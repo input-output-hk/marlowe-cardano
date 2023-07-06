@@ -12,24 +12,15 @@ import Control.Monad.Trans.Reader (ReaderT (..))
 import Control.Monad.Trans.Resource.Internal (ResourceT (..))
 import Data.Coerce (coerce)
 import Data.Foldable (asum)
-import Data.Map (Map)
 import Data.Time (UTCTime)
-import Language.Marlowe.Object.Types (Label, ObjectBundle (..))
 import Language.Marlowe.Protocol.Client (MarloweRuntimeClient (..), hoistMarloweRuntimeClient)
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient)
 import Language.Marlowe.Protocol.Load.Client (MarloweLoadClient, pushContract)
 import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient)
 import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
 import Language.Marlowe.Protocol.Transfer.Client (
-  ClientStCanDownload (..),
-  ClientStCanUpload (..),
-  ClientStDownload (..),
-  ClientStExport (..),
-  ClientStIdle (..),
-  ClientStUpload (..),
-  MarloweTransferClient (MarloweTransferClient),
+  MarloweTransferClient,
  )
-import Language.Marlowe.Protocol.Transfer.Types (ImportError)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, DatumHash, Lovelace, StakeCredential, TokenName, TxId)
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Core.Api (
@@ -58,8 +49,6 @@ import Network.Protocol.Connection (runConnector)
 import Network.Protocol.Job.Client (ClientStAwait (..), ClientStInit (..), JobClient (..), liftCommand)
 import qualified Network.Protocol.Job.Client as Job
 import Network.Protocol.Query.Client (QueryClient)
-import Numeric.Natural (Natural)
-import Pipes (Pipe, Producer, await, yield)
 import qualified Pipes.Internal as PI
 import UnliftIO (
   MonadIO,
@@ -185,82 +174,6 @@ runMarloweTxClient = runMarloweRuntimeClient . RunTxClient
 -- is already merkleized.
 loadContract :: (MonadMarlowe m) => Contract 'V1 -> m (Maybe DatumHash)
 loadContract = runMarloweLoadClient . pushContract
-
--- | Import a single object bundle into the Runtime. It will incrementally link the bundle, merkleize the contracts, and
--- save them to the store. Returns a mapping of the original contract labels to their store hashes.
-importBundle :: (MonadMarlowe m) => ObjectBundle -> m (Either ImportError (Map Label DatumHash))
-importBundle bundle =
-  runMarloweTransferClient $
-    MarloweTransferClient $
-      pure $
-        SendMsgStartImport $
-          SendMsgUpload
-            bundle
-            ClientStUpload
-              { recvMsgUploadFailed = pure . SendMsgDone . Left
-              , recvMsgUploaded = pure . SendMsgImported . SendMsgDone . Right
-              }
-
--- | Stream a multi-part object bundle into the Runtime. It will link the bundle, merkleize the contracts, and
--- save them to the store. Yields mappings of the original contract labels to their store hashes.
-importIncremental :: (MonadUnliftIO m, MonadMarlowe m) => Pipe ObjectBundle (Map Label DatumHash) m (Maybe ImportError)
-importIncremental = runMarloweTransferClient $ MarloweTransferClient $ SendMsgStartImport . upload <$> await
-  where
-    upload bundle =
-      SendMsgUpload
-        bundle
-        ClientStUpload
-          { recvMsgUploadFailed = pure . SendMsgDone . Just
-          , recvMsgUploaded = \hashes -> do
-              yield hashes
-              nextBundle <- await
-              pure $ upload nextBundle
-          }
-
--- | Export a contract from the runtime as a single object bundle. The first argument controls the batch size.
-exportContract :: (MonadMarlowe m) => Natural -> DatumHash -> m (Maybe ObjectBundle)
-exportContract batchSize hash =
-  runMarloweTransferClient $
-    MarloweTransferClient $
-      pure $
-        SendMsgRequestExport
-          hash
-          ClientStExport
-            { recvMsgStartExport = do
-                let downloadLoop acc =
-                      SendMsgDownload
-                        batchSize
-                        ClientStDownload
-                          { recvMsgDownloaded = \(ObjectBundle bundle) -> pure $ downloadLoop $ acc <> bundle
-                          , recvMsgExported = pure $ SendMsgDone $ Just $ ObjectBundle acc
-                          }
-                pure $ downloadLoop []
-            , recvMsgContractNotFound = pure $ SendMsgDone Nothing
-            }
-
--- | Stream a contract from the runtime as a multi-part object bundle. The first argument controls the batch size of the
--- bundles.
-exportIncremental :: (MonadMarlowe m, MonadUnliftIO m) => Natural -> DatumHash -> Producer ObjectBundle m Bool
-exportIncremental batchSize hash =
-  runMarloweTransferClient $
-    MarloweTransferClient $
-      pure $
-        SendMsgRequestExport
-          hash
-          ClientStExport
-            { recvMsgStartExport = do
-                let downloadLoop =
-                      SendMsgDownload
-                        batchSize
-                        ClientStDownload
-                          { recvMsgDownloaded = \bundle -> do
-                              yield bundle
-                              pure downloadLoop
-                          , recvMsgExported = pure $ SendMsgDone True
-                          }
-                pure downloadLoop
-            , recvMsgContractNotFound = pure $ SendMsgDone False
-            }
 
 -- | Create a new contract.
 createContract

@@ -6,7 +6,6 @@ module Language.Marlowe.Runtime.Contract.TransferServer (
   transferServer,
 ) where
 
-import Cardano.Api (hashScriptData)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 import Control.Monad.Trans.Maybe (MaybeT (..))
@@ -25,8 +24,7 @@ import Language.Marlowe.Object.Link (LinkedObject (..), SymbolTable, linkBundle)
 import Language.Marlowe.Object.Types
 import Language.Marlowe.Protocol.Transfer.Server
 import Language.Marlowe.Protocol.Transfer.Types
-import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScriptData)
-import Language.Marlowe.Runtime.ChainSync.Api (DatumHash (..), toDatum)
+import Language.Marlowe.Runtime.ChainSync.Api (DatumHash (..))
 import Language.Marlowe.Runtime.Contract.Api (ContractWithAdjacency (..))
 import Language.Marlowe.Runtime.Contract.Store (ContractStagingArea (..), ContractStore (..))
 import Network.Protocol.Connection (ServerSource (..), resourceTServerSource)
@@ -74,10 +72,10 @@ transferServer TransferServerDependencies{..} =
             case result of
               Left err -> pure $ SendMsgUploadFailed err idle
               Right (Left linkError) -> pure $ SendMsgUploadFailed (LinkError linkError) idle
-              Right (Right (linked, objects')) -> do
+              Right (Right (hashes, objects')) -> do
                 void flush
                 pure $
-                  SendMsgUploaded (Map.fromList $ mapMaybe (traverse hashLinkedContracts) linked) $
+                  SendMsgUploaded (Map.fromList $ mapMaybe sequence hashes) $
                     uploadServer objects' releaseKey stage
         }
 
@@ -113,10 +111,14 @@ loadContract store hash = do
   Just ContractWithAdjacency{..} <- getContract store hash
   pure $ LabelledObject (coerce hash) ContractType $ fromCoreContract contract
 
-merkleizeAndStoreContracts :: (Monad m) => ContractStagingArea m -> LinkedObject -> ExceptT ImportError m LinkedObject
+merkleizeAndStoreContracts
+  :: (Monad m) => ContractStagingArea m -> LinkedObject -> ExceptT ImportError m (LinkedObject, Maybe DatumHash)
 merkleizeAndStoreContracts stage = \case
-  LinkedContract contract -> LinkedContract <$> merkleizeAndStore stage contract
-  obj -> pure obj
+  LinkedContract contract -> do
+    merkleizedContract <- merkleizeAndStore stage contract
+    hash <- lift $ stageContract stage merkleizedContract
+    pure (LinkedContract merkleizedContract, Just hash)
+  obj -> pure (obj, Nothing)
 
 merkleizeAndStore :: (Monad m) => ContractStagingArea m -> Core.Contract -> ExceptT ImportError m Core.Contract
 merkleizeAndStore stage = \case
@@ -141,8 +143,3 @@ merkleizeAndStoreCase stage@ContractStagingArea{..} = \case
     if exists
       then pure $ Core.MerkleizedCase action hash
       else throwE $ ContinuationNotInStore $ fromCoreContractHash hash
-
-hashLinkedContracts :: LinkedObject -> Maybe DatumHash
-hashLinkedContracts = \case
-  LinkedContract contract -> Just $ fromCardanoDatumHash $ hashScriptData $ toCardanoScriptData $ toDatum contract
-  _ -> Nothing

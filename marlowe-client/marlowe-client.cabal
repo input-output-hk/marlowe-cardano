@@ -51,6 +51,7 @@ library
     Control.Monad.Trans.Marlowe
     Control.Monad.Trans.Marlowe.Class
     Language.Marlowe.Runtime.Client
+    Language.Marlowe.Runtime.Client.Transfer
 
   build-depends:
     , base >=4.9 && <5

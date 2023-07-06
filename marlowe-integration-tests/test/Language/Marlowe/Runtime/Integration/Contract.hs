@@ -8,22 +8,34 @@ module Language.Marlowe.Runtime.Integration.Contract where
 
 import Cardano.Api.Byron (ScriptData (ScriptDataBytes), hashScriptData)
 import Colog (HasLog (..), LogAction, Message)
-import Control.Arrow (returnA)
+import Control.Arrow (Arrow (..), returnA)
 import Control.Concurrent.Component
 import Control.Monad (foldM)
 import Control.Monad.Event.Class (Inject (..), NoopEventT (runNoopEventT))
 import Control.Monad.Reader (ReaderT, ask, runReaderT)
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import Control.Monad.Writer (execWriter, runWriter)
+import Data.Foldable (for_)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Language.Marlowe.Core.V1.Merkle (deepMerkleize)
 import Language.Marlowe.Core.V1.Plate (extractAll)
 import Language.Marlowe.Core.V1.Semantics (TransactionInput (..), TransactionOutput (..), computeTransaction)
 import Language.Marlowe.Core.V1.Semantics.Types
+import Language.Marlowe.Object.Gen ()
+import Language.Marlowe.Object.Link (LinkedObject (LinkedContract), linkBundle, unlink)
+import Language.Marlowe.Object.Types (
+  Label (..),
+  LabelledObject (..),
+  ObjectBundle (ObjectBundle),
+  ObjectType (..),
+  fromCoreContract,
+ )
 import Language.Marlowe.Protocol.Load.Client (MarloweLoadClient, pushContract, serveMarloweLoadClient)
+import Language.Marlowe.Protocol.Transfer.Client (MarloweTransferClient (..), serveMarloweTransferClient)
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScriptData)
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash (..), toDatum)
+import Language.Marlowe.Runtime.Client (exportContract, importBundle)
 import qualified Language.Marlowe.Runtime.Contract as Contract
 import Language.Marlowe.Runtime.Contract.Api (ContractWithAdjacency (adjacency), merkleizeInputs)
 import qualified Language.Marlowe.Runtime.Contract.Api as Api
@@ -46,6 +58,7 @@ spec :: Spec
 spec = parallel $ describe "MarloweContract" do
   getContractSpec
   getMerkleizedInputsSpec
+  transferSpec
 
 getMerkleizedInputsSpec :: Spec
 getMerkleizedInputsSpec = describe "merkleizeInputs" do
@@ -104,14 +117,6 @@ getContractSpec = describe "getContract" do
     liftIO $ Api.contract <$> result `shouldBe` Just expectedContract
 
   it "Returns the correct closure" $ runContractTest do
-    let initialContract = testContract 2
-    hash <- expectJust "failed to push contract" $ runLoad $ pushContract initialContract
-    result <- runQuery $ Api.getContract hash
-    let continuations = snd $ runWriter $ deepMerkleize initialContract
-    let expectedClosure = Set.insert hash $ Set.map fromPlutusDatumHash $ Map.keysSet continuations
-    liftIO $ foldMap Api.closure result `shouldBe` expectedClosure
-
-  it "Returns the correct closure" $ runContractTest do
     let initialContract = testContract 4
     hash <- expectJust "failed to push contract" $ runLoad $ pushContract initialContract
     result <- runQuery $ Api.getContract hash
@@ -138,6 +143,86 @@ getContractSpec = describe "getContract" do
           pure $ Map.insert (toPlutusDatumHash contractHash) contract' continuations
     actualContinuations <- foldM insertContinuation mempty closureWithoutRoot
     liftIO $ actualContinuations `shouldBe` expectedContinuations
+
+transferSpec :: Spec
+transferSpec = focus do
+  describe "Import" do
+    prop "Produces the same results as load" \label contract -> runContractTest do
+      hash <- expectJust "failed to push contract" $ runLoad $ pushContract contract
+      labelMap <-
+        expectRight "failed to import contract" $
+          runTransfer $
+            importBundle $
+              ObjectBundle [LabelledObject label ContractType $ fromCoreContract contract]
+      liftIO $ labelMap `shouldBe` Map.singleton label hash
+
+    prop "All hashes can be found in the store" \contract -> runContractTest do
+      labelMap <-
+        expectRight "failed to import contract" $ runTransfer $ importBundle $ snd $ unlink $ LinkedContract contract
+      for_ (Map.elems labelMap) \hash -> do
+        result <- runQuery $ Api.getContract hash
+        liftIO $ Api.contractHash <$> result `shouldBe` Just hash
+
+    prop "Produces the correct contract" \contract ->
+      let (rootLabel, bundle) = unlink $ LinkedContract contract
+       in counterexample ("Root Label: " <> show rootLabel) $
+            counterexample ("Bundle: " <> show bundle) $
+              runContractTest do
+                hashes <- expectRight "failed to import contract" $ runTransfer $ importBundle bundle
+                hash <- expectJust "Root hash not found" $ pure $ Map.lookup rootLabel hashes
+                result <- runQuery $ Api.getContract hash
+                liftIO $ Api.contract <$> result `shouldBe` Api.contract <$> result
+
+    prop "Produces the correct closure" \contract -> do
+      let (rootLabel, bundle) = unlink $ LinkedContract contract
+       in counterexample ("Root Label: " <> show rootLabel) $
+            counterexample ("Bundle: " <> show bundle) $
+              runContractTest do
+                hashes <- expectRight "failed to import contract" $ runTransfer $ importBundle bundle
+                hash <- expectJust "Root hash not found" $ pure $ Map.lookup rootLabel hashes
+                result <- runQuery $ Api.getContract hash
+                let continuations = snd $ runWriter $ deepMerkleize contract
+                let expectedClosure = Set.insert hash $ Set.map fromPlutusDatumHash $ Map.keysSet continuations
+                liftIO $ foldMap Api.closure result `shouldBe` expectedClosure
+
+    prop "Is possible to build the correct continuation map with the closure" \contract -> do
+      let (rootLabel, bundle) = unlink $ LinkedContract contract
+       in counterexample ("Root Label: " <> show rootLabel) $
+            counterexample ("Bundle: " <> show bundle) $
+              runContractTest do
+                hashes <- expectRight "failed to import contract" $ runTransfer $ importBundle bundle
+                hash <- expectJust "Root hash not found" $ pure $ Map.lookup rootLabel hashes
+                Api.ContractWithAdjacency{closure} <- expectJust "failed to get contract" $ runQuery $ Api.getContract hash
+                let closureWithoutRoot = Set.delete hash closure
+                let expectedContinuations = execWriter $ deepMerkleize contract
+                let insertContinuation continuations hash' = do
+                      Api.ContractWithAdjacency{contractHash, contract = contract'} <-
+                        expectJust ("failed to get contract " <> show hash') $ runQuery $ Api.getContract hash'
+                      pure $ Map.insert (toPlutusDatumHash contractHash) contract' continuations
+                actualContinuations <- foldM insertContinuation mempty closureWithoutRoot
+                liftIO $ actualContinuations `shouldBe` expectedContinuations
+
+  describe "Export" do
+    prop "Labels map to closure" \contract -> runContractTest do
+      hash <- expectJust "failed to push contract" $ runLoad $ pushContract contract
+      ObjectBundle bundle <- expectJust "failed to export contract" $ runTransfer $ exportContract 100 hash
+      Api.ContractWithAdjacency{closure} <- expectJust "failed to get contract" $ runQuery $ Api.getContract hash
+      liftIO $ Set.fromList (DatumHash . unLabel . _label <$> bundle) `shouldBe` closure
+
+    prop "Labels are hashes" \contract -> runContractTest do
+      hash <- expectJust "failed to push contract" $ runLoad $ pushContract contract
+      bundle <- expectJust "failed to export contract" $ runTransfer $ exportContract 100 hash
+      let expectOnlyContracts = \case
+            LinkedContract c -> pure (LinkedContract c, c)
+            a -> fail $ "Unexpected non-contract object in exported bundle " <> show a
+      (linked, _) <- expectRight "" $ linkBundle bundle expectOnlyContracts mempty
+      liftIO $ for_ linked \(Label label, c) -> DatumHash label `shouldBe` hashContract c
+
+    prop "import . export" \contract -> runContractTest do
+      hash <- expectJust "failed to push contract" $ runLoad $ pushContract contract
+      ObjectBundle bundle <- expectJust "failed to export contract" $ runTransfer $ exportContract 100 hash
+      hashes <- expectRight "failed to import bundle" $ runTransfer $ importBundle $ ObjectBundle bundle
+      liftIO $ hashes `shouldBe` Map.fromList ((_label &&& DatumHash . unLabel . _label) <$> bundle)
 
 extractContinuationHash :: Case Contract -> Set.Set DatumHash
 extractContinuationHash = \case
@@ -166,12 +251,23 @@ expectJust msg m =
     Nothing -> fail msg
     Just a -> pure a
 
+expectRight :: (Show a) => String -> TestM (Either a b) -> TestM b
+expectRight msg m =
+  m >>= \case
+    Left e -> fail $ msg <> ": " <> show e
+    Right a -> pure a
+
 -- helpers
 
 runLoad :: MarloweLoadClient TestM a -> TestM a
 runLoad client = do
   TestHandle{..} <- ask
   runConnector loadConnector client
+
+runTransfer :: MarloweTransferClient TestM a -> TestM a
+runTransfer client = do
+  TestHandle{..} <- ask
+  runConnector transferConnector client
 
 runQuery :: QueryClient Api.ContractRequest TestM a -> TestM a
 runQuery client = do
@@ -197,6 +293,7 @@ runContractTest test = runResourceT do
             TestHandle
               { loadConnector = directConnector serveMarloweLoadClient loadServerSource
               , queryConnector = directConnector serveQueryClient queryServerSource
+              , transferConnector = directConnector serveMarloweTransferClient transferServerSource
               , logAction = mempty
               }
   (Concurrently runTestComponent, testHandle) <-
@@ -214,6 +311,7 @@ type TestM = ReaderT TestHandle (NoopEventT TestRef AnySelector (ResourceT IO))
 data TestHandle = TestHandle
   { loadConnector :: Connector MarloweLoadClient TestM
   , queryConnector :: Connector (QueryClient Api.ContractRequest) TestM
+  , transferConnector :: Connector MarloweTransferClient TestM
   , logAction :: LogAction TestM Message
   }
 

@@ -88,9 +88,9 @@ type family Linked o where
 linkBundle
   :: (Monad m)
   => O.ObjectBundle
-  -> (LinkedObject -> m LinkedObject)
+  -> (LinkedObject -> m (LinkedObject, a))
   -> SymbolTable
-  -> m (Either LinkError ([(O.Label, LinkedObject)], SymbolTable))
+  -> m (Either LinkError ([(O.Label, a)], SymbolTable))
 linkBundle bundle transform = go [] $ O.getObjects bundle
   where
     go acc [] objects = pure $ pure (reverse acc, objects)
@@ -103,9 +103,9 @@ linkBundle bundle transform = go [] $ O.getObjects bundle
 linkObject
   :: (Monad m)
   => O.LabelledObject
-  -> (LinkedObject -> m LinkedObject)
+  -> (LinkedObject -> m (LinkedObject, a))
   -> SymbolTable
-  -> m (Either LinkError (LinkedObject, SymbolTable))
+  -> m (Either LinkError (a, SymbolTable))
 linkObject O.LabelledObject{..} transform objects
   | HashMap.member _label objects = pure $ Left $ DuplicateLabel _label
   | otherwise = do
@@ -119,8 +119,8 @@ linkObject O.LabelledObject{..} transform objects
       case mLinked of
         Left err -> pure $ Left err
         Right linked -> do
-          linked' <- transform linked
-          pure $ Right (linked', HashMap.insert _label linked' objects)
+          (linked', a) <- transform linked
+          pure $ Right (a, HashMap.insert _label linked' objects)
 
 linkValue :: SymbolTable -> O.Value -> Either LinkError (C.Value C.Observation)
 linkValue objects = \case

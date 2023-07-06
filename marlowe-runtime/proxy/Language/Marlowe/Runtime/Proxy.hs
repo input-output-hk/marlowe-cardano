@@ -226,8 +226,11 @@ transferNext :: PeerHasAgency pr st -> Message MarloweTransfer st st' -> NextAge
 transferNext = \case
   ClientAgency Transfer.TokIdle -> \case
     Transfer.MsgStartImport{} -> NextCast $ ClientAgency Transfer.TokCanUpload
-    Transfer.MsgStartExport{} -> NextCast $ ClientAgency Transfer.TokCanDownload
+    Transfer.MsgRequestExport{} -> NextCall $ ServerAgency Transfer.TokExport
     Transfer.MsgDone -> NextClose Transfer.TokDone
+  ServerAgency Transfer.TokExport -> \case
+    Transfer.MsgStartExport -> NextReceive $ ClientAgency Transfer.TokCanDownload
+    Transfer.MsgContractNotFound -> NextReceive $ ClientAgency Transfer.TokIdle
   ClientAgency Transfer.TokCanUpload -> \case
     Transfer.MsgUpload{} -> NextCall $ ServerAgency Transfer.TokUpload
     Transfer.MsgImported -> NextCast $ ClientAgency Transfer.TokIdle
