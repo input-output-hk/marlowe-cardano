@@ -15,6 +15,10 @@ let
       {
         packages = {
           # Things that need plutus-tx-plugin
+          plutus-ledger.package.buildable = lib.mkForce false;
+          plutus-tx-plugin.package.buildable = lib.mkForce false;
+
+          # Things that need plutus-tx-plugin
           marlowe.package.buildable = lib.mkForce false; # Would also require libpq
           marlowe-actus.package.buildable = lib.mkForce false;
           marlowe-contracts.package.buildable = lib.mkForce false;
@@ -41,9 +45,6 @@ let
     (_:
       {
         packages = {
-          # Things that need plutus-tx-plugin
-          plutus-ledger.package.buildable = false;
-          plutus-tx-plugin.package.buildable = false;
 
           # These libraries rely on a TemplateHaskell splice that requires
           # git to be in the path at build time. This only seems to affect
