@@ -10,137 +10,146 @@ let
   isCross = pkgs.stdenv.hostPlatform != pkgs.stdenv.buildPlatform;
   rPackages = with pkgs.rPackages; [ R tidyverse dplyr stringr MASS plotly shiny shinyjs purrr ];
 
-  packages = lib.trace ("isCross: ${if isCross then "yes" else "no" }") {
-    # Things that need plutus-tx-plugin
-    plutus-ledger.package.buildable = !isCross;
-    plutus-tx-plugin.package.buildable = !isCross;
+  modules = [
+    (_: lib.mkIf isCross
+      {
+        packages = {
+          # Things that need plutus-tx-plugin
+          marlowe.package.buildable = lib.mkForce false; # Would also require libpq
+          marlowe-actus.package.buildable = lib.mkForce false;
+          marlowe-contracts.package.buildable = lib.mkForce false;
+          marlowe-cli.package.buildable = lib.mkForce false;
 
-    # These libraries rely on a TemplateHaskell splice that requires
-    # git to be in the path at build time. This only seems to affect
-    # Darwin builds, and including them on Linux breaks lorri, so we
-    # only add these options when building on Darwin.
-    cardano-config.components.library.build-tools = mkIfDarwin [ pkgs.buildPackages.buildPackages.gitReallyMinimal ];
+          # Things that need hs-opentelemetry-sdk (which is not available on Windows)
+          actus-core.package.buildable = lib.mkForce false;
+          async-components.package.buildable = lib.mkForce false;
+          cardano-integration.package.buildable = lib.mkForce false;
+          eventuo11y-extras.package.buildable = lib.mkForce false;
+          marlowe-apps.package.buildable = lib.mkForce false;
+          marlowe-chain-sync.package.buildable = lib.mkForce false;
+          marlowe-client.package.buildable = lib.mkForce false;
+          marlowe-integration.package.buildable = lib.mkForce false;
+          marlowe-integration-tests.package.buildable = lib.mkForce false;
+          marlowe-protocols.package.buildable = lib.mkForce false;
+          marlowe-runtime.package.buildable = lib.mkForce false;
+          marlowe-runtime-cli.package.buildable = lib.mkForce false;
+          marlowe-runtime-web.package.buildable = lib.mkForce false;
+          marlowe-test.package.buildable = lib.mkForce false;
+        };
+      })
 
-    plutus-contract.doHaddock = meta.enableHaddock;
-    plutus-contract.flags.defer-plugin-errors = meta.enableHaddock;
+    (_:
+      {
+        packages = {
+          # Things that need plutus-tx-plugin
+          plutus-ledger.package.buildable = false;
+          plutus-tx-plugin.package.buildable = false;
 
-    plutus-use-cases.doHaddock = meta.enableHaddock;
-    plutus-use-cases.flags.defer-plugin-errors = meta.enableHaddock;
+          # These libraries rely on a TemplateHaskell splice that requires
+          # git to be in the path at build time. This only seems to affect
+          # Darwin builds, and including them on Linux breaks lorri, so we
+          # only add these options when building on Darwin.
+          cardano-config.components.library.build-tools = mkIfDarwin [ pkgs.buildPackages.buildPackages.gitReallyMinimal ];
 
-    plutus-ledger.doHaddock = meta.enableHaddock;
-    plutus-ledger.flags.defer-plugin-errors = meta.enableHaddock;
+          plutus-contract.doHaddock = meta.enableHaddock;
+          plutus-contract.flags.defer-plugin-errors = meta.enableHaddock;
 
-    # Packages we just don't want docs for
-    plutus-benchmark.doHaddock = false;
-    # FIXME: Haddock mysteriously gives a spurious missing-home-modules warning
-    plutus-tx-plugin.doHaddock = false;
-    plutus-script-utils.doHaddock = false;
+          plutus-use-cases.doHaddock = meta.enableHaddock;
+          plutus-use-cases.flags.defer-plugin-errors = meta.enableHaddock;
 
-    # Relies on cabal-doctest, just turn it off in the Nix build
-    prettyprinter-configurable.components.tests.prettyprinter-configurable-doctest.buildable = lib.mkForce false;
+          plutus-ledger.doHaddock = meta.enableHaddock;
+          plutus-ledger.flags.defer-plugin-errors = meta.enableHaddock;
 
-    plutus-core.components.benchmarks.update-cost-model = {
-      build-tools = rPackages;
-      # Seems to be broken on darwin for some reason
-      platforms = lib.platforms.linux;
-    };
+          # Packages we just don't want docs for
+          plutus-benchmark.doHaddock = false;
+          # FIXME: Haddock mysteriously gives a spurious missing-home-modules warning
+          plutus-tx-plugin.doHaddock = false;
+          plutus-script-utils.doHaddock = false;
 
-    plutus-core.components.benchmarks.cost-model-test = {
-      build-tools = rPackages;
-      # Seems to be broken on darwin for some reason
-      platforms = lib.platforms.linux;
-    };
+          # Relies on cabal-doctest, just turn it off in the Nix build
+          prettyprinter-configurable.components.tests.prettyprinter-configurable-doctest.buildable = lib.mkForce false;
 
-    # Broken due to warnings, unclear why the setting that fixes this for the build doesn't work here.
-    iohk-monitoring.doHaddock = false;
+          plutus-core.components.benchmarks.update-cost-model = {
+            build-tools = rPackages;
+            # Seems to be broken on darwin for some reason
+            platforms = lib.platforms.linux;
+          };
 
-    # External package settings
-    inline-r.ghcOptions = [ "-XStandaloneKindSignatures" ];
+          plutus-core.components.benchmarks.cost-model-test = {
+            build-tools = rPackages;
+            # Seems to be broken on darwin for some reason
+            platforms = lib.platforms.linux;
+          };
 
-    # Honestly not sure why we need this, it has a mysterious unused dependency on "m"
-    # This will go away when we upgrade nixpkgs and things use ieee754 anyway.
-    ieee.components.library.libs = lib.mkForce [ ];
+          # Broken due to warnings, unclear why the setting that fixes this for the build doesn't work here.
+          iohk-monitoring.doHaddock = false;
 
-    # hpack fails due to modified cabal file, can remove when we bump to 3.12.0
-    cardano-addresses.cabal-generator = lib.mkForce null;
-    cardano-addresses-cli.cabal-generator = lib.mkForce null;
+          # External package settings
+          inline-r.ghcOptions = [ "-XStandaloneKindSignatures" ];
 
-    # Things that need plutus-tx-plugin
-    marlowe.package.buildable = !isCross; # Would also require libpq
-    marlowe-actus.package.buildable = !isCross;
-    marlowe-contracts.package.buildable = !isCross;
-    marlowe-cli.package.buildable = !isCross;
+          # Honestly not sure why we need this, it has a mysterious unused dependency on "m"
+          # This will go away when we upgrade nixpkgs and things use ieee754 anyway.
+          ieee.components.library.libs = lib.mkForce [ ];
 
-    # Things that need hs-opentelemetry-sdk (which is not available on Windows)
-    actus-core.package.buildable = !isCross;
-    async-components.package.buildable = !isCross;
-    cardano-integration.package.buildable = !isCross;
-    eventuo11y-extras.package.buildable = !isCross;
-    marlowe-apps.package.buildable = !isCross;
-    marlowe-chain-sync.package.buildable = !isCross;
-    marlowe-client.package.buildable = !isCross;
-    marlowe-integration.package.buildable = !isCross;
-    marlowe-integration-tests.package.buildable = !isCross;
-    marlowe-protocols.package.buildable = !isCross;
-    marlowe-runtime.package.buildable = !isCross;
-    marlowe-runtime-cli.package.buildable = !isCross;
-    marlowe-runtime-web.package.buildable = !isCross;
-    marlowe-test.package.buildable = !isCross;
+          # hpack fails due to modified cabal file, can remove when we bump to 3.12.0
+          cardano-addresses.cabal-generator = lib.mkForce null;
+          cardano-addresses-cli.cabal-generator = lib.mkForce null;
 
-    # These libraries rely on a TemplateHaskell splice that requires
-    # git to be in the path at build time. This only seems to affect
-    # Darwin builds, and including them on Linux breaks lorri, so we
-    # only add these options when building on Darwin.
-    marlowe-cli.components.exes.marlowe-cli.build-tools = mkIfDarwin [ pkgs.buildPackages.buildPackages.gitReallyMinimal ];
+          # These libraries rely on a TemplateHaskell splice that requires
+          # git to be in the path at build time. This only seems to affect
+          # Darwin builds, and including them on Linux breaks lorri, so we
+          # only add these options when building on Darwin.
+          marlowe-cli.components.exes.marlowe-cli.build-tools = mkIfDarwin [ pkgs.buildPackages.buildPackages.gitReallyMinimal ];
 
-    # See https://github.com/input-output-hk/plutus/issues/1213 and
-    # https://github.com/input-output-hk/plutus/pull/2865.
-    marlowe.doHaddock = meta.enableHaddock;
-    marlowe.flags.defer-plugin-errors = meta.enableHaddock;
+          # See https://github.com/input-output-hk/plutus/issues/1213 and
+          # https://github.com/input-output-hk/plutus/pull/2865.
+          marlowe.doHaddock = meta.enableHaddock;
+          marlowe.flags.defer-plugin-errors = meta.enableHaddock;
 
-    # Fix missing executables on the paths of the test runners. This is arguably
-    # a bug, and the fix is a bit of a hack.
-    marlowe.components.tests.marlowe-test.preCheck = ''
-      PATH=${lib.makeBinPath [ pkgs.z3 ]}:$PATH
-    '';
+          # Fix missing executables on the paths of the test runners. This is arguably
+          # a bug, and the fix is a bit of a hack.
+          marlowe.components.tests.marlowe-test.preCheck = ''
+            PATH=${lib.makeBinPath [ pkgs.z3 ]}:$PATH
+          '';
 
-    marlowe-contracts.components.tests.marlowe-contracts-test.preCheck = ''
-      PATH=${lib.makeBinPath [ pkgs.z3 ]}:$PATH
-    '';
+          marlowe-contracts.components.tests.marlowe-contracts-test.preCheck = ''
+            PATH=${lib.makeBinPath [ pkgs.z3 ]}:$PATH
+          '';
 
-    marlowe-test.components.tests.marlowe-test.preCheck = ''
-      PATH=${lib.makeBinPath [ pkgs.z3 ]}:$PATH
-    '';
+          marlowe-test.components.tests.marlowe-test.preCheck = ''
+            PATH=${lib.makeBinPath [ pkgs.z3 ]}:$PATH
+          '';
 
-    marlowe-runtime.components.tests.marlowe-runtime-test.preCheck = ''
-      PATH=${lib.makeBinPath [ pkgs.z3 ]}:$PATH
-    '';
+          marlowe-runtime.components.tests.marlowe-runtime-test.preCheck = ''
+            PATH=${lib.makeBinPath [ pkgs.z3 ]}:$PATH
+          '';
 
-    # Note: The following two statements say that these tests should
-    # _only_ run on linux. In actual fact we just don't want them
-    # running on the 'mac-mini' instances, because these tests time out
-    # there. In an ideal world this would be reflected here more
-    # accurately.
-    # TODO: Resolve this situation in a better way.
-    marlowe.components.tests.marlowe-test-long-running = {
-      platforms = lib.platforms.linux;
-    };
+          # Note: The following two statements say that these tests should
+          # _only_ run on linux. In actual fact we just don't want them
+          # running on the 'mac-mini' instances, because these tests time out
+          # there. In an ideal world this would be reflected here more
+          # accurately.
+          # TODO: Resolve this situation in a better way.
+          marlowe.components.tests.marlowe-test-long-running = {
+            platforms = lib.platforms.linux;
+          };
 
-    marlowe.ghcOptions = [ "-Werror" ];
-    marlowe-actus.ghcOptions = [ "-Werror" ];
-    marlowe-chain-sync.ghcOptions = [ "-Werror" ];
-    marlowe-cli.ghcOptions = [ "-Werror" ];
-    marlowe-contracts.ghcOptions = [ "-Werror" ];
-    marlowe-integration.ghcOptions = [ "-Werror" ];
-    marlowe-integration-tests.ghcOptions = [ "-Werror" ];
-    marlowe-protocols.ghcOptions = [ "-Werror" ];
-    marlowe-runtime.ghcOptions = [ "-Werror" ];
-    marlowe-runtime-cli.ghcOptions = [ "-Werror" ];
-    marlowe-runtime-web.ghcOptions = [ "-Werror" ];
-    marlowe-test.ghcOptions = [ "-Werror" ];
-  };
+          marlowe.ghcOptions = [ "-Werror" ];
+          marlowe-actus.ghcOptions = [ "-Werror" ];
+          marlowe-chain-sync.ghcOptions = [ "-Werror" ];
+          marlowe-cli.ghcOptions = [ "-Werror" ];
+          marlowe-contracts.ghcOptions = [ "-Werror" ];
+          marlowe-integration.ghcOptions = [ "-Werror" ];
+          marlowe-integration-tests.ghcOptions = [ "-Werror" ];
+          marlowe-protocols.ghcOptions = [ "-Werror" ];
+          marlowe-runtime.ghcOptions = [ "-Werror" ];
+          marlowe-runtime-cli.ghcOptions = [ "-Werror" ];
+          marlowe-runtime-web.ghcOptions = [ "-Werror" ];
+          marlowe-test.ghcOptions = [ "-Werror" ];
+        };
+      })
+  ];
 
-  modules = [{ inherit packages; }];
 in
 
 {
