@@ -110,6 +110,7 @@ executable marlowe-integration-tests
     , marlowe-test
     , mtl
     , network-uri
+    , pipes ^>=4.3.16
     , plutus-ledger-api
     , plutus-tx
     , QuickCheck

@@ -10,12 +10,13 @@ import Cardano.Api.Byron (ScriptData (ScriptDataBytes), hashScriptData)
 import Colog (HasLog (..), LogAction, Message)
 import Control.Arrow (Arrow (..), returnA)
 import Control.Concurrent.Component
-import Control.Monad (foldM)
+import Control.Monad (foldM, join, unless)
 import Control.Monad.Event.Class (Inject (..), NoopEventT (runNoopEventT))
 import Control.Monad.Reader (ReaderT, ask, runReaderT)
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import Control.Monad.Writer (execWriter, runWriter)
-import Data.Foldable (for_)
+import Data.Foldable (asum, for_)
+import Data.Function (on)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Language.Marlowe.Core.V1.Merkle (deepMerkleize)
@@ -27,15 +28,19 @@ import Language.Marlowe.Object.Link (LinkedObject (LinkedContract), linkBundle, 
 import Language.Marlowe.Object.Types (
   Label (..),
   LabelledObject (..),
-  ObjectBundle (ObjectBundle),
+  ObjectBundle (..),
   ObjectType (..),
   fromCoreContract,
  )
 import Language.Marlowe.Protocol.Load.Client (MarloweLoadClient, pushContract, serveMarloweLoadClient)
-import Language.Marlowe.Protocol.Transfer.Client (MarloweTransferClient (..), serveMarloweTransferClient)
+import Language.Marlowe.Protocol.Transfer.Client (
+  MarloweTransferClient (..),
+  hoistMarloweTransferClient,
+  serveMarloweTransferClient,
+ )
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScriptData)
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash (..), toDatum)
-import Language.Marlowe.Runtime.Client (exportContract, importBundle)
+import Language.Marlowe.Runtime.Client (exportContract, exportIncremental, importBundle, importIncremental)
 import qualified Language.Marlowe.Runtime.Contract as Contract
 import Language.Marlowe.Runtime.Contract.Api (ContractWithAdjacency (adjacency), merkleizeInputs)
 import qualified Language.Marlowe.Runtime.Contract.Api as Api
@@ -45,14 +50,33 @@ import Network.Protocol.Driver.Trace (HasSpanContext (..))
 import Network.Protocol.Peer.Trace (defaultSpanContext)
 import Network.Protocol.Query.Client (QueryClient, serveQueryClient)
 import Network.TypedProtocol (unsafeIntToNat)
+import Pipes (each, (>->))
+import qualified Pipes.Internal as PI
+import qualified Pipes.Prelude as P
 import qualified Plutus.V2.Ledger.Api as PV2
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryNonnegativeInteger)
 import Spec.Marlowe.Semantics.Path (genContractPath, getContract, getInputs)
 import Test.Hspec
 import Test.Hspec.QuickCheck (prop)
 import Test.Integration.Marlowe (createWorkspace, resolveWorkspacePath)
-import Test.QuickCheck (Gen, counterexample, forAll)
-import UnliftIO (Concurrently (..), atomically, liftIO, race_)
+import Test.QuickCheck (Gen, chooseInt, counterexample, forAll)
+import UnliftIO (
+  Concurrently (..),
+  SomeException (..),
+  atomically,
+  catch,
+  concurrently,
+  liftIO,
+  newEmptyTMVar,
+  newTChan,
+  putTMVar,
+  takeTMVar,
+  throwIO,
+  throwTo,
+  writeTChan,
+ )
+import UnliftIO.Concurrent (forkFinally)
+import UnliftIO.STM (readTChan)
 
 spec :: Spec
 spec = parallel $ describe "MarloweContract" do
@@ -145,16 +169,17 @@ getContractSpec = describe "getContract" do
     liftIO $ actualContinuations `shouldBe` expectedContinuations
 
 transferSpec :: Spec
-transferSpec = focus do
+transferSpec = do
   describe "Import" do
-    prop "Produces the same results as load" \label contract -> runContractTest do
-      hash <- expectJust "failed to push contract" $ runLoad $ pushContract contract
+    prop "Produces the same results as load" \label contract -> do
+      hash <- runContractTest $ expectJust "failed to push contract" $ runLoad $ pushContract contract
       labelMap <-
-        expectRight "failed to import contract" $
-          runTransfer $
-            importBundle $
-              ObjectBundle [LabelledObject label ContractType $ fromCoreContract contract]
-      liftIO $ labelMap `shouldBe` Map.singleton label hash
+        runContractTest $
+          expectRight "failed to import contract" $
+            runTransfer $
+              importBundle $
+                ObjectBundle [LabelledObject label ContractType $ fromCoreContract contract]
+      labelMap `shouldBe` Map.singleton label hash
 
     prop "All hashes can be found in the store" \contract -> runContractTest do
       labelMap <-
@@ -202,6 +227,21 @@ transferSpec = focus do
                 actualContinuations <- foldM insertContinuation mempty closureWithoutRoot
                 liftIO $ actualContinuations `shouldBe` expectedContinuations
 
+    prop "incremental" \contract ->
+      let (_, ObjectBundle bundle) = unlink $ LinkedContract contract
+       in forAll (genChunks bundle) \chunks -> do
+            expected <-
+              runContractTest $ expectRight "failed to import contract" $ runTransfer $ importBundle $ ObjectBundle $ concat chunks
+            actual <-
+              runContractTest do
+                P.fold (<>) mempty id $
+                  each (ObjectBundle <$> chunks) >-> do
+                    result <- runTransferIncremental importIncremental
+                    case result of
+                      Nothing -> pure ()
+                      Just err -> throwIO $ userError $ "Failed to import contract incrementally: " <> show err
+            expected `shouldBe` actual
+
   describe "Export" do
     prop "Labels map to closure" \contract -> runContractTest do
       hash <- expectJust "failed to push contract" $ runLoad $ pushContract contract
@@ -218,11 +258,28 @@ transferSpec = focus do
       (linked, _) <- expectRight "" $ linkBundle bundle expectOnlyContracts mempty
       liftIO $ for_ linked \(Label label, c) -> DatumHash label `shouldBe` hashContract c
 
-    prop "import . export" \contract -> runContractTest do
+    prop "import . export" \contract -> do
+      ObjectBundle bundle <- runContractTest do
+        hash <- expectJust "failed to push contract" $ runLoad $ pushContract contract
+        expectJust "failed to export contract" $ runTransfer $ exportContract 100 hash
+      hashes <- runContractTest $ expectRight "failed to import bundle" $ runTransfer $ importBundle $ ObjectBundle bundle
+      hashes `shouldBe` Map.fromList ((_label &&& DatumHash . unLabel . _label) <$> bundle)
+
+    prop "incremental" \contract -> runContractTest do
       hash <- expectJust "failed to push contract" $ runLoad $ pushContract contract
-      ObjectBundle bundle <- expectJust "failed to export contract" $ runTransfer $ exportContract 100 hash
-      hashes <- expectRight "failed to import bundle" $ runTransfer $ importBundle $ ObjectBundle bundle
-      liftIO $ hashes `shouldBe` Map.fromList ((_label &&& DatumHash . unLabel . _label) <$> bundle)
+      expected <- expectJust "failed to export contract" $ runTransfer $ exportContract 100 hash
+      actual <-
+        P.fold (fmap ObjectBundle . on (<>) getObjects) (ObjectBundle []) id do
+          success <- runTransferIncremental $ exportIncremental 100 hash
+          unless success $ throwIO $ userError "Failed to export contract incrementally"
+      liftIO $ expected `shouldBe` actual
+
+genChunks :: [a] -> Gen [[a]]
+genChunks [] = pure []
+genChunks as = do
+  pivot <- chooseInt (1, length as)
+  let (chunk, as') = splitAt pivot as
+  (chunk :) <$> genChunks as'
 
 extractContinuationHash :: Case Contract -> Set.Set DatumHash
 extractContinuationHash = \case
@@ -269,6 +326,59 @@ runTransfer client = do
   TestHandle{..} <- ask
   runConnector transferConnector client
 
+runTransferIncremental
+  :: forall a' a b' b r
+   . MarloweTransferClient (PI.Proxy a' a b' b TestM) r
+  -> PI.Proxy a' a b' b TestM r
+runTransferIncremental client = PI.M $ join $ atomically do
+  upstreamOutChan <- newTChan
+  upstreamInChan <- newTChan
+  downstreamOutChan <- newTChan
+  downstreamInChan <- newTChan
+  resultVar <- newEmptyTMVar
+  let mkProxy clientThread = PI.M do
+        let clientAction =
+              atomically $
+                asum
+                  [ do
+                      a' <- readTChan upstreamOutChan
+                      pure $ PI.Request a' \a -> PI.M do
+                        atomically $ writeTChan upstreamInChan a
+                        pure $ mkProxy clientThread
+                  , do
+                      b <- readTChan downstreamOutChan
+                      pure $ PI.Respond b \b' -> PI.M do
+                        atomically $ writeTChan downstreamInChan b'
+                        pure $ mkProxy clientThread
+                  , do
+                      result <- takeTMVar resultVar
+                      pure case result of
+                        Left (SomeException e) -> PI.M $ throwIO e
+                        Right a -> PI.Pure a
+                  ]
+        clientAction `catch` \(SomeException e) -> do
+          throwTo clientThread e
+          throwIO e
+      elimProxy :: PI.Proxy a' a b' b TestM x -> TestM x
+      elimProxy = \case
+        PI.Request a' k -> do
+          atomically $ writeTChan upstreamOutChan a'
+          a <- atomically $ readTChan upstreamInChan
+          elimProxy $ k a
+        PI.Respond b k -> do
+          atomically $ writeTChan downstreamOutChan b
+          b' <- atomically $ readTChan downstreamInChan
+          elimProxy $ k b'
+        PI.M m -> elimProxy =<< m
+        PI.Pure r -> do
+          pure r
+  pure do
+    TestHandle{..} <- ask
+    clientThread <-
+      forkFinally (runConnector transferConnector $ hoistMarloweTransferClient elimProxy client) \result -> do
+        atomically $ putTMVar resultVar result
+    pure $ mkProxy clientThread
+
 runQuery :: QueryClient Api.ContractRequest TestM a -> TestM a
 runQuery client = do
   TestHandle{..} <- ask
@@ -276,7 +386,7 @@ runQuery client = do
 
 -- test plumbing
 
-runContractTest :: TestM () -> IO ()
+runContractTest :: TestM a -> IO a
 runContractTest test = runResourceT do
   workspace <- createWorkspace "marlowe-contract-test"
   contractStore <-
@@ -304,7 +414,8 @@ runContractTest test = runResourceT do
           { batchSize = unsafeIntToNat 10
           , contractStore
           }
-  runNoopEventT $ flip runReaderT testHandle $ race_ test runTestComponent
+  (a, _) <- runNoopEventT $ flip runReaderT testHandle $ concurrently test runTestComponent
+  pure a
 
 type TestM = ReaderT TestHandle (NoopEventT TestRef AnySelector (ResourceT IO))
 
