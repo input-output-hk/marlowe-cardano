@@ -43,7 +43,7 @@ Three APIs, accessible over three different TCP sockets, are provided:
 	- Get the unspent UTxOs.
 - The *sync* API streams or replays the block and transaction information from the Cardano node.
 
-See `marlowe-chain-sync`'s [help page](marlowe-chain-sync.md) or its [deployment instructions](../../marlowe-chain-sync/ReadMe.md) for more information.
+See `marlowe-chain-sync`'s [help page](marlowe-chain-sync.md) or its [deployment instructions](../../marlowe-chain-sync/README.md) for more information.
 
 
 ### Marlowe Transaction
