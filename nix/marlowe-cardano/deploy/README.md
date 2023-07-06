@@ -25,7 +25,7 @@ To push an oci-image to the registry you will need to get access credentials, by
 Then to push, for example, marlowe-chain-sync run:
 
 ``` sh
-nix run .\#oci-images.x86_64-linux.marlowe-chain-sync.copyToRegistry
+nix run .\#oci-images.x86_64-linux.marlowe-chain-sync
 ```
 
 `

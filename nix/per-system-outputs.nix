@@ -29,4 +29,13 @@ in
 
   packages.marlowe-integration-tests = import ./marlowe-cardano/integration-tests.nix
     { inherit inputs pkgs projects; };
+
+
+  packages.marlowe-chain-indexer = inputs.self.packages.marlowe-chain-sync-exe-marlowe-chain-indexer-ghc8107;
+  packages.marlowe-chain-sync = inputs.self.packages.marlowe-chain-sync-exe-marlowe-chain-sync-ghc8107;
+  packages.marlowe = inputs.self.packages.marlowe-runtime-exe-marlowe-runtime-ghc8107;
+  packages.marlowe-tx = inputs.self.packages.marlowe-runtime-exe-marlowe-tx-ghc8107;
+  packages.marlowe-indexer = inputs.self.packages.marlowe-runtime-exe-marlowe-indexer-ghc8107;
+  packages.marlowe-sync = inputs.self.packages.marlowe-runtime-exe-marlowe-sync-ghc8107;
+  packages.marlowe-cli = inputs.self.packages.marlowe-cli-exe-marlowe-cli-ghc8107;
 }

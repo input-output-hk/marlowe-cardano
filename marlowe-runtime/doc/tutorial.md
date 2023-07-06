@@ -29,7 +29,6 @@ In a shell terminal, clone the Marlowe Cardano git repository and launch a Jupyt
 ```bash
 git clone https://github.com/input-output-hk/marlowe-cardano.git
 cd marlowe-cardano/marlowe-runtime/doc/
-nix run ../../marlowe-cli
 ```
 This should trigger a Jupyter web page to be displayed on one's browser. Double-click on the `tutorial.ipynb` file to open the notebook. To run this tutorial, simply execute each cell of this notebook in sequence.
 
@@ -42,7 +41,7 @@ nix develop
 cd marlowe-cardano/marlowe-runtime/doc/
 ```
 
-This should result in a new shell being opened, with a prompt starting with `[nix develop:`. To run this tutorial, simply copy and paste the commands in each cell of this notebook into the terminal containing the Nix shell.
+This should result in a new shell being opened, with a prompt starting with `[marlowe-cardano:`. To run this tutorial, simply copy and paste the commands in each cell of this notebook into the terminal containing the Nix shell.
 
 ## The ACTUS Principal at Maturity (PAM) Contract
 

@@ -10,6 +10,6 @@ by Simon Thompson and Pablo Lamela Seijas
 
 To run tests, from this folder:
 ```bash
-nix run ../.#marlowe.haskell.packages.marlowe.components.tests.marlowe-test
+cabal test marlowe-test 
 ```
 

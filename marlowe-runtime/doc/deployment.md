@@ -33,6 +33,7 @@ $ nix run .#marlowe-chain-indexer -- --help
 $ nix run .#marlowe-chain-sync -- --help
 $ nix run .#marlowe-indexer -- --help
 $ nix run .#marlowe-sync -- --help
+$ nix run .#marlowe-cli -- --help
 $ nix run .#marlowe-tx -- --help
 $ nix run .#marlowe -- --help
 ```
