@@ -73,25 +73,22 @@ let
 
     # Things that need hs-opentelemetry-sdk (which is not available on Windows)
     async-components.package.buildable = !isCross;
+    cardano-integration.package.buildable = !isCross;
+    eventuo11y-extras.package.buildable = !isCross;
+    marlowe.package.buildable = !isCross;
+    marlowe-actus.package.buildable = !isCross;
+    marlowe-apps.package.buildable = !isCross;
+    marlowe-chain-sync.package.buildable = !isCross;
+    marlowe-cli.package.buildable = !isCross;
+    marlowe-client.package.buildable = !isCross;
+    marlowe-contracts.package.buildable = !isCross;
+    marlowe-integration.package.buildable = !isCross;
     marlowe-integration-tests.package.buildable = !isCross;
-
-    # async-components
-    # cardano-integration
-    # eventuo11y-extras
-    # marlowe
-    # marlowe-actus
-    # marlowe-apps
-    # marlowe-chain-sync
-    # marlowe-cli
-    # marlowe-client
-    # marlowe-contracts
-    # marlowe-integration
-    # marlowe-integration-tests
-    # marlowe-protocols
-    # marlowe-runtime
-    # marlowe-runtime-cli
-    # marlowe-runtime-web
-    # marlowe-test
+    marlowe-protocols.package.buildable = !isCross;
+    marlowe-runtime.package.buildable = !isCross;
+    marlowe-runtime-cli.package.buildable = !isCross;
+    marlowe-runtime-web.package.buildable = !isCross;
+    marlowe-test.package.buildable = !isCross;
 
     # These libraries rely on a TemplateHaskell splice that requires
     # git to be in the path at build time. This only seems to affect
