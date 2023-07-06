@@ -3137,11 +3137,11 @@
         "stackage": "stackage_5"
       },
       "locked": {
-        "lastModified": 1687222290,
-        "narHash": "sha256-StrvXdg0glosEHVUf/S40Q45JPM8C4lYRRiIyZ2lKO8=",
+        "lastModified": 1686041216,
+        "narHash": "sha256-RP0i9YtZbUkPtPVRz3GuBt9bwfoWCKcJ8888vocTiyg=",
         "owner": "input-output-hk",
         "repo": "haskell.nix",
-        "rev": "4ea7087846ef8c7255c6e7c06058c99c5b9a072b",
+        "rev": "bc3f8b660a3b40f52139f59213652e083e6d2418",
         "type": "github"
       },
       "original": {
