@@ -9,7 +9,6 @@
     std.url = "github:divnix/std";
     std.inputs.n2c.follows = "n2c";
     iogx.url = "github:input-output-hk/iogx";
-    iogx.inputs.haskell-nix.url = "github:input-output-hk/haskell.nix/bc3f8b660a3b40f52139f59213652e083e6d2418";
     # Use upstream when https://github.com/nlewo/nix2container/pull/82 is merged
     n2c.url = "github:shlevy/nix2container/no-Size-on-dir";
   };
