@@ -73,6 +73,7 @@ let
 
     # Things that need hs-opentelemetry-sdk (which is not available on Windows)
     async-components.package.buildable = !isCross;
+    marlowe-integration-tests.package.buildable = !isCross;
 
     # async-components
     # cardano-integration
