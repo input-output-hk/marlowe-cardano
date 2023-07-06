@@ -7,13 +7,13 @@ let
 
   lib = pkgs.lib;
   mkIfDarwin = lib.mkIf pkgs.stdenv.hostPlatform.isDarwin;
-  isCross = pkgs.stdenv.hostPlatform != pkgs.stdenv.buildPlatform;
+  isNotCross = lib.mkForce (pkgs.stdenv.hostPlatform == pkgs.stdenv.buildPlatform);
   rPackages = with pkgs.rPackages; [ R tidyverse dplyr stringr MASS plotly shiny shinyjs purrr ];
 
   packages = {
     # Things that need plutus-tx-plugin
-    plutus-ledger.package.buildable = !isCross;
-    plutus-tx-plugin.package.buildable = !isCross;
+    plutus-ledger.package.buildable = isNotCross;
+    plutus-tx-plugin.package.buildable = isNotCross;
 
     # These libraries rely on a TemplateHaskell splice that requires
     # git to be in the path at build time. This only seems to affect
@@ -66,25 +66,25 @@ let
     cardano-addresses-cli.cabal-generator = lib.mkForce null;
 
     # Things that need plutus-tx-plugin
-    marlowe.package.buildable = !isCross; # Would also require libpq
-    marlowe-actus.package.buildable = !isCross;
-    marlowe-contracts.package.buildable = !isCross;
-    marlowe-cli.package.buildable = !isCross;
+    marlowe.package.buildable = isNotCross; # Would also require libpq
+    marlowe-actus.package.buildable = isNotCross;
+    marlowe-contracts.package.buildable = isNotCross;
+    marlowe-cli.package.buildable = isNotCross;
 
     # Things that need hs-opentelemetry-sdk (which is not available on Windows)
-    async-components.package.buildable = !isCross;
-    cardano-integration.package.buildable = !isCross;
-    eventuo11y-extras.package.buildable = !isCross;
-    marlowe-apps.package.buildable = !isCross;
-    marlowe-chain-sync.package.buildable = !isCross;
-    marlowe-client.package.buildable = !isCross;
-    marlowe-integration.package.buildable = !isCross;
-    marlowe-integration-tests.package.buildable = !isCross;
-    marlowe-protocols.package.buildable = !isCross;
-    marlowe-runtime.package.buildable = !isCross;
-    marlowe-runtime-cli.package.buildable = !isCross;
-    marlowe-runtime-web.package.buildable = !isCross;
-    marlowe-test.package.buildable = !isCross;
+    async-components.package.buildable = isNotCross;
+    cardano-integration.package.buildable = isNotCross;
+    eventuo11y-extras.package.buildable = isNotCross;
+    marlowe-apps.package.buildable = isNotCross;
+    marlowe-chain-sync.package.buildable = isNotCross;
+    marlowe-client.package.buildable = isNotCross;
+    marlowe-integration.package.buildable = isNotCross;
+    marlowe-integration-tests.package.buildable = isNotCross;
+    marlowe-protocols.package.buildable = isNotCross;
+    marlowe-runtime.package.buildable = isNotCross;
+    marlowe-runtime-cli.package.buildable = isNotCross;
+    marlowe-runtime-web.package.buildable = isNotCross;
+    marlowe-test.package.buildable = isNotCross;
 
     # These libraries rely on a TemplateHaskell splice that requires
     # git to be in the path at build time. This only seems to affect
