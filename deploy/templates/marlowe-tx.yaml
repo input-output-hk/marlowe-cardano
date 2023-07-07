@@ -31,6 +31,10 @@ spec:
           value: "3728"
         - name: HTTP_PORT
           value: "3785"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://grafana-agent.grafana-agent:4318
+        - name: OTEL_SERVICE_NAME
+          value: marlowe-tx-{{ . }}
         cpu: "0.5"
         image: {{ $.Values.images.repo }}/{{ $.Values.images.org }}/marlowe-tx:{{ $.Values.images.tag }}
         imagePullPolicy: Always
