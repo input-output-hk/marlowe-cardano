@@ -73,6 +73,7 @@ executable marlowe-runtime-cli
     , ansi-terminal
     , base >=4.9 && <5
     , base16
+    , binary
     , bytestring
     , cardano-api
     , containers
@@ -81,15 +82,18 @@ executable marlowe-runtime-cli
     , marlowe-cardano
     , marlowe-chain-sync
     , marlowe-client
+    , marlowe-object
     , marlowe-protocols
     , marlowe-runtime:{marlowe-runtime, config, contract-api, history-api, proxy-api, tx-api}
     , monad-control
     , mtl
     , network
     , optparse-applicative
+    , pipes
     , plutus-ledger-api
     , stm
     , stm-delay
+    , tar
     , text
     , time
     , transformers
