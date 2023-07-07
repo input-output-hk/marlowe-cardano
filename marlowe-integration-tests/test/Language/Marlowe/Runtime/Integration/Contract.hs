@@ -10,12 +10,12 @@ import Cardano.Api.Byron (ScriptData (ScriptDataBytes), hashScriptData)
 import Colog (HasLog (..), LogAction, Message)
 import Control.Arrow (Arrow (..), returnA)
 import Control.Concurrent.Component
-import Control.Monad (foldM, join, unless)
+import Control.Monad (foldM, unless)
 import Control.Monad.Event.Class (Inject (..), NoopEventT (runNoopEventT))
 import Control.Monad.Reader (ReaderT, ask, runReaderT)
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import Control.Monad.Writer (execWriter, runWriter)
-import Data.Foldable (asum, for_)
+import Data.Foldable (for_)
 import Data.Function (on)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
@@ -40,7 +40,13 @@ import Language.Marlowe.Protocol.Transfer.Client (
  )
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScriptData)
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash (..), toDatum)
-import Language.Marlowe.Runtime.Client (exportContract, exportIncremental, importBundle, importIncremental)
+import Language.Marlowe.Runtime.Client (
+  exportContract,
+  exportIncremental,
+  importBundle,
+  importIncremental,
+  runClientStreaming,
+ )
 import qualified Language.Marlowe.Runtime.Contract as Contract
 import Language.Marlowe.Runtime.Contract.Api (ContractWithAdjacency (adjacency), merkleizeInputs)
 import qualified Language.Marlowe.Runtime.Contract.Api as Api
@@ -62,21 +68,11 @@ import Test.Integration.Marlowe (createWorkspace, resolveWorkspacePath)
 import Test.QuickCheck (Gen, chooseInt, counterexample, forAll)
 import UnliftIO (
   Concurrently (..),
-  SomeException (..),
   atomically,
-  catch,
   concurrently,
   liftIO,
-  newEmptyTMVar,
-  newTChan,
-  putTMVar,
-  takeTMVar,
   throwIO,
-  throwTo,
-  writeTChan,
  )
-import UnliftIO.Concurrent (forkFinally)
-import UnliftIO.STM (readTChan)
 
 spec :: Spec
 spec = parallel $ describe "MarloweContract" do
@@ -330,54 +326,7 @@ runTransferIncremental
   :: forall a' a b' b r
    . MarloweTransferClient (PI.Proxy a' a b' b TestM) r
   -> PI.Proxy a' a b' b TestM r
-runTransferIncremental client = PI.M $ join $ atomically do
-  upstreamOutChan <- newTChan
-  upstreamInChan <- newTChan
-  downstreamOutChan <- newTChan
-  downstreamInChan <- newTChan
-  resultVar <- newEmptyTMVar
-  let mkProxy clientThread = PI.M do
-        let clientAction =
-              atomically $
-                asum
-                  [ do
-                      a' <- readTChan upstreamOutChan
-                      pure $ PI.Request a' \a -> PI.M do
-                        atomically $ writeTChan upstreamInChan a
-                        pure $ mkProxy clientThread
-                  , do
-                      b <- readTChan downstreamOutChan
-                      pure $ PI.Respond b \b' -> PI.M do
-                        atomically $ writeTChan downstreamInChan b'
-                        pure $ mkProxy clientThread
-                  , do
-                      result <- takeTMVar resultVar
-                      pure case result of
-                        Left (SomeException e) -> PI.M $ throwIO e
-                        Right a -> PI.Pure a
-                  ]
-        clientAction `catch` \(SomeException e) -> do
-          throwTo clientThread e
-          throwIO e
-      elimProxy :: PI.Proxy a' a b' b TestM x -> TestM x
-      elimProxy = \case
-        PI.Request a' k -> do
-          atomically $ writeTChan upstreamOutChan a'
-          a <- atomically $ readTChan upstreamInChan
-          elimProxy $ k a
-        PI.Respond b k -> do
-          atomically $ writeTChan downstreamOutChan b
-          b' <- atomically $ readTChan downstreamInChan
-          elimProxy $ k b'
-        PI.M m -> elimProxy =<< m
-        PI.Pure r -> do
-          pure r
-  pure do
-    TestHandle{..} <- ask
-    clientThread <-
-      forkFinally (runConnector transferConnector $ hoistMarloweTransferClient elimProxy client) \result -> do
-        atomically $ putTMVar resultVar result
-    pure $ mkProxy clientThread
+runTransferIncremental = runClientStreaming hoistMarloweTransferClient runTransfer
 
 runQuery :: QueryClient Api.ContractRequest TestM a -> TestM a
 runQuery client = do

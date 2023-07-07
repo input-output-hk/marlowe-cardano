@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Control.Monad.Trans.Marlowe.Class where
 
@@ -93,51 +94,66 @@ instance (MonadMarlowe m) => MonadMarlowe (IdentityT m) where
   runMarloweRuntimeClient = coerce runMarloweRuntimeClient
 
 instance (MonadUnliftIO m, MonadMarlowe m) => MonadMarlowe (PI.Proxy a' a b' b m) where
-  runMarloweRuntimeClient client = PI.M $ join $ atomically do
-    upstreamOutChan <- newTChan
-    upstreamInChan <- newTChan
-    downstreamOutChan <- newTChan
-    downstreamInChan <- newTChan
-    resultVar <- newEmptyTMVar
-    let mkProxy clientThread = PI.M do
-          let clientAction =
-                atomically $
-                  asum
-                    [ do
-                        a' <- readTChan upstreamOutChan
-                        pure $ PI.Request a' \a -> PI.M do
-                          atomically $ writeTChan upstreamInChan a
-                          pure $ mkProxy clientThread
-                    , do
-                        b <- readTChan downstreamOutChan
-                        pure $ PI.Respond b \b' -> PI.M do
-                          atomically $ writeTChan downstreamInChan b'
-                          pure $ mkProxy clientThread
-                    , do
-                        result <- takeTMVar resultVar
-                        pure case result of
-                          Left (SomeException e) -> PI.M $ throwIO e
-                          Right a -> PI.Pure a
-                    ]
-          clientAction `catch` \(SomeException e) -> do
-            throwTo clientThread e
-            throwIO e
-        elimProxy :: PI.Proxy a' a b' b m r -> m r
-        elimProxy = \case
-          PI.Request a' k -> do
-            atomically $ writeTChan upstreamOutChan a'
-            a <- atomically $ readTChan upstreamInChan
-            elimProxy $ k a
-          PI.Respond b k -> do
-            atomically $ writeTChan downstreamOutChan b
-            b' <- atomically $ readTChan downstreamInChan
-            elimProxy $ k b'
-          PI.M m -> elimProxy =<< m
-          PI.Pure r -> pure r
-    pure $
-      fmap mkProxy $
-        forkFinally (runMarloweRuntimeClient $ hoistMarloweRuntimeClient elimProxy client) $
-          atomically . putTMVar resultVar
+  runMarloweRuntimeClient = runClientStreaming hoistMarloweRuntimeClient runMarloweRuntimeClient
+
+-- | Given a way to hoist a natural transformation over a client, and a way to eliminate a client, eliminate a client
+-- running in a streaming monad transformer. This is accomplished by running the client in a separate thread and
+-- forwarding all streaming operations to the caller thread via STM channels. Finally, the result of the client and any
+-- errors thrown will be forwarded as the result of the stream action in the caller's thread. If the caller's thread
+-- throws an exception, it will kill the client's thread with the same exception. Note that the client is not actually
+-- run until the streaming action is consumed (via a fold or `runEffect`).
+runClientStreaming
+  :: forall client a' a b' b m r
+   . (MonadUnliftIO m)
+  => (forall m' n x. (Functor m') => (forall y. m' y -> n y) -> client m' x -> client n x)
+  -> (forall x. client m x -> m x)
+  -> client (PI.Proxy a' a b' b m) r
+  -> PI.Proxy a' a b' b m r
+runClientStreaming hoistClient runClient client = PI.M $ join $ atomically do
+  upstreamOutChan <- newTChan
+  upstreamInChan <- newTChan
+  downstreamOutChan <- newTChan
+  downstreamInChan <- newTChan
+  resultVar <- newEmptyTMVar
+  let mkProxy clientThread = PI.M do
+        let clientAction =
+              atomically $
+                asum
+                  [ do
+                      a' <- readTChan upstreamOutChan
+                      pure $ PI.Request a' \a -> PI.M do
+                        atomically $ writeTChan upstreamInChan a
+                        pure $ mkProxy clientThread
+                  , do
+                      b <- readTChan downstreamOutChan
+                      pure $ PI.Respond b \b' -> PI.M do
+                        atomically $ writeTChan downstreamInChan b'
+                        pure $ mkProxy clientThread
+                  , do
+                      result <- takeTMVar resultVar
+                      pure case result of
+                        Left (SomeException e) -> PI.M $ throwIO e
+                        Right a -> PI.Pure a
+                  ]
+        clientAction `catch` \(SomeException e) -> do
+          throwTo clientThread e
+          throwIO e
+      elimProxy :: forall r'. PI.Proxy a' a b' b m r' -> m r'
+      elimProxy = \case
+        PI.Request a' k -> do
+          atomically $ writeTChan upstreamOutChan a'
+          a <- atomically $ readTChan upstreamInChan
+          elimProxy $ k a
+        PI.Respond b k -> do
+          atomically $ writeTChan downstreamOutChan b
+          b' <- atomically $ readTChan downstreamInChan
+          elimProxy $ k b'
+        PI.M m -> elimProxy =<< m
+        PI.Pure r -> pure r
+  pure $
+    fmap mkProxy $
+      forkFinally (runClient $ hoistClient elimProxy client) $
+        atomically . putTMVar resultVar
 
 -- | Run a MarloweSyncClient. Used to synchronize with history for a specific
 -- contract.
