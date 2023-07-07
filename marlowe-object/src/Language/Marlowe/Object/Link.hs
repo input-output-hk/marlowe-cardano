@@ -41,6 +41,7 @@ import Data.ByteString.Base16 (encodeBase16)
 import Data.DList (DList)
 import qualified Data.DList as DList
 import Data.Function (on)
+import Data.Functor.Identity (Identity (..))
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
 import Data.HashSet (HashSet)
@@ -86,12 +87,17 @@ type family Linked o where
   Linked O.Action = C.Action
 
 linkBundle
+  :: O.ObjectBundle
+  -> Either LinkError [(O.Label, LinkedObject)]
+linkBundle bundle = fst <$> runIdentity (linkBundle' bundle (\a -> pure (a, a)) mempty)
+
+linkBundle'
   :: (Monad m)
   => O.ObjectBundle
   -> (LinkedObject -> m (LinkedObject, a))
   -> SymbolTable
   -> m (Either LinkError ([(O.Label, a)], SymbolTable))
-linkBundle bundle transform = go [] $ O.getObjects bundle
+linkBundle' bundle transform = go [] $ O.getObjects bundle
   where
     go acc [] objects = pure $ pure (reverse acc, objects)
     go acc (x : xs) objects = do

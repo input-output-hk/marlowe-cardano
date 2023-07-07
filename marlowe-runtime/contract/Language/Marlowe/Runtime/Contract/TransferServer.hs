@@ -20,7 +20,7 @@ import qualified Data.HashSet as HashSet
 import qualified Data.Map as Map
 import Data.Maybe (mapMaybe)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Core
-import Language.Marlowe.Object.Link (LinkedObject (..), SymbolTable, linkBundle)
+import Language.Marlowe.Object.Link (LinkedObject (..), SymbolTable, linkBundle')
 import Language.Marlowe.Object.Types
 import Language.Marlowe.Protocol.Transfer.Server
 import Language.Marlowe.Protocol.Transfer.Types
@@ -68,7 +68,7 @@ transferServer TransferServerDependencies{..} =
             void commit
             pure idle
         , recvMsgUpload = \bundle -> lift do
-            result <- runExceptT $ linkBundle bundle (merkleizeAndStoreContracts stage) objects
+            result <- runExceptT $ linkBundle' bundle (merkleizeAndStoreContracts stage) objects
             case result of
               Left err -> pure $ SendMsgUploadFailed err idle
               Right (Left linkError) -> pure $ SendMsgUploadFailed (LinkError linkError) idle

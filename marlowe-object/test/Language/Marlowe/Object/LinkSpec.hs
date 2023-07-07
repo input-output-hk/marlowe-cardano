@@ -2,6 +2,7 @@
 
 module Language.Marlowe.Object.LinkSpec (spec) where
 
+import Control.Arrow (Arrow (..))
 import Data.Functor.Identity (Identity (..))
 import qualified Data.HashMap.Strict as HashMap
 import Language.Marlowe.Object.Gen ()
@@ -14,7 +15,7 @@ import Test.QuickCheck (Arbitrary (..), Gen, discard, elements, forAllShrink, (=
 spec :: Spec
 spec = do
   prop "linkObject . fromCore == id" \lbl linkedObj ->
-    runIdentity (linkObject (fromLinkedObject lbl linkedObj) pure mempty)
+    runIdentity (linkObject (fromLinkedObject lbl linkedObj) (pure . (id &&& id)) mempty)
       === Right (linkedObj, HashMap.singleton lbl linkedObj)
 
   prop "self reference" \lbl label' linkedObject ->
@@ -23,14 +24,15 @@ spec = do
       else
         let bundle = ObjectBundle [fromLinkedObject label' linkedObject, mkRefFromLinkedObject lbl label' linkedObject]
             results = [(label', linkedObject), (lbl, linkedObject)]
-         in runIdentity (linkBundle bundle pure mempty) === Right (results, HashMap.fromList results)
+         in runIdentity (linkBundle' bundle (pure . (id &&& id)) mempty)
+              === Right (results, HashMap.fromList results)
 
   prop "UnknownSymbol" \lbl someObjectType ->
-    runIdentity (linkObject (mkRefFromType lbl someObjectType) pure $ HashMap.delete lbl mempty)
+    runIdentity (linkObject (mkRefFromType lbl someObjectType) (pure . (id &&& id)) $ HashMap.delete lbl mempty)
       === Left (UnknownSymbol lbl)
 
   prop "DuplicateSymbol" \labelledObject linkedObject ->
-    runIdentity (linkObject labelledObject pure $ HashMap.singleton (_label labelledObject) linkedObject)
+    runIdentity (linkObject labelledObject (pure . (id &&& id)) $ HashMap.singleton (_label labelledObject) linkedObject)
       === Left (DuplicateLabel $ _label labelledObject)
 
   prop "TypeMismatch" \lbl label' linkedObject ->
@@ -38,12 +40,12 @@ spec = do
       then discard
       else forAllShrink (genTypeMismatch lbl label' linkedObject) shrink \labelledObject ->
         let bundle = ObjectBundle [fromLinkedObject label' linkedObject, labelledObject]
-         in runIdentity (linkBundle bundle pure mempty)
+         in linkBundle bundle
               === Left (TypeMismatch (labelledObjectType labelledObject) (linkedObjectType linkedObject))
 
   prop "linkObject . unlink == id" \linkedObject ->
     let (lbl, bundle) = unlink linkedObject
-     in (lookup lbl . fst <$> runIdentity (linkBundle bundle pure mempty)) === Right (Just linkedObject)
+     in (lookup lbl <$> linkBundle bundle) === Right (Just linkedObject)
 
 genTypeMismatch :: Label -> Label -> LinkedObject -> Gen LabelledObject
 genTypeMismatch lbl label' =
