@@ -93,7 +93,6 @@ executable marlowe-runtime-cli
     , plutus-ledger-api
     , stm
     , stm-delay
-    , tar
     , text
     , time
     , transformers
