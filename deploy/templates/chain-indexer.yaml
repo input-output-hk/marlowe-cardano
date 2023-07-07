@@ -36,6 +36,10 @@ spec:
         value: /ipc/node.socket
       - name: HTTP_PORT
         value: "3781"
+      - name: OTEL_EXPORTER_OTLP_ENDPOINT
+        value: http://grafana-agent.grafana-agent:4318
+      - name: OTEL_SERVICE_NAME
+        value: marlowe-chain-indexer-{{ $network }}
       image: {{ $.Values.images.repo }}/{{ $.Values.images.org }}/marlowe-chain-indexer:{{ $.Values.images.tag }}
       imagePullPolicy: Always
       memory: 8Gi

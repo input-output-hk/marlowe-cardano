@@ -23,6 +23,10 @@ spec:
           value: /store
         - name: HTTP_PORT
           value: "3787"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://grafana-agent.grafana-agent:4318
+        - name: OTEL_SERVICE_NAME
+          value: marlowe-contract-{{ . }}
         cpu: "0.5"
         image: {{ $.Values.images.repo }}/{{ $.Values.images.org }}/marlowe-contract:{{ $.Values.images.tag }}
         imagePullPolicy: Always

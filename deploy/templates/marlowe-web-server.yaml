@@ -19,6 +19,10 @@ spec:
           value: marlowe-proxy-{{ . }}.marlowe-staging
         - name: RUNTIME_PORT
           value: "3701"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://grafana-agent.grafana-agent:4318
+        - name: OTEL_SERVICE_NAME
+          value: marlowe-web-server-{{ . }}
         cpu: "0.5"
         image: {{ $.Values.images.repo }}/{{ $.Values.images.org }}/marlowe-web-server:{{ $.Values.images.tag }}
         imagePullPolicy: Always
