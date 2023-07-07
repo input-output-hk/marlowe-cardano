@@ -17,6 +17,7 @@ import Language.Marlowe.Runtime.CLI.Command.Apply (
   runApplyCommand,
  )
 import Language.Marlowe.Runtime.CLI.Command.Create (CreateCommand, createCommandParser, runCreateCommand)
+import Language.Marlowe.Runtime.CLI.Command.Export (ExportCommand, exportCommandParser, runExportCommand)
 import Language.Marlowe.Runtime.CLI.Command.Load
 import Language.Marlowe.Runtime.CLI.Command.Log (LogCommand, logCommandParser, runLogCommand)
 import Language.Marlowe.Runtime.CLI.Command.Query
@@ -44,6 +45,7 @@ data Command
   | Create (TxCommand CreateCommand)
   | Log LogCommand
   | Load LoadCommand
+  | Export ExportCommand
   | Query QueryCommand
   | Submit SubmitCommand
   | Withdraw (TxCommand WithdrawCommand)
@@ -75,6 +77,7 @@ getOptions = do
               mconcat
                 [ commandGroup "Contract store commands"
                 , command "load" $ Load <$> loadCommandParser
+                , command "export" $ Export <$> exportCommandParser
                 ]
           , hsubparser $
               mconcat
@@ -109,6 +112,7 @@ runCommand = \case
   Query cmd -> runQueryCommand cmd
   Withdraw cmd -> runWithdrawCommand cmd
   Load cmd -> runLoadCommand cmd
+  Export cmd -> runExportCommand cmd
 
 -- | Interpret a CLI action in IO using the provided options.
 runCLIWithOptions :: STM () -> Options -> CLI a -> IO a

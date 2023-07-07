@@ -44,7 +44,7 @@ loadCommandParser = info parser $ progDesc "Load a contract into the runtime"
       strArgument $
         mconcat
           [ metavar "FILE_PATH"
-          , help "A Marlowe contract bundle, as a TAR archive."
+          , help "A Marlowe contract archive, as a gzip-compressed TAR archive."
           ]
 
 runLoadCommand :: LoadCommand -> CLI ()

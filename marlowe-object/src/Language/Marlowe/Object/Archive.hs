@@ -1,23 +1,40 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Language.Marlowe.Object.Archive where
 
-import Codec.Archive.Tar (FormatError, extract)
+import Codec.Archive.Tar (FormatError)
+import qualified Codec.Archive.Tar as Tar
 import Codec.Archive.Tar.Check (FileNameError)
+import Codec.Compression.GZip (compress, decompress)
 import Control.Exception (IOException)
 import Control.Monad (unless)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), except, runExceptT, throwE, withExceptT)
 import Data.Aeson (FromJSON, ToJSON, eitherDecodeFileStrict)
-import Data.Binary (decodeFileOrFail)
+import qualified Data.Aeson as A
+import Data.Binary (decodeFileOrFail, encodeFile)
 import Data.Binary.Get (ByteOffset)
+import Data.ByteString.Base16 (encodeBase16)
+import qualified Data.ByteString.Lazy as LBS
+import qualified Data.DList as DList
 import Data.Foldable (asum)
+import qualified Data.Text as T
 import Data.Traversable (for)
 import GHC.Generics (Generic)
 import Language.Marlowe.Object.Types
 import System.FilePath ((</>))
-import UnliftIO (Handler (..), MonadIO (..), MonadUnliftIO, catches, withSystemTempDirectory)
-import UnliftIO.Directory (doesFileExist)
+import UnliftIO (
+  Handler (..),
+  MonadIO (..),
+  MonadUnliftIO,
+  atomicModifyIORef,
+  catches,
+  newIORef,
+  readIORef,
+  withSystemTempDirectory,
+ )
+import UnliftIO.Directory (doesFileExist, listDirectory)
 
 data BundleManifest = BundleManifest
   { mainIs :: Label
@@ -37,6 +54,7 @@ data ReadArchiveError
   | InvalidObjectFile FilePath ByteOffset String
   | MissingMain
   | WrongMainType SomeObjectType
+  deriving (Show)
 
 unpackArchive
   :: (MonadUnliftIO m)
@@ -48,7 +66,7 @@ unpackArchive archivePath f = withSystemTempDirectory "marlowe.bundle.extract" \
   unless exists $ throwE ArchiveNotFound
   ExceptT $
     liftIO $
-      (Right <$> extract archivePath extractDir)
+      (Right <$> extractGz archivePath extractDir)
         `catches` [ Handler $ pure . Left . ArchiveReadFailed
                   , Handler $ pure . Left . ExtractSecurityError
                   , Handler $ pure . Left . ExtractFormatError
@@ -57,6 +75,31 @@ unpackArchive archivePath f = withSystemTempDirectory "marlowe.bundle.extract" \
   mainType <- checkObjects manifest
   checkMain mainType
   lift $ f manifest
+
+packArchive
+  :: (MonadUnliftIO m)
+  => FilePath
+  -> Label
+  -> ((LabelledObject -> m ()) -> m a)
+  -> m a
+packArchive archivePath mainIs f = withSystemTempDirectory "marlowe.bundle.create" \baseDir -> do
+  objectsVar <- newIORef mempty
+  a <- f \obj -> do
+    let objectPath = T.unpack $ encodeBase16 $ unLabel $ _label obj
+    liftIO $ encodeFile (baseDir </> objectPath) obj
+    atomicModifyIORef objectsVar \objects -> (DList.snoc objects objectPath, ())
+  (DList.toList -> objects) <- readIORef objectsVar
+  liftIO $ A.encodeFile (baseDir </> "manifest.json") BundleManifest{..}
+  liftIO $ createGz archivePath baseDir =<< listDirectory baseDir
+  pure a
+
+extractGz :: FilePath -> FilePath -> IO ()
+extractGz archivePath extractDir =
+  Tar.unpack extractDir . Tar.read . decompress =<< LBS.readFile archivePath
+
+createGz :: FilePath -> FilePath -> [FilePath] -> IO ()
+createGz archivePath baseDir paths =
+  LBS.writeFile archivePath . compress . Tar.write =<< Tar.pack baseDir paths
 
 checkMain :: (Monad m) => Maybe SomeObjectType -> ExceptT ReadArchiveError m ()
 checkMain =

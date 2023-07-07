@@ -77,6 +77,7 @@ library
     , transformers ^>=0.5.6
     , unliftio ^>=0.2.1
     , unordered-containers ^>=0.2.19
+    , zlib ^>=0.6.3
 
 library gen
   import:          lang
