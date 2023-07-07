@@ -113,7 +113,7 @@ getOptions = do
   marloweQueryPortParser <- optParserWithEnvDefault O.syncQueryPort
   contractHostParser <- optParserWithEnvDefault O.contractHost
   marloweLoadPortParser <- optParserWithEnvDefault O.loadPort
-  marloweTransferPortParser <- optParserWithEnvDefault O.importPort
+  marloweTransferPortParser <- optParserWithEnvDefault O.transferPort
   contractQueryPortParser <- optParserWithEnvDefault O.contractQueryPort
   txHostParser <- optParserWithEnvDefault O.txHost
   txPortParser <- optParserWithEnvDefault O.txCommandPort
