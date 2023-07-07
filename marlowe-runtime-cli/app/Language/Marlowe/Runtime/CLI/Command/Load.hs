@@ -8,26 +8,26 @@ module Language.Marlowe.Runtime.CLI.Command.Load (
   runLoadCommand,
 ) where
 
-import Control.Monad (forever, unless)
+import Control.Monad (forever, replicateM, unless)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Marlowe.Class (runMarloweTransferClient)
-import Data.Binary (decodeFile)
+import Control.Monad.Trans.Maybe (MaybeT (..))
 import Data.ByteString.Base16 (encodeBase16)
-import Data.Foldable (traverse_)
+import Data.Foldable (for_, traverse_)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Text as T
-import Language.Marlowe.Object.Archive (BundleManifest (..), ReadArchiveError (..), unpackArchive)
-import Language.Marlowe.Object.Types (Label (..), ObjectBundle (..), SomeObjectType (..))
+import Language.Marlowe.Object.Archive (ReadArchiveError (..), unpackArchive)
+import Language.Marlowe.Object.Types (Label (..), LabelledObject (..), ObjectBundle (..), SomeObjectType (..))
 import Language.Marlowe.Protocol.Transfer.Types (ImportError)
 import Language.Marlowe.Runtime.CLI.Monad (CLI)
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash (..))
 import Language.Marlowe.Runtime.Client (importIncremental)
 import Options.Applicative (ParserInfo, help, info, metavar, progDesc, strArgument)
-import Pipes (Pipe, Producer, await, each, yield, (>->))
+import Pipes (Pipe, Producer, await, yield, (>->))
 import qualified Pipes.Prelude as P
 import System.Exit (die)
-import UnliftIO (Exception (displayException), liftIO, pooledMapConcurrently)
+import UnliftIO (Exception (displayException), liftIO)
 import UnliftIO.Directory (doesFileExist)
 
 newtype LoadCommand = LoadCommand
@@ -51,32 +51,28 @@ runLoadCommand :: LoadCommand -> CLI ()
 runLoadCommand LoadCommand{..} = do
   exists <- liftIO $ doesFileExist archivePath
   liftIO $ unless exists $ die "Bundle archive file does not exist"
-  result <- unpackArchive archivePath \manifest ->
+  result <- unpackArchive archivePath \mainIs readObject ->
     P.head $
-      bundles manifest
+      bundles readObject
         >-> (lift . handleError =<< runMarloweTransferClient importIncremental)
-        >-> collectMain manifest
+        >-> collectMain mainIs
   liftIO case result of
     Left err -> die $ formatReadArchiveError err
     Right Nothing -> die "Error: main not linked. This is a bug, please report it with the archive you were trying to load attached."
     Right (Just mainHash) -> putStrLn $ T.unpack $ encodeBase16 $ unDatumHash mainHash
 
-bundles :: BundleManifest -> Producer ObjectBundle CLI ()
-bundles BundleManifest{..} =
-  each (chunksOf 50 objects)
-    >-> (await >>= liftIO . pooledMapConcurrently decodeFile >>= yield . ObjectBundle)
-
-chunksOf :: Int -> [a] -> [[a]]
-chunksOf _ [] = []
-chunksOf i as = chunk : chunksOf i as'
-  where
-    (chunk, as') = splitAt i as
+bundles :: CLI (Maybe LabelledObject) -> Producer ObjectBundle CLI ()
+bundles readObject = do
+  mObjects <- lift $ runMaybeT $ replicateM 50 $ MaybeT readObject
+  for_ mObjects \objects -> do
+    yield $ ObjectBundle objects
+    bundles readObject
 
 handleError :: Maybe ImportError -> CLI ()
 handleError = maybe (pure ()) (liftIO . die . ("Failed to import bundle: " <>) . show)
 
-collectMain :: BundleManifest -> Pipe (Map Label DatumHash) DatumHash CLI ()
-collectMain BundleManifest{..} = forever $ traverse_ yield . Map.lookup mainIs =<< await
+collectMain :: Label -> Pipe (Map Label DatumHash) DatumHash CLI ()
+collectMain mainIs = forever $ traverse_ yield . Map.lookup mainIs =<< await
 
 formatReadArchiveError :: ReadArchiveError -> String
 formatReadArchiveError = \case

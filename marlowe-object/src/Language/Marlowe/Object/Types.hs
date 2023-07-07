@@ -5,6 +5,16 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TemplateHaskell #-}
 
+-- | Contains the core type definitions for Marlowe Object bundles. An object bundle is an ordered collection of objects
+-- identified by labels. Objects correspond to terms found in a Core Marlowe contract, and are identical to their core
+-- counterparts except for the fact that objects can substitute an object reference for an inline term. Ordering matters
+-- because an object may only use a previously defined label as a reference (i.e. cyclic references are explicitly
+-- forbidden). This also forces an object bundle to list leaf terms first and build up composite terms progressively,
+-- which makes the format well suited for incremental processing (e.g. contract merkleization).
+--
+-- The following core terms can be objects: actions, contracts, observations, parties, tokens and values.
+--
+-- This module defines the types, several useful instances for them, optics, and conversion functions for core terms.
 module Language.Marlowe.Object.Types where
 
 import Cardano.Api (
@@ -16,7 +26,7 @@ import Cardano.Api (
   serialiseToBech32,
  )
 import Cardano.Api.Byron (ShelleyAddr)
-import Control.Applicative (Alternative (many), empty, liftA2)
+import Control.Applicative (empty, liftA2)
 import Control.Lens (Lens', Plated (..), Prism', makeLensesFor, makePrisms, prism', traversal)
 import Control.Monad (join)
 import Data.Aeson hiding (Object, String, Value)
@@ -28,7 +38,7 @@ import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16', encodeBase16)
 import qualified Data.ByteString.Char8 as BS8
 import Data.Either (fromRight)
-import Data.Foldable (asum, traverse_)
+import Data.Foldable (asum)
 import Data.Function (on)
 import Data.Hashable (Hashable)
 import Data.List (intercalate)
@@ -54,6 +64,7 @@ import qualified Plutus.V2.Ledger.Api as PV2
 import Text.Read (Lexeme (..), ReadPrec, parens, prec, reset, step)
 import Unsafe.Coerce (unsafeCoerce)
 
+-- | A newtype wrapper for a ByteString which is parsed and rendered as an ascii string.
 newtype Verbatim = Verbatim {unVerbatim :: ByteString}
   deriving newtype (Eq, Ord, Show, Read, IsString, Variations)
 
@@ -69,11 +80,13 @@ instance FromJSON Verbatim where
 instance FromJSONKey Verbatim where
   fromJSONKey = FromJSONKeyText $ Verbatim . BS8.pack . T.unpack
 
+-- | A label that refers to an object in a bundle.
 newtype Label = Label {unLabel :: ByteString}
   deriving (Show, Read, Generic, Eq, Ord)
   deriving (IsString, FromJSON, ToJSON, FromJSONKey, ToJSONKey) via Verbatim
   deriving newtype (Binary, Variations, Hashable)
 
+-- | A timeout in a contract.
 newtype Timeout = Timeout {unTimeout :: UTCTime}
   deriving stock (Generic, Show, Read, Eq, Ord)
   deriving anyclass (Variations)
@@ -121,18 +134,26 @@ instance ToJSON Timeout where
 instance FromJSON Timeout where
   parseJSON v = Timeout . posixSecondsToUTCTime . secondsToNominalDiffTime . (/ 1000000) . fromInteger <$> parseJSON v
 
+-- | Convert a timeout to its core representation.
 toCoreTimeout :: Timeout -> Core.Timeout
 toCoreTimeout = PV2.POSIXTime . floor . (* 1000000) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds . unTimeout
 
+-- | Convert a core timeout to its object representation.
 fromCoreTimeout :: Core.Timeout -> Timeout
 fromCoreTimeout = Timeout . posixSecondsToUTCTime . secondsToNominalDiffTime . (/ 1000000) . fromInteger . getPOSIXTime
 
+-- | A case in a When contract, consisting of an action and a continuation contract (either an inline contract or a hash
+-- in the case of a merkleized contract).
 data Case
-  = Case Action Contract
-  | MerkleizedCase Action ContractHash
+  = -- | A case with an inline continuation
+    Case Action Contract
+  | -- | A case with a hashed continuation
+    MerkleizedCase Action ContractHash
   deriving stock (Show, Read, Generic, Eq, Ord)
   deriving anyclass (Binary)
 
+-- | The immediate child cases of a case are all cases in its continuation which don't have another case between them
+-- (can descend through arbitrarily many levels of contract constructors).
 instance Plated Case where
   plate = traversal \focus -> \case
     Case a c -> Case a <$> visitContractCases focus c
@@ -158,6 +179,7 @@ instance FromJSON Case where
         , MerkleizedCase <$> "case" <*> "merkleized_then"
         ]
 
+-- | Convert a core case to its object representation.
 fromCoreCase :: Core.Case Core.Contract -> Case
 fromCoreCase = \case
   Core.Case action contract ->
@@ -165,11 +187,16 @@ fromCoreCase = \case
   Core.MerkleizedCase action hash ->
     MerkleizedCase (fromCoreAction action) (fromCoreContractHash hash)
 
+-- | An action that can be matched by applying an input to a contract.
 data Action
-  = Deposit AccountId Party Token Value
-  | Choice ChoiceId [Bound]
-  | Notify Observation
-  | ActionRef Label
+  = -- | An action matched by a deposit input for the given parameters.
+    Deposit AccountId Party Token Value
+  | -- | An action matched by a choice input for the given parameters.
+    Choice ChoiceId [Bound]
+  | -- | An action matched by a notify input if the observation evaluates to true.
+    Notify Observation
+  | -- | A reference to a previously defined action.
+    ActionRef Label
   deriving stock (Show, Read, Generic, Eq, Ord)
   deriving anyclass (Binary, Variations)
 
@@ -199,6 +226,7 @@ instance FromJSON Action where
         , ActionRef <$> "ref"
         ]
 
+-- | Convert a core action to its object representation.
 fromCoreAction :: Core.Action -> Action
 fromCoreAction = \case
   Core.Deposit accountId party token val ->
@@ -208,23 +236,39 @@ fromCoreAction = \case
   Core.Notify obs ->
     Notify (fromCoreObservation obs)
 
+-- | An integer quantity that depends on the state of the contract and the current time interval.
 data Value
-  = AvailableMoney AccountId Token
-  | Constant Integer
-  | NegValue Value
-  | AddValue Value Value
-  | SubValue Value Value
-  | MulValue Value Value
-  | DivValue Value Value
-  | ChoiceValue ChoiceId
-  | TimeIntervalStart
-  | TimeIntervalEnd
-  | UseValue ValueId
-  | Cond Observation Value Value
-  | ValueRef Label
+  = -- | The amount of a given token currently in an account.
+    AvailableMoney AccountId Token
+  | -- | A constant value.
+    Constant Integer
+  | -- | Negate a value.
+    NegValue Value
+  | -- | Add two values.
+    AddValue Value Value
+  | -- | Subtract the second value from the first.
+    SubValue Value Value
+  | -- | Multiply two values.
+    MulValue Value Value
+  | -- | Divide two values and discard the remainder. Division by zero is arbitrarily defined as zero.
+    DivValue Value Value
+  | -- | The value that has been chosen for a certain choice ID. Defaults to zero.
+    ChoiceValue ChoiceId
+  | -- | The start of the current transaction's time interval, in POSIX milliseconds.
+    TimeIntervalStart
+  | -- | The end of the current transaction's time interval, in POSIX milliseconds
+    TimeIntervalEnd
+  | -- | Use a value that was previously defined in a Let-contract. Defaults to zero
+    UseValue ValueId
+  | -- | Choses the first value if the condition evaluates to true, the second one otherwise.
+    Cond Observation Value Value
+  | -- | A reference to a previously defined value.
+    ValueRef Label
   deriving stock (Show, Read, Generic, Eq, Ord)
   deriving anyclass (Binary)
 
+-- | The immediate children of a value are any value sub-terms. Note that observation and value are mutually recursive,
+-- so observations also must be traversed until a value is reached.
 instance Plated Value where
   plate = traversal \focus -> \case
     AvailableMoney a b -> pure $ AvailableMoney a b
@@ -241,6 +285,7 @@ instance Plated Value where
     Cond a b c -> Cond <$> visitObservationValues focus a <*> focus b <*> focus c
     ValueRef l -> pure $ ValueRef l
 
+-- | Visit all the observations in a value to a depth of one (i.e. don't descend into sub-terms of observations).
 visitValueObservations :: (Applicative f) => (Observation -> f Observation) -> Value -> f Value
 visitValueObservations f = \case
   AddValue a b -> on (liftA2 AddValue) (visitValueObservations f) a b
@@ -334,6 +379,7 @@ instance Num Value where
   fromInteger = Constant
   negate = NegValue
 
+-- | Convert a core value to its object representation.
 fromCoreValue :: Core.Value Core.Observation -> Value
 fromCoreValue = \case
   Core.AvailableMoney a b -> AvailableMoney (fromCoreParty a) (fromCoreToken b)
@@ -349,22 +395,38 @@ fromCoreValue = \case
   Core.TimeIntervalEnd -> TimeIntervalEnd
   Core.Cond a b c -> Cond (fromCoreObservation a) (fromCoreValue b) (fromCoreValue c)
 
+-- | An observation is a value that is either true or false depending on the state of the contract and the time interval
+-- of the current transaction.
 data Observation
-  = AndObs Observation Observation
-  | OrObs Observation Observation
-  | NotObs Observation
-  | ChoseSomething ChoiceId
-  | ValueGE Value Value
-  | ValueGT Value Value
-  | ValueLT Value Value
-  | ValueLE Value Value
-  | ValueEQ Value Value
-  | TrueObs
-  | FalseObs
-  | ObservationRef Label
+  = -- | Logical conjunction of two observations.
+    AndObs Observation Observation
+  | -- | Logical disjunction of two observations.
+    OrObs Observation Observation
+  | -- | Logical negation of an observation.
+    NotObs Observation
+  | -- | True if a choice ID has an associated value.
+    ChoseSomething ChoiceId
+  | -- | True if the first value is greater-then or equal to the second.
+    ValueGE Value Value
+  | -- | True if the first value is greater-then the second.
+    ValueGT Value Value
+  | -- | True if the first value is less-then the second.
+    ValueLT Value Value
+  | -- | True if the first value is less-then or equal to the second.
+    ValueLE Value Value
+  | -- | True if the first value is equal to the second.
+    ValueEQ Value Value
+  | -- | A true observation.
+    TrueObs
+  | -- | A false observation.
+    FalseObs
+  | -- | A reference to a previously defined observation.
+    ObservationRef Label
   deriving stock (Show, Read, Generic, Eq, Ord)
   deriving anyclass (Binary)
 
+-- | The immediate children of a observation are any observation sub-terms. Note that observation and value are mutually recursive,
+-- so value also must be traversed until a observations is reached.
 instance Plated Observation where
   plate = traversal \focus -> \case
     AndObs a b -> on (liftA2 AndObs) focus a b
@@ -380,6 +442,7 @@ instance Plated Observation where
     FalseObs -> pure FalseObs
     ObservationRef l -> pure $ ObservationRef l
 
+-- | Visit all the value in a observations to a depth of one (i.e. don't descend into sub-terms of value).
 visitObservationValues :: (Applicative f) => (Value -> f Value) -> Observation -> f Observation
 visitObservationValues f = \case
   AndObs a b -> on (liftA2 AndObs) (visitObservationValues f) a b
@@ -457,6 +520,7 @@ instance FromJSON Observation where
           , ObservationRef <$> "ref"
           ]
 
+-- | Convert a core observation to its object representation.
 fromCoreObservation :: Core.Observation -> Observation
 fromCoreObservation = \case
   Core.AndObs a b -> on AndObs fromCoreObservation a b
@@ -866,6 +930,7 @@ instance Variations Value where
         , ValueRef <$> variations
         ]
 
+-- A singleton witness of the type of an object.
 data ObjectType a where
   ValueType :: ObjectType Value
   ObservationType :: ObjectType Observation
@@ -901,6 +966,7 @@ instance ToJSON (ObjectType a) where
     TokenType -> "token"
     ActionType -> "action"
 
+-- | An existential encoding of an ObjectType.
 newtype SomeObjectType = UnsafeSomeObjectType (ObjectType Any)
   deriving newtype (ToJSON)
 
@@ -1008,34 +1074,41 @@ instance Variations SomeObjectType where
       , SomeObjectType ActionType
       ]
 
+-- | An object type paired with a value whose type is determined by the value of the object type.
 data Object where
   Object :: ObjectType a -> a -> Object
 
+-- | A prism that focuses on an object if it is a value.
 _ValueObject :: Prism' Object Value
 _ValueObject = prism' (Object ValueType) \case
   Object ValueType a -> Just a
   _ -> Nothing
 
+-- | A prism that focuses on an object if it is an observation.
 _ObservationObject :: Prism' Object Observation
 _ObservationObject = prism' (Object ObservationType) \case
   Object ObservationType a -> Just a
   _ -> Nothing
 
+-- | A prism that focuses on an object if it is a contract.
 _ContractObject :: Prism' Object Contract
 _ContractObject = prism' (Object ContractType) \case
   Object ContractType a -> Just a
   _ -> Nothing
 
+-- | A prism that focuses on an object if it is a party.
 _PartyObject :: Prism' Object Party
 _PartyObject = prism' (Object PartyType) \case
   Object PartyType a -> Just a
   _ -> Nothing
 
+-- | A prism that focuses on an object if it is a token.
 _TokenObject :: Prism' Object Token
 _TokenObject = prism' (Object TokenType) \case
   Object TokenType a -> Just a
   _ -> Nothing
 
+-- | A prism that focuses on an object if it is an action.
 _ActionObject :: Prism' Object Action
 _ActionObject = prism' (Object ActionType) \case
   Object ActionType a -> Just a
@@ -1104,13 +1177,18 @@ instance Ord Object where
     (_, TokenType) -> GT
     (ActionType, ActionType) -> compare v v'
 
+-- | An object with a label.
 data LabelledObject = forall a.
   LabelledObject
   { _label :: Label
+  -- ^ The label of the object
   , _type :: ObjectType a
+  -- ^ The type of the object
   , _value :: a
+  -- ^ The value of the object
   }
 
+-- | A lens that focuses on the type and value of a labelled object.
 object :: Lens' LabelledObject Object
 object f LabelledObject{..} = (\(Object t a) -> LabelledObject _label t a) <$> f (Object _type _value)
 
@@ -1247,11 +1325,7 @@ labelledObjectType LabelledObject{..} = SomeObjectType _type
 
 newtype ObjectBundle = ObjectBundle {getObjects :: [LabelledObject]}
   deriving stock (Show, Read, Generic, Eq, Ord)
-  deriving anyclass (FromJSON, ToJSON, Variations)
-
-instance Binary ObjectBundle where
-  put = traverse_ put . getObjects
-  get = ObjectBundle <$> many get
+  deriving anyclass (FromJSON, ToJSON, Variations, Binary)
 
 makePrisms ''Contract
 makePrisms ''ObjectBundle
@@ -1272,5 +1346,3 @@ makePrisms ''Action
 makePrisms ''Case
 
 makeLensesFor [("_label", "label")] ''LabelledObject
-
--- foo = _Bound

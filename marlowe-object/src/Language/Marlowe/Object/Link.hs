@@ -1,8 +1,9 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeFamilyDependencies #-}
 
+-- | Defines functions and type related to linking an object bundle into a collection of core terms.
 module Language.Marlowe.Object.Link where
 
 import Cardano.Api (
@@ -46,6 +47,7 @@ import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
 import Data.HashSet (HashSet)
 import qualified Data.HashSet as HashSet
+import Data.Kind (Type)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text.Encoding as T
@@ -59,6 +61,7 @@ import Plutus.V1.Ledger.Api (ToData)
 import Plutus.V2.Ledger.Api (toBuiltin, toData)
 import qualified Plutus.V2.Ledger.Api as PV2
 
+-- | Something that can go wrong when linking.
 data LinkError
   = UnknownSymbol O.Label
   | DuplicateLabel O.Label
@@ -66,8 +69,10 @@ data LinkError
   deriving stock (Show, Read, Generic, Eq, Ord)
   deriving anyclass (FromJSON, ToJSON, Binary, Variations)
 
+-- | The state of the linker.
 type SymbolTable = HashMap O.Label LinkedObject
 
+-- | A linked object, corresponding to the core representation of each object type.
 data LinkedObject
   = LinkedValue (C.Value C.Observation)
   | LinkedObservation C.Observation
@@ -78,7 +83,8 @@ data LinkedObject
   deriving stock (Show, Generic, Eq, Ord)
   deriving anyclass (FromJSON, ToJSON)
 
-type family Linked o where
+-- | A type family that provides a bidirectional mapping of core and object term types.
+type family Linked (o :: Type) = (r :: Type) | r -> o where
   Linked O.Value = C.Value C.Observation
   Linked O.Observation = C.Observation
   Linked O.Contract = C.Contract
@@ -86,16 +92,22 @@ type family Linked o where
   Linked O.Token = C.Token
   Linked O.Action = C.Action
 
+-- | Link a bundle, producing a list of labels and linked objects.
 linkBundle
   :: O.ObjectBundle
   -> Either LinkError [(O.Label, LinkedObject)]
 linkBundle bundle = fst <$> runIdentity (linkBundle' bundle (\a -> pure (a, a)) mempty)
 
+-- | A more flexible version of linkBundle, which runs in any Monad and allows terms to be rewritten as they are linked.
+-- The rewritten term is stored in the symbol table, and the second value is added to the resulting association list.
 linkBundle'
   :: (Monad m)
   => O.ObjectBundle
+  -- ^ The object bundle to link.
   -> (LinkedObject -> m (LinkedObject, a))
+  -- ^ A function that rewrites a linked object and converts it to a polymorphic result.
   -> SymbolTable
+  -- ^ The initial symbol table.
   -> m (Either LinkError ([(O.Label, a)], SymbolTable))
 linkBundle' bundle transform = go [] $ O.getObjects bundle
   where
@@ -105,6 +117,37 @@ linkBundle' bundle transform = go [] $ O.getObjects bundle
       case result of
         Left err -> pure $ Left err
         Right (linked, objects') -> go ((x ^. O.label, linked) : acc) xs objects'
+
+-- | A partial inverse of linkBundle. It decomposes a linked object into an object bundle with a naive optimization
+-- rule: if the same term appears more than once, replace all instances of it with a reference, otherwise leave it
+-- inlined. In some cases, this will make the bundle less space-efficient if the term being replaced is smaller than the
+-- size of the label.
+unlink :: LinkedObject -> (O.Label, O.ObjectBundle)
+unlink linked = (label, O.ObjectBundle $ DList.toList $ DList.snoc bundle labelled)
+  where
+    labelled = case unlinked of
+      O.Object t v -> O.LabelledObject label t v
+    label = mkLabel linked
+    (unlinked, bundle) = case linked of
+      LinkedValue a ->
+        first (O.Object O.ValueType) $
+          evalRWS (visit O.ValueType a) counts mempty
+      LinkedObservation a ->
+        first (O.Object O.ObservationType) $
+          evalRWS (visit O.ObservationType a) counts mempty
+      LinkedContract a ->
+        first (O.Object O.ContractType) $
+          evalRWS (visit O.ContractType a) counts mempty
+      LinkedParty a ->
+        first (O.Object O.PartyType) $
+          evalRWS (visit O.PartyType a) counts mempty
+      LinkedToken a ->
+        first (O.Object O.TokenType) $
+          evalRWS (visit O.TokenType a) counts mempty
+      LinkedAction a ->
+        first (O.Object O.ActionType) $
+          evalRWS (visit O.ActionType a) counts mempty
+    counts = execState (countOccurrences linked) mempty
 
 linkObject
   :: (Monad m)
@@ -284,33 +327,6 @@ linkedObjectType = \case
   LinkedParty _ -> O.SomeObjectType O.PartyType
   LinkedToken _ -> O.SomeObjectType O.TokenType
   LinkedAction _ -> O.SomeObjectType O.ActionType
-
-unlink :: LinkedObject -> (O.Label, O.ObjectBundle)
-unlink linked = (label, O.ObjectBundle $ DList.toList $ DList.snoc bundle labelled)
-  where
-    labelled = case unlinked of
-      O.Object t v -> O.LabelledObject label t v
-    label = mkLabel linked
-    (unlinked, bundle) = case linked of
-      LinkedValue a ->
-        first (O.Object O.ValueType) $
-          evalRWS (visit O.ValueType a) counts mempty
-      LinkedObservation a ->
-        first (O.Object O.ObservationType) $
-          evalRWS (visit O.ObservationType a) counts mempty
-      LinkedContract a ->
-        first (O.Object O.ContractType) $
-          evalRWS (visit O.ContractType a) counts mempty
-      LinkedParty a ->
-        first (O.Object O.PartyType) $
-          evalRWS (visit O.PartyType a) counts mempty
-      LinkedToken a ->
-        first (O.Object O.TokenType) $
-          evalRWS (visit O.TokenType a) counts mempty
-      LinkedAction a ->
-        first (O.Object O.ActionType) $
-          evalRWS (visit O.ActionType a) counts mempty
-    counts = execState (countOccurrences linked) mempty
 
 visit
   :: O.ObjectType a

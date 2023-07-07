@@ -1,6 +1,12 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ViewPatterns #-}
 
+-- | Provides types and functions for working with object bundle archives. This is a disk-based representation of an
+-- object bundle. The bundle is encoded as a TAR archive with each object being stored in a separate archive entry. It
+-- contains an additional manifest file that defines the order of the objects and the label of the main contract object.
+-- As such, it is a self-contained representation of a single bundled core Marlowe contract.
+--
+-- The TAR archive is compressed with gzip.
 module Language.Marlowe.Object.Archive where
 
 import Codec.Archive.Tar (FormatError)
@@ -11,9 +17,10 @@ import Control.Exception (IOException)
 import Control.Monad (unless)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), except, runExceptT, throwE, withExceptT)
+import Control.Monad.Trans.Maybe (MaybeT (..), runMaybeT)
 import Data.Aeson (FromJSON, ToJSON, eitherDecodeFileStrict)
 import qualified Data.Aeson as A
-import Data.Binary (decodeFileOrFail, encodeFile)
+import Data.Binary (decodeFile, decodeFileOrFail, encodeFile)
 import Data.Binary.Get (ByteOffset)
 import Data.ByteString.Base16 (encodeBase16)
 import qualified Data.ByteString.Lazy as LBS
@@ -36,9 +43,12 @@ import UnliftIO (
  )
 import UnliftIO.Directory (doesFileExist, listDirectory)
 
+-- | A record that defines the main object of the bundle and maps entry file paths in the archive to ordered bundle objects.
 data BundleManifest = BundleManifest
   { mainIs :: Label
+  -- ^ The label of the main contract object.
   , objects :: [FilePath]
+  -- ^ The paths of the archive entries in their bundle order.
   }
   deriving stock (Show, Read, Eq, Ord, Generic)
   deriving anyclass (FromJSON, ToJSON)
@@ -56,10 +66,14 @@ data ReadArchiveError
   | WrongMainType SomeObjectType
   deriving (Show)
 
+-- | Unpack and read the contents of a bundle archive file.
 unpackArchive
   :: (MonadUnliftIO m)
   => FilePath
-  -> (BundleManifest -> m a)
+  -- ^ The path of the archive file (as a gzipped tarball).
+  -> (Label -> m (Maybe LabelledObject) -> m a)
+  -- ^ An action which receives the label of the main object and an action which can be repeatedly performed to iterate
+  -- through the bundle's objects.
   -> m (Either ReadArchiveError a)
 unpackArchive archivePath f = withSystemTempDirectory "marlowe.bundle.extract" \extractDir -> runExceptT do
   exists <- doesFileExist archivePath
@@ -74,12 +88,20 @@ unpackArchive archivePath f = withSystemTempDirectory "marlowe.bundle.extract" \
   manifest <- validateManifestAndResolvePaths extractDir
   mainType <- checkObjects manifest
   checkMain mainType
-  lift $ f manifest
+  cursor <- newIORef $ objects manifest
+  lift $ f (mainIs manifest) $ runMaybeT do
+    path <- MaybeT $ atomicModifyIORef cursor \case
+      [] -> ([], Nothing)
+      x : xs -> (xs, Just x)
+    liftIO $ decodeFile path
 
+-- | Pack a bundle archive file as a gzipped tarball.
 packArchive
   :: (MonadUnliftIO m)
   => FilePath
+  -- ^ The path of the archive file to write.
   -> Label
+  -- ^ The label of the main contract object.
   -> ((LabelledObject -> m ()) -> m a)
   -> m a
 packArchive archivePath mainIs f = withSystemTempDirectory "marlowe.bundle.create" \baseDir -> do
