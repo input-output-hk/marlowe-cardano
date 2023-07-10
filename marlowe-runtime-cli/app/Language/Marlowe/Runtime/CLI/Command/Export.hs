@@ -42,8 +42,8 @@ exportCommandParser = info parser $ progDesc "Export a contract from the contrac
           [ metavar "FILE_PATH"
           , long "out-path"
           , short 'o'
-          , value "out.tar.gz"
-          , help "A filepath to which to write the resulting archive file (as a gzip-compressed tar archive)."
+          , value "out.zip"
+          , help "A filepath to which to write the resulting archive file (as a zip archive)."
           ]
     contractHashArgument =
       strArgument $

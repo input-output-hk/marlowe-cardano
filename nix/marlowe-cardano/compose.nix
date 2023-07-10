@@ -277,6 +277,9 @@ let
       "--marlowe-contract-host"
       "marlowe-contract"
     ];
+    volumes = [
+      "marlowe-contract-store:/store"
+    ];
     environment = [ "OTEL_SERVICE_NAME=marlowe-proxy" ];
   };
 

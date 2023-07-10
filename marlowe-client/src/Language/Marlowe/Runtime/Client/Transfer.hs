@@ -32,18 +32,24 @@ importBundle bundle =
 -- save them to the store. Yields mappings of the original contract labels to their store hashes.
 importIncremental
   :: (Functor m) => MarloweTransferClient (Pipe ObjectBundle (Map Label DatumHash) m) (Maybe ImportError)
-importIncremental = MarloweTransferClient $ SendMsgStartImport . upload <$> await
+importIncremental = MarloweTransferClient $ SendMsgStartImport <$> upload
   where
-    upload bundle =
-      SendMsgUpload
-        bundle
-        ClientStUpload
-          { recvMsgUploadFailed = pure . SendMsgDone . Just
-          , recvMsgUploaded = \hashes -> do
-              yield hashes
-              nextBundle <- await
-              pure $ upload nextBundle
-          }
+    upload = do
+      bundle <- await
+      case bundle of
+        ObjectBundle [] -> do
+          yield mempty
+          pure $ SendMsgImported $ SendMsgDone Nothing
+        _ ->
+          pure $
+            SendMsgUpload
+              bundle
+              ClientStUpload
+                { recvMsgUploadFailed = pure . SendMsgDone . Just
+                , recvMsgUploaded = \hashes -> do
+                    yield hashes
+                    upload
+                }
 
 -- | Exports a contract from the runtime as a single object bundle. The first argument controls the batch size.
 exportContract :: (Applicative m) => Natural -> DatumHash -> MarloweTransferClient m (Maybe ObjectBundle)

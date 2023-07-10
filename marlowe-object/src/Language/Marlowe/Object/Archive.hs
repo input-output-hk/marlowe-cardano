@@ -2,18 +2,19 @@
 {-# LANGUAGE ViewPatterns #-}
 
 -- | Provides types and functions for working with object bundle archives. This is a disk-based representation of an
--- object bundle. The bundle is encoded as a TAR archive with each object being stored in a separate archive entry. It
+-- object bundle. The bundle is encoded as a zip archive with each object being stored in a separate archive entry. It
 -- contains an additional manifest file that defines the order of the objects and the label of the main contract object.
 -- As such, it is a self-contained representation of a single bundled core Marlowe contract.
---
--- The TAR archive is compressed with gzip.
 module Language.Marlowe.Object.Archive where
 
-import Codec.Archive.Tar (FormatError)
-import qualified Codec.Archive.Tar as Tar
-import Codec.Archive.Tar.Check (FileNameError)
-import Codec.Compression.GZip (compress, decompress)
-import Control.Exception (IOException)
+import Codec.Archive.Zip (
+  CompressionMethod (..),
+  createArchive,
+  mkEntrySelector,
+  packDirRecur,
+  unpackInto,
+  withArchive,
+ )
 import Control.Monad (unless)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), except, runExceptT, throwE, withExceptT)
@@ -23,7 +24,6 @@ import qualified Data.Aeson as A
 import Data.Binary (decodeFile, decodeFileOrFail, encodeFile)
 import Data.Binary.Get (ByteOffset)
 import Data.ByteString.Base16 (encodeBase16)
-import qualified Data.ByteString.Lazy as LBS
 import qualified Data.DList as DList
 import Data.Foldable (asum)
 import qualified Data.Text as T
@@ -32,16 +32,14 @@ import GHC.Generics (Generic)
 import Language.Marlowe.Object.Types
 import System.FilePath ((</>))
 import UnliftIO (
-  Handler (..),
   MonadIO (..),
   MonadUnliftIO,
   atomicModifyIORef,
-  catches,
   newIORef,
   readIORef,
   withSystemTempDirectory,
  )
-import UnliftIO.Directory (doesFileExist, listDirectory)
+import UnliftIO.Directory (doesFileExist)
 
 -- | A record that defines the main object of the bundle and maps entry file paths in the archive to ordered bundle objects.
 data BundleManifest = BundleManifest
@@ -55,9 +53,6 @@ data BundleManifest = BundleManifest
 
 data ReadArchiveError
   = ArchiveNotFound
-  | ArchiveReadFailed IOException
-  | ExtractSecurityError FileNameError
-  | ExtractFormatError FormatError
   | MissingManifest
   | InvalidManifest String
   | MissingObjectFile FilePath
@@ -70,7 +65,7 @@ data ReadArchiveError
 unpackArchive
   :: (MonadUnliftIO m)
   => FilePath
-  -- ^ The path of the archive file (as a gzipped tarball).
+  -- ^ The path of the archive file (as a zip archive).
   -> (Label -> m (Maybe LabelledObject) -> m a)
   -- ^ An action which receives the label of the main object and an action which can be repeatedly performed to iterate
   -- through the bundle's objects.
@@ -78,13 +73,7 @@ unpackArchive
 unpackArchive archivePath f = withSystemTempDirectory "marlowe.bundle.extract" \extractDir -> runExceptT do
   exists <- doesFileExist archivePath
   unless exists $ throwE ArchiveNotFound
-  ExceptT $
-    liftIO $
-      (Right <$> extractGz archivePath extractDir)
-        `catches` [ Handler $ pure . Left . ArchiveReadFailed
-                  , Handler $ pure . Left . ExtractSecurityError
-                  , Handler $ pure . Left . ExtractFormatError
-                  ]
+  liftIO $ extractZip archivePath extractDir
   manifest <- validateManifestAndResolvePaths extractDir
   mainType <- checkObjects manifest
   checkMain mainType
@@ -95,7 +84,7 @@ unpackArchive archivePath f = withSystemTempDirectory "marlowe.bundle.extract" \
       x : xs -> (xs, Just x)
     liftIO $ decodeFile path
 
--- | Pack a bundle archive file as a gzipped tarball.
+-- | Pack a bundle archive file as a zip archive.
 packArchive
   :: (MonadUnliftIO m)
   => FilePath
@@ -112,16 +101,14 @@ packArchive archivePath mainIs f = withSystemTempDirectory "marlowe.bundle.creat
     atomicModifyIORef objectsVar \objects -> (DList.snoc objects objectPath, ())
   (DList.toList -> objects) <- readIORef objectsVar
   liftIO $ A.encodeFile (baseDir </> "manifest.json") BundleManifest{..}
-  liftIO $ createGz archivePath baseDir =<< listDirectory baseDir
+  liftIO $ createZip archivePath baseDir
   pure a
 
-extractGz :: FilePath -> FilePath -> IO ()
-extractGz archivePath extractDir =
-  Tar.unpack extractDir . Tar.read . decompress =<< LBS.readFile archivePath
+extractZip :: FilePath -> FilePath -> IO ()
+extractZip archivePath = withArchive archivePath . unpackInto
 
-createGz :: FilePath -> FilePath -> [FilePath] -> IO ()
-createGz archivePath baseDir paths =
-  LBS.writeFile archivePath . compress . Tar.write =<< Tar.pack baseDir paths
+createZip :: FilePath -> FilePath -> IO ()
+createZip archivePath baseDir = createArchive archivePath $ packDirRecur Zstd mkEntrySelector baseDir
 
 checkMain :: (Monad m) => Maybe SomeObjectType -> ExceptT ReadArchiveError m ()
 checkMain =
