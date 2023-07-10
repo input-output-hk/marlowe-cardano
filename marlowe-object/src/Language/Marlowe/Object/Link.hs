@@ -509,9 +509,7 @@ fromLinkedObject lbl = \case
 
 hashLabel :: (ToData a) => Text -> a -> O.Label
 hashLabel prefix a =
-  O.Label $
-    T.encodeUtf8 $
-      prefix <> "-" <> encodeBase16 (serialiseToRawBytes $ hashScriptData $ fromPlutusData $ toData a)
+  O.Label $ prefix <> "-" <> encodeBase16 (serialiseToRawBytes $ hashScriptData $ fromPlutusData $ toData a)
 
 linkedChildren :: Fold LinkedObject LinkedObject
 linkedChildren = folding \case

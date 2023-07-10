@@ -11,7 +11,6 @@ import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import Control.Monad.Trans.RWS (RWST, evalRWST, get, modify, tell)
 import Control.Monad.Trans.Resource (ReleaseKey, ResourceT, unprotect)
-import Data.Coerce (coerce)
 import qualified Data.DList as DList
 import Data.Foldable (traverse_)
 import Data.Functor (void)
@@ -109,7 +108,7 @@ getClosureInExportOrder store rootHash = runMaybeT $ DList.toList . snd <$> eval
 loadContract :: (MonadFail m) => ContractStore m -> DatumHash -> m LabelledObject
 loadContract store hash = do
   Just ContractWithAdjacency{..} <- getContract store hash
-  pure $ LabelledObject (coerce hash) ContractType $ fromCoreContract contract
+  pure $ LabelledObject (read $ show hash) ContractType $ fromCoreContract contract
 
 merkleizeAndStoreContracts
   :: (Monad m) => ContractStagingArea m -> LinkedObject -> ExceptT ImportError m (LinkedObject, Maybe DatumHash)
