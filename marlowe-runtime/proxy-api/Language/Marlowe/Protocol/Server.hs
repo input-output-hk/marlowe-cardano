@@ -24,6 +24,14 @@ import Language.Marlowe.Protocol.Sync.Client (marloweSyncClientPeer, serveMarlow
 import Language.Marlowe.Protocol.Sync.Server (MarloweSyncServer, hoistMarloweSyncServer, marloweSyncServerPeer)
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
 import qualified Language.Marlowe.Protocol.Sync.Types as Sync
+import Language.Marlowe.Protocol.Transfer.Client (marloweTransferClientPeer, serveMarloweTransferClient)
+import Language.Marlowe.Protocol.Transfer.Server (
+  MarloweTransferServer (..),
+  hoistMarloweTransferServer,
+  marloweTransferServerPeer,
+ )
+import Language.Marlowe.Protocol.Transfer.Types (MarloweTransfer)
+import qualified Language.Marlowe.Protocol.Transfer.Types as Transfer
 import Language.Marlowe.Protocol.Types
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
@@ -43,6 +51,7 @@ data MarloweRuntimeServer m a = MarloweRuntimeServer
   , recvMsgRunMarloweHeaderSync :: m (PeerTraced MarloweHeaderSync 'AsServer 'Header.StIdle m a)
   , recvMsgRunMarloweQuery :: m (PeerTraced MarloweQuery 'AsServer 'Query.StReq m a)
   , recvMsgRunMarloweLoad :: m (PeerTraced MarloweLoad 'AsServer ('Load.StProcessing 'Load.RootNode) m a)
+  , recvMsgRunMarloweTransfer :: m (PeerTraced MarloweTransfer 'AsServer 'Transfer.StIdle m a)
   , recvMsgRunTxJob :: m (PeerTraced (Job MarloweTxCommand) 'AsServer 'Job.StInit m a)
   , recvMsgRunContractQuery :: m (PeerTraced (Query ContractRequest) 'AsServer 'Query.StReq m a)
   }
@@ -53,6 +62,7 @@ data MarloweRuntimeServerDirect m a = MarloweRuntimeServerDirect
   , recvMsgRunMarloweHeaderSync :: m (MarloweHeaderSyncServer m a)
   , recvMsgRunMarloweQuery :: m (MarloweQueryServer m a)
   , recvMsgRunMarloweLoad :: m (MarloweLoadServer m a)
+  , recvMsgRunMarloweTransfer :: m (MarloweTransferServer m a)
   , recvMsgRunTxJob :: m (JobServer MarloweTxCommand m a)
   , recvMsgRunContractQuery :: m (QueryServer ContractRequest m a)
   }
@@ -66,6 +76,7 @@ hoistMarloweRuntimeServer f MarloweRuntimeServer{..} =
     , recvMsgRunMarloweHeaderSync = f $ hoistPeerTraced f <$> recvMsgRunMarloweHeaderSync
     , recvMsgRunMarloweQuery = f $ hoistPeerTraced f <$> recvMsgRunMarloweQuery
     , recvMsgRunMarloweLoad = f $ hoistPeerTraced f <$> recvMsgRunMarloweLoad
+    , recvMsgRunMarloweTransfer = f $ hoistPeerTraced f <$> recvMsgRunMarloweTransfer
     , recvMsgRunTxJob = f $ hoistPeerTraced f <$> recvMsgRunTxJob
     , recvMsgRunContractQuery = f $ hoistPeerTraced f <$> recvMsgRunContractQuery
     , ..
@@ -79,6 +90,7 @@ hoistMarloweRuntimeServerDirect f MarloweRuntimeServerDirect{..} =
     , recvMsgRunMarloweHeaderSync = f $ hoistMarloweHeaderSyncServer f <$> recvMsgRunMarloweHeaderSync
     , recvMsgRunMarloweQuery = f $ hoistQueryServer f <$> recvMsgRunMarloweQuery
     , recvMsgRunMarloweLoad = f $ hoistMarloweLoadServer f <$> recvMsgRunMarloweLoad
+    , recvMsgRunMarloweTransfer = f $ hoistMarloweTransferServer f <$> recvMsgRunMarloweTransfer
     , recvMsgRunTxJob = f $ hoistJobServer f <$> recvMsgRunTxJob
     , recvMsgRunContractQuery = f $ hoistQueryServer f <$> recvMsgRunContractQuery
     , ..
@@ -92,6 +104,7 @@ marloweRuntimeServerPeer MarloweRuntimeServer{..} =
       MsgRunMarloweHeaderSync -> liftPeerTraced liftMarloweHeaderSync <$> recvMsgRunMarloweHeaderSync
       MsgRunMarloweQuery -> liftPeerTraced liftMarloweQuery <$> recvMsgRunMarloweQuery
       MsgRunMarloweLoad -> liftPeerTraced liftMarloweLoad <$> recvMsgRunMarloweLoad
+      MsgRunMarloweTransfer -> liftPeerTraced liftMarloweTransfer <$> recvMsgRunMarloweTransfer
       MsgRunTxJob -> liftPeerTraced liftTxJob <$> recvMsgRunTxJob
       MsgRunContractQuery -> liftPeerTraced liftContractQuery <$> recvMsgRunContractQuery
 
@@ -104,6 +117,7 @@ marloweRuntimeServerDirectPeer MarloweRuntimeServerDirect{..} =
       MsgRunMarloweHeaderSync -> liftPeerTraced liftMarloweHeaderSync . marloweHeaderSyncServerPeer <$> recvMsgRunMarloweHeaderSync
       MsgRunMarloweQuery -> liftPeerTraced liftMarloweQuery . queryServerPeer <$> recvMsgRunMarloweQuery
       MsgRunMarloweLoad -> liftPeerTraced liftMarloweLoad . marloweLoadServerPeer <$> recvMsgRunMarloweLoad
+      MsgRunMarloweTransfer -> liftPeerTraced liftMarloweTransfer . marloweTransferServerPeer <$> recvMsgRunMarloweTransfer
       MsgRunTxJob -> liftPeerTraced liftTxJob . jobServerPeer <$> recvMsgRunTxJob
       MsgRunContractQuery -> liftPeerTraced liftContractQuery . queryServerPeer <$> recvMsgRunContractQuery
 
@@ -113,6 +127,7 @@ serveMarloweRuntimeClient MarloweRuntimeServer{..} = \case
   RunMarloweHeaderSyncClient client -> flip connectTraced (marloweHeaderSyncClientPeer client) =<< recvMsgRunMarloweHeaderSync
   RunMarloweQueryClient client -> flip connectTraced (queryClientPeer client) =<< recvMsgRunMarloweQuery
   RunMarloweLoadClient client -> flip connectTraced (marloweLoadClientPeer client) =<< recvMsgRunMarloweLoad
+  RunMarloweTransferClient client -> flip connectTraced (marloweTransferClientPeer client) =<< recvMsgRunMarloweTransfer
   RunTxClient client -> flip connectTraced (jobClientPeer client) =<< recvMsgRunTxJob
   RunContractQueryClient client -> flip connectTraced (queryClientPeer client) =<< recvMsgRunContractQuery
 
@@ -122,6 +137,7 @@ serveMarloweRuntimeClientDirect MarloweRuntimeServerDirect{..} = \case
   RunMarloweHeaderSyncClient client -> flip serveMarloweHeaderSyncClient client =<< recvMsgRunMarloweHeaderSync
   RunMarloweQueryClient client -> flip serveQueryClient client =<< recvMsgRunMarloweQuery
   RunMarloweLoadClient client -> flip serveMarloweLoadClient client =<< recvMsgRunMarloweLoad
+  RunMarloweTransferClient client -> flip serveMarloweTransferClient client =<< recvMsgRunMarloweTransfer
   RunTxClient client -> flip serveJobClient client =<< recvMsgRunTxJob
   RunContractQueryClient client -> flip serveQueryClient client =<< recvMsgRunContractQuery
 

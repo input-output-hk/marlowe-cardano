@@ -34,12 +34,14 @@ packages:
   marlowe-contracts
   marlowe-integration
   marlowe-integration-tests
+  marlowe-object
   marlowe-protocols
   marlowe-runtime
   marlowe-runtime-cli
   marlowe-runtime-web
   marlowe-test
 
+  libs/aeson-applicative
   libs/aeson-via-serialise
   libs/base16-aeson
   libs/plutus-ledger-aeson
@@ -62,6 +64,14 @@ package cryptonite
 
 package locli
   tests: True
+
+package marlowe-object
+  tests: True
+  ghc-options: -Werror
+
+package aeson-applicative
+  tests: True
+  ghc-options: -Werror
 
 package marlowe
   tests: True

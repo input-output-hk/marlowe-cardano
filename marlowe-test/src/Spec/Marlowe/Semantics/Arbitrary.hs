@@ -682,14 +682,14 @@ instance Arbitrary (Value Observation) where
           ]
 
   shrink (AvailableMoney a t) = [AvailableMoney a' t | a' <- shrink a] ++ [AvailableMoney a t' | t' <- shrink t]
-  shrink (NegValue x) = NegValue <$> shrink x
-  shrink (AddValue x y) = [AddValue x' y | x' <- shrink x] ++ [AddValue x y' | y' <- shrink y]
-  shrink (SubValue x y) = [SubValue x' y | x' <- shrink x] ++ [SubValue x y' | y' <- shrink y]
-  shrink (MulValue x y) = [MulValue x' y | x' <- shrink x] ++ [MulValue x y' | y' <- shrink y]
-  shrink (DivValue x y) = [DivValue x' y | x' <- shrink x] ++ [DivValue x y' | y' <- shrink y]
+  shrink (NegValue x) = x : (NegValue <$> shrink x)
+  shrink (AddValue x y) = x : y : ([AddValue x' y | x' <- shrink x] ++ [AddValue x y' | y' <- shrink y])
+  shrink (SubValue x y) = x : y : ([SubValue x' y | x' <- shrink x] ++ [SubValue x y' | y' <- shrink y])
+  shrink (MulValue x y) = x : y : ([MulValue x' y | x' <- shrink x] ++ [MulValue x y' | y' <- shrink y])
+  shrink (DivValue x y) = x : y : ([DivValue x' y | x' <- shrink x] ++ [DivValue x y' | y' <- shrink y])
   shrink (ChoiceValue c) = ChoiceValue <$> shrink c
   shrink (UseValue v) = UseValue <$> shrink v
-  shrink (Cond o x y) = [Cond o' x y | o' <- shrink o] ++ [Cond o x' y | x' <- shrink x] ++ [Cond o x y' | y' <- shrink y]
+  shrink (Cond o x y) = x : y : ([Cond o' x y | o' <- shrink o] ++ [Cond o x' y | x' <- shrink x] ++ [Cond o x y' | y' <- shrink y])
   shrink (Constant c) = Constant <$> shrink c
   shrink TimeIntervalStart = []
   shrink TimeIntervalEnd = []
@@ -742,15 +742,15 @@ instance Arbitrary Observation where
           , (5, pure TrueObs)
           , (5, pure FalseObs)
           ]
-  shrink (AndObs x y) = [AndObs x' y | x' <- shrink x] ++ [AndObs x y' | y' <- shrink y]
-  shrink (OrObs x y) = [OrObs x' y | x' <- shrink x] ++ [OrObs x y' | y' <- shrink y]
-  shrink (NotObs x) = NotObs <$> shrink x
-  shrink (ChoseSomething c) = ChoseSomething <$> shrink c
-  shrink (ValueGE x y) = [ValueGE x' y | x' <- shrink x] ++ [ValueGE x y' | y' <- shrink y]
-  shrink (ValueGT x y) = [ValueGT x' y | x' <- shrink x] ++ [ValueGT x y' | y' <- shrink y]
-  shrink (ValueLT x y) = [ValueLT x' y | x' <- shrink x] ++ [ValueLT x y' | y' <- shrink y]
-  shrink (ValueLE x y) = [ValueLE x' y | x' <- shrink x] ++ [ValueLE x y' | y' <- shrink y]
-  shrink (ValueEQ x y) = [ValueEQ x' y | x' <- shrink x] ++ [ValueEQ x y' | y' <- shrink y]
+  shrink (AndObs x y) = x : y : ([AndObs x' y | x' <- shrink x] ++ [AndObs x y' | y' <- shrink y])
+  shrink (OrObs x y) = x : y : ([OrObs x' y | x' <- shrink x] ++ [OrObs x y' | y' <- shrink y])
+  shrink (NotObs x) = x : (NotObs <$> shrink x)
+  shrink (ChoseSomething c) = TrueObs : FalseObs : (ChoseSomething <$> shrink c)
+  shrink (ValueGE x y) = TrueObs : FalseObs : [ValueGE x' y | x' <- shrink x] ++ [ValueGE x y' | y' <- shrink y]
+  shrink (ValueGT x y) = TrueObs : FalseObs : [ValueGT x' y | x' <- shrink x] ++ [ValueGT x y' | y' <- shrink y]
+  shrink (ValueLT x y) = TrueObs : FalseObs : [ValueLT x' y | x' <- shrink x] ++ [ValueLT x y' | y' <- shrink y]
+  shrink (ValueLE x y) = TrueObs : FalseObs : [ValueLE x' y | x' <- shrink x] ++ [ValueLE x y' | y' <- shrink y]
+  shrink (ValueEQ x y) = TrueObs : FalseObs : [ValueEQ x' y | x' <- shrink x] ++ [ValueEQ x y' | y' <- shrink y]
   shrink TrueObs = []
   shrink FalseObs = []
 
@@ -876,16 +876,21 @@ goldenContract = (,) <$> elements goldenContracts <*> pure (State AM.empty AM.em
 instance Arbitrary Contract where
   arbitrary = frequency [(95, semiArbitrary =<< arbitrary), (5, fst <$> goldenContract)]
   shrink (Pay a p t x c) =
-    [c]
-      ++ [Pay a' p t x c | a' <- shrink a]
+    c
+      : [Pay a' p t x c | a' <- shrink a]
       ++ [Pay a p' t x c | p' <- shrink p]
       ++ [Pay a p t' x c | t' <- shrink t]
       ++ [Pay a p t x' c | x' <- shrink x]
       ++ [Pay a p t x c' | c' <- shrink c]
-  shrink (If o x y) = [x, y] ++ [If o' x y | o' <- shrink o] ++ [If o x' y | x' <- shrink x] ++ [If o x y' | y' <- shrink y]
-  shrink (When a t c) = [c] ++ [When a' t c | a' <- shrink a] ++ [When a t' c | t' <- shrink t] ++ [When a t c' | c' <- shrink c]
-  shrink (Let v x c) = [c] ++ [Let v' x c | v' <- shrink v] ++ [Let v x' c | x' <- shrink x] ++ [Let v x c' | c' <- shrink c]
-  shrink (Assert o c) = [c] ++ [Assert o' c | o' <- shrink o] ++ [Assert o c' | c' <- shrink c]
+  shrink (If o x y) = x : y : [If o' x y | o' <- shrink o] ++ [If o x' y | x' <- shrink x] ++ [If o x y' | y' <- shrink y]
+  shrink (When a t c) =
+    c
+      : [When a' t c | a' <- shrink a]
+      ++ [When a t' c | t' <- shrink t]
+      ++ [When a t c' | c' <- shrink c]
+      ++ (a >>= \case Case _ contract -> [contract]; _ -> [])
+  shrink (Let v x c) = c : [Let v' x c | v' <- shrink v] ++ [Let v x' c | x' <- shrink x] ++ [Let v x c' | c' <- shrink c]
+  shrink (Assert o c) = c : [Assert o' c | o' <- shrink o] ++ [Assert o c' | c' <- shrink c]
   shrink Close = []
 
 -- | Generate an arbitrary contract, weighted towards different contract constructs.

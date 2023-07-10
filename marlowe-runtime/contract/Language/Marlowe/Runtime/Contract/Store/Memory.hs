@@ -85,6 +85,17 @@ createContractStoreInMemory = do
               writeTVar buffer mempty
               writeTVar stagingArea mempty
               close
+          , doesContractExist = \hash -> whenOpen do
+              buffered <- readTVar buffer
+              if Map.member hash buffered
+                then pure True
+                else do
+                  staged <- readTVar stagingArea
+                  if Map.member hash staged
+                    then pure True
+                    else do
+                      stored <- readTVar store
+                      pure $ Map.member hash stored
           }
 
     getContract :: TVar (Map DatumHash Contract) -> DatumHash -> STM (Maybe ContractWithAdjacency)

@@ -43,8 +43,16 @@ import Test.QuickCheck.Property (failed, succeeded)
 
 class ShowProtocol ps where
   showsPrecMessage :: Int -> PeerHasAgency pr st -> Message ps st st' -> ShowS
+  default showsPrecMessage :: (Show (Message ps st st')) => Int -> PeerHasAgency pr st -> Message ps st st' -> ShowS
+  showsPrecMessage p _ = showsPrec p
+
   showsPrecServerHasAgency :: forall (st :: ps). Int -> ServerHasAgency st -> ShowS
+  default showsPrecServerHasAgency :: forall (st :: ps). (Show (ServerHasAgency st)) => Int -> ServerHasAgency st -> ShowS
+  showsPrecServerHasAgency = showsPrec
+
   showsPrecClientHasAgency :: forall (st :: ps). Int -> ClientHasAgency st -> ShowS
+  default showsPrecClientHasAgency :: forall (st :: ps). (Show (ClientHasAgency st)) => Int -> ClientHasAgency st -> ShowS
+  showsPrecClientHasAgency = showsPrec
 
 class MessageEq ps where
   messageEq :: AnyMessageAndAgency ps -> AnyMessageAndAgency ps -> Bool

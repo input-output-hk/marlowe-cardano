@@ -103,12 +103,14 @@ executable marlowe-integration-tests
     , marlowe-chain-sync:{marlowe-chain-sync, plutus-compat}
     , marlowe-client
     , marlowe-integration
+    , marlowe-object:{marlowe-object, gen}
     , marlowe-protocols
     , marlowe-runtime-web:{marlowe-runtime-web, server}
     , marlowe-runtime:{marlowe-runtime, contract, contract-api, discovery-api, history-api, sync-api, tx-api}
     , marlowe-test
     , mtl
     , network-uri
+    , pipes ^>=4.3.16
     , plutus-ledger-api
     , plutus-tx
     , QuickCheck
