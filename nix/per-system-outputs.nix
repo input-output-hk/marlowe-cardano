@@ -32,10 +32,14 @@ in
 
 
   packages.marlowe-chain-indexer = inputs.self.packages.marlowe-chain-sync-exe-marlowe-chain-indexer-ghc8107;
+  packages.marlowe-runtime-cli = inputs.self.packages.marlowe-runtime-cli-exe-marlowe-runtime-cli-ghc8107;
+  packages.marlowe-runtime = inputs.self.packages.marlowe-runtime-exe-marlowe-runtime-ghc8107;
+  packages.marlowe-web-server = inputs.self.packages.marlowe-runtime-web-exe-marlowe-web-server-ghc8107;
   packages.marlowe-chain-sync = inputs.self.packages.marlowe-chain-sync-exe-marlowe-chain-sync-ghc8107;
-  packages.marlowe = inputs.self.packages.marlowe-runtime-exe-marlowe-runtime-ghc8107;
+  packages.marlowe-cli = inputs.self.packages.marlowe-cli-exe-marlowe-cli-ghc8107;
   packages.marlowe-tx = inputs.self.packages.marlowe-runtime-exe-marlowe-tx-ghc8107;
   packages.marlowe-indexer = inputs.self.packages.marlowe-runtime-exe-marlowe-indexer-ghc8107;
   packages.marlowe-sync = inputs.self.packages.marlowe-runtime-exe-marlowe-sync-ghc8107;
-  packages.marlowe-cli = inputs.self.packages.marlowe-cli-exe-marlowe-cli-ghc8107;
+  packages.marlowe-contract = inputs.self.packages.marlowe-runtime-exe-marlowe-contract-ghc8107;
+  packages.marlowe-proxy = inputs.self.packages.marlowe-runtime-exe-marlowe-proxy-ghc8107;
 }

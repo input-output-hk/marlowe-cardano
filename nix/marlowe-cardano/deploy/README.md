@@ -22,13 +22,17 @@ Each service has an operable in `./operables.nix`. These are written to be sched
 Each operable has a related OCI image containing exactly the operable and its debug and runtime dependencies.
 
 To push an oci-image to the registry you will need to get access credentials, by running `skopeo login` or `docker login` in a devshell with skopeo or docker (ask for login information).
-Then to push, for example, marlowe-chain-sync run:
+To build, for example, marlowe-chain-sync run:
 
 ``` sh
 nix run .\#oci-images.x86_64-linux.marlowe-chain-sync
 ```
 
-`
+To push all images to docker run: 
+```sh
+ nix run .\#oci-images.x86_64-linux.all.copyToDockerDaemon
+```
+
 ### Nomad Tasks and Environment
 Nomad tasks for each service are in `./nomadTasks.nix`. These are meant to be put together in a Nomad environment. They can be configured with Nomad's meta stanza.
 

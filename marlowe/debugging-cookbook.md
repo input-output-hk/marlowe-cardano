@@ -1,25 +1,23 @@
-# The Marlowe Debugging Cookbook
+# The Marlowe Debugging Cookbook <!-- omit in toc --> 
 
-- [The Marlowe Debugging Cookbook](#the-marlowe-debugging-cookbook)
-- [General Approaches](#general-approaches)
-  - [Infrastructure](#infrastructure)
-  - [Marlowe Semantics](#marlowe-semantics)
-  - [Time Intervals](#time-intervals)
-  - [Transactions](#transactions)
-  - [Marlowe Validator Script](#marlowe-validator-script)
-  - [Specific Approaches](#specific-approaches)
-    - [TEApplyNoMatchError](#teapplynomatcherror)
-    - [TEAmbiguousTimeIntervalError](#teambiguoustimeintervalerror)
-  - [Debugging Plutus](#debugging-plutus)
-    - [Instrument the validator](#instrument-the-validator)
-    - [Run the script](#run-the-script)
-    - [Deserialize the data](#deserialize-the-data)
-      - [Raw Plutus Data](#raw-plutus-data)
-      - [Deserialization via `FromData`](#deserialization-via-fromdata)
-  - [Profiling Marlowe](#profiling-marlowe)
+- [Infrastructure](#infrastructure)
+- [Marlowe Semantics](#marlowe-semantics)
+- [Time Intervals](#time-intervals)
+- [Transactions](#transactions)
+- [Marlowe Validator Script](#marlowe-validator-script)
+- [Specific Approaches](#specific-approaches)
+  - [TEApplyNoMatchError](#teapplynomatcherror)
+  - [TEAmbiguousTimeIntervalError](#teambiguoustimeintervalerror)
+- [Debugging Plutus](#debugging-plutus)
+  - [Instrument the validator](#instrument-the-validator)
+  - [Run the script](#run-the-script)
+  - [Deserialize the data](#deserialize-the-data)
+    - [Raw Plutus Data](#raw-plutus-data)
+    - [Deserialization via `FromData`](#deserialization-via-fromdata)
+- [Profiling Marlowe](#profiling-marlowe)
 
 
-# General Approaches
+# General Approaches <!-- omit in toc -->
 
 
 ## Infrastructure

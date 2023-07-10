@@ -30,12 +30,17 @@ separating the arguments from the command.
 $ cd marlowe-cardano
 
 $ nix run .#marlowe-chain-indexer -- --help
+$ nix run .#marlowe-runtime-cli -- --help
+$ nix run .#marlowe-runtime -- --help
+$ nix run .#marlowe-web-server -- --help
 $ nix run .#marlowe-chain-sync -- --help
-$ nix run .#marlowe-indexer -- --help
-$ nix run .#marlowe-sync -- --help
 $ nix run .#marlowe-cli -- --help
 $ nix run .#marlowe-tx -- --help
-$ nix run .#marlowe -- --help
+$ nix run .#marlowe-indexer -- --help
+$ nix run .#marlowe-sync -- --help
+$ nix run .#marlowe-contract -- --help
+$ nix run .#marlowe-proxy -- --help
+
 ```
 
 For convenience, several Cardano tools and other utilities are built and available in the development shell.
