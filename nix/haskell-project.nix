@@ -68,10 +68,6 @@ let
     marlowe-runtime-cli.ghcOptions = [ "-Werror" ];
     marlowe-runtime-web.ghcOptions = [ "-Werror" ];
     marlowe-test.ghcOptions = [ "-Werror" ];
-
-    # hpack fails due to modified cabal file, can remove when we bump to 3.12.0
-    cardano-addresses.cabal-generator = lib.mkForce null;
-    cardano-addresses-cli.cabal-generator = lib.mkForce null;
   };
 
   modules = [{ inherit packages; }];
