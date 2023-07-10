@@ -577,7 +577,7 @@ instance Read ShelleyAddress where
 
 instance IsString ShelleyAddress where
   fromString =
-    either (error . mappend "ShelleyAddress.fromString: bad address: " . show) ShelleyAddress
+    either (error . showString "fromString(ShelleyAddress): " . show) ShelleyAddress
       . deserialiseFromBech32 (AsAddress AsShelleyAddr)
       . T.pack
 
@@ -726,7 +726,7 @@ instance Read Base16 where
     pure $ Base16 parsed
 
 instance IsString Base16 where
-  fromString = read
+  fromString = either (error . showString "fromString(Base16): " . T.unpack) Base16 . decodeBase16' . T.pack
 
 instance ToJSON Base16 where
   toJSON = A.String . encodeBase16 . unBase16
