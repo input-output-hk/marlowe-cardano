@@ -24,7 +24,7 @@ import Language.Marlowe.Core.V1.Plate (extractAll)
 import Language.Marlowe.Core.V1.Semantics (TransactionInput (..), TransactionOutput (..), computeTransaction)
 import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Object.Gen ()
-import Language.Marlowe.Object.Link (LinkedObject (LinkedContract), linkBundle, unlink)
+import Language.Marlowe.Object.Link (LinkedObject (LinkedContract), linkBundle', unlink)
 import Language.Marlowe.Object.Types (
   Label (..),
   LabelledObject (..),
@@ -251,7 +251,7 @@ transferSpec = do
       let expectOnlyContracts = \case
             LinkedContract c -> pure (LinkedContract c, c)
             a -> fail $ "Unexpected non-contract object in exported bundle " <> show a
-      (linked, _) <- expectRight "" $ linkBundle bundle expectOnlyContracts mempty
+      (linked, _) <- expectRight "" $ linkBundle' bundle expectOnlyContracts mempty
       liftIO $ for_ linked \(Label label, c) -> DatumHash label `shouldBe` hashContract c
 
     prop "import . export" \contract -> do
