@@ -21,11 +21,12 @@ import Control.Monad.Trans.Except (ExceptT (..), except, runExceptT, throwE, wit
 import Control.Monad.Trans.Maybe (MaybeT (..), runMaybeT)
 import Data.Aeson (FromJSON, ToJSON, eitherDecodeFileStrict)
 import qualified Data.Aeson as A
-import Data.Binary (decodeFile, decodeFileOrFail, encodeFile)
+import Data.Binary (decodeFileOrFail)
 import Data.Binary.Get (ByteOffset)
 import Data.ByteString.Base16 (encodeBase16)
 import qualified Data.DList as DList
 import Data.Foldable (asum)
+import Data.Maybe (fromJust)
 import qualified Data.Text as T
 import Data.Traversable (for)
 import GHC.Generics (Generic)
@@ -82,7 +83,7 @@ unpackArchive archivePath f = withSystemTempDirectory "marlowe.bundle.extract" \
     path <- MaybeT $ atomicModifyIORef cursor \case
       [] -> ([], Nothing)
       x : xs -> (xs, Just x)
-    liftIO $ decodeFile path
+    liftIO $ fromJust <$> A.decodeFileStrict path
 
 -- | Pack a bundle archive file as a zip archive.
 packArchive
@@ -97,7 +98,7 @@ packArchive archivePath mainIs f = withSystemTempDirectory "marlowe.bundle.creat
   objectsVar <- newIORef mempty
   a <- f \obj -> do
     let objectPath = T.unpack $ encodeBase16 $ unLabel $ _label obj
-    liftIO $ encodeFile (baseDir </> objectPath) obj
+    liftIO $ A.encodeFile (baseDir </> objectPath) obj
     atomicModifyIORef objectsVar \objects -> (DList.snoc objects objectPath, ())
   (DList.toList -> objects) <- readIORef objectsVar
   liftIO $ A.encodeFile (baseDir </> "manifest.json") BundleManifest{..}
@@ -108,7 +109,7 @@ extractZip :: FilePath -> FilePath -> IO ()
 extractZip archivePath = withArchive archivePath . unpackInto
 
 createZip :: FilePath -> FilePath -> IO ()
-createZip archivePath baseDir = createArchive archivePath $ packDirRecur Zstd mkEntrySelector baseDir
+createZip archivePath baseDir = createArchive archivePath $ packDirRecur Deflate mkEntrySelector baseDir
 
 checkMain :: (Monad m) => Maybe SomeObjectType -> ExceptT ReadArchiveError m ()
 checkMain =
