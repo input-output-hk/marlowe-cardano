@@ -1,0 +1,38 @@
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: marlowe-runtime-database
+  namespace: marlowe-staging
+  annotations:
+    app.oam.dev/publishVersion: {{ .Chart.AppVersion }}
+spec:
+  components:
+    - type: "postgres-cluster"
+      name: marlowe-runtime-database
+      properties:
+        replicas: 3
+        volume:
+          size: 50Gi
+        resources:
+          requests:
+            memory: "8Gi"
+          limits:
+            memory: "8Gi"
+        postgresql:
+          parameters:
+            max_connections: "1000"
+            superuser_reserved_connections: "5"
+            huge_pages: "try"
+            max_wal_size: "6GB"
+            max_locks_per_transaction: "256"
+            max_pred_locks_per_transaction: "256"
+            work_mem: "32MB"
+            maintenance_work_mem: "256MB"
+        preparedDatabases:
+          {{- range $index, $network := .Values.networks }}
+          chainsync_{{ $network }}:
+            # https://postgres-operator.readthedocs.io/en/latest/user/#default-login-roles
+            # chainsync_$network_{owner,writer,reader}_user
+            defaultUsers: true
+
+          {{- end }}
