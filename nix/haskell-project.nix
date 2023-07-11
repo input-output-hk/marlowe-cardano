@@ -74,6 +74,8 @@ let
     marlowe-runtime-cli.ghcOptions = [ "-Werror" ];
     marlowe-runtime-web.ghcOptions = [ "-Werror" ];
     marlowe-test.ghcOptions = [ "-Werror" ];
+
+    plutus-ledger-slot.components.library.pkgconfig = lib.mkForce [ [ pkgs.secp256k1 ] ];
   };
 
   modules = [{ inherit packages; }];
