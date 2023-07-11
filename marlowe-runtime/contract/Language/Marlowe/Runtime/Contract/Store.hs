@@ -83,6 +83,7 @@ data ContractStagingArea m = ContractStagingArea
   , flush :: m (Set DatumHash)
   , commit :: m (Set DatumHash)
   , discard :: m ()
+  , doesContractExist :: DatumHash -> m Bool
   }
 
 hoistContractStagingArea
@@ -95,6 +96,7 @@ hoistContractStagingArea f ContractStagingArea{..} =
     , flush = f flush
     , commit = f commit
     , discard = f discard
+    , doesContractExist = f . doesContractExist
     }
 
 traceContractStagingArea
@@ -118,4 +120,5 @@ traceContractStagingArea inj ContractStagingArea{..} =
         addField ev committedHashes
         pure committedHashes
     , discard = withInjectEvent inj Discard $ const discard
+    , ..
     }

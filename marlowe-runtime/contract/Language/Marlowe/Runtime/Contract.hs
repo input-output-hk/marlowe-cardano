@@ -15,10 +15,12 @@ import Data.Text.Lazy (toStrict)
 import Data.Void (absurd)
 import Language.Marlowe (TransactionInput (..))
 import Language.Marlowe.Protocol.Load.Server (MarloweLoadServer)
+import Language.Marlowe.Protocol.Transfer.Server (MarloweTransferServer)
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Contract.LoadServer
 import Language.Marlowe.Runtime.Contract.QueryServer
 import Language.Marlowe.Runtime.Contract.Store
+import Language.Marlowe.Runtime.Contract.TransferServer (TransferServerDependencies (..), transferServer)
 import Network.Protocol.Connection (ServerSource)
 import Network.Protocol.Query.Server (QueryServer)
 import Network.TypedProtocol
@@ -35,14 +37,16 @@ data ContractDependencies n m = ContractDependencies
 data MarloweContract m = MarloweContract
   { loadServerSource :: ServerSource MarloweLoadServer m ()
   , queryServerSource :: ServerSource (QueryServer ContractRequest) m ()
+  , transferServerSource :: ServerSource MarloweTransferServer m ()
   , probes :: Probes
   }
 
-contract :: (MonadUnliftIO m) => Component m (ContractDependencies n m) (MarloweContract m)
+contract :: (MonadUnliftIO m, MonadFail m) => Component m (ContractDependencies n m) (MarloweContract m)
 contract = arr \ContractDependencies{..} ->
   MarloweContract
     { loadServerSource = loadServer LoadServerDependencies{..}
     , queryServerSource = queryServer QueryServerDependencies{..}
+    , transferServerSource = transferServer TransferServerDependencies{..}
     , probes =
         Probes
           { liveness = pure True

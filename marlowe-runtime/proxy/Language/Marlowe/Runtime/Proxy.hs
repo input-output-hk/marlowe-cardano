@@ -32,10 +32,13 @@ import Language.Marlowe.Protocol.Server (
 import Language.Marlowe.Protocol.Sync.Server (MarloweSyncServer, hoistMarloweSyncServer)
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
 import qualified Language.Marlowe.Protocol.Sync.Types as Sync
+import Language.Marlowe.Protocol.Transfer.Server (MarloweTransferServer, hoistMarloweTransferServer)
+import Language.Marlowe.Protocol.Transfer.Types (MarloweTransfer)
+import qualified Language.Marlowe.Protocol.Transfer.Types as Transfer
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Network.Channel.Typed
-import Network.Protocol.Connection (ServerSource (..))
+import Network.Protocol.Connection (ServerSource (..), resourceTServerSource)
 import Network.Protocol.Handshake.Types (Handshake)
 import qualified Network.Protocol.Handshake.Types as Handshake
 import Network.Protocol.Job.Server (JobServer, hoistJobServer)
@@ -62,8 +65,7 @@ data MarloweProxyInProc m = MarloweProxyInProc
 proxyInProc :: (MonadUnliftIO m) => Component m (RouterInProc m) (MarloweProxyInProc m)
 proxyInProc = arr \router ->
   MarloweProxyInProc
-    { proxyServerSource = ServerSource $ ResourceT \releaseMap ->
-        pure $ hoistMarloweRuntimeServerDirect (\(ResourceT m) -> m releaseMap) $ serverInProc router
+    { proxyServerSource = resourceTServerSource hoistMarloweRuntimeServerDirect $ pure $ serverInProc router
     , probes =
         Probes
           { startup = pure True
@@ -91,6 +93,8 @@ data Router r m = Router
   , connectMarloweQuery :: m (Channel (Handshake MarloweQuery) 'AsClient ('Handshake.StInit 'Query.StReq) m, r)
   , connectMarloweLoad
       :: m (Channel (Handshake MarloweLoad) 'AsClient ('Handshake.StInit ('Load.StProcessing 'Load.RootNode)) m, r)
+  , connectMarloweTransfer
+      :: m (Channel (Handshake MarloweTransfer) 'AsClient ('Handshake.StInit 'Transfer.StIdle) m, r)
   , connectTxJob :: m (Channel (Handshake (Job MarloweTxCommand)) 'AsClient ('Handshake.StInit 'Job.StInit) m, r)
   , connectContractQuery :: m (Channel (Handshake (Query ContractRequest)) 'AsClient ('Handshake.StInit 'Query.StReq) m, r)
   }
@@ -100,6 +104,7 @@ data RouterInProc m = RouterInProc
   , marloweHeaderSyncServerSource :: ServerSource MarloweHeaderSyncServer m ()
   , marloweQueryServerSource :: ServerSource MarloweQueryServer m ()
   , marloweLoadServerSource :: ServerSource MarloweLoadServer m ()
+  , marloweTransferServerSource :: ServerSource MarloweTransferServer m ()
   , txJobServerSource :: ServerSource (JobServer MarloweTxCommand) m ()
   , contractQueryServerSource :: ServerSource (QueryServer ContractRequest) m ()
   }
@@ -117,6 +122,8 @@ server useOpenRefAsParent Router{..} =
     , recvMsgRunMarloweQuery = withHandshake useOpenRefAsParent (ClientAgency Query.TokReq) connectMarloweQuery queryNext
     , recvMsgRunMarloweLoad =
         withHandshake useOpenRefAsParent (ServerAgency $ Load.TokProcessing Load.SRootNode) connectMarloweLoad loadNext
+    , recvMsgRunMarloweTransfer =
+        withHandshake useOpenRefAsParent (ClientAgency Transfer.TokIdle) connectMarloweTransfer transferNext
     , recvMsgRunTxJob = withHandshake useOpenRefAsParent (ClientAgency Job.TokInit) connectTxJob jobNext
     , recvMsgRunContractQuery = withHandshake useOpenRefAsParent (ClientAgency Query.TokReq) connectContractQuery queryNext
     }
@@ -131,6 +138,7 @@ serverInProc RouterInProc{..} =
     , recvMsgRunMarloweHeaderSync = useServerSource hoistMarloweHeaderSyncServer marloweHeaderSyncServerSource
     , recvMsgRunMarloweQuery = useServerSource hoistQueryServer marloweQueryServerSource
     , recvMsgRunMarloweLoad = useServerSource hoistMarloweLoadServer marloweLoadServerSource
+    , recvMsgRunMarloweTransfer = useServerSource hoistMarloweTransferServer marloweTransferServerSource
     , recvMsgRunTxJob = useServerSource hoistJobServer txJobServerSource
     , recvMsgRunContractQuery = useServerSource hoistQueryServer contractQueryServerSource
     }
@@ -214,6 +222,28 @@ loadNext = \case
   ServerAgency Load.TokComplete -> \case
     Load.MsgComplete{} -> NextClosed Load.TokDone
 
+transferNext :: PeerHasAgency pr st -> Message MarloweTransfer st st' -> NextAgency MarloweTransfer pr st st'
+transferNext = \case
+  ClientAgency Transfer.TokIdle -> \case
+    Transfer.MsgStartImport{} -> NextCast $ ClientAgency Transfer.TokCanUpload
+    Transfer.MsgRequestExport{} -> NextCall $ ServerAgency Transfer.TokExport
+    Transfer.MsgDone -> NextClose Transfer.TokDone
+  ServerAgency Transfer.TokExport -> \case
+    Transfer.MsgStartExport -> NextReceive $ ClientAgency Transfer.TokCanDownload
+    Transfer.MsgContractNotFound -> NextReceive $ ClientAgency Transfer.TokIdle
+  ClientAgency Transfer.TokCanUpload -> \case
+    Transfer.MsgUpload{} -> NextCall $ ServerAgency Transfer.TokUpload
+    Transfer.MsgImported -> NextCast $ ClientAgency Transfer.TokIdle
+  ServerAgency Transfer.TokUpload -> \case
+    Transfer.MsgUploaded{} -> NextReceive $ ClientAgency Transfer.TokCanUpload
+    Transfer.MsgUploadFailed{} -> NextReceive $ ClientAgency Transfer.TokIdle
+  ClientAgency Transfer.TokCanDownload -> \case
+    Transfer.MsgDownload{} -> NextCall $ ServerAgency Transfer.TokDownload
+    Transfer.MsgCancel -> NextCast $ ClientAgency Transfer.TokIdle
+  ServerAgency Transfer.TokDownload -> \case
+    Transfer.MsgDownloaded{} -> NextReceive $ ClientAgency Transfer.TokCanDownload
+    Transfer.MsgExported{} -> NextReceive $ ClientAgency Transfer.TokIdle
+
 jobNext :: (Job.Command cmd) => PeerHasAgency pr st -> Message (Job cmd) st st' -> NextAgency (Job cmd) pr st st'
 jobNext = \case
   ClientAgency Job.TokInit -> \case
@@ -254,9 +284,9 @@ withHandshake useOpenRefAsParent agency openConnection nextAgency = do
         | otherwise = id
   runMain do
     let OutboundChannel{..} = yield (ClientAgency Handshake.TokInit) $ Handshake.MsgHandshake $ Handshake.signature $ Proxy @ps
-    ResponseChannel msg' coPeer <- call $ ServerAgency Handshake.TokHandshake
+    ResponseChannel msg' channel <- call $ ServerAgency Handshake.TokHandshake
     case msg' of
-      Handshake.MsgAccept -> pure $ proxyProtocol agency (lowerChannel liftHandshake coPeer) nextAgency
+      Handshake.MsgAccept -> pure $ proxyProtocol agency (lowerChannel liftHandshake channel) nextAgency
       Handshake.MsgReject -> fail "Handshake rejected by server"
 
 liftHandshake :: LiftProtocol ps (Handshake ps) 'Handshake.StLift
@@ -275,13 +305,13 @@ proxyProtocol agency Channel{..} nextAgency = case agency of
     let OutboundChannel{..} = yield agency msg
      in case nextAgency agency msg of
           NextCall tok' -> Respond tok' do
-            ResponseChannel msg' coPeer <- call tok'
+            ResponseChannel msg' channel <- call tok'
             pure $ Response msg' case toAgency $ nextAgency tok' msg' of
               Left tok'' -> DoneTraced tok'' ()
-              Right (SomePeerHasAgency tok'') -> proxyProtocol tok'' coPeer nextAgency
+              Right (SomePeerHasAgency tok'') -> proxyProtocol tok'' channel nextAgency
           NextCast tok' -> Receive $ EffectTraced do
-            coPeer <- cast
-            pure $ proxyProtocol tok' coPeer nextAgency
+            channel <- cast
+            pure $ proxyProtocol tok' channel nextAgency
           NextClose tok' -> Closed tok' $ close tok'
   ServerAgency _ -> EffectTraced do
     InboundChannel{..} <- await agency
@@ -291,14 +321,14 @@ proxyProtocol agency Channel{..} nextAgency = case agency of
           tok'
           Handler
             { withSendResponse = \sendResponse -> pure $ Call tok' \msg -> EffectTraced do
-                coPeer <- sendResponse msg
+                channel <- sendResponse msg
                 pure case toAgency $ nextAgency tok' msg of
                   Left tok'' -> DoneTraced tok'' ()
-                  Right (SomePeerHasAgency tok'') -> proxyProtocol tok'' coPeer nextAgency
+                  Right (SomePeerHasAgency tok'') -> proxyProtocol tok'' channel nextAgency
             }
       NextReceive tok' -> do
-        coPeer <- receive
-        pure $ Cast $ proxyProtocol tok' coPeer nextAgency
+        channel <- receive
+        pure $ Cast $ proxyProtocol tok' channel nextAgency
       NextClosed tok' -> do
         closed tok'
         pure $ Close tok' ()

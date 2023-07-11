@@ -5,7 +5,8 @@
 module Network.Protocol.Connection where
 
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Resource (ResourceT, runResourceT, transResourceT)
+import Control.Monad.Trans.Resource (runResourceT, transResourceT)
+import Control.Monad.Trans.Resource.Internal (ResourceT (..))
 import Data.ByteString.Lazy (ByteString)
 import Network.Protocol.Peer.Trace
 import Network.TypedProtocol (Message, PeerHasAgency)
@@ -60,6 +61,15 @@ newtype ServerSource server m a = ServerSource
   { getServer :: ResourceT m (server m a)
   }
   deriving (Functor)
+
+resourceTServerSource
+  :: (Monad m)
+  => (forall p q x. (Functor p) => (forall y. p y -> q y) -> server p x -> server q x)
+  -> ResourceT m (server (ResourceT m) a)
+  -> ServerSource server m a
+resourceTServerSource hoistServer (ResourceT getServer) = ServerSource $ ResourceT \releaseMap -> do
+  server <- getServer releaseMap
+  pure $ hoistServer (\(ResourceT m) -> m releaseMap) server
 
 hoistServerSource
   :: (Functor m)

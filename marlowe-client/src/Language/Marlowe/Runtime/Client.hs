@@ -4,6 +4,7 @@
 module Language.Marlowe.Runtime.Client (
   module Control.Monad.Trans.Marlowe,
   module Control.Monad.Trans.Marlowe.Class,
+  module Language.Marlowe.Runtime.Client.Transfer,
   connectToMarloweRuntime,
   connectToMarloweRuntimeTraced,
 ) where
@@ -13,6 +14,7 @@ import Control.Monad.Trans.Marlowe
 import Control.Monad.Trans.Marlowe.Class
 import Language.Marlowe.Protocol.Client (marloweRuntimeClientPeer)
 import Language.Marlowe.Protocol.Types (MarloweRuntime)
+import Language.Marlowe.Runtime.Client.Transfer (exportContract, exportIncremental, importBundle, importIncremental)
 import Network.Protocol.Driver (tcpClient)
 import Network.Protocol.Driver.Trace (HasSpanContext, TcpClientSelector, tcpClientTraced)
 import Network.Protocol.Handshake.Types (Handshake)
