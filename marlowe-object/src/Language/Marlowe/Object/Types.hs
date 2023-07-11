@@ -1324,7 +1324,7 @@ labelledObjectType LabelledObject{..} = SomeObjectType _type
 
 newtype ObjectBundle = ObjectBundle {getObjects :: [LabelledObject]}
   deriving stock (Show, Read, Generic, Eq, Ord)
-  deriving anyclass (FromJSON, ToJSON, Variations, Binary)
+  deriving newtype (FromJSON, ToJSON, Variations, Binary)
 
 makePrisms ''Contract
 makePrisms ''ObjectBundle
