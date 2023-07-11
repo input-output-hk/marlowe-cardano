@@ -3854,11 +3854,11 @@
         "sphinxcontrib-haddock": "sphinxcontrib-haddock"
       },
       "locked": {
-        "lastModified": 1689077075,
-        "narHash": "sha256-O5j6ypel/35P4i7wMS+LclwcmF3uLel3A4jdidFrmOo=",
+        "lastModified": 1689070534,
+        "narHash": "sha256-8h/wSdX0GQVDja4kpA9VVdQfYu8Peiup+5FcMqkMdf4=",
         "owner": "input-output-hk",
         "repo": "iogx",
-        "rev": "cbf956ead7f34d6955119dfa64b30aae125cc555",
+        "rev": "2d063740583cd3103a178b3149018746b343f3ff",
         "type": "github"
       },
       "original": {

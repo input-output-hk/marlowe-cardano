@@ -75,7 +75,9 @@ let
     marlowe-runtime-web.ghcOptions = [ "-Werror" ];
     marlowe-test.ghcOptions = [ "-Werror" ];
 
-    plutus-ledger-slot.components.library.pkgconfig = lib.mkForce [ [ pkgs.secp256k1 ] ];
+    # See https://github.com/input-output-hk/iohk-nix/pull/488
+    cardano-crypto-praos.components.library.pkgconfig = lib.mkForce [ [ pkgs.libsodium-vrf pkgs.secp256k1 ] ];
+    cardano-crypto-class.components.library.pkgconfig = lib.mkForce [ [ pkgs.libsodium-vrf pkgs.secp256k1 ] ];
   };
 
   modules = [{ inherit packages; }];
