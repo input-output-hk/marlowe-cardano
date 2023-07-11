@@ -44,9 +44,7 @@ jobs:
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
       - name: Clean Build on Ubuntu
         run: |
-          nix develop --show-trace --command cabal clean
-          nix develop --show-trace --command cabal update
-          nix develop --show-trace --command cabal build all
+          nix develop --show-trace --command bash -c "cabal clean && cabal update && cabal build all"
       - name: Run tests
         run: |
           nix run .#marlowe-integration-tests --show-trace -- --strict
