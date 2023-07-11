@@ -42,7 +42,7 @@ jobs:
         with:
           name: ${{ env.CACHE_NAME }}
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
-      - name: Build on Ubuntu
+      - name: Clean Build on Ubuntu
         run: |
           nix develop --show-trace --ignore-environment --command cabal clean
           nix develop --show-trace --ignore-environment --command cabal update
