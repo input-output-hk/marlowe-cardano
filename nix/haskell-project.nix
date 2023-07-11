@@ -9,12 +9,6 @@ let
 
   mkIfDarwin = lib.mkIf pkgs.stdenv.hostPlatform.isDarwin;
 
-  sha256map = {
-    "https://github.com/input-output-hk/cardano-config"."1646e9167fab36c0bff82317743b96efa2d3adaa" = "11kf65x38laqhwspsl28j2x5a4rky8mfr6356w0li5g53sfykmjc";
-    "https://github.com/input-output-hk/cardano-addresses"."b6f2f3cef01a399376064194fd96711a5bdba4a7" = "10yj47gay72kx6v564qlfiigggcpqfdzrg61ii8p25m5n8ijz045";
-    "https://github.com/input-output-hk/actus-core"."3bddfeb838c695adf2c6689b3beda3ef1019de7" = "12pahjijkym93sm1qh9l9jw6wlv3vf46l73hpdwrm25rz195hi47";
-  };
-
   packages = {
 
     # See https://github.com/input-output-hk/plutus/issues/1213 and
@@ -85,6 +79,6 @@ let
 in
 
 {
-  inherit modules sha256map;
+  inherit modules;
 }
 

@@ -165,12 +165,14 @@ source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-config
   tag: 1646e9167fab36c0bff82317743b96efa2d3adaa
+  --sha256: 11kf65x38laqhwspsl28j2x5a4rky8mfr6356w0li5g53sfykmjc
 
 -- When updated to 3.12.0 or newer, remove the cabal-generator override in nix/pkgs/haskell/haskell.nix
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-addresses
   tag: b6f2f3cef01a399376064194fd96711a5bdba4a7
+  --sha256: 10yj47gay72kx6v564qlfiigggcpqfdzrg61ii8p25m5n8ijz045
   subdir: command-line
           core
 
@@ -234,3 +236,4 @@ source-repository-package
   type: git
   location: https://github.com/input-output-hk/actus-core
   tag: 3bddfeb838c695adf2c6689b3beda3ef1019de7
+  --sha256: 12pahjijkym93sm1qh9l9jw6wlv3vf46l73hpdwrm25rz195hi47
