@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name:          marlowe-runtime-web
-version:       0.0.2
+version:       0.0.3
 synopsis:      Web server for Marlowe Runtime on Cardano.
 bug-reports:   https://github.com/input-output-hk/marlowe-cardano/issues
 license:       Apache-2.0
@@ -126,10 +126,10 @@ library server
     , http-media ^>=0.8
     , lens >=5.2 && <6
     , marlowe-cardano ==0.1.1.0
-    , marlowe-chain-sync ==0.0.2
+    , marlowe-chain-sync ==0.0.3
     , marlowe-protocols ==0.1.1.0
-    , marlowe-runtime-web ==0.0.2
-    , marlowe-runtime:{marlowe-runtime, discovery-api, proxy-api, sync-api, tx-api} ==0.0.2
+    , marlowe-runtime-web ==0.0.3
+    , marlowe-runtime:{marlowe-runtime, discovery-api, proxy-api, sync-api, tx-api} ==0.0.3
     , monad-control ^>=1
     , mtl >=2.2 && <3
     , openapi3 >=3.2 && <4

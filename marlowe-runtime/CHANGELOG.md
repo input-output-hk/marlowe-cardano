@@ -1,4 +1,11 @@
 
+<a id='changelog-0.0.3'></a>
+# 0.0.3 — 2023-07-11
+
+## Fixed
+
+- Added migration to change tags column from varchar(64) to text.
+
 <a id='changelog-0.0.2'></a>
 # 0.0.2 — 2023-06-15
 
