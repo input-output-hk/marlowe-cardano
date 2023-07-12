@@ -15,7 +15,7 @@ import Language.Marlowe.Object.Types (Label, ObjectBundle)
 import Language.Marlowe.Protocol.Transfer.Types (ImportError (..))
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash (..))
 import Language.Marlowe.Runtime.Contract.Api (ContractWithAdjacency (..))
-import Language.Marlowe.Runtime.Web (ContractSourceAPI, ContractSourcesAPI)
+import Language.Marlowe.Runtime.Web (ContractSourceAPI, ContractSourcesAPI, ListObject (..))
 import Language.Marlowe.Runtime.Web.Server.Monad
 import Language.Marlowe.Runtime.Web.Server.REST.ApiError (badRequest', badRequest'')
 import Language.Marlowe.Runtime.Web.Types (ContractSourceId (..), PostContractSourceResponse (..))
@@ -30,8 +30,10 @@ server =
     :<|> contractServer
 
 contractServer :: ContractSourceId -> ServerT ContractSourceAPI ServerM
-contractServer =
-  getOne
+contractServer sourceId =
+  getOne sourceId
+    :<|> getAdjacency sourceId
+    :<|> getClosure sourceId
 
 getOne :: ContractSourceId -> Bool -> ServerM Contract
 getOne sourceId expand = do
@@ -43,6 +45,12 @@ getOne sourceId expand = do
         Left err -> fail err
         Right expanded -> pure expanded
     else pure contract
+
+getAdjacency :: ContractSourceId -> ServerM (ListObject ContractSourceId)
+getAdjacency = fmap (coerce . Set.toList . adjacency) . getContractOrThrow
+
+getClosure :: ContractSourceId -> ServerM (ListObject ContractSourceId)
+getClosure = fmap (coerce . Set.toList . closure) . getContractOrThrow
 
 loadContinuations :: Set DatumHash -> ServerM Continuations
 loadContinuations closure =

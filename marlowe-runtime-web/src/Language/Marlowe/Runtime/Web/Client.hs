@@ -8,6 +8,10 @@ module Language.Marlowe.Runtime.Web.Client (
   getContract,
   getContractNext,
   getContractSource,
+  getContractSourceAdjacency,
+  getContractSourceAdjacencyStatus,
+  getContractSourceClosure,
+  getContractSourceClosureStatus,
   getContractSourceStatus,
   getContractStatus,
   getContracts,
@@ -217,13 +221,40 @@ getContractSourceStatus :: ContractSourceId -> Bool -> ClientM (RuntimeStatus, C
 getContractSourceStatus contractSourceId expand = do
   let contractsClient :<|> _ = client
   let _ :<|> _ :<|> _ :<|> contractSourcesClient = contractsClient
-  let _ :<|> getContractSource' = contractSourcesClient
-  response <- getContractSource' contractSourceId expand
+  let _ :<|> contractSourceClient = contractSourcesClient
+  let getContractSource' :<|> _ = contractSourceClient contractSourceId
+  response <- getContractSource' expand
   status <- extractStatus response
   pure (status, getResponse response)
 
 getContractSource :: ContractSourceId -> Bool -> ClientM Contract
 getContractSource = (fmap . fmap) snd . getContractSourceStatus
+
+getContractSourceAdjacencyStatus :: ContractSourceId -> ClientM (RuntimeStatus, Set ContractSourceId)
+getContractSourceAdjacencyStatus contractSourceId = do
+  let contractsClient :<|> _ = client
+  let _ :<|> _ :<|> _ :<|> contractSourcesClient = contractsClient
+  let _ :<|> contractSourceClient = contractSourcesClient
+  let _ :<|> getContractSourceAdjacency' :<|> _ = contractSourceClient contractSourceId
+  response <- getContractSourceAdjacency'
+  status <- extractStatus response
+  pure (status, Set.fromList $ results $ getResponse response)
+
+getContractSourceAdjacency :: ContractSourceId -> ClientM (Set ContractSourceId)
+getContractSourceAdjacency = fmap snd . getContractSourceAdjacencyStatus
+
+getContractSourceClosureStatus :: ContractSourceId -> ClientM (RuntimeStatus, Set ContractSourceId)
+getContractSourceClosureStatus contractSourceId = do
+  let contractsClient :<|> _ = client
+  let _ :<|> _ :<|> _ :<|> contractSourcesClient = contractsClient
+  let _ :<|> contractSourceClient = contractSourcesClient
+  let _ :<|> _ :<|> getContractSourceClosure' = contractSourceClient contractSourceId
+  response <- getContractSourceClosure'
+  status <- extractStatus response
+  pure (status, Set.fromList $ results $ getResponse response)
+
+getContractSourceClosure :: ContractSourceId -> ClientM (Set ContractSourceId)
+getContractSourceClosure = fmap snd . getContractSourceClosureStatus
 
 getContractStatus :: TxOutRef -> ClientM (RuntimeStatus, ContractState)
 getContractStatus contractId = do

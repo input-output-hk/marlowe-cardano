@@ -237,6 +237,8 @@ type ContractSourcesAPI =
 -- | /contracts/sources/:contractSourceId sub-API
 type ContractSourceAPI =
   GetContractSourceAPI
+    :<|> "adjacency" :> GetContractSourceIdsAPI
+    :<|> "closure" :> GetContractSourceIdsAPI
 
 type PostContractSourcesAPI =
   QueryParam' '[Required] "main" Label
@@ -246,6 +248,8 @@ type PostContractSourcesAPI =
 type GetContractSourceAPI =
   QueryFlag "expand"
     :> Get '[JSON] Contract
+
+type GetContractSourceIdsAPI = Get '[JSON] (ListObject ContractSourceId)
 
 -- | /contracts/:contractId/transactions sup-API
 type TransactionsAPI =
