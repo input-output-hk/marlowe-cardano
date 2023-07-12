@@ -23,7 +23,6 @@ import Data.Aeson (FromJSON, ToJSON, eitherDecodeFileStrict)
 import qualified Data.Aeson as A
 import Data.Binary (decodeFileOrFail)
 import Data.Binary.Get (ByteOffset)
-import Data.ByteString.Base16 (encodeBase16)
 import qualified Data.DList as DList
 import Data.Foldable (asum)
 import Data.Maybe (fromJust)
@@ -97,7 +96,7 @@ packArchive
 packArchive archivePath mainIs f = withSystemTempDirectory "marlowe.bundle.create" \baseDir -> do
   objectsVar <- newIORef mempty
   a <- f \obj -> do
-    let objectPath = T.unpack $ encodeBase16 $ unLabel $ _label obj
+    let objectPath = T.unpack $ unLabel $ _label obj
     liftIO $ A.encodeFile (baseDir </> objectPath) obj
     atomicModifyIORef objectsVar \objects -> (DList.snoc objects objectPath, ())
   (DList.toList -> objects) <- readIORef objectsVar

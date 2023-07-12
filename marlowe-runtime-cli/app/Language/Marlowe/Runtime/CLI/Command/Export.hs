@@ -11,7 +11,7 @@ module Language.Marlowe.Runtime.CLI.Command.Export (
 import Control.Monad (forever, unless)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Marlowe.Class (runMarloweTransferClient)
-import Data.Coerce (coerce)
+import Data.ByteString.Base16 (encodeBase16)
 import Data.Foldable (traverse_)
 import Language.Marlowe.Object.Archive (packArchive)
 import Language.Marlowe.Object.Types (Label (..), ObjectBundle (..))
@@ -54,7 +54,7 @@ exportCommandParser = info parser $ progDesc "Export a contract from the contrac
 
 runExportCommand :: ExportCommand -> CLI ()
 runExportCommand ExportCommand{..} = do
-  found <- packArchive outPath (coerce contractHash) \writeObject ->
+  found <- packArchive outPath (Label $ encodeBase16 $ unDatumHash contractHash) \writeObject ->
     P.runEffect $
       runMarloweTransferClient (exportIncremental 50 contractHash)
         >-> forever (lift . traverse_ writeObject . getObjects =<< await)

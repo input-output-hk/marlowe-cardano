@@ -4,6 +4,7 @@ import Control.Monad.IO.Class (MonadIO (liftIO))
 import qualified Control.Monad.Reader as Reader
 
 import Control.Exception (throw)
+import Data.Functor (void)
 import Data.Proxy (Proxy (Proxy))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Integration.Common (Wallet, getGenesisWallet, runIntegrationTest, runWebClient)
@@ -173,7 +174,7 @@ invalidContractIdSpec = it "responds with a 404 when the contractId cannot be fo
             , rangeOrder = RangeAsc
             , rangeField = Proxy
             }
-    getTransactions invalidContractId $ Just invalidRange
+    void $ getTransactions invalidContractId $ Just invalidRange
 
   case result of
     Left (FailureResponse _ Response{responseStatusCode = Status{statusCode = 404}}) -> pure ()
@@ -190,7 +191,7 @@ invalidTxIdSpec = it "responds with a 416 when the transactionId cannot be found
             , rangeOrder = RangeAsc
             , rangeField = Proxy
             }
-    getTransactions expectedContractId $ Just invalidRange
+    void $ getTransactions expectedContractId $ Just invalidRange
 
   case result of
     Left (FailureResponse _ Response{responseStatusCode = Status{statusCode = 416}}) -> pure ()

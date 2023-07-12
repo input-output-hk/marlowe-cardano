@@ -2,6 +2,7 @@ module Language.Marlowe.Runtime.Web.Contracts.Contract.Post where
 
 import Control.Monad.IO.Class (MonadIO (liftIO))
 
+import Data.Functor (void)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Data.Time (getCurrentTime, secondsToNominalDiffTime)
@@ -34,19 +35,20 @@ spec = describe "Valid POST /contracts" do
       now <- liftIO getCurrentTime
       let (contract, _, _) = standardContract partyBAddress now $ secondsToNominalDiffTime 100
 
-      postContract
-        Nothing
-        partyAWebChangeAddress
-        (Just partyAWebExtraAddresses)
-        (Just partyAWebCollataralUtxos)
-        Web.PostContractsRequest
-          { metadata = mempty
-          , version = Web.V1
-          , roles = Just $ Web.Mint $ Map.singleton "PartyA" $ Web.RoleTokenSimple partyAWebChangeAddress
-          , contract = contract
-          , minUTxODeposit = 2_000_000
-          , tags = mempty
-          }
+      void $
+        postContract
+          Nothing
+          partyAWebChangeAddress
+          (Just partyAWebExtraAddresses)
+          (Just partyAWebCollataralUtxos)
+          Web.PostContractsRequest
+            { metadata = mempty
+            , version = Web.V1
+            , roles = Just $ Web.Mint $ Map.singleton "PartyA" $ Web.RoleTokenSimple partyAWebChangeAddress
+            , contract = contract
+            , minUTxODeposit = 2_000_000
+            , tags = mempty
+            }
     case result of
       Left _ -> fail $ "Expected 200 response code - got " <> show result
-      Right Web.CreateTxEnvelope{} -> pure ()
+      Right _ -> pure ()

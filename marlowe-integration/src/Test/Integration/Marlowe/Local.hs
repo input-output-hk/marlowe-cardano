@@ -48,6 +48,7 @@ import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (race_)
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Run (AppM, runAppM)
+import Control.DeepSeq (NFData)
 import Control.Exception (bracketOnError, catch, onException, throw, try)
 import Control.Monad (when, (<=<))
 import Control.Monad.Catch hiding (bracketOnError, catch, onException, try)
@@ -134,7 +135,9 @@ import Network.Socket (
 import Network.TypedProtocol.Pipelined (unsafeIntToNat)
 import Network.Wai.Handler.Warp (run)
 import Observe.Event.Explicit (injectSelector, noopEventBackend)
-import Servant.Client (BaseUrl (..), ClientError, ClientM, Scheme (..), mkClientEnv, runClientM)
+import Servant.Client (BaseUrl (..), ClientError, Scheme (..), mkClientEnv)
+import Servant.Client.Internal.HttpClient.Streaming (ClientM)
+import Servant.Client.Streaming (runClientM)
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode (..))
 import System.IO (BufferMode (..), IOMode (..), hSetBuffering)
@@ -162,7 +165,7 @@ instance HasSpanContext RuntimeRef where
 data MarloweRuntime = MarloweRuntime
   { protocolConnector :: Connector MarloweRuntimeClient (NoopEventT RuntimeRef RuntimeSelector IO)
   , proxyPort :: Int
-  , runWebClient :: forall a. ClientM a -> IO (Either ClientError a)
+  , runWebClient :: forall a. (NFData a) => ClientM a -> IO (Either ClientError a)
   , marloweScripts :: MarloweScripts
   , testnet :: LocalTestnet
   }
@@ -262,7 +265,7 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
 
     let baseUrl = BaseUrl Http "localhost" webPort ""
     let clientEnv = mkClientEnv manager baseUrl
-    let runWebClient :: ClientM a -> IO (Either ClientError a)
+    let runWebClient :: (NFData a) => ClientM a -> IO (Either ClientError a)
         runWebClient = flip runClientM clientEnv
 
         logAction = cmap fmtMessage $ logTextHandle logFileHandle

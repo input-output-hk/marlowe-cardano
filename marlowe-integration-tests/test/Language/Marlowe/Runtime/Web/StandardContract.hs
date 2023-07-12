@@ -33,7 +33,7 @@ import Language.Marlowe.Runtime.Web.Common (
   withdraw,
  )
 import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO (toDTO))
-import Servant.Client (ClientM)
+import Servant.Client.Streaming (ClientM)
 
 data StandardContractInit = StandardContractInit
   { makeInitialDeposit :: ClientM StandardContractFundsDeposited
