@@ -3,6 +3,7 @@ module Language.Marlowe.Runtime.Web.Contracts.Get where
 import Control.Exception (throw)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import qualified Control.Monad.Reader as Reader
+import Data.Functor (void)
 import Data.Proxy (Proxy (Proxy))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Integration.Common (Wallet, getGenesisWallet, runIntegrationTest, runWebClient)
@@ -137,7 +138,7 @@ invalidTxIdSpec = it "returns an error message" \MarloweWebTestData{..} -> flip 
             , rangeOrder = RangeAsc
             , rangeField = Proxy
             }
-    getContracts Nothing Nothing $ Just invalidRange
+    void $ getContracts Nothing Nothing $ Just invalidRange
 
   case result of
     Left (FailureResponse _ Response{responseStatusCode = Status{statusCode = 416}}) -> pure ()

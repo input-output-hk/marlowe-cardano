@@ -19,6 +19,7 @@ import Servant.Client.Streaming (ResponseF (Response, responseStatusCode))
 import Test.Hspec (ActionWith, Spec, SpecWith, aroundAll, describe, it, shouldBe)
 import Test.Integration.Marlowe.Local (MarloweRuntime, withLocalMarloweRuntime)
 
+import Data.Functor (void)
 import Language.Marlowe.Core.V1.Next (Next (..))
 import Language.Marlowe.Core.V1.Next.Applicables (emptyApplicables)
 import Language.Marlowe.Core.V1.Next.CanReduce (CanReduce (..))
@@ -51,7 +52,7 @@ invalidTxIdSpec = it "returns not found for invalid contract id" \MarloweWebTest
             Web.TxOutRef
               (toDTO @Chain.TxId "0000000000000000000000000000000000000000000000000000000000000000")
               1
-      getContract invalidTxId
+      void $ getContract invalidTxId
 
     case result of
       Left (FailureResponse _ Response{responseStatusCode = Status{statusCode = 404}}) -> pure ()

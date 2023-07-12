@@ -3,6 +3,7 @@ module Language.Marlowe.Runtime.Web.Contracts.Contract.Get where
 import Control.Exception (throw)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import qualified Control.Monad.Reader as Reader
+import Data.Functor (void)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Integration.Common (Wallet, getGenesisWallet, runIntegrationTest, runWebClient)
 import qualified Language.Marlowe.Runtime.Web as Web
@@ -55,7 +56,7 @@ invalidTxIdSpec :: SpecWith MarloweWebTestData
 invalidTxIdSpec = it "returns not found for invalid contract id" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
   result <- runWebClient do
     let invalidTxId = Web.TxOutRef (toDTO @Chain.TxId "0000000000000000000000000000000000000000000000000000000000000000") 1
-    getContract invalidTxId
+    void $ getContract invalidTxId
 
   case result of
     Left (FailureResponse _ Response{responseStatusCode = Status{statusCode = 404}}) -> pure ()

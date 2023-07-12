@@ -96,6 +96,7 @@ executable marlowe-integration-tests
     , cardano-api
     , co-log >=0.5.0.0 && <0.6.0.0
     , containers
+    , deepseq
     , eventuo11y-extras
     , hspec
     , http-types
