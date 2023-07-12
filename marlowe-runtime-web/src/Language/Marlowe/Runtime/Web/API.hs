@@ -56,6 +56,7 @@ import Language.Marlowe.Core.V1.Next
 import Language.Marlowe.Runtime.Web.Next.Schema ()
 
 import Data.Text.Encoding (encodeUtf8)
+import Language.Marlowe.Core.V1.Semantics.Types (Contract)
 import Language.Marlowe.Object.Types (Label, ObjectBundle)
 import Language.Marlowe.Runtime.Web.Types
 import Network.HTTP.Media ((//))
@@ -231,11 +232,20 @@ type GETNextContinuationAPI =
 -- | /contracts/sources sub-API
 type ContractSourcesAPI =
   PostContractSourcesAPI
+    :<|> Capture "contractSourceId" ContractSourceId :> ContractSourceAPI
+
+-- | /contracts/sources/:contractSourceId sub-API
+type ContractSourceAPI =
+  GetContractSourceAPI
 
 type PostContractSourcesAPI =
   QueryParam' '[Required] "main" Label
     :> StreamBody NewlineFraming JSON (Producer ObjectBundle IO ())
     :> Post '[JSON] PostContractSourceResponse
+
+type GetContractSourceAPI =
+  QueryFlag "expand"
+    :> Get '[JSON] Contract
 
 -- | /contracts/:contractId/transactions sup-API
 type TransactionsAPI =

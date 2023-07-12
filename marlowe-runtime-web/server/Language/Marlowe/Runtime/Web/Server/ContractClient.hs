@@ -24,6 +24,8 @@ import Language.Marlowe.Protocol.Client (MarloweRuntimeClient (..), hoistMarlowe
 import Language.Marlowe.Protocol.Transfer.Types (ImportError (..))
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash)
 import Language.Marlowe.Runtime.Client (importIncremental)
+import Language.Marlowe.Runtime.Contract.Api (ContractWithAdjacency)
+import qualified Language.Marlowe.Runtime.Contract.Api as Contract
 import Network.Protocol.Connection (Connector, runConnector)
 import Pipes (MFunctor (..), Pipe, await, yield, (>->))
 import Unsafe.Coerce (unsafeCoerce)
@@ -35,9 +37,13 @@ newtype ContractClientDependencies m = ContractClientDependencies
 -- | Signature for a delegate that imports a bundle into the runtime.
 type ImportBundle m = Label -> Pipe ObjectBundle (Map Label DatumHash) (ExceptT ImportError m) ()
 
+-- | Signature for a delegate that gets a contract from the runtime.
+type GetContract m = DatumHash -> m (Maybe ContractWithAdjacency)
+
 -- | Public API of the ContractClient
-newtype ContractClient m = ContractClient
+data ContractClient m = ContractClient
   { importBundle :: ImportBundle m
+  , getContract :: GetContract m
   }
 
 contractClient :: (MonadUnliftIO m) => Component m (ContractClientDependencies m) (ContractClient m)
@@ -54,6 +60,7 @@ contractClient = arr \ContractClientDependencies{..} ->
           case result of
             Nothing -> pure ()
             Just err -> throwError err
+    , getContract = runConnector connector . RunContractQueryClient . Contract.getContract
     }
 
 watchForMain :: (Monad m) => Label -> Pipe ObjectBundle ObjectBundle (ExceptT ImportError m) ()

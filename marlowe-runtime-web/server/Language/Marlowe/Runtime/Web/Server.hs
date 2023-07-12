@@ -38,6 +38,7 @@ import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Server.ContractClient (
   ContractClient (..),
   ContractClientDependencies (..),
+  GetContract,
   ImportBundle,
   contractClient,
  )
@@ -176,6 +177,7 @@ server = proc deps@ServerDependencies{connector} -> do
           , _loadWithdrawals = loadWithdrawals
           , _loadWithdrawal = loadWithdrawal
           , _createContract = createContract
+          , _getContract = getContract
           , _applyInputs = applyInputs
           , _withdraw = withdraw
           , _submitContract = submitContract
@@ -196,6 +198,7 @@ data WebServerDependencies r s = WebServerDependencies
   , _loadTransactions :: LoadTransactions (AppM r s)
   , _loadTransaction :: LoadTransaction (AppM r s)
   , _createContract :: CreateContract (AppM r s)
+  , _getContract :: GetContract (AppM r s)
   , _withdraw :: Withdraw (AppM r s)
   , _applyInputs :: ApplyInputs (AppM r s)
   , _submitContract :: ContractId -> Submit r (AppM r s)

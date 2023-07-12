@@ -21,7 +21,7 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Except (mapExceptT)
 import Language.Marlowe.Runtime.ChainSync.Api (TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId)
-import Language.Marlowe.Runtime.Web.Server.ContractClient (ImportBundle)
+import Language.Marlowe.Runtime.Web.Server.ContractClient (GetContract, ImportBundle)
 import Language.Marlowe.Runtime.Web.Server.SyncClient (
   LoadContract,
   LoadContractHeaders,
@@ -61,6 +61,7 @@ data AppEnv = forall r s.
   , _loadTransaction :: LoadTransaction (AppM r s)
   , _importBundle :: ImportBundle (AppM r s)
   , _createContract :: CreateContract (AppM r s)
+  , _getContract :: GetContract (AppM r s)
   , _withdraw :: Withdraw (AppM r s)
   , _applyInputs :: ApplyInputs (AppM r s)
   , _submitContract :: ContractId -> Submit r (AppM r s)
@@ -94,6 +95,12 @@ loadWithdrawals :: LoadWithdrawals ServerM
 loadWithdrawals wFilter range = do
   AppEnv{_eventBackend = backend, _loadWithdrawals = load} <- ask
   liftBackendM backend $ load wFilter range
+
+-- | Get a contract by its hash.
+getContract :: GetContract ServerM
+getContract hash = do
+  AppEnv{_eventBackend = backend, _getContract = get} <- ask
+  liftBackendM backend $ get hash
 
 -- | Load a list of withdrawal headers.
 loadWithdrawal :: LoadWithdrawal ServerM

@@ -7,6 +7,8 @@ module Language.Marlowe.Runtime.Web.Client (
   Page (..),
   getContract,
   getContractNext,
+  getContractSource,
+  getContractSourceStatus,
   getContractStatus,
   getContracts,
   getContractsStatus,
@@ -53,6 +55,7 @@ import Data.Time (UTCTime)
 import Data.Version (Version)
 import GHC.TypeLits (KnownSymbol, symbolVal)
 import Language.Marlowe.Core.V1.Next
+import Language.Marlowe.Core.V1.Semantics.Types (Contract)
 import Language.Marlowe.Object.Types (Label, ObjectBundle)
 import Language.Marlowe.Runtime.Web.API (
   API,
@@ -199,7 +202,7 @@ postContractSourceStatus
 postContractSourceStatus main bundles = do
   let contractsClient :<|> _ = client
   let _ :<|> _ :<|> _ :<|> contractSourcesClient = contractsClient
-  let postContractSource' = contractSourcesClient
+  let postContractSource' :<|> _ = contractSourcesClient
   response <- postContractSource' main bundles
   status <- extractStatus response
   pure (status, getResponse response)
@@ -209,6 +212,18 @@ postContractSource
   -> Producer ObjectBundle IO ()
   -> ClientM PostContractSourceResponse
 postContractSource = (fmap . fmap) snd . postContractSourceStatus
+
+getContractSourceStatus :: ContractSourceId -> Bool -> ClientM (RuntimeStatus, Contract)
+getContractSourceStatus contractSourceId expand = do
+  let contractsClient :<|> _ = client
+  let _ :<|> _ :<|> _ :<|> contractSourcesClient = contractsClient
+  let _ :<|> getContractSource' = contractSourcesClient
+  response <- getContractSource' contractSourceId expand
+  status <- extractStatus response
+  pure (status, getResponse response)
+
+getContractSource :: ContractSourceId -> Bool -> ClientM Contract
+getContractSource = (fmap . fmap) snd . getContractSourceStatus
 
 getContractStatus :: TxOutRef -> ClientM (RuntimeStatus, ContractState)
 getContractStatus contractId = do

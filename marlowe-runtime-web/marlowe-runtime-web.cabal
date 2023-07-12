@@ -76,7 +76,7 @@ library
     , openapi3 >=3.2 && <4
     , parsec ^>=3.1.14
     , pipes ^>=4.3.16
-    , plutus-ledger-api
+    , plutus-ledger-api ==1.0.0.1
     , servant ^>=0.19
     , servant-client ^>=0.19
     , servant-client-core ^>=0.19
@@ -141,6 +141,7 @@ library server
     , mtl >=2.2 && <3
     , openapi3 >=3.2 && <4
     , pipes ^>=4.3.16
+    , plutus-ledger-api ==1.0.0.1
     , servant ^>=0.19
     , servant-openapi3 ^>=2.0
     , servant-pagination >=2.5 && <3
