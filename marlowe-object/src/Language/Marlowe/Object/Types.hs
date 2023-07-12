@@ -82,8 +82,8 @@ instance FromJSONKey Verbatim where
 
 -- | A label that refers to an object in a bundle.
 newtype Label = Label {unLabel :: Text}
-  deriving (Show, Read, Generic, Eq, Ord)
-  deriving newtype (Binary, Variations, Hashable, IsString, FromJSON, ToJSON, FromJSONKey, ToJSONKey)
+  deriving (Generic, Eq, Ord)
+  deriving newtype (Show, Read, Binary, Variations, Hashable, IsString, FromJSON, ToJSON, FromJSONKey, ToJSONKey)
 
 -- | A timeout in a contract.
 newtype Timeout = Timeout {unTimeout :: UTCTime}
