@@ -112,6 +112,13 @@ Run `cabal build marlowe` from the root to build the Marlowe library.
 
 See the link:./cabal.project[cabal project file] to see the other packages that you can build with `cabal`.
 
+[NOTE]
+====
+If you get errors about missing shared libraries, try running `cabal clean` first. 
+
+If that fails you might have a corrupt cabal store, in which case you should `rm -rf ~/.cabal/store` and try `cabal build all` again.
+====
+
 === Deployment
 
 Marlowe Run and the Marlowe Playground are automatically deployed upon certain pushes to GitHub
