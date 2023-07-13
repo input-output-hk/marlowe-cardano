@@ -15,6 +15,8 @@ import Control.Monad.Event.Class (Inject (..), NoopEventT (runNoopEventT))
 import Control.Monad.Reader (ReaderT, ask, runReaderT)
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import Control.Monad.Writer (execWriter, runWriter)
+import Data.ByteString.Base16 (decodeBase16', encodeBase16)
+import Data.Either (fromRight)
 import Data.Foldable (for_)
 import Data.Function (on)
 import qualified Data.Map as Map
@@ -243,7 +245,7 @@ transferSpec = do
       hash <- expectJust "failed to push contract" $ runLoad $ pushContract contract
       ObjectBundle bundle <- expectJust "failed to export contract" $ runTransfer $ exportContract 100 hash
       Api.ContractWithAdjacency{closure} <- expectJust "failed to get contract" $ runQuery $ Api.getContract hash
-      liftIO $ Set.fromList (DatumHash . unLabel . _label <$> bundle) `shouldBe` closure
+      liftIO $ Set.fromList (unLabel . _label <$> bundle) `shouldBe` Set.map (encodeBase16 . unDatumHash) closure
 
     prop "Labels are hashes" \contract -> runContractTest do
       hash <- expectJust "failed to push contract" $ runLoad $ pushContract contract
@@ -252,14 +254,16 @@ transferSpec = do
             LinkedContract c -> pure (LinkedContract c, c)
             a -> fail $ "Unexpected non-contract object in exported bundle " <> show a
       (linked, _) <- expectRight "" $ linkBundle' bundle expectOnlyContracts mempty
-      liftIO $ for_ linked \(Label label, c) -> DatumHash label `shouldBe` hashContract c
+      liftIO $ for_ linked \(Label label, c) -> label `shouldBe` encodeBase16 (unDatumHash $ hashContract c)
 
     prop "import . export" \contract -> do
       ObjectBundle bundle <- runContractTest do
         hash <- expectJust "failed to push contract" $ runLoad $ pushContract contract
         expectJust "failed to export contract" $ runTransfer $ exportContract 100 hash
       hashes <- runContractTest $ expectRight "failed to import bundle" $ runTransfer $ importBundle $ ObjectBundle bundle
-      hashes `shouldBe` Map.fromList ((_label &&& DatumHash . unLabel . _label) <$> bundle)
+      hashes
+        `shouldBe` Map.fromList
+          ((_label &&& DatumHash . fromRight (error "fromRight: left") . decodeBase16' . unLabel . _label) <$> bundle)
 
     prop "incremental" \contract -> runContractTest do
       hash <- expectJust "failed to push contract" $ runLoad $ pushContract contract

@@ -49,7 +49,7 @@ import Language.Marlowe.Runtime.Web.Client (
  )
 import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO (toDTO))
 import qualified Plutus.V2.Ledger.Api as PV2
-import Servant.Client (ClientM)
+import Servant.Client.Streaming (ClientM)
 
 createCloseContract :: Wallet -> ClientM Web.TxOutRef
 createCloseContract Wallet{..} = do

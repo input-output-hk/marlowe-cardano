@@ -56,9 +56,11 @@ import Language.Marlowe.Core.V1.Next
 import Language.Marlowe.Runtime.Web.Next.Schema ()
 
 import Data.Text.Encoding (encodeUtf8)
+import Language.Marlowe.Object.Types (Label, ObjectBundle)
 import Language.Marlowe.Runtime.Web.Types
 import Network.HTTP.Media ((//))
 import Network.Wai (mapResponseHeaders)
+import Pipes (Producer)
 import Servant
 import Servant.Client (HasClient (..))
 import Servant.Client.Core (RunClient)
@@ -116,6 +118,9 @@ type family AddStatusHeaders api where
   AddStatusHeaders (Verb method cTypes status (Headers hs a)) =
     Verb method cTypes status (Headers (AppendStatusHeaders hs) a)
   AddStatusHeaders (Verb method cTypes status a) = Verb method cTypes status (Headers StatusHeaders a)
+  AddStatusHeaders (Stream method status framing ct (Headers hs a)) =
+    Stream method status framing ct (Headers (AppendStatusHeaders hs) a)
+  AddStatusHeaders (Stream cTypes status framing ct a) = Stream cTypes status framing ct (Headers StatusHeaders a)
 
 instance (RunClient m, HasClient m (AddStatusHeaders api)) => HasClient m (WithRuntimeStatus api) where
   type Client m (WithRuntimeStatus api) = Client m (AddStatusHeaders api)
@@ -138,6 +143,7 @@ type ContractsAPI =
   GetContractsAPI
     :<|> PostContractsAPI
     :<|> Capture "contractId" TxOutRef :> ContractAPI
+    :<|> "sources" :> ContractSourcesAPI
 
 -- | /withdrawals sub-API
 type WithdrawalsAPI =
@@ -221,6 +227,15 @@ type GETNextContinuationAPI =
     :> QueryParam' '[Required] "validityEnd" UTCTime
     :> QueryParams "party" Party
     :> Get '[JSON] Next
+
+-- | /contracts/sources sub-API
+type ContractSourcesAPI =
+  PostContractSourcesAPI
+
+type PostContractSourcesAPI =
+  QueryParam' '[Required] "main" Label
+    :> StreamBody NewlineFraming JSON (Producer ObjectBundle IO ())
+    :> Post '[JSON] PostContractSourceResponse
 
 -- | /contracts/:contractId/transactions sup-API
 type TransactionsAPI =

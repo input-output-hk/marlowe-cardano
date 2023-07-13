@@ -30,6 +30,7 @@ import qualified Cardano.Api as C
 import Cardano.Api.Byron (deserialiseFromTextEnvelope)
 import qualified Cardano.Api.Shelley as C
 import Control.Concurrent (threadDelay)
+import Control.DeepSeq (NFData)
 import Control.Monad (guard, void, (<=<))
 import Control.Monad.Event.Class (NoopEventT (..))
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -117,7 +118,8 @@ import Language.Marlowe.Runtime.Transaction.Api (
  )
 import Network.Protocol.Job.Client (liftCommandWait)
 import qualified Plutus.V2.Ledger.Api as PV2
-import Servant.Client (ClientError, ClientM)
+import Servant.Client (ClientError)
+import Servant.Client.Streaming (ClientM)
 import System.Exit (ExitCode (..))
 import Test.Hspec (shouldBe)
 import Test.Integration.Marlowe (
@@ -262,7 +264,7 @@ runIntegrationTest :: Integration a -> MarloweRuntime -> IO a
 runIntegrationTest m runtime@MarloweRuntime.MarloweRuntime{protocolConnector} =
   runNoopEventT $ runMarloweT (runReaderT m runtime) protocolConnector
 
-runWebClient :: ClientM a -> Integration (Either ClientError a)
+runWebClient :: (NFData a) => ClientM a -> Integration (Either ClientError a)
 runWebClient client = ReaderT \runtime -> liftIO $ MarloweRuntime.runWebClient runtime client
 
 expectJust :: (MonadFail m) => String -> Maybe a -> m a

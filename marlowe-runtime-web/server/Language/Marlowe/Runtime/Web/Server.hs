@@ -35,6 +35,12 @@ import Language.Marlowe.Runtime.ChainSync.Api (TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Language.Marlowe.Runtime.Web (RuntimeStatus)
 import qualified Language.Marlowe.Runtime.Web as Web
+import Language.Marlowe.Runtime.Web.Server.ContractClient (
+  ContractClient (..),
+  ContractClientDependencies (..),
+  ImportBundle,
+  contractClient,
+ )
 import Language.Marlowe.Runtime.Web.Server.DTO (toDTO)
 import Language.Marlowe.Runtime.Web.Server.Monad (AppEnv (..), ServerM (..))
 import qualified Language.Marlowe.Runtime.Web.Server.OpenAPI as OpenAPI
@@ -68,6 +74,7 @@ import Observe.Event (reference)
 import Observe.Event.Backend (Event (addField))
 import Observe.Event.Explicit (injectSelector)
 import Servant hiding (Server, respond)
+import Servant.Pipes ()
 
 data ServeRequest f where
   -- We need the request in the selector constructor as well because we need it
@@ -151,6 +158,12 @@ server = proc deps@ServerDependencies{connector} -> do
           , lookupTempTransaction
           , lookupTempWithdrawal
           }
+  ContractClient{..} <-
+    contractClient
+      -<
+        ContractClientDependencies
+          { connector
+          }
   webServer
     -< case deps of
       ServerDependencies{connector = _, ..} ->
@@ -158,6 +171,7 @@ server = proc deps@ServerDependencies{connector} -> do
           { _loadContractHeaders = loadContractHeaders
           , _loadContract = loadContract
           , _loadTransactions = loadTransactions
+          , _importBundle = importBundle
           , _loadTransaction = loadTransaction
           , _loadWithdrawals = loadWithdrawals
           , _loadWithdrawal = loadWithdrawal
@@ -176,6 +190,7 @@ server = proc deps@ServerDependencies{connector} -> do
 data WebServerDependencies r s = WebServerDependencies
   { _loadContractHeaders :: LoadContractHeaders (AppM r s)
   , _loadContract :: LoadContract (AppM r s)
+  , _importBundle :: ImportBundle (AppM r s)
   , _loadWithdrawals :: LoadWithdrawals (AppM r s)
   , _loadWithdrawal :: LoadWithdrawal (AppM r s)
   , _loadTransactions :: LoadTransactions (AppM r s)

@@ -1,6 +1,7 @@
 module Language.Marlowe.Runtime.Web.Contracts.Transactions.Transaction.Post where
 
 import Control.Monad.IO.Class (MonadIO (liftIO))
+import Data.Functor (void)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Data.Time (getCurrentTime, secondsToNominalDiffTime)
@@ -57,19 +58,20 @@ spec = describe "POST /contracts/{contractId}/transactions" do
 
       let inputs = [NormalInput $ IDeposit partyA partyA ada 100_000_000]
 
-      postTransaction
-        partyAWebChangeAddress
-        (Just partyAWebExtraAddresses)
-        (Just partyAWebCollataralUtxos)
-        contractId
-        Web.PostTransactionsRequest
-          { version = Web.V1
-          , metadata = mempty
-          , invalidBefore = Nothing
-          , invalidHereafter = Nothing
-          , inputs
-          , tags = mempty
-          }
+      void $
+        postTransaction
+          partyAWebChangeAddress
+          (Just partyAWebExtraAddresses)
+          (Just partyAWebCollataralUtxos)
+          contractId
+          Web.PostTransactionsRequest
+            { version = Web.V1
+            , metadata = mempty
+            , invalidBefore = Nothing
+            , invalidHereafter = Nothing
+            , inputs
+            , tags = mempty
+            }
     case result of
       Left _ -> fail $ "Expected 200 response code - got " <> show result
-      Right Web.ApplyInputsTxEnvelope{} -> pure ()
+      Right _ -> pure ()

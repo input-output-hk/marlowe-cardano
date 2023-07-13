@@ -22,6 +22,8 @@ module Language.Marlowe.Runtime.Web.Client (
   postContract,
   postContractCreateTx,
   postContractCreateTxStatus,
+  postContractSource,
+  postContractSourceStatus,
   postContractStatus,
   postTransaction,
   postTransactionCreateTx,
@@ -51,6 +53,7 @@ import Data.Time (UTCTime)
 import Data.Version (Version)
 import GHC.TypeLits (KnownSymbol, symbolVal)
 import Language.Marlowe.Core.V1.Next
+import Language.Marlowe.Object.Types (Label, ObjectBundle)
 import Language.Marlowe.Runtime.Web.API (
   API,
   GetContractsResponse,
@@ -61,14 +64,17 @@ import Language.Marlowe.Runtime.Web.API (
   retractLink,
  )
 import Language.Marlowe.Runtime.Web.Types
+import Pipes (Producer)
 import Servant (HasResponseHeader, ResponseHeader (..), getResponse, lookupResponseHeader, type (:<|>) ((:<|>)))
 import Servant.API (Headers)
-import Servant.Client (Client, ClientM)
-import qualified Servant.Client as Servant
+import Servant.Client (Client)
+import Servant.Client.Streaming (ClientM)
+import qualified Servant.Client.Streaming as ServantStreaming
 import Servant.Pagination (ExtractRange (extractRange), HasPagination (..), PutRange (..), Range, Ranges)
+import Servant.Pipes ()
 
 client :: Client ClientM API
-client = Servant.client api
+client = ServantStreaming.client api
 
 data Page field resource = Page
   { totalCount :: Int
@@ -186,10 +192,28 @@ postContractCreateTx
   -> ClientM (CreateTxEnvelope CardanoTx)
 postContractCreateTx = (fmap . fmap . fmap . fmap . fmap) snd . postContractCreateTxStatus
 
+postContractSourceStatus
+  :: Label
+  -> Producer ObjectBundle IO ()
+  -> ClientM (RuntimeStatus, PostContractSourceResponse)
+postContractSourceStatus main bundles = do
+  let contractsClient :<|> _ = client
+  let _ :<|> _ :<|> _ :<|> contractSourcesClient = contractsClient
+  let postContractSource' = contractSourcesClient
+  response <- postContractSource' main bundles
+  status <- extractStatus response
+  pure (status, getResponse response)
+
+postContractSource
+  :: Label
+  -> Producer ObjectBundle IO ()
+  -> ClientM PostContractSourceResponse
+postContractSource = (fmap . fmap) snd . postContractSourceStatus
+
 getContractStatus :: TxOutRef -> ClientM (RuntimeStatus, ContractState)
 getContractStatus contractId = do
   let contractsClient :<|> _ = client
-  let _ :<|> _ :<|> contractApi = contractsClient
+  let _ :<|> _ :<|> contractApi :<|> _ = contractsClient
   let getContract' :<|> _ = contractApi contractId
   response <- getContract'
   status <- extractStatus response
@@ -201,7 +225,7 @@ getContract = fmap snd . getContractStatus
 getContractNextStatus :: TxOutRef -> UTCTime -> UTCTime -> [Party] -> ClientM (RuntimeStatus, Next)
 getContractNextStatus contractId validityStart validityEnd parties = do
   let contractsClient :<|> _ = client
-  let _ :<|> _ :<|> contractApi = contractsClient
+  let _ :<|> _ :<|> contractApi :<|> _ = contractsClient
   let _ :<|> _ :<|> next' :<|> _ = contractApi contractId
   response <- next' validityStart validityEnd parties
   status <- extractStatus response
@@ -213,7 +237,7 @@ getContractNext = (fmap . fmap . fmap . fmap) snd . getContractNextStatus
 putContractStatus :: TxOutRef -> TextEnvelope -> ClientM RuntimeStatus
 putContractStatus contractId tx = do
   let contractsClient :<|> _ = client
-  let _ :<|> _ :<|> contractApi = contractsClient
+  let _ :<|> _ :<|> contractApi :<|> _ = contractsClient
   let _ :<|> putContract' :<|> _ = contractApi contractId
   response <- putContract' tx
   extractStatus response
@@ -329,7 +353,7 @@ getTransactionsStatus
   -> ClientM (RuntimeStatus, Page "transactionId" TxHeader)
 getTransactionsStatus contractId range = do
   let contractsClient :<|> _ = client
-  let _ :<|> _ :<|> contractApi = contractsClient
+  let _ :<|> _ :<|> contractApi :<|> _ = contractsClient
   let _ :<|> _ :<|> _ :<|> getTransactions' :<|> _ = contractApi contractId
   response <- getTransactions' $ putRange <$> range
   totalCount <- reqHeaderValue $ lookupResponseHeader @"Total-Count" response
@@ -360,7 +384,7 @@ postTransactionStatus
   -> ClientM (RuntimeStatus, ApplyInputsTxEnvelope CardanoTxBody)
 postTransactionStatus changeAddress otherAddresses collateralUtxos contractId request = do
   let contractsClient :<|> _ = client
-  let _ :<|> _ :<|> contractApi = contractsClient
+  let _ :<|> _ :<|> contractApi :<|> _ = contractsClient
   let _ :<|> _ :<|> _ :<|> _ :<|> (postTransaction' :<|> _) :<|> _ = contractApi contractId
   response <-
     postTransaction'
@@ -388,7 +412,7 @@ postTransactionCreateTxStatus
   -> PostTransactionsRequest
   -> ClientM (RuntimeStatus, ApplyInputsTxEnvelope CardanoTx)
 postTransactionCreateTxStatus changeAddress otherAddresses collateralUtxos contractId request = do
-  let (_ :<|> _ :<|> contractApi) :<|> _ = client
+  let (_ :<|> _ :<|> contractApi :<|> _) :<|> _ = client
   let _ :<|> _ :<|> _ :<|> _ :<|> (_ :<|> postTransactionCreateTx') :<|> _ = contractApi contractId
   response <-
     postTransactionCreateTx'
@@ -411,7 +435,7 @@ postTransactionCreateTx = (fmap . fmap . fmap . fmap . fmap) snd . postTransacti
 getTransactionStatus :: TxOutRef -> TxId -> ClientM (RuntimeStatus, Tx)
 getTransactionStatus contractId transactionId = do
   let contractsClient :<|> _ = client
-  let _ :<|> _ :<|> contractApi = contractsClient
+  let _ :<|> _ :<|> contractApi :<|> _ = contractsClient
   let _ :<|> _ :<|> _ :<|> _ :<|> _ :<|> transactionApi = contractApi contractId
   let getTransaction' :<|> _ = transactionApi transactionId
   response <- getTransaction'
@@ -424,7 +448,7 @@ getTransaction = (fmap . fmap) snd . getTransactionStatus
 putTransactionStatus :: TxOutRef -> TxId -> TextEnvelope -> ClientM RuntimeStatus
 putTransactionStatus contractId transactionId tx = do
   let contractsClient :<|> _ = client
-  let _ :<|> _ :<|> contractApi = contractsClient
+  let _ :<|> _ :<|> contractApi :<|> _ = contractsClient
   let _ :<|> _ :<|> _ :<|> _ :<|> _ :<|> transactionApi = contractApi contractId
   let _ :<|> putTransaction' = transactionApi transactionId
   response <- putTransaction' tx

@@ -41,6 +41,7 @@ import Language.Marlowe.Runtime.Web.Server.REST.ApiError (
   throwDTOError,
  )
 import qualified Language.Marlowe.Runtime.Web.Server.REST.ApiError as ApiError
+import qualified Language.Marlowe.Runtime.Web.Server.REST.ContractSources as ContractSources
 import qualified Language.Marlowe.Runtime.Web.Server.REST.Contracts.Next as Next
 import qualified Language.Marlowe.Runtime.Web.Server.REST.Transactions as Transactions
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx (TempTx), TempTxStatus (Unsigned))
@@ -53,6 +54,7 @@ server =
   get
     :<|> (postCreateTxBodyResponse :<|> postCreateTxResponse)
     :<|> contractServer
+    :<|> ContractSources.server
 
 postCreateTxBody
   :: PostContractsRequest
