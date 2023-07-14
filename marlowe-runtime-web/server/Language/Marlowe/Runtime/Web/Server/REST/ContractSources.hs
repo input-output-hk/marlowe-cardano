@@ -27,10 +27,10 @@ import Servant
 server :: ServerT ContractSourcesAPI ServerM
 server =
   post
-    :<|> contractServer
+    :<|> contractSourceServer
 
-contractServer :: ContractSourceId -> ServerT ContractSourceAPI ServerM
-contractServer sourceId =
+contractSourceServer :: ContractSourceId -> ServerT ContractSourceAPI ServerM
+contractSourceServer sourceId =
   getOne sourceId
     :<|> getAdjacency sourceId
     :<|> getClosure sourceId

@@ -18,6 +18,7 @@ import Servant.OpenApi
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Spec.Marlowe.Semantics.Next.Arbitrary ()
 
+import Language.Marlowe.Runtime.Web (ContractOrSourceId (..))
 import Test.Hspec (Spec, describe, hspec)
 import Test.QuickCheck (Arbitrary (..), Gen, elements, genericShrink, listOf, oneof, resize, suchThat)
 import Test.QuickCheck.Instances ()
@@ -145,8 +146,12 @@ instance Arbitrary Web.PostContractsRequest where
       <*> arbitrary
       -- size of 6 will result in a 1-layer deep contract being generated (this is
       -- all we care about for the purposes of schema checking).
-      <*> resize 6 arbitrary
       <*> arbitrary
+      <*> arbitrary
+  shrink = genericShrink
+
+instance Arbitrary Web.ContractOrSourceId where
+  arbitrary = ContractOrSourceId <$> oneof [Right <$> arbitrary, Left <$> resize 6 arbitrary]
   shrink = genericShrink
 
 instance Arbitrary Web.PostTransactionsRequest where
@@ -223,6 +228,9 @@ instance Arbitrary Web.TextEnvelope where
 
 instance Arbitrary Web.TxOutRef where
   arbitrary = Web.TxOutRef <$> arbitrary <*> arbitrary
+
+instance Arbitrary Web.ContractSourceId where
+  arbitrary = Web.ContractSourceId . BS.pack <$> replicateM 32 arbitrary
 
 instance Arbitrary Web.TxId where
   arbitrary = Web.TxId . BS.pack <$> replicateM 32 arbitrary

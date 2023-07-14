@@ -656,7 +656,7 @@ data PostContractsRequest = PostContractsRequest
   , metadata :: Map Word64 Metadata
   , version :: MarloweVersion
   , roles :: Maybe RolesConfig
-  , contract :: Semantics.Contract
+  , contract :: ContractOrSourceId
   , minUTxODeposit :: Word64
   }
   deriving (Show, Eq, Ord, Generic)
@@ -664,6 +664,30 @@ data PostContractsRequest = PostContractsRequest
 instance FromJSON PostContractsRequest
 instance ToJSON PostContractsRequest
 instance ToSchema PostContractsRequest
+
+newtype ContractOrSourceId = ContractOrSourceId (Either Semantics.Contract ContractSourceId)
+  deriving (Show, Eq, Ord, Generic)
+
+instance FromJSON ContractOrSourceId where
+  parseJSON =
+    fmap ContractOrSourceId . \case
+      String "close" -> pure $ Left Semantics.Close
+      String s -> Right <$> parseJSON (String s)
+      j -> Left <$> parseJSON j
+
+instance ToJSON ContractOrSourceId where
+  toJSON = \case
+    ContractOrSourceId (Left contract) -> toJSON contract
+    ContractOrSourceId (Right hash) -> toJSON hash
+
+instance ToSchema ContractOrSourceId where
+  declareNamedSchema _ = do
+    contractSchema <- declareSchemaRef $ Proxy @Semantics.Contract
+    contractSourceIdSchema <- declareSchemaRef $ Proxy @ContractSourceId
+    pure $
+      NamedSchema Nothing $
+        mempty
+          & oneOf ?~ [contractSchema, contractSourceIdSchema]
 
 data RolesConfig
   = UsePolicy PolicyId

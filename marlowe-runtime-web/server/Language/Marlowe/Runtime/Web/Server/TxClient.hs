@@ -36,7 +36,7 @@ import qualified Data.Map as Map
 import Data.Time (UTCTime)
 import Language.Marlowe.Protocol.Client (MarloweRuntimeClient (..))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
-import Language.Marlowe.Runtime.ChainSync.Api (Lovelace, StakeCredential, TokenName, TxId)
+import Language.Marlowe.Runtime.ChainSync.Api (DatumHash, Lovelace, StakeCredential, TokenName, TxId)
 import Language.Marlowe.Runtime.Core.Api (
   Contract,
   ContractId,
@@ -74,7 +74,7 @@ type CreateContract m =
   -> RoleTokensConfig
   -> MarloweTransactionMetadata
   -> Lovelace
-  -> Contract v
+  -> Either (Contract v) DatumHash
   -> m (Either (CreateError v) (ContractCreated BabbageEra v))
 
 type ApplyInputs m =
@@ -204,8 +204,7 @@ txClient = component "web-tx-client" \TxClientDependencies{..} -> do
               runConnector connector $
                 RunTxClient $
                   liftCommand $
-                    Create stakeCredential version addresses roles metadata minUTxODeposit $
-                      Left contract
+                    Create stakeCredential version addresses roles metadata minUTxODeposit contract
             liftIO $ for_ response \creation@ContractCreated{contractId} ->
               atomically $
                 modifyTVar tempContracts $
