@@ -31,13 +31,15 @@ import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Command.Parse (parseParty, parseTimeout, parseToken, timeoutHelpMsg)
 import Language.Marlowe.CLI.Examples (makeExample)
 import Language.Marlowe.CLI.IO (decodeFileStrict)
-import Language.Marlowe.CLI.Types (CliError (..), SomeTimeout, toMarloweTimeout)
+import Language.Marlowe.CLI.Types (CliError (..), SomeTimeout, toMarloweExtendedTimeout, toMarloweTimeout)
 import Language.Marlowe.Extended.V1 as E (Contract (..), Party, Token, Value (..))
 import Language.Marlowe.Util (ada)
 import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
 
 import Language.Marlowe.CLI.Test.CLI.Interpret (initialMarloweState)
 import Language.Marlowe.CLI.Test.Contract.Source (makeContract)
+import Marlowe.Contracts.Raffle (raffle)
+import Marlowe.Contracts.Raffle qualified as Raffle
 import Options.Applicative qualified as O
 
 -- | Marlowe CLI commands and options for contract templates.
@@ -150,6 +152,17 @@ data TemplateCommand
       , actusTermsFile :: FilePath
       -- ^ The Actus contract terms.
       }
+  | TemplateRaffle
+      { minAda :: Integer
+      , sponsor :: Raffle.Sponsor
+      , oracle :: Raffle.Oracle
+      , chunkSize :: Raffle.ChunkSize
+      , parties :: [Party]
+      , pricesInLovelacePerRound :: [Integer]
+      , depositDeadline :: SomeTimeout
+      , selectDeadline :: SomeTimeout
+      , payoutDeadline :: SomeTimeout
+      }
   deriving stock (Eq, Generic, Show)
   deriving anyclass (FromJSON, ToJSON)
 
@@ -160,8 +173,6 @@ data OutputFiles = OutputFiles
   , stateFile :: FilePath
   -- ^ The output JSON file representing the Marlowe contract's state.
   }
-
---
 
 -- | Create a contract from a template.
 runTemplateCommand
@@ -174,7 +185,7 @@ runTemplateCommand
   -> m ()
   -- ^ Action for runninng the command.
 runTemplateCommand TemplateTrivial{..} OutputFiles{..} = do
-  timeout' <- toMarloweTimeout timeout
+  timeout' <- toMarloweExtendedTimeout timeout
   marloweContract <-
     makeContract $
       trivial
@@ -185,10 +196,10 @@ runTemplateCommand TemplateTrivial{..} OutputFiles{..} = do
   let marloweState = initialMarloweState bystander minAda
   makeExample contractFile stateFile (marloweContract, marloweState)
 runTemplateCommand TemplateEscrow{..} OutputFiles{..} = do
-  paymentDeadline' <- toMarloweTimeout paymentDeadline
-  complaintDeadline' <- toMarloweTimeout complaintDeadline
-  disputeDeadline' <- toMarloweTimeout disputeDeadline
-  mediationDeadline' <- toMarloweTimeout mediationDeadline
+  paymentDeadline' <- toMarloweExtendedTimeout paymentDeadline
+  complaintDeadline' <- toMarloweExtendedTimeout complaintDeadline
+  disputeDeadline' <- toMarloweExtendedTimeout disputeDeadline
+  mediationDeadline' <- toMarloweExtendedTimeout mediationDeadline
   marloweContract <-
     makeContract $
       escrow
@@ -203,8 +214,8 @@ runTemplateCommand TemplateEscrow{..} OutputFiles{..} = do
   let marloweState = initialMarloweState mediator minAda
   makeExample contractFile stateFile (marloweContract, marloweState)
 runTemplateCommand TemplateSwap{..} OutputFiles{..} = do
-  aTimeout' <- toMarloweTimeout aTimeout
-  bTimeout' <- toMarloweTimeout bTimeout
+  aTimeout' <- toMarloweExtendedTimeout aTimeout
+  bTimeout' <- toMarloweExtendedTimeout bTimeout
   marloweContract <-
     makeContract $
       swap
@@ -220,8 +231,8 @@ runTemplateCommand TemplateSwap{..} OutputFiles{..} = do
   let marloweState = initialMarloweState aParty minAda
   makeExample contractFile stateFile (marloweContract, marloweState)
 runTemplateCommand TemplateZeroCouponBond{..} OutputFiles{..} = do
-  lendingDeadline' <- toMarloweTimeout lendingDeadline
-  paybackDeadline' <- toMarloweTimeout paybackDeadline
+  lendingDeadline' <- toMarloweExtendedTimeout lendingDeadline
+  paybackDeadline' <- toMarloweExtendedTimeout paybackDeadline
   marloweContract <-
     makeContract $
       zeroCouponBond
@@ -236,9 +247,9 @@ runTemplateCommand TemplateZeroCouponBond{..} OutputFiles{..} = do
   let marloweState = initialMarloweState lender minAda
   makeExample contractFile stateFile (marloweContract, marloweState)
 runTemplateCommand TemplateCoveredCall{..} OutputFiles{..} = do
-  issueDate' <- toMarloweTimeout issueDate
-  maturityDate' <- toMarloweTimeout maturityDate
-  settlementDate' <- toMarloweTimeout settlementDate
+  issueDate' <- toMarloweExtendedTimeout issueDate
+  maturityDate' <- toMarloweExtendedTimeout maturityDate
+  settlementDate' <- toMarloweExtendedTimeout settlementDate
   marloweContract <-
     makeContract $
       coveredCall
@@ -259,6 +270,23 @@ runTemplateCommand TemplateActus{..} OutputFiles{..} = do
   marloweContract <- makeContract $ genContract' (party, counterparty) defaultRiskFactors ct
   let marloweState = initialMarloweState party minAda
   makeExample contractFile stateFile (marloweContract, marloweState)
+runTemplateCommand TemplateRaffle{..} OutputFiles{..} = do
+  depositDeadline' <- toMarloweTimeout depositDeadline
+  selectDeadline' <- toMarloweTimeout selectDeadline
+  payoutDeadline' <- toMarloweTimeout payoutDeadline
+  let marloweContract =
+        raffle
+          sponsor
+          oracle
+          chunkSize
+          parties
+          pricesInLovelacePerRound
+          depositDeadline'
+          selectDeadline'
+          payoutDeadline'
+  let Raffle.Sponsor sponsorParty = sponsor
+      marloweState = initialMarloweState sponsorParty minAda
+  makeExample contractFile stateFile (marloweContract, marloweState)
 
 -- | Parser for template commands.
 parseTemplateCommand :: O.Parser TemplateCommand
@@ -271,6 +299,7 @@ parseTemplateCommand =
       <> templateZeroCouponBondCommand
       <> templateCoveredCallCommand
       <> templateActusCommand
+      <> templateRaffleCommand
 
 parseTemplateCommandOutputFiles :: O.Parser OutputFiles
 parseTemplateCommandOutputFiles =
@@ -545,4 +574,46 @@ templateActusOptions =
       )
     <*> O.strOption
       ( O.long "actus-terms-file" <> O.metavar "CONTRACT_FILE" <> O.help "JSON input file for the actus contract terms."
+      )
+
+templateRaffleCommand :: O.Mod O.CommandFields TemplateCommand
+templateRaffleCommand =
+  O.command "raffle" $
+    O.info templateRaffleOptions $
+      O.progDesc "Create a Raffle contract."
+
+templateRaffleOptions :: O.Parser TemplateCommand
+templateRaffleOptions =
+  TemplateRaffle
+    <$> O.option
+      O.auto
+      ( O.long "minimum-ada"
+          <> O.metavar "INTEGER"
+          <> O.help "Lovelace that the party contributes to the initial state."
+      )
+    <*> O.option
+      (Raffle.Sponsor <$> parseParty)
+      ( O.long "sponsor" <> O.metavar "PARTY" <> O.help "The sponsor."
+      )
+    <*> O.option
+      (Raffle.Oracle <$> parseParty)
+      ( O.long "oracle" <> O.metavar "PARTY" <> O.help "The oracle."
+      )
+    <*> O.option
+      (Raffle.ChunkSize <$> O.auto)
+      ( O.long "chunk-size" <> O.metavar "INTEGER" <> O.help "The chunk size."
+      )
+    <*> O.some (O.option parseParty (O.long "parties" <> O.metavar "PARTIES" <> O.help "The parties."))
+    <*> O.some (O.option O.auto (O.long "prices" <> O.metavar "PRICES" <> O.help "The prices."))
+    <*> O.option
+      parseTimeout
+      ( O.long "deposit-deadline" <> O.metavar "TIMEOUT" <> O.help ("The deposit deadline. " <> timeoutHelpMsg)
+      )
+    <*> O.option
+      parseTimeout
+      ( O.long "select-deadline" <> O.metavar "TIMEOUT" <> O.help ("The select deadline. " <> timeoutHelpMsg)
+      )
+    <*> O.option
+      parseTimeout
+      ( O.long "payout-deadline" <> O.metavar "TIMEOUT" <> O.help ("The payout deadline. " <> timeoutHelpMsg)
       )

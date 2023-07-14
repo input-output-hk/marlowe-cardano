@@ -41,13 +41,15 @@ import Language.Marlowe.CLI.Test.Wallet.Types (
   tokenNameToJSON,
  )
 import Language.Marlowe.CLI.Test.Wallet.Types qualified as Wallet
-import Language.Marlowe.CLI.Types (CliError, SomeTimeout, toMarloweTimeout)
+import Language.Marlowe.CLI.Types (CliError, SomeTimeout, toMarloweExtendedTimeout, toMarloweTimeout)
 import Language.Marlowe.Core.V1.Semantics.Types qualified as C
 import Language.Marlowe.Core.V1.Semantics.Types qualified as M
 import Language.Marlowe.Extended.V1 (toCore)
 import Language.Marlowe.Extended.V1 qualified as E
 import Ledger.Orphans ()
 import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
+import Marlowe.Contracts.Raffle (raffle)
+import Marlowe.Contracts.Raffle qualified as Raffle
 import Plutus.V1.Ledger.Api (TokenName)
 
 -- | We encode `PartyRef` as `Party` so we can use role based contracts
@@ -167,6 +169,16 @@ data UseTemplate
       , utActusTermsFile :: FilePath
       -- ^ The Actus contract terms.
       }
+  | UseRaffle
+      { utSponsor :: PartyRef
+      , utOracle :: PartyRef
+      , utChunkSize :: Raffle.ChunkSize
+      , utParties :: [PartyRef]
+      , utPricesInLovelacePerRound :: [Integer]
+      , utDepositDeadline :: SomeTimeout
+      , utSelectDeadline :: SomeTimeout
+      , utPayoutDeadline :: SomeTimeout
+      }
   deriving stock (Eq, Generic, Show)
 
 instance FromJSON UseTemplate where
@@ -226,7 +238,7 @@ useTemplate
   -> m M.Contract
 useTemplate currency = \case
   UseTrivial{..} -> do
-    timeout' <- toMarloweTimeout utTimeout
+    timeout' <- toMarloweExtendedTimeout utTimeout
     let partyRef = fromMaybe (WalletRef faucetNickname) utParty
     party <- buildParty currency partyRef
     makeContract' $
@@ -236,8 +248,8 @@ useTemplate currency = \case
         utWithdrawalLovelace
         timeout'
   UseSwap{..} -> do
-    aTimeout' <- toMarloweTimeout utATimeout
-    bTimeout' <- toMarloweTimeout utBTimeout
+    aTimeout' <- toMarloweExtendedTimeout utATimeout
+    bTimeout' <- toMarloweExtendedTimeout utBTimeout
 
     let Asset aAssetId aAmount = utAAsset
         Asset bAssetId bAmount = utBAsset
@@ -260,10 +272,10 @@ useTemplate currency = \case
         bTimeout'
         E.Close
   UseEscrow{..} -> do
-    paymentDeadline' <- toMarloweTimeout utPaymentDeadline
-    complaintDeadline' <- toMarloweTimeout utComplaintDeadline
-    disputeDeadline' <- toMarloweTimeout utDisputeDeadline
-    mediationDeadline' <- toMarloweTimeout utMediationDeadline
+    paymentDeadline' <- toMarloweExtendedTimeout utPaymentDeadline
+    complaintDeadline' <- toMarloweExtendedTimeout utComplaintDeadline
+    disputeDeadline' <- toMarloweExtendedTimeout utDisputeDeadline
+    mediationDeadline' <- toMarloweExtendedTimeout utMediationDeadline
 
     seller <- buildParty currency utSeller
     buyer <- buildParty currency utBuyer
@@ -280,9 +292,9 @@ useTemplate currency = \case
         disputeDeadline'
         mediationDeadline'
   UseCoveredCall{..} -> do
-    issueDate <- toMarloweTimeout utIssueDate
-    maturityDate <- toMarloweTimeout utMaturityDate
-    settlementDate <- toMarloweTimeout utSettlementDate
+    issueDate <- toMarloweExtendedTimeout utIssueDate
+    maturityDate <- toMarloweExtendedTimeout utMaturityDate
+    settlementDate <- toMarloweExtendedTimeout utSettlementDate
     issuer <- buildParty currency utIssuer
     counterParty <- buildParty currency utCounterParty
 
@@ -302,8 +314,8 @@ useTemplate currency = \case
         maturityDate
         settlementDate
   UseZeroCouponBond{..} -> do
-    lendingDeadline <- toMarloweTimeout utLendingDeadline
-    paybackDeadline <- toMarloweTimeout utPaybackDeadline
+    lendingDeadline <- toMarloweExtendedTimeout utLendingDeadline
+    paybackDeadline <- toMarloweExtendedTimeout utPaybackDeadline
 
     lender <- buildParty currency utLender
     borrower <- buildParty currency utBorrower
@@ -318,4 +330,23 @@ useTemplate currency = \case
         (E.Constant utPrincipal `E.AddValue` E.Constant utInterest)
         adaToken
         E.Close
+  UseRaffle{..} -> do
+    depositDeadline' <- toMarloweTimeout utDepositDeadline
+    selectDeadline' <- toMarloweTimeout utSelectDeadline
+    payoutDeadline' <- toMarloweTimeout utPayoutDeadline
+
+    sponsor <- buildParty currency utSponsor
+    oracle <- buildParty currency utOracle
+    parties <- traverse (buildParty currency) utParties
+
+    pure $
+      raffle
+        (Raffle.Sponsor sponsor)
+        (Raffle.Oracle oracle)
+        utChunkSize
+        parties
+        utPricesInLovelacePerRound
+        depositDeadline'
+        selectDeadline'
+        payoutDeadline'
   template -> throwError $ testExecutionFailed' $ "Template not implemented: " <> show template
