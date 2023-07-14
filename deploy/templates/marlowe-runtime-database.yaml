@@ -5,6 +5,7 @@ metadata:
   namespace: marlowe-staging
   annotations:
     app.oam.dev/publishVersion: {{ .Chart.AppVersion }}
+    "helm.sh/resource-policy": keep
 spec:
   components:
     - type: "postgres-cluster"
@@ -36,3 +37,7 @@ spec:
             defaultUsers: true
 
           {{- end }}
+      traits:
+        - type: annotations
+          properties:
+            "helm.sh/resource-policy": keep
