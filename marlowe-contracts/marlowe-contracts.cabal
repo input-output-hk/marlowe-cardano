@@ -51,11 +51,13 @@ library
   hs-source-dirs:  src
   exposed-modules:
     Marlowe.Contracts
+    Marlowe.Contracts.ChunkedValueTransfer
     Marlowe.Contracts.Common
     Marlowe.Contracts.Escrow
     Marlowe.Contracts.Forward
     Marlowe.Contracts.Futures
     Marlowe.Contracts.Options
+    Marlowe.Contracts.Raffle
     Marlowe.Contracts.StructuredProducts
     Marlowe.Contracts.Swap
     Marlowe.Contracts.Trivial
@@ -71,8 +73,11 @@ library
 
   other-modules:
   build-depends:
+    , aeson
     , base >=4.9 && <5
+    , ilist
     , marlowe-cardano
+    , split
     , time
 
 test-suite marlowe-contracts-test

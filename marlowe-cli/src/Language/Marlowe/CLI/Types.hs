@@ -100,9 +100,9 @@ module Language.Marlowe.CLI.Types (
   anUTxOValue,
   getVerificationKey,
   submitModeFromTimeout,
-  toMarloweTimeout,
+  toMarloweExtendedTimeout,
   toPaymentVerificationKey,
-  toPlutusPOSIXTime,
+  toMarloweTimeout,
   toSlotRoundedMarloweTimeout,
   toSlotRoundedPlutusPOSIXTime,
   toUTxO,
@@ -202,6 +202,7 @@ import Language.Marlowe.CLI.Cardano.Api.PlutusScript (
   plutusScriptVersion,
   withPlutusScriptVersion,
  )
+import Language.Marlowe.Core.V1.Semantics.Types qualified as M
 import Language.Marlowe.Extended.V1 qualified as E
 
 -- | Exception for Marlowe CLI.
@@ -695,11 +696,12 @@ someTimeoutToMilliseconds (RelativeTimeout seconds) = do
 marloweTimeoutFromPlutusPOSIXTime :: P.POSIXTime -> E.Timeout
 marloweTimeoutFromPlutusPOSIXTime = E.POSIXTime . P.getPOSIXTime
 
-toPlutusPOSIXTime :: (MonadIO m) => SomeTimeout -> m P.POSIXTime
-toPlutusPOSIXTime t = P.POSIXTime <$> someTimeoutToMilliseconds t
+toMarloweTimeout :: (MonadIO m) => SomeTimeout -> m M.Timeout
+toMarloweTimeout t = P.POSIXTime <$> someTimeoutToMilliseconds t
 
-toMarloweTimeout :: (MonadIO m) => SomeTimeout -> m E.Timeout
-toMarloweTimeout t = marloweTimeoutFromPlutusPOSIXTime <$> toPlutusPOSIXTime t
+-- FIXME: s/toMarloweExtendedTimeout/toMarloweExtendedTimeout/
+toMarloweExtendedTimeout :: (MonadIO m) => SomeTimeout -> m E.Timeout
+toMarloweExtendedTimeout t = marloweTimeoutFromPlutusPOSIXTime <$> toMarloweTimeout t
 
 toSlotRoundedPlutusPOSIXTime :: (MonadIO m) => SlotConfig -> SomeTimeout -> m P.POSIXTime
 toSlotRoundedPlutusPOSIXTime slotConfig t = do
