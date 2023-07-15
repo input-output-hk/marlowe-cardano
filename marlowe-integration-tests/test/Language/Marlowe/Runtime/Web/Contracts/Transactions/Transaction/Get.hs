@@ -4,6 +4,7 @@ import Control.Monad.IO.Class (MonadIO (liftIO))
 import qualified Control.Monad.Reader as Reader
 
 import Control.Exception (throw)
+import Data.Functor (void)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Integration.Common (getGenesisWallet, runIntegrationTest, runWebClient)
 import qualified Language.Marlowe.Runtime.Web as Web
@@ -68,7 +69,7 @@ invalidTxIdSpec :: SpecWith MarloweWebTestData
 invalidTxIdSpec = it "returns not found for invalid transaction id" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
   result <- runWebClient do
     let invalidTxId = toDTO @Chain.TxId "0000000000000000000000000000000000000000000000000000000000000000"
-    getTransaction contractId invalidTxId
+    void $ getTransaction contractId invalidTxId
 
   case result of
     Left (FailureResponse _ Response{responseStatusCode = Status{statusCode = 404}}) -> pure ()

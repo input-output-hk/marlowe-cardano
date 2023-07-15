@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -Wno-unused-imports #-}
-
 module Language.Marlowe.Runtime.WebSpec where
 
 import qualified Language.Marlowe.Runtime.Web.Contracts.Get as Contracts.Get

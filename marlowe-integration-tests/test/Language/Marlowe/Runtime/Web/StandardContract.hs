@@ -9,6 +9,12 @@ import qualified Data.Set as Set
 import Data.Text (Text)
 import Data.Time (getCurrentTime, secondsToNominalDiffTime)
 import Language.Marlowe.Extended.V1 (ada)
+import Language.Marlowe.Object.Types (
+  LabelledObject (LabelledObject),
+  ObjectBundle (ObjectBundle),
+  ObjectType (..),
+  fromCoreContract,
+ )
 import Language.Marlowe.Runtime.Integration.Common (Wallet (..), expectJust)
 import Language.Marlowe.Runtime.Integration.StandardContract (standardContract)
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
@@ -22,7 +28,7 @@ import Language.Marlowe.Runtime.Web (
   WithdrawTxEnvelope,
  )
 import qualified Language.Marlowe.Runtime.Web as Web
-import Language.Marlowe.Runtime.Web.Client (postContract)
+import Language.Marlowe.Runtime.Web.Client (getContractSource, postContract, postContractSource)
 import Language.Marlowe.Runtime.Web.Common (
   choose,
   deposit,
@@ -33,7 +39,9 @@ import Language.Marlowe.Runtime.Web.Common (
   withdraw,
  )
 import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO (toDTO))
-import Servant.Client (ClientM)
+import Language.Marlowe.Runtime.Web.Types (PostContractSourceResponse (..))
+import Pipes (yield)
+import Servant.Client.Streaming (ClientM)
 
 data StandardContractInit = StandardContractInit
   { makeInitialDeposit :: ClientM StandardContractFundsDeposited
@@ -82,6 +90,11 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
   now <- liftIO getCurrentTime
   let (contract, partyA, partyB) = standardContract partyBAddress now $ secondsToNominalDiffTime 100
 
+  PostContractSourceResponse{contractSourceId} <-
+    postContractSource "main" $ yield $ ObjectBundle $ pure $ LabelledObject "main" ContractType $ fromCoreContract contract
+
+  contract' <- getContractSource contractSourceId False
+
   contractCreated@Web.CreateTxEnvelope{contractId} <-
     postContract
       Nothing
@@ -92,7 +105,7 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
         { metadata = mempty
         , version = Web.V1
         , roles = Just $ Web.Mint $ Map.singleton "Party A" $ RoleTokenSimple partyAWebChangeAddress
-        , contract = contract
+        , contract = contract'
         , minUTxODeposit = 2_000_000
         , tags = tags
         }

@@ -81,10 +81,9 @@ instance FromJSONKey Verbatim where
   fromJSONKey = FromJSONKeyText $ Verbatim . BS8.pack . T.unpack
 
 -- | A label that refers to an object in a bundle.
-newtype Label = Label {unLabel :: ByteString}
-  deriving (Show, Read, Generic, Eq, Ord)
-  deriving (IsString, FromJSON, ToJSON, FromJSONKey, ToJSONKey) via Verbatim
-  deriving newtype (Binary, Variations, Hashable)
+newtype Label = Label {unLabel :: Text}
+  deriving (Generic, Eq, Ord)
+  deriving newtype (Show, Read, Binary, Variations, Hashable, IsString, FromJSON, ToJSON, FromJSONKey, ToJSONKey)
 
 -- | A timeout in a contract.
 newtype Timeout = Timeout {unTimeout :: UTCTime}
@@ -1325,7 +1324,7 @@ labelledObjectType LabelledObject{..} = SomeObjectType _type
 
 newtype ObjectBundle = ObjectBundle {getObjects :: [LabelledObject]}
   deriving stock (Show, Read, Generic, Eq, Ord)
-  deriving anyclass (FromJSON, ToJSON, Variations, Binary)
+  deriving newtype (FromJSON, ToJSON, Variations, Binary)
 
 makePrisms ''Contract
 makePrisms ''ObjectBundle

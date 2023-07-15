@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name:          marlowe-runtime-web
-version:       0.0.2
+version:       0.0.3
 synopsis:      Web server for Marlowe Runtime on Cardano.
 bug-reports:   https://github.com/input-output-hk/marlowe-cardano/issues
 license:       Apache-2.0
@@ -70,16 +70,19 @@ library
     , http-media ^>=0.8
     , lens >=5.2 && <6
     , marlowe-cardano ==0.1.1.0
+    , marlowe-object ==0.1.0.0
     , mtl >=2.2 && <3
     , network-uri >=2.6 && <3
     , openapi3 >=3.2 && <4
     , parsec ^>=3.1.14
-    , plutus-ledger-api
+    , pipes ^>=4.3.16
+    , plutus-ledger-api ==1.0.0.1
     , servant ^>=0.19
     , servant-client ^>=0.19
     , servant-client-core ^>=0.19
     , servant-openapi3 ^>=2.0
     , servant-pagination >=2.5 && <3
+    , servant-pipes ^>=0.15.3
     , servant-server ^>=0.19
     , text >=1.2.4 && <2
     , time >=1.9 && <2
@@ -96,11 +99,13 @@ library server
     Language.Marlowe.Runtime.Web.Server.Util
 
   other-modules:
+    Language.Marlowe.Runtime.Web.Server.ContractClient
     Language.Marlowe.Runtime.Web.Server.OpenAPI
     Language.Marlowe.Runtime.Web.Server.REST
     Language.Marlowe.Runtime.Web.Server.REST.ApiError
     Language.Marlowe.Runtime.Web.Server.REST.Contracts
     Language.Marlowe.Runtime.Web.Server.REST.Contracts.Next
+    Language.Marlowe.Runtime.Web.Server.REST.ContractSources
     Language.Marlowe.Runtime.Web.Server.REST.Transactions
     Language.Marlowe.Runtime.Web.Server.REST.Withdrawals
     Language.Marlowe.Runtime.Web.Server.SyncClient
@@ -126,16 +131,21 @@ library server
     , http-media ^>=0.8
     , lens >=5.2 && <6
     , marlowe-cardano ==0.1.1.0
-    , marlowe-chain-sync ==0.0.2
+    , marlowe-chain-sync ==0.0.3
+    , marlowe-client ==0.0.3
+    , marlowe-object ==0.1.0.0
     , marlowe-protocols ==0.1.1.0
-    , marlowe-runtime-web ==0.0.2
-    , marlowe-runtime:{marlowe-runtime, discovery-api, proxy-api, sync-api, tx-api} ==0.0.2
+    , marlowe-runtime-web ==0.0.3
+    , marlowe-runtime:{marlowe-runtime, contract-api, discovery-api, proxy-api, sync-api, tx-api} ==0.0.3
     , monad-control ^>=1
     , mtl >=2.2 && <3
     , openapi3 >=3.2 && <4
+    , pipes ^>=4.3.16
+    , plutus-ledger-api ==1.0.0.1
     , servant ^>=0.19
     , servant-openapi3 ^>=2.0
     , servant-pagination >=2.5 && <3
+    , servant-pipes ^>=0.15.3
     , servant-server ^>=0.19
     , stm ^>=2.5
     , stm-delay ^>=0.1.1

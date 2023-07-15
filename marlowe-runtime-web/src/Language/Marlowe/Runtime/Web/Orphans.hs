@@ -1,4 +1,8 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedLists #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Marlowe.Runtime.Web.Orphans (
@@ -6,6 +10,7 @@ module Language.Marlowe.Runtime.Web.Orphans (
 ) where
 
 import Control.Lens ((&), (.~), (?~))
+import Data.Data (Typeable)
 import Data.OpenApi (
   HasDescription (description),
   HasEnum (enum_),
@@ -15,13 +20,16 @@ import Data.OpenApi (
   HasRequired (required),
   HasType (type_),
   NamedSchema (NamedSchema),
-  OpenApiType (OpenApiBoolean, OpenApiInteger, OpenApiObject, OpenApiString),
+  OpenApiItems (OpenApiItemsObject),
+  OpenApiType (..),
   Referenced (Inline),
   Schema,
+  ToParamSchema (toParamSchema),
   ToSchema (..),
   declareSchemaRef,
   sketchSchema,
  )
+import Data.OpenApi.Lens (HasItems (..))
 import Data.Proxy (Proxy (Proxy))
 import Data.Text (Text)
 import GHC.Exts (IsList (fromList))
@@ -43,7 +51,11 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   Value,
  )
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
+import Language.Marlowe.Object.Types (Label, LabelledObject, ObjectBundle)
+import qualified Language.Marlowe.Object.Types as Object
 import Numeric.Natural (Natural)
+import Pipes (X)
+import qualified Pipes
 import qualified Plutus.V2.Ledger.Api as P
 
 data Address
@@ -899,3 +911,524 @@ instance ToSchema P.StakingCredential where
 
 instance ToSchema P.ExBudget where
   declareNamedSchema _ = pure . NamedSchema (Just "ExBudget") $ sketchSchema $ P.ExBudget 10 10
+
+instance ToParamSchema Label where
+  toParamSchema _ =
+    mempty
+      & type_ ?~ OpenApiString
+      & description ?~ "An arbitrary text identifier for an object in a Marlowe object bundle."
+
+instance ToSchema Label where
+  declareNamedSchema p = pure $ NamedSchema (Just "Label") $ toParamSchema p
+
+instance (Typeable m, ToSchema a) => ToSchema (Pipes.Proxy X () () a m ()) where
+  declareNamedSchema _ = declareNamedSchema $ Proxy @a
+
+instance ToSchema ObjectBundle where
+  declareNamedSchema _ = do
+    ref <- declareSchemaRef $ Proxy @LabelledObject
+    pure $
+      NamedSchema (Just "ObjectBundle") $
+        mempty
+          & type_ ?~ OpenApiArray
+          & items ?~ OpenApiItemsObject ref
+          & description ?~ "A bundle of labelled Marlowe objects in define-before-use order."
+
+instance ToSchema LabelledObject where
+  declareNamedSchema _ = do
+    labelRef <- declareSchemaRef $ Proxy @Label
+    valueRef <- declareSchemaRef $ Proxy @Object.Value
+    observationRef <- declareSchemaRef $ Proxy @Object.Observation
+    contractRef <- declareSchemaRef $ Proxy @Object.Contract
+    partyRef <- declareSchemaRef $ Proxy @Object.Party
+    tokenRef <- declareSchemaRef $ Proxy @Object.Token
+    actionRef <- declareSchemaRef $ Proxy @Object.Action
+    let typeSchema =
+          Inline $
+            mempty
+              & type_ ?~ OpenApiString
+              & enum_ ?~ ["value", "observation", "contract", "party", "token", "action"]
+    let valueSchema =
+          Inline $
+            mempty
+              & oneOf
+                ?~ [ valueRef
+                   , observationRef
+                   , contractRef
+                   , partyRef
+                   , tokenRef
+                   , actionRef
+                   ]
+    let props = [("label", labelRef), ("type", typeSchema), ("value", valueSchema)]
+    pure $
+      NamedSchema (Just "LabelledObject") $
+        mempty
+          & type_ ?~ OpenApiObject
+          & description ?~ "A bundle of labelled Marlowe objects in define-before-use order."
+          & required .~ fmap fst props
+          & properties .~ fromList props
+
+instance ToSchema Object.Value where
+  declareNamedSchema _ = do
+    accountIdSchema <- declareSchemaRef $ Proxy @Object.Party
+    choiceIdSchema <- declareSchemaRef $ Proxy @Object.ChoiceId
+    tokenSchema <- declareSchemaRef $ Proxy @Object.Token
+    valueSchema <- declareSchemaRef $ Proxy @Object.Value
+    observationSchema <- declareSchemaRef $ Proxy @Object.Observation
+    stringSchema <- declareSchemaRef $ Proxy @String
+    labelSchema <- declareSchemaRef $ Proxy @Label
+    let timeIntervalSchema =
+          mempty
+            & type_ ?~ OpenApiString
+            & enum_ ?~ ["time_interval_start", "time_interval_end"]
+        constantSchema =
+          mempty
+            & type_ ?~ OpenApiInteger
+            & format ?~ "int64"
+        availableMoneySchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [amount_of_token, in_account]
+            & properties .~ [amount_of_token, in_account]
+          where
+            amount_of_token = ("amount_of_token", tokenSchema)
+            in_account = ("in_account", accountIdSchema)
+        negValueSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [negate_]
+            & properties .~ [negate_]
+          where
+            negate_ = ("negate", valueSchema)
+        addValueSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [val1, val2]
+            & properties .~ [val1, val2]
+          where
+            val1 = ("add", valueSchema)
+            val2 = ("and", valueSchema)
+        subValueSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [val1, val2]
+            & properties .~ [val1, val2]
+          where
+            val1 = ("value", valueSchema)
+            val2 = ("minus", valueSchema)
+        mulValueSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [val1, val2]
+            & properties .~ [val1, val2]
+          where
+            val1 = ("multiply", valueSchema)
+            val2 = ("times", valueSchema)
+        divValueSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [val1, val2]
+            & properties .~ [val1, val2]
+          where
+            val1 = ("divide", valueSchema)
+            val2 = ("by", valueSchema)
+        choiceValueSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [value_of_choice]
+            & properties .~ [value_of_choice]
+          where
+            value_of_choice = ("value_of_choice", choiceIdSchema)
+        useValueSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [use_value]
+            & properties .~ [use_value]
+          where
+            use_value = ("use_value", stringSchema)
+        condSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [if_, then_, else_]
+            & properties .~ [if_, then_, else_]
+          where
+            if_ = ("if", observationSchema)
+            then_ = ("then", valueSchema)
+            else_ = ("else", valueSchema)
+        refSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [ref]
+            & properties .~ [ref]
+          where
+            ref = ("ref", labelSchema)
+    pure $
+      NamedSchema (Just "ValueObject") $
+        mempty
+          & description ?~ "A time-varying expression that evaluates to a boolean"
+          & oneOf
+            ?~ fmap
+              Inline
+              [ availableMoneySchema
+              , constantSchema
+              , negValueSchema
+              , addValueSchema
+              , subValueSchema
+              , mulValueSchema
+              , divValueSchema
+              , choiceValueSchema
+              , timeIntervalSchema
+              , useValueSchema
+              , condSchema
+              , refSchema
+              ]
+
+instance ToSchema Object.Observation where
+  declareNamedSchema _ = do
+    choiceIdSchema <- declareSchemaRef $ Proxy @Object.ChoiceId
+    valueSchema <- declareSchemaRef $ Proxy @Object.Value
+    observationSchema <- declareSchemaRef $ Proxy @Object.Observation
+    labelSchema <- declareSchemaRef $ Proxy @Label
+    let constantSchema = mempty & type_ ?~ OpenApiBoolean
+        andObsSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [both, and_]
+            & properties .~ [both, and_]
+          where
+            both = ("both", observationSchema)
+            and_ = ("and", observationSchema)
+        orObsSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [either_, or_]
+            & properties .~ [either_, or_]
+          where
+            either_ = ("either", observationSchema)
+            or_ = ("or", observationSchema)
+        notObsSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [p]
+            & properties .~ [p]
+          where
+            p = ("not", observationSchema)
+        choseSomethingSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [chose_something_for]
+            & properties .~ [chose_something_for]
+          where
+            chose_something_for = ("chose_something_for", choiceIdSchema)
+        valueGESchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [value, ge_than]
+            & properties .~ [value, ge_than]
+          where
+            value = ("value", valueSchema)
+            ge_than = ("ge_than", valueSchema)
+        valueGTSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [value, gt]
+            & properties .~ [value, gt]
+          where
+            value = ("value", valueSchema)
+            gt = ("gt", valueSchema)
+        valueLESchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [value, le_than]
+            & properties .~ [value, le_than]
+          where
+            value = ("value", valueSchema)
+            le_than = ("le_than", valueSchema)
+        valueLTSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [value, lt]
+            & properties .~ [value, lt]
+          where
+            value = ("value", valueSchema)
+            lt = ("lt", valueSchema)
+        valueEQSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [value, equal_to]
+            & properties .~ [value, equal_to]
+          where
+            value = ("value", valueSchema)
+            equal_to = ("equal_to", valueSchema)
+        refSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [ref]
+            & properties .~ [ref]
+          where
+            ref = ("ref", labelSchema)
+    pure $
+      NamedSchema (Just "ObservationObject") $
+        mempty
+          & description ?~ "A time-varying expression that evaluates to an integer"
+          & oneOf
+            ?~ fmap
+              Inline
+              [ constantSchema
+              , andObsSchema
+              , orObsSchema
+              , notObsSchema
+              , choseSomethingSchema
+              , valueGESchema
+              , valueGTSchema
+              , valueLTSchema
+              , valueLESchema
+              , valueEQSchema
+              , refSchema
+              ]
+
+instance ToSchema Object.Contract where
+  declareNamedSchema _ = do
+    accountIdSchema <- declareSchemaRef $ Proxy @Object.AccountId
+    payeeSchema <- declareSchemaRef $ Proxy @Object.Payee
+    tokenSchema <- declareSchemaRef $ Proxy @Object.Token
+    valueSchema <- declareSchemaRef $ Proxy @Object.Value
+    observationSchema <- declareSchemaRef $ Proxy @Object.Observation
+    contractSchema <- declareSchemaRef $ Proxy @Object.Contract
+    casesSchema <- declareSchemaRef $ Proxy @[Object.Case]
+    timeoutSchema <- declareSchemaRef $ Proxy @Integer
+    stringSchema <- declareSchemaRef $ Proxy @String
+    labelSchema <- declareSchemaRef $ Proxy @Label
+    let closeSchema =
+          mempty
+            & type_ ?~ OpenApiString
+            & description ?~ "No more payments will be sent and the balance of the contract is 0."
+            & enum_ ?~ ["close"]
+        paySchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & description ?~ "A payment will be sent from an account to a payee."
+            & required .~ fmap fst [from_account, to, token, pay, then_]
+            & properties .~ [from_account, to, token, pay, then_]
+          where
+            from_account = ("from_account", accountIdSchema)
+            to = ("to", payeeSchema)
+            token = ("token", tokenSchema)
+            pay = ("pay", valueSchema)
+            then_ = ("then", contractSchema)
+        ifSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & description ?~ "If an observation is true, the first contract applies, otherwise the second contract applies."
+            & required .~ fmap fst [if_, then_, else_]
+            & properties .~ [if_, then_, else_]
+          where
+            if_ = ("if", observationSchema)
+            then_ = ("then", contractSchema)
+            else_ = ("else", contractSchema)
+        whenSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & description
+              ?~ "Wait for an action to be performed and apply the matching contract when it does. Apply the timeout contract if no actions have been performed in the timeout period."
+            & required .~ fmap fst [when, timeout, timeout_continuation]
+            & properties .~ [when, timeout, timeout_continuation]
+          where
+            when = ("when", casesSchema)
+            timeout = ("timeout", timeoutSchema)
+            timeout_continuation = ("timeout_continuation", contractSchema)
+        letSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & description ?~ "Bind a value to a name within the scope of a sub-contract."
+            & required .~ fmap fst [let_, be, then_]
+            & properties .~ [let_, be, then_]
+          where
+            let_ = ("let", stringSchema)
+            be = ("be", valueSchema)
+            then_ = ("then", contractSchema)
+        assertSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & description ?~ "Check an observation and produce a warning if it is false."
+            & required .~ fmap fst [assert, then_]
+            & properties .~ [assert, then_]
+          where
+            assert = ("assert", observationSchema)
+            then_ = ("then", contractSchema)
+        refSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [ref]
+            & properties .~ [ref]
+          where
+            ref = ("ref", labelSchema)
+    pure $
+      NamedSchema (Just "ContractObject") $
+        mempty
+          & description ?~ "Contract terms specified in Marlowe"
+          & oneOf ?~ fmap Inline [closeSchema, paySchema, ifSchema, whenSchema, letSchema, assertSchema, refSchema]
+
+instance ToSchema Object.ChoiceId where
+  declareNamedSchema _ = do
+    stringSchema <- declareSchemaRef $ Proxy @String
+    partySchema <- declareSchemaRef $ Proxy @Object.Party
+    let choice_name = ("choice_name", stringSchema)
+    let choice_owner = ("choice_owner", partySchema)
+    pure $
+      NamedSchema (Just "ChoiceIdObject") $
+        mempty
+          & type_ ?~ OpenApiObject
+          & description ?~ "Refers to a party by role name."
+          & required .~ fmap fst [choice_name, choice_owner]
+          & properties .~ [choice_name, choice_owner]
+
+instance ToSchema Object.Party where
+  declareNamedSchema _ = do
+    stringSchema <- declareSchemaRef $ Proxy @String
+    addressSchema <- declareSchemaRef $ Proxy @Address
+    labelSchema <- declareSchemaRef $ Proxy @Label
+    let rolePartySchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & description ?~ "Refers to a party by role name."
+            & required .~ fmap fst [role_token]
+            & properties .~ [role_token]
+          where
+            role_token = ("role_token", stringSchema)
+        addressPartySchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & description ?~ "Refers to a party by Cardano address."
+            & required .~ fmap fst [address]
+            & properties .~ [address]
+          where
+            address = ("address", addressSchema)
+        refSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [ref]
+            & properties .~ [ref]
+          where
+            ref = ("ref", labelSchema)
+    pure $
+      NamedSchema (Just "PartyObject") $
+        mempty
+          & description ?~ "A participant in a contract"
+          & oneOf ?~ fmap Inline [rolePartySchema, addressPartySchema, refSchema]
+
+instance ToSchema Object.Payee where
+  declareNamedSchema _ = do
+    partySchema <- declareSchemaRef $ Proxy @Object.Party
+    let accountPayeeSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & description ?~ "Pays funds into a party's account in the contract."
+            & required .~ fmap fst [account]
+            & properties .~ [account]
+          where
+            account = ("account", partySchema)
+        partyPayeeSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & description ?~ "Pays funds to a party."
+            & required .~ fmap fst [party]
+            & properties .~ [party]
+          where
+            party = ("party", partySchema)
+    pure $
+      NamedSchema (Just "PayeeObject") $
+        mempty
+          & description ?~ "A recipient of a payment"
+          & oneOf ?~ fmap Inline [accountPayeeSchema, partyPayeeSchema]
+
+instance ToSchema Object.Token where
+  declareNamedSchema _ = do
+    tokenSchema <- declareSchemaRef $ Proxy @Token
+    labelSchema <- declareSchemaRef $ Proxy @Label
+    let refSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [ref]
+            & properties .~ [ref]
+          where
+            ref = ("ref", labelSchema)
+    pure $
+      NamedSchema (Just "TokenObject") $
+        mempty
+          & description ?~ "A token with a currency symbol (minting policy ID) and token name."
+          & oneOf ?~ [tokenSchema, Inline refSchema]
+
+instance ToSchema Object.Action where
+  declareNamedSchema _ = do
+    partySchema <- declareSchemaRef $ Proxy @Party
+    tokenSchema <- declareSchemaRef $ Proxy @Token
+    valueSchema <- declareSchemaRef $ Proxy @(Value Observation)
+    choiceIdSchema <- declareSchemaRef $ Proxy @ChoiceId
+    boundSchema <- declareSchemaRef $ Proxy @[Bound]
+    observationSchema <- declareSchemaRef $ Proxy @Observation
+    labelSchema <- declareSchemaRef $ Proxy @Label
+    let depositSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [party, deposits, of_token, into_account]
+            & properties .~ [party, deposits, of_token, into_account]
+          where
+            party = ("party", partySchema)
+            deposits = ("deposits", valueSchema)
+            of_token = ("of_token", tokenSchema)
+            into_account = ("into_account", partySchema)
+        choiceSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [for_choice, choose_between]
+            & properties .~ [for_choice, choose_between]
+          where
+            for_choice = ("for_choice", choiceIdSchema)
+            choose_between = ("choose_between", boundSchema)
+        notifySchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [notify_if]
+            & properties .~ [notify_if]
+          where
+            notify_if = ("notify_if", observationSchema)
+        refSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [ref]
+            & properties .~ [ref]
+          where
+            ref = ("ref", labelSchema)
+    pure $
+      NamedSchema (Just "ActionObject") $
+        mempty
+          & description ?~ "A contract which becomes active when an action occurs."
+          & oneOf ?~ fmap Inline [depositSchema, choiceSchema, notifySchema, refSchema]
+
+instance ToSchema Object.Case where
+  declareNamedSchema _ = do
+    actionSchema <- declareSchemaRef $ Proxy @Object.Action
+    contractSchema <- declareSchemaRef $ Proxy @Object.Contract
+    stringSchema <- declareSchemaRef $ Proxy @String
+    let caseSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [case_, then_]
+            & properties .~ [case_, then_]
+          where
+            case_ = ("case", actionSchema)
+            then_ = ("then", contractSchema)
+        merkleizedCaseSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ fmap fst [case_, merkleized_then]
+            & properties .~ [case_, merkleized_then]
+          where
+            case_ = ("case", actionSchema)
+            merkleized_then = ("merkleized_then", stringSchema)
+    pure $
+      NamedSchema (Just "CaseObject") $
+        mempty
+          & description ?~ "A contract which becomes active when an action occurs."
+          & oneOf ?~ fmap Inline [caseSchema, merkleizedCaseSchema]

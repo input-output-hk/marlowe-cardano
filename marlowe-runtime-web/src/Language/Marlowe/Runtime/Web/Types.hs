@@ -6,6 +6,7 @@
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 -- | This module defines the request and response types in the Marlowe Runtime
 -- | Web API.
@@ -57,6 +58,7 @@ import GHC.Exts (IsList)
 import GHC.Generics (Generic)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics
+import Language.Marlowe.Object.Types (Label (..))
 import Language.Marlowe.Runtime.Web.Orphans ()
 import Network.URI (parseURI)
 import Servant
@@ -87,6 +89,27 @@ instance FromHttpApiData Base16 where
 
 instance ToSchema Base16 where
   declareNamedSchema _ = NamedSchema Nothing <$> declareSchema (Proxy @String)
+
+newtype ContractSourceId = ContractSourceId {unContractSourceId :: ByteString}
+  deriving (Eq, Ord, Generic)
+  deriving (Show, ToHttpApiData, ToJSON) via Base16
+
+instance FromHttpApiData ContractSourceId where
+  parseUrlPiece = fmap ContractSourceId . (hasLength 32 . unBase16 <=< parseUrlPiece)
+
+instance FromJSON ContractSourceId where
+  parseJSON =
+    withText "ContractSourceId" $ either (parseFail . T.unpack) pure . parseUrlPiece
+
+instance ToSchema ContractSourceId where
+  declareNamedSchema = pure . NamedSchema (Just "ContractSourceId") . toParamSchema
+
+instance ToParamSchema ContractSourceId where
+  toParamSchema _ =
+    mempty
+      & type_ ?~ OpenApiString
+      & OpenApi.description ?~ "The hex-encoded identifier of a Marlowe contract source"
+      & pattern ?~ "^[a-fA-F0-9]{64}$"
 
 newtype TxId = TxId {unTxId :: ByteString}
   deriving (Eq, Ord, Generic)
@@ -608,6 +631,16 @@ instance ToSchema TextEnvelope where
                , ("cborHex", textSchema)
                ]
 
+data PostContractSourceResponse = PostContractSourceResponse
+  { contractSourceId :: ContractSourceId
+  , intermediateIds :: Map Label ContractSourceId
+  }
+  deriving (Show, Eq, Ord, Generic)
+
+instance FromJSON PostContractSourceResponse
+instance ToJSON PostContractSourceResponse
+instance ToSchema PostContractSourceResponse
+
 data PostWithdrawalsRequest = PostWithdrawalsRequest
   { role :: Text
   , contractId :: TxOutRef
@@ -924,6 +957,12 @@ instance ToHttpApiData NetworkId where
   toUrlPiece = \case
     Mainnet -> "mainnet"
     Testnet n -> toUrlPiece n
+
+instance ToHttpApiData Label where
+  toUrlPiece = unLabel
+
+instance FromHttpApiData Label where
+  parseUrlPiece = pure . Label
 
 instance FromHttpApiData NetworkId where
   parseUrlPiece = \case

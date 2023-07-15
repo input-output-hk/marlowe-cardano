@@ -18,8 +18,10 @@ import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (MonadReader (..), ReaderT (..), asks)
 import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.Trans.Except (mapExceptT)
 import Language.Marlowe.Runtime.ChainSync.Api (TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId)
+import Language.Marlowe.Runtime.Web.Server.ContractClient (GetContract, ImportBundle)
 import Language.Marlowe.Runtime.Web.Server.SyncClient (
   LoadContract,
   LoadContractHeaders,
@@ -30,6 +32,7 @@ import Language.Marlowe.Runtime.Web.Server.SyncClient (
  )
 import Language.Marlowe.Runtime.Web.Server.TxClient (ApplyInputs, CreateContract, Submit, Submit', Withdraw)
 import Observe.Event (EventBackend)
+import Pipes (MFunctor (..))
 import Servant
 
 newtype ServerM a = ServerM {runServerM :: ReaderT AppEnv Handler a}
@@ -56,7 +59,9 @@ data AppEnv = forall r s.
   , _loadWithdrawal :: LoadWithdrawal (AppM r s)
   , _loadTransactions :: LoadTransactions (AppM r s)
   , _loadTransaction :: LoadTransaction (AppM r s)
+  , _importBundle :: ImportBundle (AppM r s)
   , _createContract :: CreateContract (AppM r s)
+  , _getContract :: GetContract (AppM r s)
   , _withdraw :: Withdraw (AppM r s)
   , _applyInputs :: ApplyInputs (AppM r s)
   , _submitContract :: ContractId -> Submit r (AppM r s)
@@ -66,6 +71,12 @@ data AppEnv = forall r s.
   , _requestParent :: r
   , _logAction :: LogAction IO Message
   }
+
+-- | Load a list of contract headers.
+importBundle :: ImportBundle ServerM
+importBundle label = do
+  AppEnv{_eventBackend = backend, _importBundle = ib} <- ask
+  hoist (mapExceptT $ liftBackendM backend) $ ib label
 
 -- | Load a list of contract headers.
 loadContractHeaders :: LoadContractHeaders ServerM
@@ -84,6 +95,12 @@ loadWithdrawals :: LoadWithdrawals ServerM
 loadWithdrawals wFilter range = do
   AppEnv{_eventBackend = backend, _loadWithdrawals = load} <- ask
   liftBackendM backend $ load wFilter range
+
+-- | Get a contract by its hash.
+getContract :: GetContract ServerM
+getContract hash = do
+  AppEnv{_eventBackend = backend, _getContract = get} <- ask
+  liftBackendM backend $ get hash
 
 -- | Load a list of withdrawal headers.
 loadWithdrawal :: LoadWithdrawal ServerM

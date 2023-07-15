@@ -1,5 +1,6 @@
 module Language.Marlowe.Runtime.Web.Withdrawal.Post where
 
+import Data.Functor (void)
 import qualified Data.Set as Set
 import Language.Marlowe.Runtime.Integration.Common
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses (..))
@@ -36,15 +37,16 @@ spec = describe "POST /contracts/{contractId}/withdrawal" do
       StandardContractClosed{} <- makeReturnDeposit
       contractId <- case contractCreated of
         Web.CreateTxEnvelope{contractId} -> pure contractId
-      postWithdrawal
-        webChangeAddress
-        (Just webExtraAddresses)
-        (Just webCollataralUtxos)
-        Web.PostWithdrawalsRequest
-          { role = "Party A"
-          , contractId
-          }
+      void $
+        postWithdrawal
+          webChangeAddress
+          (Just webExtraAddresses)
+          (Just webCollataralUtxos)
+          Web.PostWithdrawalsRequest
+            { role = "Party A"
+            , contractId
+            }
 
     case result of
       Left _ -> fail $ "Expected 200 response code - got " <> show result
-      Right Web.WithdrawTxEnvelope{} -> pure ()
+      Right _ -> pure ()
