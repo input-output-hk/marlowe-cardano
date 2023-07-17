@@ -160,7 +160,7 @@ data TemplateCommand
       , oracle :: Raffle.Oracle
       , chunkSize :: Raffle.ChunkSize
       , parties :: NonEmpty Party
-      , pricesInLovelacePerRound :: NonEmpty Integer
+      , prizeNFTPerRound :: NonEmpty Token
       , depositDeadline :: SomeTimeout
       , selectDeadline :: SomeTimeout
       , payoutDeadline :: SomeTimeout
@@ -282,7 +282,7 @@ runTemplateCommand TemplateRaffle{..} OutputFiles{..} = do
           oracle
           chunkSize
           parties
-          pricesInLovelacePerRound
+          prizeNFTPerRound
           depositDeadline'
           selectDeadline'
           payoutDeadline'
@@ -606,7 +606,7 @@ templateRaffleOptions =
       ( O.long "chunk-size" <> O.metavar "INTEGER" <> O.help "The chunk size."
       )
     <*> (NEL.fromList <$> O.many (O.option parseParty (O.long "parties" <> O.metavar "PARTIES" <> O.help "The parties.")))
-    <*> (NEL.fromList <$> O.many (O.option O.auto (O.long "prices" <> O.metavar "PRICES" <> O.help "The prices.")))
+    <*> (NEL.fromList <$> O.many (O.option parseToken (O.long "prizes" <> O.metavar "PRIZES" <> O.help "The prizes.")))
     <*> O.option
       parseTimeout
       ( O.long "deposit-deadline" <> O.metavar "TIMEOUT" <> O.help ("The deposit deadline. " <> timeoutHelpMsg)

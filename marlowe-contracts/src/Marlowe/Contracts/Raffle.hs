@@ -3,7 +3,7 @@
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Marlowe.Contracts.Raffle where
+module Marlowe.Contracts.Raffle (raffle, Sponsor (..), Oracle (..), ChunkSize (..)) where
 
 import Data.Aeson (ToJSON)
 import Data.Aeson.Types (FromJSON)
@@ -15,9 +15,6 @@ import Data.List.Split (chunksOf)
 import GHC.Generics (Generic)
 import Language.Marlowe (POSIXTime)
 import Language.Marlowe.Core.V1.Semantics.Types
-
-ada :: Token
-ada = Token "" ""
 
 newtype Sponsor = Sponsor Party
   deriving stock (Eq, Generic, Show)
@@ -42,30 +39,30 @@ raffle
   -> Oracle
   -> ChunkSize
   -> NonEmpty Party
-  -> NonEmpty Integer
+  -> NonEmpty Token
   -> Timeout
   -> Timeout
   -> Timeout
   -> Contract
-raffle sponsor oracle chunkSize parties pricesPerRound deposit select payout =
-  makeDeposit sponsor pricesPerRound deposit $
-    mkRaffleRounds sponsor oracle pricesPerRound chunkSize parties select payout
+raffle sponsor oracle chunkSize parties prizeNFTPerRound deposit select payout =
+  makeDeposit sponsor prizeNFTPerRound deposit $
+    mkRaffleRounds sponsor oracle prizeNFTPerRound chunkSize parties select payout
 
 mkRaffleRounds
   :: Sponsor
   -> Oracle
-  -> NonEmpty Integer
+  -> NonEmpty Token
   -> ChunkSize
   -> NonEmpty Party
   -> Timeout
   -> Timeout
   -> Contract
-mkRaffleRounds sponsor oracle pricesPerRound chunkSize parties select payout =
+mkRaffleRounds sponsor oracle prizeNFTPerRound chunkSize parties select payout =
   selectWinner oracle (toInteger . length $ parties) select $
     payWinner
       sponsor
       oracle
-      pricesPerRound
+      prizeNFTPerRound
       chunkSize
       partiesWithDistributedNumber
       partiesWithDistributedNumber
@@ -76,17 +73,17 @@ mkRaffleRounds sponsor oracle pricesPerRound chunkSize parties select payout =
 
 makeDeposit
   :: Sponsor
-  -> NonEmpty Integer
+  -> NonEmpty Token
   -> POSIXTime
   -> Contract
   -> Contract
-makeDeposit (Sponsor sponsor) pricesPerRound deadline contract =
-  makeDeposit' (NEL.toList pricesPerRound)
+makeDeposit (Sponsor sponsor) prizeNFTPerRound deadline contract =
+  makeDeposit' (NEL.toList prizeNFTPerRound)
   where
     makeDeposit' [] = contract
     makeDeposit' (x : xs) =
       When
-        [Case (Deposit sponsor sponsor ada (Constant x)) (makeDeposit' xs)]
+        [Case (Deposit sponsor sponsor x (Constant 1)) (makeDeposit' xs)]
         deadline
         Close
 
@@ -105,23 +102,23 @@ selectWinner (Oracle oracle) nbParties deadline contract =
 payWinner
   :: Sponsor
   -> Oracle
-  -> NonEmpty Integer
+  -> NonEmpty Token
   -> ChunkSize
   -> NonEmpty (Integer, Party)
   -> NonEmpty (Integer, Party)
   -> Timeout
   -> Timeout
   -> Contract
-payWinner sponsor@(Sponsor sponsorParty) oracle@(Oracle oracleParty) (priceCurrentRound :| remainingPricesPerRound) chunkSize@(ChunkSize chunkLength) allPartiesMinusWinners partiesChunk select payoutDeadline
+payWinner sponsor@(Sponsor sponsorParty) oracle@(Oracle oracleParty) (prizeNFTPerRound :| remainingPrizeNFTPerRound) chunkSize@(ChunkSize chunkLength) allPartiesMinusWinners partiesChunk select payoutDeadline
   | length partiesChunk <= chunkLength =
       When
         [ Case (Notify (ValueEQ (ChoiceValue (ChoiceId "Random" oracleParty)) (Constant i))) $
           Pay
             sponsorParty
             (Party party)
-            ada
-            (Constant priceCurrentRound)
-            ( case remainingPricesPerRound of
+            prizeNFTPerRound
+            (Constant 1)
+            ( case remainingPrizeNFTPerRound of
                 [] -> Close
                 remainingPricesPerRound' ->
                   mkRaffleRounds -- start a new raffle without the winner
@@ -143,7 +140,7 @@ payWinner sponsor@(Sponsor sponsorParty) oracle@(Oracle oracleParty) (priceCurre
           payWinner
             sponsor
             oracle
-            (priceCurrentRound :| remainingPricesPerRound)
+            (prizeNFTPerRound :| remainingPrizeNFTPerRound)
             chunkSize
             allPartiesMinusWinners
             (NEL.fromList chunkedParties')

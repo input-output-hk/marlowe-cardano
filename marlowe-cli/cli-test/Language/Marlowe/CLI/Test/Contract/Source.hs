@@ -19,6 +19,7 @@ import Data.List.NonEmpty (NonEmpty)
 import Data.Maybe (fromMaybe)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
+import Language.Marlowe (Token (..))
 import Language.Marlowe.CLI.IO (liftCliMaybe)
 import Language.Marlowe.CLI.Run (marloweAddressFromCardanoAddress)
 import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (ParametrizedMarloweJSON)
@@ -175,7 +176,7 @@ data UseTemplate
       , utOracle :: PartyRef
       , utChunkSize :: Raffle.ChunkSize
       , utParties :: NonEmpty PartyRef
-      , utPricesInLovelacePerRound :: NonEmpty Integer
+      , utprizeNFTPerRound :: NonEmpty Token
       , utDepositDeadline :: SomeTimeout
       , utSelectDeadline :: SomeTimeout
       , utPayoutDeadline :: SomeTimeout
@@ -346,7 +347,7 @@ useTemplate currency = \case
         (Raffle.Oracle oracle)
         utChunkSize
         parties
-        utPricesInLovelacePerRound
+        utprizeNFTPerRound
         depositDeadline'
         selectDeadline'
         payoutDeadline'
