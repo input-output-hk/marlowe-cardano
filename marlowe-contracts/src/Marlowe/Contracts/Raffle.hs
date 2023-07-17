@@ -58,7 +58,7 @@ mkRaffleRounds
   -> Contract
 mkRaffleRounds sponsor oracle pricesPerRound chunkSize parties select payout =
   selectWinner oracle (toInteger . length $ parties) select $
-    payWinner sponsor oracle pricesPerRound chunkSize parties select payout
+    payWinner sponsor oracle pricesPerRound chunkSize parties parties select payout
 
 makeDeposit
   :: Sponsor
@@ -82,9 +82,9 @@ selectWinner
   -> POSIXTime
   -> Contract
   -> Contract
-selectWinner (Oracle oracle) count deadline contract =
+selectWinner (Oracle oracle) nbParties deadline contract =
   When
-    [Case (Choice (ChoiceId "Random" oracle) [Bound 0 (count - 1)]) contract]
+    [Case (Choice (ChoiceId "Random" oracle) [Bound 0 (nbParties - 1)]) contract]
     deadline
     Close
 
@@ -94,11 +94,12 @@ payWinner
   -> [Integer]
   -> ChunkSize
   -> [Party]
+  -> [Party]
   -> Timeout
   -> Timeout
   -> Contract
-payWinner sponsor@(Sponsor sponsorParty) oracle@(Oracle oracleParty) remainingPricesPerRound chunkSize@(ChunkSize chunkLength) parties select payoutDeadline
-  | (length $ parties) <= chunkLength =
+payWinner sponsor@(Sponsor sponsorParty) oracle@(Oracle oracleParty) remainingPricesPerRound chunkSize@(ChunkSize chunkLength) allPartiesMinusWinners partiesChunk select payoutDeadline
+  | length partiesChunk <= chunkLength =
       When
         [ Case (Notify (ValueEQ (ChoiceValue (ChoiceId "Random" oracleParty)) (Constant . toInteger $ i))) $
           Pay
@@ -108,18 +109,35 @@ payWinner sponsor@(Sponsor sponsorParty) oracle@(Oracle oracleParty) remainingPr
             (Constant . head $ remainingPricesPerRound)
             ( if null remainingPricesPerRound
                 then Close
-                else mkRaffleRounds sponsor oracle (deleteAt 0 remainingPricesPerRound) chunkSize (deleteAt i parties) select payoutDeadline
+                else
+                  mkRaffleRounds -- start a new raffle without the winner
+                    sponsor
+                    oracle
+                    (deleteAt 0 remainingPricesPerRound) -- removing the current round price
+                    chunkSize
+                    (deleteAt i allPartiesMinusWinners) -- removing the winner
+                    select
+                    payoutDeadline
             )
-        | (i, party) <- indexed parties
+        | (i, party) <- indexed partiesChunk
         ]
         payoutDeadline
         Close
   | otherwise =
       When
-        [ Case (Notify (ValueLE (ChoiceValue (ChoiceId "Random" oracleParty)) (Constant . toInteger . fst $ last parties'))) $
-          payWinner sponsor oracle remainingPricesPerRound chunkSize (snd <$> parties') select payoutDeadline
+        [ Case
+          (Notify (ValueLE (ChoiceValue (ChoiceId "Random" oracleParty)) (Constant . toInteger . fst $ last chunkedParties')))
+          $ payWinner
+            sponsor
+            oracle
+            remainingPricesPerRound
+            chunkSize
+            allPartiesMinusWinners
+            (snd <$> chunkedParties')
+            select
+            payoutDeadline
         | let chunks k xs = chunksOf (div (length xs + k - 1) k) xs
-        , parties' <- chunks chunkLength (indexed parties)
+        , chunkedParties' <- chunks chunkLength (indexed partiesChunk)
         ]
         payoutDeadline
         Close
