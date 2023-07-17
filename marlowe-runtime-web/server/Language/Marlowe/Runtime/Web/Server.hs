@@ -119,14 +119,21 @@ corsMiddleware accessControlAllowOriginAll =
       let policy =
             simpleCorsResourcePolicy
               { corsRequestHeaders =
-                  [ "Content-Type"
+                  [ "Accept"
+                  , "Content-Type"
                   , "Range"
-                  , "Accept"
-                  , "X-Change-Address"
                   , "X-Address"
+                  , "X-Change-Address"
                   , "X-Collateral-UTxO"
                   ]
-              , corsExposedHeaders = Just ["*"]
+              , corsExposedHeaders =
+                  Just
+                    [ "X-Network-Id"
+                    , "X-Node-Tip"
+                    , "X-Runtime-Chain-Tip"
+                    , "X-Runtime-Tip"
+                    , "X-Runtime-Version"
+                    ]
               , corsMethods = ["GET", "POST", "PUT", "OPTIONS", "DELETE"]
               }
       cors (const $ Just policy)
