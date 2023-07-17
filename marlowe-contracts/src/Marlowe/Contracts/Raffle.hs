@@ -1,12 +1,16 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Marlowe.Contracts.Raffle where
 
 import Data.Aeson (ToJSON)
 import Data.Aeson.Types (FromJSON)
-import Data.List.Index (deleteAt, indexed)
+import Data.Bifunctor (Bifunctor (..))
+import Data.List.Index (indexed)
+import Data.List.NonEmpty (NonEmpty (..))
+import Data.List.NonEmpty qualified as NEL
 import Data.List.Split (chunksOf)
 import GHC.Generics (Generic)
 import Language.Marlowe (POSIXTime)
@@ -37,8 +41,8 @@ raffle
   :: Sponsor
   -> Oracle
   -> ChunkSize
-  -> [Party]
-  -> [Integer]
+  -> NonEmpty Party
+  -> NonEmpty Integer
   -> Timeout
   -> Timeout
   -> Timeout
@@ -50,24 +54,34 @@ raffle sponsor oracle chunkSize parties pricesPerRound deposit select payout =
 mkRaffleRounds
   :: Sponsor
   -> Oracle
-  -> [Integer]
+  -> NonEmpty Integer
   -> ChunkSize
-  -> [Party]
+  -> NonEmpty Party
   -> Timeout
   -> Timeout
   -> Contract
 mkRaffleRounds sponsor oracle pricesPerRound chunkSize parties select payout =
   selectWinner oracle (toInteger . length $ parties) select $
-    payWinner sponsor oracle pricesPerRound chunkSize parties parties select payout
+    payWinner
+      sponsor
+      oracle
+      pricesPerRound
+      chunkSize
+      partiesWithDistributedNumber
+      partiesWithDistributedNumber
+      select
+      payout
+  where
+    partiesWithDistributedNumber = (fmap . first $ toInteger) . NEL.fromList . indexed . NEL.toList $ parties
 
 makeDeposit
   :: Sponsor
-  -> [Integer]
+  -> NonEmpty Integer
   -> POSIXTime
   -> Contract
   -> Contract
 makeDeposit (Sponsor sponsor) pricesPerRound deadline contract =
-  makeDeposit' pricesPerRound
+  makeDeposit' (NEL.toList pricesPerRound)
   where
     makeDeposit' [] = contract
     makeDeposit' (x : xs) =
@@ -91,53 +105,52 @@ selectWinner (Oracle oracle) nbParties deadline contract =
 payWinner
   :: Sponsor
   -> Oracle
-  -> [Integer]
+  -> NonEmpty Integer
   -> ChunkSize
-  -> [Party]
-  -> [Party]
+  -> NonEmpty (Integer, Party)
+  -> NonEmpty (Integer, Party)
   -> Timeout
   -> Timeout
   -> Contract
-payWinner sponsor@(Sponsor sponsorParty) oracle@(Oracle oracleParty) remainingPricesPerRound chunkSize@(ChunkSize chunkLength) allPartiesMinusWinners partiesChunk select payoutDeadline
+payWinner sponsor@(Sponsor sponsorParty) oracle@(Oracle oracleParty) (priceCurrentRound :| remainingPricesPerRound) chunkSize@(ChunkSize chunkLength) allPartiesMinusWinners partiesChunk select payoutDeadline
   | length partiesChunk <= chunkLength =
       When
-        [ Case (Notify (ValueEQ (ChoiceValue (ChoiceId "Random" oracleParty)) (Constant . toInteger $ i))) $
+        [ Case (Notify (ValueEQ (ChoiceValue (ChoiceId "Random" oracleParty)) (Constant i))) $
           Pay
             sponsorParty
             (Party party)
             ada
-            (Constant . head $ remainingPricesPerRound)
-            ( if null remainingPricesPerRound
-                then Close
-                else
+            (Constant priceCurrentRound)
+            ( case remainingPricesPerRound of
+                [] -> Close
+                remainingPricesPerRound' ->
                   mkRaffleRounds -- start a new raffle without the winner
                     sponsor
                     oracle
-                    (deleteAt 0 remainingPricesPerRound) -- removing the current round price
+                    (NEL.fromList remainingPricesPerRound') -- removing the current round price
                     chunkSize
-                    (deleteAt i allPartiesMinusWinners) -- removing the winner
+                    (NEL.fromList . (snd <$>) . NEL.filter (\(i', _) -> i' /= i) $ allPartiesMinusWinners) -- removing the winner
                     select
                     payoutDeadline
             )
-        | (i, party) <- indexed partiesChunk
+        | (i, party) <- NEL.toList partiesChunk
         ]
         payoutDeadline
         Close
   | otherwise =
       When
-        [ Case
-          (Notify (ValueLE (ChoiceValue (ChoiceId "Random" oracleParty)) (Constant . toInteger . fst $ last chunkedParties')))
-          $ payWinner
+        [ Case (Notify (ValueLE (ChoiceValue (ChoiceId "Random" oracleParty)) (Constant . fst $ last chunkedParties'))) $
+          payWinner
             sponsor
             oracle
-            remainingPricesPerRound
+            (priceCurrentRound :| remainingPricesPerRound)
             chunkSize
             allPartiesMinusWinners
-            (snd <$> chunkedParties')
+            (NEL.fromList chunkedParties')
             select
             payoutDeadline
         | let chunks k xs = chunksOf (div (length xs + k - 1) k) xs
-        , chunkedParties' <- chunks chunkLength (indexed partiesChunk)
+        , chunkedParties' <- chunks chunkLength (NEL.toList partiesChunk)
         ]
         payoutDeadline
         Close

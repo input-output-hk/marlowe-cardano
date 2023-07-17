@@ -15,6 +15,7 @@ import Control.Monad.Except (MonadError, throwError)
 import Data.Aeson (FromJSON (..), ToJSON (..), (.=))
 import Data.Aeson qualified as A
 import Data.Aeson.KeyMap qualified as KeyMap
+import Data.List.NonEmpty (NonEmpty)
 import Data.Maybe (fromMaybe)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
@@ -173,8 +174,8 @@ data UseTemplate
       { utSponsor :: PartyRef
       , utOracle :: PartyRef
       , utChunkSize :: Raffle.ChunkSize
-      , utParties :: [PartyRef]
-      , utPricesInLovelacePerRound :: [Integer]
+      , utParties :: NonEmpty PartyRef
+      , utPricesInLovelacePerRound :: NonEmpty Integer
       , utDepositDeadline :: SomeTimeout
       , utSelectDeadline :: SomeTimeout
       , utPayoutDeadline :: SomeTimeout
