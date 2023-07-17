@@ -36,6 +36,8 @@ import Language.Marlowe.Extended.V1 as E (Contract (..), Party, Token, Value (..
 import Language.Marlowe.Util (ada)
 import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
 
+import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty qualified as NEL
 import Language.Marlowe.CLI.Test.CLI.Interpret (initialMarloweState)
 import Language.Marlowe.CLI.Test.Contract.Source (makeContract)
 import Marlowe.Contracts.Raffle (raffle)
@@ -157,8 +159,8 @@ data TemplateCommand
       , sponsor :: Raffle.Sponsor
       , oracle :: Raffle.Oracle
       , chunkSize :: Raffle.ChunkSize
-      , parties :: [Party]
-      , pricesInLovelacePerRound :: [Integer]
+      , parties :: NonEmpty Party
+      , pricesInLovelacePerRound :: NonEmpty Integer
       , depositDeadline :: SomeTimeout
       , selectDeadline :: SomeTimeout
       , payoutDeadline :: SomeTimeout
@@ -603,8 +605,8 @@ templateRaffleOptions =
       (Raffle.ChunkSize <$> O.auto)
       ( O.long "chunk-size" <> O.metavar "INTEGER" <> O.help "The chunk size."
       )
-    <*> O.some (O.option parseParty (O.long "parties" <> O.metavar "PARTIES" <> O.help "The parties."))
-    <*> O.some (O.option O.auto (O.long "prices" <> O.metavar "PRICES" <> O.help "The prices."))
+    <*> (NEL.fromList <$> O.many (O.option parseParty (O.long "parties" <> O.metavar "PARTIES" <> O.help "The parties.")))
+    <*> (NEL.fromList <$> O.many (O.option O.auto (O.long "prices" <> O.metavar "PRICES" <> O.help "The prices.")))
     <*> O.option
       parseTimeout
       ( O.long "deposit-deadline" <> O.metavar "TIMEOUT" <> O.help ("The deposit deadline. " <> timeoutHelpMsg)
