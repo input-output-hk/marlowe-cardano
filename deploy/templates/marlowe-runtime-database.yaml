@@ -29,6 +29,10 @@ spec:
             max_pred_locks_per_transaction: "256"
             work_mem: "32MB"
             maintenance_work_mem: "256MB"
+        ports:
+          - expose: true
+            port: 5432
+            protocol: TCP
         preparedDatabases:
           {{- range $index, $network := .Values.networks }}
           chainsync_{{ $network }}:
