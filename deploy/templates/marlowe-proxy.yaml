@@ -19,6 +19,8 @@ spec:
           value: "3700"
         - name: TRACED_PORT
           value: "3701"
+        - name: TRANSFER_PORT
+          value: "3729"
         - name: TX_HOST
           value: marlowe-tx-{{ . }}.marlowe-staging
         - name: TX_PORT
