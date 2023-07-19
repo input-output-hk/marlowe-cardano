@@ -95,7 +95,7 @@ selectWinner
   -> Contract
 selectWinner (Oracle oracle) nbParties deadline contract =
   When
-    [Case (Choice (ChoiceId "Random" oracle) [Bound 0 (nbParties - 1)]) contract]
+    [Case (Choice (ChoiceId "RANDOM" oracle) [Bound 0 (nbParties - 1)]) contract]
     deadline
     Close
 
@@ -112,7 +112,7 @@ payWinner
 payWinner sponsor@(Sponsor sponsorParty) oracle@(Oracle oracleParty) (prizeNFTPerRound :| remainingPrizeNFTPerRound) chunkSize@(ChunkSize chunkLength) allPartiesMinusWinners partiesChunk select payoutDeadline
   | length partiesChunk <= chunkLength =
       When
-        [ Case (Notify (ValueEQ (ChoiceValue (ChoiceId "Random" oracleParty)) (Constant i))) $
+        [ Case (Notify (ValueEQ (ChoiceValue (ChoiceId "RANDOM" oracleParty)) (Constant i))) $
           Pay
             sponsorParty
             (Party party)
@@ -136,7 +136,7 @@ payWinner sponsor@(Sponsor sponsorParty) oracle@(Oracle oracleParty) (prizeNFTPe
         Close
   | otherwise =
       When
-        [ Case (Notify (ValueLE (ChoiceValue (ChoiceId "Random" oracleParty)) (Constant . fst $ last chunkedParties'))) $
+        [ Case (Notify (ValueLE (ChoiceValue (ChoiceId "RANDOM" oracleParty)) (Constant . fst $ last chunkedParties'))) $
           payWinner
             sponsor
             oracle

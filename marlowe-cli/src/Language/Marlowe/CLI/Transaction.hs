@@ -656,7 +656,7 @@ buildMinting connection signingKeyFile mintingAction metadataFile expires change
   let submitMode = submitModeFromTimeout timeout
   (body, policy) <- buildMintingImpl connection mintingAction' metadata expires submitMode (PrintStats True)
   doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
-  liftIO . hPutStrLn stderr $ "PolicyID " <> show policy
+  liftIO . putStrLn $ read . show . unPolicyId $ policy
 
 nonAdaValue :: Value -> Value
 nonAdaValue value = value <> C.negateValue (C.lovelaceToValue (fromMaybe 0 $ C.valueToLovelace value))
