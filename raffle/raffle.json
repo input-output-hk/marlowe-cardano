@@ -1,0 +1,215 @@
+{
+    "timeout": 1690734979530,
+    "timeout_continuation": "close",
+    "when": [
+        {
+            "case": {
+                "deposits": 1,
+                "into_account": {
+                    "address": "addr_test1qr5yzy3u25nxfvcmcteyg3ukw5y8x7umknwg376h04hn7kvtgcwrpyv2qstmfxty443vdld98ram4j2gjhqsdsq5w42qd0gsfw"
+                },
+                "of_token": {
+                    "currency_symbol": "89cd4d46ee5982a760cd12886224fbb285aa98211f19d354ccbe452b",
+                    "token_name": "1stPrize"
+                },
+                "party": {
+                    "address": "addr_test1qr5yzy3u25nxfvcmcteyg3ukw5y8x7umknwg376h04hn7kvtgcwrpyv2qstmfxty443vdld98ram4j2gjhqsdsq5w42qd0gsfw"
+                }
+            },
+            "then": {
+                "timeout": 1690734979530,
+                "timeout_continuation": "close",
+                "when": [
+                    {
+                        "case": {
+                            "choose_between": [
+                                {
+                                    "from": 0,
+                                    "to": 3
+                                }
+                            ],
+                            "for_choice": {
+                                "choice_name": "RANDOM",
+                                "choice_owner": {
+                                    "address": "addr_test1qr5yzy3u25nxfvcmcteyg3ukw5y8x7umknwg376h04hn7kvtgcwrpyv2qstmfxty443vdld98ram4j2gjhqsdsq5w42qd0gsfw"
+                                }
+                            }
+                        },
+                        "then": {
+                            "timeout": 1690734979530,
+                            "timeout_continuation": "close",
+                            "when": [
+                                {
+                                    "case": {
+                                        "notify_if": {
+                                            "le_than": 1,
+                                            "value": {
+                                                "value_of_choice": {
+                                                    "choice_name": "RANDOM",
+                                                    "choice_owner": {
+                                                        "address": "addr_test1qr5yzy3u25nxfvcmcteyg3ukw5y8x7umknwg376h04hn7kvtgcwrpyv2qstmfxty443vdld98ram4j2gjhqsdsq5w42qd0gsfw"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "then": {
+                                        "timeout": 1690734979530,
+                                        "timeout_continuation": "close",
+                                        "when": [
+                                            {
+                                                "case": {
+                                                    "notify_if": {
+                                                        "equal_to": 0,
+                                                        "value": {
+                                                            "value_of_choice": {
+                                                                "choice_name": "RANDOM",
+                                                                "choice_owner": {
+                                                                    "address": "addr_test1qr5yzy3u25nxfvcmcteyg3ukw5y8x7umknwg376h04hn7kvtgcwrpyv2qstmfxty443vdld98ram4j2gjhqsdsq5w42qd0gsfw"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "then": {
+                                                    "from_account": {
+                                                        "address": "addr_test1qr5yzy3u25nxfvcmcteyg3ukw5y8x7umknwg376h04hn7kvtgcwrpyv2qstmfxty443vdld98ram4j2gjhqsdsq5w42qd0gsfw"
+                                                    },
+                                                    "pay": 1,
+                                                    "then": "close",
+                                                    "to": {
+                                                        "party": {
+                                                            "address": "addr_test1qpj0y6wace4m6qfrs3gnw8jefql4ajy9y8fuu7hdpgdqv9vtgcwrpyv2qstmfxty443vdld98ram4j2gjhqsdsq5w42qnm58x5"
+                                                        }
+                                                    },
+                                                    "token": {
+                                                        "currency_symbol": "89cd4d46ee5982a760cd12886224fbb285aa98211f19d354ccbe452b",
+                                                        "token_name": "1stPrize"
+                                                    }
+                                                }
+                                            },
+                                            {
+                                                "case": {
+                                                    "notify_if": {
+                                                        "equal_to": 1,
+                                                        "value": {
+                                                            "value_of_choice": {
+                                                                "choice_name": "RANDOM",
+                                                                "choice_owner": {
+                                                                    "address": "addr_test1qr5yzy3u25nxfvcmcteyg3ukw5y8x7umknwg376h04hn7kvtgcwrpyv2qstmfxty443vdld98ram4j2gjhqsdsq5w42qd0gsfw"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "then": {
+                                                    "from_account": {
+                                                        "address": "addr_test1qr5yzy3u25nxfvcmcteyg3ukw5y8x7umknwg376h04hn7kvtgcwrpyv2qstmfxty443vdld98ram4j2gjhqsdsq5w42qd0gsfw"
+                                                    },
+                                                    "pay": 1,
+                                                    "then": "close",
+                                                    "to": {
+                                                        "party": {
+                                                            "address": "addr_test1qpx28jszrx6n90shly5qvdqzaxmrhrkr7nleq3u6ayfz375tgcwrpyv2qstmfxty443vdld98ram4j2gjhqsdsq5w42q4ckex2"
+                                                        }
+                                                    },
+                                                    "token": {
+                                                        "currency_symbol": "89cd4d46ee5982a760cd12886224fbb285aa98211f19d354ccbe452b",
+                                                        "token_name": "1stPrize"
+                                                    }
+                                                }
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "case": {
+                                        "notify_if": {
+                                            "le_than": 3,
+                                            "value": {
+                                                "value_of_choice": {
+                                                    "choice_name": "RANDOM",
+                                                    "choice_owner": {
+                                                        "address": "addr_test1qr5yzy3u25nxfvcmcteyg3ukw5y8x7umknwg376h04hn7kvtgcwrpyv2qstmfxty443vdld98ram4j2gjhqsdsq5w42qd0gsfw"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "then": {
+                                        "timeout": 1690734979530,
+                                        "timeout_continuation": "close",
+                                        "when": [
+                                            {
+                                                "case": {
+                                                    "notify_if": {
+                                                        "equal_to": 2,
+                                                        "value": {
+                                                            "value_of_choice": {
+                                                                "choice_name": "RANDOM",
+                                                                "choice_owner": {
+                                                                    "address": "addr_test1qr5yzy3u25nxfvcmcteyg3ukw5y8x7umknwg376h04hn7kvtgcwrpyv2qstmfxty443vdld98ram4j2gjhqsdsq5w42qd0gsfw"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "then": {
+                                                    "from_account": {
+                                                        "address": "addr_test1qr5yzy3u25nxfvcmcteyg3ukw5y8x7umknwg376h04hn7kvtgcwrpyv2qstmfxty443vdld98ram4j2gjhqsdsq5w42qd0gsfw"
+                                                    },
+                                                    "pay": 1,
+                                                    "then": "close",
+                                                    "to": {
+                                                        "party": {
+                                                            "address": "addr_test1qpx28jszrx6n90shly5qvdqzaxmrhrkr7nleq3u6ayfz375tgcwrpyv2qstmfxty443vdld98ram4j2gjhqsdsq5w42q4ckex2"
+                                                        }
+                                                    },
+                                                    "token": {
+                                                        "currency_symbol": "89cd4d46ee5982a760cd12886224fbb285aa98211f19d354ccbe452b",
+                                                        "token_name": "1stPrize"
+                                                    }
+                                                }
+                                            },
+                                            {
+                                                "case": {
+                                                    "notify_if": {
+                                                        "equal_to": 3,
+                                                        "value": {
+                                                            "value_of_choice": {
+                                                                "choice_name": "RANDOM",
+                                                                "choice_owner": {
+                                                                    "address": "addr_test1qr5yzy3u25nxfvcmcteyg3ukw5y8x7umknwg376h04hn7kvtgcwrpyv2qstmfxty443vdld98ram4j2gjhqsdsq5w42qd0gsfw"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "then": {
+                                                    "from_account": {
+                                                        "address": "addr_test1qr5yzy3u25nxfvcmcteyg3ukw5y8x7umknwg376h04hn7kvtgcwrpyv2qstmfxty443vdld98ram4j2gjhqsdsq5w42qd0gsfw"
+                                                    },
+                                                    "pay": 1,
+                                                    "then": "close",
+                                                    "to": {
+                                                        "party": {
+                                                            "address": "addr_test1qpx28jszrx6n90shly5qvdqzaxmrhrkr7nleq3u6ayfz375tgcwrpyv2qstmfxty443vdld98ram4j2gjhqsdsq5w42q4ckex2"
+                                                        }
+                                                    },
+                                                    "token": {
+                                                        "currency_symbol": "89cd4d46ee5982a760cd12886224fbb285aa98211f19d354ccbe452b",
+                                                        "token_name": "1stPrize"
+                                                    }
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}
