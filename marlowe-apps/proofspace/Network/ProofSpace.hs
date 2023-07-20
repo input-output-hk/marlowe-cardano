@@ -24,11 +24,13 @@ module Network.ProofSpace (
 
   -- * Handlers
   echoProofHandler,
+  processProofHandler,
 ) where
 
+import Control.Exception (IOException, catch)
 import Control.Monad (unless)
 import Control.Monad.IO.Class (liftIO)
-import Data.Aeson (FromJSON (parseJSON), ToJSON (toJSON), Value, eitherDecode, object, withObject, (.:), (.=))
+import Data.Aeson (FromJSON (parseJSON), ToJSON (toJSON), Value, eitherDecode, encode, object, withObject, (.:), (.=))
 import Data.Bifunctor (first)
 import Data.Kind (Type)
 import Network.HTTP.Types (hContentType)
@@ -61,7 +63,9 @@ import Servant.API (ReqBody')
 import Servant.Server.Internal.Delayed (addBodyCheck)
 import Servant.Server.Internal.DelayedIO (DelayedIO, delayedFail, delayedFailFatal, withRequest)
 import Servant.Server.Internal.ErrorFormatter (MkContextWithErrorFormatter)
+import System.IO (hPrint, stderr)
 import System.IO.Unsafe (unsafePerformIO)
+import System.Process (readProcess)
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS8
@@ -98,6 +102,21 @@ instance FromJSON ProofRequest where
           reqIssuedCredentials <- o .: "issuedCredentials"
           pure ProofRequest{..}
 
+instance ToJSON ProofRequest where
+  toJSON ProofRequest{..} =
+    object
+      [ "protocolVersion" .= reqProtocolVersion
+      , "publicServiceDid" .= reqPublicServiceDid
+      , "subscriberConnectDid" .= reqSubscriberConnectDid
+      , "actionId" .= reqActionId
+      , "actionInstanceId" .= reqActionInstanceId
+      , "actionEventId" .= reqActionEventId
+      , "actionParams" .= reqActionParams
+      , "receivedCredentials" .= reqReceivedCredentials
+      , "issuedProjects" .= reqIssuedProjects
+      , "issuedCredentials" .= reqIssuedCredentials
+      ]
+
 -- | A received ProofSpace credential.
 data ReceivedCredential = ReceivedCredential
   { schemaId :: String
@@ -119,6 +138,16 @@ instance FromJSON ReceivedCredential where
           fields <- o .: "fields"
           utcIssuedAt <- o .: "utcIssuedAt"
           pure ReceivedCredential{..}
+
+instance ToJSON ReceivedCredential where
+  toJSON ReceivedCredential{..} =
+    object
+      [ "schemaId" .= schemaId
+      , "credentialId" .= credentialId
+      , "credWalletId" .= credWalletId
+      , "fields" .= fields
+      , "utcIssuedAt" .= utcIssuedAt
+      ]
 
 -- | The response for a ProofSpace webhook.
 data ProofResponse = ProofResponse
@@ -259,7 +288,7 @@ application
   -> Application
 application context = serveWithContext proofApi context . proofServer
 
--- | Handle a request with a verification of credentials.
+-- | Handle a request with a verification of credentials, always succeeding.
 echoProofHandler
   :: ProofHandler
 echoProofHandler ProofRequest{..} =
@@ -270,3 +299,23 @@ echoProofHandler ProofRequest{..} =
       resRevokedCredentials = mempty
       resOk = True
    in pure ProofResponse{..}
+
+-- | Handle a request with a verification of credentials passed to a subprocess.
+processProofHandler
+  :: FilePath
+  -> ProofHandler
+processProofHandler processPath req@ProofRequest{..} =
+  do
+    let resServiceDid = reqPublicServiceDid
+        resSubscriberConnectDid = reqSubscriberConnectDid
+        resActionEventId = reqActionEventId
+        resIssuedCredentials = mempty
+        resRevokedCredentials = mempty
+    resOk <-
+      liftIO $
+        ( do
+            _ <- readProcess processPath [] . LBS8.unpack $ encode req
+            pure True
+        )
+          `catch` (\e -> hPrint stderr (e :: IOException) >> pure False)
+    pure ProofResponse{..}

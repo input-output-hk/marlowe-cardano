@@ -232,9 +232,25 @@ library marlowe-proofspace
     , bytestring
     , HsOpenSSL
     , http-types
+    , process
     , servant
     , servant-server
     , wai
+
+  ghc-options:
+    -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
+    -Wincomplete-record-updates -Wredundant-constraints -Widentities
+    -Wunused-packages
+
+  default-language: Haskell2010
+
+executable marlowe-proofspace-process
+  main-is:          proofspace.hs
+  hs-source-dirs:   .
+  build-depends:
+    , base >=4.9 && <5
+    , marlowe-proofspace
+    , warp
 
   ghc-options:
     -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
