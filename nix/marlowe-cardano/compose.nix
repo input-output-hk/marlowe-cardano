@@ -2,7 +2,7 @@
 
 let
   inherit (pkgs) z3 sqitchPg postgresql runCommand writeShellScriptBin writeText lib glibcLocales;
-  network = inputs.self.networks.preview;
+  network = inputs.self.networks.preprod;
 
   mkSqitchRunner = name: path: writeShellScriptBin name ''
     export PATH="$PATH:${lib.makeBinPath [ sqitchPg postgresql ]}"

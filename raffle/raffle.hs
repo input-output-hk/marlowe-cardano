@@ -34,7 +34,7 @@ data Deadlines = Deadlines {deposit :: String, selectWinner :: String, payout ::
 type PolicyId = String
 type TokenName = String
 type ContractId = String
-
+type RandomNumber = String
 
 
 main :: IO ()
@@ -73,6 +73,8 @@ main = do
         , "addr_test1qpx28jszrx6n90shly5qvdqzaxmrhrkr7nleq3u6ayfz375tgcwrpyv2qstmfxty443vdld98ram4j2gjhqsdsq5w42q4ckex2"
         ]
 
+  a <- getState runtimeURI "8b51ad1f2252688b9e1aff4d8e00e52464de17abcb4f2e3d4f36584b81888055#1"
+  echo $ show a
   prizes <- mintPrizeTokens runtimeURI raffleConfiguration sponsor nodeSocketPath ["1stPrize"]
 
   contractId <- genAndInitializeRaffle
@@ -212,23 +214,20 @@ runRaffleStateMachine' False runtime raffleConfiguration sponsor oracle deadline
       echo "#########################"
       echo "WaitingForOracle"
       echo "#########################" 
-      simulateOracle
-      echo ">>>> Oracle has answered"
+      choiceMade <- provideRandomChoiceNumber
+      echo $ ">>>> Oracle has answered with " ++ choiceMade
       echo "#########################" 
       runRaffleStateMachine' False runtime raffleConfiguration sponsor oracle deadlines parties prizes contractId 
        where 
-        waitOracle :: IO ()
-        waitOracle = do 
-          state <- getState runtime contractId
-          if (state /= WaitingForOracle) 
-            then return ()
-          else do 
-            threadDelay 5_000_000
-            echo ">>>> Oracle has not answered yet... retrying (every 5s)"
-            waitOracle
-        simulateOracle :: IO()
-        simulateOracle = do
-          echo $ " >> Simlulating Oracle " 
+        provideRandomChoiceNumber :: IO RandomNumber
+        provideRandomChoiceNumber = do
+          choiceMade <- C.unpack <$>
+            ( curl 
+                "-X" 
+                "GET"
+                [fmt|"https://www.random.org/integers?format=plain&col=1&rnd=new&base=10&num=1&min={0}&max={show $ (length parties)-1}"|]
+              |> captureTrim)
+            
           marlowe_runtime_cli
             "--marlowe-runtime-host" (host runtime)
             "--marlowe-runtime-port" (proxy_port runtime)
@@ -253,7 +252,7 @@ runRaffleStateMachine' False runtime raffleConfiguration sponsor oracle deadline
             "--marlowe-runtime-port" (proxy_port runtime)
             "submit" 
             (tmpTxToSubmit raffleConfiguration)
-          echo $ " >> Random Number Given" 
+          return choiceMade
     WaitingForNotify -> do
       echo "#########################"
       echo "WaitingForNotify"
