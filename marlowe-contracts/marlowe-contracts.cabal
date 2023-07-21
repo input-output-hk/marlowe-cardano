@@ -75,8 +75,10 @@ library
   build-depends:
     , aeson
     , base >=4.9 && <5
+    , containers
     , ilist
     , marlowe-cardano
+    , mtl
     , split
     , time
 

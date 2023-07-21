@@ -3,9 +3,10 @@
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Marlowe.Contracts.Raffle (raffle, Sponsor (..), Oracle (..), ChunkSize (..)) where
+module Marlowe.Contracts.Raffle (raffle, Sponsor (..), Oracle (..), ChunkSize (..), main) where
 
-import Data.Aeson (ToJSON)
+import Control.Monad.Writer (Writer, runWriter)
+import Data.Aeson (ToJSON, encodeFile)
 import Data.Aeson.Types (FromJSON)
 import Data.Bifunctor (Bifunctor (..))
 import Data.List.Index (indexed)
@@ -14,7 +15,10 @@ import Data.List.NonEmpty qualified as NEL
 import Data.List.Split (chunksOf)
 import GHC.Generics (Generic)
 import Language.Marlowe (POSIXTime)
+import Language.Marlowe.Core.V1.Merkle (Continuations, deepMerkleize, shallowMerkleize)
 import Language.Marlowe.Core.V1.Semantics.Types
+
+import Data.Map qualified as M (mapKeys)
 
 newtype Sponsor = Sponsor Party
   deriving stock (Eq, Generic, Show)
@@ -34,6 +38,22 @@ newtype ChunkSize = ChunkSize Int
 --
 -- newtype PayoutDeadline = PayoutDeadline Timeout
 
+main :: IO ()
+main =
+  do
+    let (contract, continuations) =
+          raffle
+            (Sponsor $ Role "Sponsor")
+            (Oracle $ Role "Oracle")
+            (ChunkSize 2)
+            (NEL.fromList $ Role <$> ["Alice", "Bob", "Charlie", "David", "Eve"])
+            (NEL.fromList $ Token "8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d" <$> ["First", "Second"])
+            1000
+            2000
+            3000
+    encodeFile "contract.json" contract
+    encodeFile "continuations.json" . M.mapKeys show $ continuations
+
 raffle
   :: Sponsor
   -> Oracle
@@ -43,10 +63,11 @@ raffle
   -> Timeout
   -> Timeout
   -> Timeout
-  -> Contract
+  -> (Contract, Continuations)
 raffle sponsor oracle chunkSize parties prizeNFTPerRound deposit select payout =
-  makeDeposit sponsor prizeNFTPerRound deposit $
-    mkRaffleRounds sponsor oracle prizeNFTPerRound chunkSize parties select payout
+  runWriter $
+    makeDeposit sponsor prizeNFTPerRound deposit
+      =<< mkRaffleRounds sponsor oracle prizeNFTPerRound chunkSize parties select payout
 
 mkRaffleRounds
   :: Sponsor
@@ -56,10 +77,11 @@ mkRaffleRounds
   -> NonEmpty Party
   -> Timeout
   -> Timeout
-  -> Contract
+  -> Writer Continuations Contract
 mkRaffleRounds sponsor oracle prizeNFTPerRound chunkSize parties select payout =
-  selectWinner oracle (toInteger . length $ parties) select $
-    payWinner
+  selectWinner oracle (toInteger . length $ parties) select
+    =<< deepMerkleize
+    =<< payWinner
       sponsor
       oracle
       prizeNFTPerRound
@@ -76,9 +98,11 @@ makeDeposit
   -> NonEmpty Token
   -> POSIXTime
   -> Contract
-  -> Contract
+  -> Writer Continuations Contract
 makeDeposit (Sponsor sponsor) prizeNFTPerRound deadline contract =
-  makeDeposit' (NEL.toList prizeNFTPerRound)
+  -- Only merkleize the deposit itself, preventing deeper merkleization.
+  shallowMerkleize $
+    makeDeposit' (NEL.toList prizeNFTPerRound)
   where
     makeDeposit' [] = contract
     makeDeposit' (x : xs) =
@@ -92,12 +116,14 @@ selectWinner
   -> Integer
   -> POSIXTime
   -> Contract
-  -> Contract
+  -> Writer Continuations Contract
 selectWinner (Oracle oracle) nbParties deadline contract =
-  When
-    [Case (Choice (ChoiceId "RANDOM" oracle) [Bound 0 (nbParties - 1)]) contract]
-    deadline
-    Close
+  -- Don't merkleize the oracle choice because merkleization prevents the general-purpose oracle from operating.
+  pure $
+    When
+      [Case (Choice (ChoiceId "RANDOM" oracle) [Bound 0 (nbParties - 1)]) contract]
+      deadline
+      Close
 
 payWinner
   :: Sponsor
@@ -108,18 +134,20 @@ payWinner
   -> NonEmpty (Integer, Party)
   -> Timeout
   -> Timeout
-  -> Contract
+  -> Writer Continuations Contract
 payWinner sponsor@(Sponsor sponsorParty) oracle@(Oracle oracleParty) (prizeNFTPerRound :| remainingPrizeNFTPerRound) chunkSize@(ChunkSize chunkLength) allPartiesMinusWinners partiesChunk select payoutDeadline
   | length partiesChunk <= chunkLength =
-      When
-        [ Case (Notify (ValueEQ (ChoiceValue (ChoiceId "RANDOM" oracleParty)) (Constant i))) $
-          Pay
-            sponsorParty
-            (Party party)
-            prizeNFTPerRound
-            (Constant 1)
-            ( case remainingPrizeNFTPerRound of
-                [] -> Close
+      do
+        cases <-
+          sequence
+            [ Case (Notify (ValueEQ (ChoiceValue (ChoiceId "RANDOM" oracleParty)) (Constant i)))
+              . Pay
+                sponsorParty
+                (Party party)
+                prizeNFTPerRound
+                (Constant 1)
+              <$> case remainingPrizeNFTPerRound of
+                [] -> pure Close
                 remainingPricesPerRound' ->
                   mkRaffleRounds -- start a new raffle without the winner
                     sponsor
@@ -129,25 +157,30 @@ payWinner sponsor@(Sponsor sponsorParty) oracle@(Oracle oracleParty) (prizeNFTPe
                     (NEL.fromList . (snd <$>) . NEL.filter (\(i', _) -> i' /= i) $ allPartiesMinusWinners) -- removing the winner
                     select
                     payoutDeadline
-            )
-        | (i, party) <- NEL.toList partiesChunk
-        ]
-        payoutDeadline
-        Close
+            | (i, party) <- NEL.toList partiesChunk
+            ]
+        -- Only merkleize this notify, preventing deeper merkleization.
+        shallowMerkleize $ When cases payoutDeadline Close
   | otherwise =
-      When
-        [ Case (Notify (ValueLE (ChoiceValue (ChoiceId "RANDOM" oracleParty)) (Constant . fst $ last chunkedParties'))) $
-          payWinner
-            sponsor
-            oracle
-            (prizeNFTPerRound :| remainingPrizeNFTPerRound)
-            chunkSize
-            allPartiesMinusWinners
-            (NEL.fromList chunkedParties')
-            select
+      do
+        cases <-
+          sequence
+            [ Case (Notify (ValueLE (ChoiceValue (ChoiceId "RANDOM" oracleParty)) (Constant . fst $ last chunkedParties')))
+              <$> payWinner
+                sponsor
+                oracle
+                (prizeNFTPerRound :| remainingPrizeNFTPerRound)
+                chunkSize
+                allPartiesMinusWinners
+                (NEL.fromList chunkedParties')
+                select
+                payoutDeadline
+            | let chunks k xs = chunksOf (div (length xs + k - 1) k) xs
+            , chunkedParties' <- chunks chunkLength (NEL.toList partiesChunk)
+            ]
+        -- Deeply merkleize the search for the winner.
+        deepMerkleize $
+          When
+            cases
             payoutDeadline
-        | let chunks k xs = chunksOf (div (length xs + k - 1) k) xs
-        , chunkedParties' <- chunks chunkLength (NEL.toList partiesChunk)
-        ]
-        payoutDeadline
-        Close
+            Close
