@@ -19,6 +19,8 @@ spec:
           value: "3727"
         - name: QUERY_PORT
           value: "3728"
+        - name: TRANSFER_PORT
+          value: "3729"
         - name: STORE_DIR
           value: /store
         - name: HTTP_PORT
