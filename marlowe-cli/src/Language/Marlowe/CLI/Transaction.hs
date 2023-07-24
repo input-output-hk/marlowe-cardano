@@ -188,7 +188,6 @@ import Cardano.Api.Shelley qualified as C
 import Cardano.Ledger.Alonzo.Scripts (ExUnits (..))
 import Cardano.Ledger.Alonzo.TxWitness (Redeemers (..))
 import Cardano.Slotting.EpochInfo.API (epochInfoRange, epochInfoSlotToUTCTime, hoistEpochInfo)
-import Contrib.Cardano.Formatting (friendlyTxBS, friendlyTxBody, friendlyTxOut)
 import Contrib.Control.Concurrent (threadDelay)
 import Control.Arrow ((***))
 import Control.Error (MaybeT (MaybeT, runMaybeT), hoistMaybe, note)
@@ -201,7 +200,6 @@ import Data.Aeson qualified as A (Value (Null, Object), object)
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Aeson.Key
 import Data.Aeson.KeyMap qualified as KeyMap
-import Data.Aeson.OneLine qualified as A
 import Data.ByteString qualified as BS (length)
 import Data.ByteString.Char8 qualified as BS8 (unpack)
 import Data.Fixed (div')
@@ -224,7 +222,6 @@ import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Data.Time.Units (Second, TimeUnit (toMicroseconds))
 import Data.Traversable (for)
 import Data.Tuple.Extra (uncurry3)
-import Debug.Trace (traceM)
 import GHC.Natural (Natural)
 import Language.Marlowe.CLI.Cardano.Api (
   adjustMinimumUTxO,
@@ -279,7 +276,6 @@ import Language.Marlowe.CLI.Types (
   submitModeFromTimeout,
   toAddressAny',
   toAsType,
-  toCardanoEra,
   toCollateralSupportedInEra,
   toEraInMode,
   toExtraKeyWitnessesSupportedInEra,
@@ -672,7 +668,6 @@ buildMintingImpl
   :: (MonadError CliError m)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
-  => (C.IsCardanoEra era)
   => LocalNodeConnectInfo CardanoMode
   -- ^ The connection info for the local node.
   -> MintingAction era
@@ -700,7 +695,7 @@ buildMintingImpl connection mintingAction metadataProps expires submitMode (Prin
 
         policy = PolicyId scriptHash
 
-    res@(inputs, outputs, signingKeys, mint) <- case mintingAction of
+    (inputs, outputs, signingKeys, mint) <- case mintingAction of
       Mint _ tokenDistribution -> do
         let tokenDistribution' = do
               tokenDistribution <&> \(recipient, minAda, tokens) -> do
@@ -801,11 +796,6 @@ buildMintingImpl connection mintingAction metadataProps expires submitMode (Prin
             $ A.Object metadataProps'
         _ -> pure TxMetadataNone
 
-    liftIO $ hPrint stderr outputs
-    liftIO $ hPutStrLn stderr $ T.unpack $ A.renderValue $ toJSON $ map friendlyTxOut outputs
-
-    liftIO $ hPutStrLn stderr "building transaction body..."
-
     (bodyContent, body) <-
       buildBodyWithContent
         connection
@@ -822,7 +812,6 @@ buildMintingImpl connection mintingAction metadataProps expires submitMode (Prin
         metadata'
         printStats
         False
-    liftIO $ hPutStrLn stderr $ T.unpack $ A.renderValue $ A.object $ friendlyTxBody (toCardanoEra era) body
 
     body' <- case submitMode of
       DontSubmit -> pure body

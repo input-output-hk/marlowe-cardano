@@ -141,10 +141,6 @@ data FailureReport lang era = FailureReport
   , _frInterpretState :: InterpretState lang era
   }
 
--- newtype TestedContracts = TestedContracts
---  { contracts :: [Map ContractNickname (V1.Contract, Maybe Continuations)]
---  }
-
 data TestResult lang era
   = TestSucceeded (InterpretState lang era)
   | TestFailed
