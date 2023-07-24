@@ -45,7 +45,6 @@ import Data.Aeson.Key qualified as A.Key
 import Data.Bifunctor (Bifunctor (bimap))
 import Data.Functor ((<&>))
 import Data.Map.Strict qualified as Map
-import Language.Marlowe qualified as V1
 import Language.Marlowe.CLI.Test.CLI.Types (CLIContracts (CLIContracts), CLIOperation)
 import Language.Marlowe.CLI.Test.CLI.Types qualified as CLI
 import Language.Marlowe.CLI.Test.Contract.ContractNickname (ContractNickname)
@@ -62,7 +61,6 @@ import Language.Marlowe.CLI.Test.Operation.Aeson qualified as Operation
 import Language.Marlowe.CLI.Test.Runtime.Types (RuntimeMonitorInput, RuntimeMonitorState, RuntimeOperation)
 import Language.Marlowe.CLI.Test.Runtime.Types qualified as Runtime
 import Language.Marlowe.CLI.Test.Wallet.Types as Wallet
-import Language.Marlowe.Core.V1.Merkle (Continuations)
 import Language.Marlowe.Protocol.Client qualified as Marlowe.Protocol
 import Network.Protocol.Connection qualified as Network.Protocol
 import Network.Socket (PortNumber)

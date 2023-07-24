@@ -45,8 +45,6 @@ import Language.Marlowe.CLI.Test.Operation.Aeson (
   ConstructorName (ConstructorName),
   NewPropName (NewPropName),
   OldPropName (OldPropName),
-  parseConstructorBasedJSON,
-  parseConstructorBasedJSON',
   rewriteProp,
   rewritePropWith,
   toConstructorBasedJSON,

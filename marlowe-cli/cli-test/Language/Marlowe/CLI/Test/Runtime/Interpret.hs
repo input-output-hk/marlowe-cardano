@@ -20,7 +20,7 @@ import Contrib.Data.Time.Units.Aeson qualified as A
 import Control.Concurrent.STM (atomically, readTVar, retry, writeTChan)
 import Control.Lens (modifying, preview, use, view)
 import Control.Monad (when)
-import Control.Monad.Except (MonadError (catchError), throwError)
+import Control.Monad.Except (MonadError (catchError))
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Loops (untilJust)
 import Control.Monad.STM (STM)
@@ -38,7 +38,6 @@ import Data.Maybe (fromMaybe, isJust, isNothing)
 import Data.Text qualified as Text
 import Data.Time.Units (Microsecond, Second, TimeUnit (fromMicroseconds, toMicroseconds))
 import Data.Traversable (for)
-import Debug.Trace (traceM)
 import Language.Marlowe.CLI.Cardano.Api (withShelleyBasedEra)
 import Language.Marlowe.CLI.Test.Contract (ContractNickname (ContractNickname), Source (InlineContract, UseTemplate))
 import Language.Marlowe.CLI.Test.Contract.Source (useTemplate)
@@ -451,8 +450,8 @@ interpret ro@RuntimeCreateContract{..} = do
         if roMerkleize == Just RuntimeSide
           then do
             possibleDatumHash <-
-              Marlowe.Class.loadContract contract `catchError` \error -> do
-                liftIO $ hPutStrLn stderr $ "Failed to load contract: " <> show error
+              Marlowe.Class.loadContract contract `catchError` \err -> do
+                liftIO $ hPutStrLn stderr $ "Failed to load contract: " <> show err
                 pure Nothing
 
             for possibleDatumHash \datumHash -> do
