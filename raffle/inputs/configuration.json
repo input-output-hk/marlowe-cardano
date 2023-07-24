@@ -1,0 +1,21 @@
+{
+    "chunkSize": 2,
+    "deadlines": {
+        "deposit": "10d",
+        "payout": "10d",
+        "selectWinner": "10d"
+    },
+    "runtimeURI": {
+        "host": "0.0.0.0",
+        "proxy_port": 33295,
+        "web_port": 33296
+    },
+    "sponsorAddressFilePath": "/home/nhenin/dev/marlowe/marlowe-cardano/raffle/addresses/sponsor/address.txt",
+    "sponsorCollateralFilePath": "/home/nhenin/dev/marlowe/marlowe-cardano/raffle/addresses/sponsor/collateral.txt",
+    "sponsorPrivateKeyFilePath": "/home/nhenin/dev/marlowe/marlowe-cardano/raffle/addresses/sponsor/extended-private-key.json",
+    
+    "contract": "/home/nhenin/dev/marlowe/marlowe-cardano/raffle/outputs/raffle.json",
+    "state": "/home/nhenin/dev/marlowe/marlowe-cardano/raffle/outputs/raffle-state.json",
+    "tmpTxToSign": "/home/nhenin/dev/marlowe/marlowe-cardano/raffle/outputs/unsigned-tx.txt",
+    "tmpTxToSubmit": "/home/nhenin/dev/marlowe/marlowe-cardano/raffle/outputs/signed-tx.txt"
+}
