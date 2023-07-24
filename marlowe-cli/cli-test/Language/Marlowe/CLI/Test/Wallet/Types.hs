@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
@@ -38,13 +39,15 @@ import Control.Monad.State.Class (MonadState)
 import Data.Aeson (FromJSON (..), ToJSON (..), ToJSONKey)
 import Data.Aeson qualified as A
 import Data.Aeson qualified as Aeson
+import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Aeson.OneLine qualified as A
 import Data.Aeson.Types (toJSONKeyText)
 import Data.Aeson.Types qualified as A
 import Data.Fixed qualified as F
 import Data.Fixed qualified as Fixed
 import Data.Foldable (fold)
-import Data.List.NonEmpty qualified as List
+import Data.List (sort)
+import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
 import Data.Map.Strict qualified as Map
 import Data.String (IsString (fromString))
@@ -156,12 +159,15 @@ instance ToJSONKey CurrencyNickname where
 data Currency = Currency
   { ccCurrencySymbol :: CurrencySymbol
   , ccIssuer :: WalletNickname
-  , ccPolicyId :: PolicyId
+  , -- , ccExpirationSlot :: C.SlotNo
+    ccPolicyId :: PolicyId
   }
   deriving stock (Eq, Ord, Generic, Show)
   deriving anyclass (FromJSON, ToJSON)
 
-newtype Currencies = Currencies {unCurrencies :: Map CurrencyNickname Currency}
+newtype Currencies = Currencies
+  { unCurrencies :: Map CurrencyNickname Currency
+  }
 
 data AssetId = AdaAssetId | AssetId CurrencyNickname TokenName
   deriving (Eq, Ord, Show)
@@ -327,8 +333,7 @@ instance ToJSON AssetsBalance where
 data TokenAssignment = TokenAssignment
   { taWalletNickname :: WalletNickname
   -- ^ Default to the same wallet nickname as a token name.
-  , taTokenName :: TokenName
-  , taAmount :: Natural
+  , tokens :: [(TokenName, Natural)]
   }
   deriving stock (Eq, Generic, Show)
 
@@ -338,12 +343,27 @@ instance FromJSON TokenAssignment where
       walletNickname <- parseJSON walletNicknameJSON
       tokenName <- parseTokenNameJSON tokenNameJSON
       amount <- parseJSON amountJSON
-      pure $ TokenAssignment walletNickname tokenName amount
+      pure $ TokenAssignment walletNickname [(tokenName, amount)]
+    A.Object (sort . KeyMap.toList -> [("recipient", walletNicknameJSON), ("tokens", A.Array tokensJSONs)]) -> do
+      walletNickname <- parseJSON walletNicknameJSON
+      tokensVector <- for tokensJSONs \case
+        A.Array (V.toList -> [tokenNameJSON, amountJSON]) -> do
+          tokenName <- parseTokenNameJSON tokenNameJSON
+          amount <- parseJSON amountJSON
+          pure (tokenName, amount)
+        _ -> fail "Expecting a `TokenAssignment` tuple: `[TokenName, Integer]`."
+      pure $ TokenAssignment walletNickname $ V.toList tokensVector
     _ -> fail "Expecting a `TokenAssignment` tuple: `[WalletNickname, TokenName, Integer]`."
 
 instance ToJSON TokenAssignment where
-  toJSON (TokenAssignment (WalletNickname walletNickname) tokenName amount) =
-    toJSON [toJSON walletNickname, tokenNameToJSON tokenName, toJSON amount]
+  toJSON (TokenAssignment (WalletNickname walletNickname) tokens) =
+    A.object
+      [ ("recipient", toJSON walletNickname)
+      , ("tokens", A.Array $ V.fromList $ map tokenToJSON tokens)
+      ]
+    where
+      tokenToJSON (tokenName, amount) =
+        A.Array $ V.fromList [toJSON tokenName, toJSON amount]
 
 -- Parts of this operation set is implemented in `marlowe-cli`. Should we extract
 -- this to a separate package/tool like `cardano-testing-wallet`?
@@ -374,7 +394,7 @@ data WalletOperation
       , woIssuer :: Maybe WalletNickname
       -- ^ Fallbacks to faucet
       , woMetadata :: Maybe Aeson.Object
-      , woTokenDistribution :: List.NonEmpty TokenAssignment
+      , woTokenDistribution :: NonEmpty TokenAssignment
       , woMinLovelace :: Lovelace
       }
   | SplitWallet

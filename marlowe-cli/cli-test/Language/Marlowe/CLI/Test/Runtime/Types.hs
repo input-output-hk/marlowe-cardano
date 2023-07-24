@@ -45,13 +45,17 @@ import Language.Marlowe.CLI.Test.Operation.Aeson (
   ConstructorName (ConstructorName),
   NewPropName (NewPropName),
   OldPropName (OldPropName),
+  parseConstructorBasedJSON,
+  parseConstructorBasedJSON',
   rewriteProp,
   rewritePropWith,
+  toConstructorBasedJSON,
  )
 import Language.Marlowe.CLI.Test.Operation.Aeson qualified as Operation
 import Language.Marlowe.CLI.Test.Wallet.Types (Currencies, CurrencyNickname, WalletNickname, Wallets)
 import Language.Marlowe.CLI.Test.Wallet.Types qualified as Wallet
 import Language.Marlowe.Cardano.Thread (AnyMarloweThread, MarloweThread, anyMarloweThreadInputsApplied)
+import Language.Marlowe.Core.V1.Merkle (Continuations)
 import Language.Marlowe.Core.V1.Semantics.Types qualified as M
 import Language.Marlowe.Protocol.Client qualified as Marlowe.Protocol
 import Language.Marlowe.Runtime.Core.Api (ContractId)
@@ -117,6 +121,17 @@ newtype RuntimeMonitor = RuntimeMonitor {runMonitor :: IO RuntimeError}
 defaultOperationTimeout :: Second
 defaultOperationTimeout = 30
 
+data DoMerkleize = ClientSide | RuntimeSide
+  deriving stock (Eq, Generic, Show)
+
+instance A.FromJSON DoMerkleize where
+  parseJSON = A.genericParseJSON A.defaultOptions
+
+-- parseConstructorBasedJSON' ""
+
+instance A.ToJSON DoMerkleize where
+  toJSON = toConstructorBasedJSON ""
+
 data RuntimeOperation
   = RuntimeAwaitTxsConfirmed
       { roContractNickname :: Maybe ContractNickname
@@ -137,6 +152,9 @@ data RuntimeOperation
       -- ^ The Marlowe contract to be created.
       , roAwaitConfirmed :: Maybe A.Second
       -- ^ How long to wait for the transaction to be confirmed in the Runtime. By default we don't wait.
+      , roMerkleize :: Maybe DoMerkleize
+      -- ^ Whether to merkleize the contract by using Marlowe Runtime store.
+      -- By default we don't merkleize.
       }
   | RuntimeApplyInputs
       { roContractNickname :: Maybe ContractNickname
@@ -195,10 +213,12 @@ instance ToJSON RuntimeOperation where
   toJSON = Operation.toConstructorBasedJSON "ro"
 
 data ContractInfo = ContractInfo
-  { _ciContractId :: ContractId
-  , _ciRoleCurrency :: Maybe CurrencyNickname
+  { _ciContractId :: !ContractId
+  , _ciRoleCurrency :: !(Maybe CurrencyNickname)
+  , _ciContract :: !M.Contract
+  , _ciContinuations :: !(Maybe Continuations)
   -- ^ If the contract uses roles then currency is required.
-  , _ciMarloweThread :: AnyRuntimeInterpreterMarloweThread
+  , _ciMarloweThread :: !AnyRuntimeInterpreterMarloweThread
   }
 
 makeLenses 'ContractInfo

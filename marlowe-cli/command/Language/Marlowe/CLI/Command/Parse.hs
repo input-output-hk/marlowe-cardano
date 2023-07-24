@@ -24,6 +24,7 @@ module Language.Marlowe.CLI.Command.Parse (
   parseInput,
   parseInputContent,
   parseLovelaceValue,
+  parseMarloweValuePair,
   parseNetworkId,
   parseOutputQuery,
   parsePOSIXTime,
@@ -47,6 +48,8 @@ module Language.Marlowe.CLI.Command.Parse (
   protocolVersionOpt,
   publishingStrategyOpt,
   readAddressEither,
+  readByteStringEither,
+  readPartyEither,
   readTokenName,
   requiredSignerOpt,
   requiredSignersOpt,
@@ -107,6 +110,7 @@ import Data.ByteString.Char8 qualified as BS8 (pack)
 import Data.Maybe (fromMaybe)
 import Data.Text qualified as T (pack)
 import Data.Time.Units (Second)
+import Language.Marlowe qualified as M
 import Options.Applicative qualified as O
 import Plutus.ApiCommon (ProtocolVersion)
 import Plutus.V1.Ledger.ProtocolVersions (alonzoPV, vasilPV)
@@ -300,12 +304,12 @@ readAddressEither s = do
       ShelleyBasedEraBabbage -> Right AsBabbage
       era -> Left $ "unsupported era: " <> show era
 
+readPartyEither :: String -> Either String Party
+readPartyEither str = readPartyAddressEither str <|> readPartyRoleEither str
+
 -- | Parser for `Party`.
 parseParty :: O.ReadM Party
-parseParty =
-  O.eitherReader readPartyAddressEither
-    <|> O.eitherReader readPartyRoleEither
-    <|> O.readerError "Invalid party."
+parseParty = O.eitherReader readPartyEither <|> O.readerError "Invalid party."
 
 -- | Reader for `Party` `Address`.
 readPartyAddressEither
@@ -360,14 +364,16 @@ readTokenName
   -> TokenName
 readTokenName = TokenName . toBuiltin . BS8.pack
 
+readByteStringEither :: String -> Either String BuiltinByteString
+readByteStringEither s =
+  case Base16.decode $ BS8.pack s of
+    Left message -> Left message
+    Right currency -> Right . toBuiltin $ currency
+
 -- | Parser for `BuiltinByteString`.
 parseByteString :: O.ReadM BuiltinByteString
 parseByteString =
-  O.eitherReader $
-    \s ->
-      case Base16.decode $ BS8.pack s of
-        Left message -> Left message
-        Right currency -> Right . toBuiltin $ currency
+  O.eitherReader readByteStringEither
 
 -- | Parse input to a contract.
 parseInput :: O.Parser Input
@@ -528,3 +534,12 @@ publishingStrategyOpt =
 
 parseSecond :: O.ReadM Second
 parseSecond = fromInteger <$> O.auto
+
+parseMarloweValuePair :: O.ReadM (Token, Integer)
+parseMarloweValuePair = O.eitherReader $ \s ->
+  case splitOn "," s of
+    [currencySymbol, token, amount] -> do
+      (amount' :: Integer) <- readEither amount
+      currencySymbol' <- readByteStringEither currencySymbol
+      pure (M.Token (CurrencySymbol currencySymbol') (readTokenName token), amount')
+    _ -> Left "Invalid deposit format. Expecting: CURRENCY_SYMBOL,TOKEN,AMOUNT"

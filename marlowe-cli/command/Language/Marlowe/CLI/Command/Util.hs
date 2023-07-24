@@ -25,6 +25,7 @@ import Cardano.Api (
   AddressInEra,
   ConsensusModeParams (CardanoModeParams),
   EpochSlots (..),
+  IsCardanoEra,
   IsShelleyBasedEra,
   LocalNodeConnectInfo (..),
   Lovelace (..),
@@ -210,6 +211,7 @@ data UtilCommand era
 runUtilCommand
   :: (MonadError CliError m)
   => (MonadReader (CliEnv era) m)
+  => (IsCardanoEra era)
   => (MonadIO m)
   => UtilCommand era
   -- ^ The command.

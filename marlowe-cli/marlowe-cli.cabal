@@ -60,6 +60,7 @@ library
   import:          lang
   hs-source-dirs:  src
   exposed-modules:
+    Contrib.Cardano.Formatting
     Contrib.Control.Concurrent
     Language.Marlowe.Cardano
     Language.Marlowe.Cardano.Thread
@@ -108,6 +109,7 @@ library
     , marlowe-cardano
     , memory
     , mtl
+    , one-line-aeson-text
     , ouroboros-consensus
     , ouroboros-network
     , plutus-core
@@ -229,12 +231,13 @@ library command
     Language.Marlowe.CLI.Command.Util
 
   build-depends:
-    , aeson
+    , appendmap
     , base >=4.9 && <5
     , base16-bytestring
     , bytestring
     , cardano-api
     , cardano-slotting
+    , containers
     , marlowe-actus
     , marlowe-cardano
     , marlowe-cli:{marlowe-cli, cli-test}

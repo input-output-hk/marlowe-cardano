@@ -16,7 +16,10 @@ import Control.Lens (Lens', (%=), (^.))
 import Control.Monad.Error.Class (MonadError (throwError))
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.State.Class (MonadState)
+import Data.Aeson qualified as Aeson
+import Data.Aeson.OneLine qualified as A
 import Data.Aeson.Types qualified as A
+import Data.Text qualified as T
 import GHC.Generics (Generic (Rep))
 import GHC.IO.Handle.FD (stderr)
 import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError (_ieInfo, _ieMessage), ieInfo, ieMessage)
@@ -68,7 +71,15 @@ logStoreMsgWith
 logStoreMsgWith l msg pairs = do
   let l' = label l
   logStoreL %= ((l', msg, pairs) :)
-  liftIO . hPutStrLn stderr $ printLabeledMsg l msg
+  case pairs of
+    [] -> liftIO . hPutStrLn stderr $ printLabeledMsg l msg
+    _ -> do
+      let payloadStr = do
+            let jsonStr = T.unpack $ A.renderValue $ A.object pairs
+            if length jsonStr > 80
+              then take 80 jsonStr <> "..."
+              else jsonStr
+      liftIO . hPutStrLn stderr $ printLabeledMsg l $ msg <> " " <> payloadStr
 
 logStoreLabeledMsg
   :: (MonadIO m)

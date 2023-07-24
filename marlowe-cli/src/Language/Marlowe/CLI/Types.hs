@@ -772,7 +772,8 @@ data MintingAction era
   = -- | The token names, amount and a possible receipient addresses.
     Mint
       { maIssuer :: CurrencyIssuer era
-      , maTokenDistribution :: L.NonEmpty (P.TokenName, Natural, AddressInEra era, Maybe Lovelace)
+      , maTokenDistribution
+          :: L.NonEmpty (AddressInEra era, Maybe Lovelace, [(P.TokenName, Natural)])
       }
   | -- | Burn all found tokens on the providers UTxOs of a given "private currency".
     BurnAll

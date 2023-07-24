@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DerivingStrategies #-}
 -----------------------------------------------------------------------------
 --
@@ -26,9 +26,17 @@ module Language.Marlowe.CLI.Command.Template (
 
 import Actus.Marlowe (defaultRiskFactors, genContract')
 import Control.Monad.Except (MonadError, MonadIO)
-import Data.Aeson (FromJSON (..), ToJSON (..))
+import Data.Map qualified as Map
 import GHC.Generics (Generic)
-import Language.Marlowe.CLI.Command.Parse (parseParty, parseTimeout, parseToken, timeoutHelpMsg)
+import Language.Marlowe.CLI.Command.Parse (
+  parseParty,
+  parseTimeout,
+  parseToken,
+  readByteStringEither,
+  readPartyEither,
+  readTokenName,
+  timeoutHelpMsg,
+ )
 import Language.Marlowe.CLI.Examples (makeExample)
 import Language.Marlowe.CLI.IO (decodeFileStrict)
 import Language.Marlowe.CLI.Types (CliError (..), SomeTimeout, toMarloweExtendedTimeout, toMarloweTimeout)
@@ -38,11 +46,18 @@ import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
 
 import Data.List.NonEmpty (NonEmpty)
 import Data.List.NonEmpty qualified as NEL
+import Data.List.Split qualified as List
+import Data.Map.Append.Strict (AppendMap (..))
+import Language.Marlowe qualified as M
 import Language.Marlowe.CLI.Test.CLI.Interpret (initialMarloweState)
 import Language.Marlowe.CLI.Test.Contract.Source (makeContract)
+import Marlowe.Contracts.ChunkedValueTransfer (chunkedValueTransfer, foldMapFlipped)
+import Marlowe.Contracts.ChunkedValueTransfer qualified as ChunkedValueTransfer
 import Marlowe.Contracts.Raffle (raffle)
 import Marlowe.Contracts.Raffle qualified as Raffle
 import Options.Applicative qualified as O
+import Plutus.V1.Ledger.Value qualified as P
+import Text.Read (readEither)
 
 -- | Marlowe CLI commands and options for contract templates.
 data TemplateCommand
@@ -165,8 +180,16 @@ data TemplateCommand
       , selectDeadline :: SomeTimeout
       , payoutDeadline :: SomeTimeout
       }
+  | TemplateChunkedValueTransfer
+      { minAda :: Integer
+      , sender :: ChunkedValueTransfer.Sender
+      , recipientsAmounts :: ChunkedValueTransfer.RecipientsAmounts
+      , payoutChunkSize :: ChunkedValueTransfer.PayoutChunkSize
+      , timeout :: SomeTimeout
+      }
   deriving stock (Eq, Generic, Show)
-  deriving anyclass (FromJSON, ToJSON)
+
+-- deriving anyclass (FromJSON, ToJSON)
 
 -- | Paths for Output Files for Template Contracts
 data OutputFiles = OutputFiles
@@ -289,6 +312,17 @@ runTemplateCommand TemplateRaffle{..} OutputFiles{..} = do
   let Raffle.Sponsor sponsorParty = sponsor
       marloweState = initialMarloweState sponsorParty minAda
   makeExample contractFile stateFile (marloweContract, marloweState)
+runTemplateCommand TemplateChunkedValueTransfer{..} OutputFiles{..} = do
+  timeout' <- toMarloweTimeout timeout
+  let ChunkedValueTransfer.Sender senderParty = sender
+      marloweState = initialMarloweState senderParty minAda
+      marloweContract =
+        chunkedValueTransfer
+          sender
+          recipientsAmounts
+          payoutChunkSize
+          timeout'
+  makeExample contractFile stateFile (marloweContract, marloweState)
 
 -- | Parser for template commands.
 parseTemplateCommand :: O.Parser TemplateCommand
@@ -302,6 +336,7 @@ parseTemplateCommand =
       <> templateCoveredCallCommand
       <> templateActusCommand
       <> templateRaffleCommand
+      <> templateChunkedValueTransferCommand
 
 parseTemplateCommandOutputFiles :: O.Parser OutputFiles
 parseTemplateCommandOutputFiles =
@@ -619,3 +654,58 @@ templateRaffleOptions =
       parseTimeout
       ( O.long "payout-deadline" <> O.metavar "TIMEOUT" <> O.help ("The payout deadline. " <> timeoutHelpMsg)
       )
+
+templateChunkedValueTransferCommand :: O.Mod O.CommandFields TemplateCommand
+templateChunkedValueTransferCommand =
+  O.command "chunked-value-transfer" $
+    O.info templateChunkedValueTransferOptions $
+      O.progDesc
+        "Create a contract \"trivial\" Marlowe contract which transfers set of tokens from the sender to the recipient in chunks."
+
+templateChunkedValueTransferOptions :: O.Parser TemplateCommand
+templateChunkedValueTransferOptions = do
+  let parsePartyAsset :: O.ReadM (Party, Token, Integer)
+      parsePartyAsset = O.eitherReader $ \s ->
+        case List.splitOn "," s of
+          [party, currencySymbol, token, amount] -> do
+            party' <- readPartyEither party
+            (amount' :: Integer) <- readEither amount
+            currencySymbol' <- readByteStringEither currencySymbol
+            pure (party', M.Token (M.CurrencySymbol currencySymbol') (readTokenName token), amount')
+          _ -> Left "Invalid deposit format. Expecting: CURRENCY_SYMBOL,TOKEN,AMOUNT"
+
+      foldRecipientsAmounts =
+        ChunkedValueTransfer.RecipientsAmounts . unAppendMap . foldMap \(party, M.Token currencySymbol tokenName, amount) -> do
+          let value = P.singleton currencySymbol tokenName amount
+          AppendMap $ Map.singleton (ChunkedValueTransfer.Recipient party) value
+
+      recipientsAmountsOption =
+        foldRecipientsAmounts
+          <$> O.some
+            ( O.option
+                parsePartyAsset
+                ( O.long "recipient-asset"
+                    <> O.metavar "RECIPIENT_ASSET"
+                    <> O.help "The recipient asset in a format \"party,currency symbol,token name, amount\"."
+                )
+            )
+
+  TemplateChunkedValueTransfer
+    <$> O.option
+      O.auto
+      ( O.long "minimum-ada"
+          <> O.metavar "INTEGER"
+          <> O.help "Lovelace that the party contributes to the initial state."
+      )
+    <*> O.option
+      (ChunkedValueTransfer.Sender <$> parseParty)
+      (O.long "sender" <> O.metavar "PARTY" <> O.help "The sender.")
+    <*> recipientsAmountsOption
+    <*> O.option
+      (ChunkedValueTransfer.PayoutChunkSize <$> O.auto)
+      (O.long "payout-chunk-size" <> O.metavar "PAYOUT-CHUNK-SIZE" <> O.help "The payout chunk size.")
+    <*> O.option
+      parseTimeout
+      (O.long "timeout" <> O.metavar "TIMEOUT" <> O.help ("The timeout. " <> timeoutHelpMsg))
+
+-- <*> depositsOption
