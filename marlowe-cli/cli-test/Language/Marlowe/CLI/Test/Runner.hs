@@ -46,7 +46,6 @@ import Data.Aeson qualified as A
 import Data.Aeson.OneLine qualified as A
 import Data.Bifunctor (first)
 import Data.Coerce (coerce)
-import Data.Default (Default (def))
 import Data.Foldable (for_)
 import Data.Foldable qualified as Foldable
 import Data.Functor ((<&>))
