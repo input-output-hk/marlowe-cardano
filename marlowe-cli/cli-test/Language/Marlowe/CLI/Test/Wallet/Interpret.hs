@@ -327,6 +327,12 @@ findWalletsByCurrencyTokens currencyNickname possibleTokenNames = do
     wallet <- findWallet n
     pure (n, wallet, tokenNames)
 
+assetToMarloweValuePair :: (InterpretMonad env st m era) => Asset -> m (M.Token, Integer)
+assetToMarloweValuePair (Asset AdaAssetId amount) = pure (M.Token "" "", amount)
+assetToMarloweValuePair (Asset (AssetId currencyNickname tokenName) amount) = do
+  Currency{ccCurrencySymbol} <- findCurrency currencyNickname
+  pure (M.Token ccCurrencySymbol tokenName, amount)
+
 assetToPlutusValue
   :: (InterpretMonad env st m era)
   => Asset
@@ -476,7 +482,8 @@ interpret so@BurnAll{..} = do
               connection
               mintingAction
               woMetadata
-              Nothing
+              -- Nothing
+              (Just 134070922)
               submitMode
               printStats
 
@@ -509,9 +516,9 @@ interpret so@Mint{..} = do
           "Current minting strategy mints unique currency per issuer. You can't mint multiple currencies with the same issuer."
 
   Wallet issuerAddress _ issuerSigningKey _ :: Wallet era <- findWallet issuerNickname
-  tokenDistribution <- forM woTokenDistribution \(TokenAssignment owner tokenName amount) -> do
-    Wallet destAddress _ _ _ <- findWallet owner
-    pure (tokenName, amount, destAddress, Just woMinLovelace)
+  tokenDistribution <- forM woTokenDistribution \(TokenAssignment recipient tokens) -> do
+    Wallet destAddress _ _ _ <- findWallet recipient
+    pure (destAddress, Just woMinLovelace, tokens)
 
   logStoreLabeledMsg so $
     "Minting currency " <> coerce woCurrencyNickname <> " with tokens distribution: " <> show woTokenDistribution
@@ -531,7 +538,8 @@ interpret so@Mint{..} = do
         connection
         mintingAction
         woMetadata
-        Nothing
+        (Just 134070922)
+        -- Nothing
         submitMode
         printStats
 

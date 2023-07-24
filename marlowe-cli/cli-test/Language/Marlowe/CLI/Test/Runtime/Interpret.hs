@@ -20,13 +20,17 @@ import Contrib.Data.Time.Units.Aeson qualified as A
 import Control.Concurrent.STM (atomically, readTVar, retry, writeTChan)
 import Control.Lens (modifying, preview, use, view)
 import Control.Monad (when)
+import Control.Monad.Except (MonadError (catchError), throwError)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Loops (untilJust)
 import Control.Monad.STM (STM)
 import Control.Monad.Trans.Marlowe (runMarloweT)
 import Control.Monad.Trans.Marlowe.Class qualified as Marlowe.Class
+import Control.Monad.Writer.Lazy (runWriter)
+import Data.Aeson (toJSON)
 import Data.Aeson qualified as A
 import Data.Aeson.OneLine qualified as A
+import Data.Bifunctor qualified as Bifunctor
 import Data.Coerce (coerce)
 import Data.Foldable (for_)
 import Data.Map.Strict qualified as Map
@@ -34,14 +38,16 @@ import Data.Maybe (fromMaybe, isJust, isNothing)
 import Data.Text qualified as Text
 import Data.Time.Units (Microsecond, Second, TimeUnit (fromMicroseconds, toMicroseconds))
 import Data.Traversable (for)
+import Debug.Trace (traceM)
 import Language.Marlowe.CLI.Cardano.Api (withShelleyBasedEra)
 import Language.Marlowe.CLI.Test.Contract (ContractNickname (ContractNickname), Source (InlineContract, UseTemplate))
 import Language.Marlowe.CLI.Test.Contract.Source (useTemplate)
 import Language.Marlowe.CLI.Test.ExecutionMode (skipInSimluationMode)
 import Language.Marlowe.CLI.Test.InterpreterError (runtimeOperationFailed', testExecutionFailed', timeoutReached')
-import Language.Marlowe.CLI.Test.Log (Label, logStoreLabeledMsg, throwLabeledError)
+import Language.Marlowe.CLI.Test.Log (Label, logStoreLabeledMsg, logStoreMsgWith, throwLabeledError)
 import Language.Marlowe.CLI.Test.Runtime.Types (
-  ContractInfo (ContractInfo, _ciContractId, _ciMarloweThread, _ciRoleCurrency),
+  ContractInfo (ContractInfo, _ciContinuations, _ciContract, _ciContractId, _ciMarloweThread, _ciRoleCurrency),
+  DoMerkleize (ClientSide, RuntimeSide),
   InterpretMonad,
   RuntimeContractInfo,
   RuntimeMonitorInput (RuntimeMonitorInput),
@@ -83,6 +89,7 @@ import Language.Marlowe.Cardano.Thread (
   overAnyMarloweThread,
  )
 import Language.Marlowe.Cardano.Thread qualified as Marlowe.Cardano.Thread
+import Language.Marlowe.Core.V1.Merkle (deepMerkleize)
 import Language.Marlowe.Protocol.Client qualified as Marlowe.Protocol
 import Language.Marlowe.Runtime.Cardano.Api qualified as MRCA
 import Language.Marlowe.Runtime.Cardano.Api qualified as RCA
@@ -98,6 +105,7 @@ import Language.Marlowe.Runtime.Transaction.Api (
 import Language.Marlowe.Runtime.Transaction.Api qualified as Transaction
 import Network.Protocol.Connection qualified as Network.Protocol
 import Plutus.V2.Ledger.Api qualified as P
+import System.IO (hPutStrLn, stderr)
 
 -- connectionP :: Prism' env (LocalNodeConnectInfo CardanoMode)
 getConnection
@@ -403,7 +411,7 @@ interpret ro@RuntimeCreateContract{..} = do
     Wallet{_waAddress, _waSigningKey} <- maybe getFaucet findWallet roSubmitter
     connector <- getConnector
     -- Verify that the role currency actually exists
-    contract <- case roContractSource of
+    origContract <- case roContractSource of
       InlineContract json -> decodeContractJSON json
       UseTemplate setup -> useTemplate roRoleCurrency setup
     let possibleChangeAddress = toChainSyncAddress _waAddress
@@ -415,6 +423,7 @@ interpret ro@RuntimeCreateContract{..} = do
     contractNickname <- mkContractNickname
 
     logStoreLabeledMsg ro $ "Invoking contract creation: " <> show contractNickname
+    logStoreMsgWith ro "Contract source:" [("source", toJSON origContract)]
 
     roleTokensConfig <- case roRoleCurrency of
       Just roleCurrency -> do
@@ -422,6 +431,14 @@ interpret ro@RuntimeCreateContract{..} = do
         let policyId = MRCA.fromCardanoPolicyId cardanoPolicyId
         pure $ RoleTokensUsePolicy policyId
       Nothing -> pure RoleTokensNone
+
+    let (contract, continuations) = case roMerkleize of
+          Nothing -> (origContract, Nothing)
+          Just RuntimeSide -> (origContract, Nothing)
+          Just ClientSide ->
+            let (c, cnt) = runWriter . deepMerkleize $ origContract
+             in (c, Just cnt)
+
     result <- liftIO $ flip runMarloweT connector do
       let minLovelace = ChainSync.Lovelace roMinLovelace
           walletAddresses =
@@ -430,15 +447,29 @@ interpret ro@RuntimeCreateContract{..} = do
               , extraAddresses = mempty
               , collateralUtxos = mempty
               }
+      possibleRuntimeContract <-
+        if roMerkleize == Just RuntimeSide
+          then do
+            possibleDatumHash <-
+              Marlowe.Class.loadContract contract `catchError` \error -> do
+                liftIO $ hPutStrLn stderr $ "Failed to load contract: " <> show error
+                pure Nothing
 
-      Marlowe.Class.createContract
-        Nothing
-        MarloweV1
-        walletAddresses
-        roleTokensConfig
-        emptyMarloweTransactionMetadata
-        minLovelace
-        $ Left contract
+            for possibleDatumHash \datumHash -> do
+              pure $ Right datumHash
+          else pure $ Just $ Left contract
+      case possibleRuntimeContract of
+        Just runtimeContract ->
+          Bifunctor.first Just
+            <$> Marlowe.Class.createContract
+              Nothing
+              MarloweV1
+              walletAddresses
+              roleTokensConfig
+              emptyMarloweTransactionMetadata
+              minLovelace
+              runtimeContract
+        Nothing -> pure (Left Nothing)
     era <- view eraL
     case result of
       Right Transaction.ContractCreated{txBody, contractId} -> do
@@ -466,6 +497,8 @@ interpret ro@RuntimeCreateContract{..} = do
                         { _ciContractId = contractId
                         , _ciRoleCurrency = roRoleCurrency
                         , _ciMarloweThread = anyMarloweThread
+                        , _ciContract = contract
+                        , _ciContinuations = continuations
                         }
                 modifying knownContractsL $ Map.insert contractNickname contractInfo
                 updateWallet submitterNickname \submitter@Wallet{_waSubmittedTransactions} -> do
@@ -476,8 +509,9 @@ interpret ro@RuntimeCreateContract{..} = do
                     runtimeAwaitTxsConfirmed ro roContractNickname $ A.toSecond timeout
           Left err ->
             throwLabeledError ro $ runtimeOperationFailed' $ "Failed to submit contract: " <> show err
-        pure ()
-      Left err ->
+      Left Nothing ->
+        throwLabeledError ro $ runtimeOperationFailed' "Failed to load contract to the store."
+      Left (Just err) ->
         throwLabeledError ro $ runtimeOperationFailed' $ "Failed to create contract: " <> show err
 interpret ro@RuntimeApplyInputs{..} = do
   view executionModeL >>= skipInSimluationMode ro do
@@ -545,4 +579,4 @@ interpret ro@RuntimeApplyInputs{..} = do
           Left err ->
             throwLabeledError ro $ runtimeOperationFailed' $ "Failed to submit contract: " <> show err
       Left err ->
-        throwLabeledError ro $ runtimeOperationFailed' $ "Failed to create contract: " <> show err
+        throwLabeledError ro $ runtimeOperationFailed' $ "Failed to apply input: " <> show err

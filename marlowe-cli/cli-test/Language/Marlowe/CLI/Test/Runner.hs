@@ -136,8 +136,10 @@ data TestRunnerFaucet era = TestRunnerFaucet
   { _trAddress :: AddressInEra era
   , _trSigningKey :: SomePaymentSigningKey
   , _trInitialBalance :: P.Value
-  , _trSubmittedTransactions :: [SomeTxBody]
-  , _trFundedTransactions :: [SomeTxBody]
+  , _trSubmittedTransactions :: ![SomeTxBody]
+  -- ^ Transactions submitted directly by the test runner (like subfaucets funding).
+  , _trFundedTransactions :: ![SomeTxBody]
+  -- ^ Transactions submitted non directly (subfaucets and test wallets)
   }
 
 makeLenses 'TestRunnerFaucet
@@ -347,12 +349,19 @@ setupTestInterpretEnv = do
     let connector :: (Network.Protocol.Connector Marlowe.Protocol.MarloweRuntimeClient IO)
         connector = Network.Protocol.tcpClient rcRuntimeHost rcRuntimePort Marlowe.Protocol.marloweRuntimeClientPeer
         config =
-          def
+          Apps.Config
             { Apps.chainSeekHost = rcRuntimeHost
+            , Apps.runtimeHost = rcRuntimeHost
             , Apps.runtimePort = rcRuntimePort
             , Apps.chainSeekSyncPort = rcChainSeekSyncPort
             , Apps.chainSeekCommandPort = rcChainSeekCommandPort
+            , Apps.timeoutSeconds = 900
+            , Apps.buildSeconds = 3
+            , Apps.confirmSeconds = 3
+            , Apps.retrySeconds = 10
+            , Apps.retryLimit = 5
             }
+
     (connector,) <$> liftIO (Runtime.Monitor.mkRuntimeMonitor config)
 
   protocolParams <- view envProtocolParams

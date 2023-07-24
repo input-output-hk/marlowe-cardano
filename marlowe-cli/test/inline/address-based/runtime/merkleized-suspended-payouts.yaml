@@ -1,0 +1,110 @@
+testName: Test merkleized multi-notify-pay chain processing
+
+operations:
+
+- CreateWallet: Recipient
+
+- RuntimeCreateContract:
+    minLovelace: 2000000
+    awaitConfirmed: 120
+    merkleize: RuntimeSide
+    source:
+      when:
+        - case:
+            party:
+              address: Faucet
+            deposits: 6000000
+            of_token:
+              token_name: ''
+              currency_symbol: ''
+            into_account:
+              address: Faucet
+          then:
+            when:
+              - case:
+                  notify_if: true
+                then:
+                  pay: 2000000
+                  token:
+                    token_name: ''
+                    currency_symbol: ''
+                  from_account:
+                    address: Faucet
+                  to:
+                    party:
+                      address: Recipient
+                  then:
+                    when:
+                      - case:
+                          notify_if: true
+                        then:
+                          pay: 2000000
+                          token:
+                            token_name: ''
+                            currency_symbol: ''
+                          from_account:
+                            address: Faucet
+                          to:
+                            party:
+                              address: Recipient
+                          then: close
+                        #     # when:
+                        #     #   - case:
+                        #     #       notify_if: true
+                        #     #     then:
+                        #     #       pay: 2000000
+                        #     #       token:
+                        #     #         token_name: ''
+                        #     #         currency_symbol: ''
+                        #     #       from_account:
+                        #     #         address: Faucet
+                        #     #       to:
+                        #     #         party:
+                        #     #           address: Recipient
+                        #     #       then: close
+                        #     # timeout:
+                        #     #   relative: 3600
+                        #     # timeout_continuation: close
+                    timeout:
+                      relative: 3600
+                    timeout_continuation: close
+            timeout:
+              relative: 3600
+            timeout_continuation: close
+      timeout:
+        relative: 3600
+      timeout_continuation: close
+
+- RuntimeApplyInputs:
+    submitter: Faucet
+    awaitConfirmed: 120
+    inputs:
+      - input_from_party:
+          address: Faucet
+        that_deposits: 6000000
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          address: Faucet
+
+- RuntimeApplyInputs:
+    awaitConfirmed: 120
+    inputs:
+      - "input_notify"
+
+- RuntimeApplyInputs:
+    awaitConfirmed: 120
+    inputs:
+      - "input_notify"
+
+# - RuntimeApplyInputs:
+#     awaitConfirmed: 120
+#     inputs:
+#       - "input_notify"
+
+- CheckBalance:
+    wallet: Recipient
+    balance:
+      # initial 10 + transfered 6 = 16
+      - [ADA, 4]

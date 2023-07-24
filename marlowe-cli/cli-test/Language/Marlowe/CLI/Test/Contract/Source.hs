@@ -1,8 +1,10 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -10,12 +12,14 @@
 
 module Language.Marlowe.CLI.Test.Contract.Source where
 
+import Contrib.Data.Foldable (foldMapMFlipped)
 import Control.Monad (void)
 import Control.Monad.Except (MonadError, throwError)
 import Data.Aeson (FromJSON (..), ToJSON (..), (.=))
 import Data.Aeson qualified as A
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.List.NonEmpty (NonEmpty)
+import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
@@ -27,6 +31,7 @@ import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError, rethrowCliE
 import Language.Marlowe.CLI.Test.Operation.Aeson qualified as Operation
 import Language.Marlowe.CLI.Test.Wallet.Interpret (
   assetIdToToken,
+  assetToPlutusValue,
   findWallet,
   findWalletByUniqueToken,
   getSingletonCurrency,
@@ -50,6 +55,8 @@ import Language.Marlowe.Extended.V1 (toCore)
 import Language.Marlowe.Extended.V1 qualified as E
 import Ledger.Orphans ()
 import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
+import Marlowe.Contracts.ChunkedValueTransfer (chunkedValueTransfer)
+import Marlowe.Contracts.ChunkedValueTransfer qualified as ChunkedValueTransfer
 import Marlowe.Contracts.Raffle (raffle)
 import Marlowe.Contracts.Raffle qualified as Raffle
 import Plutus.V1.Ledger.Api (TokenName)
@@ -62,8 +69,8 @@ import Plutus.V1.Ledger.Api (TokenName)
 -- |  "address": "Wallet-1"
 -- | ```
 data PartyRef
-  = WalletRef WalletNickname
-  | RoleRef TokenName
+  = WalletRef !WalletNickname
+  | RoleRef !TokenName
   deriving stock (Eq, Generic, Show)
 
 instance FromJSON PartyRef where
@@ -82,6 +89,26 @@ instance ToJSON PartyRef where
   toJSON (RoleRef tokenName) =
     A.object
       ["role_token" .= tokenNameToJSON tokenName]
+
+data ValueTransferRecipient = ValueTransferRecipient
+  { vtrRecipient :: !PartyRef
+  , vtrAssets :: ![Asset]
+  }
+  deriving stock (Eq, Generic, Show)
+
+instance A.FromJSON ValueTransferRecipient where
+  parseJSON json = do
+    obj <- parseJSON json
+    vtrRecipient <- obj A..: "recipient"
+    vtrAssets <- obj A..: "assets"
+    pure ValueTransferRecipient{..}
+
+instance A.ToJSON ValueTransferRecipient where
+  toJSON ValueTransferRecipient{..} =
+    A.object
+      [ "recipient" .= vtrRecipient
+      , "assets" .= vtrAssets
+      ]
 
 data UseTemplate
   = UseTrivial
@@ -180,6 +207,12 @@ data UseTemplate
       , utDepositDeadline :: SomeTimeout
       , utSelectDeadline :: SomeTimeout
       , utPayoutDeadline :: SomeTimeout
+      }
+  | UseChunkedValueTransfer
+      { utSender :: PartyRef
+      , utRecipientsAmounts :: [ValueTransferRecipient]
+      , utTimeout :: SomeTimeout
+      , utPayoutChunkSize :: ChunkedValueTransfer.PayoutChunkSize
       }
   deriving stock (Eq, Generic, Show)
 
@@ -351,4 +384,17 @@ useTemplate currency = \case
         depositDeadline'
         selectDeadline'
         payoutDeadline'
+  UseChunkedValueTransfer{..} -> do
+    timeout' <- toMarloweTimeout utTimeout
+    sender <- buildParty currency utSender
+    recipientsAmounts <- foldMapMFlipped utRecipientsAmounts \ValueTransferRecipient{vtrRecipient, vtrAssets} -> do
+      recipient <- buildParty currency vtrRecipient
+      value <- foldMapMFlipped vtrAssets assetToPlutusValue
+      pure $ Map.fromList [(ChunkedValueTransfer.Recipient recipient, value)]
+    pure $
+      chunkedValueTransfer
+        (ChunkedValueTransfer.Sender sender)
+        (ChunkedValueTransfer.RecipientsAmounts recipientsAmounts)
+        utPayoutChunkSize
+        timeout'
   template -> throwError $ testExecutionFailed' $ "Template not implemented: " <> show template
