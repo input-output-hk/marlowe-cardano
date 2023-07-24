@@ -44,8 +44,3 @@ spec:
         - type: annotations
           properties:
             "helm.sh/resource-policy": keep
-  tolerations:
-  - key: "name"
-    operator: "Equal"
-    value: "postgres-cluster"
-    effect: "NoSchedule"
