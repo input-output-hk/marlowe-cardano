@@ -109,7 +109,6 @@ library
     , marlowe-cardano
     , memory
     , mtl
-    , one-line-aeson-text
     , ouroboros-consensus
     , ouroboros-network
     , plutus-core
