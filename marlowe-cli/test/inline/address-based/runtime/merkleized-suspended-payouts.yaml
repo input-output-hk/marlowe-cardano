@@ -48,23 +48,6 @@ operations:
                             party:
                               address: Recipient
                           then: close
-                        #     # when:
-                        #     #   - case:
-                        #     #       notify_if: true
-                        #     #     then:
-                        #     #       pay: 2000000
-                        #     #       token:
-                        #     #         token_name: ''
-                        #     #         currency_symbol: ''
-                        #     #       from_account:
-                        #     #         address: Faucet
-                        #     #       to:
-                        #     #         party:
-                        #     #           address: Recipient
-                        #     #       then: close
-                        #     # timeout:
-                        #     #   relative: 3600
-                        #     # timeout_continuation: close
                     timeout:
                       relative: 3600
                     timeout_continuation: close
