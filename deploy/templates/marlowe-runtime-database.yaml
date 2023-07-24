@@ -13,12 +13,14 @@ spec:
       properties:
         replicas: 3
         volume:
-          size: 50Gi
+          size: "100Gi"
         resources:
           requests:
-            memory: "8Gi"
+            cpu: "4"
+            memory: "16Gi"
           limits:
-            memory: "8Gi"
+            cpu: "8"
+            memory: "32Gi"
         postgresql:
           parameters:
             max_connections: "1000"
