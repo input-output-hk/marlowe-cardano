@@ -51,7 +51,7 @@ import Data.Map.Append.Strict (AppendMap (..))
 import Language.Marlowe qualified as M
 import Language.Marlowe.CLI.Test.CLI.Interpret (initialMarloweState)
 import Language.Marlowe.CLI.Test.Contract.Source (makeContract)
-import Marlowe.Contracts.ChunkedValueTransfer (chunkedValueTransfer, foldMapFlipped)
+import Marlowe.Contracts.ChunkedValueTransfer (chunkedValueTransfer)
 import Marlowe.Contracts.ChunkedValueTransfer qualified as ChunkedValueTransfer
 import Marlowe.Contracts.Raffle (raffle)
 import Marlowe.Contracts.Raffle qualified as Raffle
