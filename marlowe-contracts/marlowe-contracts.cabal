@@ -88,6 +88,7 @@ test-suite marlowe-contracts-test
     , base >=4.9 && <5
     , bytestring
     , marlowe-cardano
+    , marlowe-client
     , marlowe-contracts
     , plutus-ledger-ada
     , plutus-ledger-api
@@ -99,3 +100,19 @@ test-suite marlowe-contracts-test
     , text
     , time
     , uuid
+
+executable load-future-contract
+  main-is:          Main.hs
+  hs-source-dirs:   app
+  build-depends:
+    , base >=4.9 && <5
+    , marlowe-cardano
+    , marlowe-client
+    , marlowe-contracts
+
+  ghc-options:
+    -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
+    -Wincomplete-record-updates -Wredundant-constraints -Widentities
+    -Wunused-packages
+
+  default-language: Haskell2010

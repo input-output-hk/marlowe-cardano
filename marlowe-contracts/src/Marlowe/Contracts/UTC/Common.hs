@@ -6,4 +6,4 @@ import Language.Marlowe.Extended.V1
 
 -- | Convert UTCTime to Timeout
 toTimeout :: UTCTime -> Timeout
-toTimeout = POSIXTime . floor . utcTimeToPOSIXSeconds
+toTimeout = POSIXTime . (* 1000) . floor . utcTimeToPOSIXSeconds
