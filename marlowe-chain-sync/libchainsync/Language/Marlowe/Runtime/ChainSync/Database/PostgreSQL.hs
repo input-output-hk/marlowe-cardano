@@ -37,13 +37,20 @@ import Control.Applicative ((<|>))
 import Control.Arrow ((***))
 import Control.Foldl (Fold (Fold))
 import qualified Control.Foldl as Fold
+import Control.Monad (guard)
 import Control.Monad.Event.Class (MonadInjectEvent, withEventFields)
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Maybe (MaybeT (..))
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
+import Data.Foldable (fold)
+import Data.Functor ((<&>))
 import Data.Int (Int16, Int64)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
+import Data.List.NonEmpty (NonEmpty)
+import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Monoid (Sum (..))
@@ -52,22 +59,27 @@ import qualified Data.Set as Set
 import Data.Set.NonEmpty (NESet)
 import qualified Data.Set.NonEmpty as NESet
 import Data.Text (Text)
+import Data.Vector (Vector)
 import qualified Data.Vector as V
-import Data.Void (Void)
+import Data.Void (Void, absurd)
 import Hasql.Pool (Pool)
 import qualified Hasql.Pool as Pool
 import qualified Hasql.Session as Session
-import Hasql.TH (foldStatement, maybeStatement, singletonStatement)
+import Hasql.TH (foldStatement, maybeStatement, singletonStatement, vectorStatement)
 import qualified Hasql.Transaction as HT
 import qualified Hasql.Transaction.Sessions as TS
 import Language.Marlowe.Runtime.Cardano.Feature (hush)
 import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.ChainSync.Database (
+  Collect (..),
+  CollectResult (..),
   DatabaseQueries (DatabaseQueries),
   GetTip (..),
   GetUTxOs (..),
   MoveClient (..),
   MoveResult (..),
+  Scan (..),
+  hoistCollect,
   hoistGetTip,
   hoistGetUTxOs,
   hoistMoveClient,
@@ -95,6 +107,7 @@ databaseQueries pool networkId =
     (hoistGetUTxOs (transact "getUTxOs") getUTxOs)
     (hoistGetTip (transact "getTip") getTip)
     (hoistMoveClient (transact "moveClient") $ moveClient networkId)
+    (Scan $ fmap (pure . hoistCollect (transact "collect")) . mkCollect networkId)
   where
     transact :: Text -> HT.Transaction a -> m a
     transact queryName m = withEventFields (Query queryName) [QueryName queryName] \ev -> do
@@ -109,6 +122,199 @@ databaseQueries pool networkId =
           throwIO ex
         Right a -> pure a
 
+-- Scan
+
+mkCollect :: C.NetworkId -> ChainPoint -> Move err result -> Collect err result HT.Transaction
+mkCollect networkId point move = Collect \batchSize -> do
+  tip <- runGetTip getTip
+  getRollbackPoint point >>= \case
+    Nothing ->
+      performCollect networkId batchSize tip move point >>= \case
+        CollectAbort err -> pure $ CollectReject err tip
+        Collected results -> pure $ NextBlocks results tip $ mkCollect networkId (At $ fst $ NE.last results) move
+        CollectWait' -> pure $ CollectWait tip
+    Just rollbackPoint -> pure $ CollectRollBack rollbackPoint tip
+
+data PerformCollectResult err result
+  = CollectWait'
+  | CollectAbort err
+  | Collected (NonEmpty (BlockHeader, result))
+
+performCollect
+  :: C.NetworkId
+  -> Natural
+  -> ChainPoint
+  -> Move err result
+  -> ChainPoint
+  -> HT.Transaction (PerformCollectResult err result)
+performCollect networkId batchSize tip = \case
+  AdvanceBlocks blocks -> repeatMove [] batchSize $ performAdvanceBlocks blocks
+  FindTx txId wait -> collectOne . performFindTx txId wait
+  Intersect points -> collectOne . performIntersect points
+  FindConsumingTxs txOutRef -> collectOne . performFindConsumingTxs txOutRef
+  FindTxsFor credentials -> collectTxsFor networkId batchSize credentials
+  AdvanceToTip -> \point -> pure case tip of
+    Genesis -> CollectWait'
+    At tipBlock
+      | point == tip -> CollectWait'
+      | otherwise -> Collected $ pure (tipBlock, ())
+
+collectOne :: HT.Transaction (PerformMoveResult err a) -> HT.Transaction (PerformCollectResult err a)
+collectOne query =
+  query <&> \case
+    MoveWait -> CollectWait'
+    MoveAbort err -> CollectAbort err
+    MoveArrive point result -> Collected $ pure (point, result)
+
+repeatMove
+  :: [(BlockHeader, a)]
+  -> Natural
+  -> (ChainPoint -> HT.Transaction (PerformMoveResult Void a))
+  -> ChainPoint
+  -> HT.Transaction (PerformCollectResult Void a)
+repeatMove [] 0 _ _ = pure CollectWait'
+repeatMove acc 0 _ _ = pure $ Collected $ NE.fromList $ reverse acc
+repeatMove acc n query point =
+  query point >>= \case
+    MoveWait -> pure CollectWait'
+    MoveAbort err -> absurd err
+    MoveArrive point' result -> repeatMove ((point', result) : acc) (pred n) query $ At point'
+
+collectTxsFor
+  :: C.NetworkId
+  -> Natural
+  -> NESet Credential
+  -> ChainPoint
+  -> HT.Transaction (PerformCollectResult Void (Set Transaction))
+collectTxsFor networkId batchSize credentials fromPoint =
+  maybe CollectWait' Collected <$> runMaybeT do
+    blocks <- lift loadTxIds
+    let txIds = fold blocks
+    guard $ not $ Set.null txIds
+    lift do
+      txs <- loadTxs txIds
+      txIns <- queryTxInsBulk txIds
+      txOuts <- queryTxOutsBulk txIds
+      pure $ assembleResults blocks txs txIns txOuts
+  where
+    loadTxIds :: HT.Transaction (Map BlockHeader (Set TxId))
+    loadTxIds =
+      Map.fromDistinctAscList . fmap mapRow . V.toList
+        <$> HT.statement
+          params
+          [vectorStatement|
+        WITH credentials (addressHeader,  addressPaymentCredential) as
+          ( SELECT * FROM UNNEST ($1 :: bytea[], $2 :: bytea[])
+          )
+        SELECT
+          block.slotNo :: bigint,
+          (ARRAY_AGG(block.id))[1] :: bytea,
+          (ARRAY_AGG(block.blockNo))[1] :: bigint,
+          ARRAY_AGG(tx.id) :: bytea[]
+        FROM chain.block
+        JOIN chain.tx                          ON block.id = tx.blockId AND  block.slotNo = tx.slotNo
+        JOIN chain.txOut                       ON tx.id = txOut.txId AND tx.slotNo = txOut.slotNo
+        JOIN credentials USING (addressHeader, addressPaymentCredential)
+        WHERE block.rollbackToSlot IS NULL
+          AND txOut.slotNo > $3 :: bigint
+        GROUP BY block.slotNo
+        ORDER BY block.slotNo
+        LIMIT $4 :: int
+      |]
+      where
+        params =
+          ( V.fromList $ fst <$> addressParts
+          , V.fromList $ snd <$> addressParts
+          , pointSlot fromPoint
+          , fromIntegral batchSize
+          )
+
+        addressParts =
+          Set.toList (NESet.toSet credentials) >>= \case
+            PaymentKeyCredential pkh ->
+              (,unPaymentKeyHash pkh) . BS.pack . pure
+                <$> if networkId == C.Mainnet then [0x01, 0x21, 0x41, 0x61] else [0x00, 0x20, 0x40, 0x60]
+            ScriptCredential sh ->
+              (,unScriptHash sh) . BS.pack . pure
+                <$> if networkId == C.Mainnet then [0x11, 0x31, 0x51, 0x71] else [0x10, 0x30, 0x50, 0x70]
+
+        mapRow :: (Int64, ByteString, Int64, V.Vector ByteString) -> (BlockHeader, Set TxId)
+        mapRow (slotNo, blockHeaderHash, blockNo, txIds) =
+          ( decodeBlockHeader (slotNo, blockHeaderHash, blockNo)
+          , Set.fromList $ V.toList $ TxId <$> txIds
+          )
+
+    loadTxs :: Set TxId -> HT.Transaction (Map TxId Transaction)
+    loadTxs txIds =
+      Map.fromDistinctAscList . fmap mapRow . V.toList
+        <$> HT.statement
+          params
+          [vectorStatement|
+          SELECT
+            tx.id :: bytea,
+            (ARRAY_AGG(tx.validityLowerBound))[1] :: bigint?,
+            (ARRAY_AGG(tx.validityUpperBound))[1] :: bigint?,
+            (ARRAY_AGG(tx.metadata))[1] :: bytea?,
+            ARRAY_REMOVE(ARRAY_AGG(asset.policyId), NULL) :: bytea[],
+            ARRAY_REMOVE(ARRAY_AGG(asset.name), NULL) :: bytea[],
+            ARRAY_REMOVE(ARRAY_AGG(assetMint.quantity), NULL) :: bigint[]
+          FROM chain.tx
+          LEFT JOIN chain.assetMint
+            ON assetMint.txId = tx.id
+          LEFT JOIN chain.asset
+            ON asset.id = assetMint.assetId
+          WHERE tx.id = ANY($1 :: bytea[])
+          GROUP BY tx.id
+          ORDER BY tx.id
+      |]
+      where
+        params = V.fromList $ fmap unTxId $ Set.toList txIds
+
+        mapRow
+          :: (ByteString, Maybe Int64, Maybe Int64, Maybe ByteString, Vector ByteString, Vector ByteString, Vector Int64)
+          -> (TxId, Transaction)
+        mapRow (txId, invalidBefore, invalidHereafter, metadata, policyIds, tokenNames, quantities) =
+          ( TxId txId
+          , Transaction
+              { txId = TxId txId
+              , validityRange = case (invalidBefore, invalidHereafter) of
+                  (Nothing, Nothing) -> Unbounded
+                  (Just lb, Nothing) -> MinBound $ decodeSlotNo lb
+                  (Nothing, Just ub) -> MaxBound $ decodeSlotNo ub
+                  (Just lb, Just ub) -> MinMaxBound (decodeSlotNo lb) $ decodeSlotNo ub
+              , metadata = maybe mempty fromCardanoTxMetadata $ decodeMetadata =<< metadata
+              , inputs = Set.empty
+              , outputs = []
+              , mintedTokens =
+                  Tokens $
+                    Map.fromList $
+                      V.toList $
+                        V.zipWith3 mkToken policyIds tokenNames quantities
+              }
+          )
+
+    mkToken :: ByteString -> ByteString -> Int64 -> (AssetId, Quantity)
+    mkToken policyId tokenName quantity =
+      ( AssetId (PolicyId policyId) (TokenName tokenName)
+      , Quantity $ fromIntegral quantity
+      )
+
+    assembleResults
+      :: Map BlockHeader (Set TxId)
+      -> Map TxId Transaction
+      -> Map TxId (Set TransactionInput)
+      -> Map TxId [TransactionOutput]
+      -> NonEmpty (BlockHeader, Set Transaction)
+    assembleResults txIds txs txIns txOuts =
+      NE.fromList $
+        Map.toList $
+          Set.fromList . Map.elems . Map.restrictKeys mergedTxs <$> txIds
+      where
+        mergedTxs = Map.intersectionWith ($) (Map.intersectionWith mergeTx txs txIns) txOuts
+
+        mergeTx :: Transaction -> Set TransactionInput -> [TransactionOutput] -> Transaction
+        mergeTx Transaction{..} inputs' outputs' = Transaction{inputs = inputs', outputs = outputs', ..}
+
 -- MoveClient
 
 moveClient :: C.NetworkId -> MoveClient HT.Transaction
@@ -117,36 +323,36 @@ moveClient networkId = MoveClient $ performMoveWithRollbackCheck networkId
 performMoveWithRollbackCheck :: C.NetworkId -> ChainPoint -> Move err result -> HT.Transaction (MoveResult err result)
 performMoveWithRollbackCheck networkId point move = do
   tip <- runGetTip getTip
-  getRollbackPoint >>= \case
+  getRollbackPoint point >>= \case
     Nothing ->
       performMove networkId tip move point >>= \case
         MoveAbort err -> pure $ Reject err tip
         MoveArrive point' result -> pure $ RollForward result point' tip
         MoveWait -> pure $ Wait tip
     Just rollbackPoint -> pure $ RollBack rollbackPoint tip
-  where
-    getRollbackPoint :: HT.Transaction (Maybe ChainPoint)
-    getRollbackPoint = case pointParams of
-      Nothing -> pure Nothing
-      Just pointParams' ->
-        fmap decodeChainPoint
-          <$> HT.statement
-            pointParams'
-            [maybeStatement|
-          WITH RECURSIVE rollbacks AS
-            ( SELECT *
-                FROM chain.block
-              WHERE rollbackToBlock IS NOT NULL AND id = $2 :: bytea AND slotNo = $1 :: bigint
-              UNION
-              SELECT block.*
-                FROM chain.block AS block
-                JOIN rollbacks ON block.id = rollbacks.rollbackToBlock AND block.slotNo = rollbacks.rollbackToSlot
-            )
-          SELECT slotNo :: bigint, id :: bytea, blockNo :: bigint
-            FROM rollbacks
-          WHERE rollbackToSlot IS NULL
-        |]
 
+getRollbackPoint :: ChainPoint -> HT.Transaction (Maybe ChainPoint)
+getRollbackPoint point = case pointParams of
+  Nothing -> pure Nothing
+  Just pointParams' ->
+    fmap decodeChainPoint
+      <$> HT.statement
+        pointParams'
+        [maybeStatement|
+      WITH RECURSIVE rollbacks AS
+        ( SELECT *
+            FROM chain.block
+          WHERE rollbackToBlock IS NOT NULL AND id = $2 :: bytea AND slotNo = $1 :: bigint
+          UNION
+          SELECT block.*
+            FROM chain.block AS block
+            JOIN rollbacks ON block.id = rollbacks.rollbackToBlock AND block.slotNo = rollbacks.rollbackToSlot
+        )
+      SELECT slotNo :: bigint, id :: bytea, blockNo :: bigint
+        FROM rollbacks
+      WHERE rollbackToSlot IS NULL
+    |]
+  where
     pointParams :: Maybe (Int64, ByteString)
     pointParams = case point of
       Genesis -> Nothing
@@ -427,10 +633,10 @@ performFindTxsFor networkId credentials point = do
         foldTxs
   case initialResult of
     (Nothing, _) -> pure MoveWait
-    (Just header@BlockHeader{..}, txs) -> do
+    (Just header, txs) -> do
       let txIds = Map.keysSet txs
-      txIns <- queryTxInsBulk slotNo txIds
-      txOuts <- queryTxOutsBulk slotNo txIds
+      txIns <- queryTxInsBulk txIds
+      txOuts <- queryTxOutsBulk txIds
       let insOuts = Map.intersectionWith (,) txIns txOuts
       pure $
         MoveArrive header $
@@ -504,16 +710,16 @@ queryTxIns slotNo txInId =
      WHERE txIn.txInId = $1 :: bytea AND txIn.slotNo = $2 :: bigint
   |]
       (Fold.foldMap (Set.singleton . decodeTxIn) id)
-  where
-    decodeTxIn :: ReadTxInRow -> TransactionInput
-    decodeTxIn (txId, txIx, address, datumBytes, redeemerDatumBytes) =
-      TransactionInput
-        { txId = TxId txId
-        , txIx = fromIntegral txIx
-        , address = Address address
-        , datumBytes = fromPlutusData . C.toPlutusData . unsafeDeserialize' <$> datumBytes
-        , redeemer = Redeemer . fromPlutusData . C.toPlutusData . unsafeDeserialize' <$> redeemerDatumBytes
-        }
+
+decodeTxIn :: ReadTxInRow -> TransactionInput
+decodeTxIn (txId, txIx, address, datumBytes, redeemerDatumBytes) =
+  TransactionInput
+    { txId = TxId txId
+    , txIx = fromIntegral txIx
+    , address = Address address
+    , datumBytes = fromPlutusData . C.toPlutusData . unsafeDeserialize' <$> datumBytes
+    , redeemer = Redeemer . fromPlutusData . C.toPlutusData . unsafeDeserialize' <$> redeemerDatumBytes
+    }
 
 queryTxOuts :: SlotNo -> TxId -> HT.Transaction [TransactionOutput]
 queryTxOuts slotNo txId =
@@ -559,23 +765,20 @@ queryTxOuts slotNo txId =
                   }
             }
 
-queryTxInsBulk :: SlotNo -> Set TxId -> HT.Transaction (Map TxId (Set.Set TransactionInput))
-queryTxInsBulk slotNo txInIds =
-  HT.statement (V.fromList $ unTxId <$> Set.toList txInIds, fromIntegral slotNo) $
+queryTxInsBulk :: Set TxId -> HT.Transaction (Map TxId (Set.Set TransactionInput))
+queryTxInsBulk txInIds =
+  HT.statement (V.fromList $ unTxId <$> Set.toList txInIds) $
     [foldStatement|
-    WITH ids (txInId) AS
-      ( SELECT * FROM UNNEST ($1 :: bytea[])
-      )
-    SELECT txIn.txInId :: bytea
-         , txIn.txOutId :: bytea
-         , txIn.txOutIx :: smallint
-         , txOut.address :: bytea
-         , txOut.datumBytes :: bytea?
-         , txIn.redeemerDatumBytes :: bytea?
-      FROM chain.txIn  as txIn
-      JOIN chain.txOut as txOut ON txOut.txId = txIn.txOutId AND txOut.txIx = txIn.txOutIx
-      JOIN ids USING (txInId)
-     WHERE txIn.slotNo = $2 :: bigint
+      SELECT txIn.txInId :: bytea
+          , txIn.txOutId :: bytea
+          , txIn.txOutIx :: smallint
+          , txOut.address :: bytea
+          , txOut.datumBytes :: bytea?
+          , txIn.redeemerDatumBytes :: bytea?
+        FROM chain.txIn  as txIn
+        JOIN chain.txOut as txOut ON txOut.txId = txIn.txOutId AND txOut.txIx = txIn.txOutIx
+        JOIN ids USING (txInId)
+      WHERE txIn.txInId = ANY($1 :: bytea[])
   |]
       foldTxIns
   where
@@ -584,40 +787,30 @@ queryTxInsBulk slotNo txInIds =
 
     foldTxIns' :: Map TxId (Set TransactionInput) -> ReadTxInBulkRow -> Map TxId (Set TransactionInput)
     foldTxIns' txIns row@(txId, _, _, _, _, _) =
-      Map.alter (Just . ($ decodeTxIn row) . maybe Set.singleton (flip Set.insert)) (TxId txId) txIns
+      Map.alter (Just . ($ decodeTxIn' row) . maybe Set.singleton (flip Set.insert)) (TxId txId) txIns
 
-    decodeTxIn :: ReadTxInBulkRow -> TransactionInput
-    decodeTxIn (_, txId, txIx, address, datumBytes, redeemerDatumBytes) =
-      TransactionInput
-        { txId = TxId txId
-        , txIx = fromIntegral txIx
-        , address = Address address
-        , datumBytes = fromPlutusData . C.toPlutusData . unsafeDeserialize' <$> datumBytes
-        , redeemer = Redeemer . fromPlutusData . C.toPlutusData . unsafeDeserialize' <$> redeemerDatumBytes
-        }
+    decodeTxIn' :: ReadTxInBulkRow -> TransactionInput
+    decodeTxIn' (_, txId, txIx, address, datumBytes, redeemerDatumBytes) =
+      decodeTxIn (txId, txIx, address, datumBytes, redeemerDatumBytes)
 
-queryTxOutsBulk :: SlotNo -> Set TxId -> HT.Transaction (Map TxId [TransactionOutput])
-queryTxOutsBulk slotNo txIds =
-  HT.statement (V.fromList $ unTxId <$> Set.toList txIds, fromIntegral slotNo) $
+queryTxOutsBulk :: Set TxId -> HT.Transaction (Map TxId [TransactionOutput])
+queryTxOutsBulk txIds =
+  HT.statement (V.fromList $ unTxId <$> Set.toList txIds) $
     [foldStatement|
-    WITH ids (txId) AS
-      ( SELECT * FROM UNNEST ($1 :: bytea[])
-      )
-    SELECT txOut.txId :: bytea
-         , txOut.txIx :: smallint
-         , txOut.address :: bytea
-         , txOut.lovelace :: bigint
-         , txOut.datumHash :: bytea?
-         , txOut.datumBytes :: bytea?
-         , asset.policyId :: bytea?
-         , asset.name :: bytea?
-         , assetOut.quantity :: bigint?
-      FROM chain.txOut         AS txOut
-      JOIN ids USING (txId)
-      LEFT JOIN chain.assetOut AS assetOut ON assetOut.txOutId = txOut.txId AND assetOut.txOutIx = txOut.txIx
-      LEFT JOIN chain.asset    AS asset    ON asset.id = assetOut.assetId
-     WHERE txOut.slotNo = $2 :: bigint
-     ORDER BY txIx
+      SELECT txOut.txId :: bytea
+          , txOut.txIx :: smallint
+          , txOut.address :: bytea
+          , txOut.lovelace :: bigint
+          , txOut.datumHash :: bytea?
+          , txOut.datumBytes :: bytea?
+          , asset.policyId :: bytea?
+          , asset.name :: bytea?
+          , assetOut.quantity :: bigint?
+        FROM chain.txOut         AS txOut
+        LEFT JOIN chain.assetOut AS assetOut ON assetOut.txOutId = txOut.txId AND assetOut.txOutIx = txOut.txIx
+        LEFT JOIN chain.asset    AS asset    ON asset.id = assetOut.assetId
+      WHERE txOut.txId = ANY($1 :: bytea[])
+      ORDER BY txIx
   |]
       (Fold foldRow mempty (fmap $ fmap snd . IntMap.toAscList))
   where

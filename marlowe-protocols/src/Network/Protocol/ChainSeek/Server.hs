@@ -9,6 +9,7 @@
 -- underlying typed protocol types.
 module Network.Protocol.ChainSeek.Server where
 
+import Data.Bifunctor (Bifunctor (..))
 import Network.Protocol.ChainSeek.Types
 import Network.Protocol.Peer.Trace
 import Network.TypedProtocol (PeerHasAgency (..))
@@ -18,11 +19,13 @@ import Network.TypedProtocol.Core (PeerRole (..))
 newtype ChainSeekServer query point tip m a = ChainSeekServer
   { runChainSeekServer :: m (ServerStIdle query point tip m a)
   }
+  deriving (Functor)
 
 -- | In the `StIdle` protocol state, the server does not have agency. Instead,
 -- it is waiting to handle either:
 --
 -- * A query next update request
+-- * A scan request
 -- * A termination message
 --
 -- It must be prepared to handle either.
@@ -31,8 +34,13 @@ data ServerStIdle query point tip m a = ServerStIdle
       :: forall err result
        . query err result
       -> m (ServerStNext query err result point tip m a)
+  , recvMsgScan
+      :: forall err result
+       . query err result
+      -> m (ServerStScan query err result point tip m a)
   , recvMsgDone :: m a
   }
+  deriving (Functor)
 
 -- | In the `StNext` protocol state, the server has agency. It must send
 -- either:
@@ -40,6 +48,7 @@ data ServerStIdle query point tip m a = ServerStIdle
 -- * A query rejection response
 -- * A roll forward response
 -- * A roll backward response
+-- * A wait response
 data ServerStNext query err result point tip m a where
   -- | Reject the query with an error message.
   SendMsgQueryRejected
@@ -66,6 +75,42 @@ data ServerStNext query err result point tip m a where
     :: ServerStPoll query err result point tip m a
     -> ServerStNext query err result point tip m a
 
+deriving instance (Functor m) => Functor (ServerStNext query err result point tip m)
+
+-- | In the `StCollect` protocol state, the server has agency. It must send
+-- either:
+--
+-- * A collect failed response
+-- * A collected response
+-- * A roll backward response
+-- * A wait response
+data ServerStCollect query err result point tip m a where
+  -- | Reject the scan with an error message.
+  SendMsgCollectFailed
+    :: err
+    -> tip
+    -> ServerStIdle query point tip m a
+    -> ServerStCollect query err result point tip m a
+  -- | Send a sequence of query responses and advance the client to the latest point in the results.
+  SendMsgCollected
+    :: [(point, result)]
+    -> tip
+    -> ServerStScan query err result point tip m a
+    -> ServerStCollect query err result point tip m a
+  -- | Roll the client back to a previous point.
+  SendMsgCollectRollBackward
+    :: point
+    -> tip
+    -> ServerStIdle query point tip m a
+    -> ServerStCollect query err result point tip m a
+  -- | Tell the client to wait
+  SendMsgCollectWait
+    :: tip
+    -> ServerStPoll query err result point tip m a
+    -> ServerStCollect query err result point tip m a
+
+deriving instance (Functor m) => Functor (ServerStCollect query err result point tip m)
+
 -- | In the `StPoll` protocol state, the server does not have agency. Instead,
 -- it is waiting to handle either:
 --
@@ -77,6 +122,20 @@ data ServerStPoll query err result point tip m a = ServerStPoll
   { recvMsgPoll :: m (ServerStNext query err result point tip m a)
   , recvMsgCancel :: m (ServerStIdle query point tip m a)
   }
+  deriving (Functor)
+
+-- | In the `StScan` protocol state, the server does not have agency. Instead,
+-- it is waiting to handle either:
+--
+-- * A collect message
+-- * A cancel collect message
+--
+-- It must be prepared to handle either.
+data ServerStScan query err result point tip m a = ServerStScan
+  { recvMsgCollect :: m (ServerStCollect query err result point tip m a)
+  , recvMsgCancelScan :: m (ServerStIdle query point tip m a)
+  }
+  deriving (Functor)
 
 -- | Transform the query, point, and tip types in the server.
 mapChainSeekServer
@@ -94,6 +153,7 @@ mapChainSeekServer cmapQuery mapPoint mapTip =
     mapIdle ServerStIdle{..} =
       ServerStIdle
         { recvMsgQueryNext = fmap mapNext . recvMsgQueryNext . cmapQuery
+        , recvMsgScan = fmap mapScan . recvMsgScan . cmapQuery
         , recvMsgDone
         }
 
@@ -116,6 +176,25 @@ mapChainSeekServer cmapQuery mapPoint mapTip =
         , recvMsgCancel = fmap mapIdle recvMsgCancel
         }
 
+    mapScan
+      :: forall err result
+       . ServerStScan query err result point tip m a
+      -> ServerStScan query' err result point' tip' m a
+    mapScan ServerStScan{..} =
+      ServerStScan
+        { recvMsgCollect = fmap mapCollect recvMsgCollect
+        , recvMsgCancelScan = fmap mapIdle recvMsgCancelScan
+        }
+
+    mapCollect
+      :: forall err result
+       . ServerStCollect query err result point tip m a
+      -> ServerStCollect query' err result point' tip' m a
+    mapCollect (SendMsgCollectFailed err tip idle) = SendMsgCollectFailed err (mapTip tip) $ mapIdle idle
+    mapCollect (SendMsgCollected results tip scan) = SendMsgCollected (first mapPoint <$> results) (mapTip tip) $ mapScan scan
+    mapCollect (SendMsgCollectRollBackward point tip idle) = SendMsgCollectRollBackward (mapPoint point) (mapTip tip) $ mapIdle idle
+    mapCollect (SendMsgCollectWait tip poll) = SendMsgCollectWait (mapTip tip) $ mapPoll poll
+
 -- | Change the underlying monad with a natural transformation.
 hoistChainSeekServer
   :: forall query point tip m n a
@@ -130,6 +209,7 @@ hoistChainSeekServer f =
     hoistIdle ServerStIdle{..} =
       ServerStIdle
         { recvMsgQueryNext = f . fmap hoistNext . recvMsgQueryNext
+        , recvMsgScan = f . fmap hoistScan . recvMsgScan
         , recvMsgDone = f recvMsgDone
         }
 
@@ -142,6 +222,15 @@ hoistChainSeekServer f =
     hoistNext (SendMsgRollBackward point tip idle) = SendMsgRollBackward point tip $ hoistIdle idle
     hoistNext (SendMsgWait mnext) = SendMsgWait $ hoistPoll mnext
 
+    hoistCollect
+      :: forall err result
+       . ServerStCollect query err result point tip m a
+      -> ServerStCollect query err result point tip n a
+    hoistCollect (SendMsgCollectFailed err tip idle) = SendMsgCollectFailed err tip $ hoistIdle idle
+    hoistCollect (SendMsgCollected results tip scan) = SendMsgCollected results tip $ hoistScan scan
+    hoistCollect (SendMsgCollectRollBackward point tip idle) = SendMsgCollectRollBackward point tip $ hoistIdle idle
+    hoistCollect (SendMsgCollectWait tip mnext) = SendMsgCollectWait tip $ hoistPoll mnext
+
     hoistPoll
       :: forall err result
        . ServerStPoll query err result point tip m a
@@ -150,6 +239,16 @@ hoistChainSeekServer f =
       ServerStPoll
         { recvMsgPoll = f $ fmap hoistNext recvMsgPoll
         , recvMsgCancel = f $ fmap hoistIdle recvMsgCancel
+        }
+
+    hoistScan
+      :: forall err result
+       . ServerStScan query err result point tip m a
+      -> ServerStScan query err result point tip n a
+    hoistScan ServerStScan{..} =
+      ServerStScan
+        { recvMsgCollect = f $ fmap hoistCollect recvMsgCollect
+        , recvMsgCancelScan = f $ fmap hoistIdle recvMsgCancelScan
         }
 
 chainSeekServerPeer
@@ -166,6 +265,8 @@ chainSeekServerPeer = EffectTraced . fmap peerIdle . runChainSeekServer
       MsgQueryNext query ->
         Respond (ServerAgency $ TokNext $ tagFromQuery query) $
           peerNext (tagFromQuery query) <$> recvMsgQueryNext query
+      MsgScan query ->
+        Receive $ EffectTraced $ peerScan (tagFromQuery query) <$> recvMsgScan query
       MsgDone ->
         Closed TokDone recvMsgDone
 
@@ -197,3 +298,32 @@ chainSeekServerPeer = EffectTraced . fmap peerIdle . runChainSeekServer
         Receive $
           EffectTraced $
             peerIdle <$> recvMsgCancel
+
+    peerScan
+      :: forall err result
+       . Tag query err result
+      -> ServerStScan query err result point tip m a
+      -> PeerTraced (ChainSeek query point tip) 'AsServer ('StScan err result :: ChainSeek query point tip) m a
+    peerScan tag ServerStScan{..} = AwaitTraced (ClientAgency TokScan) \case
+      MsgCollect ->
+        Respond (ServerAgency $ TokCollect tag) $
+          peerCollect tag <$> recvMsgCollect
+      MsgCancelScan ->
+        Receive $
+          EffectTraced $
+            peerIdle <$> recvMsgCancelScan
+
+    peerCollect
+      :: forall err result
+       . Tag query err result
+      -> ServerStCollect query err result point tip m a
+      -> Response (ChainSeek query point tip) 'AsServer ('StCollect err result :: ChainSeek query point tip) m a
+    peerCollect tag = \case
+      SendMsgCollectFailed err tip idle ->
+        Response (MsgCollectFailed err tip) $ peerIdle idle
+      SendMsgCollected results tip scan ->
+        Response (MsgCollected results tip) $ peerScan tag scan
+      SendMsgCollectRollBackward point tip idle ->
+        Response (MsgCollectRollBackward point tip) $ peerIdle idle
+      SendMsgCollectWait tip poll ->
+        Response (MsgCollectWait tip) $ peerPoll tag poll
