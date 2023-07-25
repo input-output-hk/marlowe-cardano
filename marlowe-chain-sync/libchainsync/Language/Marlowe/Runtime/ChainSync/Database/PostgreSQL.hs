@@ -777,7 +777,6 @@ queryTxInsBulk txInIds =
           , txIn.redeemerDatumBytes :: bytea?
         FROM chain.txIn  as txIn
         JOIN chain.txOut as txOut ON txOut.txId = txIn.txOutId AND txOut.txIx = txIn.txOutIx
-        JOIN ids USING (txInId)
       WHERE txIn.txInId = ANY($1 :: bytea[])
   |]
       foldTxIns

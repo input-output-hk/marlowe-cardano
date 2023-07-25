@@ -151,6 +151,7 @@ marloweRuntime = proc MarloweRuntimeDependencies{..} -> do
               MaryEra -> MaryEraInCardanoMode
               AlonzoEra -> AlonzoEraInCardanoMode
               BabbageEra -> BabbageEraInCardanoMode
+          , scanBatchSize = 512
           , ..
           }
 
