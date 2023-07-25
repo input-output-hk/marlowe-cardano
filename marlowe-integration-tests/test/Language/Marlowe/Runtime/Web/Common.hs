@@ -35,6 +35,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (
  )
 import Language.Marlowe.Runtime.Integration.Common hiding (choose, deposit, notify, withdraw)
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses (..))
+import Language.Marlowe.Runtime.Web (ContractOrSourceId (..))
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Client (
   getContract,
@@ -56,19 +57,19 @@ createCloseContract Wallet{..} = do
   let WalletAddresses{..} = addresses
   let webChangeAddress = toDTO changeAddress
   let webExtraAddresses = Set.map toDTO extraAddresses
-  let webCollataralUtxos = Set.map toDTO collateralUtxos
+  let webCollateralUtxos = Set.map toDTO collateralUtxos
 
   Web.CreateTxEnvelope{txEnvelope, ..} <-
     postContract
       Nothing
       webChangeAddress
       (Just webExtraAddresses)
-      (Just webCollataralUtxos)
+      (Just webCollateralUtxos)
       Web.PostContractsRequest
         { metadata = mempty
         , version = Web.V1
         , roles = Nothing
-        , contract = V1.Close
+        , contract = ContractOrSourceId $ Left V1.Close
         , minUTxODeposit = 2_000_000
         , tags = mempty
         }
@@ -83,12 +84,12 @@ applyCloseTransaction Wallet{..} contractId = do
   let WalletAddresses{..} = addresses
   let webChangeAddress = toDTO changeAddress
   let webExtraAddresses = Set.map toDTO extraAddresses
-  let webCollataralUtxos = Set.map toDTO collateralUtxos
+  let webCollateralUtxos = Set.map toDTO collateralUtxos
   Web.ApplyInputsTxEnvelope{transactionId, txEnvelope} <-
     postTransaction
       webChangeAddress
       (Just webExtraAddresses)
-      (Just webCollataralUtxos)
+      (Just webCollateralUtxos)
       contractId
       Web.PostTransactionsRequest
         { version = Web.V1
@@ -172,12 +173,12 @@ withdraw Wallet{..} contractId role = do
   let WalletAddresses{..} = addresses
   let webChangeAddress = toDTO changeAddress
   let webExtraAddresses = Set.map toDTO extraAddresses
-  let webCollataralUtxos = Set.map toDTO collateralUtxos
+  let webCollateralUtxos = Set.map toDTO collateralUtxos
 
   postWithdrawal
     webChangeAddress
     (Just webExtraAddresses)
-    (Just webCollataralUtxos)
+    (Just webCollateralUtxos)
     Web.PostWithdrawalsRequest
       { role
       , contractId
@@ -191,12 +192,12 @@ applyInputs Wallet{..} contractId inputs = do
   let WalletAddresses{..} = addresses
   let webChangeAddress = toDTO changeAddress
   let webExtraAddresses = Set.map toDTO extraAddresses
-  let webCollataralUtxos = Set.map toDTO collateralUtxos
+  let webCollateralUtxos = Set.map toDTO collateralUtxos
 
   postTransaction
     webChangeAddress
     (Just webExtraAddresses)
-    (Just webCollataralUtxos)
+    (Just webCollateralUtxos)
     contractId
     Web.PostTransactionsRequest
       { version = Web.V1

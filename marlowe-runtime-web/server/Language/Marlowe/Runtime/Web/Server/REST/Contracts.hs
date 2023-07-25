@@ -14,7 +14,7 @@ import qualified Data.Set as Set
 import Data.Text (Text)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError)
 import Language.Marlowe.Protocol.Query.Types (ContractFilter (..), Page (..))
-import Language.Marlowe.Runtime.ChainSync.Api (Lovelace (..))
+import Language.Marlowe.Runtime.ChainSync.Api (DatumHash (..), Lovelace (..))
 import Language.Marlowe.Runtime.Core.Api (
   ContractId,
   MarloweMetadataTag (..),
@@ -78,6 +78,7 @@ postCreateTxBody PostContractsRequest{..} stakeAddressDTO changeAddressDTO mAddr
     fromDTOThrow
       (badRequest' "Invalid tags value")
       if Map.null tags then Nothing else Just (tags, Nothing)
+  let ContractOrSourceId contract' = contract
   createContract
     stakeAddress
     v
@@ -85,7 +86,7 @@ postCreateTxBody PostContractsRequest{..} stakeAddressDTO changeAddressDTO mAddr
     roles'
     MarloweTransactionMetadata{..}
     (Lovelace minUTxODeposit)
-    contract
+    (DatumHash . unContractSourceId <$> contract')
     >>= \case
       Left err -> throwDTOError err
       Right ContractCreated{contractId, txBody, safetyErrors} -> pure (contractId, txBody, safetyErrors)

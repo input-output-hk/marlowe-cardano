@@ -8,7 +8,7 @@ import Language.Marlowe.Runtime.Integration.Common
 import Language.Marlowe.Runtime.Integration.StandardContract (standardContract)
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses (..))
-import Language.Marlowe.Runtime.Web (RoleTokenConfig (RoleTokenSimple))
+import Language.Marlowe.Runtime.Web (ContractOrSourceId (..), RoleTokenConfig (RoleTokenSimple))
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Client (postContract, putContract)
 import Language.Marlowe.Runtime.Web.Common (signShelleyTransaction')
@@ -26,7 +26,7 @@ spec = describe "POST /contracts/{contractId}/transactions" do
       let partyAWalletAddresses = addresses partyAWallet
       let partyAWebChangeAddress = toDTO $ changeAddress partyAWalletAddresses
       let partyAWebExtraAddresses = Set.map toDTO $ extraAddresses partyAWalletAddresses
-      let partyAWebCollataralUtxos = Set.map toDTO $ collateralUtxos partyAWalletAddresses
+      let partyAWebCollateralUtxos = Set.map toDTO $ collateralUtxos partyAWalletAddresses
 
       let partyBWalletAddresses = addresses partyBWallet
 
@@ -41,12 +41,12 @@ spec = describe "POST /contracts/{contractId}/transactions" do
           Nothing
           partyAWebChangeAddress
           (Just partyAWebExtraAddresses)
-          (Just partyAWebCollataralUtxos)
+          (Just partyAWebCollateralUtxos)
           Web.PostContractsRequest
             { metadata = mempty
             , version = Web.V1
             , roles = Just $ Web.Mint $ Map.singleton "PartyA" $ RoleTokenSimple partyAWebChangeAddress
-            , contract = contract
+            , contract = ContractOrSourceId $ Left contract
             , minUTxODeposit = 2_000_000
             , tags = mempty
             }

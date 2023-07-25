@@ -23,12 +23,13 @@ import Language.Marlowe.Runtime.Web (
   ApplyInputsTxEnvelope,
   BlockHeader,
   CardanoTxBody,
+  ContractOrSourceId (..),
   CreateTxEnvelope,
   RoleTokenConfig (RoleTokenSimple),
   WithdrawTxEnvelope,
  )
 import qualified Language.Marlowe.Runtime.Web as Web
-import Language.Marlowe.Runtime.Web.Client (getContractSource, postContract, postContractSource)
+import Language.Marlowe.Runtime.Web.Client (postContract, postContractSource)
 import Language.Marlowe.Runtime.Web.Common (
   choose,
   deposit,
@@ -81,7 +82,7 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
   let partyAWalletAddresses = addresses partyAWallet
   let partyAWebChangeAddress = toDTO $ changeAddress partyAWalletAddresses
   let partyAWebExtraAddresses = Set.map toDTO $ extraAddresses partyAWalletAddresses
-  let partyAWebCollataralUtxos = Set.map toDTO $ collateralUtxos partyAWalletAddresses
+  let partyAWebCollateralUtxos = Set.map toDTO $ collateralUtxos partyAWalletAddresses
 
   let partyBWalletAddresses = addresses partyBWallet
 
@@ -93,19 +94,17 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
   PostContractSourceResponse{contractSourceId} <-
     postContractSource "main" $ yield $ ObjectBundle $ pure $ LabelledObject "main" ContractType $ fromCoreContract contract
 
-  contract' <- getContractSource contractSourceId False
-
   contractCreated@Web.CreateTxEnvelope{contractId} <-
     postContract
       Nothing
       partyAWebChangeAddress
       (Just partyAWebExtraAddresses)
-      (Just partyAWebCollataralUtxos)
+      (Just partyAWebCollateralUtxos)
       Web.PostContractsRequest
         { metadata = mempty
         , version = Web.V1
         , roles = Just $ Web.Mint $ Map.singleton "Party A" $ RoleTokenSimple partyAWebChangeAddress
-        , contract = contract'
+        , contract = ContractOrSourceId $ Right contractSourceId
         , minUTxODeposit = 2_000_000
         , tags = tags
         }
