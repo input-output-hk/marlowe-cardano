@@ -16,9 +16,11 @@ spec:
           size: "100Gi"
         resources:
           requests:
+            cpu: "2000m"
             memory: "8Gi"
           limits:
-            memory: "16Gi"
+            cpu: "4000m"
+            memory: "24Gi"
         postgresql:
           parameters:
             max_connections: "1000"
