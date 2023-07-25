@@ -13,7 +13,7 @@
     n2c.url = "github:shlevy/nix2container/no-Size-on-dir";
   };
 
-  outputs = inputs: inputs.iogx.lib.mkFlake { inherit inputs; };
+  outputs = inputs: inputs.iogx.lib.mkFlake inputs ./.;
 
   nixConfig = {
     extra-substituters = [
