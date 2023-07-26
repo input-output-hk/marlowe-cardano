@@ -34,7 +34,7 @@ module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL (
 import qualified Cardano.Api.Shelley as C
 import Cardano.Binary (unsafeDeserialize')
 import Control.Applicative ((<|>))
-import Control.Arrow ((***))
+import Control.Arrow (Arrow (..), (***))
 import Control.Foldl (Fold (Fold))
 import qualified Control.Foldl as Fold
 import Control.Monad (guard)
@@ -45,10 +45,12 @@ import Control.Monad.Trans.Maybe (MaybeT (..))
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.Foldable (fold)
+import Data.Function (on)
 import Data.Functor ((<&>))
 import Data.Int (Int16, Int64)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
+import Data.List (groupBy, sortOn)
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
@@ -199,27 +201,46 @@ collectTxsFor networkId batchSize credentials fromPoint =
   where
     loadTxIds :: HT.Transaction (Map BlockHeader (Set TxId))
     loadTxIds =
-      Map.fromDistinctAscList . fmap mapRow . V.toList
+      Map.fromDistinctAscList
+        . fmap ((fst . head) &&& foldMap snd)
+        . groupBy (on (==) fst)
+        . fmap mapRow
+        . sortOn (\(slot, _, _, _) -> slot)
+        . V.toList
         <$> HT.statement
           params
           [vectorStatement|
-        WITH credentials (addressHeader,  addressPaymentCredential) as
-          ( SELECT * FROM UNNEST ($1 :: bytea[], $2 :: bytea[])
-          )
-        SELECT
-          block.slotNo :: bigint,
-          (ARRAY_AGG(block.id))[1] :: bytea,
-          (ARRAY_AGG(block.blockNo))[1] :: bigint,
-          ARRAY_AGG(tx.id) :: bytea[]
-        FROM chain.block
-        JOIN chain.tx                          ON block.id = tx.blockId AND  block.slotNo = tx.slotNo
-        JOIN chain.txOut                       ON tx.id = txOut.txId AND tx.slotNo = txOut.slotNo
-        JOIN credentials USING (addressHeader, addressPaymentCredential)
-        WHERE block.rollbackToSlot IS NULL
-          AND txOut.slotNo > $3 :: bigint
-        GROUP BY block.slotNo
-        ORDER BY block.slotNo
-        LIMIT $4 :: int
+            WITH credentials (addressHeader,  addressPaymentCredential) as
+              ( SELECT * FROM UNNEST ($1 :: bytea[], $2 :: bytea[])
+              )
+            SELECT
+              block.slotNo :: bigint,
+              (ARRAY_AGG(block.id))[1] :: bytea,
+              (ARRAY_AGG(block.blockNo))[1] :: bigint,
+              ARRAY_AGG(tx.id) :: bytea[]
+            FROM chain.block
+            JOIN chain.tx                          ON block.id = tx.blockId AND  block.slotNo = tx.slotNo
+            JOIN chain.txOut                       ON tx.id = txOut.txId AND tx.slotNo = txOut.slotNo
+            JOIN credentials USING (addressHeader, addressPaymentCredential)
+            WHERE block.rollbackToSlot IS NULL
+              AND block.slotNo > $3 :: bigint
+            GROUP BY block.slotNo
+            UNION
+            SELECT
+              block.slotNo :: bigint,
+              (ARRAY_AGG(block.id))[1] :: bytea,
+              (ARRAY_AGG(block.blockNo))[1] :: bigint,
+              ARRAY_AGG(tx.id) :: bytea[]
+            FROM chain.block
+            JOIN chain.tx                          ON block.id = tx.blockId AND  block.slotNo = tx.slotNo
+            JOIN chain.txIn                        ON tx.id = txIn.txInId AND tx.slotNo = txIn.slotNo
+            JOIN chain.txOut                       ON txIn.txOutId = txOut.txId AND txIn.txOutIx = txOut.txIx
+            JOIN credentials USING (addressHeader, addressPaymentCredential)
+            WHERE block.rollbackToSlot IS NULL
+              AND block.slotNo > $3 :: bigint
+            GROUP BY block.slotNo
+            ORDER BY slotNo
+            LIMIT $4 :: int
       |]
       where
         params =
