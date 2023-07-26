@@ -8,7 +8,7 @@ import Data.String (IsString)
 import GHC.Exts (IsString (fromString))
 import GHC.Generics (Generic)
 
-newtype ContractNickname = ContractNickname String
+newtype ContractNickname = ContractNickname {unContractNickname :: String}
   deriving stock (Eq, Ord, Generic, Show)
   deriving anyclass (FromJSON, ToJSON)
 instance IsString ContractNickname where fromString = ContractNickname

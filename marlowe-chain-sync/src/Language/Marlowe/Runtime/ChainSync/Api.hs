@@ -49,6 +49,7 @@ import Data.Aeson (
  )
 import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Aeson.Types (parseFail, toJSONKeyText)
 import Data.Bifunctor (bimap)
@@ -250,6 +251,22 @@ fromJSONEncodedMetadata = \case
       pure (MetadataText key, value')
   A.Bool _ -> Nothing
   A.Null -> Nothing
+
+toJSONEncodedMetadata :: Metadata -> Maybe A.Value
+toJSONEncodedMetadata = \case
+  MetadataMap ms ->
+    A.Object . KeyMap.fromList <$> for ms \case
+      (MetadataText k, v) -> do
+        let k' = Key.fromText k
+        v' <- toJSONEncodedMetadata v
+        pure (k', v')
+      _ -> Nothing
+  MetadataList ds ->
+    A.Array . Vector.fromList <$> for ds \e -> do
+      toJSONEncodedMetadata e
+  MetadataNumber i -> Just $ A.Number $ fromInteger i
+  MetadataBytes _ -> Nothing
+  MetadataText bs -> Just $ A.String bs
 
 -- Encodes `transaction_metadata`:
 -- https://github.com/input-output-hk/cardano-ledger/blob/node/1.35.3/eras/shelley/test-suite/cddl-files/shelley.cddl#L212

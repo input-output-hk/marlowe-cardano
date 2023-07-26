@@ -233,18 +233,6 @@ instance FromJSON CLIOperation where
 instance ToJSON CLIOperation where
   toJSON = Operation.toConstructorBasedJSON "co"
 
--- | We encode `PartyRef` as `Party` so we can use role based contracts
--- | without any change in the JSON structure.
--- | In the case of the `Address` you should use standard encoding but
--- | reference a wallet instead of providing hash value:
--- | ```
--- |  "address": "Wallet-1"
--- | ```
-data PartyRef
-  = WalletRef WalletNickname
-  | RoleRef TokenName
-  deriving stock (Eq, Generic, Show)
-
 data CLIContractInfo lang era = CLIContractInfo
   { _ciContract :: M.Contract
   , _ciCurrency :: Maybe CurrencyNickname

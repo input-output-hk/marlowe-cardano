@@ -509,15 +509,30 @@ interpret so@Mint{..} = do
       throwError $ testExecutionFailed' "Currency with a given nickname already exist and is minted by someone else."
     Nothing -> pure ()
 
-  ifor_ currencies \currencyNickname Currency{ccIssuer} ->
+  ifor_ currencies \currencyNickname Currency{ccIssuer} -> do
     when (ccIssuer == issuerNickname && currencyNickname /= woCurrencyNickname) $
       throwError $
         testExecutionFailed'
           "Current minting strategy mints unique currency per issuer. You can't mint multiple currencies with the same issuer."
+  -- when (ccIssuer == issuerNickname && isJust woExpires) $
+  --   throwError $
+  --     testExecutionFailed'
+  --       "Current minting strategy mints unique currency per issuer. Expiration date can be set only in the initial currency minting."
+
+  -- let
+  --   expires = woExpires $ map _ccMintingExpirationSlot find (\Currency{ccIssuer} -> ccIssuer == issuerNickname) currencies
 
   Wallet issuerAddress _ issuerSigningKey _ :: Wallet era <- findWallet issuerNickname
   tokenDistribution <- forM woTokenDistribution \(TokenAssignment recipient tokens) -> do
-    Wallet destAddress _ _ _ <- findWallet recipient
+    destAddress <- case recipient of
+      Left bech32 -> do
+        case C.deserialiseFromBech32 C.AsShelleyAddress bech32 of
+          Left err -> throwError $ testExecutionFailed' $ "Failed to parse address: " <> show err
+          Right addr -> do
+            pure $ C.shelleyAddressInEra addr
+      Right walletNickname -> do
+        Wallet addr _ _ _ <- findWallet walletNickname
+        pure addr
     pure (destAddress, Just woMinLovelace, tokens)
 
   logStoreLabeledMsg so $

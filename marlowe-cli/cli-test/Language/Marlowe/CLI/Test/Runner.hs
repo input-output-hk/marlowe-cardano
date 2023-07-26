@@ -552,7 +552,7 @@ runTest (testFile, TestCase{testName, operations = testOperations}) = do
     modifyTVar' resultsRef (Map.insert (testFile, testName) result)
 
   whenM (view envStreamJSON) do
-    let resultJson = testResultToJSON testFile testName result
+    resultJson <- testResultToJSON testFile testName result
     liftIO $ putStrLn $ Text.unpack $ A.renderValue resultJson
 
   let printResultMsg msg = liftIO $ hPutStrLn stderr $ "***** " <> coerce testName <> ": " <> msg <> " *****"
@@ -711,14 +711,14 @@ data TestSuiteResult lang era = TestSuiteResult
   , _tsMasterFaucetInfo :: MasterFaucetInfo
   }
 
-testSuiteResultToJSON :: (C.IsCardanoEra era) => TestSuiteResult lang era -> A.Value
-testSuiteResultToJSON TestSuiteResult{..} =
-  A.object
-    [ "results" .= do
-        let step ((testFile, testName), result) = testResultToJSON testFile testName result
-        map step $ Map.toList _tsResult
-    , "masterFaucetInfo" A..= masterFauceInfoToJSON _tsMasterFaucetInfo
-    ]
+testSuiteResultToJSON :: (C.IsCardanoEra era) => (MonadIO m) => TestSuiteResult lang era -> m A.Value
+testSuiteResultToJSON TestSuiteResult{..} = do
+  resultsJSON <- for (Map.toList _tsResult) \((testFile, testName), result) -> testResultToJSON testFile testName result
+  pure $
+    A.object
+      [ "results" .= resultsJSON
+      , "masterFaucetInfo" A..= masterFauceInfoToJSON _tsMasterFaucetInfo
+      ]
 
 -- It is a bit surprising but the standard bracketing failes (hangs)
 -- when we have to perform node queries during the release action.

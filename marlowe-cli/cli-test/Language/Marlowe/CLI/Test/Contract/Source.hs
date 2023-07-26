@@ -51,6 +51,8 @@ import Language.Marlowe.CLI.Test.Wallet.Types qualified as Wallet
 import Language.Marlowe.CLI.Types (CliError, SomeTimeout, toMarloweExtendedTimeout, toMarloweTimeout)
 import Language.Marlowe.Core.V1.Semantics.Types qualified as C
 import Language.Marlowe.Core.V1.Semantics.Types qualified as M
+import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddressBech32, serialiseAddressBech32)
+import Language.Marlowe.Core.V1.Semantics.Types.Address qualified as V1
 import Language.Marlowe.Extended.V1 (toCore)
 import Language.Marlowe.Extended.V1 qualified as E
 import Ledger.Orphans ()
@@ -60,6 +62,7 @@ import Marlowe.Contracts.ChunkedValueTransfer qualified as ChunkedValueTransfer
 import Marlowe.Contracts.Raffle (raffle)
 import Marlowe.Contracts.Raffle qualified as Raffle
 import Plutus.V1.Ledger.Api (TokenName)
+import Plutus.V2.Ledger.Api qualified as Ledger
 
 -- | We encode `PartyRef` as `Party` so we can use role based contracts
 -- | without any change in the JSON structure.
@@ -70,13 +73,17 @@ import Plutus.V1.Ledger.Api (TokenName)
 -- | ```
 data PartyRef
   = WalletRef !WalletNickname
+  | KnownAddress !(V1.Network, Ledger.Address)
   | RoleRef !TokenName
   deriving stock (Eq, Generic, Show)
 
 instance FromJSON PartyRef where
   parseJSON = \case
-    A.Object (KeyMap.toList -> [("address", A.String walletNickname)]) ->
-      pure . WalletRef . WalletNickname . T.unpack $ walletNickname
+    A.Object (KeyMap.toList -> [("address", A.String addr)]) ->
+      case deserialiseAddressBech32 addr of
+        Just parts -> pure $ KnownAddress parts
+        Nothing ->
+          pure . WalletRef . WalletNickname . T.unpack $ addr
     A.Object (KeyMap.toList -> [("role_token", roleTokenJSON)]) -> do
       roleToken <- parseTokenNameJSON roleTokenJSON
       pure $ RoleRef roleToken
@@ -86,6 +93,10 @@ instance ToJSON PartyRef where
   toJSON (WalletRef (WalletNickname walletNickname)) =
     A.object
       ["address" .= A.String (T.pack walletNickname)]
+  toJSON (KnownAddress (network, address)) = do
+    let address' = serialiseAddressBech32 network address
+    A.object
+      ["address" .= A.String address']
   toJSON (RoleRef tokenName) =
     A.object
       ["role_token" .= tokenNameToJSON tokenName]
@@ -257,6 +268,7 @@ buildParty mRoleCurrency = \case
   WalletRef nickname -> do
     wallet <- findWallet nickname
     uncurry M.Address <$> rethrowCliError (marloweAddressFromCardanoAddress (_waAddress wallet))
+  KnownAddress (n, a) -> pure $ M.Address n a
   RoleRef token -> do
     -- Consistency check
     currency <- case mRoleCurrency of

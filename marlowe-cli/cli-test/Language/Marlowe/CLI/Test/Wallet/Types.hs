@@ -77,6 +77,12 @@ import Plutus.V1.Ledger.Api (CurrencySymbol, TokenName)
 import Plutus.V1.Ledger.Value qualified as P
 import Text.Read (readMaybe)
 
+-- import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1
+-- import qualified Plutus.V2.Ledger.Api as Ledger
+
+import Data.Text (Text)
+import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddressBech32)
+
 -- | Runtime interaction (submission) works against specific era (Babbage).
 -- | On the other hand CLI is more flexible and is able to decode and handle
 -- | transactions from different eras.
@@ -159,7 +165,7 @@ instance ToJSONKey CurrencyNickname where
 data Currency = Currency
   { ccCurrencySymbol :: CurrencySymbol
   , ccIssuer :: WalletNickname
-  , -- , ccExpirationSlot :: C.SlotNo
+  , -- , ccMintingExpirationSlot :: C.SlotNo
     ccPolicyId :: PolicyId
   }
   deriving stock (Eq, Ord, Generic, Show)
@@ -331,34 +337,43 @@ instance ToJSON AssetsBalance where
           [toJSON currencyNickname, toJSON tokenName, toJSON [toJSON minValue, toJSON maxValue]]
 
 data TokenAssignment = TokenAssignment
-  { taWalletNickname :: WalletNickname
+  { taWalletNickname :: Either Text WalletNickname
   -- ^ Default to the same wallet nickname as a token name.
   , tokens :: [(TokenName, Natural)]
   }
   deriving stock (Eq, Generic, Show)
 
 instance FromJSON TokenAssignment where
-  parseJSON = \case
-    A.Array (V.toList -> [walletNicknameJSON, tokenNameJSON, amountJSON]) -> do
-      walletNickname <- parseJSON walletNicknameJSON
-      tokenName <- parseTokenNameJSON tokenNameJSON
-      amount <- parseJSON amountJSON
-      pure $ TokenAssignment walletNickname [(tokenName, amount)]
-    A.Object (sort . KeyMap.toList -> [("recipient", walletNicknameJSON), ("tokens", A.Array tokensJSONs)]) -> do
-      walletNickname <- parseJSON walletNicknameJSON
-      tokensVector <- for tokensJSONs \case
-        A.Array (V.toList -> [tokenNameJSON, amountJSON]) -> do
-          tokenName <- parseTokenNameJSON tokenNameJSON
-          amount <- parseJSON amountJSON
-          pure (tokenName, amount)
-        _ -> fail "Expecting a `TokenAssignment` tuple: `[TokenName, Integer]`."
-      pure $ TokenAssignment walletNickname $ V.toList tokensVector
-    _ -> fail "Expecting a `TokenAssignment` tuple: `[WalletNickname, TokenName, Integer]`."
+  parseJSON = do
+    let parseRecipient json = do
+          txt <- parseJSON json
+          case deserialiseAddressBech32 txt of
+            Just _ -> pure $ Left txt
+            Nothing -> pure $ Right $ WalletNickname $ T.unpack txt
+    \case
+      A.Array (V.toList -> [recipientJSON, tokenNameJSON, amountJSON]) -> do
+        walletNickname <- parseRecipient recipientJSON
+        tokenName <- parseTokenNameJSON tokenNameJSON
+        amount <- parseJSON amountJSON
+        pure $ TokenAssignment walletNickname [(tokenName, amount)]
+      A.Object (sort . KeyMap.toList -> [("recipient", recipientJSON), ("tokens", A.Array tokensJSONs)]) -> do
+        walletNickname <- parseRecipient recipientJSON
+        tokensVector <- for tokensJSONs \case
+          A.Array (V.toList -> [tokenNameJSON, amountJSON]) -> do
+            tokenName <- parseTokenNameJSON tokenNameJSON
+            amount <- parseJSON amountJSON
+            pure (tokenName, amount)
+          _ -> fail "Expecting a `TokenAssignment` tuple: `[TokenName, Integer]`."
+        pure $ TokenAssignment walletNickname $ V.toList tokensVector
+      _ -> fail "Expecting a `TokenAssignment` tuple: `[WalletNickname, TokenName, Integer]`."
 
 instance ToJSON TokenAssignment where
-  toJSON (TokenAssignment (WalletNickname walletNickname) tokens) =
+  toJSON (TokenAssignment recipient tokens) = do
+    let recipientJSON = case recipient of
+          Left txt -> toJSON txt
+          Right walletNickname -> toJSON walletNickname
     A.object
-      [ ("recipient", toJSON walletNickname)
+      [ ("recipient", recipientJSON)
       , ("tokens", A.Array $ V.fromList $ map tokenToJSON tokens)
       ]
     where
@@ -396,6 +411,8 @@ data WalletOperation
       , woMetadata :: Maybe Aeson.Object
       , woTokenDistribution :: NonEmpty TokenAssignment
       , woMinLovelace :: Lovelace
+      -- We should make this relative
+      -- , woMitingExpirationSlot :: Maybe C.SlotNo
       }
   | SplitWallet
       { woWalletNickname :: WalletNickname
