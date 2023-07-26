@@ -23,7 +23,7 @@ module Language.Marlowe.CLI.Test.Types where
 import Cardano.Api (AddressInEra, CardanoMode, IsCardanoEra, LocalNodeConnectInfo, NetworkId, ScriptDataSupportedInEra)
 import Control.Lens (makeLenses, (^.), _1, _2, _Just)
 import Control.Monad.Except (MonadError)
-import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Reader (MonadReader)
 import Data.Aeson (FromJSON, ToJSON (..), (.=))
 import Data.Aeson qualified as A
@@ -38,16 +38,22 @@ import Plutus.V1.Ledger.Api (CostModelParams)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig)
 
 import Cardano.Api qualified as C
+import Contrib.Data.Foldable (foldMapM)
 import Contrib.Data.Time.Units.Aeson qualified as A
 import Control.Category ((<<<))
 import Control.Monad.State.Class (MonadState)
+import Data.Aeson.Encode.Pretty qualified as A
 import Data.Aeson.Key qualified as A.Key
+import Data.Aeson.Key qualified as Key
+import Data.Aeson.Types qualified as A
 import Data.Bifunctor (Bifunctor (bimap))
+import Data.ByteString.Lazy qualified as BSL
 import Data.Functor ((<&>))
 import Data.Map.Strict qualified as Map
+import Data.Traversable (for)
 import Language.Marlowe.CLI.Test.CLI.Types (CLIContracts (CLIContracts), CLIOperation)
 import Language.Marlowe.CLI.Test.CLI.Types qualified as CLI
-import Language.Marlowe.CLI.Test.Contract.ContractNickname (ContractNickname)
+import Language.Marlowe.CLI.Test.Contract.ContractNickname (ContractNickname (ContractNickname))
 import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode)
 import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError, ieMessage)
 import Language.Marlowe.CLI.Test.Log (Logs)
@@ -67,6 +73,7 @@ import Network.Socket (PortNumber)
 import Plutus.V1.Ledger.Value qualified as P.Value
 import Plutus.V2.Ledger.Api qualified as P
 import PlutusTx.AssocMap qualified as P.AssocMap
+import System.IO.Temp (emptySystemTempFile)
 
 data RuntimeConfig = RuntimeConfig
   { rcRuntimeHost :: String
@@ -304,6 +311,7 @@ instance Runtime.HasInterpretEnv (InterpretEnv lang era) era where
   runtimeClientConnectorT = ieRuntimeClientConnector . _Just
   executionModeL = ieExecutionMode
   connectionT = ieConnection
+  slotConfigL = ieSlotConfig
   eraL = ieEra
 
 -- txId = overSomeTxBody (const C.getTxId)
@@ -329,59 +337,94 @@ currencyToJSON Currency{..} =
     , "policyId" .= ccPolicyId
     ]
 
+contractInfoToJSON :: (MonadIO m) => ContractNickname -> Runtime.ContractInfo -> m [A.Pair]
+contractInfoToJSON (ContractNickname nickname) Runtime.ContractInfo{..} = do
+  contractFile <- liftIO do
+    let filenameBase = "contract-" <> nickname <> ".json"
+    filename <- emptySystemTempFile filenameBase
+    BSL.writeFile filename $ A.encodePretty _ciContract
+    pure filename
+  continuationsFile <- for _ciContinuations \containuations -> do
+    let filenameBase = "contract-" <> nickname <> "-continuations.json"
+    liftIO $ do
+      filename <- emptySystemTempFile filenameBase
+      BSL.writeFile filename $ A.encodePretty containuations
+      pure filename
+  pure
+    [
+      ( Key.fromString nickname
+      , A.object
+          [ ("contractId", A.toJSON _ciContractId)
+          , ("contractFile", A.toJSON contractFile)
+          , ("continuationsFile", A.toJSON continuationsFile)
+          , ("roleCurrency", A.toJSON _ciRoleCurrency)
+          ]
+      )
+    ]
+
 interpretStateToJSONPairs
-  :: forall a era lang
-   . (IsCardanoEra era)
+  :: forall a era lang m
+   . (MonadIO m)
+  => (IsCardanoEra era)
   => (Aeson.KeyValue a)
   => InterpretState lang era
-  -> [a]
-interpretStateToJSONPairs InterpretState{..} =
-  [ "wallets" .= do
-      let step n wallet = [(n, walletToJSON wallet)]
-      Map.foldMapWithKey step $ getAllWallets _isWallets
-  , "currencies" .= do
-      let step n curr = [(n, currencyToJSON curr)]
-      Map.foldMapWithKey step $ unCurrencies _isCurrencies
-  ]
+  -> m [a]
+interpretStateToJSONPairs InterpretState{..} = do
+  contractsJSON <- A.object <$> foldMapM (uncurry contractInfoToJSON) (Map.toList _isKnownContracts)
+  pure
+    [ "wallets" .= do
+        let step n wallet = [(n, walletToJSON wallet)]
+        Map.foldMapWithKey step $ getAllWallets _isWallets
+    , "currencies" .= do
+        let step n curr = [(n, currencyToJSON curr)]
+        Map.foldMapWithKey step $ unCurrencies _isCurrencies
+    , "contracts" .= contractsJSON
+    ]
 
 failureReportToJSON
-  :: forall era lang
+  :: forall era lang m
    . (IsCardanoEra era)
+  => (MonadIO m)
   => FilePath
   -> TestName
   -> FailureReport lang era
   -> [FailureReport lang era]
-  -> Aeson.Value
+  -> m Aeson.Value
 failureReportToJSON testFile (TestName name) failure@FailureReport{_frInterpretState = interpretState@InterpretState{..}} retries = do
   let err = _frErr failure
       -- It is a bit easier to read the log when we have the error message itself at the end.
       logs = case err of
         InterpreterError err' -> reverse (("Error", err' ^. ieMessage, []) : _isLogs)
         _ -> reverse _isLogs
-  A.object $
-    [ "name" .= name
-    , "testSource" .= testFile
-    , "result" A..= ("failed" :: String)
-    , "error" .= err
-    , "retries" .= fmap _frErr retries
-    , "logs" .= logs
-    ]
-      <> interpretStateToJSONPairs interpretState
+  statePairs <- interpretStateToJSONPairs interpretState
+  pure $
+    A.object $
+      [ "name" .= name
+      , "testSource" .= testFile
+      , "result" A..= ("failed" :: String)
+      , "error" .= err
+      , "retries" .= fmap _frErr retries
+      , "logs" .= logs
+      ]
+        <> statePairs
 
 testResultToJSON
   :: (IsCardanoEra era)
+  => (MonadIO m)
   => FilePath
   -> TestName
   -> TestResult lang era
-  -> Aeson.Value
+  -> m Aeson.Value
 testResultToJSON testFile testName@(TestName name) = \case
-  TestSucceeded interpretState ->
-    A.object $
-      [ "testName" A..= name
-      , "testSource" A..= testFile
-      , "result" A..= ("passed" :: String)
-      ]
-        <> interpretStateToJSONPairs interpretState
+  TestSucceeded interpretState -> do
+    statePairs <- interpretStateToJSONPairs interpretState
+    pure $
+      A.object $
+        [ "testName" A..= name
+        , "testSource" A..= testFile
+        , "result" A..= ("passed" :: String)
+        ]
+          <> statePairs
   TestFailed err retries -> failureReportToJSON testFile testName err retries
 
 newtype FaucetsNumber = FaucetsNumber Int

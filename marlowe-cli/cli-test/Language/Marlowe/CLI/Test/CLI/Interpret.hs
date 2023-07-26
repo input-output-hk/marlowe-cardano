@@ -56,7 +56,7 @@ import Ledger.Orphans ()
 import Contrib.Control.Monad.Except (note)
 import Contrib.Data.Foldable (anyFlipped, foldMapFlipped, foldMapMFlipped)
 import Contrib.Data.List.Random (combinationWithRepetitions)
-import Control.Monad (foldM, void, when)
+import Control.Monad (foldM, when)
 import Control.Monad.Error.Class (MonadError (throwError))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Loops (untilJust)
@@ -84,7 +84,6 @@ import Language.Marlowe.CLI.Test.CLI.Types (
   CLIOperation (..),
   InterpretMonad,
   MarloweValidators (..),
-  PartyRef (RoleRef, WalletRef),
   anyCLIMarloweThreadInputsApplied,
   connectionL,
   contractsL,
@@ -243,24 +242,6 @@ autoRunTransaction currency defaultSubmitter prev curr@T.MarloweTransaction{..} 
     [] -> pure (txBody, Nothing)
     _ ->
       throwError $ testExecutionFailed' "[AutoRun] Multiple Marlowe outputs detected - unable to handle them yet."
-
-buildParty
-  :: (InterpretMonad env st m lang era)
-  => Maybe CurrencyNickname
-  -> PartyRef
-  -> m M.Party
-buildParty mRoleCurrency = \case
-  WalletRef nickname -> do
-    wallet <- findWallet nickname
-    uncurry M.Address <$> rethrowCliError (marloweAddressFromCardanoAddress (_waAddress wallet))
-  RoleRef token -> do
-    -- Cosistency check
-    currency <- case mRoleCurrency of
-      Nothing -> fst <$> getSingletonCurrency
-      Just cn -> pure cn
-    void $ findWalletByUniqueToken currency token
-    -- We are allowed to use this M.Role
-    pure $ M.Role token
 
 publishCurrentValidators
   :: forall env era lang st m

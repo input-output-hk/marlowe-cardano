@@ -60,13 +60,13 @@ interpret o@(ShouldFail operation) =
         throwLabeledError o $ testExecutionFailed' $ "Operation unexpectedly suceeded: " <> show operation
       Left e -> do
         state' <- get
-        let prevStateJson = A.object $ interpretStateToJSONPairs state
-            newStateJson = A.object $ interpretStateToJSONPairs state'
+        prevStateJson <- A.object <$> interpretStateToJSONPairs state
+        newStateJson <- A.object <$> interpretStateToJSONPairs state'
         -- FIXME: We don't have Eq instance in place and this check coveres only the part of the state.
         if prevStateJson /= newStateJson
           then do
-            let prevStateStr = T.unpack $ A.renderValue $ A.object $ interpretStateToJSONPairs state
-                newStateStr = T.unpack $ A.renderValue $ A.object $ interpretStateToJSONPairs state'
+            prevStateStr <- T.unpack . A.renderValue . A.object <$> interpretStateToJSONPairs state
+            newStateStr <- T.unpack . A.renderValue . A.object <$> interpretStateToJSONPairs state'
             throwLabeledError o $
               testExecutionFailed' $
                 "Operation failed as expected: "
