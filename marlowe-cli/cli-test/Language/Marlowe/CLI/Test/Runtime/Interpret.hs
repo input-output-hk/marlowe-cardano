@@ -14,7 +14,6 @@ module Language.Marlowe.CLI.Test.Runtime.Interpret where
 
 import Cardano.Api (CardanoMode, ScriptDataSupportedInEra (ScriptDataInBabbageEra))
 import Cardano.Api qualified as C
-import Contrib.Cardano.Formatting (friendlyTxBody)
 import Contrib.Control.Concurrent.Async (timeoutIO)
 import Contrib.Control.Monad.Except (note)
 import Contrib.Data.List.Random (combinationWithRepetitions)
@@ -46,7 +45,7 @@ import Language.Marlowe.CLI.Test.Contract (ContractNickname (ContractNickname), 
 import Language.Marlowe.CLI.Test.Contract.Source (useTemplate)
 import Language.Marlowe.CLI.Test.ExecutionMode (skipInSimluationMode)
 import Language.Marlowe.CLI.Test.InterpreterError (runtimeOperationFailed', testExecutionFailed', timeoutReached')
-import Language.Marlowe.CLI.Test.Log (Label, logStoreLabeledMsg, logStoreMsgWith, throwLabeledError)
+import Language.Marlowe.CLI.Test.Log (Label, logStoreLabeledMsg, throwLabeledError)
 import Language.Marlowe.CLI.Test.Runtime.Types (
   ContractInfo (ContractInfo, _ciContinuations, _ciContract, _ciContractId, _ciMarloweThread, _ciRoleCurrency),
   DoMerkleize (ClientSide, RuntimeSide),
