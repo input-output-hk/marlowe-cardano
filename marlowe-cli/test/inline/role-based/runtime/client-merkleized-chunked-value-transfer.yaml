@@ -1,0 +1,335 @@
+testName: Chunked value transfer using roles, the Runtime and the merkleization on the client side
+
+operations:
+
+- CreateWallet: Organizer
+
+- CreateWallet: First
+
+- Fund:
+    utxo: 20000000
+    wallets: [Organizer, First]
+
+- Mint:
+    nickname: PriceTokens
+    minLovelace: 2000000
+    tokenDistribution:
+      - [First, FirstPriceToken, 1]
+
+- Mint:
+    issuer: Organizer
+    nickname: PriceAsset
+    minLovelace: 2000000
+    tokenDistribution:
+      - [Organizer, Token01, 1]
+      - [Organizer, Token02, 1]
+      - [Organizer, Token03, 1]
+      - [Organizer, Token04, 1]
+
+- RuntimeCreateContract:
+    minLovelace: 2000000
+    awaitConfirmed: 120
+    roleCurrency: PriceTokens
+    merkleize: ClientSide
+    source:
+      when:
+        - case:
+            party:
+              address: Organizer
+            deposits: 1
+            into_account:
+              address: Organizer
+            of_token:
+              currency_symbol: PriceAsset
+              token_name: Token01
+          then:
+            timeout:
+              relative: 3600
+            timeout_continuation:
+              pay: 1
+              token:
+                currency_symbol: PriceAsset
+                token_name: Token01
+              from_account:
+                address: Organizer
+              to:
+                party:
+                  address: Organizer
+              then: close
+            when:
+              - case:
+                  party:
+                    address: Organizer
+                  deposits: 1
+                  into_account:
+                    address: Organizer
+                  of_token:
+                    currency_symbol: PriceAsset
+                    token_name: Token02
+                then:
+                  when:
+                    - case:
+                        party:
+                          address: Organizer
+                        deposits: 1
+                        into_account:
+                          address: Organizer
+                        of_token:
+                          currency_symbol: PriceAsset
+                          token_name: Token03
+                      then:
+                        when:
+                          - case:
+                              party:
+                                address: Organizer
+                              deposits: 1
+                              into_account:
+                                address: Organizer
+                              of_token:
+                                currency_symbol: PriceAsset
+                                token_name: Token04
+                            then:
+                              when:
+                                - case:
+                                    notify_if: true
+                                  then:
+                                    pay: 1
+                                    token:
+                                      currency_symbol: PriceAsset
+                                      token_name: Token01
+                                    from_account:
+                                      address: Organizer
+                                    to:
+                                      party:
+                                        role_token: FirstPriceToken
+                                    then:
+                                      when:
+                                        - case:
+                                            notify_if: true
+                                          then:
+                                            pay: 1
+                                            token:
+                                              currency_symbol: PriceAsset
+                                              token_name: Token02
+                                            from_account:
+                                              address: Organizer
+                                            to:
+                                              party:
+                                                role_token: FirstPriceToken
+                                            then:
+                                              when:
+                                                - case:
+                                                    notify_if: true
+                                                  then:
+                                                    pay: 1
+                                                    token:
+                                                      currency_symbol: PriceAsset
+                                                      token_name: Token03
+                                                    from_account:
+                                                      address: Organizer
+                                                    to:
+                                                      party:
+                                                        role_token: FirstPriceToken
+                                                    then:
+                                                      when:
+                                                        - case:
+                                                            notify_if: true
+                                                          then:
+                                                            pay: 1
+                                                            token:
+                                                              currency_symbol: PriceAsset
+                                                              token_name: Token04
+                                                            from_account:
+                                                              address: Organizer
+                                                            to:
+                                                              party:
+                                                                role_token: FirstPriceToken
+                                                            then: close
+                                                      timeout:
+                                                        relative: 36000 # in the real contract this is "infinite" +10_000 years
+                                                      timeout_continuation: close
+                                              timeout:
+                                                relative: 36000 # in the real contract this is "infinite" +10_000 years
+                                              timeout_continuation: close
+                                      timeout:
+                                        relative: 36000 # in the real contract this is "infinite" +10_000 years
+                                      timeout_continuation: close
+                              timeout:
+                                relative: 36000 # in the real contract this is "infinite" +10_000 years
+                              timeout_continuation: close
+                        timeout:
+                          relative: 36000 # in the real contract this is "infinite" +10_000 years
+                        timeout_continuation:
+                          pay: 1
+                          token:
+                            currency_symbol: PriceAsset
+                            token_name: Token01
+                          from_account:
+                            address: Organizer
+                          to:
+                            party:
+                              address: Organizer
+                          then:
+                            timeout:
+                              relative: 36000 # in the real contract this is "infinite" +10_000 years
+                            timeout_continuation: close
+                            when:
+                              - case:
+                                  notify_if: true
+                                then:
+                                  pay: 1
+                                  token:
+                                    currency_symbol: PriceAsset
+                                    token_name: Token02
+                                  to:
+                                    party:
+                                      address: Organizer
+                                  from_account:
+                                    address: Organizer
+                                  then:
+                                    timeout:
+                                      relative: 36000 # in the real contract this is "infinite" +10_000 years
+                                    timeout_continuation: close
+                                    when:
+                                      - case:
+                                          notify_if: true
+                                        then:
+                                          pay: 1
+                                          token:
+                                            currency_symbol: PriceAsset
+                                            token_name: Token03
+                                          from_account:
+                                            address: Organizer
+                                          to:
+                                            party:
+                                              address: Organizer
+                                          then: close
+                  timeout:
+                    relative: 3600 # this is deposit timeout
+                  timeout_continuation:
+                    pay: 1
+                    token:
+                      currency_symbol: PriceAsset
+                      token_name: Token01
+                    from_account:
+                      address: Organizer
+                    to:
+                      party:
+                        address: Organizer
+                    then:
+                      timeout:
+                        relative: 36000 # in the real contract this is "infinite" +10_000 years
+                      timeout_continuation: close
+                      when:
+                        - case:
+                            notify_if: true
+                          then:
+                            pay: 1
+                            token:
+                              currency_symbol: PriceAsset
+                              token_name: Token02
+                            from_account:
+                              address: Organizer
+                            to:
+                              party:
+                                address: Organizer
+                            then: close
+      timeout:
+        relative: 3600 # this is deposit timeout
+      timeout_continuation: close
+
+- RuntimeApplyInputs:
+    submitter: Organizer
+    awaitConfirmed: 120
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800
+    inputs:
+      - input_from_party:
+          address: Organizer
+        that_deposits: 1
+        of_token:
+          currency_symbol: PriceAsset
+          token_name: Token01
+        into_account:
+          address: Organizer
+      - input_from_party:
+          address: Organizer
+        that_deposits: 1
+        of_token:
+          currency_symbol: PriceAsset
+          token_name: Token02
+        into_account:
+          address: Organizer
+
+- RuntimeApplyInputs:
+    submitter: Organizer
+    awaitConfirmed: 120
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800
+    inputs:
+      - input_from_party:
+          address: Organizer
+        that_deposits: 1
+        of_token:
+          currency_symbol: PriceAsset
+          token_name: Token03
+        into_account:
+          address: Organizer
+      - input_from_party:
+          address: Organizer
+        that_deposits: 1
+        of_token:
+          currency_symbol: PriceAsset
+          token_name: Token04
+        into_account:
+          address: Organizer
+
+
+- RuntimeApplyInputs:
+    submitter: Organizer
+    awaitConfirmed: 120
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800
+    inputs:
+      - "input_notify"
+
+- RuntimeApplyInputs:
+    submitter: Organizer
+    awaitConfirmed: 120
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800
+    inputs:
+      - "input_notify"
+
+- RuntimeApplyInputs:
+    submitter: Organizer
+    awaitConfirmed: 120
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800
+    inputs:
+      - "input_notify"
+
+- RuntimeWithdraw:
+    wallets:
+      - First
+    awaitConfirmed: 120
+
+- CheckBalance:
+    wallet: First
+    balance:
+      - [ADA, [20, 30]]
+      - [PriceAsset, Token01, 1]
+      - [PriceAsset, Token02, 1]
+      - [PriceAsset, Token03, 1]
+      - [PriceAsset, Token04, 1]
+      - [PriceTokens, FirstPriceToken, 1]
