@@ -15,6 +15,7 @@ import Cardano.Api (
  )
 import qualified Cardano.Api.Shelley
 import qualified Control.Monad.Reader as Reader
+import Data.Foldable (for_)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Maybe as Maybe
@@ -23,6 +24,7 @@ import qualified Data.Text as Text
 import qualified Data.Time as Time
 import qualified Data.Time.Clock.POSIX as POSIX
 import Data.Void (Void)
+import GHC.IO.Exception (ExitCode (ExitSuccess))
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as ChainSync.Api
@@ -36,14 +38,29 @@ import Language.Marlowe.Runtime.Core.Api (
   MarloweVersionTag (V1),
   renderContractId,
  )
-import Language.Marlowe.Runtime.Integration.Common (Integration, Wallet (..), getGenesisWallet, runIntegrationTest)
+import Language.Marlowe.Runtime.Integration.Common (
+  Integration,
+  Wallet (..),
+  getGenesisWallet,
+  runIntegrationTest,
+ )
 import qualified Language.Marlowe.Runtime.Integration.Common as Runtime.Integration.Common
-import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand (..), WalletAddresses (..), WithdrawTx (..))
+import Language.Marlowe.Runtime.Transaction.Api (
+  MarloweTxCommand (..),
+  WalletAddresses (..),
+  WithdrawTx (..),
+ )
 import qualified Language.Marlowe.Runtime.Transaction.Api as Runtime.Transaction.Api
 import Language.Marlowe.Util (ada)
 import qualified Network.Protocol.Job.Client as JobClient
 import qualified Plutus.V2.Ledger.Api
-import Test.Hspec (Spec, describe, it, shouldBe)
+import Test.Hspec (
+  Spec,
+  describe,
+  focus,
+  it,
+  shouldBe,
+ )
 import qualified Test.Hspec as Hspec
 import Test.Integration.Marlowe (
   LocalTestnet (..),
@@ -53,7 +70,10 @@ import Test.Integration.Marlowe (
   withLocalMarloweRuntime,
   writeWorkspaceFileJSON,
  )
-import UnliftIO (concurrently, liftIO)
+import UnliftIO (
+  concurrently,
+  liftIO,
+ )
 
 data CLISpecTestData = CLISpecTestData
   { partyAWallet :: Wallet
@@ -69,6 +89,7 @@ spec = Hspec.describe "Marlowe runtime CLI" $ Hspec.aroundAll setup do
   notifySpec
   applySpec
   withdrawSpec
+  bugPLT6773
   where
     setup :: Hspec.ActionWith CLISpecTestData -> IO ()
     setup runSpec = withLocalMarloweRuntime $ runIntegrationTest do
@@ -551,3 +572,37 @@ withdrawSpec = describe "withdraw" $
             "Party A"
 
     expectSameResultFromCLIAndJobClient "withdraw-tx-body.json" extraCliArgs command
+
+bugPLT6773 :: Hspec.SpecWith CLISpecTestData
+bugPLT6773 = focus $
+  describe "[BUG] PLT-6773: Marlowe runtime cannot load any contracts" $
+    it "Marlowe runtime can load any contracts" \CLISpecTestData{..} -> flip runIntegrationTest runtime do
+      workspace <- Reader.asks $ workspace . testnet
+      let contractHashRelation :: [(V1.Contract, String, String)]
+          contractHashRelation =
+            [ (V1.Close, "923918e403bf43c34b4ef6b48eb2ee04babed17320d8d1b9ff9ad086e86f44ec", "\"close\"\n")
+            ,
+              ( V1.Assert V1.TrueObs V1.Close
+              , "ee5ab3bfda75834c3c1503ec7cd0b7fccbce7ceb3909e5404910bfd9e09b1be4"
+              , "{\"assert\":true,\"then\":\"close\"}"
+              )
+            ]
+
+      for_ contractHashRelation \(contract :: V1.Contract, expectedHash :: String, expectedContract :: String) -> do
+        contractFilePath <- writeWorkspaceFileJSON workspace "contract.json" contract
+
+        do
+          (code, stdout, stderr) <- Runtime.Integration.Common.execMarlowe' ["load", "--read-json", contractFilePath]
+
+          liftIO do
+            putStrLn stderr
+            code `shouldBe` ExitSuccess
+            stdout `shouldBe` expectedHash ++ "\n"
+
+        do
+          (code, stdout, stderr) <- Runtime.Integration.Common.execMarlowe' ["query", "store", "contract", expectedHash]
+
+          liftIO do
+            putStrLn stderr
+            code `shouldBe` ExitSuccess
+            stdout `shouldBe` expectedContract
