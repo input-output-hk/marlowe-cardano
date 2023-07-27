@@ -31,8 +31,8 @@ import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Command.Parse (parseParty, parseTimeout, parseToken, timeoutHelpMsg)
 import Language.Marlowe.CLI.Examples (makeExample)
 import Language.Marlowe.CLI.IO (decodeFileStrict)
-import Language.Marlowe.CLI.Types (CliError (..), SomeTimeout, toMarloweTimeout)
-import Language.Marlowe.Extended.V1 as E (Contract (..), Party, Token, Value (..))
+import Language.Marlowe.CLI.Types (CliError (..), SomeTimeout, toPlutusPOSIXTime)
+import Language.Marlowe.Core.V1.Semantics.Types as C (Contract (..), Party, Token, Value (..))
 import Language.Marlowe.Util (ada)
 import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
 
@@ -174,84 +174,79 @@ runTemplateCommand
   -> m ()
   -- ^ Action for runninng the command.
 runTemplateCommand TemplateTrivial{..} OutputFiles{..} = do
-  timeout' <- toMarloweTimeout timeout
-  marloweContract <-
-    makeContract $
-      trivial
-        party
-        depositLovelace
-        withdrawalLovelace
-        timeout'
+  timeout' <- toPlutusPOSIXTime timeout
+  let marloweContract =
+        trivial
+          party
+          depositLovelace
+          withdrawalLovelace
+          timeout'
   let marloweState = initialMarloweState bystander minAda
   makeExample contractFile stateFile (marloweContract, marloweState)
 runTemplateCommand TemplateEscrow{..} OutputFiles{..} = do
-  paymentDeadline' <- toMarloweTimeout paymentDeadline
-  complaintDeadline' <- toMarloweTimeout complaintDeadline
-  disputeDeadline' <- toMarloweTimeout disputeDeadline
-  mediationDeadline' <- toMarloweTimeout mediationDeadline
-  marloweContract <-
-    makeContract $
-      escrow
-        (Constant price)
-        seller
-        buyer
-        mediator
-        paymentDeadline'
-        complaintDeadline'
-        disputeDeadline'
-        mediationDeadline'
+  paymentDeadline' <- toPlutusPOSIXTime paymentDeadline
+  complaintDeadline' <- toPlutusPOSIXTime complaintDeadline
+  disputeDeadline' <- toPlutusPOSIXTime disputeDeadline
+  mediationDeadline' <- toPlutusPOSIXTime mediationDeadline
+  let marloweContract =
+        escrow
+          (Constant price)
+          seller
+          buyer
+          mediator
+          paymentDeadline'
+          complaintDeadline'
+          disputeDeadline'
+          mediationDeadline'
   let marloweState = initialMarloweState mediator minAda
   makeExample contractFile stateFile (marloweContract, marloweState)
 runTemplateCommand TemplateSwap{..} OutputFiles{..} = do
-  aTimeout' <- toMarloweTimeout aTimeout
-  bTimeout' <- toMarloweTimeout bTimeout
-  marloweContract <-
-    makeContract $
-      swap
-        aParty
-        aToken
-        (Constant aAmount)
-        aTimeout'
-        bParty
-        bToken
-        (Constant bAmount)
-        bTimeout'
-        Close
+  aTimeout' <- toPlutusPOSIXTime aTimeout
+  bTimeout' <- toPlutusPOSIXTime bTimeout
+  let marloweContract =
+        swap
+          aParty
+          aToken
+          (Constant aAmount)
+          aTimeout'
+          bParty
+          bToken
+          (Constant bAmount)
+          bTimeout'
+          Close
   let marloweState = initialMarloweState aParty minAda
   makeExample contractFile stateFile (marloweContract, marloweState)
 runTemplateCommand TemplateZeroCouponBond{..} OutputFiles{..} = do
-  lendingDeadline' <- toMarloweTimeout lendingDeadline
-  paybackDeadline' <- toMarloweTimeout paybackDeadline
-  marloweContract <-
-    makeContract $
-      zeroCouponBond
-        lender
-        borrower
-        lendingDeadline'
-        paybackDeadline'
-        (Constant principal)
-        (Constant principal `AddValue` Constant interest)
-        ada
-        Close
+  lendingDeadline' <- toPlutusPOSIXTime lendingDeadline
+  paybackDeadline' <- toPlutusPOSIXTime paybackDeadline
+  let marloweContract =
+        zeroCouponBond
+          lender
+          borrower
+          lendingDeadline'
+          paybackDeadline'
+          (Constant principal)
+          (Constant principal `AddValue` Constant interest)
+          ada
+          Close
   let marloweState = initialMarloweState lender minAda
   makeExample contractFile stateFile (marloweContract, marloweState)
 runTemplateCommand TemplateCoveredCall{..} OutputFiles{..} = do
-  issueDate' <- toMarloweTimeout issueDate
-  maturityDate' <- toMarloweTimeout maturityDate
-  settlementDate' <- toMarloweTimeout settlementDate
-  marloweContract <-
-    makeContract $
-      coveredCall
-        issuer
-        counterparty
-        Nothing
-        currency
-        underlying
-        (Constant strike)
-        (Constant amount)
-        issueDate'
-        maturityDate'
-        settlementDate'
+  issueDate' <- toPlutusPOSIXTime issueDate
+  maturityDate' <- toPlutusPOSIXTime maturityDate
+  settlementDate' <- toPlutusPOSIXTime settlementDate
+  let marloweContract =
+        coveredCall
+          issuer
+          counterparty
+          Nothing
+          currency
+          underlying
+          (Constant strike)
+          (Constant amount)
+          issueDate'
+          maturityDate'
+          settlementDate'
   let marloweState = initialMarloweState issuer minAda
   makeExample contractFile stateFile (marloweContract, marloweState)
 runTemplateCommand TemplateActus{..} OutputFiles{..} = do

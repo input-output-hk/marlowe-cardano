@@ -41,7 +41,7 @@ import Language.Marlowe.CLI.Test.Wallet.Types (
   tokenNameToJSON,
  )
 import Language.Marlowe.CLI.Test.Wallet.Types qualified as Wallet
-import Language.Marlowe.CLI.Types (CliError, SomeTimeout, toMarloweTimeout)
+import Language.Marlowe.CLI.Types (CliError, SomeTimeout, toPlutusPOSIXTime)
 import Language.Marlowe.Core.V1.Semantics.Types qualified as C
 import Language.Marlowe.Core.V1.Semantics.Types qualified as M
 import Language.Marlowe.Extended.V1 (toCore)
@@ -226,18 +226,18 @@ useTemplate
   -> m M.Contract
 useTemplate currency = \case
   UseTrivial{..} -> do
-    timeout' <- toMarloweTimeout utTimeout
+    timeout' <- toPlutusPOSIXTime utTimeout
     let partyRef = fromMaybe (WalletRef faucetNickname) utParty
     party <- buildParty currency partyRef
-    makeContract' $
+    return $
       trivial
         party
         utDepositLovelace
         utWithdrawalLovelace
         timeout'
   UseSwap{..} -> do
-    aTimeout' <- toMarloweTimeout utATimeout
-    bTimeout' <- toMarloweTimeout utBTimeout
+    aTimeout' <- toPlutusPOSIXTime utATimeout
+    bTimeout' <- toPlutusPOSIXTime utBTimeout
 
     let Asset aAssetId aAmount = utAAsset
         Asset bAssetId bAmount = utBAsset
@@ -248,30 +248,30 @@ useTemplate currency = \case
     aParty <- buildParty currency utAParty
     bParty <- buildParty currency utBParty
 
-    makeContract' $
+    return $
       swap
         aParty
         aToken
-        (E.Constant aAmount)
+        (M.Constant aAmount)
         aTimeout'
         bParty
         bToken
-        (E.Constant bAmount)
+        (M.Constant bAmount)
         bTimeout'
-        E.Close
+        M.Close
   UseEscrow{..} -> do
-    paymentDeadline' <- toMarloweTimeout utPaymentDeadline
-    complaintDeadline' <- toMarloweTimeout utComplaintDeadline
-    disputeDeadline' <- toMarloweTimeout utDisputeDeadline
-    mediationDeadline' <- toMarloweTimeout utMediationDeadline
+    paymentDeadline' <- toPlutusPOSIXTime utPaymentDeadline
+    complaintDeadline' <- toPlutusPOSIXTime utComplaintDeadline
+    disputeDeadline' <- toPlutusPOSIXTime utDisputeDeadline
+    mediationDeadline' <- toPlutusPOSIXTime utMediationDeadline
 
     seller <- buildParty currency utSeller
     buyer <- buildParty currency utBuyer
     mediator <- buildParty currency utMediator
 
-    makeContract' $
+    return $
       escrow
-        (E.Constant utPrice)
+        (M.Constant utPrice)
         seller
         buyer
         mediator
@@ -280,42 +280,42 @@ useTemplate currency = \case
         disputeDeadline'
         mediationDeadline'
   UseCoveredCall{..} -> do
-    issueDate <- toMarloweTimeout utIssueDate
-    maturityDate <- toMarloweTimeout utMaturityDate
-    settlementDate <- toMarloweTimeout utSettlementDate
+    issueDate <- toPlutusPOSIXTime utIssueDate
+    maturityDate <- toPlutusPOSIXTime utMaturityDate
+    settlementDate <- toPlutusPOSIXTime utSettlementDate
     issuer <- buildParty currency utIssuer
     counterParty <- buildParty currency utCounterParty
 
     ccCurrency <- assetIdToToken utCurrency
     underlying <- assetIdToToken utUnderlying
 
-    makeContract' $
+    return $
       coveredCall
         issuer
         counterParty
         Nothing
         ccCurrency
         underlying
-        (E.Constant utStrike)
-        (E.Constant utAmount)
+        (M.Constant utStrike)
+        (M.Constant utAmount)
         issueDate
         maturityDate
         settlementDate
   UseZeroCouponBond{..} -> do
-    lendingDeadline <- toMarloweTimeout utLendingDeadline
-    paybackDeadline <- toMarloweTimeout utPaybackDeadline
+    lendingDeadline <- toPlutusPOSIXTime utLendingDeadline
+    paybackDeadline <- toPlutusPOSIXTime utPaybackDeadline
 
     lender <- buildParty currency utLender
     borrower <- buildParty currency utBorrower
 
-    makeContract' $
+    return $
       zeroCouponBond
         lender
         borrower
         lendingDeadline
         paybackDeadline
-        (E.Constant utPrincipal)
-        (E.Constant utPrincipal `E.AddValue` E.Constant utInterest)
+        (M.Constant utPrincipal)
+        (M.Constant utPrincipal `M.AddValue` M.Constant utInterest)
         adaToken
-        E.Close
+        M.Close
   template -> throwError $ testExecutionFailed' $ "Template not implemented: " <> show template
