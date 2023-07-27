@@ -190,6 +190,8 @@ walletConstructors =
   , "Mint"
   , "SplitWallet"
   , "ReturnFunds"
+  , "ExternalCurrency"
+  , "ExternalWallet"
   ]
 
 instance FromJSON TestOperation where

@@ -126,11 +126,11 @@ instance FromJSON MarloweValidators where
             _ -> fail "Expected string `referenceRuntime`"
         fromPublished =
           parseJSON json >>= \case
-            Aeson.Object (KeyMap.toList -> [("referenceCurrent", objJson)]) -> do
+            Aeson.Object (KeyMap.toList -> [("publishCurrent", objJson)]) -> do
               obj <- parseJSON objJson
               publisher <- obj .:? "publisher"
-              permanent <- obj .:? "permanent"
-              pure $ ReferenceCurrentValidators permanent publisher
+              permanently <- obj .:? "permanently"
+              pure $ ReferenceCurrentValidators permanently publisher
             _ -> fail "Expected object with a single field `referenceCurrent`"
     inTx <|> fromRuntimeRegistry <|> fromPublished
 
@@ -162,6 +162,7 @@ data CLIOperation
       , coSubmitter :: Maybe WalletNickname
       -- ^ A wallet which gonna submit the initial transaction.
       , coMarloweValidators :: Maybe MarloweValidators
+      , coMerkleize :: Maybe Bool
       }
   | Prepare
       { coContractNickname :: Maybe ContractNickname

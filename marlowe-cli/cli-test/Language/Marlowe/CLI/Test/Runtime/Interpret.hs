@@ -14,7 +14,6 @@ module Language.Marlowe.CLI.Test.Runtime.Interpret where
 
 import Cardano.Api (CardanoMode, ScriptDataSupportedInEra (ScriptDataInBabbageEra))
 import Cardano.Api qualified as C
-import Contrib.Cardano.Formatting (friendlyTxBody)
 import Contrib.Control.Concurrent.Async (timeoutIO)
 import Contrib.Control.Monad.Except (note)
 import Contrib.Data.List.Random (combinationWithRepetitions)
@@ -46,7 +45,7 @@ import Language.Marlowe.CLI.Test.Contract (ContractNickname (ContractNickname), 
 import Language.Marlowe.CLI.Test.Contract.Source (useTemplate)
 import Language.Marlowe.CLI.Test.ExecutionMode (skipInSimluationMode)
 import Language.Marlowe.CLI.Test.InterpreterError (runtimeOperationFailed', testExecutionFailed', timeoutReached')
-import Language.Marlowe.CLI.Test.Log (Label, logStoreLabeledMsg, logStoreMsgWith, throwLabeledError)
+import Language.Marlowe.CLI.Test.Log (Label, logStoreLabeledMsg, throwLabeledError)
 import Language.Marlowe.CLI.Test.Runtime.Types (
   ContractInfo (ContractInfo, _ciContinuations, _ciContract, _ciContractId, _ciMarloweThread, _ciRoleCurrency),
   DoMerkleize (ClientSide, RuntimeSide),
@@ -130,7 +129,6 @@ getConnection = do
     Just conn -> pure conn
     Nothing -> throwLabeledError ("getConnection" :: String) (testExecutionFailed' "Connection not found")
 
--- runtimeClientConnectorP :: Prism' env (Network.Protocol.SomeClientConnector Marlowe.Protocol.MarloweRuntimeClient IO)
 getConnector
   :: forall env era st m
    . (InterpretMonad env st m era)
@@ -140,7 +138,6 @@ getConnector = do
     Just conn -> pure conn
     Nothing -> throwLabeledError ("getConnector" :: String) (testExecutionFailed' "Connector not found")
 
--- runtimeMonitorStateP :: Prism' env (RuntimeMonitorState)
 getMonitorState
   :: forall env era st m
    . (InterpretMonad env st m era)
@@ -150,7 +147,6 @@ getMonitorState = do
     Just state -> pure state
     Nothing -> throwLabeledError ("getMonitorState" :: String) (testExecutionFailed' "Monitor state not found")
 
--- runtimeMonitorInputP :: Prism' env RuntimeMonitorInput
 getMonitorInput
   :: forall env era st m
    . (InterpretMonad env st m era)
