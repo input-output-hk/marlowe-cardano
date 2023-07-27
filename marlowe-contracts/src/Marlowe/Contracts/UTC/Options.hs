@@ -20,7 +20,7 @@ module Marlowe.Contracts.UTC.Options (
 ) where
 
 import Data.Time.Clock (UTCTime)
-import Language.Marlowe.Extended.V1
+import Language.Marlowe.Core.V1.Semantics.Types
 import qualified Marlowe.Contracts.Options as C
 import Marlowe.Contracts.UTC.Common
 
@@ -35,9 +35,9 @@ option
   -- ^ Seller
   -> Maybe ChoiceId
   -- ^ Price feed for the underlying
-  -> (Token, Value)
+  -> (Token, Value Observation)
   -- ^ Underlying
-  -> (Token, Value)
+  -> (Token, Value Observation)
   -- ^ Strike
   -> UTCTime
   -- ^ Expiry
@@ -59,9 +59,9 @@ coveredCall
   -- ^ Currency
   -> Token
   -- ^ Underlying
-  -> Value
+  -> Value Observation
   -- ^ Strike price (in currency)
-  -> Value
+  -> Value Observation
   -- ^ Amount of underlying tokens per contract
   -> UTCTime
   -- ^ Issue date
@@ -95,11 +95,11 @@ callSpread
   -- ^ Currency
   -> Token
   -- ^ Underlying
-  -> Value
+  -> Value Observation
   -- ^ Strike price (in currency) for the long position
-  -> Value
+  -> Value Observation
   -- ^ Strike price (in currency) for the short position
-  -> Value
+  -> Value Observation
   -- ^ Amount of underlying tokens per contract
   -> UTCTime
   -- ^ Maturity
@@ -131,9 +131,9 @@ straddle
   -- ^ Currency
   -> Token
   -- ^ Underlying
-  -> Value
+  -> Value Observation
   -- ^ Ratio
-  -> Value
+  -> Value Observation
   -- ^ Strike
   -> UTCTime
   -- ^ Maturity
@@ -155,11 +155,11 @@ strangle
   -- ^ Currency
   -> Token
   -- ^ Underlying
-  -> Value
+  -> Value Observation
   -- ^ Ratio
-  -> Value
+  -> Value Observation
   -- ^ Lower Strike
-  -> Value
+  -> Value Observation
   -- ^ Upper Strike
   -> UTCTime
   -- ^ Maturity
@@ -187,11 +187,11 @@ barrierOption
   -- ^ Currency
   -> Token
   -- ^ Underlying
-  -> Value
+  -> Value Observation
   -- ^ Strike price (in currency)
-  -> Value
+  -> Value Observation
   -- ^ Amount of underlying tokens per contract
-  -> Value
+  -> Value Observation
   -- ^ Barrier
   -> [UTCTime]
   -- ^ Barrier observation dates

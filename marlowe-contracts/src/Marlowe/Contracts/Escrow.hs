@@ -4,11 +4,11 @@ module Marlowe.Contracts.Escrow (
   escrow,
 ) where
 
-import Language.Marlowe.Extended.V1
+import Language.Marlowe.Core.V1.Semantics.Types
 
 -- | An escrow contract with mediation
 escrow
-  :: Value
+  :: Value Observation
   -- ^ Price of the item, in lovelace
   -> Party
   -- ^ The seller
@@ -63,3 +63,5 @@ escrow price seller buyer mediator paymentDeadline complaintDeadline disputeDead
     ]
     paymentDeadline
     Close
+  where
+    ada = Token "" ""

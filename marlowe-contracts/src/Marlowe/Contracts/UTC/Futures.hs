@@ -1,7 +1,7 @@
 module Marlowe.Contracts.UTC.Futures where
 
 import Data.Time.Clock (UTCTime)
-import Language.Marlowe.Extended.V1
+import Language.Marlowe.Core.V1.Semantics.Types
 import Marlowe.Contracts.Futures as C
 import Marlowe.Contracts.UTC.Common
 
@@ -10,9 +10,9 @@ future
   -- ^ Buyer
   -> Party
   -- ^ Seller
-  -> Value
+  -> Value Observation
   -- ^ Forward price for 100 (contract size) USD at maturity (in Lovelace)
-  -> Value
+  -> Value Observation
   -- ^ Initial margin requirements (in Lovelace)
   -> UTCTime
   -- ^ Initial margin setup timout

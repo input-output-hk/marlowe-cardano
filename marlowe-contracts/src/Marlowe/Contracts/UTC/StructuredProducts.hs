@@ -1,7 +1,7 @@
 module Marlowe.Contracts.UTC.StructuredProducts where
 
 import Data.Time.Clock (UTCTime)
-import Language.Marlowe.Extended.V1
+import Language.Marlowe.Core.V1.Semantics.Types
 import Marlowe.Contracts.StructuredProducts as C
 import Marlowe.Contracts.UTC.Common
 
@@ -20,11 +20,11 @@ reverseConvertible
   -- ^ Currency
   -> Token
   -- ^ Underlying
-  -> Value
+  -> Value Observation
   -- ^ Strike
-  -> Value
+  -> Value Observation
   -- ^ Ratio
-  -> Value
+  -> Value Observation
   -- ^ Issue Price
   -> Contract
   -- ^ Reverse Convertible Contract
@@ -48,13 +48,13 @@ barrierReverseConvertible
   -- ^ Currency
   -> Token
   -- ^ Underlying
-  -> Value
+  -> Value Observation
   -- ^ Strike
-  -> Value
+  -> Value Observation
   -- ^ Barrier
-  -> Value
+  -> Value Observation
   -- ^ Ratio
-  -> Value
+  -> Value Observation
   -- ^ Issue Price
   -> Contract
   -- ^ Reverse Convertible Contract

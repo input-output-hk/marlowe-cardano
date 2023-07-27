@@ -2,7 +2,7 @@
 
 module Marlowe.Contracts.Trivial where
 
-import Language.Marlowe.Extended.V1
+import Language.Marlowe.Core.V1.Semantics.Types
 
 -- | A trivial contract, for testing.
 trivial
@@ -35,3 +35,5 @@ trivial party deposit withdrawal timeout =
     ]
     (timeout - 2000)
     Close
+  where
+    ada = Token "" ""

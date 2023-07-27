@@ -22,7 +22,7 @@ module Marlowe.Contracts.Options (
   strangle,
 ) where
 
-import Language.Marlowe.Extended.V1
+import Language.Marlowe.Core.V1.Semantics.Types
 import Marlowe.Contracts.Common
 
 -- | Option type
@@ -66,9 +66,9 @@ option
   -- ^ Seller
   -> Maybe ChoiceId
   -- ^ Price feed for the underlying
-  -> (Token, Value)
+  -> (Token, Value Observation)
   -- ^ Underlying
-  -> (Token, Value)
+  -> (Token, Value Observation)
   -- ^ Strike
   -> Timeout
   -- ^ Expiry
@@ -107,9 +107,9 @@ exercise
   -- ^ Seller
   -> Maybe ChoiceId
   -- ^ Price feed for underlying
-  -> (Token, Value)
+  -> (Token, Value Observation)
   -- ^ Underlying
-  -> (Token, Value)
+  -> (Token, Value Observation)
   -- ^ Strike
   -> Timeout
   -- ^ Timeout
@@ -137,9 +137,9 @@ depositAndPay
   -- ^ Buyer
   -> Party
   -- ^ Seller
-  -> (Token, Value)
+  -> (Token, Value Observation)
   -- ^ Underlying asset
-  -> (Token, Value)
+  -> (Token, Value Observation)
   -- ^ Strike price
   -> Timeout
   -- ^ Timeout for deposit
@@ -162,7 +162,7 @@ choose
   -- ^ Continuation Contract if 0 chosen
   -> Contract
   -- ^ Continuation Contract if 1 chosen
-  -> Case
+  -> Case Contract
   -- ^ Case expression with continuation
 choose choiceId continuation0 continuation1 =
   Case
@@ -173,15 +173,15 @@ choose choiceId continuation0 continuation1 =
 chooseOracle
   :: ChoiceId
   -- ^ Price feed
-  -> (Token, Value)
+  -> (Token, Value Observation)
   -- ^ Strike price
-  -> (Value -> Value -> Observation)
+  -> (Value Observation -> Value Observation -> Observation)
   -- ^ Comparison function
   -> Contract
   -- ^ Continuation Contract if condition holds
   -> Contract
   -- ^ Continuation Contract if condition does not hold
-  -> Case
+  -> Case Contract
   -- ^ Case expression with continuation
 chooseOracle choiceId (_, strike) comparision continuation0 continuation1 =
   Case
@@ -201,9 +201,9 @@ coveredCall
   -- ^ Currency
   -> Token
   -- ^ Underlying
-  -> Value
+  -> Value Observation
   -- ^ Strike price (in currency)
-  -> Value
+  -> Value Observation
   -- ^ Amount of underlying tokens per contract
   -> Timeout
   -- ^ Issue date
@@ -230,9 +230,9 @@ straddle
   -- ^ Currency
   -> Token
   -- ^ Underlying
-  -> Value
+  -> Value Observation
   -- ^ Ratio
-  -> Value
+  -> Value Observation
   -- ^ Strike
   -> Timeout
   -- ^ Maturity
@@ -258,11 +258,11 @@ strangle
   -- ^ Currency
   -> Token
   -- ^ Underlying
-  -> Value
+  -> Value Observation
   -- ^ Ratio
-  -> Value
+  -> Value Observation
   -- ^ Lower Strike
-  -> Value
+  -> Value Observation
   -- ^ Upper Strike
   -> Timeout
   -- ^ Maturity
@@ -288,11 +288,11 @@ callSpread
   -- ^ Currency
   -> Token
   -- ^ Underlying
-  -> Value
+  -> Value Observation
   -- ^ Strike price (in currency) for the long position
-  -> Value
+  -> Value Observation
   -- ^ Strike price (in currency) for the short position
-  -> Value
+  -> Value Observation
   -- ^ Amount of underlying tokens per contract
   -> Timeout
   -- ^ Maturity
@@ -324,11 +324,11 @@ barrierOption
   -- ^ Currency
   -> Token
   -- ^ Underlying
-  -> Value
+  -> Value Observation
   -- ^ Strike price (in currency)
-  -> Value
+  -> Value Observation
   -- ^ Amount of underlying tokens per contract
-  -> Value
+  -> Value Observation
   -- ^ Barrier
   -> [Timeout]
   -- ^ Barrier observation dates
@@ -358,7 +358,7 @@ barrierOption exerciseType optionType barrierType issuer counterparty priceFeed 
     checkBarrierCondition continuation timeout =
       When [checkBarrierCondition' priceFeed barrierType] timeout Close
       where
-        checkBarrierCondition' :: Maybe ChoiceId -> BarrierType -> Case
+        checkBarrierCondition' :: Maybe ChoiceId -> BarrierType -> Case Contract
         checkBarrierCondition' (Just choiceId) DownAndIn = chooseOracle choiceId (currency, barrier) ValueGT continuation optionContract
         checkBarrierCondition' (Just choiceId) DownAndOut = chooseOracle choiceId (currency, barrier) ValueGT continuation Close
         checkBarrierCondition' (Just choiceId) UpAndIn = chooseOracle choiceId (currency, barrier) ValueLT continuation optionContract

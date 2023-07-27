@@ -1,6 +1,6 @@
 module Marlowe.Contracts.ZeroCouponBond where
 
-import Language.Marlowe.Extended.V1
+import Language.Marlowe.Core.V1.Semantics.Types
 import Marlowe.Contracts.Common
 
 -- | A zero-coupon bond is a debt security that does not pay interest.
@@ -15,9 +15,9 @@ zeroCouponBond
   -- ^ Initial Fixing
   -> Timeout
   -- ^ Maturity
-  -> Value
+  -> Value Observation
   -- ^ Discounted value
-  -> Value
+  -> Value Observation
   -- ^ Face value
   -> Token
   -- ^ Token
@@ -47,9 +47,9 @@ zeroCouponBond'
   -- ^ Initial Fixing
   -> Timeout
   -- ^ Maturity
-  -> Value
+  -> Value Observation
   -- ^ Discounted value
-  -> Value
+  -> Value Observation
   -- ^ Face value
   -> Token
   -- ^ Token

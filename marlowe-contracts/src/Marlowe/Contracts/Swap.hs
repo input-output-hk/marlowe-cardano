@@ -1,6 +1,6 @@
 module Marlowe.Contracts.Swap where
 
-import Language.Marlowe.Extended.V1
+import Language.Marlowe.Core.V1.Semantics.Types
 import Marlowe.Contracts.Common
 
 -- | Swap tokens between two parties
@@ -9,7 +9,7 @@ swap
   -- ^ Party A
   -> Token
   -- ^ Token A
-  -> Value
+  -> Value Observation
   -- ^ Value A
   -> Timeout
   -- ^ Deposit timeout A
@@ -17,7 +17,7 @@ swap
   -- ^ Party B
   -> Token
   -- ^ Token B
-  -> Value
+  -> Value Observation
   -- ^ Value B
   -> Timeout
   -- ^ Deposit timeout B

@@ -2,7 +2,7 @@
 
 module Marlowe.Contracts.StructuredProducts where
 
-import Language.Marlowe.Extended.V1
+import Language.Marlowe.Core.V1.Semantics.Types
 import Marlowe.Contracts.Common
 import Marlowe.Contracts.Options
 import Marlowe.Contracts.ZeroCouponBond
@@ -83,11 +83,11 @@ reverseConvertible
   -- ^ Currency
   -> Token
   -- ^ Underlying
-  -> Value
+  -> Value Observation
   -- ^ Strike
-  -> Value
+  -> Value Observation
   -- ^ Ratio
-  -> Value
+  -> Value Observation
   -- ^ Issue Price
   -> Contract
   -- ^ Reverse Convertible Contract
@@ -134,13 +134,13 @@ barrierReverseConvertible
   -- ^ Currency
   -> Token
   -- ^ Underlying
-  -> Value
+  -> Value Observation
   -- ^ Strike
-  -> Value
+  -> Value Observation
   -- ^ Barrier
-  -> Value
+  -> Value Observation
   -- ^ Ratio
-  -> Value
+  -> Value Observation
   -- ^ Issue Price
   -> Contract
   -- ^ Reverse Convertible Contract
