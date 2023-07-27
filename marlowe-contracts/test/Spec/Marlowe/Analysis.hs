@@ -6,9 +6,8 @@ module Spec.Marlowe.Analysis where
 
 import Data.Maybe (isJust)
 import Data.Time.Clock (UTCTime)
-import qualified Language.Marlowe as C
 import Language.Marlowe.Analysis.FSSemantics (warningsTrace)
-import Language.Marlowe.Extended.V1
+import Language.Marlowe.Core.V1.Semantics.Types
 import Marlowe.Contracts.Common
 import Marlowe.Contracts.UTC.Options
 import Marlowe.Contracts.UTC.Swap
@@ -26,25 +25,27 @@ tests =
     , testCase "Option test" optionTest
     ]
 
-hasWarnings :: Maybe C.Contract -> IO Bool
-hasWarnings (Just c) = do
+hasWarnings :: Contract -> IO Bool
+hasWarnings c = do
   result <- warningsTrace c
   case result of
     Left errDesc -> assertFailure ("Analysis failed: " ++ show errDesc)
     Right counterExample -> return $ isJust counterExample
-hasWarnings Nothing = assertFailure "Contract conversion failed"
 
 testNoWarnings :: Contract -> Assertion
 testNoWarnings c =
-  assertBool "Has no warnings" . not =<< hasWarnings (toCore c)
+  assertBool "Has no warnings" . not =<< hasWarnings c
 
 testExpectedWarnings :: Contract -> Assertion
 testExpectedWarnings c =
-  assertBool "Has warnings" =<< hasWarnings (toCore c)
+  assertBool "Has warnings" =<< hasWarnings c
 
 partyA, partyB :: Party
 partyA = Role "a"
 partyB = Role "b"
+
+ada :: Token
+ada = Token "" ""
 
 coin :: Token
 coin = Token "" "coin"

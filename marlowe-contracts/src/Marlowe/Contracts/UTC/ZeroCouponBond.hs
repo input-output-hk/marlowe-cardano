@@ -1,7 +1,7 @@
 module Marlowe.Contracts.UTC.ZeroCouponBond where
 
 import Data.Time.Clock (UTCTime)
-import Language.Marlowe.Extended.V1
+import Language.Marlowe.Core.V1.Semantics.Types
 import Marlowe.Contracts.UTC.Common
 import Marlowe.Contracts.ZeroCouponBond as C
 
@@ -14,9 +14,9 @@ zeroCouponBond
   -- ^ Initial Fixing
   -> UTCTime
   -- ^ Maturity
-  -> Value
+  -> Value Observation
   -- ^ Discounted value
-  -> Value
+  -> Value Observation
   -- ^ Face value
   -> Token
   -- ^ Token

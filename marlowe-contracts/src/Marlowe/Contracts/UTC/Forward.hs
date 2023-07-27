@@ -3,7 +3,7 @@ module Marlowe.Contracts.UTC.Forward (
 ) where
 
 import Data.Time.Clock (UTCTime)
-import Language.Marlowe.Extended.V1
+import Language.Marlowe.Core.V1.Semantics.Types
 import qualified Marlowe.Contracts.Forward as C
 import Marlowe.Contracts.UTC.Common
 
@@ -14,7 +14,7 @@ forward
   -- ^ Party A
   -> Token
   -- ^ Token A
-  -> Value
+  -> Value Observation
   -- ^ Value A
   -> UTCTime
   -- ^ Deposit timeout A
@@ -22,7 +22,7 @@ forward
   -- ^ Party B
   -> Token
   -- ^ Token B
-  -> Value
+  -> Value Observation
   -- ^ Value B:ta
   -> UTCTime
   -- ^ Deposit timeout B

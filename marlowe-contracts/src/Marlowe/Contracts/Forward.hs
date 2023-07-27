@@ -2,7 +2,7 @@ module Marlowe.Contracts.Forward (
   forward,
 ) where
 
-import Language.Marlowe.Extended.V1
+import Language.Marlowe.Core.V1.Semantics.Types
 import Marlowe.Contracts.Common
 import Marlowe.Contracts.Swap
 
@@ -13,7 +13,7 @@ forward
   -- ^ Party A
   -> Token
   -- ^ Token A
-  -> Value
+  -> Value Observation
   -- ^ Value A
   -> Timeout
   -- ^ Deposit timeout A
@@ -21,7 +21,7 @@ forward
   -- ^ Party B
   -> Token
   -- ^ Token B
-  -> Value
+  -> Value Observation
   -- ^ Value B:ta
   -> Timeout
   -- ^ Deposit timeout B

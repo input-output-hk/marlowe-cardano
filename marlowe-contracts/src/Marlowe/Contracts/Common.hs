@@ -3,7 +3,8 @@
 
 module Marlowe.Contracts.Common where
 
-import Language.Marlowe.Extended.V1
+import Language.Marlowe (POSIXTime (..))
+import Language.Marlowe.Core.V1.Semantics.Types
 
 -- | Compose two contracts
 both :: Contract -> Contract -> Contract
@@ -73,7 +74,7 @@ pay
   -- ^ Payer
   -> Party
   -- ^ Payee
-  -> (Token, Value)
+  -> (Token, Value Observation)
   -- ^ Token and Value
   -> Contract
   -- ^ Continuation Contract
@@ -92,7 +93,7 @@ deposit
   -- ^ Party to receive the deposit
   -> Party
   -- ^ Party that deposits
-  -> (Token, Value)
+  -> (Token, Value Observation)
   -- ^ Token and Value
   -> Timeout
   -- ^ Timeout for deposit
@@ -117,7 +118,7 @@ transfer
   -- ^ Payer
   -> Party
   -- ^ Payee
-  -> (Token, Value)
+  -> (Token, Value Observation)
   -- ^ Token and Value
   -> Timeout
   -- ^ Timeout for transfer

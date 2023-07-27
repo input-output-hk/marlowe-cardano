@@ -9,8 +9,8 @@ module Spec.Marlowe.Contracts (
 
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import qualified Language.Marlowe as C
-import Language.Marlowe.Extended.V1
-import Marlowe.Contracts.Common
+import Language.Marlowe.Core.V1.Semantics.Types
+import Marlowe.Contracts.Common (both, deposit, dirRate, invRate)
 import Marlowe.Contracts.UTC.Common
 import Marlowe.Contracts.UTC.CouponBond
 import Marlowe.Contracts.UTC.Futures
@@ -19,8 +19,7 @@ import Marlowe.Contracts.UTC.StructuredProducts
 import Marlowe.Contracts.UTC.Swap
 import Marlowe.Contracts.UTC.ZeroCouponBond
 import Plutus.V1.Ledger.Ada (lovelaceValueOf)
-import Plutus.V1.Ledger.Api (TokenName, singleton)
-import Plutus.V1.Ledger.Value (CurrencySymbol)
+import Plutus.V1.Ledger.Api (singleton)
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -55,6 +54,9 @@ tokSymbol = ""
 tok :: Token
 tok = Token tokSymbol tokName
 
+ada :: Token
+ada = Token "" ""
+
 tokValueOf :: Integer -> C.Money
 tokValueOf = singleton tokSymbol tokName
 
@@ -79,17 +81,16 @@ toPOSIX = C.POSIXTime . floor . utcTimeToPOSIXSeconds . read
 -- | Zero-coupon Bond test
 zeroCouponBondTest :: IO ()
 zeroCouponBondTest =
-  let Just contract =
-        toCore $
-          zeroCouponBond
-            w1Pk
-            w2Pk
-            (read "2022-01-01 00:00:00.000000 UTC")
-            (read "2023-01-01 00:00:00.000000 UTC")
-            (Constant 75_000_000)
-            (Constant 90_000_000)
-            ada
-            Close
+  let contract =
+        zeroCouponBond
+          w1Pk
+          w2Pk
+          (read "2022-01-01 00:00:00.000000 UTC")
+          (read "2023-01-01 00:00:00.000000 UTC")
+          (Constant 75_000_000)
+          (Constant 90_000_000)
+          ada
+          Close
       txIn =
         [ C.TransactionInput
             (toPOSIX "2021-12-31 00:00:00.000000 UTC", toPOSIX "2021-12-31 23:59:59.999999 UTC")
@@ -109,19 +110,18 @@ zeroCouponBondTest =
 -- | Coupon Bond test
 couponBondTest :: IO ()
 couponBondTest =
-  let Just contract =
-        toCore $
-          couponBond
-            w1Pk
-            w2Pk
-            (read "2022-01-01 00:00:00.000000 UTC")
-            (read "2023-01-01 00:00:00.000000 UTC")
-            (Cycle 1 HalfYear False)
-            (Constant 75_000_000)
-            (Constant 1_000_000)
-            (Constant 90_000_000)
-            ada
-            Close
+  let contract =
+        couponBond
+          w1Pk
+          w2Pk
+          (read "2022-01-01 00:00:00.000000 UTC")
+          (read "2023-01-01 00:00:00.000000 UTC")
+          (Cycle 1 HalfYear False)
+          (Constant 75_000_000)
+          (Constant 1_000_000)
+          (Constant 90_000_000)
+          ada
+          Close
       txIn =
         [ C.TransactionInput
             (toPOSIX "2021-12-31 00:00:00.000000 UTC", toPOSIX "2021-12-31 23:59:59.999999 UTC")
@@ -147,10 +147,9 @@ couponBondTest =
 -- | Swap contract test
 swapContractTest :: IO ()
 swapContractTest =
-  let Just contract =
-        toCore $
-          swap w1Pk ada (Constant 10_000_000) timestamp w2Pk tok (Constant 30) timestamp $
-            swap w2Pk ada (Constant 10_000_000) timestamp w1Pk tok (Constant 30) timestamp Close
+  let contract =
+        swap w1Pk ada (Constant 10_000_000) timestamp w2Pk tok (Constant 30) timestamp $
+          swap w2Pk ada (Constant 10_000_000) timestamp w1Pk tok (Constant 30) timestamp Close
       timestamp = read "2022-01-01 00:00:00.000000 UTC"
       txIn =
         [ C.TransactionInput
@@ -173,18 +172,17 @@ swapContractTest =
 -- | American Call Option test (No exercise)
 americanCallOptionTest :: IO ()
 americanCallOptionTest =
-  let Just contract =
-        toCore $
-          option
-            American
-            Call
-            w1Pk
-            w2Pk
-            Nothing
-            (tok, Constant 30)
-            (ada, Constant 10_000_000)
-            (read "2022-03-01 09:00:00.000000 UTC")
-            (read "2022-03-31 17:30:00.000000 UTC")
+  let contract =
+        option
+          American
+          Call
+          w1Pk
+          w2Pk
+          Nothing
+          (tok, Constant 30)
+          (ada, Constant 10_000_000)
+          (read "2022-03-01 09:00:00.000000 UTC")
+          (read "2022-03-31 17:30:00.000000 UTC")
       txIn =
         [C.TransactionInput (0, 0) [C.NormalInput $ C.IChoice (ChoiceId "Exercise Call" w1Pk) 0]]
    in case C.playTrace 0 contract txIn of
@@ -210,15 +208,14 @@ americanCallOptionExercisedTest =
           (ada, Constant 10_000_000)
           (read "2022-03-31 17:00:00.000000 UTC")
           (read "2022-03-31 17:30:00.000000 UTC")
-      Just contract =
-        toCore $
-          deposit
-            w2Pk
-            w2Pk
-            (tok, Constant 30)
-            (toTimeout $ read "2022-03-01 08:00:00.000000 UTC")
-            Close
-            americanCall
+      contract =
+        deposit
+          w2Pk
+          w2Pk
+          (tok, Constant 30)
+          (toTimeout $ read "2022-03-01 08:00:00.000000 UTC")
+          Close
+          americanCall
 
       t0 = toPOSIX "2022-03-01 07:30:00.000000 UTC"
       t1 = toPOSIX "2022-03-15 07:30:00.000000 UTC"
@@ -241,18 +238,17 @@ americanCallOptionExercisedTest =
 -- | European Call Option test (No exercise)
 europeanCallOptionTest :: IO ()
 europeanCallOptionTest =
-  let Just contract =
-        toCore $
-          option
-            European
-            Call
-            w1Pk
-            w2Pk
-            Nothing
-            (tok, Constant 30)
-            (ada, Constant 10_000_000)
-            (read "2022-03-19 17:30:00.000000 UTC")
-            (read "2022-03-20 17:30:00.000000 UTC")
+  let contract =
+        option
+          European
+          Call
+          w1Pk
+          w2Pk
+          Nothing
+          (tok, Constant 30)
+          (ada, Constant 10_000_000)
+          (read "2022-03-19 17:30:00.000000 UTC")
+          (read "2022-03-20 17:30:00.000000 UTC")
       exerciseTime = toPOSIX "2022-03-19 17:31:00.000000 UTC"
       txIn =
         [C.TransactionInput (exerciseTime, exerciseTime) [C.NormalInput $ C.IChoice (ChoiceId "Exercise Call" w1Pk) 0]]
@@ -279,16 +275,15 @@ europeanCallOptionExercisedTest =
           (ada, Constant 10_000_000)
           (read "2022-03-19 17:30:00.000000 UTC")
           (read "2022-03-20 17:30:00.000000 UTC")
-      Just contract =
-        toCore $
-          deposit
-            w2Pk
-            w2Pk
-            (tok, Constant 30)
-            (toTimeout $ read "2022-03-19 08:00:00.000000 UTC")
-            Close
-            Close
-            `both` europeanCall
+      contract =
+        deposit
+          w2Pk
+          w2Pk
+          (tok, Constant 30)
+          (toTimeout $ read "2022-03-19 08:00:00.000000 UTC")
+          Close
+          Close
+          `both` europeanCall
       exerciseTime = toPOSIX "2022-03-19 17:31:00.000000 UTC"
       depositTime = toPOSIX "2022-03-19 17:32:00.000000 UTC"
       txIn =
@@ -314,16 +309,15 @@ futureNoChange =
   -- The contract is cash settled, i.e. USD is delivered in ADA
   -- resp. the difference between 80 ADA and 100 USD in ADA is
   -- due at maturity
-  let Just contract =
-        toCore $
-          future
-            w1Pk
-            w2Pk
-            (Constant 80_000_000) -- 80 ADA
-            (Constant 8_000_000) -- 8 ADA
-            (read "2022-03-31 08:00:00.000000 UTC")
-            [] -- no margin calls
-            (read "2023-03-31 08:00:00.000000 UTC")
+  let contract =
+        future
+          w1Pk
+          w2Pk
+          (Constant 80_000_000) -- 80 ADA
+          (Constant 8_000_000) -- 8 ADA
+          (read "2022-03-31 08:00:00.000000 UTC")
+          [] -- no margin calls
+          (read "2023-03-31 08:00:00.000000 UTC")
 
       t0 = toPOSIX "2022-03-31 07:30:00.000000 UTC"
       t1 = toPOSIX "2023-03-31 07:30:00.000000 UTC"
@@ -355,16 +349,15 @@ futureNoChange =
 -- | Future, scenario without any margin calls
 futureNoMarginCall :: IO ()
 futureNoMarginCall =
-  let Just contract =
-        toCore $
-          future
-            w1Pk
-            w2Pk
-            (Constant 80_000_000) -- 80 ADA
-            (Constant 8_000_000) -- 8 ADA
-            (read "2022-03-31 08:00:00.000000 UTC")
-            [] -- no margin calls
-            (read "2023-03-31 08:00:00.000000 UTC")
+  let contract =
+        future
+          w1Pk
+          w2Pk
+          (Constant 80_000_000) -- 80 ADA
+          (Constant 8_000_000) -- 8 ADA
+          (read "2022-03-31 08:00:00.000000 UTC")
+          [] -- no margin calls
+          (read "2023-03-31 08:00:00.000000 UTC")
 
       t0 = toPOSIX "2022-03-31 07:30:00.000000 UTC"
       t1 = toPOSIX "2023-03-31 07:30:00.000000 UTC"
@@ -393,16 +386,15 @@ futureNoMarginCall =
 -- | Future, scenario with margin call
 futureWithMarginCall :: IO ()
 futureWithMarginCall =
-  let Just contract =
-        toCore $
-          future
-            w1Pk
-            w2Pk
-            (Constant 80_000_000) -- 80 ADA
-            (Constant 8_000_000) -- 8 ADA
-            (read "2022-03-31 08:00:00.000000 UTC")
-            [read "2022-09-30 08:30:00.000000 UTC"] -- margin call
-            (read "2023-03-31 09:00:00.000000 UTC")
+  let contract =
+        future
+          w1Pk
+          w2Pk
+          (Constant 80_000_000) -- 80 ADA
+          (Constant 8_000_000) -- 8 ADA
+          (read "2022-03-31 08:00:00.000000 UTC")
+          [read "2022-09-30 08:30:00.000000 UTC"] -- margin call
+          (read "2023-03-31 09:00:00.000000 UTC")
 
       t0 = toPOSIX "2022-03-31 07:30:00.000000 UTC"
       t1 = toPOSIX "2022-09-30 07:00:00.000000 UTC"
@@ -441,19 +433,18 @@ futureWithMarginCall =
 -- | Reverse Convertible test (Exercise)
 reverseConvertibleExercisedTest :: IO ()
 reverseConvertibleExercisedTest =
-  let Just contract =
-        toCore $
-          reverseConvertible
-            w1Pk
-            (read "2022-03-19 17:30:00.000000 UTC")
-            (read "2022-03-19 17:30:00.000000 UTC")
-            (read "2022-03-20 17:30:00.000000 UTC")
-            Nothing
-            ada
-            tok
-            (Constant 10_000_000)
-            (Constant 30)
-            (Constant 9_000_000)
+  let contract =
+        reverseConvertible
+          w1Pk
+          (read "2022-03-19 17:30:00.000000 UTC")
+          (read "2022-03-19 17:30:00.000000 UTC")
+          (read "2022-03-20 17:30:00.000000 UTC")
+          Nothing
+          ada
+          tok
+          (Constant 10_000_000)
+          (Constant 30)
+          (Constant 9_000_000)
       repaymentTime = toPOSIX "2022-03-19 17:29:59.000000 UTC"
       exerciseTime = toPOSIX "2022-03-19 17:30:00.000000 UTC"
       txIn =
@@ -478,19 +469,18 @@ reverseConvertibleExercisedTest =
 -- | Reverse Convertible test (No exercise)
 reverseConvertibleTest :: IO ()
 reverseConvertibleTest =
-  let Just contract =
-        toCore $
-          reverseConvertible
-            w1Pk
-            (read "2022-03-19 17:30:00.000000 UTC")
-            (read "2022-03-19 17:30:00.000000 UTC")
-            (read "2022-03-20 17:30:00.000000 UTC")
-            Nothing
-            ada
-            tok
-            (Constant 10_000_000)
-            (Constant 30)
-            (Constant 9_000_000)
+  let contract =
+        reverseConvertible
+          w1Pk
+          (read "2022-03-19 17:30:00.000000 UTC")
+          (read "2022-03-19 17:30:00.000000 UTC")
+          (read "2022-03-20 17:30:00.000000 UTC")
+          Nothing
+          ada
+          tok
+          (Constant 10_000_000)
+          (Constant 30)
+          (Constant 9_000_000)
       repaymentTime = toPOSIX "2022-03-19 17:29:59.000000 UTC"
       exerciseTime = toPOSIX "2022-03-19 17:30:00.000000 UTC"
       txIn =
