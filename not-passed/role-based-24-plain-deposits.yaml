@@ -438,6 +438,13 @@ operations:
           token_name: Token03
         into_account:
           role_token: R
+
+- Prepare:
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+    inputs:
       - input_from_party:
           address: Sender
         that_deposits: 1
