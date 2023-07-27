@@ -37,7 +37,7 @@ If you find yourself building GHC, STOP and fix the cache.
 
 The main documentation for the whole Plutus ecosystem is located https://plutus.readthedocs.io/en/latest/[here].
 
-An index of key documentation for Marlowe development is located at https://developers.cardano.org/docs/smart-contracts/marlowe/#resources-for-developing-and-deploying-marlowe-contracts.
+An index of key documentation for Marlowe development is located https://docs.marlowe.iohk.io/docs/developer-tools/overview/[here].
 
 == Working with the project
 
