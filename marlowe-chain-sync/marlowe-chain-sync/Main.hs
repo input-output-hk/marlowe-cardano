@@ -91,7 +91,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
                   AlonzoEra -> AlonzoEraInCardanoMode
                   BabbageEra -> BabbageEraInCardanoMode
               , nodeTip
-              , scanBatchSize = 512 -- TODO make this a command line option
+              , scanBatchSize = 8192 -- TODO make this a command line option
               }
 
       tcpServerTraced "chain-seek" $ injectSelector ChainSeekServer
