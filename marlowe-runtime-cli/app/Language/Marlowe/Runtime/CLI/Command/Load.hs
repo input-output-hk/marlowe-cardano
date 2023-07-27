@@ -121,7 +121,7 @@ formatReadArchiveError = \case
   MissingManifest -> "Archive does not contain a manifest.json"
   InvalidManifest e -> "Archive contains an invalid manifest.json: " <> e
   MissingObjectFile path -> "Manifest lists a missing object file path: " <> path
-  InvalidObjectFile path byteOffset err ->
-    "Bundle contains an invalid object file. Path: " <> path <> "; Byte Offset: " <> show byteOffset <> "; Error:" <> err
+  InvalidObjectFile path err ->
+    "Bundle contains an invalid object file. Path: " <> path <> "; Error:" <> err
   MissingMain -> "Manifest specifies a main object that is not listed as an object"
   WrongMainType (UnsafeSomeObjectType actual) -> "Manifest specifies a main object that is of a non-contract type: " <> show actual

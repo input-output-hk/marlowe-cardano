@@ -576,9 +576,9 @@ withdrawSpec = describe "withdraw" $
     expectSameResultFromCLIAndJobClient "withdraw-tx-body.json" extraCliArgs command
 
 bugPLT6773 :: Hspec.SpecWith CLISpecTestData
-bugPLT6773 = focus $
-  describe "[BUG] PLT-6773: Marlowe runtime cannot load any contracts" $
-    it "Marlowe runtime can load any contracts" \CLISpecTestData{..} -> flip runIntegrationTest runtime do
+bugPLT6773 = do
+  describe "[BUG] PLT-6773: Marlowe runtime cannot load any contracts" do
+    it "Marlowe runtime can load a JSON contract" \CLISpecTestData{..} -> flip runIntegrationTest runtime do
       workspace <- Reader.asks $ workspace . testnet
       let contractHashRelation :: [(String, V1.Contract, Aeson.Value)]
           contractHashRelation =
@@ -597,7 +597,7 @@ bugPLT6773 = focus $
           (code, stdout, stderr) <- Runtime.Integration.Common.execMarlowe' ["load", "--read-json", contractFilePath]
 
           liftIO do
-            putStrLn stderr
+            stderr `shouldBe` ""
             (code, stdout) `shouldBe` (ExitSuccess, expectedHash ++ "\n")
 
         do
@@ -606,5 +606,40 @@ bugPLT6773 = focus $
           let actualContractJSON :: Maybe Aeson.Value = Aeson.decode $ fromString stdout
 
           liftIO do
-            putStrLn stderr
+            stderr `shouldBe` ""
             (code, actualContractJSON) `shouldBe` (ExitSuccess, Just expectedContract)
+
+    focus $ it "Marlowe runtime can load an exported contract" \CLISpecTestData{..} -> flip runIntegrationTest runtime do
+      workspace <- Reader.asks $ workspace . testnet
+      let contractHashRelation :: [(String, V1.Contract)]
+          contractHashRelation =
+            [
+              ( "35eea4e90b656c443ebb90eb68375725c7041ce804b8e2fd1c718c819e2f234e"
+              , V1.Assert V1.FalseObs V1.Close
+              )
+            ]
+
+      for_ contractHashRelation \(expectedHash :: String, contract :: V1.Contract) -> do
+        contractFilePath <- writeWorkspaceFileJSON workspace "contract.json" contract
+
+        (loadCode, loadStdout, loadStderr) <- Runtime.Integration.Common.execMarlowe' ["load", "--read-json", contractFilePath]
+
+        liftIO do
+          loadStderr `shouldBe` ""
+          (loadCode, loadStdout) `shouldBe` (ExitSuccess, expectedHash ++ "\n")
+
+        let archivePath = resolveWorkspacePath workspace "out.zip"
+
+        (exportCode, _, exportStderr) <-
+          Runtime.Integration.Common.execMarlowe' ["export", "-o", archivePath, expectedHash]
+
+        liftIO do
+          exportStderr `shouldBe` ""
+          exportCode `shouldBe` ExitSuccess
+
+        (loadCode', loadStdout', loadStderr') <- Runtime.Integration.Common.execMarlowe' ["load", archivePath]
+
+        liftIO do
+          loadStderr' `shouldBe` ""
+          loadCode' `shouldBe` ExitSuccess
+          loadStdout' `shouldBe` loadStdout
