@@ -1,7 +1,7 @@
 module Marlowe.Contracts.UTC.Swap where
 
 import Data.Time.Clock (UTCTime)
-import Language.Marlowe.Extended.V1
+import Language.Marlowe.Core.V1.Semantics.Types
 import qualified Marlowe.Contracts.Swap as C
 import Marlowe.Contracts.UTC.Common
 
@@ -10,7 +10,7 @@ swap
   -- ^ Party A
   -> Token
   -- ^ Token A
-  -> Value
+  -> Value Observation
   -- ^ Value A
   -> UTCTime
   -- ^ Deposit timeout A
@@ -18,7 +18,7 @@ swap
   -- ^ Party B
   -> Token
   -- ^ Token B
-  -> Value
+  -> Value Observation
   -- ^ Value B
   -> UTCTime
   -- ^ Deposit timeout B

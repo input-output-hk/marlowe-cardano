@@ -6,7 +6,7 @@ module Marlowe.Contracts.Futures (
 ) where
 
 import Data.String (IsString (..))
-import Language.Marlowe.Extended.V1
+import Language.Marlowe.Core.V1.Semantics.Types
 import Marlowe.Contracts.Common
 
 -- | Future on the exchange rate of ADA/USD
@@ -31,9 +31,9 @@ future
   -- ^ Buyer
   -> Party
   -- ^ Seller
-  -> Value
+  -> Value Observation
   -- ^ Forward price for 100 (contract size) USD at maturity (in Lovelace)
-  -> Value
+  -> Value Observation
   -- ^ Initial margin requirements (in Lovelace)
   -> Timeout
   -- ^ Initial margin setup timout
@@ -59,7 +59,7 @@ depositInitialMargin
   -- ^ Buyer
   -> Party
   -- ^ Seller
-  -> Value
+  -> Value Observation
   -- ^ Forward price
   -> Timeout
   -- ^ Initial margin call
@@ -77,7 +77,7 @@ maintenanceMarginCalls
   -- ^ Buyer
   -> Party
   -- ^ Seller
-  -> Value
+  -> Value Observation
   -- ^ Forward price
   -> [Timeout]
   -- ^ Call dates
@@ -109,7 +109,7 @@ maintenanceMarginCalls buyer seller forwardPrice callDates cont =
                     (updateMarginAccount seller amount timeout (liquidation seller buyer) continuation)
                     (updateMarginAccount buyer (NegValue amount) timeout (liquidation buyer seller) continuation)
 
-    updateMarginAccount :: Party -> Value -> Timeout -> Contract -> Contract -> Contract
+    updateMarginAccount :: Party -> Value Observation -> Timeout -> Contract -> Contract -> Contract
     updateMarginAccount party value timeout liquidation continuation =
       If
         (ValueGT (AvailableMoney party ada) value)
@@ -127,7 +127,7 @@ settlement
   -- ^ Buyer
   -> Party
   -- ^ Seller
-  -> Value
+  -> Value Observation
   -- ^ Forward price
   -> Timeout
   -- ^ Delivery date
@@ -154,7 +154,10 @@ settlement buyer seller forwardPrice deliveryDate continuation =
                 (pay seller buyer (ada, amount) continuation)
                 (pay buyer seller (ada, NegValue amount) continuation)
 
+ada :: Token
+ada = Token "" ""
+
 -- | Constants
-scale, contractSize :: Value
+scale, contractSize :: Value Observation
 scale = Constant 1_000_000
 contractSize = Constant 100

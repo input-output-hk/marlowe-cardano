@@ -6,7 +6,7 @@ module Marlowe.Contracts.UTC.CouponBond where
 import Data.Time (Day, addDays)
 import Data.Time.Calendar (addGregorianMonthsClip, addGregorianYearsClip)
 import Data.Time.Clock (UTCTime (..))
-import Language.Marlowe.Extended.V1
+import Language.Marlowe.Core.V1.Semantics.Types
 import Marlowe.Contracts.Common
 import Marlowe.Contracts.UTC.Common
 import Prelude hiding (cycle)
@@ -23,11 +23,11 @@ couponBond
   -- ^ Maturity
   -> Cycle
   -- ^ Cycle
-  -> Value
+  -> Value Observation
   -- ^ Discounted value
-  -> Value
+  -> Value Observation
   -- ^ Coupon
-  -> Value
+  -> Value Observation
   -- ^ Face value
   -> Token
   -- ^ Token
