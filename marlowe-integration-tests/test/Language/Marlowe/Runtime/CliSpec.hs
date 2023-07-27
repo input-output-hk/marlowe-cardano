@@ -28,6 +28,8 @@ import qualified Data.Time.Clock.POSIX as POSIX
 import Data.Void (Void)
 import GHC.IO.Exception (ExitCode (ExitSuccess))
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
+import Language.Marlowe.Object.Archive (packArchive)
+import Language.Marlowe.Object.Types (LabelledObject (LabelledObject), ObjectType (ContractType), fromCoreContract)
 import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as ChainSync.Api
 import Language.Marlowe.Runtime.Client (runMarloweTxClient)
@@ -59,7 +61,6 @@ import qualified Plutus.V2.Ledger.Api
 import Test.Hspec (
   Spec,
   describe,
-  focus,
   it,
   shouldBe,
  )
@@ -609,7 +610,42 @@ bugPLT6773 = do
             stderr `shouldBe` ""
             (code, actualContractJSON) `shouldBe` (ExitSuccess, Just expectedContract)
 
-    focus $ it "Marlowe runtime can load an exported contract" \CLISpecTestData{..} -> flip runIntegrationTest runtime do
+    it "Marlowe runtime can load a bundle archive" \CLISpecTestData{..} -> flip runIntegrationTest runtime do
+      workspace <- Reader.asks $ workspace . testnet
+      let contractHashRelation :: [(String, V1.Contract, Aeson.Value)]
+          contractHashRelation =
+            [
+              ( "a5a461145b2621873bd8f23d6b1b2d511d07b5afabfff8cc24134a657c9fb23b"
+              , V1.Assert V1.TrueObs $ V1.Assert V1.TrueObs V1.Close
+              , Aeson.object
+                  [ ("assert", Aeson.Bool True)
+                  , ("then", Aeson.object [("assert", Aeson.Bool True), ("then", Aeson.String "close")])
+                  ]
+              )
+            ]
+
+      for_ contractHashRelation \(expectedHash :: String, contract :: V1.Contract, expectedContract :: Aeson.Value) -> do
+        let archivePath = resolveWorkspacePath workspace "archive.zip"
+        packArchive archivePath "main" \writeObject -> do
+          writeObject $ LabelledObject "main" ContractType $ fromCoreContract contract
+
+        do
+          (code, stdout, stderr) <- Runtime.Integration.Common.execMarlowe' ["load", archivePath]
+
+          liftIO do
+            stderr `shouldBe` ""
+            (code, stdout) `shouldBe` (ExitSuccess, expectedHash ++ "\n")
+
+        do
+          (code, stdout, stderr) <- Runtime.Integration.Common.execMarlowe' ["query", "store", "contract", expectedHash]
+
+          let actualContractJSON :: Maybe Aeson.Value = Aeson.decode $ fromString stdout
+
+          liftIO do
+            stderr `shouldBe` ""
+            (code, actualContractJSON) `shouldBe` (ExitSuccess, Just expectedContract)
+
+    it "Marlowe runtime can load an exported contract" \CLISpecTestData{..} -> flip runIntegrationTest runtime do
       workspace <- Reader.asks $ workspace . testnet
       let contractHashRelation :: [(String, V1.Contract)]
           contractHashRelation =

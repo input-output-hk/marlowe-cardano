@@ -4,6 +4,7 @@ module Language.Marlowe.Runtime.Client.Transfer (
   importIncremental,
   exportContract,
   exportIncremental,
+  BundlePart (..),
 ) where
 
 import Data.Map (Map)
@@ -28,24 +29,37 @@ importBundle bundle =
             , recvMsgUploaded = pure . SendMsgImported . SendMsgDone . Right
             }
 
+-- | A data structure that carries an object bundle and an indication of whether to expect more bundles.
+data BundlePart
+  = IntermediatePart ObjectBundle
+  | FinalPart ObjectBundle
+
 -- | Streams a multi-part object bundle into the Runtime. It will link the bundle, merkleize the contracts, and
--- save them to the store. Yields mappings of the original contract labels to their store hashes.
+-- save them to the store. Yields mappings of the original contract labels to their store hashes. sending it a FinalPart
+-- finalizes the import, and is necessary to actually import the bundle. If no FinalPart is sent, nothing will be
+-- imported. The final mapping will be returned in the result, and not yielded.
 importIncremental
-  :: (Functor m) => MarloweTransferClient (Pipe ObjectBundle (Map Label DatumHash) m) (Maybe ImportError)
+  :: (Functor m)
+  => MarloweTransferClient (Pipe BundlePart (Map Label DatumHash) m) (Either ImportError (Map Label DatumHash))
 importIncremental = MarloweTransferClient $ SendMsgStartImport <$> upload
   where
     upload = do
-      bundle <- await
-      case bundle of
-        ObjectBundle [] -> do
-          yield mempty
-          pure $ SendMsgImported $ SendMsgDone Nothing
-        _ ->
+      part <- await
+      case part of
+        FinalPart bundle ->
           pure $
             SendMsgUpload
               bundle
               ClientStUpload
-                { recvMsgUploadFailed = pure . SendMsgDone . Just
+                { recvMsgUploadFailed = pure . SendMsgDone . Left
+                , recvMsgUploaded = \hashes -> pure $ SendMsgImported $ SendMsgDone $ Right hashes
+                }
+        IntermediatePart bundle ->
+          pure $
+            SendMsgUpload
+              bundle
+              ClientStUpload
+                { recvMsgUploadFailed = pure . SendMsgDone . Left
                 , recvMsgUploaded = \hashes -> do
                     yield hashes
                     upload
