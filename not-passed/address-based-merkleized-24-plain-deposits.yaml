@@ -1,0 +1,1006 @@
+testName: Plain 24 depoists of different tokens to address accounts
+
+operations:
+
+- CreateWallet:
+    walletNickname: Sender
+
+- Fund:
+    utxo: 100000000
+    wallets: [Sender]
+
+- CreateWallet:
+    walletNickname: Recipient
+
+- Mint:
+    issuer: Faucet
+    nickname: PriceToken
+    minLovelace: 2000000
+    tokenDistribution:
+      - [Sender, Token01, 1]
+      - [Sender, Token02, 1]
+      - [Sender, Token03, 1]
+      - [Sender, Token04, 1]
+      - [Sender, Token05, 1]
+      - [Sender, Token06, 1]
+      - [Sender, Token07, 1]
+      - [Sender, Token08, 1]
+      - [Sender, Token09, 1]
+      - [Sender, Token10, 1]
+      - [Sender, Token11, 1]
+      - [Sender, Token12, 1]
+      - [Sender, Token13, 1]
+      - [Sender, Token14, 1]
+      - [Sender, Token15, 1]
+      - [Sender, Token16, 1]
+      - [Sender, Token17, 1]
+      - [Sender, Token18, 1]
+      - [Sender, Token19, 1]
+      - [Sender, Token21, 1]
+      - [Sender, Token22, 1]
+      - [Sender, Token23, 1]
+      - [Sender, Token24, 1]
+
+- Initialize:
+    minLovelace: 2000000
+    merkleize: true
+    marloweValidators:
+      publishCurrent:
+        permanently: true
+    source:
+      when:
+        timeout:
+          relative: 3600
+        timeout_continuation: close
+        - case:
+            party:
+              address: Sender
+            deposits: 1
+            into_account:
+              address: Sender
+            of_token:
+              currency_symbol: PriceToken
+              token_name: Token01
+          then:
+            when:
+              timeout:
+                relative: 3600
+              timeout_continuation: close
+              - case:
+                  party:
+                    address: Sender
+                  deposits: 1
+                  into_account:
+                    address: Sender
+                  of_token:
+                    currency_symbol: PriceToken
+                    token_name: Token02
+                then:
+                  when:
+                    timeout:
+                      relative: 3600
+                    timeout_continuation: close
+                    - case:
+                        party:
+                          address: Sender
+                        deposits: 1
+                        into_account:
+                          address: Sender
+                        of_token:
+                          currency_symbol: PriceToken
+                          token_name: Token03
+                      then:
+                        when:
+                          timeout:
+                            relative: 3600
+                          timeout_continuation: close
+                          - case:
+                              party:
+                                address: Sender
+                              deposits: 1
+                              into_account:
+                                address: Sender
+                              of_token:
+                                currency_symbol: PriceToken
+                                token_name: Token04
+                            then:
+                              when:
+                                timeout:
+                                  relative: 3600
+                                timeout_continuation: close
+                                - case:
+                                    party:
+                                      address: Sender
+                                    deposits: 1
+                                    into_account:
+                                      address: Sender
+                                    of_token:
+                                      currency_symbol: PriceToken
+                                      token_name: Token05
+                                  then:
+                                    when:
+                                      timeout:
+                                        relative: 3600
+                                      timeout_continuation: close
+                                      - case:
+                                          party:
+                                            address: Sender
+                                          deposits: 1
+                                          into_account:
+                                            address: Sender
+                                          of_token:
+                                            currency_symbol: PriceToken
+                                            token_name: Token06
+                                        then:
+                                          when:
+                                            timeout:
+                                              relative: 3600
+                                            timeout_continuation: close
+                                            - case:
+                                                party:
+                                                  address: Sender
+                                                deposits: 1
+                                                into_account:
+                                                  address: Sender
+                                                of_token:
+                                                  currency_symbol: PriceToken
+                                                  token_name: Token07
+                                              then:
+                                                when:
+                                                  timeout:
+                                                    relative: 3600
+                                                  timeout_continuation: close
+                                                  - case:
+                                                      party:
+                                                        address: Sender
+                                                      deposits: 1
+                                                      into_account:
+                                                        address: Sender
+                                                      of_token:
+                                                        currency_symbol: PriceToken
+                                                        token_name: Token08
+                                                    then:
+                                                      when:
+                                                        timeout:
+                                                          relative: 3600
+                                                        timeout_continuation: close
+                                                        - case:
+                                                            party:
+                                                              address: Sender
+                                                            deposits: 1
+                                                            into_account:
+                                                              address: Sender
+                                                            of_token:
+                                                              currency_symbol: PriceToken
+                                                              token_name: Token09
+                                                          then:
+                                                            when:
+                                                              timeout:
+                                                                relative: 3600
+                                                              timeout_continuation: close
+                                                              - case:
+                                                                  party:
+                                                                    address: Sender
+                                                                  deposits: 1
+                                                                  into_account:
+                                                                    address: Sender
+                                                                  of_token:
+                                                                    currency_symbol: PriceToken
+                                                                    token_name: Token10
+                                                                then:
+                                                                  when:
+                                                                    timeout:
+                                                                      relative: 3600
+                                                                    timeout_continuation: close
+                                                                    - case:
+                                                                        party:
+                                                                          address: Sender
+                                                                        deposits: 1
+                                                                        into_account:
+                                                                          address: Sender
+                                                                        of_token:
+                                                                          currency_symbol: PriceToken
+                                                                          token_name: Token11
+                                                                      then:
+                                                                        when:
+                                                                          timeout:
+                                                                            relative: 3600
+                                                                          timeout_continuation: close
+                                                                          - case:
+                                                                              party:
+                                                                                address: Sender
+                                                                              deposits: 1
+                                                                              into_account:
+                                                                                address: Sender
+                                                                              of_token:
+                                                                                currency_symbol: PriceToken
+                                                                                token_name: Token12
+                                                                            then:
+                                                                              when:
+                                                                                timeout:
+                                                                                  relative: 3600
+                                                                                timeout_continuation: close
+                                                                                - case:
+                                                                                    party:
+                                                                                      address: Sender
+                                                                                    deposits: 1
+                                                                                    into_account:
+                                                                                      address: Sender
+                                                                                    of_token:
+                                                                                      currency_symbol: PriceToken
+                                                                                      token_name: Token13
+                                                                                  then:
+                                                                                    when:
+                                                                                      timeout:
+                                                                                        relative: 3600
+                                                                                      timeout_continuation: close
+                                                                                      - case:
+                                                                                          party:
+                                                                                            address: Sender
+                                                                                          deposits: 1
+                                                                                          into_account:
+                                                                                            address: Sender
+                                                                                          of_token:
+                                                                                            currency_symbol: PriceToken
+                                                                                            token_name: Token14
+                                                                                        then:
+                                                                                          when:
+                                                                                            timeout:
+                                                                                              relative: 3600
+                                                                                            timeout_continuation: close
+                                                                                            - case:
+                                                                                                party:
+                                                                                                  address: Sender
+                                                                                                deposits: 1
+                                                                                                into_account:
+                                                                                                  address: Sender
+                                                                                                of_token:
+                                                                                                  currency_symbol: PriceToken
+                                                                                                  token_name: Token15
+                                                                                              then:
+                                                                                                when:
+                                                                                                  timeout:
+                                                                                                    relative: 3600
+                                                                                                  timeout_continuation: close
+                                                                                                  - case:
+                                                                                                      party:
+                                                                                                        address: Sender
+                                                                                                      deposits: 1
+                                                                                                      into_account:
+                                                                                                        address: Sender
+                                                                                                      of_token:
+                                                                                                        currency_symbol: PriceToken
+                                                                                                        token_name: Token16
+                                                                                                    then:
+                                                                                                        when:
+                                                                                                          timeout:
+                                                                                                            relative: 3600
+                                                                                                          timeout_continuation: close
+                                                                                                          - case:
+                                                                                                              party:
+                                                                                                                address: Sender
+                                                                                                              deposits: 1
+                                                                                                              into_account:
+                                                                                                                address: Sender
+                                                                                                              of_token:
+                                                                                                                currency_symbol: PriceToken
+                                                                                                                token_name: Token17
+                                                                                                            then:
+                                                                                                              when:
+                                                                                                                timeout:
+                                                                                                                  relative: 3600
+                                                                                                                timeout_continuation: close
+                                                                                                                - case:
+                                                                                                                    party:
+                                                                                                                      address: Sender
+                                                                                                                    deposits: 1
+                                                                                                                    into_account:
+                                                                                                                      address: Sender
+                                                                                                                    of_token:
+                                                                                                                      currency_symbol: PriceToken
+                                                                                                                      token_name: Token18
+                                                                                                                  then:
+                                                                                                                    when:
+                                                                                                                      timeout:
+                                                                                                                        relative: 3600
+                                                                                                                      timeout_continuation: close
+                                                                                                                      - case:
+                                                                                                                          party:
+                                                                                                                            address: Sender
+                                                                                                                          deposits: 1
+                                                                                                                          into_account:
+                                                                                                                            address: Sender
+                                                                                                                          of_token:
+                                                                                                                            currency_symbol: PriceToken
+                                                                                                                            token_name: Token19
+                                                                                                                        then:
+                                                                                                                          when:
+                                                                                                                            timeout:
+                                                                                                                              relative: 3600
+                                                                                                                            timeout_continuation: close
+                                                                                                                            - case:
+                                                                                                                                party:
+                                                                                                                                  address: Sender
+                                                                                                                                deposits: 1
+                                                                                                                                into_account:
+                                                                                                                                  address: Sender
+                                                                                                                                of_token:
+                                                                                                                                  currency_symbol: PriceToken
+                                                                                                                                  token_name: Token20
+                                                                                                                              then:
+                                                                                                                                when:
+                                                                                                                                  timeout:
+                                                                                                                                    relative: 3600
+                                                                                                                                  timeout_continuation: close
+                                                                                                                                  - case:
+                                                                                                                                      party:
+                                                                                                                                        address: Sender
+                                                                                                                                      deposits: 1
+                                                                                                                                      into_account:
+                                                                                                                                        address: Sender
+                                                                                                                                      of_token:
+                                                                                                                                        currency_symbol: PriceToken
+                                                                                                                                        token_name: Token21
+                                                                                                                                    then:
+                                                                                                                                      when:
+                                                                                                                                        timeout:
+                                                                                                                                          relative: 3600
+                                                                                                                                        timeout_continuation: close
+                                                                                                                                        - case:
+                                                                                                                                            party:
+                                                                                                                                              address: Sender
+                                                                                                                                            deposits: 1
+                                                                                                                                            into_account:
+                                                                                                                                              address: Sender
+                                                                                                                                            of_token:
+                                                                                                                                              currency_symbol: PriceToken
+                                                                                                                                              token_name: Token23
+                                                                                                                                          then:
+                                                                                                                                            when:
+                                                                                                                                              timeout:
+                                                                                                                                                relative: 3600
+                                                                                                                                              timeout_continuation: close
+                                                                                                                                              - case:
+                                                                                                                                                  party:
+                                                                                                                                                    address: Sender
+                                                                                                                                                  deposits: 1
+                                                                                                                                                  into_account:
+                                                                                                                                                    address: Sender
+                                                                                                                                                  of_token:
+                                                                                                                                                    currency_symbol: PriceToken
+                                                                                                                                                    token_name: Token23
+                                                                                                                                                then:
+                                                                                                                                                  when:
+                                                                                                                                                    timeout:
+                                                                                                                                                      relative: 3600
+                                                                                                                                                    timeout_continuation: close
+                                                                                                                                                    - case:
+                                                                                                                                                        party:
+                                                                                                                                                          address: Sender
+                                                                                                                                                        deposits: 1
+                                                                                                                                                        into_account:
+                                                                                                                                                          address: Sender
+                                                                                                                                                        of_token:
+                                                                                                                                                          currency_symbol: PriceToken
+                                                                                                                                                          token_name: Token14
+                                                                                                                                                      then: close
+
+
+- Prepare:
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+    inputs:
+      - input_from_party:
+          address: Sender
+        that_deposits: 1
+        of_token:
+          currency_symbol: PriceToken
+          token_name: Token01
+        into_account:
+          address: Sender
+
+- Prepare:
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+    inputs:
+      - input_from_party:
+          address: Sender
+        that_deposits: 1
+        of_token:
+          currency_symbol: PriceToken
+          token_name: Token02
+        into_account:
+          address: Sender
+
+- Prepare:
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+    inputs:
+      - input_from_party:
+          address: Sender
+        that_deposits: 1
+        of_token:
+          currency_symbol: PriceToken
+          token_name: Token03
+        into_account:
+          address: Sender
+      - input_from_party:
+          address: Sender
+        that_deposits: 1
+        of_token:
+          currency_symbol: PriceToken
+          token_name: Token04
+        into_account:
+          address: Sender
+
+- Prepare:
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+    inputs:
+      - input_from_party:
+          address: Sender
+        that_deposits: 1
+        of_token:
+          currency_symbol: PriceToken
+          token_name: Token05
+        into_account:
+          address: Sender
+
+- Prepare:
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+    inputs:
+      - input_from_party:
+          address: Sender
+        that_deposits: 1
+        of_token:
+          currency_symbol: PriceToken
+          token_name: Token06
+        into_account:
+          address: Sender
+
+- Prepare:
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+    inputs:
+      - input_from_party:
+          address: Sender
+        that_deposits: 1
+        of_token:
+          currency_symbol: PriceToken
+          token_name: Token07
+        into_account:
+          address: Sender
+
+- Prepare:
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+    inputs:
+      - input_from_party:
+          address: Sender
+        that_deposits: 1
+        of_token:
+          currency_symbol: PriceToken
+          token_name: Token08
+        into_account:
+          address: Sender
+
+- Prepare:
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+    inputs:
+      - input_from_party:
+          address: Sender
+        that_deposits: 1
+        of_token:
+          currency_symbol: PriceToken
+          token_name: Token09
+        into_account:
+          address: Sender
+
+- Prepare:
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+    inputs:
+      - input_from_party:
+          address: Sender
+        that_deposits: 1
+        of_token:
+          currency_symbol: PriceToken
+          token_name: Token10
+        into_account:
+          address: Sender
+
+- Prepare:
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+    inputs:
+      - input_from_party:
+          address: Sender
+        that_deposits: 1
+        of_token:
+          currency_symbol: PriceToken
+          token_name: Token11
+        into_account:
+          address: Sender
+
+- Prepare:
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+    inputs:
+      - input_from_party:
+          address: Sender
+        that_deposits: 1
+        of_token:
+          currency_symbol: PriceToken
+          token_name: Token12
+        into_account:
+          address: Sender
+
+- Prepare:
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+    inputs:
+      - input_from_party:
+          address: Sender
+        that_deposits: 1
+        of_token:
+          currency_symbol: PriceToken
+          token_name: Token13
+        into_account:
+          address: Sender
+
+- Prepare:
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+    inputs:
+      - input_from_party:
+          address: Sender
+        that_deposits: 1
+        of_token:
+          currency_symbol: PriceToken
+          token_name: Token14
+        into_account:
+          address: Sender
+
+- Prepare:
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+    inputs:
+      - input_from_party:
+          address: Sender
+        that_deposits: 1
+        of_token:
+          currency_symbol: PriceToken
+          token_name: Token15
+        into_account:
+          address: Sender
+
+- Prepare:
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+    inputs:
+      - input_from_party:
+          address: Sender
+        that_deposits: 1
+        of_token:
+          currency_symbol: PriceToken
+          token_name: Token16
+        into_account:
+          address: Sender
+
+- Prepare:
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+    inputs:
+      - input_from_party:
+          address: Sender
+        that_deposits: 1
+        of_token:
+          currency_symbol: PriceToken
+          token_name: Token17
+        into_account:
+          address: Sender
+
+- Prepare:
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+    inputs:
+      - input_from_party:
+          address: Sender
+        that_deposits: 1
+        of_token:
+          currency_symbol: PriceToken
+          token_name: Token18
+        into_account:
+          address: Sender
+
+- Prepare:
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+    inputs:
+      - input_from_party:
+          address: Sender
+        that_deposits: 1
+        of_token:
+          currency_symbol: PriceToken
+          token_name: Token19
+        into_account:
+          address: Sender
+
+- Prepare:
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+    inputs:
+      - input_from_party:
+          address: Sender
+        that_deposits: 1
+        of_token:
+          currency_symbol: PriceToken
+          token_name: Token20
+        into_account:
+          address: Sender
+
+- Prepare:
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+    inputs:
+      - input_from_party:
+          address: Sender
+        that_deposits: 1
+        of_token:
+          currency_symbol: PriceToken
+          token_name: Token21
+        into_account:
+          address: Sender
+
+- Prepare:
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+    inputs:
+      - input_from_party:
+          address: Sender
+        that_deposits: 1
+        of_token:
+          currency_symbol: PriceToken
+          token_name: Token22
+        into_account:
+          address: Sender
+
+- Prepare:
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+    inputs:
+      - input_from_party:
+          address: Sender
+        that_deposits: 1
+        of_token:
+          currency_symbol: PriceToken
+          token_name: Token23
+        into_account:
+          address: Sender
+
+- Prepare:
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+    inputs:
+      - input_from_party:
+          address: Sender
+        that_deposits: 1
+        of_token:
+          currency_symbol: PriceToken
+          token_name: Token24
+        into_account:
+          address: Sender
+
+- AutoRun
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+
+
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -60
+    maximumTime:
+      relative: +1800
+
+
+- AutoRun
+
+# # # - RuntimeApplyInputs:
+# # #     submitter: Organizer
+# # #     awaitConfirmed: 120
+# # #     invalidBefore:
+# # #       relative: -60
+# # #     invalidHereafter:
+# # #       relative: +1800
+# # #     inputs:
+# # #       - "input_notify"
+# # #
+# # # - RuntimeApplyInputs:
+# # #     submitter: Organizer
+# # #     awaitConfirmed: 120
+# # #     invalidBefore:
+# # #       relative: -60
+# # #     invalidHereafter:
+# # #       relative: +1800
+# # #     inputs:
+# # #       - "input_notify"
+# # #
+# # # - RuntimeApplyInputs:
+# # #     submitter: Organizer
+# # #     awaitConfirmed: 120
+# # #     invalidBefore:
+# # #       relative: -60
+# # #     invalidHereafter:
+# # #       relative: +1800
+# # #     inputs:
+# # #       - "input_notify"
+# # #
+# # # - RuntimeWithdraw:
+# # #     wallets:
+# # #       - First
+# # #     awaitConfirmed: 120
+# # #
+# # # - CheckBalance:
+# # #     wallet: First
+# # #     balance:
+# # #       - [ADA, [20, 30]]
+# # #       - [PriceToken, Token01, 1]
+# # #       - [PriceToken, Token02, 1]
+# # #
+# # # - RuntimeWithdraw:
+# # #     wallets:
+# # #       - Second
+# # #     awaitConfirmed: 120
+# # #
+# # # - CheckBalance:
+# # #     wallet: Second
+# # #     balance:
+# # #       - [ADA, [20, 30]]
+# # #       - [PriceToken, Token03, 1]
+# # #       - [PriceTokens, SecondPriceToken, 1]
+# # #
+# # # - RuntimeWithdraw:
+# # #     wallets:
+# # #       - Third
+# # #     awaitConfirmed: 120
+# # #
+# # # - CheckBalance:
+# # #     wallet: Third
+# # #     balance:
+# # #       - [ADA, [20, 30]]
+# # #       - [PriceToken, Token03, 1]
+# # #       - [PriceTokens, SecondPriceToken, 1]

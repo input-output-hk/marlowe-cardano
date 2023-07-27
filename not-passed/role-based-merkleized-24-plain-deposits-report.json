@@ -1,0 +1,1693 @@
+{
+    "masterFaucetInfo": {
+        "currentBalance": {
+            "": {
+                "": 31241151148
+            },
+            "257efb43dca8e9b859f7553d8a52bdffe7376f93383478cb13de90a4": {
+                "Token01": 1,
+                "Token02": 1,
+                "Token03": 1,
+                "Token04": 1
+            },
+            "9ea08c58d46e6fed49ad4970c7a2a8e49f86cf72fd2a60e46fc17147": {
+                "Token01": 1,
+                "Token03": 1,
+                "Token04": 1,
+                "Token05": 1,
+                "Token06": 1,
+                "Token07": 1,
+                "Token08": 1,
+                "Token09": 1,
+                "Token10": 1,
+                "Token11": 1,
+                "Token12": 1,
+                "Token13": 1,
+                "Token14": 1,
+                "Token15": 1,
+                "Token16": 1,
+                "Token17": 1,
+                "Token18": 1,
+                "Token19": 1,
+                "Token20": 1,
+                "Token21": 1,
+                "Token22": 1,
+                "Token23": 1,
+                "Token24": 1
+            }
+        },
+        "fundedTxs": [
+            {
+                "txFee": 187921,
+                "txId": "1eaab82487d4e543ae0819a85bc638d7e40168c1b3ed9e31efaa9cdeb362b169"
+            },
+            {
+                "txFee": 282585,
+                "txId": "44eca17963093fbf0d7849018517621a8bbfa2084b2b429ef591e52b2cdd14b9"
+            },
+            {
+                "txFee": 196741,
+                "txId": "dafbf962b063645bf7161f676fb9b9be7d17b243ee70123fc9d9cc47a25e2177"
+            },
+            {
+                "txFee": 262785,
+                "txId": "1329073e88567f67758aa5e096b7a4b950e569fc682bc9debfbad31e124946f9"
+            },
+            {
+                "txFee": 169637,
+                "txId": "3dd437ff4533ab466df4822d0e67166d574b74b732696f0c065118f4d2d62882"
+            },
+            {
+                "txFee": 220017,
+                "txId": "411afeebcaa3dc2e85cd7aca8083382a67dd62492f3a1dcb4e32a82dde6ce157"
+            },
+            {
+                "txFee": 1311631,
+                "txId": "a672dc5d5f2eba43a67716b6ccdd94a8f74b0ab16e0d6468a1d8aca834f02ca8"
+            },
+            {
+                "txFee": 1164170,
+                "txId": "36d6e41ed085b31da9d7da8e5e7f7b0a74da5d3c5880416ffbf367370d9ef043"
+            },
+            {
+                "txFee": 1192180,
+                "txId": "dc6f4ab7e7aa4417866239f83eda7f7a99bab8498ae160cfe98191670f06ecb6"
+            },
+            {
+                "txFee": 816437,
+                "txId": "6c071b53e31b24f5e7de131001259ce24d997f5fd28d4e00976955ddda809e1a"
+            },
+            {
+                "txFee": 716144,
+                "txId": "6d4570fed9b4f0d74350a2ec7985c0ca15088c2055c8a4afeee4bb1b4a1e79c3"
+            },
+            {
+                "txFee": 175093,
+                "txId": "1336c81613f12c5324158f72d94a3200966000bd4e198a0acdd5bfb4713dcfcb"
+            }
+        ],
+        "initialBalance": {
+            "": {
+                "": 31249151365
+            },
+            "257efb43dca8e9b859f7553d8a52bdffe7376f93383478cb13de90a4": {
+                "Token01": 1,
+                "Token02": 1,
+                "Token03": 1,
+                "Token04": 1
+            },
+            "9ea08c58d46e6fed49ad4970c7a2a8e49f86cf72fd2a60e46fc17147": {
+                "Token03": 1,
+                "Token04": 1,
+                "Token05": 1,
+                "Token06": 1,
+                "Token07": 1,
+                "Token08": 1,
+                "Token09": 1,
+                "Token10": 1,
+                "Token11": 1,
+                "Token12": 1,
+                "Token13": 1,
+                "Token14": 1,
+                "Token15": 1,
+                "Token16": 1,
+                "Token17": 1,
+                "Token18": 1,
+                "Token19": 1,
+                "Token20": 1,
+                "Token21": 1,
+                "Token22": 1,
+                "Token23": 1,
+                "Token24": 1
+            }
+        },
+        "submittedTxs": [
+            {
+                "txFee": 169637,
+                "txId": "945adcd3b6e6414b9ac95da842bf46a31b504b1fff299ebf094f82f624b640d4"
+            },
+            {
+                "txFee": 173949,
+                "txId": "019cdfaed6f910ee4fe433ecd088f0ac391cc3fe78358d1bae6718a20df57db7"
+            }
+        ],
+        "totalKnownFees": 7038927
+    },
+    "results": [
+        {
+            "contracts": {},
+            "currencies": [
+                [
+                    "PriceToken",
+                    {
+                        "issuer": "Faucet",
+                        "policyId": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9"
+                    }
+                ],
+                [
+                    "RoleToken",
+                    {
+                        "issuer": "Sender",
+                        "policyId": "b2b8be1a4fc9650c9723fe7a9c20d37db424cecd61b2fca35b0debbe"
+                    }
+                ]
+            ],
+            "error": {
+                "InterpreterError": {
+                    "contents": {
+                        "CliOperationFailed": {
+                            "info": [
+                                [
+                                    "label",
+                                    "[AutoRun] "
+                                ]
+                            ],
+                            "message": "TxValidationErrorInMode (ShelleyTxValidationError ShelleyBasedEraBabbage (ApplyTxError [UtxowFailure (UtxoFailure (FromAlonzoUtxoFail (ExUnitsTooBigUTxO (WrapExUnits {unWrapExUnits = ExUnits' {exUnitsMem' = 14000000, exUnitsSteps' = 10000000000}}) (WrapExUnits {unWrapExUnits = ExUnits' {exUnitsMem' = 15874512, exUnitsSteps' = 4101007008}}))))])) BabbageEraInCardanoMode"
+                        }
+                    }
+                }
+            },
+            "logs": [
+                [
+                    "CreateWallet",
+                    "",
+                    []
+                ],
+                [
+                    "CreateWallet",
+                    "Wallet \"Sender\" created with an address: addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv",
+                    []
+                ],
+                [
+                    "CreateWallet",
+                    "Wallet info stored in /tmp/nix-shell.G3whqS/wallet-of-Sender-3544457-2.pay and /tmp/nix-shell.G3whqS/wallet-of-Sender-3544457-3.skey",
+                    []
+                ],
+                [
+                    "Fund",
+                    "",
+                    []
+                ],
+                [
+                    "CreateWallet",
+                    "",
+                    []
+                ],
+                [
+                    "CreateWallet",
+                    "Wallet \"Recipient\" created with an address: addr_test1vqlja478jvn6t863mg293tekcr796d6h6jpyq6cju02llyqu62kdd",
+                    []
+                ],
+                [
+                    "CreateWallet",
+                    "Wallet info stored in /tmp/nix-shell.G3whqS/wallet-of-Recipient-3544457-4.pay and /tmp/nix-shell.G3whqS/wallet-of-Recipient-3544457-5.skey",
+                    []
+                ],
+                [
+                    "Mint",
+                    "",
+                    []
+                ],
+                [
+                    "Mint",
+                    "Minting currency RoleToken with tokens distribution: TokenAssignment {taWalletNickname = Right (WalletNickname {unWalletNickname = \"Sender\"}), tokens = [(\"R\",1)]} :| []",
+                    []
+                ],
+                [
+                    "Mint",
+                    "The issuer is Sender",
+                    []
+                ],
+                [
+                    "Mint",
+                    "This currency symbol is \"b2b8be1a4fc9650c9723fe7a9c20d37db424cecd61b2fca35b0debbe\"",
+                    []
+                ],
+                [
+                    "Mint",
+                    "",
+                    []
+                ],
+                [
+                    "Mint",
+                    "Minting currency PriceToken with tokens distribution: TokenAssignment {taWalletNickname = Right (WalletNickname {unWalletNickname = \"Sender\"}), tokens = [(\"Token01\",1)]} :| [TokenAssignment {taWalletNickname = Right (WalletNickname {unWalletNickname = \"Sender\"}), tokens = [(\"Token02\",1)]},TokenAssignment {taWalletNickname = Right (WalletNickname {unWalletNickname = \"Sender\"}), tokens = [(\"Token03\",1)]},TokenAssignment {taWalletNickname = Right (WalletNickname {unWalletNickname = \"Sender\"}), tokens = [(\"Token04\",1)]},TokenAssignment {taWalletNickname = Right (WalletNickname {unWalletNickname = \"Sender\"}), tokens = [(\"Token05\",1)]},TokenAssignment {taWalletNickname = Right (WalletNickname {unWalletNickname = \"Sender\"}), tokens = [(\"Token06\",1)]},TokenAssignment {taWalletNickname = Right (WalletNickname {unWalletNickname = \"Sender\"}), tokens = [(\"Token07\",1)]},TokenAssignment {taWalletNickname = Right (WalletNickname {unWalletNickname = \"Sender\"}), tokens = [(\"Token08\",1)]},TokenAssignment {taWalletNickname = Right (WalletNickname {unWalletNickname = \"Sender\"}), tokens = [(\"Token09\",1)]},TokenAssignment {taWalletNickname = Right (WalletNickname {unWalletNickname = \"Sender\"}), tokens = [(\"Token10\",1)]},TokenAssignment {taWalletNickname = Right (WalletNickname {unWalletNickname = \"Sender\"}), tokens = [(\"Token11\",1)]},TokenAssignment {taWalletNickname = Right (WalletNickname {unWalletNickname = \"Sender\"}), tokens = [(\"Token12\",1)]},TokenAssignment {taWalletNickname = Right (WalletNickname {unWalletNickname = \"Sender\"}), tokens = [(\"Token13\",1)]},TokenAssignment {taWalletNickname = Right (WalletNickname {unWalletNickname = \"Sender\"}), tokens = [(\"Token14\",1)]},TokenAssignment {taWalletNickname = Right (WalletNickname {unWalletNickname = \"Sender\"}), tokens = [(\"Token15\",1)]},TokenAssignment {taWalletNickname = Right (WalletNickname {unWalletNickname = \"Sender\"}), tokens = [(\"Token16\",1)]},TokenAssignment {taWalletNickname = Right (WalletNickname {unWalletNickname = \"Sender\"}), tokens = [(\"Token17\",1)]},TokenAssignment {taWalletNickname = Right (WalletNickname {unWalletNickname = \"Sender\"}), tokens = [(\"Token18\",1)]},TokenAssignment {taWalletNickname = Right (WalletNickname {unWalletNickname = \"Sender\"}), tokens = [(\"Token19\",1)]},TokenAssignment {taWalletNickname = Right (WalletNickname {unWalletNickname = \"Sender\"}), tokens = [(\"Token21\",1)]},TokenAssignment {taWalletNickname = Right (WalletNickname {unWalletNickname = \"Sender\"}), tokens = [(\"Token22\",1)]},TokenAssignment {taWalletNickname = Right (WalletNickname {unWalletNickname = \"Sender\"}), tokens = [(\"Token23\",1)]},TokenAssignment {taWalletNickname = Right (WalletNickname {unWalletNickname = \"Sender\"}), tokens = [(\"Token24\",1)]}]",
+                    []
+                ],
+                [
+                    "Mint",
+                    "The issuer is Faucet",
+                    []
+                ],
+                [
+                    "Mint",
+                    "This currency symbol is \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\"",
+                    []
+                ],
+                [
+                    "Initialize",
+                    "",
+                    []
+                ],
+                [
+                    "Initialize",
+                    "Contract: When [\n  (Case\n     (Deposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n        (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token01\")\n        (Constant 1))\n     (When [\n        (Case\n           (Deposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n              (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token02\")\n              (Constant 1))\n           (When [\n              (Case\n                 (Deposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n                    (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token03\")\n                    (Constant 1))\n                 (When [\n                    (Case\n                       (Deposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n                          (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token04\")\n                          (Constant 1))\n                       (When [\n                          (Case\n                             (Deposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n                                (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token05\")\n                                (Constant 1))\n                             (When [\n                                (Case\n                                   (Deposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n                                      (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token06\")\n                                      (Constant 1))\n                                   (When [\n                                      (Case\n                                         (Deposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n                                            (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token07\")\n                                            (Constant 1))\n                                         (When [\n                                            (Case\n                                               (Deposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n                                                  (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token08\")\n                                                  (Constant 1))\n                                               (When [\n                                                  (Case\n                                                     (Deposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n                                                        (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token09\")\n                                                        (Constant 1))\n                                                     (When [\n                                                        (Case\n                                                           (Deposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n                                                              (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token10\")\n                                                              (Constant 1))\n                                                           (When [\n                                                              (Case\n                                                                 (Deposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n                                                                    (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token11\")\n                                                                    (Constant 1))\n                                                                 (When [\n                                                                    (Case\n                                                                       (Deposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n                                                                          (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token12\")\n                                                                          (Constant 1))\n                                                                       (When [\n                                                                          (Case\n                                                                             (Deposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n                                                                                (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token13\")\n                                                                                (Constant 1))\n                                                                             (When [\n                                                                                (Case\n                                                                                   (Deposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n                                                                                      (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token14\")\n                                                                                      (Constant 1))\n                                                                                   (When [\n                                                                                      (Case\n                                                                                         (Deposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n                                                                                            (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token15\")\n                                                                                            (Constant 1))\n                                                                                         (When [\n                                                                                            (Case\n                                                                                               (Deposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n                                                                                                  (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token16\")\n                                                                                                  (Constant 1))\n                                                                                               (When [\n                                                                                                  (Case\n                                                                                                     (Deposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n                                                                                                        (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token17\")\n                                                                                                        (Constant 1))\n                                                                                                     (When [\n                                                                                                        (Case\n                                                                                                           (Deposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n                                                                                                              (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token18\")\n                                                                                                              (Constant 1))\n                                                                                                           (When [\n                                                                                                              (Case\n                                                                                                                 (Deposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n                                                                                                                    (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token19\")\n                                                                                                                    (Constant 1))\n                                                                                                                 (When [\n                                                                                                                    (Case\n                                                                                                                       (Deposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n                                                                                                                          (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token20\")\n                                                                                                                          (Constant 1))\n                                                                                                                       (When [\n                                                                                                                          (Case\n                                                                                                                             (Deposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n                                                                                                                                (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token21\")\n                                                                                                                                (Constant 1))\n                                                                                                                             (When [\n                                                                                                                                (Case\n                                                                                                                                   (Deposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n                                                                                                                                      (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token22\")\n                                                                                                                                      (Constant 1))\n                                                                                                                                   (When [\n                                                                                                                                      (Case\n                                                                                                                                         (Deposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n                                                                                                                                            (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token23\")\n                                                                                                                                            (Constant 1))\n                                                                                                                                         (When [\n                                                                                                                                            (Case\n                                                                                                                                               (Deposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n                                                                                                                                                  (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token24\")\n                                                                                                                                                  (Constant 1)) Close)] 1690473914034 Close))] 1690473914034 Close))] 1690473914034 Close))] 1690473914034 Close))] 1690473914034 Close))] 1690473914034 Close))] 1690473914034 Close))] 1690473914034 Close))] 1690473914034 Close))] 1690473914034 Close))] 1690473914034 Close))] 1690473914034 Close))] 1690473914034 Close))] 1690473914034 Close))] 1690473914034 Close))] 1690473914034 Close))] 1690473914034 Close))] 1690473914034 Close))] 1690473914034 Close))] 1690473914034 Close))] 1690473914034 Close))] 1690473914034 Close))] 1690473914034 Close))] 1690473914034 Close",
+                    []
+                ],
+                [
+                    "Initialize",
+                    "Using reference scripts to the current Marlowe validator.",
+                    []
+                ],
+                [
+                    "Initialize",
+                    "Publishing the scripts.",
+                    []
+                ],
+                [
+                    "publishCurrentValidators",
+                    "Found already published scripts so using them.",
+                    []
+                ],
+                [
+                    "publishCurrentValidators",
+                    "Marlowe reference: TxIn \"9a8a6f387a3330b4141e1cb019380b9ac5c72151c0abc52aa4266245d3c555cd\" (TxIx 1)",
+                    []
+                ],
+                [
+                    "publishCurrentValidators",
+                    "addr_test1wqhdyccahvnheppng3fut3phhp3jt5m37zp4529ezz535ms2u9jqv",
+                    []
+                ],
+                [
+                    "publishCurrentValidators",
+                    "Payout reference: TxIn \"001c4e145938d2d7afe1f3a17360dc4cf9efffab4fe9e76f3ac6351c9e937537\" (TxIx 2)",
+                    []
+                ],
+                [
+                    "publishCurrentValidators",
+                    "addr_test1wrsk2cgzxg34hwa7ladenzer8k4wg2temmyj5eezm8x6nzg2u8ua0",
+                    []
+                ],
+                [
+                    "Initialize",
+                    "Saving initialized contract \"contract-soscbysd\"",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "Inputs: :\n  (NormalInput\n     (IDeposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n        (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token01\") 1)) []",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "Inputs: :\n  (NormalInput\n     (IDeposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n        (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token02\") 1)) []",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "Inputs: :\n  (NormalInput\n     (IDeposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n        (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token03\") 1)) [\n  (NormalInput\n     (IDeposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n        (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token04\") 1))]",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "Inputs: :\n  (NormalInput\n     (IDeposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n        (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token05\") 1)) []",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "Inputs: :\n  (NormalInput\n     (IDeposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n        (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token06\") 1)) []",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "Inputs: :\n  (NormalInput\n     (IDeposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n        (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token07\") 1)) []",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "Inputs: :\n  (NormalInput\n     (IDeposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n        (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token08\") 1)) []",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "Inputs: :\n  (NormalInput\n     (IDeposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n        (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token09\") 1)) []",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "Inputs: :\n  (NormalInput\n     (IDeposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n        (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token10\") 1)) []",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "Inputs: :\n  (NormalInput\n     (IDeposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n        (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token11\") 1)) []",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "Inputs: :\n  (NormalInput\n     (IDeposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n        (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token12\") 1)) []",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "Inputs: :\n  (NormalInput\n     (IDeposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n        (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token13\") 1)) []",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "Inputs: :\n  (NormalInput\n     (IDeposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n        (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token14\") 1)) []",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "Inputs: :\n  (NormalInput\n     (IDeposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n        (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token15\") 1)) []",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "Inputs: :\n  (NormalInput\n     (IDeposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n        (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token16\") 1)) []",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "Inputs: :\n  (NormalInput\n     (IDeposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n        (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token17\") 1)) []",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "Inputs: :\n  (NormalInput\n     (IDeposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n        (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token18\") 1)) []",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "Inputs: :\n  (NormalInput\n     (IDeposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n        (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token19\") 1)) []",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "Inputs: :\n  (NormalInput\n     (IDeposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n        (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token20\") 1)) []",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "Inputs: :\n  (NormalInput\n     (IDeposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n        (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token21\") 1)) []",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "Inputs: :\n  (NormalInput\n     (IDeposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n        (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token22\") 1)) []",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "Inputs: :\n  (NormalInput\n     (IDeposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n        (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token23\") 1)) []",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "",
+                    []
+                ],
+                [
+                    "Prepare",
+                    "Inputs: :\n  (NormalInput\n     (IDeposit (Role \"R\") (Address \"addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv\")\n        (Token \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\" \"Token24\") 1)) []",
+                    []
+                ],
+                [
+                    "AutoRun",
+                    "",
+                    []
+                ],
+                [
+                    "autoRunTransaction",
+                    "Applying marlowe inputs: ",
+                    [
+                        [
+                            "inputs",
+                            []
+                        ],
+                        [
+                            "state",
+                            {
+                                "accounts": [
+                                    [
+                                        [
+                                            {
+                                                "address": "addr_test1vzpaq7wpyf3h7nrk67w8v5we3mjj5dzz9mgcwwala9u942s30c62y"
+                                            },
+                                            {
+                                                "currency_symbol": "",
+                                                "token_name": ""
+                                            }
+                                        ],
+                                        2000000
+                                    ]
+                                ],
+                                "boundValues": [],
+                                "choices": [],
+                                "minTime": 1
+                            }
+                        ],
+                        [
+                            "contract",
+                            {
+                                "timeout": 1690473914034,
+                                "timeout_continuation": "close",
+                                "when": [
+                                    {
+                                        "case": {
+                                            "deposits": 1,
+                                            "into_account": {
+                                                "role_token": "R"
+                                            },
+                                            "of_token": {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token01"
+                                            },
+                                            "party": {
+                                                "address": "addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv"
+                                            }
+                                        },
+                                        "merkleized_then": "c27bf302731891dc10a7041dd4e59e8aae819f779458284f2cd8e92a33781a3a"
+                                    }
+                                ]
+                            }
+                        ]
+                    ]
+                ],
+                [
+                    "autoRunTransaction",
+                    "Submitter: Faucet",
+                    []
+                ],
+                [
+                    "autoRunTransaction",
+                    "TxBody:ShelleyTxBody ShelleyBasedEraBabbage (TxBodyConstr TxBodyRaw {_spendInputs = fromList [TxIn (TxId {_unTxId = SafeHash \"1329073e88567f67758aa5e096b7a4b950e569fc682bc9debfbad31e124946f9\"}) (TxIx 0)], _collateralInputs = fromList [TxIn (TxId {_unTxId = SafeHash \"1329073e88567f67758aa5e096b7a4b950e569fc682bc9debfbad31e124946f9\"}) (TxIx 0)], _referenceInputs = fromList [], _outputs = StrictSeq {fromStrict = fromList [Sized {sizedValue = (Addr Testnet (KeyHashObj (KeyHash \"83d079c122637f4c76d79c7651d98ee52a34422ed1873bbfe9785aaa\")) StakeRefNull,Value 558196391 (fromList []),NoDatum,SNothing), sizedSize = 39},Sized {sizedValue = (Addr Testnet (ScriptHashObj (ScriptHash \"2ed2631dbb277c84334453c5c437b86325d371f0835a28b910a91a6e\")) StakeRefNull,Value 2000000 (fromList []),DatumHash (SafeHash \"e30b92eda7936703d5170218fb476eb1c02eb91ec5169ddfcb3e7083015fa02a\"),SNothing), sizedSize = 76}]}, _collateralReturn = SJust (Sized {sizedValue = (Addr Testnet (KeyHashObj (KeyHash \"83d079c122637f4c76d79c7651d98ee52a34422ed1873bbfe9785aaa\")) StakeRefNull,Value 560098020 (fromList []),NoDatum,SNothing), sizedSize = 39}), _totalCollateral = SJust (Coin 295112), _certs = StrictSeq {fromStrict = fromList []}, _wdrls = Wdrl {unWdrl = fromList []}, _txfee = Coin 196741, _vldt = ValidityInterval {invalidBefore = SNothing, invalidHereafter = SNothing}, _update = SNothing, _reqSignerHashes = fromList [KeyHash \"83d079c122637f4c76d79c7651d98ee52a34422ed1873bbfe9785aaa\"], _mint = Value 0 (fromList []), _scriptIntegrityHash = SJust (SafeHash \"b1e3c6361f5dbecad9644aa226517b15db9d25d54a5024f67c076e19f6975ec8\"), _adHash = SNothing, _txnetworkid = SNothing}) [] (TxBodyScriptData ScriptDataInBabbageEra TxDatsRaw (fromList [(SafeHash \"e30b92eda7936703d5170218fb476eb1c02eb91ec5169ddfcb3e7083015fa02a\",DataConstr Constr 0 [Constr 0 [B \"\\178\\184\\190\\SUBO\\201e\\f\\151#\\254z\\156 \\211}\\180$\\206\\205a\\178\\252\\163[\\r\\235\\190\"],Constr 0 [Map [(Constr 0 [Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\131\\208y\\193\\\"c\\DELLv\\215\\156vQ\\217\\142\\229*4B.\\209\\135;\\191\\233xZ\\170\"],Constr 1 []]],Constr 0 [B \"\",B \"\"]],I 2000000)],Map [],Map [],I 1],Constr 3 [List [Constr 1 [Constr 0 [Constr 1 [B \"R\"],Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\178\\195d\\153\\147~\\156\\&7\\220w\\153\\177\\170\\212\\&0\\t\\ENQ\\247\\153\\194W\\158\\NULgZ\\147\\&2\\216\"],Constr 1 []]],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token01\"],Constr 1 [I 1]],B \"\\194{\\243\\STXs\\CAN\\145\\220\\DLE\\167\\EOT\\GS\\212\\229\\158\\138\\174\\129\\159w\\148X(O,\\216\\233*3x\\SUB:\"]],I 1690473914034,Constr 0 []]])]) RedeemersRaw (fromList [])) Nothing TxScriptValidityNone",
+                    []
+                ],
+                [
+                    "autoRunTransaction",
+                    "TxId:\"dafbf962b063645bf7161f676fb9b9be7d17b243ee70123fc9d9cc47a25e2177\"",
+                    []
+                ],
+                [
+                    "autoRunTransaction",
+                    "Marlowe output:TxIn \"dafbf962b063645bf7161f676fb9b9be7d17b243ee70123fc9d9cc47a25e2177\" (TxIx 1)",
+                    []
+                ],
+                [
+                    "autoRunTransaction",
+                    "Applying marlowe inputs: ",
+                    [
+                        [
+                            "inputs",
+                            [
+                                {
+                                    "continuation_hash": "c27bf302731891dc10a7041dd4e59e8aae819f779458284f2cd8e92a33781a3a",
+                                    "input_from_party": {
+                                        "address": "addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv"
+                                    },
+                                    "into_account": {
+                                        "role_token": "R"
+                                    },
+                                    "merkleized_continuation": {
+                                        "timeout": 1690473914034,
+                                        "timeout_continuation": "close",
+                                        "when": [
+                                            {
+                                                "case": {
+                                                    "deposits": 1,
+                                                    "into_account": {
+                                                        "role_token": "R"
+                                                    },
+                                                    "of_token": {
+                                                        "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                        "token_name": "Token02"
+                                                    },
+                                                    "party": {
+                                                        "address": "addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv"
+                                                    }
+                                                },
+                                                "merkleized_then": "d7fd8ac525c054339bf17ff3cc75e54035b81c404d33395ac77717e6d76aa172"
+                                            }
+                                        ]
+                                    },
+                                    "of_token": {
+                                        "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                        "token_name": "Token01"
+                                    },
+                                    "that_deposits": 1
+                                }
+                            ]
+                        ],
+                        [
+                            "state",
+                            {
+                                "accounts": [
+                                    [
+                                        [
+                                            {
+                                                "address": "addr_test1vzpaq7wpyf3h7nrk67w8v5we3mjj5dzz9mgcwwala9u942s30c62y"
+                                            },
+                                            {
+                                                "currency_symbol": "",
+                                                "token_name": ""
+                                            }
+                                        ],
+                                        2000000
+                                    ],
+                                    [
+                                        [
+                                            {
+                                                "role_token": "R"
+                                            },
+                                            {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token01"
+                                            }
+                                        ],
+                                        1
+                                    ]
+                                ],
+                                "boundValues": [],
+                                "choices": [],
+                                "minTime": 1690470254000
+                            }
+                        ],
+                        [
+                            "contract",
+                            {
+                                "timeout": 1690473914034,
+                                "timeout_continuation": "close",
+                                "when": [
+                                    {
+                                        "case": {
+                                            "deposits": 1,
+                                            "into_account": {
+                                                "role_token": "R"
+                                            },
+                                            "of_token": {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token02"
+                                            },
+                                            "party": {
+                                                "address": "addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv"
+                                            }
+                                        },
+                                        "merkleized_then": "d7fd8ac525c054339bf17ff3cc75e54035b81c404d33395ac77717e6d76aa172"
+                                    }
+                                ]
+                            }
+                        ]
+                    ]
+                ],
+                [
+                    "autoRunTransaction",
+                    "Submitter: Sender",
+                    []
+                ],
+                [
+                    "autoRunTransaction",
+                    "TxBody:ShelleyTxBody ShelleyBasedEraBabbage (TxBodyConstr TxBodyRaw {_spendInputs = fromList [TxIn (TxId {_unTxId = SafeHash \"1329073e88567f67758aa5e096b7a4b950e569fc682bc9debfbad31e124946f9\"}) (TxIx 1),TxIn (TxId {_unTxId = SafeHash \"1336c81613f12c5324158f72d94a3200966000bd4e198a0acdd5bfb4713dcfcb\"}) (TxIx 0),TxIn (TxId {_unTxId = SafeHash \"dafbf962b063645bf7161f676fb9b9be7d17b243ee70123fc9d9cc47a25e2177\"}) (TxIx 1)], _collateralInputs = fromList [TxIn (TxId {_unTxId = SafeHash \"1336c81613f12c5324158f72d94a3200966000bd4e198a0acdd5bfb4713dcfcb\"}) (TxIx 0)], _referenceInputs = fromList [TxIn (TxId {_unTxId = SafeHash \"9a8a6f387a3330b4141e1cb019380b9ac5c72151c0abc52aa4266245d3c555cd\"}) (TxIx 1)], _outputs = StrictSeq {fromStrict = fromList [Sized {sizedValue = (Addr Testnet (KeyHashObj (KeyHash \"b2c36499937e9c37dc7799b1aad4300905f799c2579e00675a9332d8\")) StakeRefNull,Value 97608763 (fromList []),NoDatum,SNothing), sizedSize = 39},Sized {sizedValue = (Addr Testnet (ScriptHashObj (ScriptHash \"2ed2631dbb277c84334453c5c437b86325d371f0835a28b910a91a6e\")) StakeRefNull,Value 2000000 (fromList [(PolicyID {policyID = ScriptHash \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\"},fromList [(546f6b656e3031,1)])]),DatumHash (SafeHash \"17328050855eecc4abb7a55f286f2a9283cb43624065d035a2920d3c0dbab2e1\"),SNothing), sizedSize = 118},Sized {sizedValue = (Addr Testnet (KeyHashObj (KeyHash \"b2c36499937e9c37dc7799b1aad4300905f799c2579e00675a9332d8\")) StakeRefNull,Value 1500000 (fromList []),DatumHash (SafeHash \"c27bf302731891dc10a7041dd4e59e8aae819f779458284f2cd8e92a33781a3a\"),SNothing), sizedSize = 76}]}, _collateralReturn = SJust (Sized {sizedValue = (Addr Testnet (KeyHashObj (KeyHash \"b2c36499937e9c37dc7799b1aad4300905f799c2579e00675a9332d8\")) StakeRefNull,Value 96750691 (fromList []),NoDatum,SNothing), sizedSize = 39}), _totalCollateral = SJust (Coin 1074216), _certs = StrictSeq {fromStrict = fromList []}, _wdrls = Wdrl {unWdrl = fromList []}, _txfee = Coin 716144, _vldt = ValidityInterval {invalidBefore = SJust (SlotNo 34787054), invalidHereafter = SJust (SlotNo 34788914)}, _update = SNothing, _reqSignerHashes = fromList [KeyHash \"b2c36499937e9c37dc7799b1aad4300905f799c2579e00675a9332d8\"], _mint = Value 0 (fromList []), _scriptIntegrityHash = SJust (SafeHash \"0d07b9a526e76f76aa787f0b8129133e9ea54f3a056d16bd947bccdede702f8a\"), _adHash = SNothing, _txnetworkid = SNothing}) [] (TxBodyScriptData ScriptDataInBabbageEra TxDatsRaw (fromList [(SafeHash \"17328050855eecc4abb7a55f286f2a9283cb43624065d035a2920d3c0dbab2e1\",DataConstr Constr 0 [Constr 0 [B \"\\178\\184\\190\\SUBO\\201e\\f\\151#\\254z\\156 \\211}\\180$\\206\\205a\\178\\252\\163[\\r\\235\\190\"],Constr 0 [Map [(Constr 0 [Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\131\\208y\\193\\\"c\\DELLv\\215\\156vQ\\217\\142\\229*4B.\\209\\135;\\191\\233xZ\\170\"],Constr 1 []]],Constr 0 [B \"\",B \"\"]],I 2000000),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token01\"]],I 1)],Map [],Map [],I 1690470254000],Constr 3 [List [Constr 1 [Constr 0 [Constr 1 [B \"R\"],Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\178\\195d\\153\\147~\\156\\&7\\220w\\153\\177\\170\\212\\&0\\t\\ENQ\\247\\153\\194W\\158\\NULgZ\\147\\&2\\216\"],Constr 1 []]],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token02\"],Constr 1 [I 1]],B \"\\215\\253\\138\\197%\\192T3\\155\\241\\DEL\\243\\204u\\229@5\\184\\FS@M39Z\\199w\\ETB\\230\\215j\\161r\"]],I 1690473914034,Constr 0 []]]),(SafeHash \"c27bf302731891dc10a7041dd4e59e8aae819f779458284f2cd8e92a33781a3a\",DataConstr Constr 3 [List [Constr 1 [Constr 0 [Constr 1 [B \"R\"],Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\178\\195d\\153\\147~\\156\\&7\\220w\\153\\177\\170\\212\\&0\\t\\ENQ\\247\\153\\194W\\158\\NULgZ\\147\\&2\\216\"],Constr 1 []]],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token02\"],Constr 1 [I 1]],B \"\\215\\253\\138\\197%\\192T3\\155\\241\\DEL\\243\\204u\\229@5\\184\\FS@M39Z\\199w\\ETB\\230\\215j\\161r\"]],I 1690473914034,Constr 0 []]),(SafeHash \"e30b92eda7936703d5170218fb476eb1c02eb91ec5169ddfcb3e7083015fa02a\",DataConstr Constr 0 [Constr 0 [B \"\\178\\184\\190\\SUBO\\201e\\f\\151#\\254z\\156 \\211}\\180$\\206\\205a\\178\\252\\163[\\r\\235\\190\"],Constr 0 [Map [(Constr 0 [Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\131\\208y\\193\\\"c\\DELLv\\215\\156vQ\\217\\142\\229*4B.\\209\\135;\\191\\233xZ\\170\"],Constr 1 []]],Constr 0 [B \"\",B \"\"]],I 2000000)],Map [],Map [],I 1],Constr 3 [List [Constr 1 [Constr 0 [Constr 1 [B \"R\"],Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\178\\195d\\153\\147~\\156\\&7\\220w\\153\\177\\170\\212\\&0\\t\\ENQ\\247\\153\\194W\\158\\NULgZ\\147\\&2\\216\"],Constr 1 []]],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token01\"],Constr 1 [I 1]],B \"\\194{\\243\\STXs\\CAN\\145\\220\\DLE\\167\\EOT\\GS\\212\\229\\158\\138\\174\\129\\159w\\148X(O,\\216\\233*3x\\SUB:\"]],I 1690473914034,Constr 0 []]])]) RedeemersRaw (fromList [(RdmrPtr Spend 2,(DataConstr List [Constr 1 [Constr 0 [Constr 1 [B \"R\"],Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\178\\195d\\153\\147~\\156\\&7\\220w\\153\\177\\170\\212\\&0\\t\\ENQ\\247\\153\\194W\\158\\NULgZ\\147\\&2\\216\"],Constr 1 []]],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token01\"],I 1],B \"\\194{\\243\\STXs\\CAN\\145\\220\\DLE\\167\\EOT\\GS\\212\\229\\158\\138\\174\\129\\159w\\148X(O,\\216\\233*3x\\SUB:\"]],WrapExUnits {unWrapExUnits = ExUnits' {exUnitsMem' = 6169976, exUnitsSteps' = 1662063304}}))])) Nothing TxScriptValidityNone",
+                    []
+                ],
+                [
+                    "autoRunTransaction",
+                    "TxId:\"6d4570fed9b4f0d74350a2ec7985c0ca15088c2055c8a4afeee4bb1b4a1e79c3\"",
+                    []
+                ],
+                [
+                    "autoRunTransaction",
+                    "Marlowe output:TxIn \"6d4570fed9b4f0d74350a2ec7985c0ca15088c2055c8a4afeee4bb1b4a1e79c3\" (TxIx 1)",
+                    []
+                ],
+                [
+                    "autoRunTransaction",
+                    "Applying marlowe inputs: ",
+                    [
+                        [
+                            "inputs",
+                            [
+                                {
+                                    "continuation_hash": "d7fd8ac525c054339bf17ff3cc75e54035b81c404d33395ac77717e6d76aa172",
+                                    "input_from_party": {
+                                        "address": "addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv"
+                                    },
+                                    "into_account": {
+                                        "role_token": "R"
+                                    },
+                                    "merkleized_continuation": {
+                                        "timeout": 1690473914034,
+                                        "timeout_continuation": "close",
+                                        "when": [
+                                            {
+                                                "case": {
+                                                    "deposits": 1,
+                                                    "into_account": {
+                                                        "role_token": "R"
+                                                    },
+                                                    "of_token": {
+                                                        "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                        "token_name": "Token03"
+                                                    },
+                                                    "party": {
+                                                        "address": "addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv"
+                                                    }
+                                                },
+                                                "merkleized_then": "68b96398bd6d65748609afc512078ce4c0353cf553f9e562ad71f5deeb9a6a6c"
+                                            }
+                                        ]
+                                    },
+                                    "of_token": {
+                                        "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                        "token_name": "Token02"
+                                    },
+                                    "that_deposits": 1
+                                }
+                            ]
+                        ],
+                        [
+                            "state",
+                            {
+                                "accounts": [
+                                    [
+                                        [
+                                            {
+                                                "address": "addr_test1vzpaq7wpyf3h7nrk67w8v5we3mjj5dzz9mgcwwala9u942s30c62y"
+                                            },
+                                            {
+                                                "currency_symbol": "",
+                                                "token_name": ""
+                                            }
+                                        ],
+                                        2000000
+                                    ],
+                                    [
+                                        [
+                                            {
+                                                "role_token": "R"
+                                            },
+                                            {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token01"
+                                            }
+                                        ],
+                                        1
+                                    ],
+                                    [
+                                        [
+                                            {
+                                                "role_token": "R"
+                                            },
+                                            {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token02"
+                                            }
+                                        ],
+                                        1
+                                    ]
+                                ],
+                                "boundValues": [],
+                                "choices": [],
+                                "minTime": 1690470254000
+                            }
+                        ],
+                        [
+                            "contract",
+                            {
+                                "timeout": 1690473914034,
+                                "timeout_continuation": "close",
+                                "when": [
+                                    {
+                                        "case": {
+                                            "deposits": 1,
+                                            "into_account": {
+                                                "role_token": "R"
+                                            },
+                                            "of_token": {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token03"
+                                            },
+                                            "party": {
+                                                "address": "addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv"
+                                            }
+                                        },
+                                        "merkleized_then": "68b96398bd6d65748609afc512078ce4c0353cf553f9e562ad71f5deeb9a6a6c"
+                                    }
+                                ]
+                            }
+                        ]
+                    ]
+                ],
+                [
+                    "autoRunTransaction",
+                    "Submitter: Sender",
+                    []
+                ],
+                [
+                    "autoRunTransaction",
+                    "TxBody:ShelleyTxBody ShelleyBasedEraBabbage (TxBodyConstr TxBodyRaw {_spendInputs = fromList [TxIn (TxId {_unTxId = SafeHash \"1329073e88567f67758aa5e096b7a4b950e569fc682bc9debfbad31e124946f9\"}) (TxIx 2),TxIn (TxId {_unTxId = SafeHash \"6d4570fed9b4f0d74350a2ec7985c0ca15088c2055c8a4afeee4bb1b4a1e79c3\"}) (TxIx 0),TxIn (TxId {_unTxId = SafeHash \"6d4570fed9b4f0d74350a2ec7985c0ca15088c2055c8a4afeee4bb1b4a1e79c3\"}) (TxIx 1)], _collateralInputs = fromList [TxIn (TxId {_unTxId = SafeHash \"6d4570fed9b4f0d74350a2ec7985c0ca15088c2055c8a4afeee4bb1b4a1e79c3\"}) (TxIx 0)], _referenceInputs = fromList [TxIn (TxId {_unTxId = SafeHash \"9a8a6f387a3330b4141e1cb019380b9ac5c72151c0abc52aa4266245d3c555cd\"}) (TxIx 1)], _outputs = StrictSeq {fromStrict = fromList [Sized {sizedValue = (Addr Testnet (KeyHashObj (KeyHash \"b2c36499937e9c37dc7799b1aad4300905f799c2579e00675a9332d8\")) StakeRefNull,Value 97292326 (fromList []),NoDatum,SNothing), sizedSize = 39},Sized {sizedValue = (Addr Testnet (ScriptHashObj (ScriptHash \"2ed2631dbb277c84334453c5c437b86325d371f0835a28b910a91a6e\")) StakeRefNull,Value 2000000 (fromList [(PolicyID {policyID = ScriptHash \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\"},fromList [(546f6b656e3031,1),(546f6b656e3032,1)])]),DatumHash (SafeHash \"f13011512c6bf6d4fc13e8e3895dd85828b51c711b4a24563222782dcfe962d5\"),SNothing), sizedSize = 127},Sized {sizedValue = (Addr Testnet (KeyHashObj (KeyHash \"b2c36499937e9c37dc7799b1aad4300905f799c2579e00675a9332d8\")) StakeRefNull,Value 1500000 (fromList []),DatumHash (SafeHash \"d7fd8ac525c054339bf17ff3cc75e54035b81c404d33395ac77717e6d76aa172\"),SNothing), sizedSize = 76}]}, _collateralReturn = SJust (Sized {sizedValue = (Addr Testnet (KeyHashObj (KeyHash \"b2c36499937e9c37dc7799b1aad4300905f799c2579e00675a9332d8\")) StakeRefNull,Value 96384107 (fromList []),NoDatum,SNothing), sizedSize = 39}), _totalCollateral = SJust (Coin 1224656), _certs = StrictSeq {fromStrict = fromList []}, _wdrls = Wdrl {unWdrl = fromList []}, _txfee = Coin 816437, _vldt = ValidityInterval {invalidBefore = SJust (SlotNo 34787054), invalidHereafter = SJust (SlotNo 34788914)}, _update = SNothing, _reqSignerHashes = fromList [KeyHash \"b2c36499937e9c37dc7799b1aad4300905f799c2579e00675a9332d8\"], _mint = Value 0 (fromList []), _scriptIntegrityHash = SJust (SafeHash \"6957fc47632dfad47f01e62d567d69be776542aaccc529a9a371fda4071e3c77\"), _adHash = SNothing, _txnetworkid = SNothing}) [] (TxBodyScriptData ScriptDataInBabbageEra TxDatsRaw (fromList [(SafeHash \"17328050855eecc4abb7a55f286f2a9283cb43624065d035a2920d3c0dbab2e1\",DataConstr Constr 0 [Constr 0 [B \"\\178\\184\\190\\SUBO\\201e\\f\\151#\\254z\\156 \\211}\\180$\\206\\205a\\178\\252\\163[\\r\\235\\190\"],Constr 0 [Map [(Constr 0 [Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\131\\208y\\193\\\"c\\DELLv\\215\\156vQ\\217\\142\\229*4B.\\209\\135;\\191\\233xZ\\170\"],Constr 1 []]],Constr 0 [B \"\",B \"\"]],I 2000000),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token01\"]],I 1)],Map [],Map [],I 1690470254000],Constr 3 [List [Constr 1 [Constr 0 [Constr 1 [B \"R\"],Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\178\\195d\\153\\147~\\156\\&7\\220w\\153\\177\\170\\212\\&0\\t\\ENQ\\247\\153\\194W\\158\\NULgZ\\147\\&2\\216\"],Constr 1 []]],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token02\"],Constr 1 [I 1]],B \"\\215\\253\\138\\197%\\192T3\\155\\241\\DEL\\243\\204u\\229@5\\184\\FS@M39Z\\199w\\ETB\\230\\215j\\161r\"]],I 1690473914034,Constr 0 []]]),(SafeHash \"d7fd8ac525c054339bf17ff3cc75e54035b81c404d33395ac77717e6d76aa172\",DataConstr Constr 3 [List [Constr 1 [Constr 0 [Constr 1 [B \"R\"],Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\178\\195d\\153\\147~\\156\\&7\\220w\\153\\177\\170\\212\\&0\\t\\ENQ\\247\\153\\194W\\158\\NULgZ\\147\\&2\\216\"],Constr 1 []]],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token03\"],Constr 1 [I 1]],B \"h\\185c\\152\\189met\\134\\t\\175\\197\\DC2\\a\\140\\228\\192\\&5<\\245S\\249\\229b\\173q\\245\\222\\235\\154jl\"]],I 1690473914034,Constr 0 []]),(SafeHash \"f13011512c6bf6d4fc13e8e3895dd85828b51c711b4a24563222782dcfe962d5\",DataConstr Constr 0 [Constr 0 [B \"\\178\\184\\190\\SUBO\\201e\\f\\151#\\254z\\156 \\211}\\180$\\206\\205a\\178\\252\\163[\\r\\235\\190\"],Constr 0 [Map [(Constr 0 [Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\131\\208y\\193\\\"c\\DELLv\\215\\156vQ\\217\\142\\229*4B.\\209\\135;\\191\\233xZ\\170\"],Constr 1 []]],Constr 0 [B \"\",B \"\"]],I 2000000),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token01\"]],I 1),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token02\"]],I 1)],Map [],Map [],I 1690470254000],Constr 3 [List [Constr 1 [Constr 0 [Constr 1 [B \"R\"],Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\178\\195d\\153\\147~\\156\\&7\\220w\\153\\177\\170\\212\\&0\\t\\ENQ\\247\\153\\194W\\158\\NULgZ\\147\\&2\\216\"],Constr 1 []]],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token03\"],Constr 1 [I 1]],B \"h\\185c\\152\\189met\\134\\t\\175\\197\\DC2\\a\\140\\228\\192\\&5<\\245S\\249\\229b\\173q\\245\\222\\235\\154jl\"]],I 1690473914034,Constr 0 []]])]) RedeemersRaw (fromList [(RdmrPtr Spend 2,(DataConstr List [Constr 1 [Constr 0 [Constr 1 [B \"R\"],Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\178\\195d\\153\\147~\\156\\&7\\220w\\153\\177\\170\\212\\&0\\t\\ENQ\\247\\153\\194W\\158\\NULgZ\\147\\&2\\216\"],Constr 1 []]],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token02\"],I 1],B \"\\215\\253\\138\\197%\\192T3\\155\\241\\DEL\\243\\204u\\229@5\\184\\FS@M39Z\\199w\\ETB\\230\\215j\\161r\"]],WrapExUnits {unWrapExUnits = ExUnits' {exUnitsMem' = 7423812, exUnitsSteps' = 1974605608}}))])) Nothing TxScriptValidityNone",
+                    []
+                ],
+                [
+                    "autoRunTransaction",
+                    "TxId:\"6c071b53e31b24f5e7de131001259ce24d997f5fd28d4e00976955ddda809e1a\"",
+                    []
+                ],
+                [
+                    "autoRunTransaction",
+                    "Marlowe output:TxIn \"6c071b53e31b24f5e7de131001259ce24d997f5fd28d4e00976955ddda809e1a\" (TxIx 1)",
+                    []
+                ],
+                [
+                    "autoRunTransaction",
+                    "Applying marlowe inputs: ",
+                    [
+                        [
+                            "inputs",
+                            [
+                                {
+                                    "continuation_hash": "68b96398bd6d65748609afc512078ce4c0353cf553f9e562ad71f5deeb9a6a6c",
+                                    "input_from_party": {
+                                        "address": "addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv"
+                                    },
+                                    "into_account": {
+                                        "role_token": "R"
+                                    },
+                                    "merkleized_continuation": {
+                                        "timeout": 1690473914034,
+                                        "timeout_continuation": "close",
+                                        "when": [
+                                            {
+                                                "case": {
+                                                    "deposits": 1,
+                                                    "into_account": {
+                                                        "role_token": "R"
+                                                    },
+                                                    "of_token": {
+                                                        "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                        "token_name": "Token04"
+                                                    },
+                                                    "party": {
+                                                        "address": "addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv"
+                                                    }
+                                                },
+                                                "merkleized_then": "cced0e4f3b60261e3e4fd495cac6fec506be98482773e6261b5e95531d66b595"
+                                            }
+                                        ]
+                                    },
+                                    "of_token": {
+                                        "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                        "token_name": "Token03"
+                                    },
+                                    "that_deposits": 1
+                                },
+                                {
+                                    "continuation_hash": "cced0e4f3b60261e3e4fd495cac6fec506be98482773e6261b5e95531d66b595",
+                                    "input_from_party": {
+                                        "address": "addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv"
+                                    },
+                                    "into_account": {
+                                        "role_token": "R"
+                                    },
+                                    "merkleized_continuation": {
+                                        "timeout": 1690473914034,
+                                        "timeout_continuation": "close",
+                                        "when": [
+                                            {
+                                                "case": {
+                                                    "deposits": 1,
+                                                    "into_account": {
+                                                        "role_token": "R"
+                                                    },
+                                                    "of_token": {
+                                                        "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                        "token_name": "Token05"
+                                                    },
+                                                    "party": {
+                                                        "address": "addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv"
+                                                    }
+                                                },
+                                                "merkleized_then": "e083a008e4b37f3d5c623ece46f1dc7f80a2cace3b7aaa25cf454efca5ecec88"
+                                            }
+                                        ]
+                                    },
+                                    "of_token": {
+                                        "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                        "token_name": "Token04"
+                                    },
+                                    "that_deposits": 1
+                                }
+                            ]
+                        ],
+                        [
+                            "state",
+                            {
+                                "accounts": [
+                                    [
+                                        [
+                                            {
+                                                "address": "addr_test1vzpaq7wpyf3h7nrk67w8v5we3mjj5dzz9mgcwwala9u942s30c62y"
+                                            },
+                                            {
+                                                "currency_symbol": "",
+                                                "token_name": ""
+                                            }
+                                        ],
+                                        2000000
+                                    ],
+                                    [
+                                        [
+                                            {
+                                                "role_token": "R"
+                                            },
+                                            {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token01"
+                                            }
+                                        ],
+                                        1
+                                    ],
+                                    [
+                                        [
+                                            {
+                                                "role_token": "R"
+                                            },
+                                            {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token02"
+                                            }
+                                        ],
+                                        1
+                                    ],
+                                    [
+                                        [
+                                            {
+                                                "role_token": "R"
+                                            },
+                                            {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token03"
+                                            }
+                                        ],
+                                        1
+                                    ],
+                                    [
+                                        [
+                                            {
+                                                "role_token": "R"
+                                            },
+                                            {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token04"
+                                            }
+                                        ],
+                                        1
+                                    ]
+                                ],
+                                "boundValues": [],
+                                "choices": [],
+                                "minTime": 1690470254000
+                            }
+                        ],
+                        [
+                            "contract",
+                            {
+                                "timeout": 1690473914034,
+                                "timeout_continuation": "close",
+                                "when": [
+                                    {
+                                        "case": {
+                                            "deposits": 1,
+                                            "into_account": {
+                                                "role_token": "R"
+                                            },
+                                            "of_token": {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token05"
+                                            },
+                                            "party": {
+                                                "address": "addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv"
+                                            }
+                                        },
+                                        "merkleized_then": "e083a008e4b37f3d5c623ece46f1dc7f80a2cace3b7aaa25cf454efca5ecec88"
+                                    }
+                                ]
+                            }
+                        ]
+                    ]
+                ],
+                [
+                    "autoRunTransaction",
+                    "Submitter: Sender",
+                    []
+                ],
+                [
+                    "autoRunTransaction",
+                    "TxBody:ShelleyTxBody ShelleyBasedEraBabbage (TxBodyConstr TxBodyRaw {_spendInputs = fromList [TxIn (TxId {_unTxId = SafeHash \"1329073e88567f67758aa5e096b7a4b950e569fc682bc9debfbad31e124946f9\"}) (TxIx 3),TxIn (TxId {_unTxId = SafeHash \"1329073e88567f67758aa5e096b7a4b950e569fc682bc9debfbad31e124946f9\"}) (TxIx 4),TxIn (TxId {_unTxId = SafeHash \"6c071b53e31b24f5e7de131001259ce24d997f5fd28d4e00976955ddda809e1a\"}) (TxIx 0),TxIn (TxId {_unTxId = SafeHash \"6c071b53e31b24f5e7de131001259ce24d997f5fd28d4e00976955ddda809e1a\"}) (TxIx 1)], _collateralInputs = fromList [TxIn (TxId {_unTxId = SafeHash \"6c071b53e31b24f5e7de131001259ce24d997f5fd28d4e00976955ddda809e1a\"}) (TxIx 0)], _referenceInputs = fromList [TxIn (TxId {_unTxId = SafeHash \"9a8a6f387a3330b4141e1cb019380b9ac5c72151c0abc52aa4266245d3c555cd\"}) (TxIx 1)], _outputs = StrictSeq {fromStrict = fromList [Sized {sizedValue = (Addr Testnet (KeyHashObj (KeyHash \"b2c36499937e9c37dc7799b1aad4300905f799c2579e00675a9332d8\")) StakeRefNull,Value 97100146 (fromList []),NoDatum,SNothing), sizedSize = 39},Sized {sizedValue = (Addr Testnet (ScriptHashObj (ScriptHash \"2ed2631dbb277c84334453c5c437b86325d371f0835a28b910a91a6e\")) StakeRefNull,Value 2000000 (fromList [(PolicyID {policyID = ScriptHash \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\"},fromList [(546f6b656e3031,1),(546f6b656e3032,1),(546f6b656e3033,1),(546f6b656e3034,1)])]),DatumHash (SafeHash \"adfeb90da8ce30291e57bed2f5b300f5bbe918ced5918f95c7cbfbe3e21e5f39\"),SNothing), sizedSize = 145},Sized {sizedValue = (Addr Testnet (KeyHashObj (KeyHash \"b2c36499937e9c37dc7799b1aad4300905f799c2579e00675a9332d8\")) StakeRefNull,Value 1500000 (fromList []),DatumHash (SafeHash \"68b96398bd6d65748609afc512078ce4c0353cf553f9e562ad71f5deeb9a6a6c\"),SNothing), sizedSize = 76},Sized {sizedValue = (Addr Testnet (KeyHashObj (KeyHash \"b2c36499937e9c37dc7799b1aad4300905f799c2579e00675a9332d8\")) StakeRefNull,Value 1500000 (fromList []),DatumHash (SafeHash \"cced0e4f3b60261e3e4fd495cac6fec506be98482773e6261b5e95531d66b595\"),SNothing), sizedSize = 76}]}, _collateralReturn = SJust (Sized {sizedValue = (Addr Testnet (KeyHashObj (KeyHash \"b2c36499937e9c37dc7799b1aad4300905f799c2579e00675a9332d8\")) StakeRefNull,Value 95504056 (fromList []),NoDatum,SNothing), sizedSize = 39}), _totalCollateral = SJust (Coin 1788270), _certs = StrictSeq {fromStrict = fromList []}, _wdrls = Wdrl {unWdrl = fromList []}, _txfee = Coin 1192180, _vldt = ValidityInterval {invalidBefore = SJust (SlotNo 34787054), invalidHereafter = SJust (SlotNo 34788914)}, _update = SNothing, _reqSignerHashes = fromList [KeyHash \"b2c36499937e9c37dc7799b1aad4300905f799c2579e00675a9332d8\"], _mint = Value 0 (fromList []), _scriptIntegrityHash = SJust (SafeHash \"dbd38243bc671ade77e959b376b4cf6af78bef255279cca75e286d96d52be940\"), _adHash = SNothing, _txnetworkid = SNothing}) [] (TxBodyScriptData ScriptDataInBabbageEra TxDatsRaw (fromList [(SafeHash \"68b96398bd6d65748609afc512078ce4c0353cf553f9e562ad71f5deeb9a6a6c\",DataConstr Constr 3 [List [Constr 1 [Constr 0 [Constr 1 [B \"R\"],Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\178\\195d\\153\\147~\\156\\&7\\220w\\153\\177\\170\\212\\&0\\t\\ENQ\\247\\153\\194W\\158\\NULgZ\\147\\&2\\216\"],Constr 1 []]],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token04\"],Constr 1 [I 1]],B \"\\204\\237\\SOO;`&\\RS>O\\212\\149\\202\\198\\254\\197\\ACK\\190\\152H's\\230&\\ESC^\\149S\\GSf\\181\\149\"]],I 1690473914034,Constr 0 []]),(SafeHash \"adfeb90da8ce30291e57bed2f5b300f5bbe918ced5918f95c7cbfbe3e21e5f39\",DataConstr Constr 0 [Constr 0 [B \"\\178\\184\\190\\SUBO\\201e\\f\\151#\\254z\\156 \\211}\\180$\\206\\205a\\178\\252\\163[\\r\\235\\190\"],Constr 0 [Map [(Constr 0 [Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\131\\208y\\193\\\"c\\DELLv\\215\\156vQ\\217\\142\\229*4B.\\209\\135;\\191\\233xZ\\170\"],Constr 1 []]],Constr 0 [B \"\",B \"\"]],I 2000000),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token01\"]],I 1),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token02\"]],I 1),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token03\"]],I 1),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token04\"]],I 1)],Map [],Map [],I 1690470254000],Constr 3 [List [Constr 1 [Constr 0 [Constr 1 [B \"R\"],Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\178\\195d\\153\\147~\\156\\&7\\220w\\153\\177\\170\\212\\&0\\t\\ENQ\\247\\153\\194W\\158\\NULgZ\\147\\&2\\216\"],Constr 1 []]],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token05\"],Constr 1 [I 1]],B \"\\224\\131\\160\\b\\228\\179\\DEL=\\\\b>\\206F\\241\\220\\DEL\\128\\162\\202\\206;z\\170%\\207EN\\252\\165\\236\\236\\136\"]],I 1690473914034,Constr 0 []]]),(SafeHash \"cced0e4f3b60261e3e4fd495cac6fec506be98482773e6261b5e95531d66b595\",DataConstr Constr 3 [List [Constr 1 [Constr 0 [Constr 1 [B \"R\"],Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\178\\195d\\153\\147~\\156\\&7\\220w\\153\\177\\170\\212\\&0\\t\\ENQ\\247\\153\\194W\\158\\NULgZ\\147\\&2\\216\"],Constr 1 []]],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token05\"],Constr 1 [I 1]],B \"\\224\\131\\160\\b\\228\\179\\DEL=\\\\b>\\206F\\241\\220\\DEL\\128\\162\\202\\206;z\\170%\\207EN\\252\\165\\236\\236\\136\"]],I 1690473914034,Constr 0 []]),(SafeHash \"f13011512c6bf6d4fc13e8e3895dd85828b51c711b4a24563222782dcfe962d5\",DataConstr Constr 0 [Constr 0 [B \"\\178\\184\\190\\SUBO\\201e\\f\\151#\\254z\\156 \\211}\\180$\\206\\205a\\178\\252\\163[\\r\\235\\190\"],Constr 0 [Map [(Constr 0 [Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\131\\208y\\193\\\"c\\DELLv\\215\\156vQ\\217\\142\\229*4B.\\209\\135;\\191\\233xZ\\170\"],Constr 1 []]],Constr 0 [B \"\",B \"\"]],I 2000000),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token01\"]],I 1),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token02\"]],I 1)],Map [],Map [],I 1690470254000],Constr 3 [List [Constr 1 [Constr 0 [Constr 1 [B \"R\"],Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\178\\195d\\153\\147~\\156\\&7\\220w\\153\\177\\170\\212\\&0\\t\\ENQ\\247\\153\\194W\\158\\NULgZ\\147\\&2\\216\"],Constr 1 []]],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token03\"],Constr 1 [I 1]],B \"h\\185c\\152\\189met\\134\\t\\175\\197\\DC2\\a\\140\\228\\192\\&5<\\245S\\249\\229b\\173q\\245\\222\\235\\154jl\"]],I 1690473914034,Constr 0 []]])]) RedeemersRaw (fromList [(RdmrPtr Spend 3,(DataConstr List [Constr 1 [Constr 0 [Constr 1 [B \"R\"],Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\178\\195d\\153\\147~\\156\\&7\\220w\\153\\177\\170\\212\\&0\\t\\ENQ\\247\\153\\194W\\158\\NULgZ\\147\\&2\\216\"],Constr 1 []]],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token03\"],I 1],B \"h\\185c\\152\\189met\\134\\t\\175\\197\\DC2\\a\\140\\228\\192\\&5<\\245S\\249\\229b\\173q\\245\\222\\235\\154jl\"],Constr 1 [Constr 0 [Constr 1 [B \"R\"],Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\178\\195d\\153\\147~\\156\\&7\\220w\\153\\177\\170\\212\\&0\\t\\ENQ\\247\\153\\194W\\158\\NULgZ\\147\\&2\\216\"],Constr 1 []]],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token04\"],I 1],B \"\\204\\237\\SOO;`&\\RS>O\\212\\149\\202\\198\\254\\197\\ACK\\190\\152H's\\230&\\ESC^\\149S\\GSf\\181\\149\"]],WrapExUnits {unWrapExUnits = ExUnits' {exUnitsMem' = 11916486, exUnitsSteps' = 3169565850}}))])) Nothing TxScriptValidityNone",
+                    []
+                ],
+                [
+                    "autoRunTransaction",
+                    "TxId:\"dc6f4ab7e7aa4417866239f83eda7f7a99bab8498ae160cfe98191670f06ecb6\"",
+                    []
+                ],
+                [
+                    "autoRunTransaction",
+                    "Marlowe output:TxIn \"dc6f4ab7e7aa4417866239f83eda7f7a99bab8498ae160cfe98191670f06ecb6\" (TxIx 1)",
+                    []
+                ],
+                [
+                    "autoRunTransaction",
+                    "Applying marlowe inputs: ",
+                    [
+                        [
+                            "inputs",
+                            [
+                                {
+                                    "continuation_hash": "e083a008e4b37f3d5c623ece46f1dc7f80a2cace3b7aaa25cf454efca5ecec88",
+                                    "input_from_party": {
+                                        "address": "addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv"
+                                    },
+                                    "into_account": {
+                                        "role_token": "R"
+                                    },
+                                    "merkleized_continuation": {
+                                        "timeout": 1690473914034,
+                                        "timeout_continuation": "close",
+                                        "when": [
+                                            {
+                                                "case": {
+                                                    "deposits": 1,
+                                                    "into_account": {
+                                                        "role_token": "R"
+                                                    },
+                                                    "of_token": {
+                                                        "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                        "token_name": "Token06"
+                                                    },
+                                                    "party": {
+                                                        "address": "addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv"
+                                                    }
+                                                },
+                                                "merkleized_then": "41c6cb542e20a3dddf4c5ba4816b89fc115b5a94d99cdf7d89c8f45122ac0773"
+                                            }
+                                        ]
+                                    },
+                                    "of_token": {
+                                        "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                        "token_name": "Token05"
+                                    },
+                                    "that_deposits": 1
+                                }
+                            ]
+                        ],
+                        [
+                            "state",
+                            {
+                                "accounts": [
+                                    [
+                                        [
+                                            {
+                                                "address": "addr_test1vzpaq7wpyf3h7nrk67w8v5we3mjj5dzz9mgcwwala9u942s30c62y"
+                                            },
+                                            {
+                                                "currency_symbol": "",
+                                                "token_name": ""
+                                            }
+                                        ],
+                                        2000000
+                                    ],
+                                    [
+                                        [
+                                            {
+                                                "role_token": "R"
+                                            },
+                                            {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token01"
+                                            }
+                                        ],
+                                        1
+                                    ],
+                                    [
+                                        [
+                                            {
+                                                "role_token": "R"
+                                            },
+                                            {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token02"
+                                            }
+                                        ],
+                                        1
+                                    ],
+                                    [
+                                        [
+                                            {
+                                                "role_token": "R"
+                                            },
+                                            {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token03"
+                                            }
+                                        ],
+                                        1
+                                    ],
+                                    [
+                                        [
+                                            {
+                                                "role_token": "R"
+                                            },
+                                            {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token04"
+                                            }
+                                        ],
+                                        1
+                                    ],
+                                    [
+                                        [
+                                            {
+                                                "role_token": "R"
+                                            },
+                                            {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token05"
+                                            }
+                                        ],
+                                        1
+                                    ]
+                                ],
+                                "boundValues": [],
+                                "choices": [],
+                                "minTime": 1690470254000
+                            }
+                        ],
+                        [
+                            "contract",
+                            {
+                                "timeout": 1690473914034,
+                                "timeout_continuation": "close",
+                                "when": [
+                                    {
+                                        "case": {
+                                            "deposits": 1,
+                                            "into_account": {
+                                                "role_token": "R"
+                                            },
+                                            "of_token": {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token06"
+                                            },
+                                            "party": {
+                                                "address": "addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv"
+                                            }
+                                        },
+                                        "merkleized_then": "41c6cb542e20a3dddf4c5ba4816b89fc115b5a94d99cdf7d89c8f45122ac0773"
+                                    }
+                                ]
+                            }
+                        ]
+                    ]
+                ],
+                [
+                    "autoRunTransaction",
+                    "Submitter: Sender",
+                    []
+                ],
+                [
+                    "autoRunTransaction",
+                    "TxBody:ShelleyTxBody ShelleyBasedEraBabbage (TxBodyConstr TxBodyRaw {_spendInputs = fromList [TxIn (TxId {_unTxId = SafeHash \"1329073e88567f67758aa5e096b7a4b950e569fc682bc9debfbad31e124946f9\"}) (TxIx 5),TxIn (TxId {_unTxId = SafeHash \"dc6f4ab7e7aa4417866239f83eda7f7a99bab8498ae160cfe98191670f06ecb6\"}) (TxIx 0),TxIn (TxId {_unTxId = SafeHash \"dc6f4ab7e7aa4417866239f83eda7f7a99bab8498ae160cfe98191670f06ecb6\"}) (TxIx 1)], _collateralInputs = fromList [TxIn (TxId {_unTxId = SafeHash \"dc6f4ab7e7aa4417866239f83eda7f7a99bab8498ae160cfe98191670f06ecb6\"}) (TxIx 0)], _referenceInputs = fromList [TxIn (TxId {_unTxId = SafeHash \"9a8a6f387a3330b4141e1cb019380b9ac5c72151c0abc52aa4266245d3c555cd\"}) (TxIx 1)], _outputs = StrictSeq {fromStrict = fromList [Sized {sizedValue = (Addr Testnet (KeyHashObj (KeyHash \"b2c36499937e9c37dc7799b1aad4300905f799c2579e00675a9332d8\")) StakeRefNull,Value 96435976 (fromList []),NoDatum,SNothing), sizedSize = 39},Sized {sizedValue = (Addr Testnet (ScriptHashObj (ScriptHash \"2ed2631dbb277c84334453c5c437b86325d371f0835a28b910a91a6e\")) StakeRefNull,Value 2000000 (fromList [(PolicyID {policyID = ScriptHash \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\"},fromList [(546f6b656e3031,1),(546f6b656e3032,1),(546f6b656e3033,1),(546f6b656e3034,1),(546f6b656e3035,1)])]),DatumHash (SafeHash \"4c8d268672d6e484f7bbc915751fba06f3bd4713d9a0f1e3480ab71c7c8bbb73\"),SNothing), sizedSize = 154},Sized {sizedValue = (Addr Testnet (KeyHashObj (KeyHash \"b2c36499937e9c37dc7799b1aad4300905f799c2579e00675a9332d8\")) StakeRefNull,Value 1500000 (fromList []),DatumHash (SafeHash \"e083a008e4b37f3d5c623ece46f1dc7f80a2cace3b7aaa25cf454efca5ecec88\"),SNothing), sizedSize = 76}]}, _collateralReturn = SJust (Sized {sizedValue = (Addr Testnet (KeyHashObj (KeyHash \"b2c36499937e9c37dc7799b1aad4300905f799c2579e00675a9332d8\")) StakeRefNull,Value 95353891 (fromList []),NoDatum,SNothing), sizedSize = 39}), _totalCollateral = SJust (Coin 1746255), _certs = StrictSeq {fromStrict = fromList []}, _wdrls = Wdrl {unWdrl = fromList []}, _txfee = Coin 1164170, _vldt = ValidityInterval {invalidBefore = SJust (SlotNo 34787054), invalidHereafter = SJust (SlotNo 34788914)}, _update = SNothing, _reqSignerHashes = fromList [KeyHash \"b2c36499937e9c37dc7799b1aad4300905f799c2579e00675a9332d8\"], _mint = Value 0 (fromList []), _scriptIntegrityHash = SJust (SafeHash \"2b5a6744f400ea421177a699768b25055c9c51d8c78f6ebb9c2634545cd4168e\"), _adHash = SNothing, _txnetworkid = SNothing}) [] (TxBodyScriptData ScriptDataInBabbageEra TxDatsRaw (fromList [(SafeHash \"4c8d268672d6e484f7bbc915751fba06f3bd4713d9a0f1e3480ab71c7c8bbb73\",DataConstr Constr 0 [Constr 0 [B \"\\178\\184\\190\\SUBO\\201e\\f\\151#\\254z\\156 \\211}\\180$\\206\\205a\\178\\252\\163[\\r\\235\\190\"],Constr 0 [Map [(Constr 0 [Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\131\\208y\\193\\\"c\\DELLv\\215\\156vQ\\217\\142\\229*4B.\\209\\135;\\191\\233xZ\\170\"],Constr 1 []]],Constr 0 [B \"\",B \"\"]],I 2000000),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token01\"]],I 1),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token02\"]],I 1),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token03\"]],I 1),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token04\"]],I 1),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token05\"]],I 1)],Map [],Map [],I 1690470254000],Constr 3 [List [Constr 1 [Constr 0 [Constr 1 [B \"R\"],Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\178\\195d\\153\\147~\\156\\&7\\220w\\153\\177\\170\\212\\&0\\t\\ENQ\\247\\153\\194W\\158\\NULgZ\\147\\&2\\216\"],Constr 1 []]],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token06\"],Constr 1 [I 1]],B \"A\\198\\203T. \\163\\221\\223L[\\164\\129k\\137\\252\\DC1[Z\\148\\217\\156\\223}\\137\\200\\244Q\\\"\\172\\as\"]],I 1690473914034,Constr 0 []]]),(SafeHash \"adfeb90da8ce30291e57bed2f5b300f5bbe918ced5918f95c7cbfbe3e21e5f39\",DataConstr Constr 0 [Constr 0 [B \"\\178\\184\\190\\SUBO\\201e\\f\\151#\\254z\\156 \\211}\\180$\\206\\205a\\178\\252\\163[\\r\\235\\190\"],Constr 0 [Map [(Constr 0 [Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\131\\208y\\193\\\"c\\DELLv\\215\\156vQ\\217\\142\\229*4B.\\209\\135;\\191\\233xZ\\170\"],Constr 1 []]],Constr 0 [B \"\",B \"\"]],I 2000000),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token01\"]],I 1),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token02\"]],I 1),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token03\"]],I 1),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token04\"]],I 1)],Map [],Map [],I 1690470254000],Constr 3 [List [Constr 1 [Constr 0 [Constr 1 [B \"R\"],Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\178\\195d\\153\\147~\\156\\&7\\220w\\153\\177\\170\\212\\&0\\t\\ENQ\\247\\153\\194W\\158\\NULgZ\\147\\&2\\216\"],Constr 1 []]],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token05\"],Constr 1 [I 1]],B \"\\224\\131\\160\\b\\228\\179\\DEL=\\\\b>\\206F\\241\\220\\DEL\\128\\162\\202\\206;z\\170%\\207EN\\252\\165\\236\\236\\136\"]],I 1690473914034,Constr 0 []]]),(SafeHash \"e083a008e4b37f3d5c623ece46f1dc7f80a2cace3b7aaa25cf454efca5ecec88\",DataConstr Constr 3 [List [Constr 1 [Constr 0 [Constr 1 [B \"R\"],Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\178\\195d\\153\\147~\\156\\&7\\220w\\153\\177\\170\\212\\&0\\t\\ENQ\\247\\153\\194W\\158\\NULgZ\\147\\&2\\216\"],Constr 1 []]],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token06\"],Constr 1 [I 1]],B \"A\\198\\203T. \\163\\221\\223L[\\164\\129k\\137\\252\\DC1[Z\\148\\217\\156\\223}\\137\\200\\244Q\\\"\\172\\as\"]],I 1690473914034,Constr 0 []])]) RedeemersRaw (fromList [(RdmrPtr Spend 2,(DataConstr List [Constr 1 [Constr 0 [Constr 1 [B \"R\"],Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\178\\195d\\153\\147~\\156\\&7\\220w\\153\\177\\170\\212\\&0\\t\\ENQ\\247\\153\\194W\\158\\NULgZ\\147\\&2\\216\"],Constr 1 []]],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token05\"],I 1],B \"\\224\\131\\160\\b\\228\\179\\DEL=\\\\b>\\206F\\241\\220\\DEL\\128\\162\\202\\206;z\\170%\\207EN\\252\\165\\236\\236\\136\"]],WrapExUnits {unWrapExUnits = ExUnits' {exUnitsMem' = 11810714, exUnitsSteps' = 3076263491}}))])) Nothing TxScriptValidityNone",
+                    []
+                ],
+                [
+                    "autoRunTransaction",
+                    "TxId:\"36d6e41ed085b31da9d7da8e5e7f7b0a74da5d3c5880416ffbf367370d9ef043\"",
+                    []
+                ],
+                [
+                    "autoRunTransaction",
+                    "Marlowe output:TxIn \"36d6e41ed085b31da9d7da8e5e7f7b0a74da5d3c5880416ffbf367370d9ef043\" (TxIx 1)",
+                    []
+                ],
+                [
+                    "autoRunTransaction",
+                    "Applying marlowe inputs: ",
+                    [
+                        [
+                            "inputs",
+                            [
+                                {
+                                    "continuation_hash": "41c6cb542e20a3dddf4c5ba4816b89fc115b5a94d99cdf7d89c8f45122ac0773",
+                                    "input_from_party": {
+                                        "address": "addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv"
+                                    },
+                                    "into_account": {
+                                        "role_token": "R"
+                                    },
+                                    "merkleized_continuation": {
+                                        "timeout": 1690473914034,
+                                        "timeout_continuation": "close",
+                                        "when": [
+                                            {
+                                                "case": {
+                                                    "deposits": 1,
+                                                    "into_account": {
+                                                        "role_token": "R"
+                                                    },
+                                                    "of_token": {
+                                                        "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                        "token_name": "Token07"
+                                                    },
+                                                    "party": {
+                                                        "address": "addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv"
+                                                    }
+                                                },
+                                                "merkleized_then": "8a095049bada9c7ad56a54c0a8a4de3574cefc3de3c1e7ba35545dd9c0049463"
+                                            }
+                                        ]
+                                    },
+                                    "of_token": {
+                                        "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                        "token_name": "Token06"
+                                    },
+                                    "that_deposits": 1
+                                }
+                            ]
+                        ],
+                        [
+                            "state",
+                            {
+                                "accounts": [
+                                    [
+                                        [
+                                            {
+                                                "address": "addr_test1vzpaq7wpyf3h7nrk67w8v5we3mjj5dzz9mgcwwala9u942s30c62y"
+                                            },
+                                            {
+                                                "currency_symbol": "",
+                                                "token_name": ""
+                                            }
+                                        ],
+                                        2000000
+                                    ],
+                                    [
+                                        [
+                                            {
+                                                "role_token": "R"
+                                            },
+                                            {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token01"
+                                            }
+                                        ],
+                                        1
+                                    ],
+                                    [
+                                        [
+                                            {
+                                                "role_token": "R"
+                                            },
+                                            {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token02"
+                                            }
+                                        ],
+                                        1
+                                    ],
+                                    [
+                                        [
+                                            {
+                                                "role_token": "R"
+                                            },
+                                            {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token03"
+                                            }
+                                        ],
+                                        1
+                                    ],
+                                    [
+                                        [
+                                            {
+                                                "role_token": "R"
+                                            },
+                                            {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token04"
+                                            }
+                                        ],
+                                        1
+                                    ],
+                                    [
+                                        [
+                                            {
+                                                "role_token": "R"
+                                            },
+                                            {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token05"
+                                            }
+                                        ],
+                                        1
+                                    ],
+                                    [
+                                        [
+                                            {
+                                                "role_token": "R"
+                                            },
+                                            {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token06"
+                                            }
+                                        ],
+                                        1
+                                    ]
+                                ],
+                                "boundValues": [],
+                                "choices": [],
+                                "minTime": 1690470254000
+                            }
+                        ],
+                        [
+                            "contract",
+                            {
+                                "timeout": 1690473914034,
+                                "timeout_continuation": "close",
+                                "when": [
+                                    {
+                                        "case": {
+                                            "deposits": 1,
+                                            "into_account": {
+                                                "role_token": "R"
+                                            },
+                                            "of_token": {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token07"
+                                            },
+                                            "party": {
+                                                "address": "addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv"
+                                            }
+                                        },
+                                        "merkleized_then": "8a095049bada9c7ad56a54c0a8a4de3574cefc3de3c1e7ba35545dd9c0049463"
+                                    }
+                                ]
+                            }
+                        ]
+                    ]
+                ],
+                [
+                    "autoRunTransaction",
+                    "Submitter: Sender",
+                    []
+                ],
+                [
+                    "autoRunTransaction",
+                    "TxBody:ShelleyTxBody ShelleyBasedEraBabbage (TxBodyConstr TxBodyRaw {_spendInputs = fromList [TxIn (TxId {_unTxId = SafeHash \"1329073e88567f67758aa5e096b7a4b950e569fc682bc9debfbad31e124946f9\"}) (TxIx 6),TxIn (TxId {_unTxId = SafeHash \"36d6e41ed085b31da9d7da8e5e7f7b0a74da5d3c5880416ffbf367370d9ef043\"}) (TxIx 0),TxIn (TxId {_unTxId = SafeHash \"36d6e41ed085b31da9d7da8e5e7f7b0a74da5d3c5880416ffbf367370d9ef043\"}) (TxIx 1)], _collateralInputs = fromList [TxIn (TxId {_unTxId = SafeHash \"36d6e41ed085b31da9d7da8e5e7f7b0a74da5d3c5880416ffbf367370d9ef043\"}) (TxIx 0)], _referenceInputs = fromList [TxIn (TxId {_unTxId = SafeHash \"9a8a6f387a3330b4141e1cb019380b9ac5c72151c0abc52aa4266245d3c555cd\"}) (TxIx 1)], _outputs = StrictSeq {fromStrict = fromList [Sized {sizedValue = (Addr Testnet (KeyHashObj (KeyHash \"b2c36499937e9c37dc7799b1aad4300905f799c2579e00675a9332d8\")) StakeRefNull,Value 95624345 (fromList []),NoDatum,SNothing), sizedSize = 39},Sized {sizedValue = (Addr Testnet (ScriptHashObj (ScriptHash \"2ed2631dbb277c84334453c5c437b86325d371f0835a28b910a91a6e\")) StakeRefNull,Value 2000000 (fromList [(PolicyID {policyID = ScriptHash \"34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9\"},fromList [(546f6b656e3031,1),(546f6b656e3032,1),(546f6b656e3033,1),(546f6b656e3034,1),(546f6b656e3035,1),(546f6b656e3036,1)])]),DatumHash (SafeHash \"8a7d2152bd2d93c3a896311b81eb2bc03702d605b7dc9328f6fa23467c4a2034\"),SNothing), sizedSize = 163},Sized {sizedValue = (Addr Testnet (KeyHashObj (KeyHash \"b2c36499937e9c37dc7799b1aad4300905f799c2579e00675a9332d8\")) StakeRefNull,Value 1500000 (fromList []),DatumHash (SafeHash \"41c6cb542e20a3dddf4c5ba4816b89fc115b5a94d99cdf7d89c8f45122ac0773\"),SNothing), sizedSize = 76}]}, _collateralReturn = SJust (Sized {sizedValue = (Addr Testnet (KeyHashObj (KeyHash \"b2c36499937e9c37dc7799b1aad4300905f799c2579e00675a9332d8\")) StakeRefNull,Value 94468529 (fromList []),NoDatum,SNothing), sizedSize = 39}), _totalCollateral = SJust (Coin 1967447), _certs = StrictSeq {fromStrict = fromList []}, _wdrls = Wdrl {unWdrl = fromList []}, _txfee = Coin 1311631, _vldt = ValidityInterval {invalidBefore = SJust (SlotNo 34787054), invalidHereafter = SJust (SlotNo 34788914)}, _update = SNothing, _reqSignerHashes = fromList [KeyHash \"b2c36499937e9c37dc7799b1aad4300905f799c2579e00675a9332d8\"], _mint = Value 0 (fromList []), _scriptIntegrityHash = SJust (SafeHash \"96f6258c0e652e53cbbeba7dc89eea40641c06cfb2b87e9a738402ee69d75abc\"), _adHash = SNothing, _txnetworkid = SNothing}) [] (TxBodyScriptData ScriptDataInBabbageEra TxDatsRaw (fromList [(SafeHash \"41c6cb542e20a3dddf4c5ba4816b89fc115b5a94d99cdf7d89c8f45122ac0773\",DataConstr Constr 3 [List [Constr 1 [Constr 0 [Constr 1 [B \"R\"],Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\178\\195d\\153\\147~\\156\\&7\\220w\\153\\177\\170\\212\\&0\\t\\ENQ\\247\\153\\194W\\158\\NULgZ\\147\\&2\\216\"],Constr 1 []]],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token07\"],Constr 1 [I 1]],B \"\\138\\tPI\\186\\218\\156z\\213jT\\192\\168\\164\\222\\&5t\\206\\252=\\227\\193\\231\\186\\&5T]\\217\\192\\EOT\\148c\"]],I 1690473914034,Constr 0 []]),(SafeHash \"4c8d268672d6e484f7bbc915751fba06f3bd4713d9a0f1e3480ab71c7c8bbb73\",DataConstr Constr 0 [Constr 0 [B \"\\178\\184\\190\\SUBO\\201e\\f\\151#\\254z\\156 \\211}\\180$\\206\\205a\\178\\252\\163[\\r\\235\\190\"],Constr 0 [Map [(Constr 0 [Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\131\\208y\\193\\\"c\\DELLv\\215\\156vQ\\217\\142\\229*4B.\\209\\135;\\191\\233xZ\\170\"],Constr 1 []]],Constr 0 [B \"\",B \"\"]],I 2000000),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token01\"]],I 1),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token02\"]],I 1),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token03\"]],I 1),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token04\"]],I 1),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token05\"]],I 1)],Map [],Map [],I 1690470254000],Constr 3 [List [Constr 1 [Constr 0 [Constr 1 [B \"R\"],Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\178\\195d\\153\\147~\\156\\&7\\220w\\153\\177\\170\\212\\&0\\t\\ENQ\\247\\153\\194W\\158\\NULgZ\\147\\&2\\216\"],Constr 1 []]],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token06\"],Constr 1 [I 1]],B \"A\\198\\203T. \\163\\221\\223L[\\164\\129k\\137\\252\\DC1[Z\\148\\217\\156\\223}\\137\\200\\244Q\\\"\\172\\as\"]],I 1690473914034,Constr 0 []]]),(SafeHash \"8a7d2152bd2d93c3a896311b81eb2bc03702d605b7dc9328f6fa23467c4a2034\",DataConstr Constr 0 [Constr 0 [B \"\\178\\184\\190\\SUBO\\201e\\f\\151#\\254z\\156 \\211}\\180$\\206\\205a\\178\\252\\163[\\r\\235\\190\"],Constr 0 [Map [(Constr 0 [Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\131\\208y\\193\\\"c\\DELLv\\215\\156vQ\\217\\142\\229*4B.\\209\\135;\\191\\233xZ\\170\"],Constr 1 []]],Constr 0 [B \"\",B \"\"]],I 2000000),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token01\"]],I 1),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token02\"]],I 1),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token03\"]],I 1),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token04\"]],I 1),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token05\"]],I 1),(Constr 0 [Constr 1 [B \"R\"],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token06\"]],I 1)],Map [],Map [],I 1690470254000],Constr 3 [List [Constr 1 [Constr 0 [Constr 1 [B \"R\"],Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\178\\195d\\153\\147~\\156\\&7\\220w\\153\\177\\170\\212\\&0\\t\\ENQ\\247\\153\\194W\\158\\NULgZ\\147\\&2\\216\"],Constr 1 []]],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token07\"],Constr 1 [I 1]],B \"\\138\\tPI\\186\\218\\156z\\213jT\\192\\168\\164\\222\\&5t\\206\\252=\\227\\193\\231\\186\\&5T]\\217\\192\\EOT\\148c\"]],I 1690473914034,Constr 0 []]])]) RedeemersRaw (fromList [(RdmrPtr Spend 2,(DataConstr List [Constr 1 [Constr 0 [Constr 1 [B \"R\"],Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\178\\195d\\153\\147~\\156\\&7\\220w\\153\\177\\170\\212\\&0\\t\\ENQ\\247\\153\\194W\\158\\NULgZ\\147\\&2\\216\"],Constr 1 []]],Constr 0 [B \"4\\233\\ETX\\226_\\246,*\\136\\133wk\\FSY\\207\\239\\238\\173%Q\\NUL./\\164\\152\\182(\\217\",B \"Token06\"],I 1],B \"A\\198\\203T. \\163\\221\\223L[\\164\\129k\\137\\252\\DC1[Z\\148\\217\\156\\223}\\137\\200\\244Q\\\"\\172\\as\"]],WrapExUnits {unWrapExUnits = ExUnits' {exUnitsMem' = 13688680, exUnitsSteps' = 3548420910}}))])) Nothing TxScriptValidityNone",
+                    []
+                ],
+                [
+                    "autoRunTransaction",
+                    "TxId:\"a672dc5d5f2eba43a67716b6ccdd94a8f74b0ab16e0d6468a1d8aca834f02ca8\"",
+                    []
+                ],
+                [
+                    "autoRunTransaction",
+                    "Marlowe output:TxIn \"a672dc5d5f2eba43a67716b6ccdd94a8f74b0ab16e0d6468a1d8aca834f02ca8\" (TxIx 1)",
+                    []
+                ],
+                [
+                    "autoRunTransaction",
+                    "Applying marlowe inputs: ",
+                    [
+                        [
+                            "inputs",
+                            [
+                                {
+                                    "continuation_hash": "8a095049bada9c7ad56a54c0a8a4de3574cefc3de3c1e7ba35545dd9c0049463",
+                                    "input_from_party": {
+                                        "address": "addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv"
+                                    },
+                                    "into_account": {
+                                        "role_token": "R"
+                                    },
+                                    "merkleized_continuation": {
+                                        "timeout": 1690473914034,
+                                        "timeout_continuation": "close",
+                                        "when": [
+                                            {
+                                                "case": {
+                                                    "deposits": 1,
+                                                    "into_account": {
+                                                        "role_token": "R"
+                                                    },
+                                                    "of_token": {
+                                                        "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                        "token_name": "Token08"
+                                                    },
+                                                    "party": {
+                                                        "address": "addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv"
+                                                    }
+                                                },
+                                                "merkleized_then": "efcc6bd9c7dedd80fa6e714e402d6f9189b28d4d7bd8858d5535ab10e7a4a86f"
+                                            }
+                                        ]
+                                    },
+                                    "of_token": {
+                                        "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                        "token_name": "Token07"
+                                    },
+                                    "that_deposits": 1
+                                }
+                            ]
+                        ],
+                        [
+                            "state",
+                            {
+                                "accounts": [
+                                    [
+                                        [
+                                            {
+                                                "address": "addr_test1vzpaq7wpyf3h7nrk67w8v5we3mjj5dzz9mgcwwala9u942s30c62y"
+                                            },
+                                            {
+                                                "currency_symbol": "",
+                                                "token_name": ""
+                                            }
+                                        ],
+                                        2000000
+                                    ],
+                                    [
+                                        [
+                                            {
+                                                "role_token": "R"
+                                            },
+                                            {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token01"
+                                            }
+                                        ],
+                                        1
+                                    ],
+                                    [
+                                        [
+                                            {
+                                                "role_token": "R"
+                                            },
+                                            {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token02"
+                                            }
+                                        ],
+                                        1
+                                    ],
+                                    [
+                                        [
+                                            {
+                                                "role_token": "R"
+                                            },
+                                            {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token03"
+                                            }
+                                        ],
+                                        1
+                                    ],
+                                    [
+                                        [
+                                            {
+                                                "role_token": "R"
+                                            },
+                                            {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token04"
+                                            }
+                                        ],
+                                        1
+                                    ],
+                                    [
+                                        [
+                                            {
+                                                "role_token": "R"
+                                            },
+                                            {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token05"
+                                            }
+                                        ],
+                                        1
+                                    ],
+                                    [
+                                        [
+                                            {
+                                                "role_token": "R"
+                                            },
+                                            {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token06"
+                                            }
+                                        ],
+                                        1
+                                    ],
+                                    [
+                                        [
+                                            {
+                                                "role_token": "R"
+                                            },
+                                            {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token07"
+                                            }
+                                        ],
+                                        1
+                                    ]
+                                ],
+                                "boundValues": [],
+                                "choices": [],
+                                "minTime": 1690470254000
+                            }
+                        ],
+                        [
+                            "contract",
+                            {
+                                "timeout": 1690473914034,
+                                "timeout_continuation": "close",
+                                "when": [
+                                    {
+                                        "case": {
+                                            "deposits": 1,
+                                            "into_account": {
+                                                "role_token": "R"
+                                            },
+                                            "of_token": {
+                                                "currency_symbol": "34e903e25ff62c2a8885776b1c59cfefeead2551002e2fa498b628d9",
+                                                "token_name": "Token08"
+                                            },
+                                            "party": {
+                                                "address": "addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv"
+                                            }
+                                        },
+                                        "merkleized_then": "efcc6bd9c7dedd80fa6e714e402d6f9189b28d4d7bd8858d5535ab10e7a4a86f"
+                                    }
+                                ]
+                            }
+                        ]
+                    ]
+                ],
+                [
+                    "autoRunTransaction",
+                    "Submitter: Sender",
+                    []
+                ],
+                [
+                    "Error",
+                    "TxValidationErrorInMode (ShelleyTxValidationError ShelleyBasedEraBabbage (ApplyTxError [UtxowFailure (UtxoFailure (FromAlonzoUtxoFail (ExUnitsTooBigUTxO (WrapExUnits {unWrapExUnits = ExUnits' {exUnitsMem' = 14000000, exUnitsSteps' = 10000000000}}) (WrapExUnits {unWrapExUnits = ExUnits' {exUnitsMem' = 15874512, exUnitsSteps' = 4101007008}}))))])) BabbageEraInCardanoMode",
+                    []
+                ]
+            ],
+            "name": "Plain 24 depoists of different tokens to role based accounts (with minimal length role name)",
+            "result": "failed",
+            "retries": [],
+            "testSource": "./not-passed/role-based-24-plain-deposits.yaml",
+            "wallets": [
+                [
+                    "Faucet",
+                    {
+                        "address": "addr_test1vzpaq7wpyf3h7nrk67w8v5we3mjj5dzz9mgcwwala9u942s30c62y",
+                        "balanceCheckBaseline": {
+                            "": {
+                                "": 706825554
+                            }
+                        },
+                        "txs": [
+                            {
+                                "txFee": 196741,
+                                "txId": "dafbf962b063645bf7161f676fb9b9be7d17b243ee70123fc9d9cc47a25e2177"
+                            },
+                            {
+                                "txFee": 262785,
+                                "txId": "1329073e88567f67758aa5e096b7a4b950e569fc682bc9debfbad31e124946f9"
+                            },
+                            {
+                                "txFee": 169637,
+                                "txId": "3dd437ff4533ab466df4822d0e67166d574b74b732696f0c065118f4d2d62882"
+                            }
+                        ]
+                    }
+                ],
+                [
+                    "Recipient",
+                    {
+                        "address": "addr_test1vqlja478jvn6t863mg293tekcr796d6h6jpyq6cju02llyqu62kdd",
+                        "balanceCheckBaseline": {},
+                        "txs": []
+                    }
+                ],
+                [
+                    "Sender",
+                    {
+                        "address": "addr_test1vzevxeyejdlfcd7uw7vmr2k5xqystauecfteuqr8t2fn9kqgwtmgv",
+                        "balanceCheckBaseline": {},
+                        "txs": [
+                            {
+                                "txFee": 1311631,
+                                "txId": "a672dc5d5f2eba43a67716b6ccdd94a8f74b0ab16e0d6468a1d8aca834f02ca8"
+                            },
+                            {
+                                "txFee": 1164170,
+                                "txId": "36d6e41ed085b31da9d7da8e5e7f7b0a74da5d3c5880416ffbf367370d9ef043"
+                            },
+                            {
+                                "txFee": 1192180,
+                                "txId": "dc6f4ab7e7aa4417866239f83eda7f7a99bab8498ae160cfe98191670f06ecb6"
+                            },
+                            {
+                                "txFee": 816437,
+                                "txId": "6c071b53e31b24f5e7de131001259ce24d997f5fd28d4e00976955ddda809e1a"
+                            },
+                            {
+                                "txFee": 716144,
+                                "txId": "6d4570fed9b4f0d74350a2ec7985c0ca15088c2055c8a4afeee4bb1b4a1e79c3"
+                            },
+                            {
+                                "txFee": 175093,
+                                "txId": "1336c81613f12c5324158f72d94a3200966000bd4e198a0acdd5bfb4713dcfcb"
+                            }
+                        ]
+                    }
+                ]
+            ]
+        }
+    ]
+}

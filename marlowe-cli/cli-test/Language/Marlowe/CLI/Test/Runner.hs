@@ -222,6 +222,7 @@ toTestWallet faucet@TestRunnerFaucet{..} conversion = do
         , _waBalanceCheckBaseline = actualBalance
         , _waSigningKey = _trSigningKey
         , _waSubmittedTransactions = mempty
+        , _waExternal = False
         }
     IncludeAllTransactions -> do
       let actualBalance' =
@@ -233,6 +234,7 @@ toTestWallet faucet@TestRunnerFaucet{..} conversion = do
         , _waBalanceCheckBaseline = actualBalance'
         , _waSigningKey = _trSigningKey
         , _waSubmittedTransactions = _trSubmittedTransactions <> _trFundedTransactions
+        , _waExternal = False
         }
 
 updateFaucet

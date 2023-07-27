@@ -25,18 +25,7 @@ import Language.Marlowe.CLI.Test.Types (
   TestOperation (CLIOperation, Comment, Fail, RuntimeOperation, ShouldFail, Sleep, WalletOperation),
  )
 import Language.Marlowe.CLI.Test.Wallet.Types as Wallet (
-  WalletOperation (
-    BurnAll,
-    CheckBalance,
-    CreateWallet,
-    Fund,
-    Mint,
-    ReturnFunds,
-    SplitWallet,
-    woIssuer,
-    woPossibleUTxOs,
-    woWalletNickname
-  ),
+  WalletOperation (..),
   faucetNickname,
  )
 
@@ -87,13 +76,15 @@ testFaucetBudgetUpperBound tub@(TxCostsUpperBounds txCost _) TestCase{operations
         possibleFaucetTx (WalletOperation CreateWallet{..}) = case woPossibleUTxOs of
           Nothing -> False
           Just [] -> False
-          _ -> True
+          Just _ -> True
         possibleFaucetTx (WalletOperation CheckBalance{}) = False
         possibleFaucetTx (WalletOperation ReturnFunds{}) = False
         possibleFaucetTx (WalletOperation Fund{}) = True
         possibleFaucetTx (WalletOperation BurnAll{}) = True
         possibleFaucetTx (WalletOperation Mint{woIssuer = issuer}) = maybe True (faucetNickname ==) issuer
         possibleFaucetTx (WalletOperation SplitWallet{woWalletNickname = walletNickname}) = walletNickname == faucetNickname
+        possibleFaucetTx (WalletOperation ExternalCurrency{}) = False
+        possibleFaucetTx (WalletOperation ExternalWallet{}) = False
         possibleFaucetTx (CLIOperation Initialize{coSubmitter = submitter}) = maybe True (faucetNickname ==) submitter
         possibleFaucetTx (CLIOperation Prepare{}) = True
         possibleFaucetTx (CLIOperation Publish{coPublisher = publisher}) = maybe True (faucetNickname ==) publisher
@@ -125,6 +116,8 @@ testTxsFeesUpperBound (TxCostsUpperBounds txCost _) TestCase{operations} =
     possibleTx (WalletOperation BurnAll{}) = True
     possibleTx (WalletOperation Mint{}) = True
     possibleTx (WalletOperation SplitWallet{}) = True
+    possibleTx (WalletOperation ExternalCurrency{}) = False
+    possibleTx (WalletOperation ExternalWallet{}) = False
     possibleTx (CLIOperation Initialize{}) = True
     possibleTx (CLIOperation Prepare{}) = True
     possibleTx (CLIOperation Publish{}) = True

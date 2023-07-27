@@ -89,7 +89,6 @@ mkChunkedPayouts payouts (PayoutChunkSize chunkSize) timeout = do
 allDeposits :: Sender -> RecipientsAmounts -> [Deposit]
 allDeposits sender (RecipientsAmounts recipient2Amount) = do
   let totalValue = fold recipient2Amount
-
       unsorted =
         foldMapFlipped (AssocMap.toList $ P.getValue totalValue) \(currencySymbol, tokenName2Amount) -> do
           foldMapFlipped (AssocMap.toList tokenName2Amount) \(tokenName, tokenAmount) -> do
@@ -108,9 +107,10 @@ mkDepositWithChunkedPaybacks (DepositStep alreadyDeposited deposit) payoutChunkS
         alreadyDeposited <&> \(Deposit sender@(Sender s) t a) ->
           Payout sender (Recipient s) t a
 
-      -- On timeout we are paying back to the sender
+      -- On timeout we are paying back to the sender.
+      -- This supspension is for merkleization.
       timeoutContract :: Contract
-      timeoutContract = mkChunkedPayouts paybacks payoutChunkSize (BaseTimeout timeout)
+      timeoutContract = suspendContract (mkChunkedPayouts paybacks payoutChunkSize (BaseTimeout timeout)) (BaseTimeout timeout)
 
       Deposit (Sender senderParty) token amount = deposit
   -- When the contract closes the current chunk payouts are made automatically and we know that the size of the

@@ -80,6 +80,7 @@ import Text.Read (readMaybe)
 -- import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1
 -- import qualified Plutus.V2.Ledger.Api as Ledger
 
+import Data.ByteString.Base16.Aeson (EncodeBase16)
 import Data.Text (Text)
 import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddressBech32)
 
@@ -111,18 +112,24 @@ data Wallet era = Wallet
   , _waSubmittedTransactions :: [SomeTxBody]
   -- ^ We keep track of all the transactions so we can
   -- discard fees from the balance check calculation.
+  , _waExternal :: Bool
+  -- ^ We allow loading of external wallets from the file system.
+  -- We keep track of them so we don't move funds out of these wallet
+  -- at the end of the scenario.
   }
   deriving stock (Generic, Show)
 
 makeLenses ''Wallet
 
 emptyWallet :: AddressInEra era -> SomePaymentSigningKey -> Wallet era
-emptyWallet address signignKey = Wallet address mempty signignKey mempty -- mempty
+emptyWallet address signignKey = Wallet address mempty signignKey mempty False -- mempty
 
-fromUTxO :: AddressInEra era -> SomePaymentSigningKey -> UTxO era -> Wallet era
-fromUTxO address signignKey (UTxO utxo) = do
+newtype IsExternalWallet = IsExternalWallet {unExternalWallet :: Bool}
+
+fromUTxO :: AddressInEra era -> SomePaymentSigningKey -> UTxO era -> IsExternalWallet -> Wallet era
+fromUTxO address signignKey (UTxO utxo) (IsExternalWallet isExternalWallet) = do
   let total = foldMap (toPlutusValue . txOutValueValue) (Map.elems utxo)
-  Wallet address total signignKey mempty
+  Wallet address total signignKey mempty isExternalWallet
 
 -- | In many contexts this defaults to the `RoleName` but at some
 -- | point we want to also support multiple marlowe contracts scenarios
@@ -162,11 +169,11 @@ instance IsString CurrencyNickname where fromString = CurrencyNickname
 instance ToJSONKey CurrencyNickname where
   toJSONKey = toJSONKeyText $ T.pack . unCurrencyNickname
 
+-- We want to probably issuer with minting strategies
 data Currency = Currency
   { ccCurrencySymbol :: CurrencySymbol
-  , ccIssuer :: WalletNickname
-  , -- , ccMintingExpirationSlot :: C.SlotNo
-    ccPolicyId :: PolicyId
+  , ccIssuer :: Maybe WalletNickname -- , ccMintingExpirationSlot :: C.SlotNo
+  , ccPolicyId :: PolicyId
   }
   deriving stock (Eq, Ord, Generic, Show)
   deriving anyclass (FromJSON, ToJSON)
@@ -413,6 +420,15 @@ data WalletOperation
       , woMinLovelace :: Lovelace
       -- We should make this relative
       -- , woMitingExpirationSlot :: Maybe C.SlotNo
+      }
+  | ExternalCurrency
+      { woCurrencyNickname :: CurrencyNickname
+      , woCurrencySymbol :: Maybe EncodeBase16
+      , woPolicyId :: Maybe EncodeBase16
+      }
+  | ExternalWallet
+      { woWalletNickname :: WalletNickname
+      , woSigningKeyFile :: String
       }
   | SplitWallet
       { woWalletNickname :: WalletNickname

@@ -60,6 +60,8 @@ import Control.Monad (foldM, when)
 import Control.Monad.Error.Class (MonadError (throwError))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Loops (untilJust)
+import Data.Aeson qualified as A
+import Data.Aeson.OneLine qualified as A
 import Data.Coerce (coerce)
 import Data.Functor ((<&>))
 import Data.List.NonEmpty qualified as List.NonEmpty
@@ -105,7 +107,7 @@ import Language.Marlowe.CLI.Test.ExecutionMode (
   toSubmitMode,
  )
 import Language.Marlowe.CLI.Test.InterpreterError (rethrowCliError, testExecutionFailed')
-import Language.Marlowe.CLI.Test.Log (logStoreLabeledMsg, throwLabeledError)
+import Language.Marlowe.CLI.Test.Log (logStoreLabeledMsg, logStoreMsgWith, throwLabeledError)
 import Language.Marlowe.CLI.Test.Wallet.Interpret (
   decodeContractJSON,
   decodeInputJSON,
@@ -160,6 +162,9 @@ findCLIContractInfo Nothing = do
     [pair] -> pure pair
     _ -> throwLabeledError fnName (testExecutionFailed' "Multiple contracts found. Please specify a contract nickname.")
 
+toOneLineJSON :: forall a. (A.ToJSON a) => a -> String
+toOneLineJSON = Text.unpack . A.renderValue . A.toJSON
+
 autoRunTransaction
   :: forall era env lang m st
    . (IsShelleyBasedEra era)
@@ -174,14 +179,18 @@ autoRunTransaction
 autoRunTransaction currency defaultSubmitter prev curr@T.MarloweTransaction{..} invalid = do
   let log' = logStoreLabeledMsg ("autoRunTransaction" :: String)
 
-      getNormalInputParty = \case
+      getInputContentParty = \case
         M.IDeposit _ party _ _ -> Just party
         M.IChoice (M.ChoiceId _ party) _ -> Just party
         M.INotify -> Nothing
 
-      getInputParty :: Maybe M.Party -> M.Input -> m (Maybe M.Party)
-      getInputParty Nothing (M.NormalInput input) = pure $ getNormalInputParty input
-      getInputParty reqParty (M.NormalInput input) = case getNormalInputParty input of
+      getInputParty = \case
+        M.NormalInput inputContent -> getInputContentParty inputContent
+        M.MerkleizedInput inputContent _ _ -> getInputContentParty inputContent
+
+      step :: Maybe M.Party -> M.Input -> m (Maybe M.Party)
+      step Nothing input = pure $ getInputParty input
+      step reqParty input = case getInputParty input of
         Nothing -> pure reqParty
         reqParty'
           | reqParty /= reqParty' ->
@@ -192,15 +201,17 @@ autoRunTransaction currency defaultSubmitter prev curr@T.MarloweTransaction{..} 
                     <> " /= "
                     <> show reqParty'
         _ -> pure reqParty
-      getInputParty _ M.MerkleizedInput{} =
-        throwError $ testExecutionFailed' "[autoRunTransaction] merkleized input handling is not implemented yet."
 
-  log' $ "Applying marlowe inputs: " <> show mtInputs
-  log' $ "Output contract: " <> show (pretty mtContract)
-  log' $ "Output state: " <> show mtState
+  logStoreMsgWith
+    ("autoRunTransaction" :: String)
+    "Applying marlowe inputs: "
+    [ ("inputs", A.toJSON mtInputs)
+    , ("state", A.toJSON mtState)
+    , ("contract", A.toJSON mtContract)
+    ]
 
-  (submitterNickname, Wallet address _ skey _) <-
-    foldM getInputParty Nothing mtInputs >>= \case
+  (submitterNickname, Wallet address _ skey _ _) <-
+    foldM step Nothing mtInputs >>= \case
       Nothing -> (defaultSubmitter,) <$> findWallet defaultSubmitter
       Just (M.Address network address) -> (findWalletByAddress =<< rethrowCliError (marloweAddressToCardanoAddress network address))
       Just (M.Role rn) -> case currency of
@@ -296,13 +307,15 @@ interpret
   => CLIOperation
   -> m ()
 interpret co@Initialize{..} = do
+  let submitterNickname = fromMaybe faucetNickname coSubmitter
+      merkleize = fromMaybe False coMerkleize
+
   marloweContract <- case coContractSource of
     InlineContract json -> decodeContractJSON json
     UseTemplate setup -> useTemplate coRoleCurrency setup
 
   logStoreLabeledMsg co $ "Contract: " <> show (pretty marloweContract)
 
-  let submitterNickname = fromMaybe faucetNickname coSubmitter
   address <- _waAddress <$> findWallet submitterNickname
   submitterParty <- uncurry M.Address <$> rethrowCliError (marloweAddressFromCardanoAddress address)
 
@@ -361,7 +374,7 @@ interpret co@Initialize{..} = do
           NoStakeAddress
           marloweContract
           marloweState
-          False
+          merkleize
           True
     InTxCurrentValidators -> do
       logStoreLabeledMsg co "Using in Tx scripts embeding strategy to initialize Marlowe contract."
@@ -376,7 +389,7 @@ interpret co@Initialize{..} = do
           marloweContract
           marloweState
           Nothing
-          False
+          merkleize
           True
     ReferenceRuntimeValidators -> do
       throwLabeledError co $ testExecutionFailed' "Usage of reference runtime scripts is not supported yet."

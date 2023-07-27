@@ -734,6 +734,8 @@ newtype PrintStats = PrintStats {unPrintStats :: Bool}
 newtype TxBodyFile = TxBodyFile {unTxBodyFile :: FilePath}
 
 newtype SigningKeyFile = SigningKeyFile {unSigningKeyFile :: FilePath}
+  deriving stock (Eq, Generic, Show)
+  deriving anyclass (FromJSON, ToJSON)
 
 -- | A single UTxO. We preserve the `Tuple` structure for consistency with `UTxO`.
 newtype AnUTxO era = AnUTxO {unAnUTxO :: (C.TxIn, C.TxOut C.CtxUTxO era)}

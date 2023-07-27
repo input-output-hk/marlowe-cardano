@@ -175,6 +175,7 @@ library cli-test
     , async
     , async-pool
     , base >=4.9 && <5
+    , base16-aeson ==0.1.0.0
     , bytestring
     , cardano-api
     , containers
