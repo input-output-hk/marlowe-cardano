@@ -6,6 +6,8 @@ metadata:
   annotations:
     app.oam.dev/publishVersion: {{ .Chart.AppVersion }}
     "helm.sh/resource-policy": keep
+    "meta.helm.sh/release-name": marlowe-db
+    "meta.helm.sh/release-namespace": marlowe-staging-refactor
 spec:
   components:
     - type: "postgres-cluster"
@@ -45,3 +47,5 @@ spec:
         - type: annotations
           properties:
             "helm.sh/resource-policy": keep
+            "meta.helm.sh/release-namespace": marlowe-staging-refactor
+            "meta.helm.sh/release-name": marlowe-db
