@@ -88,8 +88,9 @@ import PlutusTx.Prelude
 
    "1" - Marlowe input not found.
    "2" - Invalid own value - we expect only the role token(s) and min ADA.
-   "3" - Invalid Marlowe redeemer - we expect only the `IDeposit` redeemer.
+   "3" - Invalid Marlowe redeemer.
    "4" - Missing thread token.
+   "5" - Invalid role currency symbol.
 -}
 
 -- | Custom type which decodes only the required part of the datum.
