@@ -2,7 +2,7 @@ apiVersion: core.oam.dev/v1beta1
 kind: Application
 metadata:
   name: marlowe-runtime-database
-  namespace: marlowe-staging
+  namespace: marlowe-staging-refactor
   annotations:
     app.oam.dev/publishVersion: {{ .Chart.AppVersion }}
     "helm.sh/resource-policy": keep
