@@ -1,0 +1,14 @@
+apiVersion: actions.summerwind.dev/v1alpha1
+kind: RunnerDeployment
+metadata:
+  name: plutus-github-runner
+  namespace: plutus-testing
+spec:
+  replicas: 1
+  template:
+    spec:
+      repository: input-output-hk/plutus
+      labels:
+        - self-hosted
+        - plutus-benchmark
+

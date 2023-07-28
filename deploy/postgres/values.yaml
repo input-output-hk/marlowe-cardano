@@ -1,0 +1,9 @@
+networks:
+  - preprod
+  - preview
+  - mainnet
+
+images:
+  tag: latest
+  repo: ghcr.io
+  org: input-output-hk

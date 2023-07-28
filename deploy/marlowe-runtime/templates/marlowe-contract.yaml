@@ -1,0 +1,73 @@
+{{- range .Values.networks }}
+---
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: marlowe-contract-{{ . }}
+  namespace: marlowe-staging
+  annotations:
+    app.oam.dev/publishVersion: {{ $.Chart.AppVersion }}
+spec:
+  components:
+    - name: marlowe-contract-{{ . }}
+      type: webservice
+      properties:
+        env:
+        - name: HOST
+          value: 0.0.0.0
+        - name: PORT
+          value: "3727"
+        - name: QUERY_PORT
+          value: "3728"
+        - name: STORE_DIR
+          value: /store
+        - name: HTTP_PORT
+          value: "3787"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://grafana-agent.grafana-agent:4318
+        - name: OTEL_SERVICE_NAME
+          value: marlowe-contract-{{ . }}
+        cpu: "0.5"
+        image: {{ $.Values.images.repo }}/{{ $.Values.images.org }}/marlowe-contract:{{ $.Values.images.tag }}
+        imagePullPolicy: Always
+        memory: 1024Mi
+        ports:
+        - expose: true
+          port: 3727
+          protocol: TCP
+        - expose: true
+          port: 3728
+          protocol: TCP
+        - expose: true
+          port: 3787
+          protocol: TCP
+      traits:
+      - type: storage
+        properties:
+          pvc:
+          - name: store-dir-{{ . }}
+            mountPath: /store
+            storageClassName: ebs-sc
+            resources:
+              requests:
+                storage: 50Gi
+  policies:
+  - name: local-marlowe-staging
+    properties:
+      clusters:
+      - local
+      namespace: marlowe-staging
+    type: topology
+
+  workflow:
+    mode:
+      steps: DAG
+    steps:
+    - meta:
+        alias: Deploy To local-marlowe-staging
+      name: local-marlowe-staging
+      properties:
+        policies:
+        - local-marlowe-staging
+      type: deploy
+{{- end }}
