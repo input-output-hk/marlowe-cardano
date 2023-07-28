@@ -277,9 +277,6 @@ let
       "--marlowe-contract-host"
       "marlowe-contract"
     ];
-    volumes = [
-      "marlowe-contract-store:/store"
-    ];
     environment = [ "OTEL_SERVICE_NAME=marlowe-proxy" ];
   };
 
@@ -308,6 +305,9 @@ let
     environment = [
       "TZ=UTC"
       "OTEL_SERVICE_NAME=marlowe-runtime"
+    ];
+    volumes = [
+      "marlowe-contract-store:/store"
     ];
   };
 
