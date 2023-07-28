@@ -24,6 +24,7 @@ import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams (..))
 import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.Core.Api (
   ContractId (..),
+  MarloweTransactionMetadata (..),
   MarloweVersion (..),
   TransactionScriptOutput (..),
   emptyMarloweTransactionMetadata,
@@ -303,7 +304,7 @@ createTxToTxOutRows blockHeader@BlockHeader{..} MarloweCreateTransaction{..} =
           , fromIntegral blockNo
           , if metadata == emptyMarloweTransactionMetadata
               then Nothing
-              else Just $ toStrict $ runPut $ put metadata
+              else Just $ toStrict $ runPut $ put let MarloweTransactionMetadata _ original = metadata in original
           )
         , txOutAssetRows
         , transactionMetadataToTagRows txId' txIx' metadata
@@ -365,7 +366,7 @@ applyTxToRows (MarloweApplyInputsTransaction MarloweV1 UnspentContractOutput{..}
         , utcToLocalTime utc validityUpperBound
         , if metadata == emptyMarloweTransactionMetadata
             then Nothing
-            else Just $ toStrict $ runPut $ put metadata
+            else Just $ toStrict $ runPut $ put let MarloweTransactionMetadata _ original = metadata in original
         , inputTxId'
         , inputTxIx'
         , toStrict $ runPut $ put $ toDatum inputs

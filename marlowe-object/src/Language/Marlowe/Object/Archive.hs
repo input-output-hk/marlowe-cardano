@@ -21,8 +21,6 @@ import Control.Monad.Trans.Except (ExceptT (..), except, runExceptT, throwE, wit
 import Control.Monad.Trans.Maybe (MaybeT (..), runMaybeT)
 import Data.Aeson (FromJSON, ToJSON, eitherDecodeFileStrict)
 import qualified Data.Aeson as A
-import Data.Binary (decodeFileOrFail)
-import Data.Binary.Get (ByteOffset)
 import qualified Data.DList as DList
 import Data.Foldable (asum)
 import Data.Maybe (fromJust)
@@ -56,7 +54,7 @@ data ReadArchiveError
   | MissingManifest
   | InvalidManifest String
   | MissingObjectFile FilePath
-  | InvalidObjectFile FilePath ByteOffset String
+  | InvalidObjectFile FilePath String
   | MissingMain
   | WrongMainType SomeObjectType
   deriving (Show)
@@ -123,7 +121,7 @@ checkObjects BundleManifest{..} =
     exists <- doesFileExist objectPath
     unless exists $ throwE $ MissingObjectFile objectPath
     LabelledObject{..} <-
-      withExceptT (uncurry (InvalidObjectFile objectPath)) $ ExceptT $ liftIO $ decodeFileOrFail objectPath
+      withExceptT (InvalidObjectFile objectPath) $ ExceptT $ liftIO $ eitherDecodeFileStrict objectPath
     pure
       if _label == mainIs
         then Just $ SomeObjectType _type

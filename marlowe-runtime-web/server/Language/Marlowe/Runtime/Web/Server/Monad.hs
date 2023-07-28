@@ -18,7 +18,6 @@ import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (MonadReader (..), ReaderT (..), asks)
 import Control.Monad.Trans.Control (MonadBaseControl)
-import Control.Monad.Trans.Except (mapExceptT)
 import Language.Marlowe.Runtime.ChainSync.Api (TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Language.Marlowe.Runtime.Web.Server.ContractClient (GetContract, ImportBundle)
@@ -76,7 +75,7 @@ data AppEnv = forall r s.
 importBundle :: ImportBundle ServerM
 importBundle label = do
   AppEnv{_eventBackend = backend, _importBundle = ib} <- ask
-  hoist (mapExceptT $ liftBackendM backend) $ ib label
+  hoist (liftBackendM backend) $ ib label
 
 -- | Load a list of contract headers.
 loadContractHeaders :: LoadContractHeaders ServerM

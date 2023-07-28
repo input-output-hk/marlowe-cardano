@@ -1,23 +1,43 @@
 Show: MsgQueryNext (AdvanceBlocks 1)
 Binary: 0101000000000000000001
+Show: MsgScan (AdvanceBlocks 1)
+Binary: 0901000000000000000001
 Show: MsgQueryNext (Intersect [])
 Binary: 01020000000000000000
 Show: MsgQueryNext (Intersect [BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}}])
 Binary: 01020000000000000001000000000000000100000000000000000000000000000001
 Show: MsgQueryNext (Intersect [BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}])
 Binary: 0102000000000000000100000000000000010000000000000001610000000000000001
+Show: MsgScan (Intersect [])
+Binary: 09020000000000000000
+Show: MsgScan (Intersect [BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}}])
+Binary: 09020000000000000001000000000000000100000000000000000000000000000001
+Show: MsgScan (Intersect [BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}])
+Binary: 0902000000000000000100000000000000010000000000000001610000000000000001
 Show: MsgQueryNext (FindConsumingTxs (fromList []))
 Binary: 01040000000000000000
 Show: MsgQueryNext (FindConsumingTxs (fromList [TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}}]))
 Binary: 0104000000000000000100000000000000000001
 Show: MsgQueryNext (FindConsumingTxs (fromList [TxOutRef {txId = "61", txIx = TxIx {unTxIx = 1}}]))
 Binary: 010400000000000000010000000000000001610001
+Show: MsgScan (FindConsumingTxs (fromList []))
+Binary: 09040000000000000000
+Show: MsgScan (FindConsumingTxs (fromList [TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}}]))
+Binary: 0904000000000000000100000000000000000001
+Show: MsgScan (FindConsumingTxs (fromList [TxOutRef {txId = "61", txIx = TxIx {unTxIx = 1}}]))
+Binary: 090400000000000000010000000000000001610001
 Show: MsgQueryNext (FindTx "" False)
 Binary: 0103000000000000000000
 Show: MsgQueryNext (FindTx "" True)
 Binary: 0103000000000000000001
 Show: MsgQueryNext (FindTx "61" False)
 Binary: 010300000000000000016100
+Show: MsgScan (FindTx "" False)
+Binary: 0903000000000000000000
+Show: MsgScan (FindTx "" True)
+Binary: 0903000000000000000001
+Show: MsgScan (FindTx "61" False)
+Binary: 090300000000000000016100
 Show: MsgQueryNext (FindTxsFor (fromList (PaymentKeyCredential "" :| [])))
 Binary: 01060000000000000001000000000000000000
 Show: MsgQueryNext (FindTxsFor (fromList (PaymentKeyCredential "" :| [PaymentKeyCredential "61"])))
@@ -32,14 +52,34 @@ Show: MsgQueryNext (FindTxsFor (fromList (ScriptCredential "" :| [])))
 Binary: 01060000000000000001010000000000000000
 Show: MsgQueryNext (FindTxsFor (fromList (ScriptCredential "61" :| [])))
 Binary: 0106000000000000000101000000000000000161
+Show: MsgScan (FindTxsFor (fromList (PaymentKeyCredential "" :| [])))
+Binary: 09060000000000000001000000000000000000
+Show: MsgScan (FindTxsFor (fromList (PaymentKeyCredential "" :| [PaymentKeyCredential "61"])))
+Binary: 0906000000000000000200000000000000000000000000000000000161
+Show: MsgScan (FindTxsFor (fromList (PaymentKeyCredential "" :| [ScriptCredential ""])))
+Binary: 09060000000000000002000000000000000000010000000000000000
+Show: MsgScan (FindTxsFor (fromList (PaymentKeyCredential "" :| [ScriptCredential "61"])))
+Binary: 0906000000000000000200000000000000000001000000000000000161
+Show: MsgScan (FindTxsFor (fromList (PaymentKeyCredential "61" :| [])))
+Binary: 0906000000000000000100000000000000000161
+Show: MsgScan (FindTxsFor (fromList (ScriptCredential "" :| [])))
+Binary: 09060000000000000001010000000000000000
+Show: MsgScan (FindTxsFor (fromList (ScriptCredential "61" :| [])))
+Binary: 0906000000000000000101000000000000000161
 Show: MsgQueryNext AdvanceToTip
 Binary: 0105
+Show: MsgScan AdvanceToTip
+Binary: 0905
 Show: MsgDone
 Binary: 02
 Show: MsgPoll
 Binary: 07
 Show: MsgCancel
 Binary: 08
+Show: MsgCollect
+Binary: 0a
+Show: MsgCancelScan
+Binary: 0b
 Show: MsgRollForward () Genesis Genesis
 Binary: 04010000
 Show: MsgRollForward () (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}})) Genesis
@@ -60,6 +100,24 @@ Show: MsgRollBackward Genesis (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, 
 Binary: 050001000000000000000100000000000000000000000000000001
 Show: MsgRollBackward Genesis (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}))
 Binary: 05000100000000000000010000000000000001610000000000000001
+Show: MsgCollected [(Genesis())] Genesis
+Binary: 0d0100000000000000010000
+Show: MsgCollected [] Genesis
+Binary: 0d01000000000000000000
+Show: MsgCollected [] (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0d01000000000000000001000000000000000100000000000000000000000000000001
+Show: MsgCollected [] (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0d0100000000000000000100000000000000010000000000000001610000000000000001
+Show: MsgCollectRollBackward Genesis Genesis
+Binary: 0e0000
+Show: MsgCollectRollBackward (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}})) Genesis
+Binary: 0e0100000000000000010000000000000000000000000000000100
+Show: MsgCollectRollBackward (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}})) Genesis
+Binary: 0e010000000000000001000000000000000161000000000000000100
+Show: MsgCollectRollBackward Genesis (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0e0001000000000000000100000000000000000000000000000001
+Show: MsgCollectRollBackward Genesis (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0e000100000000000000010000000000000001610000000000000001
 Show: MsgRollForward () Genesis Genesis
 Binary: 04020000
 Show: MsgRollForward () (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}})) Genesis
@@ -86,6 +144,30 @@ Show: MsgRejectQuery IntersectionNotFound (At (BlockHeader {slotNo = SlotNo {unS
 Binary: 030201000000000000000100000000000000000000000000000001
 Show: MsgRejectQuery IntersectionNotFound (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}))
 Binary: 03020100000000000000010000000000000001610000000000000001
+Show: MsgCollected [(Genesis())] Genesis
+Binary: 0d0200000000000000010000
+Show: MsgCollected [] Genesis
+Binary: 0d02000000000000000000
+Show: MsgCollected [] (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0d02000000000000000001000000000000000100000000000000000000000000000001
+Show: MsgCollected [] (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0d0200000000000000000100000000000000010000000000000001610000000000000001
+Show: MsgCollectRollBackward Genesis Genesis
+Binary: 0e0000
+Show: MsgCollectRollBackward (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}})) Genesis
+Binary: 0e0100000000000000010000000000000000000000000000000100
+Show: MsgCollectRollBackward (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}})) Genesis
+Binary: 0e010000000000000001000000000000000161000000000000000100
+Show: MsgCollectRollBackward Genesis (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0e0001000000000000000100000000000000000000000000000001
+Show: MsgCollectRollBackward Genesis (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0e000100000000000000010000000000000001610000000000000001
+Show: MsgCollectFailed IntersectionNotFound Genesis
+Binary: 0c0200
+Show: MsgCollectFailed IntersectionNotFound (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0c0201000000000000000100000000000000000000000000000001
+Show: MsgCollectFailed IntersectionNotFound (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0c020100000000000000010000000000000001610000000000000001
 Show: MsgRollForward (fromList []) Genesis Genesis
 Binary: 040400000000000000000000
 Show: MsgRollForward (fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},Transaction {txId = "", validityRange = Unbounded, metadata = TransactionMetadata {unTransactionMetadata = fromList []}, inputs = fromList [], outputs = [], mintedTokens = Tokens {unTokens = fromList []}})]) Genesis Genesis
@@ -230,6 +312,38 @@ Show: MsgRejectQuery (fromList []) (At (BlockHeader {slotNo = SlotNo {unSlotNo =
 Binary: 0304000000000000000001000000000000000100000000000000000000000000000001
 Show: MsgRejectQuery (fromList []) (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}))
 Binary: 030400000000000000000100000000000000010000000000000001610000000000000001
+Show: MsgCollected [(GenesisfromList [])] Genesis
+Binary: 0d04000000000000000100000000000000000000
+Show: MsgCollected [(At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}})fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},Transaction {txId = "", validityRange = Unbounded, metadata = TransactionMetadata {unTransactionMetadata = fromList []}, inputs = fromList [], outputs = [], mintedTokens = Tokens {unTokens = fromList []}})]),(At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}})fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},Transaction {txId = "", validityRange = Unbounded, metadata = TransactionMetadata {unTransactionMetadata = fromList []}, inputs = fromList [], outputs = [], mintedTokens = Tokens {unTokens = fromList [(AssetId {policyId = "", tokenName = ""},Quantity {unQuantity = 1})]}})])] Genesis
+Binary: 0d0400000000000000020100000000000000010000000000000000000000000000000100000000000000010000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000010000000000000001610000000000000001000000000000000100000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000100
+Show: MsgCollected [] (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0d04000000000000000001000000000000000100000000000000000000000000000001
+Show: MsgCollected [] (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0d0400000000000000000100000000000000010000000000000001610000000000000001
+Show: MsgCollectRollBackward Genesis Genesis
+Binary: 0e0000
+Show: MsgCollectRollBackward (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}})) Genesis
+Binary: 0e0100000000000000010000000000000000000000000000000100
+Show: MsgCollectRollBackward (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}})) Genesis
+Binary: 0e010000000000000001000000000000000161000000000000000100
+Show: MsgCollectRollBackward Genesis (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0e0001000000000000000100000000000000000000000000000001
+Show: MsgCollectRollBackward Genesis (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0e000100000000000000010000000000000001610000000000000001
+Show: MsgCollectFailed (fromList []) Genesis
+Binary: 0c04000000000000000000
+Show: MsgCollectFailed (fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},UTxONotFound)]) Genesis
+Binary: 0c040000000000000001000000000000000000010000
+Show: MsgCollectFailed (fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},UTxOSpent "")]) Genesis
+Binary: 0c0400000000000000010000000000000000000101000000000000000000
+Show: MsgCollectFailed (fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},UTxOSpent "61")]) Genesis
+Binary: 0c040000000000000001000000000000000000010100000000000000016100
+Show: MsgCollectFailed (fromList [(TxOutRef {txId = "61", txIx = TxIx {unTxIx = 1}},UTxONotFound)]) Genesis
+Binary: 0c04000000000000000100000000000000016100010000
+Show: MsgCollectFailed (fromList []) (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0c04000000000000000001000000000000000100000000000000000000000000000001
+Show: MsgCollectFailed (fromList []) (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0c0400000000000000000100000000000000010000000000000001610000000000000001
 Show: MsgRollForward (Transaction {txId = "", validityRange = Unbounded, metadata = TransactionMetadata {unTransactionMetadata = fromList []}, inputs = fromList [], outputs = [], mintedTokens = Tokens {unTokens = fromList []}}) Genesis Genesis
 Binary: 040300000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 Show: MsgRollForward (Transaction {txId = "", validityRange = Unbounded, metadata = TransactionMetadata {unTransactionMetadata = fromList []}, inputs = fromList [], outputs = [], mintedTokens = Tokens {unTokens = fromList [(AssetId {policyId = "", tokenName = ""},Quantity {unQuantity = 1})]}}) Genesis Genesis
@@ -366,6 +480,34 @@ Show: MsgRejectQuery TxNotFound (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}
 Binary: 03030001000000000000000100000000000000000000000000000001
 Show: MsgRejectQuery TxNotFound (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}))
 Binary: 0303000100000000000000010000000000000001610000000000000001
+Show: MsgCollected [(GenesisTransaction {txId = "", validityRange = Unbounded, metadata = TransactionMetadata {unTransactionMetadata = fromList []}, inputs = fromList [], outputs = [], mintedTokens = Tokens {unTokens = fromList []}})] Genesis
+Binary: 0d03000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+Show: MsgCollected [(At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}})Transaction {txId = "", validityRange = Unbounded, metadata = TransactionMetadata {unTransactionMetadata = fromList []}, inputs = fromList [], outputs = [], mintedTokens = Tokens {unTokens = fromList [(AssetId {policyId = "", tokenName = ""},Quantity {unQuantity = 1})]}}),(At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}})Transaction {txId = "", validityRange = Unbounded, metadata = TransactionMetadata {unTransactionMetadata = fromList []}, inputs = fromList [], outputs = [], mintedTokens = Tokens {unTokens = fromList [(AssetId {policyId = "", tokenName = "a"},Quantity {unQuantity = 1})]}})] Genesis
+Binary: 0d030000000000000002010000000000000001000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000001010000000000000001000000000000000161000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000161000000000000000100
+Show: MsgCollected [] (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0d03000000000000000001000000000000000100000000000000000000000000000001
+Show: MsgCollected [] (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0d0300000000000000000100000000000000010000000000000001610000000000000001
+Show: MsgCollectRollBackward Genesis Genesis
+Binary: 0e0000
+Show: MsgCollectRollBackward (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}})) Genesis
+Binary: 0e0100000000000000010000000000000000000000000000000100
+Show: MsgCollectRollBackward (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}})) Genesis
+Binary: 0e010000000000000001000000000000000161000000000000000100
+Show: MsgCollectRollBackward Genesis (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0e0001000000000000000100000000000000000000000000000001
+Show: MsgCollectRollBackward Genesis (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0e000100000000000000010000000000000001610000000000000001
+Show: MsgCollectFailed TxNotFound Genesis
+Binary: 0c030000
+Show: MsgCollectFailed (TxInPast (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}})) Genesis
+Binary: 0c030100000000000000010000000000000000000000000000000100
+Show: MsgCollectFailed (TxInPast (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}})) Genesis
+Binary: 0c03010000000000000001000000000000000161000000000000000100
+Show: MsgCollectFailed TxNotFound (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0c030001000000000000000100000000000000000000000000000001
+Show: MsgCollectFailed TxNotFound (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0c03000100000000000000010000000000000001610000000000000001
 Show: MsgRollForward (fromList []) Genesis Genesis
 Binary: 040600000000000000000000
 Show: MsgRollForward (fromList [Transaction {txId = "", validityRange = Unbounded, metadata = TransactionMetadata {unTransactionMetadata = fromList []}, inputs = fromList [], outputs = [], mintedTokens = Tokens {unTokens = fromList []}}]) Genesis Genesis
@@ -494,6 +636,24 @@ Show: MsgRollBackward Genesis (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, 
 Binary: 050001000000000000000100000000000000000000000000000001
 Show: MsgRollBackward Genesis (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}))
 Binary: 05000100000000000000010000000000000001610000000000000001
+Show: MsgCollected [(GenesisfromList [])] Genesis
+Binary: 0d06000000000000000100000000000000000000
+Show: MsgCollected [(At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}})fromList [Transaction {txId = "", validityRange = Unbounded, metadata = TransactionMetadata {unTransactionMetadata = fromList []}, inputs = fromList [], outputs = [], mintedTokens = Tokens {unTokens = fromList []}}]),(At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}})fromList [Transaction {txId = "", validityRange = Unbounded, metadata = TransactionMetadata {unTransactionMetadata = fromList []}, inputs = fromList [], outputs = [], mintedTokens = Tokens {unTokens = fromList [(AssetId {policyId = "", tokenName = ""},Quantity {unQuantity = 1})]}}])] Genesis
+Binary: 0d060000000000000002010000000000000001000000000000000000000000000000010000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000100000000000000016100000000000000010000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000100
+Show: MsgCollected [] (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0d06000000000000000001000000000000000100000000000000000000000000000001
+Show: MsgCollected [] (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0d0600000000000000000100000000000000010000000000000001610000000000000001
+Show: MsgCollectRollBackward Genesis Genesis
+Binary: 0e0000
+Show: MsgCollectRollBackward (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}})) Genesis
+Binary: 0e0100000000000000010000000000000000000000000000000100
+Show: MsgCollectRollBackward (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}})) Genesis
+Binary: 0e010000000000000001000000000000000161000000000000000100
+Show: MsgCollectRollBackward Genesis (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0e0001000000000000000100000000000000000000000000000001
+Show: MsgCollectRollBackward Genesis (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0e000100000000000000010000000000000001610000000000000001
 Show: MsgRollForward () Genesis Genesis
 Binary: 04050000
 Show: MsgRollForward () (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}})) Genesis
@@ -514,3 +674,21 @@ Show: MsgRollBackward Genesis (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, 
 Binary: 050001000000000000000100000000000000000000000000000001
 Show: MsgRollBackward Genesis (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}))
 Binary: 05000100000000000000010000000000000001610000000000000001
+Show: MsgCollected [(Genesis())] Genesis
+Binary: 0d0500000000000000010000
+Show: MsgCollected [] Genesis
+Binary: 0d05000000000000000000
+Show: MsgCollected [] (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0d05000000000000000001000000000000000100000000000000000000000000000001
+Show: MsgCollected [] (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0d0500000000000000000100000000000000010000000000000001610000000000000001
+Show: MsgCollectRollBackward Genesis Genesis
+Binary: 0e0000
+Show: MsgCollectRollBackward (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}})) Genesis
+Binary: 0e0100000000000000010000000000000000000000000000000100
+Show: MsgCollectRollBackward (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}})) Genesis
+Binary: 0e010000000000000001000000000000000161000000000000000100
+Show: MsgCollectRollBackward Genesis (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0e0001000000000000000100000000000000000000000000000001
+Show: MsgCollectRollBackward Genesis (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0e000100000000000000010000000000000001610000000000000001
