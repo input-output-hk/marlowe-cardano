@@ -52,6 +52,7 @@ library
   hs-source-dirs:  src
   exposed-modules:
     Language.Marlowe.Object.Archive
+    Language.Marlowe.Object.Bundler
     Language.Marlowe.Object.Link
     Language.Marlowe.Object.Types
 
@@ -70,6 +71,8 @@ library
     , lens >=5.2 && <6
     , marlowe-cardano ==0.1.1.0
     , marlowe-protocols ==0.1.1.0
+    , mtl >=2.2 && <3
+    , pipes ^>=4.3.16
     , plutus-ledger-api ==1.0.0.1
     , text >=1.2.4 && <2
     , time >=1.9 && <2
