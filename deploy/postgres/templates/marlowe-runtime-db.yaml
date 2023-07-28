@@ -1,7 +1,7 @@
 apiVersion: core.oam.dev/v1beta1
 kind: Application
 metadata:
-  name: marlowe-runtime-database
+  name: marlowe-runtime-db
   namespace: marlowe-staging-refactor
   annotations:
     app.oam.dev/publishVersion: {{ .Chart.AppVersion }}
@@ -11,7 +11,7 @@ metadata:
 spec:
   components:
     - type: "postgres-cluster"
-      name: marlowe-runtime-database
+      name: marlowe-runtime-db
       properties:
         replicas: 3
         volume:
