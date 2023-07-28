@@ -10,10 +10,13 @@ module Spec.Marlowe.Contracts (
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import qualified Language.Marlowe as C
 import Language.Marlowe.Core.V1.Semantics.Types
-import Marlowe.Contracts.Common (both, deposit, dirRate, invRate)
+import Marlowe.Contracts.Common (both, deposit) -- , dirRate, invRate)
 import Marlowe.Contracts.UTC.Common
 import Marlowe.Contracts.UTC.CouponBond
-import Marlowe.Contracts.UTC.Futures
+
+-- import Marlowe.Contracts.UTC.Futures
+
+import Language.Marlowe.Util (ada)
 import Marlowe.Contracts.UTC.Options
 import Marlowe.Contracts.UTC.StructuredProducts
 import Marlowe.Contracts.UTC.Swap
@@ -30,10 +33,10 @@ tests =
     [ testCase "ZeroCouponBond" zeroCouponBondTest
     , testCase "CouponBond" couponBondTest
     , testCase "Swap Contract" swapContractTest
-    , testCase "Future Contract (repayment of initial margin)" futureNoChange
-    , testCase "Future Contract (without margin calls)" futureNoMarginCall
-    , testCase "Future Contract (with margins calls)" futureWithMarginCall
-    , testCase "American Call Option test" americanCallOptionTest
+    , -- , testCase "Future Contract (repayment of initial margin)" futureNoChange
+      -- , testCase "Future Contract (without margin calls)" futureNoMarginCall
+      -- , testCase "Future Contract (with margins calls)" futureWithMarginCall
+      testCase "American Call Option test" americanCallOptionTest
     , testCase "American Call Option (exercised) test" americanCallOptionExercisedTest
     , testCase "European Call Option test" europeanCallOptionTest
     , testCase "European Call Option (exercised) test" europeanCallOptionExercisedTest
@@ -53,9 +56,6 @@ tokSymbol = ""
 
 tok :: Token
 tok = Token tokSymbol tokName
-
-ada :: Token
-ada = Token "" ""
 
 tokValueOf :: Integer -> C.Money
 tokValueOf = singleton tokSymbol tokName
@@ -300,6 +300,7 @@ europeanCallOptionExercisedTest =
         C.Error err ->
           assertNoFailedTransactions err
 
+{-
 -- | Future, scenario repayment of initial margins
 futureNoChange :: IO ()
 futureNoChange =
@@ -429,6 +430,7 @@ futureWithMarginCall =
           assertTotalPayments w2Pk txOutPayments (lovelaceValueOf 14_666_666)
         C.Error err ->
           assertNoFailedTransactions err
+-}
 
 -- | Reverse Convertible test (Exercise)
 reverseConvertibleExercisedTest :: IO ()

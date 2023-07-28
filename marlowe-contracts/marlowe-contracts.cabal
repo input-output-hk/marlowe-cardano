@@ -73,6 +73,8 @@ library
   build-depends:
     , base >=4.9 && <5
     , marlowe-cardano
+    , marlowe-object
+    , text
     , time
 
 test-suite marlowe-contracts-test
@@ -106,9 +108,8 @@ executable load-future-contract
   hs-source-dirs:   app
   build-depends:
     , base >=4.9 && <5
-    , marlowe-cardano
-    , marlowe-client
     , marlowe-contracts
+    , marlowe-object
 
   ghc-options:
     -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
