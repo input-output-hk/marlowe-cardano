@@ -1,18 +1,17 @@
 module Marlowe.Contracts.UTC.Futures where
 
 import Data.Time.Clock (UTCTime)
-import Language.Marlowe.Core.V1.Semantics.Types
+import Language.Marlowe.Object.Types
 import Marlowe.Contracts.Futures as C
-import Marlowe.Contracts.UTC.Common
 
 future
   :: Party
   -- ^ Buyer
   -> Party
   -- ^ Seller
-  -> Value Observation
+  -> Value
   -- ^ Forward price for 100 (contract size) USD at maturity (in Lovelace)
-  -> Value Observation
+  -> Value
   -- ^ Initial margin requirements (in Lovelace)
   -> UTCTime
   -- ^ Initial margin setup timout
@@ -20,7 +19,7 @@ future
   -- ^ Margin call dates
   -> UTCTime
   -- ^ Delivery date
-  -> Contract
+  -> ObjectBundle
   -- ^ Future contract
 future buyer seller forwardPrice initialMargin initialFixing callDates deliveryDate =
   C.future
@@ -28,6 +27,6 @@ future buyer seller forwardPrice initialMargin initialFixing callDates deliveryD
     seller
     forwardPrice
     initialMargin
-    (toTimeout initialFixing)
-    (map toTimeout callDates)
-    (toTimeout deliveryDate)
+    (Timeout initialFixing)
+    (map Timeout callDates)
+    (Timeout deliveryDate)

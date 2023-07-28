@@ -7,22 +7,21 @@
 module Main
 where
 
-import Control.Monad.IO.Class (MonadIO (..))
-import Language.Marlowe.Core.V1.Semantics.Types
-import Language.Marlowe.Runtime.Client
+import qualified Language.Marlowe.Object.Archive as A
+import qualified Language.Marlowe.Object.Types as O
 import Marlowe.Contracts.UTC.Futures (future)
 
-w1Pk, w2Pk :: Party
-w1Pk = Role "party1"
-w2Pk = Role "party2"
+w1Pk, w2Pk :: O.Party
+w1Pk = O.Role "party1"
+w2Pk = O.Role "party2"
 
-futureContract :: Contract
-futureContract =
+futureBundle :: O.ObjectBundle
+futureBundle =
   future
     w1Pk
     w2Pk
-    (Constant 80_000_000) -- 80 ADA
-    (Constant 8_000_000) -- 8 ADA
+    (O.Constant 80_000_000) -- 80 ADA
+    (O.Constant 8_000_000) -- 8 ADA
     (read "2024-03-31 08:00:00.000000 UTC")
     [ read "2024-09-01 08:30:00.000000 UTC"
     , read "2024-09-02 08:30:00.000000 UTC"
@@ -40,7 +39,7 @@ futureContract =
     (read "2025-03-31 09:00:00.000000 UTC")
 
 main :: IO ()
-main = connectToMarloweRuntime "localhost" 32856 do
-  hashes <- loadContract futureContract
-  _ <- liftIO $ print (show hashes)
-  return ()
+main = A.packArchive "futureBundle.zip" (O.Label "initialMarginDeposit") $ write futureBundle
+
+write :: O.ObjectBundle -> (O.LabelledObject -> IO ()) -> IO ()
+write bundle f = mapM_ f (O.getObjects bundle)
