@@ -53,10 +53,10 @@ future buyer seller forwardPrice initialMargin initialFixing callDates deliveryD
    in ObjectBundle $
         [ LabelledObject "dirRate" ActionType $ Choice dirRate [Bound 0 100_000_000_000]
         , LabelledObject "invRate" ActionType $ Choice invRate [Bound 0 100_000_000_000]
-        , LabelledObject "initialMarginDeposit" ContractType initialMarginAccounts
+        , LabelledObject "settlement" ContractType contractSettlement
         ]
           <> updateMarginAccounts
-          <> [LabelledObject "settlement" ContractType contractSettlement]
+          <> [LabelledObject "initialMarginDeposit" ContractType initialMarginAccounts]
 
 -- | Initial deposits into margin accounts
 depositInitialMargin
