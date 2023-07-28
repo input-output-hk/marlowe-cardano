@@ -41,6 +41,7 @@ packages:
   marlowe-runtime
   marlowe-runtime-cli
   marlowe-runtime-web
+  marlowe-scripts
   marlowe-test
 
   libs/aeson-record
