@@ -30,7 +30,7 @@ import Language.Marlowe.Object.Types (
 import Language.Marlowe.Protocol.Transfer.Types (ImportError)
 import Language.Marlowe.Runtime.CLI.Monad (CLI)
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash (..))
-import Language.Marlowe.Runtime.Client (importBundle, importIncremental)
+import Language.Marlowe.Runtime.Client (importIncremental)
 import Options.Applicative (ParserInfo, flag, help, info, long, metavar, progDesc, short, strArgument)
 import Pipes (Pipe, Producer, await, yield, (>->))
 import qualified Pipes.Prelude as P
@@ -70,12 +70,12 @@ runLoadCommand LoadCommand{..} = do
   liftIO $ unless exists $ die "Bundle archive file does not exist"
   result <-
     if readJSON
-      then do
-        bundle <- readJSONFile archivePath
-        result <- runMarloweTransferClient $ importBundle bundle
-        case result of
-          Left err -> liftIO $ die $ "Failed to import bundle: " <> show err
-          Right hashes -> pure $ pure $ Map.lookup "main" hashes
+      then
+        fmap pure $
+          P.head $
+            readJSONFile archivePath
+              >-> (lift . handleError =<< runMarloweTransferClient importIncremental)
+              >-> collectMain "main"
       else unpackArchive archivePath \mainIs readObject ->
         P.head $
           bundles readObject
@@ -86,13 +86,15 @@ runLoadCommand LoadCommand{..} = do
     Right Nothing -> die "Error: main not linked. This is a bug, please report it with the archive you were trying to load attached."
     Right (Just mainHash) -> putStrLn $ T.unpack $ encodeBase16 $ unDatumHash mainHash
 
-readJSONFile :: FilePath -> CLI ObjectBundle
+readJSONFile :: FilePath -> Producer ObjectBundle CLI ()
 readJSONFile path = do
   result <- liftIO $ eitherDecodeFileStrict path
   case result of
-    Left err -> liftIO $ die $ "Error: bad contract file: " <> err
+    Left err -> liftIO $ die $ "Error: back contract file: " <> err
     Right contract -> do
-      pure $ ObjectBundle $ pure $ LabelledObject "main" ContractType $ fromCoreContract contract
+      yield $ ObjectBundle $ pure $ LabelledObject "main" ContractType $ fromCoreContract contract
+      -- Yield an empty bundle to indicate the stream is done.
+      yield $ ObjectBundle []
 
 bundles :: CLI (Maybe LabelledObject) -> Producer ObjectBundle CLI ()
 bundles readObject = do

@@ -15,13 +15,11 @@ import Cardano.Api (
  )
 import qualified Cardano.Api.Shelley
 import qualified Control.Monad.Reader as Reader
-import qualified Data.Aeson as Aeson
 import Data.Foldable (for_)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Maybe as Maybe
 import qualified Data.Set as Set
-import Data.String (fromString)
 import qualified Data.Text as Text
 import qualified Data.Time as Time
 import qualified Data.Time.Clock.POSIX as POSIX
@@ -580,17 +578,17 @@ bugPLT6773 = focus $
   describe "[BUG] PLT-6773: Marlowe runtime cannot load any contracts" $
     it "Marlowe runtime can load any contracts" \CLISpecTestData{..} -> flip runIntegrationTest runtime do
       workspace <- Reader.asks $ workspace . testnet
-      let contractHashRelation :: [(String, V1.Contract, Aeson.Value)]
+      let contractHashRelation :: [(V1.Contract, String, String)]
           contractHashRelation =
-            [ ("923918e403bf43c34b4ef6b48eb2ee04babed17320d8d1b9ff9ad086e86f44ec", V1.Close, Aeson.String "close")
+            [ (V1.Close, "923918e403bf43c34b4ef6b48eb2ee04babed17320d8d1b9ff9ad086e86f44ec", "\"close\"\n")
             ,
-              ( "ee5ab3bfda75834c3c1503ec7cd0b7fccbce7ceb3909e5404910bfd9e09b1be4"
-              , V1.Assert V1.TrueObs V1.Close
-              , Aeson.object [("assert", Aeson.Bool True), ("then", Aeson.String "close")]
+              ( V1.Assert V1.TrueObs V1.Close
+              , "ee5ab3bfda75834c3c1503ec7cd0b7fccbce7ceb3909e5404910bfd9e09b1be4"
+              , "{\"assert\":true,\"then\":\"close\"}"
               )
             ]
 
-      for_ contractHashRelation \(expectedHash :: String, contract :: V1.Contract, expectedContract :: Aeson.Value) -> do
+      for_ contractHashRelation \(contract :: V1.Contract, expectedHash :: String, expectedContract :: String) -> do
         contractFilePath <- writeWorkspaceFileJSON workspace "contract.json" contract
 
         do
@@ -598,13 +596,13 @@ bugPLT6773 = focus $
 
           liftIO do
             putStrLn stderr
-            (code, stdout) `shouldBe` (ExitSuccess, expectedHash ++ "\n")
+            code `shouldBe` ExitSuccess
+            stdout `shouldBe` expectedHash ++ "\n"
 
         do
           (code, stdout, stderr) <- Runtime.Integration.Common.execMarlowe' ["query", "store", "contract", expectedHash]
 
-          let actualContractJSON :: Maybe Aeson.Value = Aeson.decode $ fromString stdout
-
           liftIO do
             putStrLn stderr
-            (code, actualContractJSON) `shouldBe` (ExitSuccess, Just expectedContract)
+            code `shouldBe` ExitSuccess
+            stdout `shouldBe` expectedContract
