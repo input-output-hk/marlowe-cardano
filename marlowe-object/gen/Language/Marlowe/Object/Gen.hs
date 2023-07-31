@@ -1,4 +1,5 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE QuantifiedConstraints #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Marlowe.Object.Gen where
@@ -9,12 +10,26 @@ import qualified Data.ByteString as BS
 import Data.Foldable (Foldable (fold))
 import Data.Function ((&))
 import Gen.Cardano.Api.Typed (genAddressShelley)
+import Language.Marlowe.Object.Bundler (BundlerT (..))
 import Language.Marlowe.Object.Link
 import Language.Marlowe.Object.Types
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Test.QuickCheck hiding (label)
 import Test.QuickCheck.Hedgehog (hedgehog)
 import Test.QuickCheck.Instances ()
+
+instance (forall x. (Arbitrary x) => Arbitrary (m x), Arbitrary a, Functor m) => Arbitrary (BundlerT m a) where
+  arbitrary = sized \n ->
+    if n == 0
+      then oneof [Pure <$> arbitrary, M . fmap Pure <$> arbitrary]
+      else oneof [Pure <$> arbitrary, M . fmap Pure <$> arbitrary, Define <$> arbitrary <*> resize (n - 1) arbitrary]
+  shrink = \case
+    Pure a -> Pure <$> shrink a
+    M m -> M <$> shrink m
+    Define obj b ->
+      b
+        : (Define <$> shrink obj <*> pure b)
+          <> (Define obj <$> shrink b)
 
 instance Arbitrary LinkedObject where
   arbitrary =

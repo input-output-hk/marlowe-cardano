@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 -- | A monad for conveniently defining Marlowe object bundles. It allows one to define a Marlowe contract
@@ -13,7 +14,7 @@ import Control.Applicative (Applicative (liftA2))
 import Control.Monad.Cont (ContT)
 import Control.Monad.Except (MonadError (..))
 import Control.Monad.IO.Class (MonadIO (..))
-import Control.Monad.Identity (IdentityT)
+import Control.Monad.Identity (Identity (..), IdentityT)
 import Control.Monad.Reader (MonadReader (..))
 import Control.Monad.State (MonadState (..))
 import Control.Monad.Trans.Class (MonadTrans (..))
@@ -23,8 +24,10 @@ import Control.Monad.Trans.Reader (ReaderT)
 import Control.Monad.Trans.State (StateT)
 import Control.Monad.Trans.Writer (WriterT)
 import Control.Monad.Writer (MonadWriter (..), censor)
+import Control.Monad.Zip (MonadZip (..))
 import Data.Bifunctor (Bifunctor (..))
 import Data.Functor (($>))
+import GHC.Show (showSpace)
 import Language.Marlowe.Object.Types
 import Pipes (Producer, yield)
 import Pipes.Core (Proxy)
@@ -36,6 +39,27 @@ data BundlerT m a
   | M (m (BundlerT m a))
   | Define LabelledObject (BundlerT m a)
   deriving (Functor)
+
+type Bundler = BundlerT Identity
+
+instance (forall x. (Eq x) => Eq (m x), Eq a) => Eq (BundlerT m a) where
+  b1 == b2 = case b1 of
+    Pure a -> case b2 of
+      Pure b -> a == b
+      _ -> False
+    M m1 -> case b2 of
+      M m2 -> m1 == m2
+      _ -> False
+    Define obj1 b1' -> case b2 of
+      Define obj2 b2' -> obj1 == obj2 && b1' == b2'
+      _ -> False
+
+instance (forall x. (Show x) => Show (m x), Show a) => Show (BundlerT m a) where
+  showsPrec p =
+    showParen (p > 10) . \case
+      Pure a -> showString "Pure" . showSpace . showsPrec 11 a
+      M m -> showString "M" . showsPrec 11 m
+      Define obj b -> showString "Define" . showSpace . showsPrec 11 obj . showSpace . showsPrec 11 b
 
 -- | A class of monads able to append marlowe objects to a bundle.
 class (Monad m) => MonadBundler m where
@@ -84,6 +108,9 @@ instance (Functor m) => Monad (BundlerT m) where
         Pure a -> f a
         M m -> M (go <$> m)
         Define obj b' -> Define obj $ go b'
+
+instance (Functor m) => MonadZip (BundlerT m) where
+  mzip = liftA2 (,)
 
 instance (Functor m, Semigroup a) => Semigroup (BundlerT m a) where
   (<>) = liftA2 (<>)
@@ -148,6 +175,18 @@ instance (MonadError e m) => MonadError e (BundlerT m) where
 -- | Run a bundler action, returning the resulting object bundle and the result of the action.
 runBundlerT :: (Monad m) => BundlerT m a -> m (ObjectBundle, a)
 runBundlerT = (fmap . first) ObjectBundle . toListM' . runBundlerTIncremental
+
+-- | Run a bundler action, returning the resulting object bundle and the result of the action.
+runBundlerT_ :: (Monad m) => BundlerT m () -> m ObjectBundle
+runBundlerT_ = fmap fst . runBundlerT
+
+-- | Run a bundler action, returning the resulting object bundle and the result of the action.
+runBundler :: Bundler a -> (ObjectBundle, a)
+runBundler = runIdentity . runBundlerT
+
+-- | Run a bundler action, returning the resulting object bundle and the result of the action.
+runBundler_ :: Bundler () -> ObjectBundle
+runBundler_ = runIdentity . runBundlerT_
 
 -- | Run a bundler action, streaming the defined objects via a producer.
 runBundlerTIncremental :: (Monad m) => BundlerT m a -> Producer LabelledObject m a
