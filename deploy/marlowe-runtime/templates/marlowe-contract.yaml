@@ -4,9 +4,11 @@ apiVersion: core.oam.dev/v1beta1
 kind: Application
 metadata:
   name: marlowe-contract-{{ . }}
-  namespace: marlowe-staging
+  namespace: {{ $.Values.namespace }}
   annotations:
     app.oam.dev/publishVersion: {{ $.Chart.AppVersion }}
+    meta.helm.sh/release-name: {{ $.Values.releaseName }}
+    meta.helm.sh/release-namespace: {{ $.Values.namespace }}
 spec:
   components:
     - name: marlowe-contract-{{ . }}
@@ -52,11 +54,11 @@ spec:
               requests:
                 storage: 50Gi
   policies:
-  - name: local-marlowe-staging
+  - name: local-{{ $.Values.namespace }}
     properties:
       clusters:
       - local
-      namespace: marlowe-staging
+      namespace: {{ $.Values.namespace }}
     type: topology
 
   workflow:
@@ -64,10 +66,10 @@ spec:
       steps: DAG
     steps:
     - meta:
-        alias: Deploy To local-marlowe-staging
-      name: local-marlowe-staging
+        alias: Deploy To local-{{ $.Values.namespace }}
+      name: local-{{ $.Values.namespace }}
       properties:
         policies:
-        - local-marlowe-staging
+        - local-{{ $.Values.namespace }}
       type: deploy
 {{- end }}

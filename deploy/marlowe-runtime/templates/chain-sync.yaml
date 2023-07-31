@@ -4,9 +4,11 @@ apiVersion: core.oam.dev/v1beta1
 kind: Application
 metadata:
   name: chain-sync-{{ $network }}
-  namespace: marlowe-staging
+  namespace: {{ $.Values.namespace }}
   annotations:
     app.oam.dev/publishVersion: {{ $.Chart.AppVersion }}
+    meta.helm.sh/release-name: {{ $.Values.releaseName }}
+    meta.helm.sh/release-namespace: {{ $.Values.namespace }}
 spec:
   components:
   - name: chain-sync-{{ $network }}
@@ -34,19 +36,19 @@ spec:
       - name: DB_NAME
         value: chainsync_{{ $network }}
       - name: DB_HOST
-        value: marlowe-runtime-database.marlowe-staging:5432
+        value: {{ $.Values.databaseName }}.{{ $.Values.namespace }}:5432
       - name: DB_USER
         valueFrom:
           secretKeyRef:
             key: username
-            name: chainsync-{{ $network }}-owner-user.marlowe-runtime-database.credentials.postgresql.acid.zalan.do
-            namespace: marlowe-staging
+            name: chainsync-{{ $network }}-owner-user.{{ $.Values.databaseName }}.credentials.postgresql.acid.zalan.do
+            namespace: {{ $.Values.namespace }}
       - name: DB_PASS
         valueFrom:
           secretKeyRef:
             key: password
-            name: chainsync-{{ $network }}-owner-user.marlowe-runtime-database.credentials.postgresql.acid.zalan.do
-            namespace: marlowe-staging
+            name: chainsync-{{ $network }}-owner-user.{{ $.Values.databaseName }}.credentials.postgresql.acid.zalan.do
+            namespace: {{ $.Values.namespace }}
       cpu: "0.5"
       image: {{ $.Values.images.repo }}/{{ $.Values.images.org }}/marlowe-chain-sync:{{ $.Values.images.tag }}
       imagePullPolicy: Always
@@ -94,11 +96,11 @@ spec:
           path: /ipc
 
   policies:
-  - name: local-marlowe-staging
+  - name: local-{{ $.Values.namespace }}
     properties:
       clusters:
       - local
-      namespace: marlowe-staging
+      namespace: {{ $.Values.namespace }}
     type: topology
 
   workflow:
@@ -106,11 +108,11 @@ spec:
       steps: DAG
     steps:
     - meta:
-        alias: Deploy To local-marlowe-staging
-      name: local-marlowe-staging
+        alias: Deploy To local-{{ $.Values.namespace }}
+      name: local-{{ $.Values.namespace }}
       properties:
         policies:
-        - local-marlowe-staging
+        - local-{{ $.Values.namespace }}
       type: deploy
 
 {{- end }}

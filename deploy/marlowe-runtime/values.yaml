@@ -7,3 +7,9 @@ images:
   tag: latest
   repo: ghcr.io
   org: input-output-hk
+
+namespace: marlowe-staging-refactor
+
+releaseName: marlowe-runtime-service
+
+databaseName: marlowe-runtime-db

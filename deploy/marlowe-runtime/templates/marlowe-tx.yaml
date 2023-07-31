@@ -4,9 +4,11 @@ apiVersion: core.oam.dev/v1beta1
 kind: Application
 metadata:
   name: marlowe-tx-{{ . }}
-  namespace: marlowe-staging
+  namespace: {{ $.Values.namespace }}
   annotations:
     app.oam.dev/publishVersion: {{ $.Chart.AppVersion }}
+    meta.helm.sh/release-name: {{ $.Values.releaseName }}
+    meta.helm.sh/release-namespace: {{ $.Values.namespace }}
 spec:
   components:
     - name: marlowe-tx-{{ . }}
@@ -18,7 +20,7 @@ spec:
         - name: PORT
           value: "3723"
         - name: MARLOWE_CHAIN_SYNC_HOST
-          value: chain-sync-{{ . }}.marlowe-staging
+          value: chain-sync-{{ . }}.{{ $.Values.namespace }}
         - name: MARLOWE_CHAIN_SYNC_PORT
           value: "3715"
         - name: MARLOWE_CHAIN_SYNC_QUERY_PORT
@@ -26,7 +28,7 @@ spec:
         - name: MARLOWE_CHAIN_SYNC_COMMAND_PORT
           value: "3720"
         - name: CONTRACT_HOST
-          value: marlowe-contract-{{ . }}.marlowe-staging
+          value: marlowe-contract-{{ . }}.{{ $.Values.namespace }}
         - name: CONTRACT_QUERY_PORT
           value: "3728"
         - name: HTTP_PORT
@@ -47,11 +49,11 @@ spec:
           port: 3785
           protocol: TCP
   policies:
-  - name: local-marlowe-staging
+  - name: local-{{ $.Values.namespace }}
     properties:
       clusters:
       - local
-      namespace: marlowe-staging
+      namespace: {{ $.Values.namespace }}
     type: topology
 
   workflow:
@@ -59,10 +61,10 @@ spec:
       steps: DAG
     steps:
     - meta:
-        alias: Deploy To local-marlowe-staging
-      name: local-marlowe-staging
+        alias: Deploy To local-{{ $.Values.namespace }}
+      name: local-{{ $.Values.namespace }}
       properties:
         policies:
-        - local-marlowe-staging
+        - local-{{ $.Values.namespace }}
       type: deploy
 {{- end }}
