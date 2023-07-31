@@ -1,17 +1,17 @@
 apiVersion: core.oam.dev/v1beta1
 kind: Application
 metadata:
-  name: marlowe-runtime-db
-  namespace: marlowe-staging-refactor
+  name: {{ $.Values.databaseName }}
+  namespace: {{ $.Values.namespace }}
   annotations:
     app.oam.dev/publishVersion: {{ .Chart.AppVersion }}
     "helm.sh/resource-policy": keep
-    "meta.helm.sh/release-name": marlowe-db
-    "meta.helm.sh/release-namespace": marlowe-staging-refactor
+    "meta.helm.sh/release-name": {{ $.Values.databaseName }}
+    "meta.helm.sh/release-namespace": {{ $.Values.namespace }}
 spec:
   components:
     - type: "postgres-cluster"
-      name: marlowe-runtime-db
+      name: {{ $.Values.databaseName }}
       properties:
         replicas: 3
         volume:
@@ -47,5 +47,5 @@ spec:
         - type: annotations
           properties:
             "helm.sh/resource-policy": keep
-            "meta.helm.sh/release-namespace": marlowe-staging-refactor
-            "meta.helm.sh/release-name": marlowe-db
+            "meta.helm.sh/release-namespace": {{ $.Values.namespace }}
+            "meta.helm.sh/release-name": {{ $.Values.databaseName }}
