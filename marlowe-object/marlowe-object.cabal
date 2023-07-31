@@ -104,6 +104,7 @@ test-suite marlowe-object-test
   type:               exitcode-stdio-1.0
   main-is:            Spec.hs
   other-modules:
+    Language.Marlowe.Object.BundlerSpec
     Language.Marlowe.Object.LinkSpec
     Language.Marlowe.Object.TypesSpec
 
