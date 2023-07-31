@@ -1,24 +1,33 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Main where
 
 import Control.Monad (replicateM)
-import Data.Aeson (Value (Null))
+import Data.Aeson (ToJSON, Value (Null))
 import qualified Data.ByteString as BS
 import Data.OpenApi hiding (version)
 import Data.Proxy
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics (Input (..))
+import Language.Marlowe.Object.Gen ()
 import qualified Language.Marlowe.Runtime.Web as Web
 import Network.Arbitrary ()
 import Servant.OpenApi
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Spec.Marlowe.Semantics.Next.Arbitrary ()
 
-import Language.Marlowe.Runtime.Web (ContractOrSourceId (..))
+import Data.Data (Typeable)
+import Data.Kind (Type)
+import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
+import Language.Marlowe.Runtime.Web (ContractOrSourceId (..), WithRuntimeStatus)
+import Servant.API
 import Test.Hspec (Spec, describe, hspec)
 import Test.QuickCheck (Arbitrary (..), Gen, elements, genericShrink, listOf, oneof, resize, suchThat)
 import Test.QuickCheck.Instances ()
@@ -29,10 +38,36 @@ main = hspec do
   describe "OpenAPI" openAPISpec
 
 openAPISpec :: Spec
-openAPISpec = validateEveryToJSONWithPatternChecker patternChecker (Proxy @Web.API)
+openAPISpec = validateEveryToJSONWithPatternChecker patternChecker (Proxy @(WrapContractBodies (RetractRuntimeStatus Web.API)))
+
+type family RetractRuntimeStatus api where
+  RetractRuntimeStatus (WithRuntimeStatus api) = api
+
+type family WrapContractBodies (api :: Type) :: Type where
+  WrapContractBodies (ReqBody' mods cs V1.Contract :> api) = ReqBody' mods cs WrappedContract :> WrapContractBodies api
+  WrapContractBodies ((e :: k) :> api) = e :> WrapContractBodies api
+  WrapContractBodies (api1 :<|> api2) = WrapContractBodies api1 :<|> WrapContractBodies api2
+  WrapContractBodies (Verb v s cs (Headers hs V1.Contract)) = Verb v s cs (Headers hs WrappedContract)
+  WrapContractBodies (Verb v s cs V1.Contract) = Verb v s cs WrappedContract
+  WrapContractBodies (Verb v s cs a) = Verb v s cs a
+  WrapContractBodies api = api
+
+newtype WrappedContract = WrappedContract {unWrappedContract :: V1.Contract}
+  deriving (Typeable)
+  deriving newtype (Show, ToJSON, ToSchema)
+
+instance Arbitrary WrappedContract where
+  arbitrary = WrappedContract <$> resize 6 arbitrary
+  shrink = fmap WrappedContract . shrink . unWrappedContract
 
 patternChecker :: Pattern -> Text -> Bool
 patternChecker pat text = T.unpack text =~ T.unpack pat
+
+instance Arbitrary Web.PostContractSourceResponse where
+  arbitrary =
+    Web.PostContractSourceResponse
+      <$> arbitrary
+      <*> arbitrary
 
 instance Arbitrary Web.WithdrawalHeader where
   arbitrary =
