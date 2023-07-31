@@ -4,9 +4,11 @@ apiVersion: core.oam.dev/v1beta1
 kind: Application
 metadata:
   name: marlowe-web-server-{{ . }}
-  namespace: marlowe-staging
+  namespace: {{ $.Values.namespace }}
   annotations:
     app.oam.dev/publishVersion: {{ $.Chart.AppVersion }}
+    meta.helm.sh/release-name: {{ $.Values.releaseName }}
+    meta.helm.sh/release-namespace: {{ $.Values.namespace }}
 spec:
   components:
     - name: marlowe-web-server-{{ . }}
@@ -16,7 +18,7 @@ spec:
         - name: PORT
           value: "3780"
         - name: RUNTIME_HOST
-          value: marlowe-proxy-{{ . }}.marlowe-staging
+          value: marlowe-proxy-{{ . }}.{{ $.Values.namespace }}
         - name: RUNTIME_PORT
           value: "3701"
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
@@ -60,11 +62,11 @@ spec:
                   exporters: [logging]
 
   policies:
-  - name: local-marlowe-staging
+  - name: local-{{ $.Values.namespace }}
     properties:
       clusters:
       - local
-      namespace: marlowe-staging
+      namespace: {{ $.Values.namespace }}
     type: topology
 
   workflow:
@@ -72,10 +74,10 @@ spec:
       steps: DAG
     steps:
     - meta:
-        alias: Deploy To local-marlowe-staging
-      name: local-marlowe-staging
+        alias: Deploy To local-{{ $.Values.namespace }}
+      name: local-{{ $.Values.namespace }}
       properties:
         policies:
-        - local-marlowe-staging
+        - local-{{ $.Values.namespace }}
       type: deploy
 {{- end }}
