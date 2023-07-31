@@ -15,7 +15,7 @@ spec:
       properties:
         replicas: 3
         volume:
-          size: 50Gi
+          size: 200Gi
         resources:
           requests:
             memory: "8Gi"
