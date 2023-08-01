@@ -74,10 +74,10 @@ import Language.Marlowe.CLI.Test.Runtime.Types (
 import Language.Marlowe.CLI.Test.Wallet.Interpret (
   decodeContractJSON,
   decodeInputJSON,
-  findCurrency,
-  findWallet,
-  findWalletsByCurrencyTokens,
+  getCurrency,
   getFaucet,
+  getWallet,
+  getWalletsByCurrencyTokens,
   updateWallet,
  )
 import Language.Marlowe.CLI.Test.Wallet.Types (
@@ -375,7 +375,7 @@ interpret ro@RuntimeWithdraw{..} = do
         testExecutionFailed' $
           "Unable to withdraw from contract: " <> show roContractNickname <> ". Role currency is not set."
     Just roleCurrency -> do
-      allWallets <- findWalletsByCurrencyTokens roleCurrency Nothing
+      allWallets <- getWalletsByCurrencyTokens roleCurrency Nothing
       let wallets = case roWallets of
             Nothing -> allWallets
             Just nicknames -> [(nickname, wallet, tokenNames) | (nickname, wallet, tokenNames) <- allWallets, nickname `elem` nicknames]
@@ -433,7 +433,7 @@ interpret ro@RuntimeCreateContract{..} = do
             pure nickname
 
   view executionModeL >>= skipInSimluationMode ro do
-    Wallet{_waAddress, _waSigningKey} <- maybe getFaucet findWallet roSubmitter
+    Wallet{_waAddress, _waSigningKey} <- maybe getFaucet getWallet roSubmitter
     connector <- getConnector
     -- Verify that the role currency actually exists
     origContract <- case roContractSource of
@@ -451,7 +451,7 @@ interpret ro@RuntimeCreateContract{..} = do
 
     roleTokensConfig <- case roRoleCurrency of
       Just roleCurrency -> do
-        Currency{ccPolicyId = cardanoPolicyId} <- findCurrency roleCurrency
+        Currency{ccPolicyId = cardanoPolicyId} <- getCurrency roleCurrency
         let policyId = MRCA.fromCardanoPolicyId cardanoPolicyId
         pure $ RoleTokensUsePolicy policyId
       Nothing -> pure RoleTokensNone
@@ -556,7 +556,7 @@ interpret ro@RuntimeCreateContract{..} = do
         throwLabeledError ro $ runtimeOperationFailed' $ "Failed to create contract: " <> show err
 interpret ro@RuntimeApplyInputs{..} = do
   view executionModeL >>= skipInSimluationMode ro do
-    Wallet{_waAddress, _waSigningKey} <- maybe getFaucet findWallet roSubmitter
+    Wallet{_waAddress, _waSigningKey} <- maybe getFaucet getWallet roSubmitter
     connector <- getConnector
     inputs <- for roInputs decodeInputJSON
     slotConfig <- view slotConfigL

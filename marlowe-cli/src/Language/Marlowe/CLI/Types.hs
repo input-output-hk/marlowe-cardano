@@ -111,6 +111,7 @@ module Language.Marlowe.CLI.Types (
   -- * constructors and defaults
   defaultCoinSelectionStrategy,
   fromUTxO,
+  validatorAddress,
   validatorInfo,
   validatorInfo',
 ) where
@@ -373,6 +374,8 @@ data MarloweTransaction lang era = MarloweTransaction
   -- ^ The Marlowe validator.
   , mtRoleValidator :: ValidatorInfo lang era
   -- ^ The roles validator.
+  , mtOpenRoleValidator :: ValidatorInfo lang era
+  -- ^ The open roles validator.
   , mtRolesCurrency :: CurrencySymbol
   -- ^ The roles currency.
   , mtState :: State
@@ -414,6 +417,7 @@ instance (IsScriptLanguage lang, IsShelleyBasedEra era) => FromJSON (MarloweTran
         do
           mtValidator <- o .: "marloweValidator"
           mtRoleValidator <- o .: "rolesValidator"
+          mtOpenRoleValidator <- o .: "openRolesValidator"
           mtRolesCurrency <- o .: "roles"
           mtState <- o .: "state"
           mtContract <- o .: "contract"
@@ -475,6 +479,19 @@ data ValidatorInfo lang era = ValidatorInfo
   }
   deriving (Eq, Generic, Show)
 
+-- Let's extract validatorAddress build up from the above
+validatorAddress
+  :: (IsPlutusScriptLanguage lang)
+  => PlutusScript lang
+  -> ScriptDataSupportedInEra era
+  -> CS.NetworkId
+  -> CS.StakeAddressReference
+  -> AddressInEra era
+validatorAddress viScript era network stake = do
+  let viHash = C.hashScript (C.PlutusScript plutusScriptVersion viScript)
+      paymentCredential = C.PaymentCredentialByScript viHash
+  withShelleyBasedEra era $ C.makeShelleyAddressInEra network paymentCredential stake
+
 -- | Build validator info.
 validatorInfo
   :: (IsPlutusScriptLanguage lang)
@@ -494,10 +511,8 @@ validatorInfo
   -- ^ The validator information, or an error message.
 validatorInfo viScript viTxIn era protocolVersion costModel network stake = do
   let C.PlutusScriptSerialised viBytes = viScript
-      -- viBytes = SBS.toShort . LBS.toStrict . serialise . Scripts.getValidator $  viScript
       viHash = C.hashScript (C.PlutusScript plutusScriptVersion viScript)
-      paymentCredential = C.PaymentCredentialByScript viHash
-      viAddress = withShelleyBasedEra era $ C.makeShelleyAddressInEra network paymentCredential stake
+      viAddress = validatorAddress viScript era network stake
       viSize = SBS.length viBytes
 
   evaluationContext <- Bifunctor.first show $ P.mkEvaluationContext costModel
@@ -726,6 +741,7 @@ data PublishScript lang era = PublishScript
 data PublishMarloweScripts lang era = PublishMarloweScripts
   { pmsMarloweScript :: PublishScript lang era
   , pmsRolePayoutScript :: PublishScript lang era
+  , pmsOpenRoleScript :: PublishScript lang era
   }
 
 newtype PrintStats = PrintStats {unPrintStats :: Bool}
@@ -753,6 +769,7 @@ anUTxOValue (AnUTxO (_, C.TxOut _ v _ _)) = C.txOutValueToValue v
 data MarloweScriptsRefs lang era = MarloweScriptsRefs
   { mrMarloweValidator :: (AnUTxO era, ValidatorInfo lang era)
   , mrRolePayoutValidator :: (AnUTxO era, ValidatorInfo lang era)
+  , mrOpenRoleValidator :: (AnUTxO era, ValidatorInfo lang era)
   }
 
 data CoinSelectionStrategy = CoinSelectionStrategy

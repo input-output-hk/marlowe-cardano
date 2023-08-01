@@ -32,7 +32,7 @@ import Contrib.Monad.Loops (MaxRetries (..), PrevResult (PrevResult), retryTillJ
 import Contrib.UnliftIO.Async.Pool qualified as UnlifIO
 import Contrib.UnliftIO.Control.Concurrent (threadDelayBy)
 import Control.Concurrent.STM (TVar, modifyTVar, modifyTVar', newTVarIO, readTVar, readTVarIO, retry, writeTVar)
-import Control.Exception (Exception, onException, throwIO)
+import Control.Exception (Exception, SomeException, onException, throwIO)
 import Control.Lens (makeLenses, view, views, (^.))
 import Control.Monad (unless, void, when)
 import Control.Monad.Error.Class (throwError)
@@ -56,7 +56,9 @@ import Data.Set qualified as S (singleton)
 import Data.Text qualified as Text
 import Data.Time.Units (Second)
 import Data.Traversable (for)
+import Debug.Trace (traceM)
 import GHC.Generics (Generic)
+import GHC.IO (catch)
 import GHC.IO.Handle.FD (stderr)
 import Language.Marlowe.CLI.Cardano.Api (toPlutusProtocolVersion, txOutValueValue)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage)
@@ -64,9 +66,9 @@ import Language.Marlowe.CLI.Cardano.Api.Value (lovelaceToPlutusValue, toPlutusVa
 import Language.Marlowe.CLI.IO (queryInEra)
 import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode)
 import Language.Marlowe.CLI.Test.Interpret (interpret)
-import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError (CliOperationFailed, TimeOutReached))
+import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError (..))
 import Language.Marlowe.CLI.Test.Runtime.Monitor qualified as Runtime.Monitor
-import Language.Marlowe.CLI.Test.Runtime.Types (RuntimeError (RuntimeRollbackError))
+import Language.Marlowe.CLI.Test.Runtime.Types (RuntimeError (..))
 import Language.Marlowe.CLI.Test.Runtime.Types qualified as R
 import Language.Marlowe.CLI.Test.Runtime.Types qualified as Runtime
 import Language.Marlowe.CLI.Test.TestCase (
@@ -407,12 +409,28 @@ interpretTest
 interpretTest testOperations (PrevResult possiblePrevResult) = do
   stateRef <- views envResource snd
   (testEnv, possibleRuntimeMonitor) <- setupTestInterpretEnv
-  let runInterpretLoop = do
-        liftIO $ unsafeExecIOStateT stateRef $ runExceptT $ flip runReaderT testEnv $ for testOperations \operation ->
-          interpret operation
+  let runInterpretLoop =
+        liftIO $ do
+          let loop =
+                unsafeExecIOStateT stateRef $ runExceptT $ flip runReaderT testEnv $ for testOperations \operation -> do
+                  traceM $ "Running the operation: " <> show operation
+                  interpret operation
+          loop `catch` \(err :: SomeException) -> do
+            pure $ Left $ TestExecutionFailed (show err) []
+
+  traceM "Running the loop"
   res <- case possibleRuntimeMonitor of
-    Just runtimeMonitor -> runInterpretLoop `race` liftIO (Runtime.runMonitor runtimeMonitor)
-    Nothing -> Left <$> runInterpretLoop
+    Just runtimeMonitor -> do
+      traceM "Running the loop with the runtime"
+      let runRuntimeMonitor = liftIO do
+            Runtime.runMonitor runtimeMonitor `catch` \(err :: SomeException) -> do
+              pure $ RuntimeExecutionFailure (show err)
+      runInterpretLoop `race` runRuntimeMonitor
+    Nothing -> do
+      traceM "Running the loop without runtime"
+      Left <$> runInterpretLoop
+  traceM "Loop finished with result:"
+  traceM $ show res
 
   let prevFailures = case either id id <$> possiblePrevResult of
         Just TestSucceeded{} -> []

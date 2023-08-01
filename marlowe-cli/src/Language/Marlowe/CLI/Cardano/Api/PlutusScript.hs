@@ -37,6 +37,28 @@ instance IsPlutusScriptLanguage PlutusScriptV1 where
 instance IsPlutusScriptLanguage PlutusScriptV2 where
   plutusScriptVersion = PlutusScriptV2
 
+fromTypedValidator :: forall lang t. TypedValidator' lang t -> PlutusScript lang
+fromTypedValidator (TypedValidatorV1 v) = fromV1TypedValidator v
+fromTypedValidator (TypedValidatorV2 v) = fromV2TypedValidator v
+
+fromV1TypedValidator :: V1.Scripts.TypedValidator t -> PlutusScript PlutusScriptV1
+fromV1TypedValidator =
+  PlutusScriptSerialised
+    . BSS.toShort
+    . BSL.toStrict
+    . serialise
+    . Plutus.getValidator
+    . V1.Scripts.validatorScript
+
+fromV2TypedValidator :: V2.Scripts.TypedValidator t -> PlutusScript PlutusScriptV2
+fromV2TypedValidator =
+  PlutusScriptSerialised
+    . BSS.toShort
+    . BSL.toStrict
+    . serialise
+    . Plutus.getValidator
+    . V2.Scripts.validatorScript
+
 toScript :: forall lang. (IsPlutusScriptLanguage lang) => PlutusScript lang -> Script lang
 toScript = PlutusScript (plutusScriptVersion :: PlutusScriptVersion lang)
 

@@ -17,25 +17,52 @@ common lang
   ghc-options:
     -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
     -Wincomplete-record-updates -Wredundant-constraints -Widentities
-    -Wunused-packages -Werror
+    -Werror
+
+-- -Wunused-packages -Werror
+
+flag defer-plugin-errors
+  description:
+    Defer errors from the plugin, useful for things like Haddock that can't handle it.
+
+  default:     False
+  manual:      True
+
+flag trace-plutus
+  description: Enable Plutus trace log for Marlowe validators.
+  default:     False
+  manual:      True
 
 library
   import:          lang
   hs-source-dirs:  src
-  exposed-modules: Language.Marlowe.Scripts.OpenRole
+
+  if !(impl(ghcjs) || os(ghcjs))
+    build-depends: plutus-tx-plugin ==1.0.0.0
+
   build-depends:
-    , aeson >=2 && <3
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
-    , containers ^>=0.6.5
     , marlowe-cardano
-    , mtl >=2.2 && <3
-    , newtype-generics ^>=0.6.2
     , plutus-ledger ^>=1.2
     , plutus-ledger-api ==1.0.0.1
     , plutus-script-utils ==1.2.0.0
     , plutus-tx ==1.0.0.0
-    , template-haskell >=2.16 && <3
-    , text >=1.2.4 && <2
-    , time >=1.9.3 && <2
-    , transformers ^>=0.5.6
+    , plutus-tx-plugin ==1.0.0.0
+    , serialise ^>=0.2.6
+
+  if flag(trace-plutus)
+    cpp-options: -DTRACE_PLUTUS
+
+  exposed-modules: Language.Marlowe.Scripts.OpenRole
+
+executable marlowe-scripts
+  import:         lang
+  hs-source-dirs: app
+  main-is:        Main.hs
+  build-depends:
+    , base >=4.9 && <5
+    , bytestring >=0.10.12 && <0.12
+    , marlowe-scripts
+
+  ghc-options:    -threaded

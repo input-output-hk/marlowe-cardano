@@ -32,6 +32,7 @@ import Data.List qualified as List
 import Data.Map (Map)
 import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Types (MarlowePlutusVersion, MarloweScriptsRefs, PrintStats)
+import Ledger.Orphans ()
 import Plutus.ApiCommon (ProtocolVersion)
 import Plutus.V1.Ledger.Api (CostModelParams)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig)
@@ -234,7 +235,7 @@ data InterpretState lang era = InterpretState
   { -- We should flatten these two contracInfo representations.
     _isCLIContracts :: CLIContracts lang era
   , _isKnownContracts :: Map ContractNickname Runtime.ContractInfo
-  , _isPublishedScripts :: Maybe (MarloweScriptsRefs MarlowePlutusVersion era)
+  , _isPublishedScripts :: Maybe (MarloweScriptsRefs lang era)
   , _isCurrencies :: Currencies
   , _isWallets :: Wallets era
   , _isLogs :: Logs

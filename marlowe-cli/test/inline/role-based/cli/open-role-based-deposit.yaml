@@ -1,0 +1,112 @@
+testName: Test outputing minted token to open role script
+
+operations:
+
+- CheckBalance:
+    wallet: Faucet
+    balance:
+      - [ADA, 0]
+
+- Mint:
+    issuer: Faucet
+    nickname: RoleTokenCurrency
+    minLovelace: 2000000
+    tokenDistribution:
+      - [{ script: OpenRole }, Depositor, 1]
+      - ["Faucet", '', 1]
+
+- Publish:
+    publishPermanently: true
+
+- CheckBalance:
+    wallet: Faucet
+    balance:
+      - [ADA, 0]
+      - [RoleTokenCurrency, '', 1]
+
+- Initialize:
+    minLovelace: 2000000
+    roleCurrency: RoleTokenCurrency
+    submitter: Faucet
+    source:
+      when:
+        - case:
+            party:
+              address: Faucet
+            deposits: 1
+            of_token:
+              currency_symbol: RoleTokenCurrency
+              token_name: ''
+            into_account:
+              role_token: Depositor
+          then:
+            when:
+              - case:
+                  party:
+                    role_token: Depositor
+                  deposits: 1000000
+                  of_token:
+                    currency_symbol: ''
+                    token_name: ''
+                  into_account:
+                    role_token: Depositor
+                then: close
+            timeout:
+              relative: +3600
+            timeout_continuation: close
+      timeout:
+        relative: +3600
+      timeout_continuation: close
+
+- Comment: Manually deposit thread token to the script
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: Depositor
+        that_deposits: 1000_000
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          role_token: Depositor
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun
+
+- Comment: Perform the actual deposit with the release of the thread token
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: Depositor
+        that_deposits: 1000_000
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          role_token: Depositor
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun:
+    submitter: Faucet
+
+- CheckBalance:
+    wallet: Faucet
+    balance:
+      - [ADA, -1]
+      - [RoleTokenCurrency, Depositor, 1]
+
+- Withdraw: Depositor
+
+- CheckBalance:
+    wallet: Faucet
+    balance:
+      - [ADA, 0]
+      - [RoleTokenCurrency, Depositor, 1]

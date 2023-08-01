@@ -9,11 +9,28 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Language.Marlowe.CLI.Test.CLI.Interpret where
 
-import Language.Marlowe.CLI.Transaction (findMarloweScriptsRefs, publishImpl)
-import Language.Marlowe.CLI.Types qualified as T
+import Language.Marlowe.CLI.Transaction (buildPayFromScript, findMarloweScriptsRefs, publishImpl, selectUtxosImpl)
+import Language.Marlowe.CLI.Types (
+  AnUTxO (..),
+  CoinSelectionStrategy (CoinSelectionStrategy),
+  MarloweScriptsRefs (..),
+  MarloweTransaction (..),
+  OutputQuery (..),
+  OutputQueryResult (..),
+  PayFromScript,
+  PrintStats (PrintStats),
+  PublishingStrategy (PublishAtAddress, PublishPermanently),
+  ValidatorInfo (..),
+  fromUTxO,
+  toSlotRoundedPlutusPOSIXTime,
+  unAnUTxO,
+  validatorInfoScriptOrReference,
+ )
 import Language.Marlowe.Client qualified as Client
 import Language.Marlowe.Core.V1.Semantics qualified as M
 import Language.Marlowe.Core.V1.Semantics.Types qualified as M
@@ -33,12 +50,32 @@ import Contrib.Data.List.Random (combinationWithRepetitions)
 import Control.Lens (assign, coerced, modifying, use, view)
 import Control.Monad (foldM, when)
 import Control.Monad.Error.Class (MonadError (throwError))
-import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Loops (untilJust)
+import Control.Lens (assign, coerced, modifying, use, view)
+import Data.Foldable (fold)
+import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
+import Data.Map.Strict qualified as Map
+import Data.Traversable (for)
+import Language.Marlowe.CLI.Test.Wallet.Types (
+  Currency (..),
+  CurrencyNickname,
+  SomeTxBody (..),
+  Wallet (Wallet, _waAddress, _waBalanceCheckBaseline, _waSigningKey, _waSubmittedTransactions),
+  WalletNickname (WalletNickname),
+  faucetNickname,
+ )
+import Ledger.Orphans ()
+
+import Contrib.Control.Monad.Except (note)
+import Contrib.Data.Foldable (anyFlipped, foldMapFlipped, foldMapMFlipped)
+import Contrib.Data.List.Random (combinationWithRepetitions)
+import Control.Monad (foldM, void, when)
+import Control.Monad.Error.Class (MonadError (throwError), liftEither)
 import Data.Aeson qualified as A
 import Data.Aeson.OneLine qualified as A
+import Data.Bifunctor qualified as Bifunctor
 import Data.Coerce (coerce)
 import Data.Foldable (fold)
+import Data.Foldable qualified as Foldable
 import Data.Functor ((<&>))
 import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
 import Data.List.NonEmpty qualified as List.NonEmpty
@@ -91,12 +128,13 @@ import Language.Marlowe.CLI.Test.Wallet.Interpret (
   decodeContractJSON,
   decodeInputJSON,
   fetchWalletValue,
-  findCurrency,
-  findWallet,
-  findWalletByAddress,
   findWalletByUniqueToken,
+  getCurrency,
   getFaucet,
   getSingletonCurrency,
+  getWallet,
+  getWalletByAddress,
+  getWalletByUniqueToken,
   updateWallet,
  )
 import Language.Marlowe.CLI.Test.Wallet.Types (
@@ -126,6 +164,8 @@ import Language.Marlowe.Cardano.Thread (
  )
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, State (..))
 import Language.Marlowe.Extended.V1 (ada)
+import Ledger.Tx.CardanoAPI (toCardanoAssetName)
+import Plutus.V2.Ledger.Api qualified as P
 import PlutusTx.AssocMap qualified as AM
 
 -- | Build the initial Marlowe state.
@@ -174,7 +214,7 @@ autoRunTransaction
   -> MarloweTransaction lang era
   -> Bool
   -> m (C.TxBody era, Maybe C.TxIn)
-autoRunTransaction currency defaultSubmitter prev curr@T.MarloweTransaction{..} invalid = do
+autoRunTransaction currency defaultSubmitter prev curr@MarloweTransaction{..} invalid = do
   let log' = logStoreLabeledMsg ("autoRunTransaction" :: String)
 
       getInputContentParty = \case
@@ -208,25 +248,69 @@ autoRunTransaction currency defaultSubmitter prev curr@T.MarloweTransaction{..} 
     , ("contract", A.toJSON mtContract)
     ]
 
-  (submitterNickname, Wallet address _ skey _ _) <-
+  connection <- view connectionL
+  era <- view eraL
+  (submitterNickname, Wallet address _ skey _, possiblePayFromOpenRole) <-
     foldM step Nothing mtInputs >>= \case
-      Nothing -> (defaultSubmitter,) <$> findWallet defaultSubmitter
-      Just (M.Address network address) -> (findWalletByAddress =<< rethrowCliError (marloweAddressToCardanoAddress network address))
+      Nothing -> do
+        wallet <- getWallet defaultSubmitter
+        pure (defaultSubmitter, wallet, Nothing)
+      Just (M.Address network address) -> do
+        addr <- rethrowCliError (marloweAddressToCardanoAddress network address)
+        (wn, w) <- getWalletByAddress addr
+        pure (wn, w, Nothing)
       Just (M.Role rn) -> case currency of
-        Just cn -> findWalletByUniqueToken cn rn
+        Just cn ->
+          findWalletByUniqueToken cn rn >>= \case
+            --  We have not found owner of the token. It seems that it should belong to open role validator.
+            --  So we need to:
+            --    * search for utxo under open role script which contains role token
+            --    * if found, use it as an extra input
+            --    * extract reference input to the open role script from the context and pass it up
+            Left err -> do
+              -- assign publishedScriptsL (Just marloweScriptRefs)
+              Currency{ccPolicyId = policyId} <- getCurrency cn
+              use publishedScriptsL >>= \case
+                Nothing ->
+                  throwError $
+                    testExecutionFailed' $
+                      "[autoRunTransaction] Contract requires role token but open role script was not published yet "
+                        <> "and role token is not possed the open role script and was not found between wallets: "
+                        <> err
+                Just MarloweScriptsRefs{mrOpenRoleValidator = (_, openRoleValidatorInfo)} -> do
+                  roleAssetName <-
+                    liftEither $ Bifunctor.first (const $ testExecutionFailed' "TokenName conversion error") (toCardanoAssetName rn)
+                  let openRoleAddress = viAddress openRoleValidatorInfo
+                      roleTokenAssetId = C.AssetId policyId roleAssetName
+                  runCli era "[AutoRun]" (selectUtxosImpl connection openRoleAddress (AssetOnly roleTokenAssetId)) >>= \case
+                    OutputQueryResult{oqrMatching = fromUTxO -> (AnUTxO (txIn, _) : _)} -> do
+                      let scriptOrReference = validatorInfoScriptOrReference openRoleValidatorInfo
+                          datum = P.Datum $ P.toBuiltinData ()
+                          redeemer = P.Redeemer $ P.toBuiltinData ()
+
+                          payFromOpenRole :: PayFromScript lang
+                          payFromOpenRole = buildPayFromScript scriptOrReference datum redeemer txIn
+
+                      wallet <- getWallet defaultSubmitter
+                      pure (defaultSubmitter, wallet, Just payFromOpenRole)
+                    _ ->
+                      throwError $
+                        testExecutionFailed'
+                          "[autoRunTransaction] Contract requires role token but neither open role script or wallet contains it."
+            Right (wn, w) -> do
+              pure (wn, w, Nothing)
         Nothing -> throwError $ testExecutionFailed' "[autoRunTransaction] Contract requires a role currency which was not specified."
 
   log' $ "Submitter: " <> case submitterNickname of WalletNickname n -> n
 
-  connection <- view connectionL
   submitMode <- view executionModeL <&> toSubmitMode
-  era <- view eraL
   txBody <-
     runCli era "[AutoRun] " $
       autoRunTransactionImpl
         connection
         prev
         curr
+        (Foldable.toList possiblePayFromOpenRole)
         address
         [skey]
         C.TxMetadataNone
@@ -252,15 +336,34 @@ autoRunTransaction currency defaultSubmitter prev curr@T.MarloweTransaction{..} 
     _ ->
       throwError $ testExecutionFailed' "[AutoRun] Multiple Marlowe outputs detected - unable to handle them yet."
 
+buildParty
+  :: (InterpretMonad env st m lang era)
+  => Maybe CurrencyNickname
+  -> PartyRef
+  -> m M.Party
+buildParty mRoleCurrency = \case
+  WalletRef nickname -> do
+    wallet <- getWallet nickname
+    uncurry M.Address <$> rethrowCliError (marloweAddressFromCardanoAddress (_waAddress wallet))
+  RoleRef token -> do
+    -- Cosistency check
+    currency <- case mRoleCurrency of
+      Nothing -> fst <$> getSingletonCurrency
+      Just cn -> pure cn
+    void $ getWalletByUniqueToken currency token
+    -- We are allowed to use this M.Role
+    pure $ M.Role token
+
 publishCurrentValidators
   :: forall env era lang st m
    . (C.IsShelleyBasedEra era)
+  => (IsPlutusScriptLanguage lang)
   => (InterpretMonad env st m lang era)
   => Maybe Bool
   -> Maybe WalletNickname
-  -> m (MarloweScriptsRefs MarlowePlutusVersion era)
+  -> m (MarloweScriptsRefs lang era)
 publishCurrentValidators publishPermanently possiblePublisher = do
-  Wallet{_waAddress, _waSigningKey} <- maybe getFaucet findWallet possiblePublisher
+  Wallet{_waAddress, _waSigningKey} <- maybe getFaucet getWallet possiblePublisher
   let publishingStrategy = case publishPermanently of
         Just True -> PublishPermanently NoStakeAddress
         _ -> PublishAtAddress _waAddress
@@ -270,8 +373,8 @@ publishCurrentValidators publishPermanently possiblePublisher = do
   let fnName :: String
       fnName = "publishCurrentValidators"
       logTraceMsg' = logStoreLabeledMsg fnName
-  runCli era fnName (findMarloweScriptsRefs connection publishingStrategy printStats) >>= \case
-    Just marloweScriptRefs@(MarloweScriptsRefs (AnUTxO (mTxIn, _), mv) (AnUTxO (pTxIn, _), pv)) -> do
+  runCli era fnName (findMarloweScriptsRefs @lang connection publishingStrategy printStats) >>= \case
+    Just marloweScriptRefs@(MarloweScriptsRefs (AnUTxO (mTxIn, _), mv) (AnUTxO (pTxIn, _), pv) (AnUTxO (orTxIn, _), orv)) -> do
       let logValidatorInfo ValidatorInfo{..} =
             logTraceMsg' $ Text.unpack (C.serialiseAddress viAddress)
 
@@ -280,6 +383,8 @@ publishCurrentValidators publishPermanently possiblePublisher = do
       logValidatorInfo mv
       logTraceMsg' $ "Payout reference: " <> show pTxIn
       logValidatorInfo pv
+      logTraceMsg' $ "Open role reference: " <> show orTxIn
+      logValidatorInfo orv
       pure marloweScriptRefs
     Nothing ->
       view executionModeL >>= \case
@@ -314,13 +419,14 @@ interpret co@Initialize{..} = do
 
   logStoreLabeledMsg co $ "Contract: " <> show (pretty marloweContract)
 
-  address <- _waAddress <$> findWallet submitterNickname
+  let submitterNickname = fromMaybe faucetNickname coSubmitter
+  address <- _waAddress <$> getWallet submitterNickname
   submitterParty <- uncurry M.Address <$> rethrowCliError (marloweAddressFromCardanoAddress address)
 
   currencySymbol <- case coRoleCurrency of
     Nothing -> pure P.adaSymbol
     Just nickname -> do
-      Currency{ccCurrencySymbol} <- findCurrency nickname
+      Currency{ccCurrencySymbol} <- getCurrency nickname
       pure ccCurrencySymbol
 
   let Lovelace minAda = coMinLovelace
@@ -334,7 +440,6 @@ interpret co@Initialize{..} = do
   LocalNodeConnectInfo{localNodeNetworkId} <- view connectionL
 
   let marloweValidators = fromMaybe (ReferenceCurrentValidators Nothing Nothing) coMarloweValidators
-
       mkContractNickname = do
         CLIContracts contracts <- use contractsL
         case coContractNickname of
@@ -459,8 +564,9 @@ interpret AutoRun{..} = do
                   txIn <- overAnyMarloweThread marloweThreadTxIn =<< mTh
                   pure (pmt, txIn)
                 invalid = Just True == coInvalid
+                defaultSubmitter = fromMaybe _ciSubmitter coSubmitter
 
-            (txBody, mTxIn) <- autoRunTransaction _ciCurrency _ciSubmitter prev mt invalid
+            (txBody, mTxIn) <- autoRunTransaction _ciCurrency defaultSubmitter prev mt invalid
             case (mTh, mTxIn) of
               (Nothing, Nothing) -> throwError $ testExecutionFailed' "[AutoRun] Creation of the Marlowe thread failed."
               (Nothing, Just txIn) -> pure $ Just $ anyMarloweThreadCreated (mt, txBody) txIn
@@ -481,8 +587,8 @@ interpret co@Withdraw{..} =
     marloweThread <- case _ciThread of
       Just marloweThread -> pure marloweThread
       Nothing -> throwLabeledError co $ testExecutionFailed' "Contract is not on the chain yet so there are not payouts as well."
-    wallet@Wallet{_waAddress, _waSigningKey} <- findWallet coWalletNickname
-    Currency{ccCurrencySymbol} <- maybe (snd <$> getSingletonCurrency) findCurrency _ciCurrency
+    wallet@Wallet{_waAddress, _waSigningKey} <- getWallet coWalletNickname
+    Currency{ccCurrencySymbol} <- maybe (snd <$> getSingletonCurrency) getCurrency _ciCurrency
     onChainValue <- fetchWalletValue wallet
     let roles =
           P.flattenValue onChainValue `foldMapFlipped` \(cs, tn, _) ->
@@ -522,17 +628,17 @@ interpret co@Withdraw{..} =
             filter (flip elem txIds . txInId . fst . unAnUTxO) utxos
 
       let anyWithdrawalsExist =
-            possibleWithdrawals `anyFlipped` \(T.MarloweTransaction{..}, _) ->
+            possibleWithdrawals `anyFlipped` \(MarloweTransaction{..}, _) ->
               elem role . mapMaybe paymentRole $ mtPayments
 
       if anyWithdrawalsExist
         then do
           let roleToken = M.Token ccCurrencySymbol role
-              T.MarloweTransaction{mtRoleValidator} :| _ = _ciPlan
+              MarloweTransaction{mtRoleValidator} :| _ = _ciPlan
 
           logStoreLabeledMsg co $
             "Withdrawing funds for role " <> show role <> " after application of inputs: " <> do
-              let inputs = foldMapFlipped possibleWithdrawals \(T.MarloweTransaction{mtInputs}, _) -> mtInputs
+              let inputs = foldMapFlipped possibleWithdrawals \(MarloweTransaction{mtInputs}, _) -> mtInputs
               show inputs
           era <- view eraL
           txBody <-

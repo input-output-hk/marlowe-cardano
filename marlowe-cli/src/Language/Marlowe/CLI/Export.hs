@@ -46,7 +46,8 @@ module Language.Marlowe.CLI.Export (
 
   -- * Role Validator
   exportRoleValidator,
-  roleValidatorInfo,
+  payoutValidatorInfo,
+  openRoleValidatorInfo,
 
   -- * Role Datum
   buildRoleDatum,
@@ -120,6 +121,8 @@ import Language.Marlowe.CLI.Cardano.Api qualified as C
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript qualified as PlutusScript
 import Language.Marlowe.Scripts.Types (marloweTxInputsFromInputs)
+import Language.Marlowe.CLI.Plutus.Script.Utils (TypedValidator' (TypedValidatorV2))
+import Language.Marlowe.Scripts.OpenRole (openRoleValidator)
 import Plutus.ApiCommon (ProtocolVersion)
 import Plutus.V1.Ledger.Api (DatumHash (..), toBuiltin, toData)
 
@@ -587,7 +590,7 @@ exportRoleAddress
 exportRoleAddress = exportAddress rolePayoutValidatorBytes
 
 -- | Current Marlowe validator information.
-roleValidatorInfo
+payoutValidatorInfo
   :: ScriptDataSupportedInEra era
   -- ^ The era to build he validator in.
   -> ProtocolVersion
@@ -599,7 +602,22 @@ roleValidatorInfo
   -- ^ The stake address.
   -> Either CliError (ValidatorInfo PlutusScriptV2 era)
   -- ^ The validator information, or an error message.
-roleValidatorInfo = validatorInfo' (PlutusScriptSerialised rolePayoutValidatorBytes) Nothing
+payoutValidatorInfo = validatorInfo' (fromV2TypedValidator rolePayoutValidator) Nothing
+
+-- | Open role validator
+openRoleValidatorInfo
+  :: ScriptDataSupportedInEra era
+  -- ^ The era to build he validator in.
+  -> ProtocolVersion
+  -> CostModelParams
+  -- ^ The cost model parameters.
+  -> NetworkId
+  -- ^ The network ID.
+  -> StakeAddressReference
+  -- ^ The stake address.
+  -> Either CliError (ValidatorInfo PlutusScriptV2 era)
+  -- ^ The validator information, or an error message.
+openRoleValidatorInfo = validatorInfo' (fromV2TypedValidator openRoleValidator) Nothing
 
 -- | Export to a file the role validator information about a Marlowe contract.
 exportRoleValidator

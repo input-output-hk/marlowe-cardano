@@ -54,7 +54,6 @@ import Language.Marlowe.CLI.Test.Operation.Aeson qualified as Operation
 import Language.Marlowe.CLI.Test.Wallet.Types (Currencies, CurrencyNickname, WalletNickname, Wallets)
 import Language.Marlowe.CLI.Test.Wallet.Types qualified as Wallet
 import Language.Marlowe.CLI.Types (
-  MarlowePlutusVersion,
   MarloweScriptsRefs,
   MarloweTransaction (MarloweTransaction, mtInputs),
   PrintStats,
@@ -183,6 +182,9 @@ data CLIOperation
   | AutoRun
       { coContractNickname :: Maybe ContractNickname
       , coInvalid :: Maybe Bool
+      , coSubmitter :: Maybe WalletNickname
+      -- ^ In the case of open roles we are not able to pick a wallet.
+      -- We fallback to the initial contract submitter as a default.
       }
   | Withdraw
       { coContractNickname :: Maybe ContractNickname
@@ -266,7 +268,7 @@ class HasInterpretState st lang era | st -> lang era where
   walletsL :: Lens' st (Wallets era)
   currenciesL :: Lens' st Currencies
   contractsL :: Lens' st (CLIContracts lang era)
-  publishedScriptsL :: Lens' st (Maybe (MarloweScriptsRefs MarlowePlutusVersion era))
+  publishedScriptsL :: Lens' st (Maybe (MarloweScriptsRefs lang era))
 
 class HasInterpretEnv env lang era | env -> lang era where
   connectionL :: Lens' env (LocalNodeConnectInfo CardanoMode)

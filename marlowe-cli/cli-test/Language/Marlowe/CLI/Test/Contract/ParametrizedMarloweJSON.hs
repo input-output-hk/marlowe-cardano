@@ -63,7 +63,7 @@ instance ToJSON ParametrizedMarloweJSON where
 rewriteCurrencyRefs :: Currencies -> ParametrizedMarloweJSON -> Either CurrencyNickname ParametrizedMarloweJSON
 rewriteCurrencyRefs (Currencies currencies) (ParametrizedMarloweJSON json) = ParametrizedMarloweJSON <$> A.rewriteBottomUp rewrite json
   where
-    findCurrency nickname = case M.lookup nickname currencies of
+    getCurrency nickname = case M.lookup nickname currencies of
       Nothing -> Left nickname
       Just currency -> pure currency
     rewrite = \case
@@ -72,7 +72,7 @@ rewriteCurrencyRefs (Currencies currencies) (ParametrizedMarloweJSON json) = Par
           [("currency_symbol", A.String ""), ("token_name", A.String "")] -> pure obj
           [("currency_symbol", A.String currencyNickname), ("token_name", tokenName)] -> do
             let nickname = Text.unpack currencyNickname
-            Currency{ccCurrencySymbol = PV.CurrencySymbol cs} <- findCurrency (CurrencyNickname nickname)
+            Currency{ccCurrencySymbol = PV.CurrencySymbol cs} <- getCurrency (CurrencyNickname nickname)
             pure $
               A.object
                 [ ("currency_symbol", A.toJSON cs)
@@ -89,12 +89,12 @@ rewritePartyRefs
   :: Marlowe.Network -> Wallets era -> ParametrizedMarloweJSON -> Either (RewritePartyError era) ParametrizedMarloweJSON
 rewritePartyRefs network wallets (ParametrizedMarloweJSON json) = ParametrizedMarloweJSON <$> A.rewriteBottomUp rewrite json
   where
-    findWallet nickname = case M.lookup nickname $ getAllWallets wallets of
+    getWallet nickname = case M.lookup nickname $ getAllWallets wallets of
       Nothing -> Left $ WalletNotFound nickname
       Just wallet -> pure wallet
     rewrite = \case
       A.Object (KeyMap.toList -> [("address", A.String walletNickname)]) -> do
-        wallet <- findWallet (WalletNickname $ Text.unpack walletNickname)
+        wallet <- getWallet (WalletNickname $ Text.unpack walletNickname)
         let address = toPlutusAddress . _waAddress $ wallet
         pure $ A.toJSON (Marlowe.Address network address)
       v -> do

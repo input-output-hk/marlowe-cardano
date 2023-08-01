@@ -35,6 +35,8 @@ import Language.Marlowe.CLI.Test.Wallet.Interpret (
   findWallet,
   findWalletByUniqueToken,
   getSingletonCurrency,
+  getWallet,
+  getWalletByUniqueToken,
  )
 import Language.Marlowe.CLI.Test.Wallet.Types (
   Asset (Asset),
@@ -265,7 +267,7 @@ buildParty
   -> m M.Party
 buildParty mRoleCurrency = \case
   WalletRef nickname -> do
-    wallet <- findWallet nickname
+    wallet <- getWallet nickname
     uncurry M.Address <$> rethrowCliError (marloweAddressFromCardanoAddress (_waAddress wallet))
   KnownAddress (n, a) -> pure $ M.Address n a
   RoleRef token -> do
@@ -273,7 +275,7 @@ buildParty mRoleCurrency = \case
     currency <- case mRoleCurrency of
       Nothing -> fst <$> getSingletonCurrency
       Just cn -> pure cn
-    void $ findWalletByUniqueToken currency token
+    void $ getWalletByUniqueToken currency token
     -- We are allowed to use this M.Role
     pure $ M.Role token
 

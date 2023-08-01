@@ -93,7 +93,7 @@ import Data.Functor ((<&>))
 import Data.List (groupBy, sortBy)
 import Data.Map.Strict qualified as M (toList)
 import Data.Maybe (catMaybes, fromMaybe)
-import Data.Set qualified as S (singleton)
+import Data.Set qualified as S (fromList, singleton)
 import Data.Time.Units (Second)
 import Data.Traversable (for)
 import Data.Tuple.Extra (uncurry3)
@@ -106,7 +106,8 @@ import Language.Marlowe.CLI.Export (
   buildRoleDatum,
   buildRoleRedeemer,
   marloweValidatorInfo,
-  roleValidatorInfo,
+  openRoleValidatorInfo,
+  payoutValidatorInfo,
  )
 import Language.Marlowe.CLI.IO (
   decodeFileStrict,
@@ -139,6 +140,7 @@ import Language.Marlowe.CLI.Types (
   MarlowePlutusVersion,
   MarloweScriptsRefs (MarloweScriptsRefs, mrMarloweValidator, mrRolePayoutValidator),
   MarloweTransaction (..),
+  PayFromScript (..),
   PrintStats (PrintStats),
   PublishingStrategy,
   RedeemerInfo (..),
@@ -151,6 +153,7 @@ import Language.Marlowe.CLI.Types (
   askEra,
   defaultCoinSelectionStrategy,
   doWithCardanoEra,
+  mrOpenRoleValidator,
   submitModeFromTimeout,
   toAddressAny',
   toShelleyAddress,
@@ -324,11 +327,12 @@ initializeTransaction connection marloweParams slotConfig protocolVersion costMo
 
 -- | Create an initial Marlowe transaction.
 initializeTransactionImpl
-  :: forall m era
+  :: forall lang m era
    . (MonadError CliError m)
   => (MonadIO m)
   => (C.IsShelleyBasedEra era)
   => (MonadReader (CliEnv era) m)
+  => (IsPlutusScriptLanguage lang)
   => MarloweParams
   -- ^ The Marlowe contract parameters.
   -> SlotConfig
@@ -344,23 +348,25 @@ initializeTransactionImpl
   -- ^ The initial Marlowe contract.
   -> State
   -- ^ The initial Marlowe state.
-  -> Maybe (MarloweScriptsRefs MarlowePlutusVersion era)
+  -> Maybe (MarloweScriptsRefs lang era)
   -> Bool
   -- ^ Whether to deeply merkleize the contract.
   -> Bool
   -- ^ Whether to print statistics about the validator.
-  -> m (MarloweTransaction MarlowePlutusVersion era)
+  -> m (MarloweTransaction lang era)
   -- ^ Action to return a MarloweTransaction
-initializeTransactionImpl marloweParams mtSlotConfig protocolVersion costModelParams network stake mtContract mtState refs merkleize printStats =
-  do
+initializeTransactionImpl marloweParams mtSlotConfig protocolVersion costModelParams network stake mtContract mtState refs merkleize printStats = case plutusScriptVersion @lang of
+  PlutusScriptV1 -> throwError "Plutus Script V1 not supported"
+  PlutusScriptV2 -> do
     era <- askEra
     let mtRolesCurrency = rolesCurrency marloweParams
-    (mtValidator, mtRoleValidator) <-
+    (mtValidator, mtRoleValidator, mtOpenRoleValidator) <-
       case refs of
         Nothing -> do
           mv <- liftCli $ marloweValidatorInfo era protocolVersion costModelParams network stake
-          rv <- liftCli $ roleValidatorInfo era protocolVersion costModelParams network stake
-          pure (mv, rv)
+          rv <- liftCli $ payoutValidatorInfo era protocolVersion costModelParams network stake
+          ov <- liftCli $ openRoleValidatorInfo era protocolVersion costModelParams network stake
+          pure (mv, rv, ov)
         Just MarloweScriptsRefs{..} -> do
           let vi = snd mrMarloweValidator
           vi' <-
@@ -374,7 +380,7 @@ initializeTransactionImpl marloweParams mtSlotConfig protocolVersion costModelPa
                           CS.ShelleyAddress n p $
                             toShelleyStakeReference stake
                     }
-          pure (vi', snd mrRolePayoutValidator)
+          pure (vi', snd mrRolePayoutValidator, snd mrOpenRoleValidator)
     let ValidatorInfo{..} = mtValidator
         mtContinuations = mempty
         mtRange = Nothing
@@ -427,10 +433,11 @@ initializeTransactionUsingScriptRefsImpl marloweParams mtSlotConfig scriptRefs s
                         (toShelleyStakeReference stake)
               pure $ vi{viAddress = viAddress'}
 
-        MarloweScriptsRefs{mrMarloweValidator = (_, mv), mrRolePayoutValidator = (_, pv)} = scriptRefs
+        MarloweScriptsRefs{mrMarloweValidator = (_, mv), mrRolePayoutValidator = (_, pv), mrOpenRoleValidator = (_, ov)} = scriptRefs
 
     mtValidator <- setupStaking mv
     mtRoleValidator <- setupStaking pv
+    mtOpenRoleValidator <- setupStaking ov
 
     let ValidatorInfo{..} = mtValidator
         mtContinuations = mempty
@@ -922,6 +929,7 @@ autoRunTransaction connection marloweInBundle marloweOutFile changeAddress signi
               connection
               marloweInBundle'
               marloweOut''
+              []
               changeAddress
               signingKeys
               metadata
@@ -951,6 +959,7 @@ autoRunTransactionImpl
   -- ^ The JSON file with the Marlowe initial state and initial contract, unless the transaction opens the contract.
   -> MarloweTransaction lang era
   -- ^ The JSON file with the Marlowe inputs, final state, and final contract.
+  -> [PayFromScript lang]
   -> AddressInEra era
   -- ^ The change address.
   -> [SomePaymentSigningKey]
@@ -964,7 +973,7 @@ autoRunTransactionImpl
   -- ^ Assertion that the transaction is invalid.
   -> m (TxBody era)
   -- ^ Action to build the transaction body.
-autoRunTransactionImpl connection marloweInBundle marloweOut' changeAddress signingKeys metadata submitMode printStats invalid =
+autoRunTransactionImpl connection marloweInBundle marloweOut' extraSpend changeAddress signingKeys metadata submitMode printStats invalid =
   do
     -- Fetch the protocol parameters.
     protocol <- queryInEra connection QueryProtocolParameters
@@ -979,7 +988,7 @@ autoRunTransactionImpl connection marloweInBundle marloweOut' changeAddress sign
           (spend, datumOutputs) <-
             case marloweInBundle of
               -- This is a creation transaction.
-              Nothing -> pure ([], [])
+              Nothing -> pure (extraSpend, [])
               -- This is a non-creation transaction.
               Just (marloweIn, spend) -> do
                 -- Find the results of the previous transaction.
@@ -1010,7 +1019,7 @@ autoRunTransactionImpl connection marloweInBundle marloweOut' changeAddress sign
                         | input <- mtInputs marloweOut
                         ]
                 -- Return the spending witness and the extra datum for demerkleization.
-                pure ([spend'], merkles)
+                pure (spend' : extraSpend, merkles)
           let -- Compute the script address.
               scriptAddress = viAddress $ mtValidator marloweOut
               -- Build the datum output to the script.
@@ -1065,14 +1074,13 @@ autoRunTransactionImpl connection marloweInBundle marloweOut' changeAddress sign
                 | txIn' `elem` fmap txIn spend = txOutValueToValue value
                 | otherwise = mempty
           -- Compute the value coming from the script.
-          incoming <-
+          incoming <- do
+            let txIns = S.fromList $ spend <&> \PayFromScript{txIn} -> txIn
             fmap (mconcat . fmap incomingValue . M.toList . unUTxO)
               . queryInEra connection
               . QueryUTxO
-              . QueryUTxOByAddress
-              . S.singleton
-              . toAddressAny'
-              $ scriptAddress
+              . QueryUTxOByTxIn
+              $ txIns
 
           -- Build the outputs for role tokens.
           roleOutputs <-
