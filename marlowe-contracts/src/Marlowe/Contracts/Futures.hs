@@ -5,15 +5,19 @@ module Marlowe.Contracts.Futures (
   future,
 ) where
 
-import Data.List (mapAccumL, sortBy)
+import Control.Monad (foldM)
+import Data.Functor (void)
+import Data.List (sortOn)
+import Data.Ord (Down (Down))
 import Data.String (IsString (..))
 import Data.Text (pack)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
+import Language.Marlowe.Object.Bundler
 import Language.Marlowe.Object.Types
 
 -- | Future on the exchange rate of ADA/USD
 --
---  A Future is an obligation for the parties involed in the
+--  A Future is an obligation for the parties involved in the
 --  contract to exchange assets at maturity for the predefined
 --  value.
 --
@@ -38,25 +42,19 @@ future
   -> Value
   -- ^ Initial margin requirements (in Lovelace)
   -> Timeout
-  -- ^ Initial margin setup timout
+  -- ^ Initial margin setup timeout
   -> [Timeout]
   -- ^ Margin call dates
   -> Timeout
   -- ^ Delivery date
-  -> ObjectBundle
+  -> Bundler ()
   -- ^ Future contract
-future buyer seller forwardPrice initialMargin initialFixing callDates deliveryDate =
-  let firstMarginUpdate = Label $ "updateMargin-" <> pack (show $ utcTimeToPOSIXSeconds $ unTimeout $ minimum callDates)
-      initialMarginAccounts = depositInitialMargin buyer seller initialMargin initialFixing (ContractRef firstMarginUpdate)
-      updateMarginAccounts = maintenanceMarginCalls buyer seller forwardPrice callDates "settlement"
-      contractSettlement = settlement buyer seller forwardPrice deliveryDate Close
-   in ObjectBundle $
-        [ LabelledObject "dirRate" ActionType $ Choice dirRate [Bound 0 100_000_000_000]
-        , LabelledObject "invRate" ActionType $ Choice invRate [Bound 0 100_000_000_000]
-        , LabelledObject "settlement" ContractType contractSettlement
-        ]
-          <> updateMarginAccounts
-          <> [LabelledObject "initialMarginDeposit" ContractType initialMarginAccounts]
+future buyer seller forwardPrice initialMargin initialFixing callDates deliveryDate = do
+  dirRateAction <- defineAction "dirRate" $ Choice dirRate [Bound 0 100_000_000_000]
+  invRateAction <- defineAction "invRate" $ Choice invRate [Bound 0 100_000_000_000]
+  void . defineContract "initialMarginDeposit" . depositInitialMargin buyer seller initialMargin initialFixing
+    =<< maintenanceMarginCalls dirRateAction invRateAction buyer seller forwardPrice callDates
+    =<< defineContract "settlement" (settlement dirRateAction invRateAction buyer seller forwardPrice deliveryDate Close)
 
 -- | Initial deposits into margin accounts
 depositInitialMargin
@@ -72,13 +70,17 @@ depositInitialMargin
   -- ^ Continuation contract
   -> Contract
   -- ^ Composed contract
-depositInitialMargin buyer seller initalMargin initialFixing continuation =
-  deposit buyer buyer (ada, initalMargin) initialFixing Close $
-    deposit seller seller (ada, initalMargin) initialFixing Close continuation
+depositInitialMargin buyer seller initialMargin initialFixing continuation =
+  deposit buyer buyer (ada, initialMargin) initialFixing Close $
+    deposit seller seller (ada, initialMargin) initialFixing Close continuation
 
 -- | Maintenance of the margin accounts
 maintenanceMarginCalls
-  :: Party
+  :: Action
+  -- ^ DirRateAction
+  -> Action
+  -- ^ InvRateAction
+  -> Party
   -- ^ Buyer
   -> Party
   -- ^ Seller
@@ -86,15 +88,15 @@ maintenanceMarginCalls
   -- ^ Forward price
   -> [Timeout]
   -- ^ Call dates
-  -> Label
+  -> Contract
   -- ^ Continuation contract
-  -> [LabelledObject]
+  -> Bundler Contract
   -- ^ Composed contract
-maintenanceMarginCalls buyer seller forwardPrice callDates cont =
-  snd $ mapAccumL updateMarginAccounts cont (sortBy (flip compare) callDates)
+maintenanceMarginCalls dirRateAction invRateAction buyer seller forwardPrice callDates cont =
+  foldM updateMarginAccounts cont $ sortOn Down callDates
   where
-    updateMarginAccounts :: Label -> Timeout -> (Label, LabelledObject)
-    updateMarginAccounts contLabel timeout =
+    updateMarginAccounts :: Contract -> Timeout -> Bundler Contract
+    updateMarginAccounts continuation timeout = do
       let invId = toValueId "i" timeout
           dirId = toValueId "d" timeout
           amount =
@@ -106,17 +108,15 @@ maintenanceMarginCalls buyer seller forwardPrice callDates cont =
               (MulValue contractSize scale)
           liquidation a b = pay a b (ada, AvailableMoney a ada) Close
           newLabel = Label $ "updateMargin-" <> pack (show $ utcTimeToPOSIXSeconds $ unTimeout timeout)
-       in ( newLabel
-          , LabelledObject newLabel ContractType $
-              dirOracle timeout $
-                invOracle timeout $
-                  Let dirId (ChoiceValue dirRate) $
-                    Let invId (ChoiceValue invRate) $
-                      If
-                        (ValueGE (UseValue invId) forwardPrice)
-                        (updateMarginAccount seller amount timeout (liquidation seller buyer) (ContractRef contLabel))
-                        (updateMarginAccount buyer (NegValue amount) timeout (liquidation buyer seller) (ContractRef contLabel))
-          )
+      defineContract newLabel $
+        dirOracle dirRateAction timeout $
+          invOracle invRateAction timeout $
+            Let dirId (ChoiceValue dirRate) $
+              Let invId (ChoiceValue invRate) $
+                If
+                  (ValueGE (UseValue invId) forwardPrice)
+                  (updateMarginAccount seller amount timeout (liquidation seller buyer) continuation)
+                  (updateMarginAccount buyer (NegValue amount) timeout (liquidation buyer seller) continuation)
 
     updateMarginAccount :: Party -> Value -> Timeout -> Contract -> Contract -> Contract
     updateMarginAccount party value timeout liquidation continuation =
@@ -132,7 +132,11 @@ toValueId name _ = fromString name
 --  At delivery, if spot price is bigger than forward the seller transfers
 --  the difference to the buyer and vice versa
 settlement
-  :: Party
+  :: Action
+  -- ^ Dir rate action
+  -> Action
+  -- ^ Inv rate action
+  -> Party
   -- ^ Buyer
   -> Party
   -- ^ Seller
@@ -144,7 +148,7 @@ settlement
   -- ^ Continuation contract
   -> Contract
   -- ^ Composed contract
-settlement buyer seller forwardPrice deliveryDate continuation =
+settlement dirRateAction invRateAction buyer seller forwardPrice deliveryDate continuation =
   let invId = toValueId "i" deliveryDate
       dirId = toValueId "d" deliveryDate
       amount =
@@ -154,8 +158,8 @@ settlement buyer seller forwardPrice deliveryDate continuation =
               (SubValue (UseValue invId) forwardPrice)
           )
           (MulValue contractSize scale)
-   in dirOracle deliveryDate $
-        invOracle deliveryDate $
+   in dirOracle dirRateAction deliveryDate $
+        invOracle invRateAction deliveryDate $
           Let dirId (ChoiceValue dirRate) $
             Let invId (ChoiceValue invRate) $
               If
@@ -180,17 +184,11 @@ invRate = ChoiceId "i" kraken -- ADA/USD
 ada :: Token
 ada = Token "" ""
 
-dirOracle :: Timeout -> Contract -> Contract
-dirOracle = When [Case dirRateAction Close]
+dirOracle :: Action -> Timeout -> Contract -> Contract
+dirOracle dirRateAction = When [Case dirRateAction Close]
 
-invOracle :: Timeout -> Contract -> Contract
-invOracle = When [Case invRateAction Close]
-
-dirRateAction :: Action
-dirRateAction = ActionRef "dirRate"
-
-invRateAction :: Action
-invRateAction = ActionRef "invRate"
+invOracle :: Action -> Timeout -> Contract -> Contract
+invOracle invRateAction = When [Case invRateAction Close]
 
 -- | Pay
 pay

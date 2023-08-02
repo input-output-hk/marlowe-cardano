@@ -1,6 +1,7 @@
 module Marlowe.Contracts.UTC.Futures where
 
 import Data.Time.Clock (UTCTime)
+import Language.Marlowe.Object.Bundler
 import Language.Marlowe.Object.Types
 import Marlowe.Contracts.Futures as C
 
@@ -19,7 +20,7 @@ future
   -- ^ Margin call dates
   -> UTCTime
   -- ^ Delivery date
-  -> ObjectBundle
+  -> Bundler ()
   -- ^ Future contract
 future buyer seller forwardPrice initialMargin initialFixing callDates deliveryDate =
   C.future
