@@ -7,22 +7,23 @@
 module Main
 where
 
+import Data.Time.Clock (UTCTime (..), addUTCTime, getCurrentTime, secondsToNominalDiffTime)
 import qualified Language.Marlowe.Object.Archive as A
 import qualified Language.Marlowe.Object.Types as O
 import Marlowe.Contracts.UTC.Futures (future)
 
 w1Pk, w2Pk :: O.Party
-w1Pk = O.Role "party1"
-w2Pk = O.Role "party2"
+w1Pk = O.Role "p"
+w2Pk = O.Role "q"
 
-futureBundle :: O.ObjectBundle
-futureBundle =
+futureBundle :: UTCTime -> O.ObjectBundle
+futureBundle now =
   future
     w1Pk
     w2Pk
     (O.Constant 80_000_000) -- 80 ADA
     (O.Constant 8_000_000) -- 8 ADA
-    (read "2024-03-31 08:00:00.000000 UTC")
+    (addUTCTime (secondsToNominalDiffTime 600) now)
     [ read "2024-09-01 08:30:00.000000 UTC"
     , read "2024-09-02 08:30:00.000000 UTC"
     , read "2024-09-03 08:30:00.000000 UTC"
@@ -39,7 +40,7 @@ futureBundle =
     (read "2025-03-31 09:00:00.000000 UTC")
 
 main :: IO ()
-main = A.packArchive "futureBundle.zip" (O.Label "initialMarginDeposit") $ write futureBundle
+main = getCurrentTime >>= A.packArchive "futureBundle.zip" (O.Label "initialMarginDeposit") . write . futureBundle
 
 write :: O.ObjectBundle -> (O.LabelledObject -> IO ()) -> IO ()
 write bundle f = mapM_ f (O.getObjects bundle)
