@@ -110,6 +110,7 @@ executable load-future-contract
     , base >=4.9 && <5
     , marlowe-contracts
     , marlowe-object
+    , time
 
   ghc-options:
     -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns

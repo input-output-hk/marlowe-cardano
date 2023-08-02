@@ -95,8 +95,8 @@ maintenanceMarginCalls buyer seller forwardPrice callDates cont =
   where
     updateMarginAccounts :: Label -> Timeout -> (Label, LabelledObject)
     updateMarginAccounts contLabel timeout =
-      let invId = toValueId "inv-spot" timeout
-          dirId = toValueId "dir-spot" timeout
+      let invId = toValueId "i" timeout
+          dirId = toValueId "d" timeout
           amount =
             DivValue
               ( MulValue
@@ -126,7 +126,7 @@ maintenanceMarginCalls buyer seller forwardPrice callDates cont =
         (deposit party party (ada, value) timeout liquidation continuation)
 
 toValueId :: String -> Timeout -> ValueId
-toValueId name timeout = fromString $ name ++ "@" ++ show timeout
+toValueId name _ = fromString name
 
 -- | Settlement of the Future contract
 --  At delivery, if spot price is bigger than forward the seller transfers
@@ -145,8 +145,8 @@ settlement
   -> Contract
   -- ^ Composed contract
 settlement buyer seller forwardPrice deliveryDate continuation =
-  let invId = toValueId "inv-spot" deliveryDate
-      dirId = toValueId "dir-spot" deliveryDate
+  let invId = toValueId "i" deliveryDate
+      dirId = toValueId "d" deliveryDate
       amount =
         DivValue
           ( MulValue
@@ -170,12 +170,12 @@ contractSize = Constant 100
 
 -- | Role for oracle
 kraken :: Party
-kraken = Role "kraken"
+kraken = Role "k"
 
 -- | Exchange rates
 dirRate, invRate :: ChoiceId
-dirRate = ChoiceId "dir-adausd" kraken -- USD/ADA
-invRate = ChoiceId "inv-adausd" kraken -- ADA/USD
+dirRate = ChoiceId "d" kraken -- USD/ADA
+invRate = ChoiceId "i" kraken -- ADA/USD
 
 ada :: Token
 ada = Token "" ""
