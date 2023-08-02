@@ -124,22 +124,22 @@ instance Num Timeout where
       . unTimeout
 
 instance Binary Timeout where
-  put = put @Integer . floor . (* 1000000) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds . unTimeout
-  get = Timeout . posixSecondsToUTCTime . secondsToNominalDiffTime . (/ 1000000) . fromInteger <$> get
+  put = put @Integer . floor . (* 1000) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds . unTimeout
+  get = Timeout . posixSecondsToUTCTime . secondsToNominalDiffTime . (/ 1000) . fromInteger <$> get
 
 instance ToJSON Timeout where
-  toJSON = toJSON @Integer . floor . (* 1000000) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds . unTimeout
+  toJSON = toJSON @Integer . floor . (* 1000) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds . unTimeout
 
 instance FromJSON Timeout where
-  parseJSON v = Timeout . posixSecondsToUTCTime . secondsToNominalDiffTime . (/ 1000000) . fromInteger <$> parseJSON v
+  parseJSON v = Timeout . posixSecondsToUTCTime . secondsToNominalDiffTime . (/ 1000) . fromInteger <$> parseJSON v
 
 -- | Convert a timeout to its core representation.
 toCoreTimeout :: Timeout -> Core.Timeout
-toCoreTimeout = PV2.POSIXTime . floor . (* 1000000) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds . unTimeout
+toCoreTimeout = PV2.POSIXTime . floor . (* 1000) . utcTimeToPOSIXSeconds . unTimeout
 
 -- | Convert a core timeout to its object representation.
 fromCoreTimeout :: Core.Timeout -> Timeout
-fromCoreTimeout = Timeout . posixSecondsToUTCTime . secondsToNominalDiffTime . (/ 1000000) . fromInteger . getPOSIXTime
+fromCoreTimeout = Timeout . posixSecondsToUTCTime . secondsToNominalDiffTime . (/ 1000) . fromInteger . getPOSIXTime
 
 -- | A case in a When contract, consisting of an action and a continuation contract (either an inline contract or a hash
 -- in the case of a merkleized contract).
