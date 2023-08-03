@@ -9,7 +9,6 @@ import Control.Monad (foldM)
 import Data.Functor (void)
 import Data.List (sortOn)
 import Data.Ord (Down (Down))
-import Data.String (IsString (..))
 import Data.Text (pack)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Language.Marlowe.Object.Bundler
@@ -97,26 +96,22 @@ maintenanceMarginCalls dirRateAction invRateAction buyer seller forwardPrice cal
   where
     updateMarginAccounts :: Contract -> Timeout -> Bundler Contract
     updateMarginAccounts continuation timeout = do
-      let invId = toValueId "i" timeout
-          dirId = toValueId "d" timeout
-          amount =
+      let amount =
             DivValue
               ( MulValue
-                  (UseValue dirId)
-                  (SubValue (UseValue invId) forwardPrice)
+                  (ChoiceValue dirRate)
+                  (SubValue (ChoiceValue invRate) forwardPrice)
               )
               (MulValue contractSize scale)
           liquidation a b = pay a b (ada, AvailableMoney a ada) Close
           newLabel = Label $ "updateMargin-" <> pack (show $ utcTimeToPOSIXSeconds $ unTimeout timeout)
       defineContract newLabel $
-        dirOracle dirRateAction timeout $
-          invOracle invRateAction timeout $
-            Let dirId (ChoiceValue dirRate) $
-              Let invId (ChoiceValue invRate) $
-                If
-                  (ValueGE (UseValue invId) forwardPrice)
-                  (updateMarginAccount seller amount timeout (liquidation seller buyer) continuation)
-                  (updateMarginAccount buyer (NegValue amount) timeout (liquidation buyer seller) continuation)
+        oracle dirRateAction timeout $
+          oracle invRateAction timeout $
+            If
+              (ValueGE (ChoiceValue invRate) forwardPrice)
+              (updateMarginAccount seller amount timeout (liquidation seller buyer) continuation)
+              (updateMarginAccount buyer (NegValue amount) timeout (liquidation buyer seller) continuation)
 
     updateMarginAccount :: Party -> Value -> Timeout -> Contract -> Contract -> Contract
     updateMarginAccount party value timeout liquidation continuation =
@@ -124,9 +119,6 @@ maintenanceMarginCalls dirRateAction invRateAction buyer seller forwardPrice cal
         (ValueGT (AvailableMoney party ada) value)
         continuation
         (deposit party party (ada, value) timeout liquidation continuation)
-
-toValueId :: String -> Timeout -> ValueId
-toValueId name _ = fromString name
 
 -- | Settlement of the Future contract
 --  At delivery, if spot price is bigger than forward the seller transfers
@@ -149,8 +141,8 @@ settlement
   -> Contract
   -- ^ Composed contract
 settlement dirRateAction invRateAction buyer seller forwardPrice deliveryDate continuation =
-  let invId = toValueId "i" deliveryDate
-      dirId = toValueId "d" deliveryDate
+  let invId = ValueId "i"
+      dirId = ValueId "d"
       amount =
         DivValue
           ( MulValue
@@ -158,8 +150,8 @@ settlement dirRateAction invRateAction buyer seller forwardPrice deliveryDate co
               (SubValue (UseValue invId) forwardPrice)
           )
           (MulValue contractSize scale)
-   in dirOracle dirRateAction deliveryDate $
-        invOracle invRateAction deliveryDate $
+   in oracle dirRateAction deliveryDate $
+        oracle invRateAction deliveryDate $
           Let dirId (ChoiceValue dirRate) $
             Let invId (ChoiceValue invRate) $
               If
@@ -184,11 +176,8 @@ invRate = ChoiceId "i" kraken -- ADA/USD
 ada :: Token
 ada = Token "" ""
 
-dirOracle :: Action -> Timeout -> Contract -> Contract
-dirOracle dirRateAction = When [Case dirRateAction Close]
-
-invOracle :: Action -> Timeout -> Contract -> Contract
-invOracle invRateAction = When [Case invRateAction Close]
+oracle :: Action -> Timeout -> Contract -> Contract
+oracle action timeout cont = When [Case action cont] timeout Close
 
 -- | Pay
 pay
