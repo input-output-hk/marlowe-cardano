@@ -425,7 +425,7 @@ maximumFee C.ProtocolParameters{..} =
           (Just C.ExecutionUnitPrices{..}, Just C.ExecutionUnits{..}) ->
             priceExecutionSteps * fromIntegral executionSteps + priceExecutionMemory * fromIntegral executionMemory
           _ -> 0
-   in txFee + round executionFee
+   in txFee + ceiling executionFee
 
 -- | Calculate the minimum UTxO requirement for a value.
 --   We must pack the address, datum and value into a dummy TxOut along with
