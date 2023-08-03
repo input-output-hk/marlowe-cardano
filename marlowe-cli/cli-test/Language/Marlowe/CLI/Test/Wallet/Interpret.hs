@@ -81,6 +81,7 @@ import Language.Marlowe.CLI.Types (
   CurrencyIssuer (CurrencyIssuer),
   PayFromScript,
   SigningKeyFile (..),
+  TokensRecipient (..),
   defaultCoinSelectionStrategy,
   validatorAddress,
  )
@@ -89,6 +90,7 @@ import Plutus.V1.Ledger.Api (CurrencySymbol, TokenName)
 import Plutus.V1.Ledger.Value qualified as P
 
 import Cardano.Api.Byron (SerialiseAsRawBytes (..))
+import Cardano.Api.Shelley qualified as CAS
 import Contrib.Control.Monad.Except (note)
 import Contrib.Data.Foldable (foldMapFlipped, ifoldMapMFlipped)
 import Control.Category ((>>>))
@@ -110,7 +112,7 @@ import Data.Maybe (catMaybes, fromMaybe, isJust)
 import Data.Set qualified as Set
 import Data.Text qualified as Text
 import Data.Tuple.Extra (uncurry3)
-import Language.Marlowe.CLI.Cardano.Api.PlutusScript (fromV2TypedValidator)
+import Language.Marlowe.CLI.Cardano.Api.PlutusScript (fromV2Validator)
 import Language.Marlowe.CLI.Cardano.Api.Value qualified as CV
 import Language.Marlowe.CLI.IO (queryInEra, readSigningKey)
 import Language.Marlowe.CLI.Run (toCardanoPolicyId)
@@ -134,6 +136,7 @@ import Plutus.V1.Ledger.Value qualified as PV
 import Plutus.V2.Ledger.Api (MintingPolicyHash (..))
 import Plutus.V2.Ledger.Api qualified as P
 import PlutusTx.AssocMap qualified as AssocMap
+import PlutusTx.Builtins qualified as P
 import PlutusTx.Monoid (Group (inv))
 import System.IO.Temp (emptySystemTempFile, emptyTempFile)
 
@@ -193,7 +196,7 @@ openRoleValidatorAddress = do
   era <- view eraL
   connection <- view connectionL
   let LocalNodeConnectInfo{localNodeNetworkId} = connection
-  pure $ validatorAddress (fromV2TypedValidator openRoleValidator) era localNodeNetworkId NoStakeAddress
+  pure $ validatorAddress (fromV2Validator openRoleValidator) era localNodeNetworkId NoStakeAddress
 
 fetchWalletUTxOs
   :: (InterpretMonad env st m era)
@@ -599,7 +602,8 @@ interpret so@Mint{..} = do
         testExecutionFailed'
           "Current minting strategy mints unique currency per issuer. You can't mint multiple currencies with the same issuer."
 
-  error "FAILURE"
+-- <<<<<<< HEAD
+--   error "FAILURE"
 -- <<<<<<< HEAD
 --   Wallet issuerAddress _ issuerSigningKey _ _ :: Wallet era <- findWallet issuerNickname
 --   tokenDistribution <- forM woTokenDistribution \(TokenAssignment recipient tokens) -> do
@@ -624,6 +628,20 @@ interpret so@Mint{..} = do
 --         openRoleValidatorAddress
 --     pure (tokenName, amount, destAddress, Just woMinLovelace)
 -- >>>>>>> 909fe1a17 (Ongoing work on open role integartion into the test suite)
+-- second change
+-- =======
+--   Wallet issuerAddress _ issuerSigningKey _ :: Wallet era <- getWallet issuerNickname
+--   tokenDistribution <- forM woTokenDistribution \(TokenAssignment recipient tokenName amount) -> do
+--     recipient' <- case recipient of
+--       WalletRecipient walletNickname -> do
+--         Wallet destAddress _ _ _ <- getWallet walletNickname
+--         pure $ RegularAddressRecipient destAddress
+--       ScriptRecipient OpenRoleScript -> do
+--         let datum = CAS.fromPlutusData . P.toData $ P.emptyByteString
+--         addr <- openRoleValidatorAddress
+--         pure $ ScriptAddressRecipient addr datum
+--     pure (tokenName, amount, recipient', Just woMinLovelace)
+-- >>>>>>> 27b967b02 (Fully integarte open roles into the testing DSL with full e2e scenario.)
 
   logStoreLabeledMsg so $
     "Minting currency " <> coerce woCurrencyNickname <> " with tokens distribution: " <> show woTokenDistribution
@@ -656,7 +674,7 @@ interpret so@Mint{..} = do
   modifying currenciesL \(Currencies currencies') ->
     Currencies $ Map.insert woCurrencyNickname currency currencies'
 interpret SplitWallet{..} = do
-  Wallet address _ skey _ :: Wallet era <- getWallet woWalletNickname
+  Wallet address _ skey _ _ :: Wallet era <- findWallet woWalletNickname
   connection <- view connectionL
   submitMode <- view executionModeL <&> toSubmitMode
   let values = [C.lovelaceToValue v | v <- woUTxOs]
@@ -711,6 +729,7 @@ interpret wo@ReturnFunds{} = do
             C.TxMetadataNone
             False
             False
+            Nothing
 
       logStoreLabeledMsg wo $ "Returning funds to the faucet: " <> show total
 
@@ -781,7 +800,11 @@ createWallet _ connection = do
   skey <- generateSigningKey AsPaymentKey
   let vkey = getVerificationKey skey
       LocalNodeConnectInfo{localNodeNetworkId} = connection
-      (address :: AddressInEra era) = makeShelleyAddressInEra localNodeNetworkId (PaymentCredentialByKey (verificationKeyHash vkey)) NoStakeAddress
+      (address :: AddressInEra era) =
+        makeShelleyAddressInEra
+          localNodeNetworkId
+          (PaymentCredentialByKey (verificationKeyHash vkey))
+          NoStakeAddress
   pure $ emptyWallet address (Left skey)
 
 fundWallets

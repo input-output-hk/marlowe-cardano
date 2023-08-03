@@ -18,7 +18,7 @@
 #
 cabal run marlowe-cli -- \
   --babbage-era test \
-  --testnet-magic 2 \
+  --testnet-magic 1 \
   --concurrent-runners 8 \
   --socket-path "$CARDANO_NODE_SOCKET_PATH" \
   --faucet-skey-file "$FAUCET_SKEY_FILE" \
@@ -27,8 +27,11 @@ cabal run marlowe-cli -- \
   --chain-seek-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
   --chain-seek-cmd-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
   --write-to-json-file report.json \
-  --max-retries 3 \
+  --max-retries 2 \
   --stream-json \
+  ./test/inline/role-based/cli/open-role-based-deposit.yaml \
+  ./test/operations/publish.yaml \
+  ./test/operations/mint-to-open-role-script.yaml \
   ./test/inline/role-based/cli/contract-for-differences-with-oracle.yaml \
   ./test/inline/role-based/cli/contract-for-differences.yaml \
   ./test/inline/role-based/cli/coupon-bond-guaranteed.yaml \

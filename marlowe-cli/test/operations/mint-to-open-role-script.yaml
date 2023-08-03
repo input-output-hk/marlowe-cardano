@@ -1,0 +1,10 @@
+testName: Test minting to open role script
+
+operations:
+
+- Mint:
+    issuer: Faucet
+    nickname: RoleTokenCurrency
+    minLovelace: 2000000
+    tokenDistribution:
+      - [{ script: OpenRole }, Depositor, 1]

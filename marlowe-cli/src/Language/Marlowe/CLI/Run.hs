@@ -1104,6 +1104,7 @@ autoRunTransactionImpl connection marloweInBundle marloweOut' extraSpend changeA
               continue
               changeAddress
               defaultCoinSelectionStrategy
+              Nothing
           -- Build the transaction body.
           body <-
             buildBody
@@ -1320,6 +1321,7 @@ autoWithdrawFundsImpl connection token validatorInfo range changeAddress signing
         Nothing
         changeAddress
         defaultCoinSelectionStrategy
+        Nothing
     -- Build the transaction body.
     body <-
       buildBody

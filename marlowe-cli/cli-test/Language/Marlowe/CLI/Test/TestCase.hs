@@ -46,6 +46,7 @@ operationFaucetBudget (TxCostsUpperBounds _ publishingMinAda) = lovelaceFromInt 
         then lovelaceToInt minLovelace * length tokenDistribution
         else 0
     operationBudget' (ShouldFail operation) = operationBudget' operation
+    operationBudget' (CLIOperation Publish{}) = lovelaceToInt publishingMinAda
     -- FIXME: Publishing should be managed by the test runner probably separately...
     operationBudget' (CLIOperation Initialize{coMarloweValidators = marloweValidators}) =
       case marloweValidators of

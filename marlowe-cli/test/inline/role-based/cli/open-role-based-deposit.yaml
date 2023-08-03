@@ -1,4 +1,4 @@
-testName: Test outputing minted token to open role script
+testName: Test role token release from a open role script on deposit
 
 operations:
 
@@ -13,20 +13,23 @@ operations:
     minLovelace: 2000000
     tokenDistribution:
       - [{ script: OpenRole }, Depositor, 1]
-      - ["Faucet", '', 1]
-
-- Publish:
-    publishPermanently: true
+      - [{ wallet: Faucet }, '', 1]
 
 - CheckBalance:
     wallet: Faucet
     balance:
-      - [ADA, 0]
+      # Temporarly spent on the Depositor token min UTxO
+      - [ADA, -2]
       - [RoleTokenCurrency, '', 1]
+
+- Comment: "To simplify the flow we manually deposit the \"thread token\" into the contract. We put it under the user account so at the end of the contract we can easily calculate the expected balance."
 
 - Initialize:
     minLovelace: 2000000
     roleCurrency: RoleTokenCurrency
+    marloweValidators:
+      referenceCurrent:
+        permanently: true
     submitter: Faucet
     source:
       when:
@@ -38,19 +41,26 @@ operations:
               currency_symbol: RoleTokenCurrency
               token_name: ''
             into_account:
-              role_token: Depositor
+              address: Faucet
           then:
             when:
               - case:
                   party:
                     role_token: Depositor
-                  deposits: 1000000
+                  deposits: 2000000
                   of_token:
                     currency_symbol: ''
                     token_name: ''
                   into_account:
                     role_token: Depositor
-                then: close
+                then:
+                  when:
+                    - case:
+                        notify_if: true
+                      then: close
+                  timeout:
+                    relative: +3600
+                  timeout_continuation: close
             timeout:
               relative: +3600
             timeout_continuation: close
@@ -58,13 +68,45 @@ operations:
         relative: +3600
       timeout_continuation: close
 
+- AutoRun
+
+- CheckBalance:
+    wallet: Faucet
+    balance:
+      - [ADA, -4]
+      - [RoleTokenCurrency, '', 1]
+
 - Comment: Manually deposit thread token to the script
 
 - Prepare:
     inputs:
       - input_from_party:
+          address: Faucet
+        that_deposits: 1
+        of_token:
+          currency_symbol: RoleTokenCurrency
+          token_name: ''
+        into_account:
+          address: Faucet
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun
+
+- CheckBalance:
+    wallet: Faucet
+    balance:
+      - [ADA, -4]
+
+- Comment: Perform the actual deposit which releases the role token
+
+- Prepare:
+    inputs:
+      - input_from_party:
           role_token: Depositor
-        that_deposits: 1000_000
+        that_deposits: 2000000
         of_token:
           currency_symbol: ''
           token_name: ''
@@ -77,18 +119,17 @@ operations:
 
 - AutoRun
 
-- Comment: Perform the actual deposit with the release of the thread token
+- Comment: Wallet should get back `Depositor` token for the 2 ADA deposit. Wallet should also get back 2 ADA which was locked by the OpenRole script. In other words after this operation wallet balance should have additional token in it.
+
+- CheckBalance:
+    wallet: Faucet
+    balance:
+      - [ADA, -4]
+      - [RoleTokenCurrency, Depositor, 1]
 
 - Prepare:
     inputs:
-      - input_from_party:
-          role_token: Depositor
-        that_deposits: 1000_000
-        of_token:
-          currency_symbol: ''
-          token_name: ''
-        into_account:
-          role_token: Depositor
+      - "input_notify"
     minimumTime:
       relative: -15
     maximumTime:
@@ -97,16 +138,22 @@ operations:
 - AutoRun:
     submitter: Faucet
 
+- Comment: After contract closure but before the withdrawal we should get back the 2 ADA locked in the the Marlowe script.
+
 - CheckBalance:
     wallet: Faucet
     balance:
-      - [ADA, -1]
+      - [ADA, -2]
+      - [RoleTokenCurrency, '', 1]
       - [RoleTokenCurrency, Depositor, 1]
 
-- Withdraw: Depositor
+- Withdraw: Faucet
+
+- Comment: After the final withdrawal the `Faucet` wallet should have all the tokens and deposited money back.
 
 - CheckBalance:
     wallet: Faucet
     balance:
       - [ADA, 0]
+      - [RoleTokenCurrency, '', 1]
       - [RoleTokenCurrency, Depositor, 1]

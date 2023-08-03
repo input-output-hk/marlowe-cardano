@@ -1,0 +1,6 @@
+testName: Test publishing permanently our scripts
+
+operations:
+
+- Publish:
+    publishPermanently: true

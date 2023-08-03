@@ -191,6 +191,7 @@ import Cardano.Ledger.Alonzo.Scripts (ExUnits (..))
 import Cardano.Ledger.Alonzo.TxWitness (Redeemers (..))
 import Cardano.Slotting.EpochInfo.API (epochInfoRange, epochInfoSlotToUTCTime, hoistEpochInfo)
 import Contrib.Control.Concurrent (threadDelay)
+import Contrib.Data.Foldable (foldMapFlipped, foldlMFlipped, tillFirstMatch)
 import Control.Arrow ((***))
 import Control.Error (MaybeT (MaybeT, runMaybeT), hoistMaybe, note)
 import Control.Monad (forM, forM_, unless, void, when)
@@ -234,7 +235,6 @@ import Language.Marlowe.CLI.Cardano.Api (
 import Language.Marlowe.CLI.Cardano.Api qualified as MCA
 import Language.Marlowe.CLI.Cardano.Api.Address.ProofOfBurn (permanentPublisher)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript as PS
-import Language.Marlowe.CLI.Data.Foldable (tillFirstMatch)
 import Language.Marlowe.CLI.Export (buildValidatorInfo)
 import Language.Marlowe.CLI.IO (
   decodeFileBuiltinData,
@@ -268,6 +268,7 @@ import Language.Marlowe.CLI.Types (
   SigningKeyFile,
   SomePaymentSigningKey,
   SubmitMode (DoSubmit, DontSubmit),
+  TokensRecipient (..),
   TxBodyFile (TxBodyFile),
   ValidatorInfo (ValidatorInfo, viHash, viScript),
   askEra,
@@ -299,6 +300,7 @@ import Ouroboros.Consensus.HardFork.History (interpreterToEpochInfo)
 import Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult (..))
 import Plutus.V1.Ledger.Api (Datum (..), POSIXTime (..), Redeemer (..), TokenName (..), fromBuiltin, toData)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
+import Plutus.V2.Ledger.Api (fromData)
 import System.IO (hPrint, hPutStrLn, stderr)
 
 -- | Build a non-Marlowe transaction.
@@ -516,6 +518,7 @@ buildFaucetImpl connection possibleValues destAddresses fundAddress fundSigningK
             Nothing
             fundAddress
             coinSelectionStrategy
+            Nothing
         pure (i, o, fundAddress)
 
     body <-
@@ -651,8 +654,15 @@ buildMinting connection signingKeyFile mintingAction metadataFile expires change
     Left _ -> do
       throwError "Token provider set is empty."
     Right tokenDistribution -> do
+-- MERGING
+-- <<<<<<< HEAD
       -- Simplified version of the token distribution, where all tokens are minted at once.
       pure $ Mint currencyIssuer $ tokenDistribution <&> \(name, amount, addr) -> (addr, Nothing, [(name, amount)])
+-- =======
+--       pure $
+--         Mint currencyIssuer $
+--           tokenDistribution <&> \(name, amount, addr) -> (name, amount, RegularAddressRecipient addr, Nothing)
+-- >>>>>>> 27b967b02 (Fully integarte open roles into the testing DSL with full e2e scenario.)
   metadataJson <- sequence $ decodeFileStrict <$> metadataFile
   metadata <- forM metadataJson \case
     A.Object metadataProps -> pure metadataProps
@@ -721,14 +731,19 @@ buildMintingImpl connection mintingAction metadataProps expires submitMode (Prin
             then Just <$> makeBalancedTxOut era protocol addr Nothing assetsValue ReferenceScriptNone
             else pure Nothing
 
-        outputs' <- fmap NonEmpty.toList $ for tokenDistribution' \(address, mintedValue, minAda) -> case minAda of
-          Just minAda' -> do
-            let adaValue = C.lovelaceToValue minAda'
-                value = adaValue <> mintedValue
-            makeTxOut' address Nothing value
-          Nothing ->
-            makeBalancedTxOut era protocol address Nothing mintedValue ReferenceScriptNone
+        outputs' <- fmap NonEmpty.toList $ for tokenDistribution' \(recipient, mintedValue, minAda) -> do
+          let (address, possibleDatum) = case recipient of
+                RegularAddressRecipient addr -> (addr, Nothing :: (Maybe Datum))
+                ScriptAddressRecipient addr scriptData -> do
+                  (addr, fromData . C.toPlutusData $ scriptData)
 
+          case minAda of
+            Just minAda' -> do
+              let adaValue = C.lovelaceToValue minAda'
+                  value = adaValue <> mintedValue
+              makeTxOut' address possibleDatum value
+            Nothing ->
+              makeBalancedTxOut era protocol address possibleDatum mintedValue ReferenceScriptNone
         pure (map fst utxos, assetsOutputs <> outputs', [signingKey], foldMap (\(_, m, _) -> m) tokenDistribution')
       BurnAll _ providers -> do
         let signingKeys' = signingKey : (NonEmpty.toList . fmap snd $ providers)
@@ -814,6 +829,7 @@ buildMintingImpl connection mintingAction metadataProps expires submitMode (Prin
         metadata'
         printStats
         False
+        Nothing
 
     body' <- case submitMode of
       DontSubmit -> pure body
@@ -991,29 +1007,25 @@ buildPublishingImpl connection signingKey expires changeAddress publishingStrate
   PlutusScriptV2 -> do
     pm <- buildPublishScript @lang connection (fromV2TypedValidator marloweValidator) publishingStrategy
     pp <- buildPublishScript @lang connection (fromV2TypedValidator rolePayoutValidator) publishingStrategy
-    po <- buildPublishScript @lang connection (fromV2TypedValidator openRoleValidator) publishingStrategy
+    po <- buildPublishScript @lang connection (fromV2Validator openRoleValidator) publishingStrategy
 
     let buildPublishScriptTxOut PublishScript{psMinAda, psPublisher, psReferenceValidator} = do
           referenceScript <- buildReferenceScript $ viScript psReferenceValidator
           makeTxOut psPublisher Nothing (lovelaceToValue psMinAda) referenceScript
-        pause = 30 :: Second
 
     initialUTxOs <-
-      fmap (filter include . M.toList . unUTxO)
-        . queryInEra connection
+      queryInEra connection
         . QueryUTxO
         . QueryUTxOByAddress
         . S.singleton
         $ toAddressAny' changeAddress
 
-    -- Currently all three scripts don't fit into a single transaction, so we publish them separately.
-    txBodies <- foldlM [[pm, pp], [po]] [] \txScripts acc -> do
-      utxos <- foldMapFlipped consumedUTxOs \(txBodyContent, _) -> do
-        let TxBodyContent{txIns, txInsCollateral, txOuts} = txBodyContent
-            txIns' = txInsCollateral <> txIns
+    let initial :: (UTxO era, [TxBody era])
+        initial = (initialUTxOs, [])
 
-      outputs <- for txScripts buildPublishScriptTxOut
-
+    -- TODO: we should publish only scripts which are not present already on the chain for a given address/strategy
+    txBodies <- fmap (reverse . snd) $ foldlMFlipped initial [[pm, pp], [po]] \(utxos, txBodies) publishScripts -> do
+      outputs <- for publishScripts buildPublishScriptTxOut
       (_, inputs, outputs') <-
         selectCoins
           connection
@@ -1024,7 +1036,7 @@ buildPublishingImpl connection signingKey expires changeAddress publishingStrate
           coinSelectionStrategy
           (Just utxos)
 
-      txInfo <-
+      (txBodyContent, txBody) <-
         buildBodyWithContent
           connection
           ([] :: [PayFromScript lang])
@@ -1040,10 +1052,19 @@ buildPublishingImpl connection signingKey expires changeAddress publishingStrate
           TxMetadataNone
           printStats
           False
+          (Just utxos)
 
-      liftIO $ threadDelay pause
-
-      pure txInfo : acc
+      let TxBodyContent{txIns, txInsCollateral, txOuts} = txBodyContent
+          txIns' = do
+            let collateralTxIns = case txInsCollateral of
+                  TxInsCollateralNone -> []
+                  TxInsCollateral _ txInsCollateral' -> txInsCollateral'
+            collateralTxIns <> (fst <$> txIns)
+          txId = C.getTxId txBody
+          newUtxos = Map.fromList $ foldMapFlipped (zip [0 ..] txOuts) \(idx, txOut@(C.TxOut addr _ _ _)) ->
+            [(C.TxIn txId (C.TxIx idx), C.toCtxUTxOTxOut txOut) | addr == changeAddress]
+          utxos' = unUTxO utxos `Map.withoutKeys` S.fromList txIns' <> newUtxos
+      pure (UTxO utxos', txBody : txBodies)
 
     let serialiseAddress = T.unpack . C.serialiseAddress
 
@@ -1143,7 +1164,7 @@ publishImpl
   -> CoinSelectionStrategy
   -> Second
   -> PrintStats
-  -> m (MarloweScriptsRefs lang era)
+  -> m ([TxBody era], MarloweScriptsRefs lang era)
 publishImpl connection signingKey expires changeAddress publishingStrategy coinSelectionStrategy timeout printStats = do
   (txBodies, _) <-
     buildPublishingImpl
@@ -1156,10 +1177,14 @@ publishImpl connection signingKey expires changeAddress publishingStrategy coinS
       coinSelectionStrategy
       printStats
 
-  for_ txBodies \txBody -> submitBody connection txBody [signingKey] timeout
-  findMarloweScriptsRefs connection publishingStrategy printStats >>= \case
-    Nothing -> throwError . CliError $ "Unable to find just published scripts by tx:" <> show (map getTxId txBodies)
-    Just m -> pure m
+  for_ txBodies \txBody ->
+    submitBody connection txBody [signingKey] timeout
+
+  refs <-
+    findMarloweScriptsRefs connection publishingStrategy printStats >>= \case
+      Nothing -> throwError . CliError $ "Unable to find just published scripts by tx:" <> show (map getTxId txBodies)
+      Just m -> pure m
+  pure (txBodies, refs)
 
 findScriptRef
   :: forall lang era m
@@ -1493,6 +1518,7 @@ buildBody connection payFromScript payToScript extraInputs inputs outputs collat
       metadata
       printStats
       invalid
+      Nothing
 
 -- We need the `TxContext` when we want to resubmit a failing transaction with adjusted fees.
 buildBodyWithContent
@@ -1529,9 +1555,10 @@ buildBodyWithContent
   -- ^ Whether to print statistics about the transaction.
   -> Bool
   -- ^ Assertion that the transaction is invalid.
+  -> Maybe (UTxO era)
   -> m (TxBodyContent C.BuildTx era, TxBody era)
   -- ^ The action to build the transaction body together with context.
-buildBodyWithContent connection payFromScript payToScript extraInputs inputs outputs collateral changeAddress slotRange extraSigners mintValue metadata printStats invalid =
+buildBodyWithContent connection payFromScript payToScript extraInputs inputs outputs collateral changeAddress slotRange extraSigners mintValue metadata printStats invalid possibleUTxOs =
   do
     start <- queryAny connection QuerySystemStart
     history <- queryAny connection $ QueryEraHistory CardanoModeIsMultiEra
@@ -1579,18 +1606,19 @@ buildBodyWithContent connection payFromScript payToScript extraInputs inputs out
 
     let txInsReferencesToTxIns C.TxInsReferenceNone = []
         txInsReferencesToTxIns (C.TxInsReference _ refs) = refs
-
         refTxIns = txInsReferencesToTxIns txInsReference
-
         allTxIns = (fst <$> txIns) <> refTxIns
 
     -- This UTxO set is used for change calcuation.
-    utxos <-
-      queryInEra connection
-        . QueryUTxO
-        . QueryUTxOByTxIn
-        . S.fromList
-        $ allTxIns
+    utxos <- case possibleUTxOs of
+      Just utxos -> pure utxos
+      Nothing ->
+        queryInEra connection
+          . QueryUTxO
+          . QueryUTxOByTxIn
+          . S.fromList
+          $ allTxIns
+
     let eraInMode = toEraInMode era
 
     let foundTxIns = map fst . M.toList . unUTxO $ utxos
@@ -2170,7 +2198,9 @@ selectCoins
   -- ^ The change address.
   -> CoinSelectionStrategy
   -- ^ Indicate which `UTxO`'s to ignore.
-  -> Maybe [(TxIn, TxOut CtxUTxO era)]
+  -> Maybe (UTxO era)
+  -- ^ A possible whole selection set of `UTxO`'s.
+  -- If provided we still apply the `CoinSelectionStrategy` over this set.
   -> m (TxIn, [TxIn], [TxOut CtxTx era])
   -- ^ Action select the collateral, inputs, and outputs.
 selectCoins connection inputs outputs pay changeAddress CoinSelectionStrategy{..} possibleUTxOs =
@@ -2184,12 +2214,10 @@ selectCoins connection inputs outputs pay changeAddress CoinSelectionStrategy{..
             && notElem txIn csPreserveTxIns
 
     -- Find the UTxOs that we have to work with.
-    utxos <- case possibleUTxOs of
+    utxos <- fmap (filter include . M.toList . unUTxO) $ case possibleUTxOs of
       Just utxos -> pure utxos
       Nothing ->
-        do
-          fmap (filter include . M.toList . unUTxO)
-          . queryInEra connection
+        queryInEra connection
           . QueryUTxO
           . QueryUTxOByAddress
           . S.singleton

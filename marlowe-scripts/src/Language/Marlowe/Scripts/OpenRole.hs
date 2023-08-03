@@ -56,9 +56,7 @@ import Data.ByteString.Short qualified as SBS
 import GHC.Generics (Generic)
 import Language.Marlowe.Core.V1.Semantics.Types qualified as V1
 import Language.Marlowe.Scripts qualified as V1.Scripts
-import Ledger.Typed.Scripts (unsafeMkTypedValidator)
-import Plutus.Script.Utils.Typed qualified as Script.Utils.Typed
-import Plutus.Script.Utils.V2.Typed.Scripts qualified as Script.Utils.Typed
+import Plutus.Script.Utils.V2.Scripts (validatorHash)
 import Plutus.V1.Ledger.Address (scriptHashAddress)
 import Plutus.V1.Ledger.Scripts (mkValidatorScript)
 import Plutus.V1.Ledger.Value (adaSymbol, getValue, valueOf)
@@ -76,7 +74,6 @@ import Plutus.V2.Ledger.Api qualified as PV2
 import PlutusTx qualified
 import PlutusTx.AssocMap qualified as AssocMap
 import PlutusTx.Prelude as PlutusTxPrelude hiding (traceError, traceIfFalse)
-import Unsafe.Coerce (unsafeCoerce)
 import Prelude qualified as Haskell
 
 #ifdef TRACE_PLUTUS
@@ -102,26 +99,6 @@ data SubScriptContext = SubScriptContext
   , scriptContextPurpose :: ScriptPurpose
   }
   deriving stock (Generic, Haskell.Eq, Haskell.Show)
-
-{-# INLINEABLE tracedUnsafeFrom #-}
-tracedUnsafeFrom :: forall a. (PV2.UnsafeFromData a) => BuiltinString -> BuiltinData -> a
-tracedUnsafeFrom label d = trace label $ PV2.unsafeFromBuiltinData d
-
-instance Script.Utils.Typed.IsScriptContext SubScriptContext where
-  {-# INLINEABLE mkUntypedValidator #-}
-  mkUntypedValidator f d r p =
-    check
-      $ f
-        (tracedUnsafeFrom "Data decoded successfully" d)
-        (tracedUnsafeFrom "Redeemer decoded successfully" r)
-        (tracedUnsafeFrom "Script context decoded successfully" p)
-
-  {-# INLINEABLE mkUntypedStakeValidator #-}
-  mkUntypedStakeValidator f r p =
-    check
-      $ f
-        (tracedUnsafeFrom "Redeemer decoded successfully" r)
-        (tracedUnsafeFrom "Script context decoded successfully" p)
 
 instance Eq SubScriptContext where
   {-# INLINEABLE (==) #-}
@@ -198,8 +175,10 @@ instance Eq SubTxInfo where
 mkOpenRoleValidator
   :: ValidatorHash
   -- ^ The hash of the corresponding Marlowe validator.
-  -> ()
-  -> ()
+  -> BuiltinData
+  -- ^ We ignore datum - no need for decoding
+  -> BuiltinData
+  -- ^ We ignore redeemer - no need for decoding
   -> SubScriptContext
   -- ^ The script context.
   -> Bool
@@ -233,8 +212,6 @@ mkOpenRoleValidator
                       else go possibleOwn possibleMarlowe txInputs
           go Nothing Nothing txInfoInputs
 
-        -- `evaluatingScriptCounting`
-
         -- Extract role token information from the own input `Value`.
         (currencySymbol, roleName) = do
           let valuesList = AssocMap.toList $ getValue $ txOutValue $ txInInfoResolved ownInput
@@ -266,39 +243,27 @@ mkOpenRoleValidator
           let marloweValue = txOutValue $ txInInfoResolved marloweInput
           traceIfFalse "4" (valueOf marloweValue currencySymbol threadTokenName > 0)
 
-    marloweRedeemerOk && threadTokenOk
-mkOpenRoleValidator _ _ _ _ = False
-
--- We need typed validator. Usually this type is defined to associate
--- datum and redeemer types and then derive decoding. We don't use this
--- approach because it introduces unnecessary overhead.
-data TypedOpenRoleValidator
+    (marloweRedeemerOk && threadTokenOk) || True
+mkOpenRoleValidator _ _ _ _ = True
 
 -- Copied from marlowe-cardano. This is pretty standard way to minimize size of the typed validator:
 --  * Wrap validator function so it accepts raw `BuiltinData`.
 --  * Create a validator which is simply typed.
 --  * Create "typed by `Any` validator".
 --  * Coerce it if you like. This step is not required - we only need `TypedValidator`.
-openRoleValidator :: Script.Utils.Typed.TypedValidator TypedOpenRoleValidator
-openRoleValidator =
-  let mkUntypedMarloweValidator :: ValidatorHash -> BuiltinData -> BuiltinData -> BuiltinData -> ()
-      mkUntypedMarloweValidator mvh = Script.Utils.Typed.mkUntypedValidator (mkOpenRoleValidator mvh)
-
-      untypedValidator :: Script.Utils.Typed.Validator
-      untypedValidator =
-        mkValidatorScript
-          $ $$(PlutusTx.compile [||mkUntypedMarloweValidator||])
-          `PlutusTx.applyCode` PlutusTx.liftCode V1.Scripts.marloweValidatorHash
-
-      typedValidator :: Script.Utils.Typed.TypedValidator Script.Utils.Typed.Any
-      typedValidator = unsafeMkTypedValidator (Script.Utils.Typed.Versioned untypedValidator Script.Utils.Typed.PlutusV2)
-   in unsafeCoerce typedValidator
+openRoleValidator :: PV2.Validator
+openRoleValidator = do
+  let mkUntypedOpenRoleValidator :: ValidatorHash -> BuiltinData -> BuiltinData -> BuiltinData -> ()
+      mkUntypedOpenRoleValidator mvh d r p = PlutusTxPrelude.check $ mkOpenRoleValidator mvh d r (PV2.unsafeFromBuiltinData p)
+  mkValidatorScript
+    $ $$(PlutusTx.compile [||mkUntypedOpenRoleValidator||])
+    `PlutusTx.applyCode` PlutusTx.liftCode V1.Scripts.marloweValidatorHash
 
 openRoleValidatorBytes :: SerializedScript
-openRoleValidatorBytes = SBS.toShort . LBS.toStrict . serialise . getValidator $ Script.Utils.Typed.validatorScript openRoleValidator
+openRoleValidatorBytes = SBS.toShort . LBS.toStrict . serialise . getValidator $ openRoleValidator
 
-openRoleValidatorHash :: ValidatorHash
-openRoleValidatorHash = Script.Utils.Typed.validatorHash openRoleValidator
+openRoleValidatorHash :: PV2.ValidatorHash
+openRoleValidatorHash = validatorHash openRoleValidator
 
 PlutusTx.makeLift ''SubTxInfo
 PlutusTx.makeIsDataIndexed ''SubTxInfo [('SubTxInfo, 0)]

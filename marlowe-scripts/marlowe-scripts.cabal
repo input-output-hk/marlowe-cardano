@@ -19,7 +19,10 @@ common lang
     -Wincomplete-record-updates -Wredundant-constraints -Widentities
     -Werror
 
--- -Wunused-packages -Werror
+-- I'm experiencing carazy behaviour regarding plutus-tx-plugin
+-- which is at the same required and non-required. So I switched
+-- this off for now:
+-- -Wunused-packages
 
 flag defer-plugin-errors
   description:

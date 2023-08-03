@@ -27,6 +27,7 @@ import Language.Marlowe.CLI.Types (
   PublishingStrategy (PublishAtAddress, PublishPermanently),
   ValidatorInfo (..),
   fromUTxO,
+  toCardanoEra,
   toSlotRoundedPlutusPOSIXTime,
   unAnUTxO,
   validatorInfoScriptOrReference,
@@ -65,6 +66,7 @@ import Language.Marlowe.CLI.Test.Wallet.Types (
  )
 import Ledger.Orphans ()
 
+import Contrib.Cardano.Debug (friendlyTxBody)
 import Contrib.Control.Monad.Except (note)
 import Contrib.Data.Foldable (anyFlipped, foldMapFlipped, foldMapMFlipped)
 import Contrib.Data.List.Random (combinationWithRepetitions)
@@ -167,6 +169,7 @@ import Language.Marlowe.Extended.V1 (ada)
 import Ledger.Tx.CardanoAPI (toCardanoAssetName)
 import Plutus.V2.Ledger.Api qualified as P
 import PlutusTx.AssocMap qualified as AM
+import PlutusTx.Builtins qualified as P
 
 -- | Build the initial Marlowe state.
 initialMarloweState :: AccountId -> Integer -> State
@@ -216,6 +219,7 @@ autoRunTransaction
   -> m (C.TxBody era, Maybe C.TxIn)
 autoRunTransaction currency defaultSubmitter prev curr@MarloweTransaction{..} invalid = do
   let log' = logStoreLabeledMsg ("autoRunTransaction" :: String)
+      logWith = logStoreMsgWith ("autoRunTransaction" :: String)
 
       getInputContentParty = \case
         M.IDeposit _ party _ _ -> Just party
@@ -285,9 +289,8 @@ autoRunTransaction currency defaultSubmitter prev curr@MarloweTransaction{..} in
                   runCli era "[AutoRun]" (selectUtxosImpl connection openRoleAddress (AssetOnly roleTokenAssetId)) >>= \case
                     OutputQueryResult{oqrMatching = fromUTxO -> (AnUTxO (txIn, _) : _)} -> do
                       let scriptOrReference = validatorInfoScriptOrReference openRoleValidatorInfo
-                          datum = P.Datum $ P.toBuiltinData ()
-                          redeemer = P.Redeemer $ P.toBuiltinData ()
-
+                          datum = P.Datum $ P.toBuiltinData P.emptyByteString
+                          redeemer = P.Redeemer $ P.toBuiltinData P.emptyByteString
                           payFromOpenRole :: PayFromScript lang
                           payFromOpenRole = buildPayFromScript scriptOrReference datum redeemer txIn
 
@@ -318,7 +321,7 @@ autoRunTransaction currency defaultSubmitter prev curr@MarloweTransaction{..} in
         True
         invalid
 
-  log' $ "TxBody:" <> show txBody
+  logWith "TxBody" $ friendlyTxBody (toCardanoEra era) txBody
   let C.TxBody C.TxBodyContent{..} = txBody
       mTxId = C.getTxId txBody
 
@@ -391,16 +394,21 @@ publishCurrentValidators publishPermanently possiblePublisher = do
         SimulationMode -> throwLabeledError fnName $ testExecutionFailed' "Can't perform on chain script publishing in simulation mode"
         OnChainMode timeout -> do
           logStoreLabeledMsg fnName "Scripts not found so publishing them."
-          runCli era fnName $
-            publishImpl
-              connection
-              _waSigningKey
-              Nothing
-              _waAddress
-              publishingStrategy
-              (CoinSelectionStrategy False False [])
-              timeout
-              (PrintStats True)
+          (txBodies, refs) <-
+            runCli era fnName $
+              publishImpl
+                connection
+                _waSigningKey
+                Nothing
+                _waAddress
+                publishingStrategy
+                (CoinSelectionStrategy False False [])
+                timeout
+                (PrintStats True)
+
+          updateWallet (fromMaybe faucetNickname possiblePublisher) \w@Wallet{_waSubmittedTransactions} ->
+            w{_waSubmittedTransactions = map (SomeTxBody era) txBodies <> _waSubmittedTransactions}
+          pure refs
 
 interpret
   :: forall env era lang st m

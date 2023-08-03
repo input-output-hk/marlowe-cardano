@@ -118,7 +118,12 @@ import Codec.Serialise (serialise)
 import Control.Monad.Reader (MonadReader)
 import Data.ByteString.Short qualified as SBS
 import Language.Marlowe.CLI.Cardano.Api qualified as C
-import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage)
+import Language.Marlowe.CLI.Cardano.Api.PlutusScript (
+  IsPlutusScriptLanguage (plutusScriptVersion),
+  fromTypedValidator,
+  fromV2TypedValidator,
+  fromV2Validator,
+ )
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript qualified as PlutusScript
 import Language.Marlowe.Scripts.Types (marloweTxInputsFromInputs)
 import Language.Marlowe.CLI.Plutus.Script.Utils (TypedValidator' (TypedValidatorV2))
@@ -617,7 +622,7 @@ openRoleValidatorInfo
   -- ^ The stake address.
   -> Either CliError (ValidatorInfo PlutusScriptV2 era)
   -- ^ The validator information, or an error message.
-openRoleValidatorInfo = validatorInfo' (fromV2TypedValidator openRoleValidator) Nothing
+openRoleValidatorInfo = validatorInfo' (fromV2Validator openRoleValidator) Nothing
 
 -- | Export to a file the role validator information about a Marlowe contract.
 exportRoleValidator

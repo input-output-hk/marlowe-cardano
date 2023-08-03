@@ -44,6 +44,7 @@ module Language.Marlowe.CLI.Types (
 
   -- * Minting
   CurrencyIssuer (..),
+  TokensRecipient (..),
   MintingAction (..),
 
   -- * Keys
@@ -786,12 +787,25 @@ data CurrencyIssuer era = CurrencyIssuer
   , ciSigingKey :: SomePaymentSigningKey
   }
 
+data TokensRecipient era
+  = RegularAddressRecipient (AddressInEra era)
+  | ScriptAddressRecipient
+      (AddressInEra era)
+      -- ^ The value to be paid.
+      ScriptData
+      -- ^ The datum.
+
 data MintingAction era
   = -- | The token names, amount and a possible receipient addresses.
     Mint
       { maIssuer :: CurrencyIssuer era
+-- MERGING
+-- <<<<<<< HEAD
       , maTokenDistribution
           :: L.NonEmpty (AddressInEra era, Maybe Lovelace, [(P.TokenName, Natural)])
+-- =======
+--       , maTokenDistribution :: L.NonEmpty (P.TokenName, Natural, TokensRecipient era, Maybe Lovelace)
+-- >>>>>>> 27b967b02 (Fully integarte open roles into the testing DSL with full e2e scenario.)
       }
   | -- | Burn all found tokens on the providers UTxOs of a given "private currency".
     BurnAll
