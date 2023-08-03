@@ -68,7 +68,7 @@ doSubmit
   -> ScriptDataSupportedInEra era
   -> Tx era
   -> m ()
-doSubmit SubmitJobDependencies{..} tellStatus era tx = recovering retryPolicy handlers $ const do
+doSubmit SubmitJobDependencies{..} tellStatus era tx = do
   result <- runConnector chainSyncJobConnector $ liftCommand $ SubmitTx era tx
   case result of
     Left msg -> tellStatus $ Failed $ SubmitFailed msg
@@ -84,7 +84,7 @@ doSubmit SubmitJobDependencies{..} tellStatus era tx = recovering retryPolicy ha
           -- Catch any other kind of exception and log the retry message as a warning.
           logRetries
             (const $ pure True)
-            ((fmap . fmap) (logWarning . fromString . (<> ("[submit tx: " <> show txId <> "]"))) . defaultLogMsg @SomeException)
+            ((fmap . fmap) (logWarning . fromString . (("[tx: " <> show txId <> "] ") <>)) . defaultLogMsg @SomeException)
     -- Abort submit if our reconnect delay exceeds one minute.
     maxRetrySeconds = 60
     -- Use full-jitter backoff with a base delay of 100 ms, aborting if delay exceeds one minute.
@@ -97,7 +97,7 @@ doSubmit SubmitJobDependencies{..} tellStatus era tx = recovering retryPolicy ha
     pollingMicroSeconds = floor $ nominalDiffTimeToSeconds pollingInterval * 1_000_000
 
     waitForTx :: m BlockHeader
-    waitForTx = runConnector chainSyncConnector client
+    waitForTx = recovering retryPolicy handlers $ const $ runConnector chainSyncConnector client
       where
         client = ChainSeekClient $ pure clientIdleAwaitConfirmation
 

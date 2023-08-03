@@ -521,7 +521,7 @@ submitJobServerCmd
   => JobId MarloweTxCommand SubmitStatus SubmitError BlockHeader
   -> SubmitJob m
   -> m (ServerStCmd MarloweTxCommand SubmitStatus SubmitError BlockHeader m ())
-submitJobServerCmd jobId submitJob = do
+submitJobServerCmd jobId@(JobIdSubmit txId) submitJob = do
   jobStatus <- atomically $ submitJobStatus submitJob
   case jobStatus of
     Running status ->
@@ -535,9 +535,9 @@ submitJobServerCmd jobId submitJob = do
             }
     Succeeded block -> pure $ SendMsgSucceed block ()
     Failed err -> pure $ SendMsgFail err ()
-    Crashed e -> throwIO $ SubmitJobCrashedException e
+    Crashed e -> throwIO $ SubmitJobCrashedException txId e
 
-newtype SubmitJobCrashedException = SubmitJobCrashedException SomeException
+data SubmitJobCrashedException = SubmitJobCrashedException TxId SomeException
   deriving (Show)
   deriving anyclass (Exception)
 
