@@ -13,7 +13,7 @@ spec:
       properties:
         replicas: 3
         volume:
-          size: "100Gi"
+          size: "500Gi"
         resources:
           requests:
             cpu: "2000m"
