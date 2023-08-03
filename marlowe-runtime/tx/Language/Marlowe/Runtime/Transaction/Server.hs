@@ -40,7 +40,8 @@ import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, modifyTVar, newEmptyTMVar, newTVar, putTMVar, readTMVar, readTVar, retry)
 import Control.Error (MaybeT (..))
 import Control.Error.Util (hoistMaybe, hush, note, noteT)
-import Control.Exception (Exception (..))
+import Control.Exception (Exception (..), SomeException)
+import Control.Monad ((<=<))
 import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Trans.Class (lift)
@@ -124,13 +125,11 @@ import Network.Protocol.Job.Server (
   ServerStAwait (..),
   ServerStCmd (..),
   ServerStInit (..),
-  hoistAttach,
-  hoistCmd,
  )
 import Network.Protocol.Query.Client (QueryClient, request)
 import Observe.Event.Explicit (addField)
 import Ouroboros.Consensus.BlockchainTime (SystemStart)
-import UnliftIO (MonadUnliftIO, atomically)
+import UnliftIO (MonadUnliftIO, atomically, throwIO)
 import UnliftIO.Concurrent (forkFinally)
 
 data TransactionServerSelector f where
@@ -250,8 +249,7 @@ attachSubmit
   => JobId MarloweTxCommand SubmitStatus SubmitError BlockHeader
   -> STM (Maybe (SubmitJob m))
   -> m (ServerStAttach MarloweTxCommand SubmitStatus SubmitError BlockHeader m ())
-attachSubmit jobId getSubmitJob =
-  atomically $ fmap (hoistAttach $ liftIO . atomically) <$> submitJobServerAttach jobId =<< getSubmitJob
+attachSubmit jobId = submitJobServerAttach jobId <=< atomically
 
 execCreate
   :: forall m v
@@ -506,34 +504,42 @@ execSubmit mkSubmitJob trackSubmitJob tx = do
     Left ex -> atomically $ putTMVar exVar $ displayException ex
     _ -> pure ()
   -- Make a new server and run it in IO.
-  hoistCmd (liftIO . atomically) <$> atomically (submitJobServerCmd (JobIdSubmit txId) submitJob)
+  submitJobServerCmd (JobIdSubmit txId) submitJob
 
 submitJobServerAttach
-  :: JobId MarloweTxCommand SubmitStatus SubmitError BlockHeader
+  :: (MonadIO m)
+  => JobId MarloweTxCommand SubmitStatus SubmitError BlockHeader
   -> Maybe (SubmitJob m)
-  -> STM (ServerStAttach MarloweTxCommand SubmitStatus SubmitError BlockHeader STM ())
+  -> m (ServerStAttach MarloweTxCommand SubmitStatus SubmitError BlockHeader m ())
 submitJobServerAttach jobId =
   maybe
     (pure $ SendMsgAttachFailed ())
     (fmap SendMsgAttached . submitJobServerCmd jobId)
 
 submitJobServerCmd
-  :: JobId MarloweTxCommand SubmitStatus SubmitError BlockHeader
+  :: (MonadIO m)
+  => JobId MarloweTxCommand SubmitStatus SubmitError BlockHeader
   -> SubmitJob m
-  -> STM (ServerStCmd MarloweTxCommand SubmitStatus SubmitError BlockHeader STM ())
+  -> m (ServerStCmd MarloweTxCommand SubmitStatus SubmitError BlockHeader m ())
 submitJobServerCmd jobId submitJob = do
-  jobStatus <- submitJobStatus submitJob
-  pure case jobStatus of
+  jobStatus <- atomically $ submitJobStatus submitJob
+  case jobStatus of
     Running status ->
-      SendMsgAwait
-        status
-        jobId
-        ServerStAwait
-          { recvMsgDetach = pure ()
-          , recvMsgPoll = submitJobServerCmd jobId submitJob
-          }
-    Succeeded block -> SendMsgSucceed block ()
-    Failed err -> SendMsgFail err ()
+      pure $
+        SendMsgAwait
+          status
+          jobId
+          ServerStAwait
+            { recvMsgDetach = pure ()
+            , recvMsgPoll = submitJobServerCmd jobId submitJob
+            }
+    Succeeded block -> pure $ SendMsgSucceed block ()
+    Failed err -> pure $ SendMsgFail err ()
+    Crashed e -> throwIO $ SubmitJobCrashedException e
+
+newtype SubmitJobCrashedException = SubmitJobCrashedException SomeException
+  deriving (Show)
+  deriving anyclass (Exception)
 
 execExceptT
   :: (Functor m)

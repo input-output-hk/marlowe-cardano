@@ -418,6 +418,7 @@ library tx
     , ouroboros-network ==0.1.0.1
     , plutus-ledger-api ==1.0.0.1
     , plutus-tx ==1.0.0.0
+    , retry ^>=0.9.3
     , semialign >=1.2 && <2
     , stm ^>=2.5
     , time >=1.9 && <2
