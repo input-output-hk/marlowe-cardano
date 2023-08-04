@@ -189,8 +189,6 @@ data TemplateCommand
       }
   deriving stock (Eq, Generic, Show)
 
--- deriving anyclass (FromJSON, ToJSON)
-
 -- | Paths for Output Files for Template Contracts
 data OutputFiles = OutputFiles
   { contractFile :: FilePath
@@ -707,5 +705,3 @@ templateChunkedValueTransferOptions = do
     <*> O.option
       parseTimeout
       (O.long "timeout" <> O.metavar "TIMEOUT" <> O.help ("The timeout. " <> timeoutHelpMsg))
-
--- <*> depositsOption

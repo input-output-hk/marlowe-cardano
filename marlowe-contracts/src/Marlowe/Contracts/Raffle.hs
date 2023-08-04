@@ -28,12 +28,6 @@ newtype ChunkSize = ChunkSize Int
   deriving stock (Eq, Generic, Show)
   deriving newtype (ToJSON, FromJSON)
 
--- newtype DepositDeadline = DepositDeadline Timeout
---
--- newtype SelectDeadline = SelectDeadline Timeout
---
--- newtype PayoutDeadline = PayoutDeadline Timeout
-
 raffle
   :: Sponsor
   -> Oracle

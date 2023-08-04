@@ -9,7 +9,6 @@ import qualified Cardano.Api.Shelley as C
 import Control.Error.Util (hoistMaybe, noteT)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT (ExceptT), throwE)
-import Data.Aeson (FromJSON)
 import qualified Data.Aeson as A
 import Data.Bifunctor (bimap, first)
 import qualified Data.ByteString.Char8 as BS8
@@ -18,7 +17,6 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.String (fromString)
 import Data.Text (pack)
-import qualified Data.Text as T
 import qualified Data.Yaml as Yaml
 import Data.Yaml.Aeson (decodeFileEither)
 import GHC.Generics (Generic)
@@ -74,7 +72,7 @@ data RoleConfig = RoleConfig
   { address :: Address
   , metadata :: RoleTokenMetadata
   }
-  deriving (Generic, FromJSON)
+  deriving (Generic, A.FromJSON)
 
 data RolesConfig
   = MintSimple (NonEmpty (TokenName, Address))
@@ -250,7 +248,7 @@ runCreateCommand TxCommand{walletAddresses, signingMethod, tagsFile, metadataFil
         else do
           hPutStrLn stderr "Safety analysis found the following errors in the contract:"
           BS8.hPutStrLn stderr $ Yaml.encode safetyErrors
-    liftIO . putStrLn . T.unpack . renderTxOutRef $ contractId
+    liftIO . print $ A.encode (A.object [("contractId", A.toJSON . renderTxOutRef $ contractId)])
   where
     readContract :: MarloweVersion v -> ExceptT (CreateCommandError v) CLI (Either (Contract v) DatumHash)
     readContract = \case

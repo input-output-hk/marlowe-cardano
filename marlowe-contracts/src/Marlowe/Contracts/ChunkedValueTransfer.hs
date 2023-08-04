@@ -37,22 +37,14 @@ newtype Recipient = Recipient Party
 newtype RecipientsAmounts = RecipientsAmounts (Map Recipient P.Value)
   deriving stock (Eq, Generic, Show)
 
--- deriving newtype (ToJSON, FromJSON)
-
 data Deposit = Deposit !Sender !Token !Integer
   deriving stock (Eq, Generic, Show)
-
--- deriving (ToJSON, FromJSON)
 
 data Payout = Payout !Sender !Recipient !Token !Integer
   deriving stock (Eq, Generic, Show)
 
--- deriving (ToJSON, FromJSON)
-
 newtype BaseTimeout = BaseTimeout POSIXTime
   deriving stock (Eq, Generic, Show)
-
--- deriving newtype (ToJSON, FromJSON)
 
 suspendContract :: Contract -> BaseTimeout -> Contract
 suspendContract continuation (BaseTimeout (POSIXTime timeoutMilliseconds)) = do
@@ -95,12 +87,12 @@ allDeposits sender (RecipientsAmounts recipient2Amount) = do
             [Deposit sender (M.Token currencySymbol tokenName) tokenAmount]
   List.sortOn (\(Deposit _ token _) -> token) unsorted
 
--- -- At every step during deposit phase in theory we can encounter a timeout.
--- -- In such a case we should payback in chunks.
+-- | At every step during deposit phase in theory we can encounter a timeout.
+-- In such a case we should payback in chunks.
 data DepositStep = DepositStep {dsAlreadDeposited :: ![Deposit], dsCurrent :: !Deposit}
 
 -- | Deposits are not really chunked but the timeout payouts are.
--- | We store deposits in the sender account during the execution.
+-- We store deposits in the sender account during the execution.
 mkDepositWithChunkedPaybacks :: DepositStep -> PayoutChunkSize -> Timeout -> Contract -> Contract
 mkDepositWithChunkedPaybacks (DepositStep alreadyDeposited deposit) payoutChunkSize timeout continuation = do
   let paybacks =
@@ -131,7 +123,8 @@ allPayouts sender (RecipientsAmounts recipient2Value) = do
     foldMapFlipped (AssocMap.toList $ P.getValue value) \(currencySymbol, tokenName2Amount) ->
       foldMapFlipped (AssocMap.toList tokenName2Amount) \(tokenName, tokenAmount) ->
         [Payout sender recipient (M.Token currencySymbol tokenName) tokenAmount]
--- ^ This contract is not really practical given the current limitations of Marlowe validator - we are able to handle
+
+-- | This contract is not really practical given the current limitations of Marlowe validator - we are able to handle
 -- only few distinct accounts/tokens. It lives here as a baseline for performance testing.
 --
 -- Contract logic:
@@ -143,7 +136,6 @@ allPayouts sender (RecipientsAmounts recipient2Value) = do
 -- The contract is still possibly unsafe because at some point multiple "notifies" can in theory expire so a single
 -- trigger can turn into a larger set of payouts which can exceed on chain limits. Because of that we use infinity
 -- approximation (+10_000 years) for all the timeouts in the `Notify` constrcuts.
-
 chunkedValueTransfer
   :: Sender
   -> RecipientsAmounts
