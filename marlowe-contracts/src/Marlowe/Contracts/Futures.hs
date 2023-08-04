@@ -98,10 +98,11 @@ maintenanceMarginCalls invRateAction buyer seller forwardPrice callDates cont =
           newLabel = Label $ "updateMargin-" <> pack (show $ utcTimeToPOSIXSeconds $ unTimeout timeout)
       defineContract newLabel $
         oracle invRateAction timeout $
-          If
-            (ValueGE (ChoiceValue invRate) forwardPrice)
-            (updateMarginAccount seller amount timeout (liquidation seller buyer) continuation)
-            (updateMarginAccount buyer (NegValue amount) timeout (liquidation buyer seller) continuation)
+          Let (ValueId "amount") amount $
+            If
+              (ValueGE (ChoiceValue invRate) forwardPrice)
+              (updateMarginAccount seller (UseValue "amount") timeout (liquidation seller buyer) continuation)
+              (updateMarginAccount buyer (NegValue (UseValue "amount")) timeout (liquidation buyer seller) continuation)
 
     updateMarginAccount :: Party -> Value -> Timeout -> Contract -> Contract -> Contract
     updateMarginAccount party value timeout liquidation continuation =
@@ -131,10 +132,11 @@ settlement
 settlement invRateAction buyer seller forwardPrice deliveryDate continuation =
   let amount = SubValue scaledContractSize (DivValue (MulValue scaledContractSize forwardPrice) (ChoiceValue invRate))
    in oracle invRateAction deliveryDate $
-        If
-          (ValueGE (ChoiceValue invRate) forwardPrice)
-          (pay seller buyer (ada, amount) continuation)
-          (pay buyer seller (ada, NegValue amount) continuation)
+        Let (ValueId "amount") amount $
+          If
+            (ValueGE (ChoiceValue invRate) forwardPrice)
+            (pay seller buyer (ada, UseValue "amount") continuation)
+            (pay buyer seller (ada, NegValue (UseValue "amount")) continuation)
 
 -- | Constants
 scaledContractSize :: Value
