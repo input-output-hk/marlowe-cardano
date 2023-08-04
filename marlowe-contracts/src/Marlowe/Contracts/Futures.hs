@@ -5,13 +5,18 @@ module Marlowe.Contracts.Futures (
   future,
 ) where
 
-import Data.String (IsString (..))
-import Language.Marlowe.Extended.V1
-import Marlowe.Contracts.Common
+import Control.Monad (foldM)
+import Data.Functor (void)
+import Data.List (sortOn)
+import Data.Ord (Down (Down))
+import Data.Text (pack)
+import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
+import Language.Marlowe.Object.Bundler
+import Language.Marlowe.Object.Types
 
 -- | Future on the exchange rate of ADA/USD
 --
---  A Future is an obligation for the parties involed in the
+--  A Future is an obligation for the parties involved in the
 --  contract to exchange assets at maturity for the predefined
 --  value.
 --
@@ -36,22 +41,18 @@ future
   -> Value
   -- ^ Initial margin requirements (in Lovelace)
   -> Timeout
-  -- ^ Initial margin setup timout
+  -- ^ Initial margin setup timeout
   -> [Timeout]
   -- ^ Margin call dates
   -> Timeout
   -- ^ Delivery date
-  -> Contract
+  -> Bundler ()
   -- ^ Future contract
-future buyer seller forwardPrice initialMargin initialFixing callDates deliveryDate =
-  depositInitialMargin buyer seller initialMargin initialFixing $
-    maintenanceMarginCalls buyer seller forwardPrice callDates $
-      settlement
-        buyer
-        seller
-        forwardPrice
-        deliveryDate
-        Close
+future buyer seller forwardPrice initialMargin initialFixing callDates deliveryDate = do
+  invRateAction <- defineAction "invRate" $ Choice invRate [Bound 0 100_000_000_000]
+  void . defineContract "initialMarginDeposit" . depositInitialMargin buyer seller initialMargin initialFixing
+    =<< maintenanceMarginCalls invRateAction buyer seller forwardPrice callDates
+    =<< defineContract "settlement" (settlement invRateAction buyer seller forwardPrice deliveryDate Close)
 
 -- | Initial deposits into margin accounts
 depositInitialMargin
@@ -67,13 +68,15 @@ depositInitialMargin
   -- ^ Continuation contract
   -> Contract
   -- ^ Composed contract
-depositInitialMargin buyer seller initalMargin initialFixing continuation =
-  deposit buyer buyer (ada, initalMargin) initialFixing Close $
-    deposit seller seller (ada, initalMargin) initialFixing Close continuation
+depositInitialMargin buyer seller initialMargin initialFixing continuation =
+  deposit buyer buyer (ada, initialMargin) initialFixing Close $
+    deposit seller seller (ada, initialMargin) initialFixing Close continuation
 
 -- | Maintenance of the margin accounts
 maintenanceMarginCalls
-  :: Party
+  :: Action
+  -- ^ InvRateAction
+  -> Party
   -- ^ Buyer
   -> Party
   -- ^ Seller
@@ -83,31 +86,23 @@ maintenanceMarginCalls
   -- ^ Call dates
   -> Contract
   -- ^ Continuation contract
-  -> Contract
+  -> Bundler Contract
   -- ^ Composed contract
-maintenanceMarginCalls buyer seller forwardPrice callDates cont =
-  foldl updateMarginAccounts cont callDates
+maintenanceMarginCalls invRateAction buyer seller forwardPrice callDates cont =
+  foldM updateMarginAccounts cont $ sortOn Down callDates
   where
-    updateMarginAccounts :: Contract -> Timeout -> Contract
-    updateMarginAccounts continuation timeout =
-      let invId = toValueId "inv-spot" timeout
-          dirId = toValueId "dir-spot" timeout
-          amount =
-            DivValue
-              ( MulValue
-                  (UseValue dirId)
-                  (SubValue (UseValue invId) forwardPrice)
-              )
-              (MulValue contractSize scale)
+    updateMarginAccounts :: Contract -> Timeout -> Bundler Contract
+    updateMarginAccounts continuation timeout = do
+      let amount = SubValue scaledContractSize (DivValue (MulValue scaledContractSize forwardPrice) (ChoiceValue invRate))
           liquidation a b = pay a b (ada, AvailableMoney a ada) Close
-       in oracleInput dirRate timeout Close $
-            oracleInput invRate timeout Close $
-              Let dirId (ChoiceValue dirRate) $
-                Let invId (ChoiceValue invRate) $
-                  If
-                    (ValueGE (UseValue invId) forwardPrice)
-                    (updateMarginAccount seller amount timeout (liquidation seller buyer) continuation)
-                    (updateMarginAccount buyer (NegValue amount) timeout (liquidation buyer seller) continuation)
+          newLabel = Label $ "updateMargin-" <> pack (show $ utcTimeToPOSIXSeconds $ unTimeout timeout)
+      defineContract newLabel $
+        oracle invRateAction timeout $
+          Let (ValueId "amount") amount $
+            If
+              (ValueGE (ChoiceValue invRate) forwardPrice)
+              (updateMarginAccount seller (UseValue "amount") timeout (liquidation seller buyer) continuation)
+              (updateMarginAccount buyer (NegValue (UseValue "amount")) timeout (liquidation buyer seller) continuation)
 
     updateMarginAccount :: Party -> Value -> Timeout -> Contract -> Contract -> Contract
     updateMarginAccount party value timeout liquidation continuation =
@@ -116,14 +111,13 @@ maintenanceMarginCalls buyer seller forwardPrice callDates cont =
         continuation
         (deposit party party (ada, value) timeout liquidation continuation)
 
-toValueId :: String -> Timeout -> ValueId
-toValueId label timeout = fromString $ label ++ "@" ++ show timeout
-
 -- | Settlement of the Future contract
 --  At delivery, if spot price is bigger than forward the seller transfers
 --  the difference to the buyer and vice versa
 settlement
-  :: Party
+  :: Action
+  -- ^ Inv rate action
+  -> Party
   -- ^ Buyer
   -> Party
   -- ^ Seller
@@ -135,26 +129,69 @@ settlement
   -- ^ Continuation contract
   -> Contract
   -- ^ Composed contract
-settlement buyer seller forwardPrice deliveryDate continuation =
-  let invId = toValueId "inv-spot" deliveryDate
-      dirId = toValueId "dir-spot" deliveryDate
-      amount =
-        DivValue
-          ( MulValue
-              (UseValue dirId)
-              (SubValue (UseValue invId) forwardPrice)
-          )
-          (MulValue contractSize scale)
-   in oracleInput dirRate deliveryDate Close $
-        oracleInput invRate deliveryDate Close $
-          Let dirId (ChoiceValue dirRate) $
-            Let invId (ChoiceValue invRate) $
-              If
-                (ValueGE (UseValue invId) forwardPrice)
-                (pay seller buyer (ada, amount) continuation)
-                (pay buyer seller (ada, NegValue amount) continuation)
+settlement invRateAction buyer seller forwardPrice deliveryDate continuation =
+  let amount = SubValue scaledContractSize (DivValue (MulValue scaledContractSize forwardPrice) (ChoiceValue invRate))
+   in oracle invRateAction deliveryDate $
+        Let (ValueId "amount") amount $
+          If
+            (ValueGE (ChoiceValue invRate) forwardPrice)
+            (pay seller buyer (ada, UseValue "amount") continuation)
+            (pay buyer seller (ada, NegValue (UseValue "amount")) continuation)
 
 -- | Constants
-scale, contractSize :: Value
-scale = Constant 1_000_000
-contractSize = Constant 100
+scaledContractSize :: Value
+scaledContractSize = 100_000_000
+
+-- | Exchange rates
+invRate :: ChoiceId
+invRate = ChoiceId "ADAUSD" (Role "oracle")
+
+ada :: Token
+ada = Token "" ""
+
+oracle :: Action -> Timeout -> Contract -> Contract
+oracle action timeout cont = When [Case action cont] timeout Close
+
+-- | Pay
+pay
+  :: Party
+  -- ^ Payer
+  -> Party
+  -- ^ Payee
+  -> (Token, Value)
+  -- ^ Token and Value
+  -> Contract
+  -- ^ Continuation Contract
+  -> Contract
+  -- ^ Combined Contract
+pay from to (token, value) =
+  Pay
+    from
+    (Party to)
+    token
+    value
+
+-- | Deposit
+deposit
+  :: Party
+  -- ^ Party to receive the deposit
+  -> Party
+  -- ^ Party that deposits
+  -> (Token, Value)
+  -- ^ Token and Value
+  -> Timeout
+  -- ^ Timeout for deposit
+  -> Contract
+  -- ^ Continuation Contract in case of timeout of deposit
+  -> Contract
+  -- ^ Continuation Contract after deposit
+  -> Contract
+  -- ^ Combined Contract
+deposit to from (token, value) timeout timeoutContinuation continuation =
+  When
+    [ Case
+        (Deposit to from token value)
+        continuation
+    ]
+    timeout
+    timeoutContinuation
