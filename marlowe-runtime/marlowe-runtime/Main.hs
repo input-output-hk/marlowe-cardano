@@ -123,7 +123,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
     NESet.IsEmpty -> fail "No known marlowe scripts"
     NESet.IsNonEmpty scripts -> pure scripts
 
-  runAppMTraced instrumentationLibrary (renderRootSelectorOTel @Span dbName dbUser dbHost dbPort) do
+  runAppMTraced instrumentationLibrary (renderRootSelectorOTel dbName dbUser dbHost dbPort) do
     let chainIndexerDatabaseQueries = ChainIndexerPostgres.databaseQueries pool genesisBlock
 
     runGetGenesisBlock (getGenesisBlock chainIndexerDatabaseQueries) >>= \case
@@ -150,9 +150,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
                     Sync.hoistDatabaseQueries
                       (either throwIO pure <=< liftIO . Pool.use pool)
                       SyncPostgres.databaseQueries
-              , connectToLocalNode = \client -> do
-                  connectRef <- emitImmediateEventFields (ConnectToNode @Span) [localNodeConnectInfo]
-                  liftIO $ Cardano.connectToLocalNode localNodeConnectInfo $ client connectRef
+              , connectToLocalNode = liftIO . Cardano.connectToLocalNode localNodeConnectInfo
               , batchSize = unsafeIntToNat bufferSize
               , chainIndexerDatabaseQueries
               , chainSyncDatabaseQueries = ChainSyncPostgres.databaseQueries pool networkId

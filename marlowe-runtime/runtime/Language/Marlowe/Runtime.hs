@@ -28,7 +28,7 @@ import Language.Marlowe.Protocol.Server (MarloweRuntimeServerDirect)
 import Language.Marlowe.Runtime.ChainIndexer (ChainIndexerDependencies (..), chainIndexer)
 import qualified Language.Marlowe.Runtime.ChainIndexer.Database as ChainIndexer
 import Language.Marlowe.Runtime.ChainIndexer.Genesis (GenesisBlock)
-import Language.Marlowe.Runtime.ChainIndexer.NodeClient (CostModel, NodeClientSelector)
+import Language.Marlowe.Runtime.ChainIndexer.NodeClient (CostModel)
 import Language.Marlowe.Runtime.ChainIndexer.Store (ChainStoreSelector)
 import Language.Marlowe.Runtime.ChainSync (ChainSyncDependencies (..), chainSync)
 import qualified Language.Marlowe.Runtime.ChainSync as ChainSync
@@ -77,13 +77,12 @@ import UnliftIO (
   newTVar,
   readTVar,
   try,
-  withRunInIO,
   writeTVar,
  )
 import UnliftIO.Concurrent (threadDelay)
 
 data MarloweRuntimeDependencies r n m = MarloweRuntimeDependencies
-  { connectToLocalNode :: (r -> LocalNodeClientProtocolsInMode CardanoMode) -> m ()
+  { connectToLocalNode :: LocalNodeClientProtocolsInMode CardanoMode -> m ()
   , batchSize :: Nat ('S n)
   , chainIndexerDatabaseQueries :: ChainIndexer.DatabaseQueries m
   , chainSyncDatabaseQueries :: ChainSync.DatabaseQueries m
@@ -114,8 +113,7 @@ marloweRuntime
   :: ( MonadUnliftIO m
      , MonadFail m
      , MonadEvent r s m
-     , Inject (ChainStoreSelector r) s
-     , Inject NodeClientSelector s
+     , Inject ChainStoreSelector s
      , Inject Sync.NodeClientSelector s
      , Inject (MarloweIndexer.ChainSeekClientSelector r) s
      , Inject MarloweIndexer.StoreSelector s
@@ -130,7 +128,7 @@ marloweRuntime = proc MarloweRuntimeDependencies{..} -> do
     unnestNodeClient <$> supervisor "node-client" nodeClient
       -<
         NodeClientDependencies
-          { connectToLocalNode = \client -> withRunInIO \runInIO -> runInIO $ connectToLocalNode $ const client
+          { ..
           }
 
   supervisor "chain-indexer" chainIndexer

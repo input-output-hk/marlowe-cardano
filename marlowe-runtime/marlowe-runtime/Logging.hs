@@ -16,7 +16,6 @@ import Language.Marlowe.Protocol.Types (MarloweRuntime)
 import Language.Marlowe.Runtime.ChainIndexer (ChainIndexerSelector)
 import qualified Language.Marlowe.Runtime.ChainIndexer as ChainIndexer
 import qualified Language.Marlowe.Runtime.ChainIndexer.Database.PostgreSQL as ChainIndexer
-import qualified Language.Marlowe.Runtime.ChainIndexer.NodeClient as ChainIndexer
 import Language.Marlowe.Runtime.ChainIndexer.Store (ChainStoreSelector)
 import qualified Language.Marlowe.Runtime.ChainSync as ChainSync
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as ChainSync
@@ -44,61 +43,58 @@ import Observe.Event.Render.OpenTelemetry
 import OpenTelemetry.Trace
 import Prelude hiding (filter)
 
-data RootSelector r f where
-  ProxyServer :: TcpServerSelector (Handshake MarloweRuntime) f -> RootSelector r f
-  SyncDatabase :: Sync.DatabaseSelector f -> RootSelector r f
-  ChainIndexerDatabase :: ChainIndexer.QuerySelector f -> RootSelector r f
-  ChainIndexer :: ChainIndexerSelector r f -> RootSelector r f
-  ConnectToNode :: RootSelector r (LocalNodeConnectInfo CardanoMode)
-  ChainSyncDatabase :: ChainSync.QuerySelector f -> RootSelector r f
-  ChainSyncNodeService :: ChainSync.NodeClientSelector f -> RootSelector r f
-  MarloweIndexerDatabase :: MarloweIndexer.QuerySelector f -> RootSelector r f
-  MarloweIndexer :: MarloweIndexerSelector Span f -> RootSelector r f
-  MarloweTx :: TransactionServerSelector f -> RootSelector r f
-  LoadWalletContext :: Q.LoadWalletContextSelector f -> RootSelector r f
-  LoadMarloweContext :: Q.LoadMarloweContextSelector f -> RootSelector r f
-  ContractStoreSelector :: ContractStoreSelector f -> RootSelector r f
+data RootSelector f where
+  ProxyServer :: TcpServerSelector (Handshake MarloweRuntime) f -> RootSelector f
+  SyncDatabase :: Sync.DatabaseSelector f -> RootSelector f
+  ChainIndexerDatabase :: ChainIndexer.QuerySelector f -> RootSelector f
+  ChainIndexer :: ChainIndexerSelector f -> RootSelector f
+  ConnectToNode :: RootSelector (LocalNodeConnectInfo CardanoMode)
+  ChainSyncDatabase :: ChainSync.QuerySelector f -> RootSelector f
+  ChainSyncNodeService :: ChainSync.NodeClientSelector f -> RootSelector f
+  MarloweIndexerDatabase :: MarloweIndexer.QuerySelector f -> RootSelector f
+  MarloweIndexer :: MarloweIndexerSelector Span f -> RootSelector f
+  MarloweTx :: TransactionServerSelector f -> RootSelector f
+  LoadWalletContext :: Q.LoadWalletContextSelector f -> RootSelector f
+  LoadMarloweContext :: Q.LoadMarloweContextSelector f -> RootSelector f
+  ContractStoreSelector :: ContractStoreSelector f -> RootSelector f
 
-instance Inject (RootSelector r) (RootSelector r) where
+instance Inject RootSelector RootSelector where
   inject = idInjectSelector
 
-instance Inject Sync.DatabaseSelector (RootSelector r) where
+instance Inject Sync.DatabaseSelector RootSelector where
   inject = injectSelector SyncDatabase
 
-instance Inject ChainIndexer.QuerySelector (RootSelector r) where
+instance Inject ChainIndexer.QuerySelector RootSelector where
   inject = injectSelector ChainIndexerDatabase
 
-instance Inject ChainIndexer.NodeClientSelector (RootSelector r) where
-  inject = injectSelector $ ChainIndexer . ChainIndexer.NodeClientEvent
-
-instance Inject (ChainStoreSelector r) (RootSelector r) where
+instance Inject ChainStoreSelector RootSelector where
   inject = injectSelector $ ChainIndexer . ChainIndexer.ChainStoreEvent
 
-instance Inject ChainSync.QuerySelector (RootSelector r) where
+instance Inject ChainSync.QuerySelector RootSelector where
   inject = injectSelector ChainSyncDatabase
 
-instance Inject ChainSync.NodeClientSelector (RootSelector r) where
+instance Inject ChainSync.NodeClientSelector RootSelector where
   inject = injectSelector ChainSyncNodeService
 
-instance Inject MarloweIndexer.StoreSelector (RootSelector r) where
+instance Inject MarloweIndexer.StoreSelector RootSelector where
   inject = injectSelector $ MarloweIndexer . MarloweIndexer.StoreEvent
 
-instance Inject (MarloweIndexer.ChainSeekClientSelector Span) (RootSelector Span) where
+instance Inject (MarloweIndexer.ChainSeekClientSelector Span) RootSelector where
   inject = injectSelector $ MarloweIndexer . MarloweIndexer.ChainSeekClientEvent
 
-instance Inject MarloweIndexer.QuerySelector (RootSelector r) where
+instance Inject MarloweIndexer.QuerySelector RootSelector where
   inject = injectSelector MarloweIndexerDatabase
 
-instance Inject Q.LoadWalletContextSelector (RootSelector r) where
+instance Inject Q.LoadWalletContextSelector RootSelector where
   inject = injectSelector LoadWalletContext
 
-instance Inject Q.LoadMarloweContextSelector (RootSelector r) where
+instance Inject Q.LoadMarloweContextSelector RootSelector where
   inject = injectSelector LoadMarloweContext
 
-instance Inject TransactionServerSelector (RootSelector r) where
+instance Inject TransactionServerSelector RootSelector where
   inject = injectSelector MarloweTx
 
-instance Inject ContractStoreSelector (RootSelector r) where
+instance Inject ContractStoreSelector RootSelector where
   inject = injectSelector ContractStoreSelector
 
 renderRootSelectorOTel
@@ -106,7 +102,7 @@ renderRootSelectorOTel
   -> Maybe ByteString
   -> Maybe ByteString
   -> Maybe ByteString
-  -> RenderSelectorOTel (RootSelector r)
+  -> RenderSelectorOTel RootSelector
 renderRootSelectorOTel dbName dbUser host port = \case
   ProxyServer sel -> renderTcpServerSelectorOTel sel
   SyncDatabase sel -> Sync.renderDatabaseSelectorOTel dbName dbUser host port sel
