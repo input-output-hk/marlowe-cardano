@@ -46,7 +46,7 @@ spec:
       cpu: "0.5"
       image: {{ $.Values.images.repo }}/{{ $.Values.images.org }}/marlowe-indexer:{{ $.Values.images.tag }}
       imagePullPolicy: Always
-      memory: 1024Mi
+      memory: 4096Mi
       ports:
       - expose: true
         port: 3783
