@@ -418,6 +418,7 @@ library tx
     , ouroboros-network ==0.1.0.1
     , plutus-ledger-api ==1.0.0.1
     , plutus-tx ==1.0.0.0
+    , retry ^>=0.9.3
     , semialign >=1.2 && <2
     , stm ^>=2.5
     , time >=1.9 && <2
@@ -474,6 +475,7 @@ library runtime
     , marlowe-protocols ==0.1.1.0
     , marlowe-runtime:{marlowe-runtime, contract, indexer, proxy, proxy-api, sync, tx} ==0.0.3
     , nonempty-containers ^>=0.3.4
+    , random ^>=1.2.1
     , time >=1.9 && <2
     , typed-protocols ==0.1.0.0
     , unliftio ^>=0.2.1
