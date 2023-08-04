@@ -76,7 +76,7 @@ renderContractStoreSelectorOTel = \case
       , eventKind = Client
       , renderField = \case
           MerkleizeInputsState state -> [("marlowe.state", toAttribute $ toStrict $ encodeToLazyText state)]
-          MerkleizeInputsContract hash -> [("marlowe.contract", fromString $ show hash)]
+          MerkleizeInputsContract rootContract -> [("marlowe.contract", fromString $ show rootContract)]
           MerkleizeInputsInput TransactionInput{..} ->
             [ ("marlowe.interval_low", toAttribute $ IntAttribute $ fromIntegral $ fst txInterval)
             , ("marlowe.interval_high", toAttribute $ IntAttribute $ fromIntegral $ snd txInterval)
