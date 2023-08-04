@@ -1,6 +1,6 @@
 {-# LANGUAGE GADTs #-}
 
-module Language.Marlowe.Object.TypesSpec (spec) where
+module Language.Marlowe.Object.TypesSpec (spec, checkLaws) where
 
 import Data.Aeson (Result (..), ToJSON (..), fromJSON)
 import Data.Binary (Binary, decode, encode)
