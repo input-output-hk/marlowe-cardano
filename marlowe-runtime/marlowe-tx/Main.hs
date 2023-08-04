@@ -23,7 +23,7 @@ import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
 import Logging (RootSelector (..), renderRootSelectorOTel)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.Connection (Connector, runConnector)
-import Network.Protocol.Driver (TcpServerDependencies (..))
+import Network.Protocol.Driver (TcpServerDependencies (..), tcpClient)
 import Network.Protocol.Driver.Trace (tcpClientTraced, tcpServerTraced)
 import Network.Protocol.Job.Client (jobClientPeer)
 import Network.Protocol.Job.Server (jobServerPeer)
@@ -64,7 +64,7 @@ main = do
 run :: Options -> AppM Span RootSelector ()
 run Options{..} = flip runComponent_ () proc _ -> do
   let chainSyncConnector :: Connector RuntimeChainSeekClient (AppM Span RootSelector)
-      chainSyncConnector = tcpClientTraced (injectSelector ChainSeekClient) chainSeekHost chainSeekPort chainSeekClientPeer
+      chainSyncConnector = tcpClient chainSeekHost chainSeekPort chainSeekClientPeer
 
       chainSyncQueryConnector :: Connector (QueryClient ChainSyncQuery) (AppM Span RootSelector)
       chainSyncQueryConnector = tcpClientTraced (injectSelector ChainSyncQueryClient) chainSeekHost chainSeekQueryPort queryClientPeer

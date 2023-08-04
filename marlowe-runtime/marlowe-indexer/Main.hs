@@ -30,6 +30,7 @@ import qualified Language.Marlowe.Runtime.Indexer.Database.PostgreSQL as Postgre
 import Logging (RootSelector (..), renderRootSelectorOTel)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.Connection (Connector, runConnector)
+import Network.Protocol.Driver (tcpClient)
 import Network.Protocol.Driver.Trace (tcpClientTraced)
 import Network.Protocol.Query.Client (QueryClient, queryClientPeer, request)
 import Network.Socket (AddrInfo (..), HostName, PortNumber, SocketType (..), defaultHints)
@@ -82,12 +83,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
         marloweIndexer
           -<
             MarloweIndexerDependencies
-              { chainSyncConnector =
-                  tcpClientTraced
-                    (injectSelector ChainSeekClient)
-                    chainSeekHost
-                    chainSeekPort
-                    chainSeekClientPeer
+              { chainSyncConnector = tcpClient chainSeekHost chainSeekPort chainSeekClientPeer
               , chainSyncQueryConnector
               , databaseQueries = PostgreSQL.databaseQueries pool securityParameter
               , pollingInterval = 1

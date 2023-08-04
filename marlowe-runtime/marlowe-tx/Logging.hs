@@ -7,7 +7,7 @@ module Logging (
 ) where
 
 import Control.Monad.Event.Class (Inject (..))
-import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand, ChainSyncQuery, RuntimeChainSeek)
+import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand, ChainSyncQuery)
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Transaction (
   renderLoadMarloweContextSelectorOTel,
@@ -30,7 +30,6 @@ import Observe.Event (idInjectSelector, injectSelector)
 import Observe.Event.Render.OpenTelemetry
 
 data RootSelector f where
-  ChainSeekClient :: TcpClientSelector (Handshake RuntimeChainSeek) f -> RootSelector f
   ChainSyncJobClient :: TcpClientSelector (Handshake (Job ChainSyncCommand)) f -> RootSelector f
   ChainSyncQueryClient :: TcpClientSelector (Handshake (Query ChainSyncQuery)) f -> RootSelector f
   ContractQueryClient :: TcpClientSelector (Handshake (Query ContractRequest)) f -> RootSelector f
@@ -53,7 +52,6 @@ instance Inject TransactionServerSelector RootSelector where
 
 renderRootSelectorOTel :: RenderSelectorOTel RootSelector
 renderRootSelectorOTel = \case
-  ChainSeekClient sel -> renderTcpClientSelectorOTel sel
   ChainSyncJobClient sel -> renderTcpClientSelectorOTel sel
   ChainSyncQueryClient sel -> renderTcpClientSelectorOTel sel
   ContractQueryClient sel -> renderTcpClientSelectorOTel sel

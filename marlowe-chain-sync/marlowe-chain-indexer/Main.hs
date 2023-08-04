@@ -17,7 +17,6 @@ import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes (ProbeServerDependencies (..), probeServer)
 import Control.Concurrent.Component.Run (runAppMTraced)
 import Control.Exception (bracket)
-import Control.Monad.Event.Class
 import Control.Monad.Reader (MonadReader (..))
 import Control.Monad.Trans.Except (ExceptT (ExceptT), runExceptT, withExceptT)
 import Data.Aeson (eitherDecodeFileStrict)
@@ -32,7 +31,7 @@ import qualified Hasql.Pool as Pool
 import Language.Marlowe.Runtime.ChainIndexer (ChainIndexerDependencies (..), chainIndexer)
 import qualified Language.Marlowe.Runtime.ChainIndexer.Database.PostgreSQL as PostgreSQL
 import Language.Marlowe.Runtime.ChainIndexer.Genesis (computeGenesisBlock)
-import Logging (RootSelector (..), renderRootSelectorOTel)
+import Logging (renderRootSelectorOTel)
 import OpenTelemetry.Trace
 import Options (Options (..), getOptions)
 import Paths_marlowe_chain_sync (version)
@@ -57,9 +56,7 @@ run Options{..} = do
           chainIndexer
             -<
               ChainIndexerDependencies
-                { connectToLocalNode = \client -> do
-                    connectRef <- emitImmediateEventFields (ConnectToNode @Span) [localNodeConnectInfo]
-                    liftIO $ Cardano.connectToLocalNode localNodeConnectInfo $ client connectRef
+                { connectToLocalNode = liftIO . Cardano.connectToLocalNode localNodeConnectInfo
                 , databaseQueries = PostgreSQL.databaseQueries pool genesisBlock
                 , persistRateLimit
                 , genesisBlock
@@ -83,7 +80,7 @@ run Options{..} = do
             <*> PQ.user conn
             <*> PQ.host conn
             <*> PQ.port conn
-    runAppMTraced instrumentationLibrary (renderRootSelectorOTel @Span dbName dbUser dbHost dbPort) $
+    runAppMTraced instrumentationLibrary (renderRootSelectorOTel dbName dbUser dbHost dbPort) $
       runComponent_ appComponent pool
   where
     instrumentationLibrary =

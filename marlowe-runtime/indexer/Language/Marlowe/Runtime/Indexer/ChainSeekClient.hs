@@ -7,7 +7,7 @@
 module Language.Marlowe.Runtime.Indexer.ChainSeekClient where
 
 import Cardano.Api (SystemStart)
-import Colog (Message, WithLog)
+import Colog (Message, WithLog, logInfo)
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, TVar, newTQueue, newTVar, readTQueue, readTVar, writeTQueue, writeTVar)
 import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
@@ -18,6 +18,7 @@ import Data.Functor ((<&>))
 import Data.Set (Set)
 import Data.Set.NonEmpty (NESet)
 import qualified Data.Set.NonEmpty as NESet
+import Data.String (fromString)
 import Data.Time (NominalDiffTime, nominalDiffTimeToSeconds)
 import Data.Void (Void, absurd)
 import Language.Marlowe.Runtime.ChainSync.Api
@@ -27,6 +28,7 @@ import Network.Protocol.ChainSeek.Client
 import Network.Protocol.Connection (Connector, runConnector)
 import Network.Protocol.Query.Client (QueryClient, request)
 import Observe.Event (addField, reference)
+import Text.Printf (printf)
 import UnliftIO (MonadUnliftIO, atomically, finally)
 import UnliftIO.Concurrent (threadDelay)
 
@@ -83,6 +85,39 @@ chainSeekClient = component "indexer-chain-seek-client" \ChainSeekClientDependen
                 let event = mkEvent (reference ev)
                 addField ev event
                 atomically $ writeTQueue eventQueue event
+                case event of
+                  RollBackward local remote _ -> do
+                    logInfo case remote of
+                      Genesis -> "Chain-sync rolled back to genesis"
+                      At (BlockHeader _ hash no) ->
+                        fromString $ printf "Chain sync switched to new tip %s (#%d)" (show hash) (unBlockNo no)
+                    let remoteNo = case remote of
+                          Genesis -> 0
+                          At (BlockHeader _ _ no) -> unBlockNo no
+                    logInfo case local of
+                      Genesis -> "Rolled back to genesis"
+                      At (BlockHeader _ hash (BlockNo no)) ->
+                        fromString $
+                          printf
+                            "Rolled back to block %s (#%d of %d) (%d%%)"
+                            (show hash)
+                            no
+                            remoteNo
+                            ((no * 100) `div` remoteNo)
+                  RollForward _ local remote _ -> do
+                    let remoteNo = case remote of
+                          Genesis -> 0
+                          At (BlockHeader _ _ no) -> unBlockNo no
+                    logInfo case local of
+                      Genesis -> "Rolled forward to genesis"
+                      At (BlockHeader _ hash (BlockNo no)) ->
+                        fromString $
+                          printf
+                            "Rolled forward to block %s (#%d of %d) (%d%%)"
+                            (show hash)
+                            no
+                            remoteNo
+                            ((no * 100) `div` remoteNo)
             )
             databaseQueries
             pollingInterval
@@ -109,12 +144,17 @@ chainSeekClient = component "indexer-chain-seek-client" \ChainSeekClientDependen
         systemStart <- request GetSystemStart
         -- Get the intersection points - the most recent block headers stored locally.
         intersectionPoints <- lift getIntersectionPoints
+        lift case intersectionPoints of
+          ((BlockHeader _ hash no) : _) ->
+            logInfo $ fromString $ printf "Tip of local chain: %s (#%d)" (show hash) (unBlockNo no)
+          _ -> logInfo "Local chain empty"
         let -- A client state for handling the intersect response.
             clientNextIntersect =
               ClientStNext
                 { -- Rejection of an intersection request implies no intersection was found.
                   -- In this case, we have no choice but to start synchronization from Genesis.
                   recvMsgQueryRejected = \_ tip -> do
+                    logInfo "No intersection with chain-sync"
                     -- Roll everything back to Genesis.
                     emit $ RollBackward Genesis tip
 
@@ -123,6 +163,7 @@ chainSeekClient = component "indexer-chain-seek-client" \ChainSeekClientDependen
                 , -- An intersection point was found, resume synchronization from
                   -- that point.
                   recvMsgRollForward = \_ point tip -> do
+                    logInfo "Intersected with chain-sync"
                     -- Always emit a rollback at the start.
                     emit $ RollBackward point tip
 
