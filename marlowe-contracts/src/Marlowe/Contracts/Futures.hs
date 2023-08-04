@@ -49,11 +49,10 @@ future
   -> Bundler ()
   -- ^ Future contract
 future buyer seller forwardPrice initialMargin initialFixing callDates deliveryDate = do
-  dirRateAction <- defineAction "dirRate" $ Choice dirRate [Bound 0 100_000_000_000]
   invRateAction <- defineAction "invRate" $ Choice invRate [Bound 0 100_000_000_000]
   void . defineContract "initialMarginDeposit" . depositInitialMargin buyer seller initialMargin initialFixing
-    =<< maintenanceMarginCalls dirRateAction invRateAction buyer seller forwardPrice callDates
-    =<< defineContract "settlement" (settlement dirRateAction invRateAction buyer seller forwardPrice deliveryDate Close)
+    =<< maintenanceMarginCalls invRateAction buyer seller forwardPrice callDates
+    =<< defineContract "settlement" (settlement invRateAction buyer seller forwardPrice deliveryDate Close)
 
 -- | Initial deposits into margin accounts
 depositInitialMargin
@@ -76,8 +75,6 @@ depositInitialMargin buyer seller initialMargin initialFixing continuation =
 -- | Maintenance of the margin accounts
 maintenanceMarginCalls
   :: Action
-  -- ^ DirRateAction
-  -> Action
   -- ^ InvRateAction
   -> Party
   -- ^ Buyer
@@ -91,27 +88,20 @@ maintenanceMarginCalls
   -- ^ Continuation contract
   -> Bundler Contract
   -- ^ Composed contract
-maintenanceMarginCalls dirRateAction invRateAction buyer seller forwardPrice callDates cont =
+maintenanceMarginCalls invRateAction buyer seller forwardPrice callDates cont =
   foldM updateMarginAccounts cont $ sortOn Down callDates
   where
     updateMarginAccounts :: Contract -> Timeout -> Bundler Contract
     updateMarginAccounts continuation timeout = do
-      let amount =
-            DivValue
-              ( MulValue
-                  (ChoiceValue dirRate)
-                  (SubValue (ChoiceValue invRate) forwardPrice)
-              )
-              (MulValue contractSize scale)
+      let amount = SubValue scaledContractSize (DivValue (MulValue scaledContractSize forwardPrice) (ChoiceValue invRate))
           liquidation a b = pay a b (ada, AvailableMoney a ada) Close
           newLabel = Label $ "updateMargin-" <> pack (show $ utcTimeToPOSIXSeconds $ unTimeout timeout)
       defineContract newLabel $
-        oracle dirRateAction timeout $
-          oracle invRateAction timeout $
-            If
-              (ValueGE (ChoiceValue invRate) forwardPrice)
-              (updateMarginAccount seller amount timeout (liquidation seller buyer) continuation)
-              (updateMarginAccount buyer (NegValue amount) timeout (liquidation buyer seller) continuation)
+        oracle invRateAction timeout $
+          If
+            (ValueGE (ChoiceValue invRate) forwardPrice)
+            (updateMarginAccount seller amount timeout (liquidation seller buyer) continuation)
+            (updateMarginAccount buyer (NegValue amount) timeout (liquidation buyer seller) continuation)
 
     updateMarginAccount :: Party -> Value -> Timeout -> Contract -> Contract -> Contract
     updateMarginAccount party value timeout liquidation continuation =
@@ -125,8 +115,6 @@ maintenanceMarginCalls dirRateAction invRateAction buyer seller forwardPrice cal
 --  the difference to the buyer and vice versa
 settlement
   :: Action
-  -- ^ Dir rate action
-  -> Action
   -- ^ Inv rate action
   -> Party
   -- ^ Buyer
@@ -140,37 +128,24 @@ settlement
   -- ^ Continuation contract
   -> Contract
   -- ^ Composed contract
-settlement dirRateAction invRateAction buyer seller forwardPrice deliveryDate continuation =
-  let invId = ValueId "i"
-      dirId = ValueId "d"
-      amount =
-        DivValue
-          ( MulValue
-              (UseValue dirId)
-              (SubValue (UseValue invId) forwardPrice)
-          )
-          (MulValue contractSize scale)
-   in oracle dirRateAction deliveryDate $
-        oracle invRateAction deliveryDate $
-          Let dirId (ChoiceValue dirRate) $
-            Let invId (ChoiceValue invRate) $
-              If
-                (ValueGE (UseValue invId) forwardPrice)
-                (pay seller buyer (ada, amount) continuation)
-                (pay buyer seller (ada, NegValue amount) continuation)
+settlement invRateAction buyer seller forwardPrice deliveryDate continuation =
+  let amount = SubValue scaledContractSize (DivValue (MulValue scaledContractSize forwardPrice) (ChoiceValue invRate))
+   in oracle invRateAction deliveryDate $
+        If
+          (ValueGE (ChoiceValue invRate) forwardPrice)
+          (pay seller buyer (ada, amount) continuation)
+          (pay buyer seller (ada, NegValue amount) continuation)
 
 -- | Constants
-scale, contractSize :: Value
-scale = Constant 1_000_000
-contractSize = Constant 100
+scaledContractSize :: Value
+scaledContractSize = 100_000_000
 
 -- | Role for oracle
 kraken :: Party
 kraken = Role "k"
 
 -- | Exchange rates
-dirRate, invRate :: ChoiceId
-dirRate = ChoiceId "d" kraken -- USD/ADA
+invRate :: ChoiceId
 invRate = ChoiceId "i" kraken -- ADA/USD
 
 ada :: Token
