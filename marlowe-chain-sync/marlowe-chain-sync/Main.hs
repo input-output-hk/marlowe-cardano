@@ -36,7 +36,7 @@ import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as Postg
 import Language.Marlowe.Runtime.ChainSync.NodeClient (NodeClient (..), NodeClientDependencies (..), nodeClient)
 import Logging (RootSelector (..), renderRootSelectorOTel)
 import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
-import Network.Protocol.Driver (TcpServerDependencies (..))
+import Network.Protocol.Driver (TcpServerDependencies (..), tcpServer)
 import Network.Protocol.Driver.Trace (tcpServerTraced)
 import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Query.Server (queryServerPeer)
@@ -94,7 +94,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
               , scanBatchSize = 8192 -- TODO make this a command line option
               }
 
-      tcpServerTraced "chain-seek" $ injectSelector ChainSeekServer
+      tcpServer "chain-seek"
         -<
           TcpServerDependencies
             { host
