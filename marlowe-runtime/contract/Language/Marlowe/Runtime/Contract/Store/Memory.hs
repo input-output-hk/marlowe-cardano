@@ -126,15 +126,13 @@ toPlutusDatumHash = PV2.toBuiltin . unDatumHash
 merkleizeInputsDefault
   :: (Monad m)
   => (DatumHash -> m (Maybe Contract))
-  -> DatumHash
+  -> Contract
   -> State
   -> TransactionInput
   -> m (Either MerkleizeInputsError TransactionInput)
-merkleizeInputsDefault getContract' rootHash initialState TransactionInput{..} = runExceptT do
+merkleizeInputsDefault getContract' initialContract initialState TransactionInput{..} = runExceptT do
   case fixInterval txInterval initialState of
-    IntervalTrimmed env state' -> do
-      contract <- getContractExcept rootHash
-      go env state' txInputs contract []
+    IntervalTrimmed env state' -> go env state' txInputs initialContract []
     IntervalError err -> throwE $ MerkleizeInputsIntervalError err
   where
     getContractExcept hash =

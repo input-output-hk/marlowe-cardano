@@ -22,7 +22,7 @@ import Network.Protocol.Query.Types
 data ContractRequest a where
   GetContract :: DatumHash -> ContractRequest (Maybe ContractWithAdjacency)
   MerkleizeInputs
-    :: DatumHash
+    :: Contract
     -> State
     -> TransactionInput
     -> ContractRequest (Either MerkleizeInputsError TransactionInput)
@@ -44,7 +44,7 @@ getContract = request . GetContract
 
 merkleizeInputs
   :: (Applicative m)
-  => DatumHash
+  => Contract
   -> State
   -> TransactionInput
   -> QueryClient ContractRequest m (Either MerkleizeInputsError TransactionInput)

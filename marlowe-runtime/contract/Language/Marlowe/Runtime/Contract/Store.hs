@@ -21,7 +21,7 @@ data ContractStoreSelector f where
   MerkleizeInputs :: ContractStoreSelector MerkleizeInputsField
 
 data MerkleizeInputsField
-  = MerkleizeInputsContractHash DatumHash
+  = MerkleizeInputsContract Contract
   | MerkleizeInputsState State
   | MerkleizeInputsInput TransactionInput
   | MerkleizeInputsResult (Either MerkleizeInputsError TransactionInput)
@@ -29,7 +29,7 @@ data MerkleizeInputsField
 data ContractStore m = ContractStore
   { createContractStagingArea :: m (ContractStagingArea m)
   , getContract :: DatumHash -> m (Maybe ContractWithAdjacency)
-  , merkleizeInputs :: DatumHash -> State -> TransactionInput -> m (Either MerkleizeInputsError TransactionInput)
+  , merkleizeInputs :: Contract -> State -> TransactionInput -> m (Either MerkleizeInputsError TransactionInput)
   }
 
 hoistContractStore
@@ -59,11 +59,11 @@ traceContractStore inj ContractStore{..} =
         result <- getContract hash
         traverse_ (addField ev) result
         pure result
-    , merkleizeInputs = \hash state input -> withInjectEvent inj MerkleizeInputs \ev -> do
-        addField ev $ MerkleizeInputsContractHash hash
+    , merkleizeInputs = \contract state input -> withInjectEvent inj MerkleizeInputs \ev -> do
+        addField ev $ MerkleizeInputsContract contract
         addField ev $ MerkleizeInputsState state
         addField ev $ MerkleizeInputsInput input
-        result <- merkleizeInputs hash state input
+        result <- merkleizeInputs contract state input
         addField ev $ MerkleizeInputsResult result
         pure result
     }
