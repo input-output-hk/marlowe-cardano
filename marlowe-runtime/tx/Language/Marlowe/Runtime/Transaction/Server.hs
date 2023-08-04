@@ -29,7 +29,6 @@ import Cardano.Api (
   cardanoEra,
   getTxBody,
   getTxId,
-  hashScriptData,
   makeShelleyAddress,
  )
 import Cardano.Api.Shelley (ProtocolParameters)
@@ -59,11 +58,9 @@ import Language.Marlowe.Analysis.Safety.Types (SafetyError (SafetyAnalysisTimeou
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import Language.Marlowe.Runtime.Cardano.Api (
   fromCardanoAddressInEra,
-  fromCardanoDatumHash,
   fromCardanoTxId,
   fromCardanoTxIn,
   toCardanoPaymentCredential,
-  toCardanoScriptData,
   toCardanoStakeCredential,
  )
 import Language.Marlowe.Runtime.ChainSync.Api (
@@ -74,7 +71,6 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   TokenName,
   TxId (..),
   fromCardanoTxMetadata,
-  toDatum,
  )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest, getContract, merkleizeInputs)
@@ -422,10 +418,10 @@ execApplyInputs
     tipSlot <- liftIO getTipSlot
     scriptOutput'@TransactionScriptOutput{datum = inputDatum} <-
       except $ maybe (Left ScriptOutputNotFound) Right scriptOutput
-    let (contractHash, state) = case version of
+    let (contract, state) = case version of
           MarloweV1 -> case inputDatum of
-            V1.MarloweData{..} -> (fromCardanoDatumHash $ hashScriptData $ toCardanoScriptData $ toDatum marloweContract, marloweState)
-        merkleizeInputs' = fmap hush . runConnector contractQueryConnector . merkleizeInputs contractHash state
+            V1.MarloweData{..} -> (marloweContract, marloweState)
+        merkleizeInputs' = fmap hush . runConnector contractQueryConnector . merkleizeInputs contract state
     ((invalidBefore, invalidHereafter, mAssetsAndDatum, inputs'), constraints) <-
       buildApplyInputsConstraints
         merkleizeInputs'

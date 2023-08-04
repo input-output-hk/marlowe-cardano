@@ -92,9 +92,9 @@ getMerkleizedInputsSpec = describe "merkleizeInputs" do
           counterexample (show contract) $ runContractTest do
             hash <- expectJust "failed to push contract" $ runLoad $ pushContract contract
             let input = TransactionInput interval $ NormalInput <$> inputs
-            input' <- either (fail . show) pure =<< runQuery (merkleizeInputs hash state input)
             Api.ContractWithAdjacency{contract = merkleizedContract} <-
               expectJust "Failed to get contract" $ runQuery $ Api.getContract hash
+            input' <- either (fail . show) pure =<< runQuery (merkleizeInputs merkleizedContract state input)
             let expected = computeTransaction input state contract
             let expected' = case expected of
                   TransactionOutput warnings payment state' contract' ->
