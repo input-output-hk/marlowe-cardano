@@ -126,11 +126,11 @@ instance FromJSON MarloweValidators where
             _ -> fail "Expected string `referenceRuntime`"
         fromPublished =
           parseJSON json >>= \case
-            Aeson.Object (KeyMap.toList -> [("referenceCurrent", objJson)]) -> do
+            Aeson.Object (KeyMap.toList -> [("publishCurrent", objJson)]) -> do
               obj <- parseJSON objJson
               publisher <- obj .:? "publisher"
-              permanent <- obj .:? "permanent"
-              pure $ ReferenceCurrentValidators permanent publisher
+              permanently <- obj .:? "permanently"
+              pure $ ReferenceCurrentValidators permanently publisher
             _ -> fail "Expected object with a single field `referenceCurrent`"
     inTx <|> fromRuntimeRegistry <|> fromPublished
 
@@ -162,6 +162,7 @@ data CLIOperation
       , coSubmitter :: Maybe WalletNickname
       -- ^ A wallet which gonna submit the initial transaction.
       , coMarloweValidators :: Maybe MarloweValidators
+      , coMerkleize :: Maybe Bool
       }
   | Prepare
       { coContractNickname :: Maybe ContractNickname
@@ -232,18 +233,6 @@ instance FromJSON CLIOperation where
 
 instance ToJSON CLIOperation where
   toJSON = Operation.toConstructorBasedJSON "co"
-
--- | We encode `PartyRef` as `Party` so we can use role based contracts
--- | without any change in the JSON structure.
--- | In the case of the `Address` you should use standard encoding but
--- | reference a wallet instead of providing hash value:
--- | ```
--- |  "address": "Wallet-1"
--- | ```
-data PartyRef
-  = WalletRef WalletNickname
-  | RoleRef TokenName
-  deriving stock (Eq, Generic, Show)
 
 data CLIContractInfo lang era = CLIContractInfo
   { _ciContract :: M.Contract

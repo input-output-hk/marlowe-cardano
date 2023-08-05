@@ -21,6 +21,7 @@ import Data.Text qualified as Text
 import Data.Text.Encoding qualified as TE
 
 newtype EncodeBase16 = EncodeBase16 BSS.ByteString
+  deriving (Eq, Ord, Show)
 
 unBase16 (EncodeBase16 bs) = bs
 

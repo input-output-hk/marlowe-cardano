@@ -232,7 +232,7 @@ runTestSuite era TestSuite{..} = do
   testSuiteResult <- liftIO $ flip runReaderT env $ runTests tests tsConcurrentRunners
 
   let writeReportFile filePath = do
-        let json = testSuiteResultToJSON testSuiteResult
+        json <- testSuiteResultToJSON testSuiteResult
         liftIO $ B.writeFile filePath (A.encodePretty json)
 
   for_ tsReportingStrategy \case

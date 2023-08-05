@@ -60,6 +60,7 @@ library
   import:          lang
   hs-source-dirs:  src
   exposed-modules:
+    Contrib.Cardano.Formatting
     Contrib.Control.Concurrent
     Language.Marlowe.Cardano
     Language.Marlowe.Cardano.Thread
@@ -174,6 +175,7 @@ library cli-test
     , async
     , async-pool
     , base >=4.9 && <5
+    , base16-aeson ==0.1.0.0
     , bytestring
     , cardano-api
     , containers
@@ -229,12 +231,13 @@ library command
     Language.Marlowe.CLI.Command.Util
 
   build-depends:
-    , aeson
+    , appendmap
     , base >=4.9 && <5
     , base16-bytestring
     , bytestring
     , cardano-api
     , cardano-slotting
+    , containers
     , marlowe-actus
     , marlowe-cardano
     , marlowe-cli:{marlowe-cli, cli-test}

@@ -100,9 +100,9 @@ module Language.Marlowe.CLI.Types (
   anUTxOValue,
   getVerificationKey,
   submitModeFromTimeout,
-  toMarloweTimeout,
+  toMarloweExtendedTimeout,
   toPaymentVerificationKey,
-  toPlutusPOSIXTime,
+  toMarloweTimeout,
   toSlotRoundedMarloweTimeout,
   toSlotRoundedPlutusPOSIXTime,
   toUTxO,
@@ -202,6 +202,7 @@ import Language.Marlowe.CLI.Cardano.Api.PlutusScript (
   plutusScriptVersion,
   withPlutusScriptVersion,
  )
+import Language.Marlowe.Core.V1.Semantics.Types qualified as M
 import Language.Marlowe.Extended.V1 qualified as E
 
 -- | Exception for Marlowe CLI.
@@ -695,11 +696,12 @@ someTimeoutToMilliseconds (RelativeTimeout seconds) = do
 marloweTimeoutFromPlutusPOSIXTime :: P.POSIXTime -> E.Timeout
 marloweTimeoutFromPlutusPOSIXTime = E.POSIXTime . P.getPOSIXTime
 
-toPlutusPOSIXTime :: (MonadIO m) => SomeTimeout -> m P.POSIXTime
-toPlutusPOSIXTime t = P.POSIXTime <$> someTimeoutToMilliseconds t
+toMarloweTimeout :: (MonadIO m) => SomeTimeout -> m M.Timeout
+toMarloweTimeout t = P.POSIXTime <$> someTimeoutToMilliseconds t
 
-toMarloweTimeout :: (MonadIO m) => SomeTimeout -> m E.Timeout
-toMarloweTimeout t = marloweTimeoutFromPlutusPOSIXTime <$> toPlutusPOSIXTime t
+-- FIXME: s/toMarloweExtendedTimeout/toMarloweExtendedTimeout/
+toMarloweExtendedTimeout :: (MonadIO m) => SomeTimeout -> m E.Timeout
+toMarloweExtendedTimeout t = marloweTimeoutFromPlutusPOSIXTime <$> toMarloweTimeout t
 
 toSlotRoundedPlutusPOSIXTime :: (MonadIO m) => SlotConfig -> SomeTimeout -> m P.POSIXTime
 toSlotRoundedPlutusPOSIXTime slotConfig t = do
@@ -732,6 +734,8 @@ newtype PrintStats = PrintStats {unPrintStats :: Bool}
 newtype TxBodyFile = TxBodyFile {unTxBodyFile :: FilePath}
 
 newtype SigningKeyFile = SigningKeyFile {unSigningKeyFile :: FilePath}
+  deriving stock (Eq, Generic, Show)
+  deriving anyclass (FromJSON, ToJSON)
 
 -- | A single UTxO. We preserve the `Tuple` structure for consistency with `UTxO`.
 newtype AnUTxO era = AnUTxO {unAnUTxO :: (C.TxIn, C.TxOut C.CtxUTxO era)}
@@ -770,7 +774,8 @@ data MintingAction era
   = -- | The token names, amount and a possible receipient addresses.
     Mint
       { maIssuer :: CurrencyIssuer era
-      , maTokenDistribution :: L.NonEmpty (P.TokenName, Natural, AddressInEra era, Maybe Lovelace)
+      , maTokenDistribution
+          :: L.NonEmpty (AddressInEra era, Maybe Lovelace, [(P.TokenName, Natural)])
       }
   | -- | Burn all found tokens on the providers UTxOs of a given "private currency".
     BurnAll

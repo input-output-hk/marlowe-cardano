@@ -1,0 +1,57 @@
+testName: Runtime merkleized operations test case
+
+operations:
+
+- RuntimeCreateContract:
+    minLovelace: 2000000
+    awaitConfirmed: 120
+    # roleCurrency: PriceTokens
+    tags:
+      "raffello-payout-dev-0.1":
+        foo: 1
+        bar: "string"
+    merkleize: ClientSide
+    source:
+      when:
+        - case:
+            notify_if: true
+          then:
+            when:
+              - case:
+                  notify_if: true
+                then:
+                  when:
+                    - case:
+                        notify_if: true
+                      then: close
+                  timeout:
+                    relative: 3600
+                  timeout_continuation: close
+            timeout:
+              relative: 3600
+            timeout_continuation: close
+      timeout:
+        relative: 3600
+      timeout_continuation: close
+
+- RuntimeApplyInputs:
+    awaitConfirmed: 120
+    inputs:
+      - "input_notify"
+      - "input_notify"
+    invalidBefore:
+        relative: -5
+    invalidHereafter:
+        relative: +1800
+
+- RuntimeApplyInputs:
+    awaitConfirmed: 120
+    inputs:
+      - "input_notify"
+    invalidBefore:
+        relative: -5
+    invalidHereafter:
+        relative: +1800
+
+- RuntimeAwaitClosed:
+    timeout: 120

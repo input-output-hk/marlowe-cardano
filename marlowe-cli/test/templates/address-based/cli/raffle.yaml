@@ -1,0 +1,114 @@
+testName: Raffle contract with a few participants
+
+operations:
+
+- CreateWallet: Sponsor
+
+- CreateWallet: Party0
+
+- CreateWallet: Party1
+
+- CreateWallet: Party2
+
+- CreateWallet: Party3
+
+- CreateWallet: Party4
+
+- CreateWallet: Party5
+
+- CreateWallet: Party6
+
+- CreateWallet: Party7
+
+- CreateWallet: Oracle
+
+- Mint:
+    nickname: WinnerTokensCurrency
+    minLovelace: 2000000
+    tokenDistribution:
+      - [Sponsor, FirstPrice, 1]
+      - [Sponsor, SecondPrice, 1]
+      - [Sponsor, ThirdPrice, 1]
+
+- Fund:
+    utxo: 5000000
+    wallets: [Oracle]
+
+- Initialize:
+    minLovelace: 3000000
+    template:
+      UseRaffle:
+        sponsor:
+          address: Faucet
+        oracle:
+          address: Oracle
+        chunkSize: 2
+        parties:
+          - address: Party1
+          - address: Party2
+          - address: Party3
+          - address: Party4
+          - address: Party5
+          - address: Party6
+          - address: Party7
+          - address: Party8
+        pricesInLovelacePerRound: [100, 50, 25]
+        depositDeadline:
+          relative: +1000
+        selectDeadline:
+          relative: +1000
+        payoutDeadline:
+          relative: +1000
+
+- Prepare:
+    inputs:
+      - for_choice_id:
+          choice_name: Random
+          choice_owner:
+            address: Oracle
+        input_that_chooses_num: 3
+    minimumTime:
+      relative: -100
+    maximumTime:
+      relative: 240
+
+- Prepare:
+    inputs:
+      - for_choice_id:
+          choice_name: Random
+          choice_owner:
+            address: Oracle
+        input_that_chooses_num: 3
+    minimumTime:
+      relative: -100
+    maximumTime:
+      relative: 240
+
+- Prepare:
+    inputs:
+      - for_choice_id:
+          choice_name: Random
+          choice_owner:
+            address: Oracle
+        input_that_chooses_num: 3
+    minimumTime:
+      relative: -100
+    maximumTime:
+      relative: 240
+
+- AutoRun
+
+- CheckBalance:
+    wallet: Party3
+    balance:
+      - [WinnerTokensCurrency, FirstPrice, 1]
+
+- CheckBalance:
+    wallet: Party4
+    balance:
+      - [WinnerTokensCurrency, FirstPrice, 1]
+
+- CheckBalance:
+    wallet: Party5
+    balance:
+      - [WinnerTokensCurrency, FirstPrice, 1]

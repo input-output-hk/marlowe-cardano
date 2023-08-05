@@ -20,6 +20,7 @@ in
     inputs.cardano-world.cardano.packages.cardano-node
     inputs.cardano-world.cardano.packages.cardano-cli
 
+    pkgs.z3
     pkgs.sqitchPg
     pkgs.postgresql
     pkgs.haskellPackages.hspec-golden
