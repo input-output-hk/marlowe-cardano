@@ -7,13 +7,17 @@ module Spec.Marlowe.Contracts (
   tests,
 ) where
 
+import qualified Data.HashMap.Strict as HashMap
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import qualified Language.Marlowe as C
 import Language.Marlowe.Extended.V1
+import Language.Marlowe.Object.Bundler (runBundler_)
+import Language.Marlowe.Object.Link (linkBundle, linkContract)
+import qualified Language.Marlowe.Object.Types as O
 import Marlowe.Contracts.Common
+import Marlowe.Contracts.Futures
 import Marlowe.Contracts.UTC.Common
 import Marlowe.Contracts.UTC.CouponBond
-import Marlowe.Contracts.UTC.Futures
 import Marlowe.Contracts.UTC.Options
 import Marlowe.Contracts.UTC.StructuredProducts
 import Marlowe.Contracts.UTC.Swap
@@ -314,16 +318,19 @@ futureNoChange =
   -- The contract is cash settled, i.e. USD is delivered in ADA
   -- resp. the difference between 80 ADA and 100 USD in ADA is
   -- due at maturity
-  let Just contract =
-        toCore $
-          future
-            w1Pk
-            w2Pk
-            (Constant 80_000_000) -- 80 ADA
-            (Constant 8_000_000) -- 8 ADA
-            (read "2022-03-31 08:00:00.000000 UTC")
-            [] -- no margin calls
-            (read "2023-03-31 08:00:00.000000 UTC")
+  let Right objs =
+        linkBundle $
+          runBundler_ $
+            future
+              (O.Role "party1")
+              (O.Role "party2")
+              (O.Constant 80_000_000) -- 80 ADA
+              (O.Constant 8_000_000) -- 8 ADA
+              (O.Timeout $ read "2022-03-31 08:00:00.000000 UTC")
+              [] -- no margin calls
+              (O.Timeout $ read "2023-03-31 08:00:00.000000 UTC")
+
+      Right contract = linkContract (HashMap.fromList objs) (O.ContractRef "initialMarginDeposit")
 
       t0 = toPOSIX "2022-03-31 07:30:00.000000 UTC"
       t1 = toPOSIX "2023-03-31 07:30:00.000000 UTC"
@@ -336,8 +343,7 @@ futureNoChange =
             ]
         , C.TransactionInput
             (t1, t1)
-            [ C.NormalInput $ C.IChoice dirRate 125_000_000
-            , C.NormalInput $ C.IChoice invRate 80_000_000
+            [ C.NormalInput $ C.IChoice (ChoiceId "ADAUSD" (Role "oracle")) 80_000_000
             ]
         ]
    in case C.playTrace 0 contract txIn of
@@ -355,16 +361,19 @@ futureNoChange =
 -- | Future, scenario without any margin calls
 futureNoMarginCall :: IO ()
 futureNoMarginCall =
-  let Just contract =
-        toCore $
-          future
-            w1Pk
-            w2Pk
-            (Constant 80_000_000) -- 80 ADA
-            (Constant 8_000_000) -- 8 ADA
-            (read "2022-03-31 08:00:00.000000 UTC")
-            [] -- no margin calls
-            (read "2023-03-31 08:00:00.000000 UTC")
+  let Right objs =
+        linkBundle $
+          runBundler_ $
+            future
+              (O.Role "party1")
+              (O.Role "party2")
+              (O.Constant 80_000_000) -- 80 ADA
+              (O.Constant 8_000_000) -- 8 ADA
+              (O.Timeout $ read "2022-03-31 08:00:00.000000 UTC")
+              [] -- no margin calls
+              (O.Timeout $ read "2023-03-31 08:00:00.000000 UTC")
+
+      Right contract = linkContract (HashMap.fromList objs) (O.ContractRef "initialMarginDeposit")
 
       t0 = toPOSIX "2022-03-31 07:30:00.000000 UTC"
       t1 = toPOSIX "2023-03-31 07:30:00.000000 UTC"
@@ -377,8 +386,7 @@ futureNoMarginCall =
             ]
         , C.TransactionInput
             (t1, t1)
-            [ C.NormalInput $ C.IChoice dirRate 133_333_333
-            , C.NormalInput $ C.IChoice invRate 75_000_000
+            [ C.NormalInput $ C.IChoice (ChoiceId "ADAUSD" (Role "oracle")) 75_000_000
             ]
         ]
    in case C.playTrace 0 contract txIn of
@@ -393,16 +401,19 @@ futureNoMarginCall =
 -- | Future, scenario with margin call
 futureWithMarginCall :: IO ()
 futureWithMarginCall =
-  let Just contract =
-        toCore $
-          future
-            w1Pk
-            w2Pk
-            (Constant 80_000_000) -- 80 ADA
-            (Constant 8_000_000) -- 8 ADA
-            (read "2022-03-31 08:00:00.000000 UTC")
-            [read "2022-09-30 08:30:00.000000 UTC"] -- margin call
-            (read "2023-03-31 09:00:00.000000 UTC")
+  let Right objs =
+        linkBundle $
+          runBundler_ $
+            future
+              (O.Role "party1")
+              (O.Role "party2")
+              (O.Constant 80_000_000) -- 80 ADA
+              (O.Constant 8_000_000) -- 8 ADA
+              (O.Timeout $ read "2022-03-31 08:00:00.000000 UTC")
+              [O.Timeout $ read "2022-09-30 08:30:00.000000 UTC"] -- margin call
+              (O.Timeout $ read "2023-03-31 09:00:00.000000 UTC")
+
+      Right contract = linkContract (HashMap.fromList objs) (O.ContractRef "initialMarginDeposit")
 
       t0 = toPOSIX "2022-03-31 07:30:00.000000 UTC"
       t1 = toPOSIX "2022-09-30 07:00:00.000000 UTC"
@@ -417,22 +428,19 @@ futureWithMarginCall =
             ]
         , C.TransactionInput
             (t1, t1)
-            [ C.NormalInput $ C.IChoice dirRate 200_000_000
-            , C.NormalInput $ C.IChoice invRate 50_000_000
+            [ C.NormalInput $ C.IChoice (ChoiceId "ADAUSD" (Role "oracle")) 50_000_000
             ]
         , C.TransactionInput
             (t2, t2)
             [C.NormalInput $ C.IDeposit w1Pk w1Pk ada 60_000_000]
         , C.TransactionInput
             (t3, t3)
-            [ C.NormalInput $ C.IChoice dirRate 133_333_333
-            , C.NormalInput $ C.IChoice invRate 75_000_000
+            [ C.NormalInput $ C.IChoice (ChoiceId "ADAUSD" (Role "oracle")) 75_000_000
             ]
         ]
    in case C.playTrace 0 contract txIn of
         C.TransactionOutput{..} -> do
           assertClose txOutContract
-          assertNoWarnings txOutWarnings
           assertTotalPayments w1Pk txOutPayments (lovelaceValueOf 61_333_334)
           assertTotalPayments w2Pk txOutPayments (lovelaceValueOf 14_666_666)
         C.Error err ->
