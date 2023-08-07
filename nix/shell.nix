@@ -16,9 +16,9 @@ in
 
 
   packages = [
-    inputs.cardano-world.cardano.packages.cardano-address
-    inputs.cardano-world.cardano.packages.cardano-node
-    inputs.cardano-world.cardano.packages.cardano-cli
+    inputs'.cardano-world.cardano.packages.cardano-address
+    inputs'.cardano-world.cardano.packages.cardano-node
+    inputs'.cardano-world.cardano.packages.cardano-cli
 
     pkgs.z3
     pkgs.sqitchPg
