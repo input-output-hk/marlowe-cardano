@@ -1,7 +1,8 @@
 # This file is part of the IOGX template and is documented at the link below:
 # https://www.github.com/input-output-hk/iogx#35-nixper-system-outputsnix
 
-{ inputs, inputs', pkgs, projects }:
+{ inputs, inputs', pkgs, projects, ... }:
+
 let
 
   staticPkgs = inputs.self.packages.marlowe-apps-exe-marlowe-finder-ghc8107.project.projectCross.musl64.hsPkgs;
