@@ -1,5 +1,5 @@
 # This file is part of the IOGX template and is documented at the link below:
-# https://www.github.com/input-output-hk/iogx#33-nixhaskell-projectnix
+# https://www.github.com/input-output-hk/iogx#33-nixcabal-projectnix
 
 { inputs, inputs', meta, config, pkgs, lib }:
 

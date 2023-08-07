@@ -31,5 +31,5 @@ in
 
 
   packages.marlowe-integration-tests = import ./marlowe-cardano/integration-tests.nix
-    { inherit inputs pkgs projects; };
+    { inherit inputs' pkgs projects; };
 }

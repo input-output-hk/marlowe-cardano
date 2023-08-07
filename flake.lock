@@ -2523,11 +2523,11 @@
         "systems": "systems"
       },
       "locked": {
-        "lastModified": 1687709756,
-        "narHash": "sha256-Y5wKlQSkgEK2weWdOu4J3riRd+kV/VCgHsqLNTTWQ/0=",
+        "lastModified": 1689068808,
+        "narHash": "sha256-6ixXo3wt24N/melDWjq70UuHQLxGV8jZvooRanIHXw0=",
         "owner": "numtide",
         "repo": "flake-utils",
-        "rev": "dbabf0ca0c0c4bce6ea5eaf65af5cb694d2082c7",
+        "rev": "919d646de7be200f3bf08cb76ae1f09402b6f9b4",
         "type": "github"
       },
       "original": {
@@ -3854,11 +3854,11 @@
         "sphinxcontrib-haddock": "sphinxcontrib-haddock"
       },
       "locked": {
-        "lastModified": 1689173432,
-        "narHash": "sha256-x/vnkSVB0xyeOmpv+X/cdqN7v/QtvmsJ+iPalnb0UsA=",
+        "lastModified": 1691436259,
+        "narHash": "sha256-3GjwI4oASjhVQD8Z37P4FhB7tCZHq0Hd6qS9EtTmT70=",
         "owner": "input-output-hk",
         "repo": "iogx",
-        "rev": "05225853e4f01456d5239f89f8c2b3aae6a0d505",
+        "rev": "dc16debd3acb624b1e5fac4169785efd1e668a8a",
         "type": "github"
       },
       "original": {
