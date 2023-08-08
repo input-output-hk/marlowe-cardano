@@ -5,7 +5,7 @@
 
 let
 
-  scripts = import ./marlowe-cardano/scripts.nix { inherit inputs pkgs; };
+  scripts = import ./marlowe-cardano/scripts.nix { inherit inputs' pkgs; };
 
   isLinux = pkgs.stdenv.hostPlatform.isLinux;
 

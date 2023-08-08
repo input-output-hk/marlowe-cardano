@@ -28,7 +28,7 @@ in
 
 
   networks = import ./marlowe-cardano/networks.nix
-    { inherit inputs pkgs; };
+    { inherit inputs' pkgs; };
 
 
   packages.integration-tests = import ./marlowe-cardano/integration-tests.nix
