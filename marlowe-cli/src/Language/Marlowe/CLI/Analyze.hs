@@ -24,6 +24,7 @@ module Language.Marlowe.CLI.Analyze (
 
   -- * Analysis
   analyze,
+  checkExecutionCost,
 ) where
 
 import Control.Monad (guard, liftM2, (<=<))
