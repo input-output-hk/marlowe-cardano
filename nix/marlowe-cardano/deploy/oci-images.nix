@@ -1,6 +1,6 @@
-{ inputs, pkgs }:
+{ inputs', pkgs }:
 let
-  inherit (inputs) self std n2c;
+  inherit (inputs') self std n2c;
   inherit (pkgs.lib) removePrefix mapAttrsToList mapAttrs;
   inherit (pkgs.lib.strings) concatMapStrings;
   inherit (self) operables;

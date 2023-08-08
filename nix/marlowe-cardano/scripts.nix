@@ -1,4 +1,4 @@
-{ inputs, pkgs, project }:
+{ inputs, pkgs }:
 
 let
 

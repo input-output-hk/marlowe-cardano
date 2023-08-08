@@ -3,5 +3,4 @@
 
 {
   supportedCompilers = [ "ghc8107" ];
-  enableCrossCompilation = false;
 }

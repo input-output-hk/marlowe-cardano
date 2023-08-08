@@ -10,10 +10,10 @@ let
 in
 {
   operables = import ./marlowe-cardano/deploy/operables.nix
-    { inherit inputs pkgs; };
+    { inherit inputs' pkgs; };
 
   oci-images = pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux (
-    import ./marlowe-cardano/deploy/oci-images.nix { inherit inputs pkgs; }
+    import ./marlowe-cardano/deploy/oci-images.nix { inherit inputs' pkgs; }
   );
 
   static = pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux
@@ -24,7 +24,7 @@ in
     );
 
   nomadTasks = import ./marlowe-cardano/deploy/nomadTasks.nix
-    { inherit inputs; };
+    { inherit inputs'; };
 
 
   networks = import ./marlowe-cardano/networks.nix

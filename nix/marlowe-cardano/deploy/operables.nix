@@ -1,6 +1,6 @@
-{ inputs, pkgs }:
+{ inputs', pkgs }:
 let
-  inherit (inputs) self std;
+  inherit (inputs') self std;
   inherit (pkgs)
     lib
     jq
