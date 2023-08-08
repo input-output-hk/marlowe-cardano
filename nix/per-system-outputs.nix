@@ -31,6 +31,6 @@ in
     { inherit inputs pkgs; };
 
 
-  packages.marlowe-integration-tests = import ./marlowe-cardano/integration-tests.nix
+  packages.integration-tests = import ./marlowe-cardano/integration-tests.nix
     { inherit inputs' pkgs projects; };
 }
