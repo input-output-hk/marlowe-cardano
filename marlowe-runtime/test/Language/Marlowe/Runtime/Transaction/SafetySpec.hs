@@ -4,18 +4,16 @@ module Language.Marlowe.Runtime.Transaction.SafetySpec where
 
 import Data.List (isInfixOf, nub)
 import Data.Maybe (fromJust)
-import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError (..))
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion (MarloweV1))
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts (..), getCurrentScripts)
 import Language.Marlowe.Runtime.Transaction.Api (Mint (..), RoleTokensConfig (..))
 import Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec ()
-import Language.Marlowe.Runtime.Transaction.Constraints (MarloweContext (..), solveConstraints)
+import Language.Marlowe.Runtime.Transaction.Constraints (MarloweContext (..))
 import Language.Marlowe.Runtime.Transaction.ConstraintsSpec (protocolTestnet)
 import Language.Marlowe.Runtime.Transaction.Safety (
   checkContract,
   checkTransactions,
-  makeSystemHistory,
   minAdaUpperBound,
   noContinuations,
  )
@@ -259,10 +257,7 @@ spec =
 
     describe "checkTransactions" do
       referenceContracts <- runIO readReferenceContracts
-      let zeroTime = posixSecondsToUTCTime 0
-          (systemStart, eraHistory) = makeSystemHistory zeroTime
-          solveConstraints' = solveConstraints systemStart eraHistory protocolTestnet
-          networkId = Cardano.Testnet $ Cardano.NetworkMagic 1
+      let networkId = Cardano.Testnet $ Cardano.NetworkMagic 1
           MarloweScripts{..} = getCurrentScripts version
           stakeReference = Shelley.NoStakeAddress
           marloweContext =
@@ -296,7 +291,7 @@ spec =
       for_ referenceContracts \(name, contract) -> it ("Passes for reference contract " <> name) do
         (policy, address) <- generate arbitrary
         let minAda = maybe 0 toInteger $ minAdaUpperBound protocolTestnet version contract continuations
-        actual <- checkTransactions solveConstraints' version marloweContext policy address minAda contract continuations
+        actual <- checkTransactions protocolTestnet version marloweContext policy address minAda contract continuations
         case actual of
           -- Overspending or warnings are not a test failures.
           Right errs
@@ -319,7 +314,7 @@ spec =
                   ]
                   1000
                   V1.Close
-          actual <- checkTransactions solveConstraints' version marloweContext policy address minAda contract continuations
+          actual <- checkTransactions protocolTestnet version marloweContext policy address minAda contract continuations
           case actual of
             Right errs
               | all overspent errs -> pure ()
