@@ -1,4 +1,5 @@
-{ inputs', pkgs }:
+{ inputs', pkgs, ... }:
+
 let
   inherit (pkgs.cardanoLib) environments mkEdgeTopology;
   mkNetwork = env: env // {

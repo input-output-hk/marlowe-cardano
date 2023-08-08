@@ -1,13 +1,12 @@
 # This file is part of the IOGX template and is documented at the link below:
 # https://www.github.com/input-output-hk/iogx#33-nixcabal-projectnix
 
-{ inputs, inputs', meta, config, pkgs, lib, ... }:
+{ inputs, inputs', meta, config, pkgs, l, ... }:
 
 let
 
-  lib = pkgs.lib;
+  mkIfDarwin = l.mkIf pkgs.stdenv.hostPlatform.isDarwin;
 
-  mkIfDarwin = lib.mkIf pkgs.stdenv.hostPlatform.isDarwin;
 
   packages = {
 
@@ -19,19 +18,19 @@ let
     # Fix missing executables on the paths of the test runners. This is arguably
     # a bug, and the fix is a bit of a hack.
     marlowe.components.tests.marlowe-test.preCheck = ''
-      PATH=${lib.makeBinPath [ pkgs.z3 ]}:$PATH
+      PATH=${l.makeBinPath [ pkgs.z3 ]}:$PATH
     '';
 
     marlowe-contracts.components.tests.marlowe-contracts-test.preCheck = ''
-      PATH=${lib.makeBinPath [ pkgs.z3 ]}:$PATH
+      PATH=${l.makeBinPath [ pkgs.z3 ]}:$PATH
     '';
 
     marlowe-test.components.tests.marlowe-test.preCheck = ''
-      PATH=${lib.makeBinPath [ pkgs.z3 ]}:$PATH
+      PATH=${l.makeBinPath [ pkgs.z3 ]}:$PATH
     '';
 
     marlowe-runtime.components.tests.marlowe-runtime-test.preCheck = ''
-      PATH=${lib.makeBinPath [ pkgs.z3 ]}:$PATH
+      PATH=${l.makeBinPath [ pkgs.z3 ]}:$PATH
     '';
 
     marlowe-cli.components.tests.marlowe-cli-test.preCheck = ''
@@ -45,7 +44,7 @@ let
     # accurately.
     # TODO: Resolve this situation in a better way.
     marlowe.components.tests.marlowe-test-long-running = {
-      platforms = lib.platforms.linux;
+      platforms = l.platforms.linux;
     };
 
     # These libraries rely on a TemplateHaskell splice that requires

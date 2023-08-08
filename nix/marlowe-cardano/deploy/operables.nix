@@ -1,8 +1,8 @@
-{ inputs', pkgs }:
+{ inputs', pkgs, l, ... }:
+
 let
   inherit (inputs') self std;
   inherit (pkgs)
-    lib
     jq
     sqitchPg
     postgresql
@@ -32,8 +32,8 @@ let
     filter = path: type:
       path == "${self}/marlowe-chain-sync"
         || path == "${self}/marlowe-chain-sync/sqitch.plan"
-        || lib.hasPrefix "${self}/marlowe-chain-sync/deploy" path
-        || lib.hasPrefix "${self}/marlowe-chain-sync/revert" path;
+        || l.hasPrefix "${self}/marlowe-chain-sync/deploy" path
+        || l.hasPrefix "${self}/marlowe-chain-sync/revert" path;
   }) + "/marlowe-chain-sync";
 
   # Ensure this path only changes when sqitch.plan file is updated, or DDL
@@ -45,8 +45,8 @@ let
       path == "${self}/marlowe-runtime"
         || path == "${self}/marlowe-runtime/marlowe-indexer"
         || path == "${self}/marlowe-runtime/marlowe-indexer/sqitch.plan"
-        || lib.hasPrefix "${self}/marlowe-runtime/marlowe-indexer/deploy" path
-        || lib.hasPrefix "${self}/marlowe-runtime/marlowe-indexer/revert" path;
+        || l.hasPrefix "${self}/marlowe-runtime/marlowe-indexer/deploy" path
+        || l.hasPrefix "${self}/marlowe-runtime/marlowe-indexer/revert" path;
   }) + "/marlowe-runtime/marlowe-indexer";
 
   database-uri = "postgresql://$DB_USER:$DB_PASS@$DB_HOST/$DB_NAME";
@@ -54,7 +54,7 @@ let
   wait-for-socket = writeShellScriptBin "wait-for-socket" ''
     set -eEuo pipefail
 
-    export PATH="${lib.makeBinPath [ coreutils socat ]}"
+    export PATH="${l.makeBinPath [ coreutils socat ]}"
 
     sock_path="$1"
     delay_iterations="''${2:-8}"
@@ -76,7 +76,7 @@ let
   wait-for-tcp = writeShellScriptBin "wait-for-tcp" ''
     set -eEuo pipefail
 
-    export PATH="${lib.makeBinPath [ coreutils netcat ]}"
+    export PATH="${l.makeBinPath [ coreutils netcat ]}"
 
     ip="$1"
     port="$2"

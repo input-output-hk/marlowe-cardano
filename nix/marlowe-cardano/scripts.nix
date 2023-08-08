@@ -1,4 +1,4 @@
-{ inputs', pkgs }:
+{ nix, inputs', pkgs, ... }:
 
 let
 
@@ -8,7 +8,7 @@ let
     docker compose -f ${compose-spec} up -d
   '';
 
-  compose-spec = import ./compose.nix { inherit inputs' pkgs; };
+  compose-spec = nix.marlowe-cardano.compose;
 
   refresh-compose = ''
     cd $(git rev-parse --show-toplevel)

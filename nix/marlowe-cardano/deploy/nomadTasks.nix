@@ -1,4 +1,5 @@
-{ inputs' }:
+{ inputs', ... }:
+
 let
   oci-images = inputs'.self.oci-images;
   # OCI-Image Namer
