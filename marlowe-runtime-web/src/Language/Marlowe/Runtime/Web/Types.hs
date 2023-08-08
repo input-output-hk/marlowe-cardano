@@ -242,15 +242,24 @@ instance FromJSON TxOutRef where
     withText "TxOutRef" $ either (parseFail . T.unpack) pure . parseUrlPiece
 
 instance ToSchema TxOutRef where
-  declareNamedSchema proxy = pure $ NamedSchema (Just "TxOutRef") $ toParamSchema proxy
+  declareNamedSchema _ =
+    pure $
+      NamedSchema (Just "TxOutRef") $
+        mempty
+          & type_ ?~ OpenApiString
+          & OpenApi.description
+            ?~ "A reference to a transaction output with a transaction ID and index."
+          & pattern ?~ "^[a-fA-F0-9]{64}#[0-9]+$"
+          & example ?~ "98d601c9307dd43307cf68a03aad0086d4e07a789b66919ccf9f7f7676577eb7#1"
 
 instance ToParamSchema TxOutRef where
   toParamSchema _ =
     mempty
       & type_ ?~ OpenApiString
-      & OpenApi.description ?~ "A reference to a transaction output with a transaction ID and index."
-      & pattern ?~ "^[a-fA-F0-9]{64}#[0-9]+$"
-      & example ?~ "98d601c9307dd43307cf68a03aad0086d4e07a789b66919ccf9f7f7676577eb7#1"
+      & OpenApi.description
+        ?~ "A reference to a transaction output with a transaction ID and index. The value must be URL encoded by replacing the '#' character with %23."
+      & pattern ?~ "^[a-fA-F0-9]{64}%23[0-9]+$"
+      & example ?~ "98d601c9307dd43307cf68a03aad0086d4e07a789b66919ccf9f7f7676577eb7%231"
 
 instance ToJSON TxOutRef where
   toJSON = String . toUrlPiece
