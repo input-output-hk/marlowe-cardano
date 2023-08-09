@@ -178,13 +178,6 @@ demerkleize requireContinuations f (When cases timeout contract) = When <$> mapM
             if requireContinuations
               then throwError . fromString $ "Missing continuation for hash " <> show mh <> "."
               else pure mc
-    {-
-        demerkleizeCase (MerkleizedCase action mh) =
-          do
-            continuation' <- asks . M.lookup $ DatumHash mh
-            continuation <- maybe (throwError . fromString $ "Missing continuation for hash " <> show mh <> ".") f continuation'
-            Case action <$> demerkleize requireContinuations f continuation
-    -}
     demerkleizeCase (Case action continuation) = Case action <$> demerkleize requireContinuations f continuation
 
 -- | Merkleize whatever inputs need merkleization before application to a contract.
