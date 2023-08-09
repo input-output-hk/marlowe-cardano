@@ -224,7 +224,7 @@ analyzeImpl era protocol MarloweTransaction{..} preconditions roles tokens maxim
         ci = ContractInstance mtRolesCurrency mtState mtContract mtContinuations mtValidator mtRoleValidator mtSlotConfig
     transactions <-
       if checkAll || executionCost || transactionSize || best && (maximumValue || minimumUtxo)
-        then findTransactions' $ MerkleizedContract mtContract mtContinuations
+        then findTransactions' True $ MerkleizedContract mtContract mtContinuations
         else pure mempty
     let perhapsTransactions = if best then Right transactions else Left ci
         guardValue condition x =

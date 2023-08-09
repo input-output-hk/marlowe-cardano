@@ -40,7 +40,7 @@ getOne sourceId expand = do
   if expand
     then do
       continuations <- loadContinuations closure
-      case demerkleizeContract continuations $ deepDemerkleize contract of
+      case demerkleizeContract continuations $ deepDemerkleize False contract of
         Left err -> fail err
         Right expanded -> pure expanded
     else pure contract

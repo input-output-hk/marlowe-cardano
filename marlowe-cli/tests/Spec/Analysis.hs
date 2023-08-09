@@ -105,7 +105,7 @@ checkTransactionCost merkleize =
           ciSemanticsValidator = mtValidator
           ciPayoutValidator = mtRoleValidator
           ciSlotConfig = mtSlotConfig
-      transactions <- findTransactions' $ MerkleizedContract ciContract ciContinuations
+      transactions <- findTransactions' True $ MerkleizedContract ciContract ciContinuations
       actual <- checkExecutionCost protocolTestnet ContractInstance{..} transactions False
       liftIO $ assertBool "" $ actual == expected merkleize
 

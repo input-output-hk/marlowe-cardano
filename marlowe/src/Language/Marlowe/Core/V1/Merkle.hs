@@ -1,3 +1,4 @@
+{-# LANGUAGE ExplicitForAll #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  $Headers
@@ -125,45 +126,66 @@ merkleize f (When cases timeout contract) = When <$> mapM merkleizeCase cases <*
 shallowDemerkleize
   :: (IsString e)
   => (MonadError e m)
-  => Contract
+  => Bool
+  -- ^ Throw an error if all required continuations are not present.
+  -> Contract
   -- ^ The contract.
   -> ReaderT Continuations m Contract
   -- ^ Action for the demerkleized contract.
-shallowDemerkleize = demerkleize pure
+shallowDemerkleize = flip demerkleize pure
 
 -- | Demerkleize all case statements in a contract.
 deepDemerkleize
   :: (IsString e)
   => (MonadError e m)
-  => Contract
+  => Bool
+  -- ^ Throw an error if all required continuations are not present.
+  -> Contract
   -- ^ The contract.
   -> ReaderT Continuations m Contract
   -- ^ Action for the demerkleized contract.
-deepDemerkleize = fix demerkleize
+deepDemerkleize = fix . demerkleize
 
 -- | Demerkleize selected case statements in a contract.
 demerkleize
-  :: (IsString e)
+  :: forall e m
+   . (IsString e)
   => (MonadError e m)
-  => (Contract -> ReaderT Continuations m Contract)
+  => Bool
+  -- ^ Throw an error if all required continuations are not present.
+  -> (Contract -> ReaderT Continuations m Contract)
   -- ^ Action to continue demerkleization.
   -> Contract
   -- ^ The contract.
   -> ReaderT Continuations m Contract
   -- ^ Action for demerkleized the selected case statements.
-demerkleize _ Close = pure Close
-demerkleize f (Pay accountId payee token value contract) = Pay accountId payee token value <$> demerkleize f contract
-demerkleize f (If observation thenContract elseContract) = If observation <$> demerkleize f thenContract <*> demerkleize f elseContract
-demerkleize f (Let valueId value contract) = Let valueId value <$> demerkleize f contract
-demerkleize f (Assert observation contract) = Assert observation <$> demerkleize f contract
-demerkleize f (When cases timeout contract) = When <$> mapM demerkleizeCase cases <*> pure timeout <*> demerkleize f contract
+demerkleize _ _ Close = pure Close
+demerkleize requireContinuations f (Pay accountId payee token value contract) = Pay accountId payee token value <$> demerkleize requireContinuations f contract
+demerkleize requireContinuations f (If observation thenContract elseContract) =
+  If observation <$> demerkleize requireContinuations f thenContract <*> demerkleize requireContinuations f elseContract
+demerkleize requireContinuations f (Let valueId value contract) = Let valueId value <$> demerkleize requireContinuations f contract
+demerkleize requireContinuations f (Assert observation contract) = Assert observation <$> demerkleize requireContinuations f contract
+demerkleize requireContinuations f (When cases timeout contract) = When <$> mapM demerkleizeCase cases <*> pure timeout <*> demerkleize requireContinuations f contract
   where
-    demerkleizeCase (MerkleizedCase action mh) =
+    demerkleizeCase :: Case Contract -> ReaderT Continuations m (Case Contract)
+    demerkleizeCase mc@(MerkleizedCase action mh) =
       do
         continuation' <- asks . M.lookup $ DatumHash mh
-        continuation <- maybe (throwError . fromString $ "Missing continuation for hash " <> show mh <> ".") f continuation'
-        Case action <$> demerkleize f continuation
-    demerkleizeCase (Case action continuation) = Case action <$> demerkleize f continuation
+        case continuation' of
+          Just continuation ->
+            fmap (Case action) . demerkleize requireContinuations f =<< f continuation
+          Nothing ->
+            if requireContinuations
+              then throwError . fromString $ "Missing continuation for hash " <> show mh <> "."
+              else pure mc
+    {-
+        demerkleizeCase (MerkleizedCase action mh) =
+          do
+            continuation' <- asks . M.lookup $ DatumHash mh
+            continuation <- maybe (throwError . fromString $ "Missing continuation for hash " <> show mh <> ".") f continuation'
+            Case action <$> demerkleize requireContinuations f continuation
+    -}
+    demerkleizeCase (Case action continuation) = Case action <$> demerkleize requireContinuations f continuation
 
 -- | Merkleize whatever inputs need merkleization before application to a contract.
 merkleizeInputs
