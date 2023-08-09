@@ -33,8 +33,8 @@ spec:
             max_pred_locks_per_transaction: "256"
             work_mem: "32MB"
             maintenance_work_mem: "512MB"
-            shared_buffers: "2GB"
-            wal_buffers: "256MB"
+            shared_buffers: "4GB"
+            wal_buffers: "512MB"
         ports:
           - expose: true
             port: 5432
