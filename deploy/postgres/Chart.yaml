@@ -1,8 +1,8 @@
 apiVersion: v2
-name: marlowe-runtime
+name: marlowe-runtime-database
 version: v0.0.30
 appVersion: v1.0.10
-description: Marlowe smart contract language Cardano implementation
+description: Postgres cluster for Marlowe Runtime
 home: https://marlowe.iohk.io
 sources:
   - https://github.com/input-output-hk/marlowe-cardano
