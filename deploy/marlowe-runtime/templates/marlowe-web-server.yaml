@@ -37,7 +37,7 @@ spec:
       - type: https-route
         properties:
           domains:
-          - marlowe-runtime-{{ . }}-refactor-web.scdev.aws.iohkdev.io
+          - marlowe-runtime-{{ . }}-web.scdev.aws.iohkdev.io
           rules:
           - port: 3780
       - type: opentelemetry-collector

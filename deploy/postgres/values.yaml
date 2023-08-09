@@ -8,6 +8,6 @@ images:
   repo: ghcr.io
   org: input-output-hk
 
-namespace: marlowe-staging-refactor
+namespace: marlowe-staging
 
-databaseName: marlowe-runtime-db
+databaseName: marlowe-runtime-database

@@ -15,7 +15,7 @@ spec:
       properties:
         replicas: 3
         volume:
-          size: 200Gi
+          size: 1000Gi
         resources:
           requests:
             cpu: "4000m"
