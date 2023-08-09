@@ -34,6 +34,10 @@ let
       PATH=${lib.makeBinPath [ pkgs.z3 ]}:$PATH
     '';
 
+    marlowe-cli.components.tests.marlowe-cli-test.preCheck = ''
+      PATH=${lib.makeBinPath [ pkgs.z3 ]}:$PATH
+    '';
+
     # Note: The following two statements say that these tests should
     # _only_ run on linux. In actual fact we just don't want them
     # running on the 'mac-mini' instances, because these tests time out
