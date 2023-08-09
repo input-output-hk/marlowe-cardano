@@ -18,9 +18,11 @@ spec:
           size: 200Gi
         resources:
           requests:
-            memory: "8Gi"
+            cpu: "4000m"
+            memory: "16Gi"
           limits:
-            memory: "8Gi"
+            cpu: "4000m"
+            memory: "24Gi"
         postgresql:
           parameters:
             max_connections: "1000"
@@ -30,7 +32,9 @@ spec:
             max_locks_per_transaction: "256"
             max_pred_locks_per_transaction: "256"
             work_mem: "32MB"
-            maintenance_work_mem: "256MB"
+            maintenance_work_mem: "512MB"
+            shared_buffers: "2GB"
+            wal_buffers: "256MB"
         ports:
           - expose: true
             port: 5432
