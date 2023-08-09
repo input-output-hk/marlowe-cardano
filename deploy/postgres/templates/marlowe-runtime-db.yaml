@@ -8,6 +8,7 @@ metadata:
     "helm.sh/resource-policy": keep
     "meta.helm.sh/release-name": {{ $.Values.databaseName }}
     "meta.helm.sh/release-namespace": {{ $.Values.namespace }}
+    "app.kubernetes.io/managed-by": "Helm"
 spec:
   components:
     - type: "postgres-cluster"
