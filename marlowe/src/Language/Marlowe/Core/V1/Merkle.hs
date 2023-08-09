@@ -1,4 +1,3 @@
-{-# LANGUAGE ExplicitForAll #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  $Headers
@@ -8,6 +7,7 @@
 -- Portability :  Portable
 --
 -----------------------------------------------------------------------------
+{-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards #-}
 
