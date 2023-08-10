@@ -182,7 +182,7 @@ library
     , hint ^>=0.9
     , ilist ==0.4.0.1
     , lens >=5.2 && <6
-    , marlowe-cardano ==0.1.1.0
+    , marlowe-cardano ==0.1.2.0
     , marlowe-spec-test ==0.1.0.0
     , mtl >=2.2 && <3
     , plutus-ledger ^>=1.2

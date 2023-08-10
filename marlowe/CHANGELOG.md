@@ -1,4 +1,17 @@
 
+<a id='changelog-0.1.2.0'></a>
+# 0.1.2.0 — 2023-08-10
+
+## Added
+
+- "next" possibilities for a given contract
+
+- JSON instances for safety-analysis types.
+
+## Fixed
+
+- Execution-cost analysis of merkleized contracts (PLT-6907).
+
 <a id='changelog-0.1.1.0'></a>
 # 0.1.1.0 — 2023-06-15
 

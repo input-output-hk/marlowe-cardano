@@ -69,7 +69,7 @@ library
     , containers ^>=0.6.5
     , http-media ^>=0.8
     , lens >=5.2 && <6
-    , marlowe-cardano ==0.1.1.0
+    , marlowe-cardano ==0.1.2.0
     , marlowe-object ==0.1.0.0
     , mtl >=2.2 && <3
     , network-uri >=2.6 && <3
@@ -130,7 +130,7 @@ library server
     , exceptions >=0.10 && <0.12
     , http-media ^>=0.8
     , lens >=5.2 && <6
-    , marlowe-cardano ==0.1.1.0
+    , marlowe-cardano ==0.1.2.0
     , marlowe-chain-sync ==0.0.3
     , marlowe-client ==0.0.3
     , marlowe-object ==0.1.0.0
@@ -200,7 +200,7 @@ test-suite marlowe-runtime-web-test
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
     , hspec
-    , marlowe-cardano ==0.1.1.0
+    , marlowe-cardano ==0.1.2.0
     , marlowe-object:gen
     , marlowe-runtime-web
     , marlowe-test

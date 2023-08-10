@@ -85,7 +85,7 @@ library
     , bytestring >=0.10.12 && <0.12
     , cardano-api ==1.35.4
     , containers ^>=0.6.5
-    , marlowe-cardano ==0.1.1.0
+    , marlowe-cardano ==0.1.2.0
     , marlowe-chain-sync ==0.0.3
     , marlowe-protocols ==0.1.1.0
     , ouroboros-network ==0.1.0.1
@@ -110,7 +110,7 @@ library gen
     , cardano-api:{cardano-api, gen} ==1.35.4
     , hedgehog-quickcheck ^>=0.1
     , http-media ^>=0.8
-    , marlowe-cardano ==0.1.1.0
+    , marlowe-cardano ==0.1.2.0
     , marlowe-chain-sync:{gen, plutus-compat} ==0.0.3
     , marlowe-runtime:{marlowe-runtime, discovery-api, history-api, tx-api} ==0.0.3
     , marlowe-test ==0.1.2.0
@@ -136,7 +136,7 @@ library history-api
     , containers ^>=0.6.5
     , errors >=2.3 && <3
     , hs-opentelemetry-api ==0.0.3.6
-    , marlowe-cardano ==0.1.1.0
+    , marlowe-cardano ==0.1.2.0
     , marlowe-chain-sync ==0.0.3
     , marlowe-protocols ==0.1.1.0
     , marlowe-runtime ==0.0.3
@@ -179,7 +179,7 @@ library indexer
     , hasql-th ^>=0.4
     , hasql-transaction ^>=1
     , hs-opentelemetry-api ==0.0.3.6
-    , marlowe-cardano ==0.1.1.0
+    , marlowe-cardano ==0.1.2.0
     , marlowe-chain-sync ==0.0.3
     , marlowe-protocols ==0.1.1.0
     , marlowe-runtime:{marlowe-runtime, history-api} ==0.0.3
@@ -236,7 +236,7 @@ library contract-api
     , cardano-api ==1.35.4
     , containers ^>=0.6.5
     , hs-opentelemetry-api ==0.0.3.6
-    , marlowe-cardano ==0.1.1.0
+    , marlowe-cardano ==0.1.2.0
     , marlowe-chain-sync ==0.0.3
     , marlowe-object ==0.1.0.0
     , marlowe-protocols ==0.1.1.0
@@ -274,7 +274,7 @@ library contract
     , filepath ^>=1.4
     , hs-opentelemetry-api ==0.0.3.6
     , lock-file ^>=0.7
-    , marlowe-cardano ==0.1.1.0
+    , marlowe-cardano ==0.1.2.0
     , marlowe-chain-sync ==0.0.3
     , marlowe-object ==0.1.0.0
     , marlowe-protocols ==0.1.1.0
@@ -329,7 +329,7 @@ library sync
     , hasql-th ^>=0.4
     , hasql-transaction ^>=1
     , hs-opentelemetry-api ==0.0.3.6
-    , marlowe-cardano ==0.1.1.0
+    , marlowe-cardano ==0.1.2.0
     , marlowe-chain-sync ==0.0.3
     , marlowe-protocols ==0.1.1.0
     , marlowe-runtime:{marlowe-runtime, discovery-api, history-api, sync-api} ==0.0.3
@@ -374,7 +374,7 @@ library tx-api
     , cardano-api ==1.35.4
     , containers ^>=0.6.5
     , http-media ^>=0.8
-    , marlowe-cardano ==0.1.1.0
+    , marlowe-cardano ==0.1.2.0
     , marlowe-chain-sync ==0.0.3
     , marlowe-protocols ==0.1.1.0
     , marlowe-runtime:{marlowe-runtime, history-api} ==0.0.3
@@ -410,7 +410,7 @@ library tx
     , eventuo11y-extras ==0.1.1.0
     , eventuo11y-otel ^>=0.1
     , hs-opentelemetry-api ==0.0.3.6
-    , marlowe-cardano ==0.1.1.0
+    , marlowe-cardano ==0.1.2.0
     , marlowe-chain-sync:{marlowe-chain-sync, plutus-compat} ==0.0.3
     , marlowe-protocols ==0.1.1.0
     , marlowe-runtime:{marlowe-runtime, contract-api, history-api, plutus-scripts, tx-api} ==0.0.3
@@ -727,7 +727,7 @@ test-suite marlowe-runtime-test
     , hedgehog-quickcheck ^>=0.1
     , hspec
     , http-media ^>=0.8
-    , marlowe-cardano ==0.1.1.0
+    , marlowe-cardano ==0.1.2.0
     , marlowe-chain-sync:{marlowe-chain-sync, gen, plutus-compat} ==0.0.3
     , marlowe-object:gen
     , marlowe-protocols ==0.1.1.0
@@ -762,7 +762,7 @@ test-suite indexer-test
     , cardano-api ==1.35.4
     , containers ^>=0.6.5
     , hspec
-    , marlowe-cardano ==0.1.1.0
+    , marlowe-cardano ==0.1.2.0
     , marlowe-chain-sync:{marlowe-chain-sync, plutus-compat} ==0.0.3
     , marlowe-runtime:{marlowe-runtime, gen, history-api, indexer} ==0.0.3
     , marlowe-test ==0.1.2.0
