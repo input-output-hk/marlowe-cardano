@@ -184,7 +184,7 @@ checkTransactions solveConstraints version@MarloweV1 marloweContext rolesCurrenc
     do
       let changeAddress' = uncurry V1.Address . fromJust . V1.deserialiseAddress $ Chain.unAddress changeAddress
       transactions <-
-        findTransactions changeAddress' minAda . V1.MerkleizedContract contract $ remapContinuations continuations
+        findTransactions False changeAddress' minAda . V1.MerkleizedContract contract $ remapContinuations continuations
       either throwE (pure . mconcat)
         . forM transactions
         $ checkTransaction solveConstraints version marloweContext rolesCurrency changeAddress

@@ -272,3 +272,23 @@ executable marlowe-cli
     , text
 
   ghc-options:     -threaded
+
+test-suite marlowe-cli-test
+  import:         lang
+  hs-source-dirs: tests
+  type:           exitcode-stdio-1.0
+  main-is:        Spec.hs
+  other-modules:  Spec.Analysis
+  build-depends:
+    , aeson
+    , base >=4.9 && <5
+    , cardano-api
+    , containers
+    , marlowe-cardano
+    , marlowe-cli
+    , mtl
+    , plutus-ledger-api
+    , plutus-ledger-slot
+    , plutus-tx
+    , tasty
+    , tasty-hunit

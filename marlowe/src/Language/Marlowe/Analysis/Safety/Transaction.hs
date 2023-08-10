@@ -212,7 +212,9 @@ findTransactions
   :: (IsString e)
   => (MonadError e m)
   => (MonadIO m)
-  => Party
+  => Bool
+  -- ^ Throw an error if all required continuations are not present.
+  -> Party
   -- ^ The contract creator.
   -> Integer
   -- ^ The initial lovelace for the creator's account.
@@ -220,11 +222,11 @@ findTransactions
   -- ^ The bundle of contract information.
   -> m [Transaction]
   -- ^ Action for computing the initial state, initial contract, perhaps-merkleized input, and the output for the transactions.
-findTransactions creatorAddress minAda mc@MerkleizedContract{..} =
+findTransactions requireContinuations creatorAddress minAda mc@MerkleizedContract{..} =
   do
     let ada = Token P.adaSymbol P.adaToken
         prune (Transaction s c i _) (Transaction s' c' i' _) = s == s' && c == c' && i == i'
-    paths <- findPaths creatorAddress minAda mc
+    paths <- findPaths requireContinuations creatorAddress minAda mc
     nubBy prune
       . concat
       <$> sequence
@@ -238,11 +240,13 @@ findTransactions'
   :: (IsString e)
   => (MonadError e m)
   => (MonadIO m)
-  => MerkleizedContract
+  => Bool
+  -- ^ Throw an error if all required continuations are not present.
+  -> MerkleizedContract
   -- ^ The bundle of contract information.
   -> m [Transaction]
   -- ^ Action for computing the initial state, initial contract, perhaps-merkleized input, and the output for the transactions.
-findTransactions' mc@MerkleizedContract{..} =
+findTransactions' requireContinuations mc@MerkleizedContract{..} =
   let utxoCostPerByte = 4310
       creatorAddress =
         Address True $
@@ -250,7 +254,7 @@ findTransactions' mc@MerkleizedContract{..} =
             (P.PubKeyCredential "88888888888888888888888888888888888888888888888888888888")
             (Just . P.StakingHash $ P.PubKeyCredential "99999999999999999999999999999999999999999999999999999999")
       minAda = worstMinimumUtxo' utxoCostPerByte mcContract mcContinuations
-   in findTransactions creatorAddress minAda mc
+   in findTransactions requireContinuations creatorAddress minAda mc
 
 -- | Find the transactions corresponding to a path of demerkleized inputs.
 findTransactionPath
@@ -300,7 +304,9 @@ findPaths
   :: (IsString e)
   => (MonadError e m)
   => (MonadIO m)
-  => Party
+  => Bool
+  -- ^ Throw an error if all required continuations are not present.
+  -> Party
   -- ^ The creator.
   -> Integer
   -- ^ The initial lovelace in the creator's account.
@@ -308,7 +314,7 @@ findPaths
   -- ^ The bundle of contract information.
   -> m [(P.POSIXTime, [TransactionInput])]
   -- ^ The paths throught the Marlowe contract.
-findPaths creatorAddress minAda MerkleizedContract{..} =
+findPaths requireContinuations creatorAddress minAda MerkleizedContract{..} =
   do
     let ada = Token P.adaSymbol P.adaToken
         forever = 4_102_444_800_000 {- 1 Jan 2100 -}
@@ -317,7 +323,7 @@ findPaths creatorAddress minAda MerkleizedContract{..} =
     paths <-
       liftEither . first (fromString . show)
         =<< liftIO . getAllInputs
-        =<< demerkleizeContract mcContinuations (deepDemerkleize contract)
+        =<< demerkleizeContract mcContinuations (deepDemerkleize requireContinuations contract)
     pure
       . filter (not . null . snd) -- Discard the input that is only the initial deposit.
       $ second tail <$> paths -- Discard the initial deposit from each path.

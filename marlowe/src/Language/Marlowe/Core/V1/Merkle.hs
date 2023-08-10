@@ -1,12 +1,13 @@
 -----------------------------------------------------------------------------
 --
--- Module      :  $Headers
+-- Module      :  Language.Marlowe.Core.V1.Merkle
 -- License     :  Apache 2.0
 --
 -- Stability   :  Experimental
 -- Portability :  Portable
 --
 -----------------------------------------------------------------------------
+{-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -32,18 +33,16 @@ module Language.Marlowe.Core.V1.Merkle (
 ) where
 
 import Control.Monad (foldM)
-import Control.Monad.Except (MonadError, catchError, throwError)
+import Control.Monad.Except (MonadError, throwError)
 import Control.Monad.Fix (fix)
-import Control.Monad.Reader (ReaderT, ask, runReaderT)
+import Control.Monad.Reader (ReaderT, asks, runReaderT)
 import Control.Monad.Writer (Writer, runWriter, tell)
 import Data.String (IsString (..))
 import Language.Marlowe.Core.V1.Semantics (
-  ApplyResult (..),
+  ApplyAction (..),
   ReduceResult (..),
   TransactionInput (..),
-  TransactionOutput (..),
-  applyInput,
-  computeTransaction,
+  applyAction,
   fixInterval,
   reduceContractUntilQuiescent,
  )
@@ -89,7 +88,7 @@ shallowMerkleize
   -- ^ The contract.
   -> Writer Continuations Contract
   -- ^ Action for the merkleized contract.
-shallowMerkleize = merkleize' pure
+shallowMerkleize = merkleize pure
 
 -- | Merkleize all case statements in a contract.
 deepMerkleize
@@ -97,22 +96,22 @@ deepMerkleize
   -- ^ The contract.
   -> Writer Continuations Contract
   -- ^ Action for the merkleized contract.
-deepMerkleize = fix merkleize'
+deepMerkleize = fix merkleize
 
 -- | Merkleize selected case statements in a contract.
-merkleize'
+merkleize
   :: (Contract -> Writer Continuations Contract)
   -- ^ Action to continue merkleization.
   -> Contract
   -- ^ The contract.
   -> Writer Continuations Contract
   -- ^ Action for merkleizing the selected case statements.
-merkleize' _ Close = pure Close
-merkleize' f (Pay accountId payee token value contract) = Pay accountId payee token value <$> merkleize' f contract
-merkleize' f (If observation thenContract elseContract) = If observation <$> merkleize' f thenContract <*> merkleize' f elseContract
-merkleize' f (Let valueId value contract) = Let valueId value <$> merkleize' f contract
-merkleize' f (Assert observation contract) = Assert observation <$> merkleize' f contract
-merkleize' f (When cases timeout contract) = When <$> mapM merkleizeCase cases <*> pure timeout <*> merkleize' f contract
+merkleize _ Close = pure Close
+merkleize f (Pay accountId payee token value contract) = Pay accountId payee token value <$> merkleize f contract
+merkleize f (If observation thenContract elseContract) = If observation <$> merkleize f thenContract <*> merkleize f elseContract
+merkleize f (Let valueId value contract) = Let valueId value <$> merkleize f contract
+merkleize f (Assert observation contract) = Assert observation <$> merkleize f contract
+merkleize f (When cases timeout contract) = When <$> mapM merkleizeCase cases <*> pure timeout <*> merkleize f contract
   where
     merkleizeCase c@(Case _ Close) = pure c
     merkleizeCase (Case action continuation) =
@@ -127,45 +126,59 @@ merkleize' f (When cases timeout contract) = When <$> mapM merkleizeCase cases <
 shallowDemerkleize
   :: (IsString e)
   => (MonadError e m)
-  => Contract
+  => Bool
+  -- ^ Throw an error if all required continuations are not present.
+  -> Contract
   -- ^ The contract.
   -> ReaderT Continuations m Contract
   -- ^ Action for the demerkleized contract.
-shallowDemerkleize = demerkleize' pure
+shallowDemerkleize = flip demerkleize pure
 
 -- | Demerkleize all case statements in a contract.
 deepDemerkleize
   :: (IsString e)
   => (MonadError e m)
-  => Contract
+  => Bool
+  -- ^ Throw an error if all required continuations are not present.
+  -> Contract
   -- ^ The contract.
   -> ReaderT Continuations m Contract
   -- ^ Action for the demerkleized contract.
-deepDemerkleize = fix demerkleize'
+deepDemerkleize = fix . demerkleize
 
 -- | Demerkleize selected case statements in a contract.
-demerkleize'
-  :: (IsString e)
+demerkleize
+  :: forall e m
+   . (IsString e)
   => (MonadError e m)
-  => (Contract -> ReaderT Continuations m Contract)
+  => Bool
+  -- ^ Throw an error if all required continuations are not present.
+  -> (Contract -> ReaderT Continuations m Contract)
   -- ^ Action to continue demerkleization.
   -> Contract
   -- ^ The contract.
   -> ReaderT Continuations m Contract
   -- ^ Action for demerkleized the selected case statements.
-demerkleize' _ Close = pure Close
-demerkleize' f (Pay accountId payee token value contract) = Pay accountId payee token value <$> demerkleize' f contract
-demerkleize' f (If observation thenContract elseContract) = If observation <$> demerkleize' f thenContract <*> demerkleize' f elseContract
-demerkleize' f (Let valueId value contract) = Let valueId value <$> demerkleize' f contract
-demerkleize' f (Assert observation contract) = Assert observation <$> demerkleize' f contract
-demerkleize' f (When cases timeout contract) = When <$> mapM demerkleizeCase cases <*> pure timeout <*> demerkleize' f contract
+demerkleize _ _ Close = pure Close
+demerkleize requireContinuations f (Pay accountId payee token value contract) = Pay accountId payee token value <$> demerkleize requireContinuations f contract
+demerkleize requireContinuations f (If observation thenContract elseContract) =
+  If observation <$> demerkleize requireContinuations f thenContract <*> demerkleize requireContinuations f elseContract
+demerkleize requireContinuations f (Let valueId value contract) = Let valueId value <$> demerkleize requireContinuations f contract
+demerkleize requireContinuations f (Assert observation contract) = Assert observation <$> demerkleize requireContinuations f contract
+demerkleize requireContinuations f (When cases timeout contract) = When <$> mapM demerkleizeCase cases <*> pure timeout <*> demerkleize requireContinuations f contract
   where
-    demerkleizeCase (MerkleizedCase action mh) =
+    demerkleizeCase :: Case Contract -> ReaderT Continuations m (Case Contract)
+    demerkleizeCase mc@(MerkleizedCase action mh) =
       do
-        continuation' <- M.lookup (DatumHash mh) <$> ask
-        continuation <- maybe (throwError . fromString $ "Missing continuation for hash " <> show mh <> ".") f continuation'
-        pure $ Case action continuation
-    demerkleizeCase c = pure c
+        continuation' <- asks . M.lookup $ DatumHash mh
+        case continuation' of
+          Just continuation ->
+            fmap (Case action) . demerkleize requireContinuations f =<< f continuation
+          Nothing ->
+            if requireContinuations
+              then throwError . fromString $ "Missing continuation for hash " <> show mh <> "."
+              else pure mc
+    demerkleizeCase (Case action continuation) = Case action <$> demerkleize requireContinuations f continuation
 
 -- | Merkleize whatever inputs need merkleization before application to a contract.
 merkleizeInputs
@@ -199,53 +212,31 @@ merkleizeInput
   -> m ((State, Contract), [Input])
   -- ^ The new state and contract, along with the prior inputs.
 merkleizeInput txInterval continuations ((state, contract), inputs) input =
-  do
-    -- Apply input as it is.
-    let attempt = computeTransaction (TransactionInput txInterval [input]) state contract
-        result =
-          case attempt of
-            TransactionOutput{..} -> pure ((txOutState, txOutContract), inputs ++ [input])
-            Error e -> throwError . fromString $ show e
-    -- Try applying the input to the demerkleized contract.
-    contract' <- shallowDemerkleize contract `runReaderT` continuations
-    let attempt' = computeTransaction' txInterval input state contract'
-        result' =
-          case attempt' of
-            Just (txOutState, txOutContract) ->
-              do
-                input' <-
-                  case input of
-                    NormalInput content ->
-                      pure $
-                        MerkleizedInput
-                          content
-                          (dataHash $ toBuiltinData txOutContract)
-                          txOutContract
-                    MerkleizedInput{} -> throwError $ fromString "Unexpected mekleized input."
-                pure ((txOutState, txOutContract), inputs ++ [input'])
-            Nothing -> throwError $ fromString "Failed to merkleize input."
-    -- See if either as-is or merkleized input is accepted.
-    result `catchError` const result'
-
--- | Compute one step in a transaction without reducing the quiescent state after the input is applied.
-computeTransaction'
-  :: TimeInterval
-  -- ^ The validity interval.
-  -> Input
-  -- ^ The input to the contract.
-  -> State
-  -- ^ The current state of the contract.
-  -> Contract
-  -- ^ The current contract.
-  -> Maybe (State, Contract)
-  -- ^ The new state and contract, if the input could be applied.
-computeTransaction' txInterval input state contract =
-  case fixInterval txInterval state of
-    IntervalTrimmed env fixState ->
-      case reduceContractUntilQuiescent env fixState contract of
-        ContractQuiescent _ _ _ curState cont ->
-          case applyInput env curState input cont of
-            Applied _ newState cont' -> Just (newState, cont')
-            _ -> Nothing
-        _ -> Nothing
-    _ -> Nothing
+  let inputContent =
+        case input of
+          NormalInput inputContent' -> inputContent'
+          MerkleizedInput inputContent' _ _ -> inputContent'
+   in case fixInterval txInterval state of
+        IntervalTrimmed env fixState ->
+          case reduceContractUntilQuiescent env fixState contract of
+            ContractQuiescent _ _ _ curState cont ->
+              case cont of
+                (When cases _ _) ->
+                  let match [] = throwError $ fromString "No match when merkleizing input."
+                      match (Case action continuation : cases') =
+                        case applyAction env curState inputContent action of
+                          AppliedAction _ newState -> pure ((newState, continuation), inputs ++ [NormalInput inputContent])
+                          NotAppliedAction -> match cases'
+                      match (MerkleizedCase action mh : cases') =
+                        -- Note that this does not handle the situation where two `Case` statements have the same action,
+                        -- but different continuation hashes.
+                        case applyAction env curState inputContent action of
+                          AppliedAction _ newState ->
+                            case M.lookup (DatumHash mh) continuations of
+                              Just continuation -> pure ((newState, continuation), inputs ++ [MerkleizedInput inputContent mh continuation])
+                              Nothing -> throwError $ fromString "No continuation when merkleizing input."
+                          NotAppliedAction -> match cases'
+                   in match cases
+                _ -> throwError $ fromString "No quiescence when merkleizing input."
+            _ -> throwError $ fromString "Reduction failure when merkelizing input."
+        _ -> throwError $ fromString "Bad interval when merkleizing input."

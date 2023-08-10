@@ -24,6 +24,7 @@ module Language.Marlowe.CLI.Analyze (
 
   -- * Analysis
   analyze,
+  checkExecutionCost,
 ) where
 
 import Control.Monad (guard, liftM2, (<=<))
@@ -223,7 +224,7 @@ analyzeImpl era protocol MarloweTransaction{..} preconditions roles tokens maxim
         ci = ContractInstance mtRolesCurrency mtState mtContract mtContinuations mtValidator mtRoleValidator mtSlotConfig
     transactions <-
       if checkAll || executionCost || transactionSize || best && (maximumValue || minimumUtxo)
-        then findTransactions' $ MerkleizedContract mtContract mtContinuations
+        then findTransactions' True $ MerkleizedContract mtContract mtContinuations
         else pure mempty
     let perhapsTransactions = if best then Right transactions else Left ci
         guardValue condition x =

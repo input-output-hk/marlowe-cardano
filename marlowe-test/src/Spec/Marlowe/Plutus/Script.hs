@@ -26,6 +26,9 @@ module Spec.Marlowe.Plutus.Script (
   hashRole,
   payoutScriptHash,
   semanticsScriptHash,
+
+  -- * Parameters
+  costModel,
 ) where
 
 import Codec.Serialise (serialise)
