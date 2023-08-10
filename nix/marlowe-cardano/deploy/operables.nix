@@ -14,15 +14,15 @@ let
     z3
     ;
 
-  marlowe-chain-indexer = self.packages.marlowe-chain-sync-exe-marlowe-chain-indexer-ghc8107;
-  marlowe-chain-sync = self.packages.marlowe-chain-sync-exe-marlowe-chain-sync-ghc8107;
-  marlowe-contract = self.packages.marlowe-runtime-exe-marlowe-contract-ghc8107;
-  marlowe-runtime = self.packages.marlowe-runtime-exe-marlowe-runtime-ghc8107;
-  marlowe-tx = self.packages.marlowe-runtime-exe-marlowe-tx-ghc8107;
-  marlowe-proxy = self.packages.marlowe-runtime-exe-marlowe-proxy-ghc8107;
-  marlowe-indexer = self.packages.marlowe-runtime-exe-marlowe-indexer-ghc8107;
-  marlowe-web-server = self.packages.marlowe-runtime-web-exe-marlowe-web-server-ghc8107;
-  marlowe-sync = self.packages.marlowe-runtime-exe-marlowe-sync-ghc8107;
+  marlowe-chain-indexer = self.packages.marlowe-chain-indexer;
+  marlowe-chain-sync = self.packages.marlowe-chain-sync;
+  marlowe-contract = self.packages.marlowe-contract;
+  marlowe-runtime = self.packages.marlowe-runtime;
+  marlowe-tx = self.packages.marlowe-tx;
+  marlowe-proxy = self.packages.marlowe-proxy;
+  marlowe-indexer = self.packages.marlowe-indexer;
+  marlowe-web-server = self.packages.marlowe-web-server;
+  marlowe-sync = self.packages.marlowe-sync;
 
   # Ensure this path only changes when sqitch.plan file is updated, or DDL
   # files are updated.
