@@ -113,7 +113,7 @@ library gen
     , marlowe-cardano ==0.1.2.0
     , marlowe-chain-sync:{gen, plutus-compat} ==0.0.3
     , marlowe-runtime:{marlowe-runtime, discovery-api, history-api, tx-api} ==0.0.3
-    , marlowe-test ==0.1.2.0
+    , marlowe-test ==0.1.3.0
     , network-uri >=2.6 && <3
     , QuickCheck >=2.14 && <3
     , quickcheck-instances ^>=0.3.29
@@ -732,7 +732,7 @@ test-suite marlowe-runtime-test
     , marlowe-object:gen
     , marlowe-protocols ==0.1.1.0
     , marlowe-runtime:{marlowe-runtime, contract-api, discovery-api, gen, history-api, sync-api, tx, tx-api} ==0.0.3
-    , marlowe-test ==0.1.2.0
+    , marlowe-test ==0.1.3.0
     , network-uri >=2.6 && <3
     , ouroboros-consensus ==0.1.0.1
     , plutus-ledger-api ==1.0.0.1
@@ -765,7 +765,7 @@ test-suite indexer-test
     , marlowe-cardano ==0.1.2.0
     , marlowe-chain-sync:{marlowe-chain-sync, plutus-compat} ==0.0.3
     , marlowe-runtime:{marlowe-runtime, gen, history-api, indexer} ==0.0.3
-    , marlowe-test ==0.1.2.0
+    , marlowe-test ==0.1.3.0
     , ouroboros-consensus ==0.1.0.1
     , plutus-tx ==1.0.0.0
     , QuickCheck >=2.14 && <3

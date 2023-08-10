@@ -92,7 +92,7 @@ library gen
     , hedgehog-quickcheck ^>=0.1
     , lens >=5.2 && <6
     , marlowe-object ==0.1.0.0
-    , marlowe-test ==0.1.2.0
+    , marlowe-test ==0.1.3.0
     , QuickCheck >=2.14 && <3
     , quickcheck-instances ^>=0.3.29
 
