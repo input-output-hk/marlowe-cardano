@@ -34,7 +34,7 @@ let
     '';
 
     marlowe-cli.components.tests.marlowe-cli-test.preCheck = ''
-      PATH=${lib.makeBinPath [ pkgs.z3 ]}:$PATH
+      PATH=${l.makeBinPath [ pkgs.z3 ]}:$PATH
     '';
 
     # Note: The following two statements say that these tests should
