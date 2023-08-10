@@ -1,4 +1,19 @@
 
+<a id='changelog-0.0.4'></a>
+# 0.0.4 — 2023-08-10
+
+## Added
+
+* New Endpoint `GET` : `contracts/:contractId/next` (Provide a description of what can be done for a given contract)
+
+- Results of contract's safety analysis reported in create response.
+
+* Unclaimed payouts added in `/contracts/:contractId`
+
+* Optional Filetring by Party for `GET` : `contracts/:contractId/next`
+
+- Added header `X-Stake-Address` for creating contracts.
+
 <a id='changelog-0.0.2'></a>
 # 0.0.2 — 2023-06-15
 
