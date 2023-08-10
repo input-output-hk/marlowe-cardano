@@ -1,0 +1,118 @@
+{{- range $index, $network := .Values.networks }}
+---
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: chain-sync-{{ $network }}
+  namespace: {{ $.Values.namespace }}
+  annotations:
+    app.oam.dev/publishVersion: {{ $.Chart.AppVersion }}
+    meta.helm.sh/release-name: {{ $.Values.releaseName }}
+    meta.helm.sh/release-namespace: {{ $.Values.namespace }}
+spec:
+  components:
+  - name: chain-sync-{{ $network }}
+    type: webservice
+    properties:
+      env:
+      - name: HOST
+        value: 0.0.0.0
+      - name: PORT
+        value: "3715"
+      - name: QUERY_PORT
+        value: "3716"
+      - name: JOB_PORT
+        value: "3720"
+      - name: HTTP_PORT
+        value: "3782"
+      - name: OTEL_EXPORTER_OTLP_ENDPOINT
+        value: http://grafana-agent.grafana-agent:4318
+      - name: OTEL_SERVICE_NAME
+        value: marlowe-chain-sync-{{ $network }}
+      - name: CARDANO_NODE_SOCKET_PATH
+        value: /ipc/node.socket
+      - name: NODE_CONFIG
+        value: /node-config/network/{{ $network }}/cardano-node/config.json
+      - name: DB_NAME
+        value: chainsync_{{ $network }}
+      - name: DB_HOST
+        value: {{ $.Values.databaseName }}.{{ $.Values.namespace }}:5432
+      - name: DB_USER
+        valueFrom:
+          secretKeyRef:
+            key: username
+            name: chainsync-{{ $network }}-owner-user.{{ $.Values.databaseName }}.credentials.postgresql.acid.zalan.do
+            namespace: {{ $.Values.namespace }}
+      - name: DB_PASS
+        valueFrom:
+          secretKeyRef:
+            key: password
+            name: chainsync-{{ $network }}-owner-user.{{ $.Values.databaseName }}.credentials.postgresql.acid.zalan.do
+            namespace: {{ $.Values.namespace }}
+      cpu: "0.5"
+      image: {{ $.Values.images.repo }}/{{ $.Values.images.org }}/marlowe-chain-sync:{{ $.Values.images.tag }}
+      imagePullPolicy: Always
+      memory: 4096Mi
+      ports:
+      - expose: true
+        port: 3715
+        protocol: TCP
+      - expose: true
+        port: 3716
+        protocol: TCP
+      - expose: true
+        port: 3720
+        protocol: TCP
+      - expose: true
+        port: 3782
+        protocol: TCP
+      volumeMounts:
+        emptyDir:
+        - name: ipc
+          mountPath: /ipc
+    traits:
+    - type: init-container
+      properties:
+        name: node-config-cloner
+        image: alpine/git
+        args:
+        - clone
+        - --single-branch
+        - --
+        - https://github.com/input-output-hk/cardano-configurations
+        - /node-config
+        mountName: node-config
+        initMountPath: /node-config
+        appMountPath: /node-config
+    - type: sidecar
+      properties:
+        name: socat
+        image: alpine/socat
+        args:
+        - UNIX-LISTEN:/ipc/node.socket,fork
+        - TCP-CONNECT:cardano-node-{{ $network }}.vela-system:8090
+        volumes:
+        - name: ipc
+          path: /ipc
+
+  policies:
+  - name: local-{{ $.Values.namespace }}
+    properties:
+      clusters:
+      - local
+      namespace: {{ $.Values.namespace }}
+    type: topology
+
+  workflow:
+    mode:
+      steps: DAG
+    steps:
+    - meta:
+        alias: Deploy To local-{{ $.Values.namespace }}
+      name: local-{{ $.Values.namespace }}
+      properties:
+        policies:
+        - local-{{ $.Values.namespace }}
+      type: deploy
+
+{{- end }}
