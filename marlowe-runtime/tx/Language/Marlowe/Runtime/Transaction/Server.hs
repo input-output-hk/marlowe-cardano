@@ -199,6 +199,7 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                       contractQueryConnector
                       getCurrentScripts
                       solveConstraints
+                      protocolParameters
                       loadWalletContext
                       networkId
                       mStakeCredential
@@ -257,6 +258,7 @@ execCreate
   => Connector (QueryClient ContractRequest) m
   -> (MarloweVersion v -> MarloweScripts)
   -> SolveConstraints
+  -> ProtocolParameters
   -> LoadWalletContext m
   -> NetworkId
   -> Maybe Chain.StakeCredential
@@ -268,7 +270,7 @@ execCreate
   -> Either (Contract v) DatumHash
   -> NominalDiffTime
   -> m (ServerStCmd MarloweTxCommand Void (CreateError v) (ContractCreated BabbageEra v) m ())
-execCreate contractQueryConnector getCurrentScripts solveConstraints loadWalletContext networkId mStakeCredential version addresses roleTokens metadata minAda contract analysisTimeout = execExceptT do
+execCreate contractQueryConnector getCurrentScripts solveConstraints protocolParameters loadWalletContext networkId mStakeCredential version addresses roleTokens metadata minAda contract analysisTimeout = execExceptT do
   walletContext <- lift $ loadWalletContext addresses
   (contract', continuations) <- case contract of
     Right hash -> case version of
@@ -323,7 +325,7 @@ execCreate contractQueryConnector getCurrentScripts solveConstraints loadWalletC
       first CreateSafetyAnalysisError
         <$> limitAnalysisTime
           ( checkTransactions
-              solveConstraints
+              protocolParameters
               version
               marloweContext
               rolesCurrency
