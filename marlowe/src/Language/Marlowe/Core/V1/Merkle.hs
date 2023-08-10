@@ -1,6 +1,6 @@
 -----------------------------------------------------------------------------
 --
--- Module      :  $Headers
+-- Module      :  Language.Marlowe.Core.V1.Merkle
 -- License     :  Apache 2.0
 --
 -- Stability   :  Experimental
