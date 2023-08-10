@@ -4,7 +4,7 @@ networks:
   - mainnet
 
 images:
-  tag: latest
+  tag: 0.0.4-rc1
   repo: ghcr.io
   org: input-output-hk
 
