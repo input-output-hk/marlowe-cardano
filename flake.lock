@@ -3873,11 +3873,10 @@
       "locked": {
         "lastModified": 1691655486,
         "narHash": "sha256-y6NCaFSAe/OtrK09K9NlTpQOhiBEDVfK1DR7Kpw7Kso=",
-        "ref": "refs/heads/main",
+        "owner": "input-output-hk",
+        "repo": "iogx",
         "rev": "2f081f1e9a71f04b0adf795445956ea84fc60313",
-        "revCount": 121,
-        "type": "git",
-        "url": "file:///Users/zeme/Repos/iogx"
+        "type": "github"
       },
       "original": {
         "owner": "input-output-hk",
