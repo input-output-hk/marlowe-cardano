@@ -3,11 +3,6 @@ networks:
   - preview
   - mainnet
 
-images:
-  tag: latest
-  repo: ghcr.io
-  org: input-output-hk
-
 namespace: marlowe-staging
 
 databaseName: marlowe-runtime-database
