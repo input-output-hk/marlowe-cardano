@@ -33,7 +33,7 @@ import Options.Applicative qualified as O
 data ConvertCommand
   = -- | Convert a contract.
     Convert
-    { inputFile :: FilePath
+    { inputFile :: Maybe FilePath
     -- ^ The Marlowe file containing the contract to be converted.
     , outputFile :: Maybe FilePath
     -- ^ The output file for the converted Marlowe contract.
@@ -85,17 +85,25 @@ runConvertCommand
 parseConvertCommand :: O.Parser ConvertCommand
 parseConvertCommand =
   Convert
-    <$> O.strOption
-      ( O.long "in-file"
-          <> O.metavar "MARLOWE_FILE"
-          <> O.help "The Marlowe file containing the contract."
-      )
-    <*> (O.optional . O.strOption)
-      ( O.long "out-file" <> O.metavar "MARLOWE_FILE" <> O.help "Output file Marlowe containing the converted contract."
-      )
+    <$> inFile
+    <*> outFile
     <*> readPrettyFlag
     <*> writePrettyFlag
   where
+    inFile =
+      O.optional . O.strOption $
+        mconcat
+          [ O.long "in-file"
+          , O.metavar "MARLOWE_FILE"
+          , O.help "The Marlowe file containing the contract. Stdin if omitted."
+          ]
+    outFile =
+      O.optional . O.strOption $
+        mconcat
+          [ O.long "out-file"
+          , O.metavar "MARLOWE_FILE"
+          , O.help "Output file Marlowe containing the converted contract. Stdout if omitted."
+          ]
     readPrettyFlag =
       O.flag False True $
         mconcat

@@ -21,12 +21,13 @@ module Language.Marlowe.CLI.Convert (
 
 import Control.Monad.Combinators as C
 import Control.Monad.Except (MonadError, MonadIO, liftEither, liftIO)
+import Data.Aeson (eitherDecodeStrict)
 import Data.Bifunctor (first)
-import Data.ByteString.Char8 qualified as BS (pack)
+import Data.ByteString.Char8 qualified as BS (getContents, pack)
 import Data.Functor (($>))
 import Data.String (IsString (..))
 import Data.Text (Text)
-import Data.Text.IO as T (readFile)
+import Data.Text.IO qualified as T
 import Data.Void
 import GHC.Generics (Generic (..))
 import Language.Marlowe.CLI.IO (decodeFileStrict, maybeWriteJson)
@@ -61,19 +62,37 @@ import Text.Megaparsec.Char.Lexer qualified as L
 readContractJson
   :: (MonadError CliError m)
   => (MonadIO m)
-  => FilePath
+  => Maybe FilePath
   -> m Contract
-readContractJson = decodeFileStrict
+readContractJson (Just inputFile) = decodeFileStrict inputFile
+readContractJson Nothing =
+  do
+    result :: Either String Contract <- eitherDecodeStrict <$> liftIO BS.getContents
+    liftEither $ first (CliError . show) result
 
 -- | Read a pretty printed Marlowe Contract from a file.
 readContractPretty
   :: (MonadError CliError m)
   => (MonadIO m)
-  => FilePath
+  => Maybe FilePath
   -> m Contract
-readContractPretty inputFile = do
+readContractPretty (Just inputFile) = do
   result <- parseFromFile inputFile
   liftEither $ first (CliError . errorBundlePretty) result
+readContractPretty Nothing = do
+  result <- parseFromStdin
+  liftEither $ first (CliError . errorBundlePretty) result
+
+parseFromFile
+  :: (MonadIO m)
+  => String
+  -> m (Either (ParseErrorBundle Text Void) Contract)
+parseFromFile f = runParserT contractParser f =<< liftIO (T.readFile f)
+
+parseFromStdin
+  :: (MonadIO m)
+  => m (Either (ParseErrorBundle Text Void) Contract)
+parseFromStdin = runParserT contractParser "stdin" =<< liftIO T.getContents
 
 -- | Optional write a pretty printed Marlowe contract to a file, otherwise write to standard output.
 maybeWritePretty
@@ -85,12 +104,6 @@ maybeWritePretty
   -> m ()
 maybeWritePretty Nothing = liftIO . print . pretty
 maybeWritePretty (Just outputFile) = liftIO . writeFile outputFile . show . pretty
-
-parseFromFile
-  :: (MonadIO m)
-  => String
-  -> m (Either (ParseErrorBundle Text Void) Contract)
-parseFromFile f = runParserT contractParser f =<< liftIO (T.readFile f)
 
 contractParser
   :: ParsecT Void Text m Contract
