@@ -5,5 +5,6 @@
   includedPaths = pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
     "oci-images"
     "operables"
+    "static"
   ];
 }
