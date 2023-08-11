@@ -19,6 +19,7 @@ module Main (
 import Test.Tasty (TestTree, defaultMain, testGroup)
 
 import Spec.Analysis qualified (tests)
+import Spec.Convert qualified (tests)
 
 -- | Entry point for the tests.
 main :: IO ()
@@ -30,4 +31,5 @@ tests =
   testGroup
     "Marlowe CLI"
     [ Spec.Analysis.tests
+    , Spec.Convert.tests
     ]

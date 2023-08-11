@@ -17,12 +17,14 @@ module Language.Marlowe.CLI.Convert (
   maybeWriteJson,
   readContractPretty,
   readContractJson,
+  contractParser,
 ) where
 
 import Control.Monad.Combinators as C
 import Control.Monad.Except (MonadError, MonadIO, liftEither, liftIO)
 import Data.Aeson (eitherDecodeStrict)
 import Data.Bifunctor (first)
+import Data.ByteString.Base16 qualified as Base16
 import Data.ByteString.Char8 qualified as BS (getContents, pack)
 import Data.Functor (($>))
 import Data.String (IsString (..))
@@ -191,8 +193,8 @@ boundParser :: ParsecT Void Text m Bound
 boundParser =
   symbol "Bound"
     >> Bound
-      <$> integer
-      <*> integer
+      <$> signedInteger
+      <*> signedInteger
 
 valueParser :: ParsecT Void Text m (Value Observation)
 valueParser = valueParser' <|> parens valueParser
@@ -218,7 +220,7 @@ valueParser = valueParser' <|> parens valueParser
     constantParser =
       symbol "Constant"
         >> Constant
-          <$> integer
+          <$> signedInteger
     negValueParser =
       symbol "NegValue"
         >> NegValue
@@ -377,7 +379,7 @@ currencySymbolParser :: ParsecT Void Text m S.CurrencySymbol
 currencySymbolParser =
   lexeme $
     S.CurrencySymbol
-      <$> quotedBuiltinByteString
+      <$> quotedBase16
 
 tokenNameParser :: ParsecT Void Text m TokenName
 tokenNameParser =
@@ -392,7 +394,7 @@ payeeParser =
       <|> partyParser'
   where
     accountParser =
-      symbol "Acccount"
+      symbol "Account"
         >> Account
           <$> accountIdParser
     partyParser' =
@@ -404,10 +406,13 @@ timeoutParser :: ParsecT Void Text m Timeout
 timeoutParser =
   lexeme $
     POSIXTime
-      <$> integer
+      <$> signedInteger
 
 integer :: ParsecT Void Text m Integer
 integer = lexeme L.decimal
+
+signedInteger :: ParsecT Void Text m Integer
+signedInteger = L.signed spaceConsumer integer
 
 parens :: ParsecT Void Text m a -> ParsecT Void Text m a
 parens = between (symbol "(") (symbol ")")
@@ -420,6 +425,9 @@ stringLiteral = P.char '"' >> C.manyTill L.charLiteral (P.char '"')
 
 quotedBuiltinByteString :: ParsecT Void Text m BuiltinByteString
 quotedBuiltinByteString = lexeme $ toBuiltin . BS.pack <$> stringLiteral
+
+quotedBase16 :: ParsecT Void Text m BuiltinByteString
+quotedBase16 = lexeme $ toBuiltin . Base16.decodeLenient . BS.pack <$> stringLiteral
 
 lexeme :: ParsecT Void Text m a -> ParsecT Void Text m a
 lexeme = L.lexeme spaceConsumer

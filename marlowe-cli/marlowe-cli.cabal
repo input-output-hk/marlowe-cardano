@@ -282,7 +282,10 @@ test-suite marlowe-cli-test
   hs-source-dirs: tests
   type:           exitcode-stdio-1.0
   main-is:        Spec.hs
-  other-modules:  Spec.Analysis
+  other-modules:
+    Spec.Analysis
+    Spec.Convert
+
   build-depends:
     , aeson
     , base >=4.9 && <5
@@ -290,9 +293,13 @@ test-suite marlowe-cli-test
     , containers
     , marlowe-cardano
     , marlowe-cli
+    , marlowe-test
+    , megaparsec
     , mtl
     , plutus-ledger-api
     , plutus-ledger-slot
     , plutus-tx
     , tasty
     , tasty-hunit
+    , tasty-quickcheck
+    , text
