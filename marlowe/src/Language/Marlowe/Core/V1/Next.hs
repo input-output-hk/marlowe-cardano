@@ -31,12 +31,13 @@ import Language.Marlowe.Pretty (Pretty (..))
 
 import Data.Bifunctor (Bifunctor (first))
 import Data.List.NonEmpty
-import Data.Time (UTCTime)
+import Data.Time (NominalDiffTime, UTCTime, nominalDiffTimeToSeconds)
+import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Language.Marlowe.Core.V1.Next.Applicables (ApplicableInputs, mkApplicables)
 import qualified Language.Marlowe.Core.V1.Next.Applicables as Applicables
 import Language.Marlowe.Core.V1.Next.CanReduce (CanReduce, tryReduce)
 import Language.Marlowe.Core.V1.Semantics (fixInterval)
-import Plutus.V1.Ledger.SlotConfig (utcTimeToPOSIXTime)
+import Plutus.V2.Ledger.Api (POSIXTime (..))
 
 data Next = Next {canReduce :: CanReduce, applicables :: ApplicableInputs}
   deriving stock (Show, Eq, Ord, Generic)
@@ -70,3 +71,13 @@ instance ToJSON Next where
 
 mkEnvironment :: UTCTime -> UTCTime -> Environment
 mkEnvironment start end = Environment (utcTimeToPOSIXTime start, utcTimeToPOSIXTime end)
+
+utcTimeToPOSIXTime :: UTCTime -> POSIXTime
+utcTimeToPOSIXTime = nominalDiffTimeToPOSIXTime . utcTimeToPOSIXSeconds
+
+nominalDiffTimeToPOSIXTime :: NominalDiffTime -> POSIXTime
+nominalDiffTimeToPOSIXTime =
+  POSIXTime
+    . truncate
+    . (* 1000) -- Convert to ms
+    . nominalDiffTimeToSeconds
