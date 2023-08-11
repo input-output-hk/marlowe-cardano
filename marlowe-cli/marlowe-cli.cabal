@@ -71,6 +71,7 @@ library
     Language.Marlowe.CLI.Cardano.Api.PlutusScript
     Language.Marlowe.CLI.Cardano.Api.Value
     Language.Marlowe.CLI.Codec
+    Language.Marlowe.CLI.Convert
     Language.Marlowe.CLI.Data.Foldable
     Language.Marlowe.CLI.Examples
     Language.Marlowe.CLI.Export
@@ -107,10 +108,12 @@ library
     , errors
     , extra
     , marlowe-cardano
+    , megaparsec
     , memory
     , mtl
     , ouroboros-consensus
     , ouroboros-network
+    , parser-combinators
     , plutus-core
     , plutus-ledger
     , plutus-ledger-ada
@@ -221,6 +224,7 @@ library command
   exposed-modules:
     Language.Marlowe.CLI.Command
     Language.Marlowe.CLI.Command.Contract
+    Language.Marlowe.CLI.Command.Convert
     Language.Marlowe.CLI.Command.Input
     Language.Marlowe.CLI.Command.Parse
     Language.Marlowe.CLI.Command.Role
