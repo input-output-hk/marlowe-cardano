@@ -131,7 +131,12 @@ contractParser = contractParser' <|> parens contractParser
         whenParser =
           symbol "When"
             >> When
-              <$> brackets ((spaceConsumer >> caseParser) `sepBy` char ',')
+              <$> brackets
+                ( ( spaceConsumer
+                      >> (caseParser <|> parens caseParser)
+                  )
+                    `sepBy` char ','
+                )
               <*> timeoutParser
               <*> contractParser
         letParser =
@@ -171,7 +176,12 @@ actionParser =
       symbol "Choice"
         >> Choice
           <$> choiceIdParser
-          <*> brackets ((spaceConsumer >> boundParser) `sepBy` char ',')
+          <*> brackets
+            ( ( spaceConsumer
+                  >> (boundParser <|> parens boundParser)
+              )
+                `sepBy` char ','
+            )
     notifyParser =
       symbol "Notify"
         >> Notify
@@ -248,7 +258,7 @@ valueParser = valueParser' <|> parens valueParser
         >> UseValue
           <$> valueIdParser
     condParser =
-      symbol "NegValue"
+      symbol "Cond"
         >> Cond
           <$> observationParser
           <*> valueParser
@@ -378,8 +388,17 @@ tokenNameParser =
 payeeParser :: ParsecT Void Text m Payee
 payeeParser =
   parens $
-    (symbol "Acccount" >> Account <$> accountIdParser)
-      <|> (symbol "Party" >> Party <$> partyParser)
+    accountParser
+      <|> partyParser'
+  where
+    accountParser =
+      symbol "Acccount"
+        >> Account
+          <$> accountIdParser
+    partyParser' =
+      symbol "Party"
+        >> Party
+          <$> partyParser
 
 timeoutParser :: ParsecT Void Text m Timeout
 timeoutParser =
