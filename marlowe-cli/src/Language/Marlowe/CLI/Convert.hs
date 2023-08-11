@@ -234,17 +234,17 @@ valueParser = valueParser' <|> parens valueParser
           <$> valueParser
           <*> valueParser
     choiceValueParser =
-      symbol "NegValue"
+      symbol "ChoiceValue"
         >> ChoiceValue
           <$> choiceIdParser
     timeIntervalStartParser =
-      symbol "NegValue"
+      symbol "TimeIntervalStart"
         $> TimeIntervalStart
     timeIntervalEndParser =
-      symbol "NegValue"
+      symbol "TimeIntervalEnd"
         $> TimeIntervalEnd
     useValueParser =
-      symbol "NegValue"
+      symbol "UseValue"
         >> UseValue
           <$> valueIdParser
     condParser =
@@ -352,10 +352,8 @@ choiceIdParser =
 
 valueIdParser :: ParsecT Void Text m ValueId
 valueIdParser =
-  parens $
-    symbol "ValueId"
-      >> ValueId
-        <$> quotedBuiltinByteString
+  ValueId
+    <$> quotedBuiltinByteString
 
 tokenParser :: ParsecT Void Text m S.Token
 tokenParser =
