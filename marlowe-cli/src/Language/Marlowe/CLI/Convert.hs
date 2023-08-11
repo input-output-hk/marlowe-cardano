@@ -64,11 +64,11 @@ readContractJson
   => (MonadIO m)
   => Maybe FilePath
   -> m Contract
-readContractJson (Just inputFile) = decodeFileStrict inputFile
+readContractJson (Just inputFile) =
+  decodeFileStrict inputFile
 readContractJson Nothing =
-  do
-    result :: Either String Contract <- eitherDecodeStrict <$> liftIO BS.getContents
-    liftEither $ first (CliError . show) result
+  (liftEither . first (CliError . show)) . eitherDecodeStrict
+    =<< liftIO BS.getContents
 
 -- | Read a pretty printed Marlowe Contract from a file.
 readContractPretty
@@ -76,25 +76,16 @@ readContractPretty
   => (MonadIO m)
   => Maybe FilePath
   -> m Contract
-readContractPretty (Just inputFile) = do
-  result <- parseFromFile inputFile
-  liftEither $ first (CliError . errorBundlePretty) result
-readContractPretty Nothing = do
-  result <- parseFromStdin
-  liftEither $ first (CliError . errorBundlePretty) result
+readContractPretty (Just inputFile) =
+  liftEither . first (CliError . errorBundlePretty)
+    =<< runParserT contractParser inputFile
+    =<< liftIO (T.readFile inputFile)
+readContractPretty Nothing =
+  liftEither . first (CliError . errorBundlePretty)
+    =<< runParserT contractParser "stdin"
+    =<< liftIO T.getContents
 
-parseFromFile
-  :: (MonadIO m)
-  => String
-  -> m (Either (ParseErrorBundle Text Void) Contract)
-parseFromFile f = runParserT contractParser f =<< liftIO (T.readFile f)
-
-parseFromStdin
-  :: (MonadIO m)
-  => m (Either (ParseErrorBundle Text Void) Contract)
-parseFromStdin = runParserT contractParser "stdin" =<< liftIO T.getContents
-
--- | Optional write a pretty printed Marlowe contract to a file, otherwise write to standard output.
+-- | Write a pretty printed Marlowe contract to a file or stdout.
 maybeWritePretty
   :: (MonadIO m)
   => (Generic a)
@@ -102,9 +93,12 @@ maybeWritePretty
   => Maybe FilePath
   -> a
   -> m ()
-maybeWritePretty Nothing = liftIO . print . pretty
-maybeWritePretty (Just outputFile) = liftIO . writeFile outputFile . show . pretty
+maybeWritePretty Nothing =
+  liftIO . print . pretty
+maybeWritePretty (Just outputFile) =
+  liftIO . writeFile outputFile . show . pretty
 
+-- | Parser for the pretty printed Marlowe Contract data type.
 contractParser
   :: ParsecT Void Text m Contract
 contractParser = contractParser' <|> parens contractParser
