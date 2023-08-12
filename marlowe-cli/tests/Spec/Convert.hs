@@ -30,13 +30,13 @@ tests =
     "Pretty printing"
     [ testGroup
         "Test pretty / un-pretty"
-        [ testBidir
+        [ testPrettyUnPretty
         ]
     ]
 
-testBidir :: TestTree
-testBidir =
-  testProperty "parse contract" prop
+testPrettyUnPretty :: TestTree
+testPrettyUnPretty =
+  testProperty "Pretty print and parse contract" prop
 
 prop :: Contract -> Property
 prop c =
