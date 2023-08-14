@@ -101,7 +101,7 @@ parseConvertCommand =
         mconcat
           [ O.long "out-file"
           , O.metavar "MARLOWE_FILE"
-          , O.help "Output file Marlowe containing the converted contract. Stdout if omitted."
+          , O.help "The Marlowe file containing the output contract. Stdout if omitted."
           ]
     readPrettyFlag =
       O.flag False True $

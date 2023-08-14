@@ -183,12 +183,12 @@ mkCommandParser networkId socketPath version = do
               , O.command "template" $
                   O.info (TemplateCommand <$> parseTemplateCommand <*> parseTemplateCommandOutputFiles) $
                     O.progDesc "Create a contract from a template."
-              , O.command "convert" $
-                  O.info (ConvertCommand <$> parseConvertCommand) $
-                    O.progDesc "Convert to an other format."
               , O.command "test" $
                   O.info (TestCommand <$> testCommandParser) $
                     O.progDesc "Run test scenario described using yaml based DSL."
+              , O.command "format" $
+                  O.info (ConvertCommand <$> parseConvertCommand) $
+                    O.progDesc "Read and write a Marlowe contract."
               ]
         , O.hsubparser $
             fold

@@ -27,6 +27,7 @@ import Data.Bifunctor (first)
 import Data.ByteString.Base16 qualified as Base16
 import Data.ByteString.Char8 qualified as BS (getContents, pack)
 import Data.Functor (($>))
+import Data.List.NonEmpty (fromList)
 import Data.String (IsString (..))
 import Data.Text (Text)
 import Data.Text.IO qualified as T
@@ -339,17 +340,16 @@ partyParser =
       <|> roleParser
   where
     addressParser =
-      symbol "Address" >> toAddr
+      symbol "Address" >> parseAddress
     roleParser =
       symbol "Role"
         >> Role
           <$> tokenNameParser
-    toAddr = do
-      addr <- fromString <$> stringLiteral
-      let p = deserialiseAddressBech32 addr
-      case p of
-        Just (b, a) -> return $ Address b a
-        Nothing -> customFailure undefined
+    parseAddress = do
+      text <- fromString <$> stringLiteral
+      case deserialiseAddressBech32 text of
+        Just address -> return . uncurry Address $ address
+        Nothing -> failure (Just (Label $ fromList "Bech32")) mempty
 
 accountIdParser :: ParsecT Void Text m AccountId
 accountIdParser = partyParser
