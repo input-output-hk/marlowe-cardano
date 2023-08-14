@@ -27,7 +27,7 @@ import Cardano.Api (AlonzoEra, BabbageEra, IsShelleyBasedEra, NetworkId, ScriptD
 import Control.Monad.Except (MonadError, MonadIO, liftIO, runExceptT)
 import Data.Foldable (Foldable (fold), asum)
 import Language.Marlowe.CLI.Command.Contract (ContractCommand, parseContractCommand, runContractCommand)
-import Language.Marlowe.CLI.Command.Convert (ConvertCommand, parseConvertCommand, runConvertCommand)
+import Language.Marlowe.CLI.Command.Format (FormatCommand, parseFormatCommand, runFormatCommand)
 import Language.Marlowe.CLI.Command.Input (InputCommand, parseInputCommand, runInputCommand)
 import Language.Marlowe.CLI.Command.Role (RoleCommand, parseRoleCommand, runRoleCommand)
 import Language.Marlowe.CLI.Command.Run (RunCommand, parseRunCommand, runRunCommand)
@@ -68,8 +68,8 @@ data Command era
     UtilCommand (UtilCommand era)
   | -- | Test-related commands.
     TestCommand (TestCommand era)
-  | -- | Convert-related commands.
-    ConvertCommand ConvertCommand
+  | -- | Format-related commands.
+    FormatCommand FormatCommand
 
 data SomeCommand = forall era. SomeCommand (ScriptDataSupportedInEra era) (Command era)
 
@@ -115,7 +115,7 @@ runCommand era cmd = flip runReaderT CliEnv{..} case cmd of
   TemplateCommand command outputFiles -> runTemplateCommand command outputFiles
   TransactionCommand command -> runTransactionCommand command
   UtilCommand command -> runUtilCommand command
-  ConvertCommand command -> runConvertCommand command
+  FormatCommand command -> runFormatCommand command
 
 -- | Command parseCommand for the tool version.
 mkCommandParser
@@ -187,7 +187,7 @@ mkCommandParser networkId socketPath version = do
                   O.info (TestCommand <$> testCommandParser) $
                     O.progDesc "Run test scenario described using yaml based DSL."
               , O.command "format" $
-                  O.info (ConvertCommand <$> parseConvertCommand) $
+                  O.info (FormatCommand <$> parseFormatCommand) $
                     O.progDesc "Read and write a Marlowe contract."
               ]
         , O.hsubparser $

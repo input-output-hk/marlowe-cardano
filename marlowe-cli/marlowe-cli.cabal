@@ -71,10 +71,10 @@ library
     Language.Marlowe.CLI.Cardano.Api.PlutusScript
     Language.Marlowe.CLI.Cardano.Api.Value
     Language.Marlowe.CLI.Codec
-    Language.Marlowe.CLI.Convert
     Language.Marlowe.CLI.Data.Foldable
     Language.Marlowe.CLI.Examples
     Language.Marlowe.CLI.Export
+    Language.Marlowe.CLI.Format
     Language.Marlowe.CLI.IO
     Language.Marlowe.CLI.Merkle
     Language.Marlowe.CLI.Orphans
@@ -224,7 +224,7 @@ library command
   exposed-modules:
     Language.Marlowe.CLI.Command
     Language.Marlowe.CLI.Command.Contract
-    Language.Marlowe.CLI.Command.Convert
+    Language.Marlowe.CLI.Command.Format
     Language.Marlowe.CLI.Command.Input
     Language.Marlowe.CLI.Command.Parse
     Language.Marlowe.CLI.Command.Role
@@ -284,7 +284,7 @@ test-suite marlowe-cli-test
   main-is:        Spec.hs
   other-modules:
     Spec.Analysis
-    Spec.Convert
+    Spec.Format
 
   build-depends:
     , aeson

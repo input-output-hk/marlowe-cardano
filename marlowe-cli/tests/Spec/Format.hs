@@ -9,13 +9,13 @@
 -----------------------------------------------------------------------------
 
 -- | Quickcheck tests for contract format conversion
-module Spec.Convert (
+module Spec.Format (
   -- * Testing
   tests,
 ) where
 
 import Data.Text (pack)
-import Language.Marlowe.CLI.Convert
+import Language.Marlowe.CLI.Format
 import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Pretty
 import Spec.Marlowe.Semantics.Arbitrary ()

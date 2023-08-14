@@ -11,8 +11,8 @@
 --
 -----------------------------------------------------------------------------
 
--- | Convert Marlowe contracts.
-module Language.Marlowe.CLI.Convert (
+-- | Format Marlowe contracts.
+module Language.Marlowe.CLI.Format (
   maybeWritePretty,
   maybeWriteJson,
   readContractPretty,

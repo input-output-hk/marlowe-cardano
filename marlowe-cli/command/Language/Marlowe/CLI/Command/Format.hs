@@ -14,24 +14,24 @@
 --
 -----------------------------------------------------------------------------
 
--- | Contract templates in the Marlowe CLI tool.
-module Language.Marlowe.CLI.Command.Convert (
+-- | Format Marlowe contracts in the CLI tool.
+module Language.Marlowe.CLI.Command.Format (
   -- * Marlowe CLI Commands
-  ConvertCommand (..),
-  runConvertCommand,
-  parseConvertCommand,
+  FormatCommand (..),
+  runFormatCommand,
+  parseFormatCommand,
 ) where
 
 import Control.Monad.Except (MonadError, MonadIO (..))
 import GHC.Generics (Generic)
-import Language.Marlowe.CLI.Convert (maybeWriteJson, maybeWritePretty, readContractJson, readContractPretty)
+import Language.Marlowe.CLI.Format (maybeWriteJson, maybeWritePretty, readContractJson, readContractPretty)
 import Language.Marlowe.CLI.Types (CliError (..))
 import Options.Applicative qualified as O
 
 -- | Marlowe CLI commands and options for convert templates.
-data ConvertCommand
-  = -- | Convert a contract.
-    Convert
+data FormatCommand
+  = -- | Format a contract.
+    Format
     { inputFile :: Maybe FilePath
     -- ^ The Marlowe file containing the contract to be converted.
     , outputFile :: Maybe FilePath
@@ -44,36 +44,36 @@ data ConvertCommand
   deriving stock (Eq, Generic, Show)
 
 -- | Create a contract from a template.
-runConvertCommand
+runFormatCommand
   :: (MonadError CliError m)
   => (MonadIO m)
-  => ConvertCommand
+  => FormatCommand
   -- ^ The command.
   -> m ()
   -- ^ Action for runninng the command.
-runConvertCommand
-  Convert
+runFormatCommand
+  Format
     { inputFile
     , outputFile
     , fromPretty = False
     , toPretty = False
     } = readContractJson inputFile >>= maybeWriteJson outputFile
-runConvertCommand
-  Convert
+runFormatCommand
+  Format
     { inputFile
     , outputFile
     , fromPretty = True
     , toPretty = False
     } = readContractPretty inputFile >>= maybeWriteJson outputFile
-runConvertCommand
-  Convert
+runFormatCommand
+  Format
     { inputFile
     , outputFile
     , fromPretty = False
     , toPretty = True
     } = readContractJson inputFile >>= maybeWritePretty outputFile
-runConvertCommand
-  Convert
+runFormatCommand
+  Format
     { inputFile
     , outputFile
     , fromPretty = True
@@ -81,9 +81,9 @@ runConvertCommand
     } = readContractPretty inputFile >>= maybeWritePretty outputFile
 
 -- | Parser for template commands.
-parseConvertCommand :: O.Parser ConvertCommand
-parseConvertCommand =
-  Convert
+parseFormatCommand :: O.Parser FormatCommand
+parseFormatCommand =
+  Format
     <$> inFile
     <*> outFile
     <*> readPrettyFlag
