@@ -58,7 +58,7 @@ library
 
   build-depends:
     , aeson >=2 && <3
-    , aeson-applicative ==0.1.0.0
+    , aeson-record ==0.1.0.0
     , base >=4.9 && <5
     , base16 ^>=0.3.2
     , binary ^>=0.8.8

@@ -1,5 +1,5 @@
 cabal-version: 3.0
-name:          aeson-applicative
+name:          aeson-record
 version:       0.1.0.0
 synopsis:
   An Applicative and Alternative interface to Aeson with better errors on Alternatives.
@@ -17,7 +17,7 @@ license-files:
 source-repository head
   type:     git
   location: https://github.com/input-output-hk/marlowe-cardano
-  subdir:   libs/aeson-applicative
+  subdir:   libs/aeson-record
 
 library
   default-language:   Haskell2010
