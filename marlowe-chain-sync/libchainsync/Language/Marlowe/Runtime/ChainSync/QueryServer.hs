@@ -64,6 +64,7 @@ chainSyncQueryServer ChainSyncQueryServerDependencies{..} = ServerSource $ pure 
               GetUTxOs utxosQuery -> Database.runGetUTxOs getUTxOs utxosQuery
               GetNodeTip -> atomically nodeTip
               GetTip -> runGetTip getTip
+              GetEra -> either (fail . show) pure =<< queryLocalNodeState Nothing (QueryCurrentEra CardanoModeIsMultiEra)
         }
 
     queryGenesisParameters :: (GenesisParameters -> a) -> m a
