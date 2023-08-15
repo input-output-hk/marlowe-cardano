@@ -4,7 +4,8 @@
 
 module Control.Monad.Trans.Marlowe.Class where
 
-import Cardano.Api (BabbageEra, Tx)
+import Cardano.Api (Tx)
+import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra)
 import Control.Concurrent (threadDelay)
 import Control.Monad (join)
 import Control.Monad.Identity (IdentityT (..))
@@ -208,7 +209,7 @@ createContract
   -- ^ Min Lovelace which should be used for the contract output.
   -> Either (Contract v) DatumHash
   -- ^ The contract to run, or the hash of the contract to look up in the store.
-  -> m (Either (CreateError v) (ContractCreated BabbageEra v))
+  -> m (Either (CreateError v) (ContractCreated v))
 createContract mStakeCredential version wallet roleTokens metadata lovelace contract =
   runMarloweTxClient $
     liftCommand $
@@ -240,7 +241,7 @@ applyInputs'
   -- is computed from the contract.
   -> Inputs v
   -- ^ The inputs to apply.
-  -> m (Either (ApplyInputsError v) (InputsApplied BabbageEra v))
+  -> m (Either (ApplyInputsError v) (InputsApplied v))
 applyInputs' version wallet contractId metadata invalidBefore invalidHereafter inputs =
   runMarloweTxClient $
     liftCommand $
@@ -266,7 +267,7 @@ applyInputs
   -- ^ Optional metadata to attach to the transaction
   -> Inputs v
   -- ^ The inputs to apply.
-  -> m (Either (ApplyInputsError v) (InputsApplied BabbageEra v))
+  -> m (Either (ApplyInputsError v) (InputsApplied v))
 applyInputs version wallet contractId metadata =
   applyInputs' version wallet contractId metadata Nothing Nothing
 
@@ -281,7 +282,7 @@ withdraw
   -- ^ The ID of the contract to apply the inputs to.
   -> TokenName
   -- ^ The names of the roles whose assets to withdraw.
-  -> m (Either (WithdrawError v) (WithdrawTx BabbageEra v))
+  -> m (Either (WithdrawError v) (WithdrawTx v))
 withdraw version wallet contractId role =
   runMarloweTxClient $ liftCommand $ Withdraw version wallet contractId role
 
@@ -289,12 +290,14 @@ withdraw version wallet contractId role =
 -- with exponential back-off in the polling.
 submitAndWait
   :: (MonadMarlowe m, MonadIO m)
-  => Tx BabbageEra
+  => ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  -- ^ Proof that the era of the transaction supports reference scripts.
+  -> Tx era
   -- ^ The transaction to submit.
   -> m (Either SubmitError BlockHeader)
-submitAndWait tx = do
+submitAndWait era tx = do
   delayRef <- liftIO $ newIORef 1000
-  submit (onAwait delayRef) (pure . Left) (pure . Right) tx
+  submit (onAwait delayRef) (pure . Left) (pure . Right) era tx
   where
     onAwait delayRef _ _ = liftIO do
       delay <- readIORef delayRef
@@ -307,7 +310,9 @@ submitAndWait tx = do
 -- which can be used to check progress later via @attachSubmit@.
 submitAndDetach
   :: (MonadMarlowe m)
-  => Tx BabbageEra
+  => ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  -- ^ Proof that the era of the transaction supports reference scripts.
+  -> Tx era
   -- ^ The transaction to submit.
   -> m (Either TxId (Either SubmitError BlockHeader))
 submitAndDetach = submit (const . pure . Just . Left) (pure . Right . Left) (pure . Right . Right)
@@ -326,11 +331,13 @@ submit
   -- transaction was seen to have been published on. Note: this block could be
   -- rolled back, in which case the block header would change and the
   -- transaction may not exist anymore.
-  -> Tx BabbageEra
+  -> ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  -- ^ Proof that the era of the transaction supports reference scripts.
+  -> Tx era
   -- ^ The transaction to submit.
   -> m a
-submit onAwait onFail onSuccess tx =
-  runMarloweTxClient $ JobClient $ pure $ SendMsgExec (Submit tx) clientCmd
+submit onAwait onFail onSuccess era tx =
+  runMarloweTxClient $ JobClient $ pure $ SendMsgExec (Submit era tx) clientCmd
   where
     clientCmd =
       Job.ClientStCmd

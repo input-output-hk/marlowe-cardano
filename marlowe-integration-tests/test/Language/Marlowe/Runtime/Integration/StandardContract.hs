@@ -1,8 +1,12 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 
 module Language.Marlowe.Runtime.Integration.StandardContract where
 
 import Cardano.Api (BabbageEra)
+import Cardano.Api.Shelley (
+  ReferenceTxInsScriptsInlineDatumsSupportedInEra (ReferenceTxInsScriptsInlineDatumsInBabbageEra),
+ )
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Map as Map
 import Data.Set (Set)
@@ -40,17 +44,18 @@ import Language.Marlowe.Runtime.Integration.Common (
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
 import Language.Marlowe.Runtime.Transaction.Api (
   ContractCreated (..),
-  InputsApplied (..),
+  ContractCreatedInEra (..),
+  InputsAppliedInEra (..),
   RoleTokensConfig (..),
   WalletAddresses (changeAddress),
-  WithdrawTx (..),
+  WithdrawTxInEra (..),
   mkMint,
  )
 import qualified Plutus.V2.Ledger.Api as PV2
 
 data StandardContractInit v = StandardContractInit
   { makeInitialDeposit :: Integration (StandardContractFundsDeposited v)
-  , contractCreated :: ContractCreated BabbageEra v
+  , contractCreated :: ContractCreatedInEra BabbageEra v
   , createdBlock :: BlockHeader
   }
 
@@ -58,29 +63,29 @@ standardContractHeader :: StandardContractInit v -> ContractHeader
 standardContractHeader StandardContractInit{..} = contractCreatedToContractHeader createdBlock contractCreated
 
 standardContractId :: StandardContractInit v -> ContractId
-standardContractId StandardContractInit{contractCreated = ContractCreated{..}} = contractId
+standardContractId StandardContractInit{contractCreated = ContractCreatedInEra{..}} = contractId
 
 data StandardContractFundsDeposited v = StandardContractFundsDeposited
   { chooseGimmeTheMoney :: Integration (StandardContractChoiceMade v)
-  , initialFundsDeposited :: InputsApplied BabbageEra v
+  , initialFundsDeposited :: InputsAppliedInEra BabbageEra v
   , initialDepositBlock :: BlockHeader
   }
 
 data StandardContractChoiceMade v = StandardContractChoiceMade
   { sendNotify :: Integration (StandardContractNotified v)
-  , gimmeTheMoneyChosen :: InputsApplied BabbageEra v
+  , gimmeTheMoneyChosen :: InputsAppliedInEra BabbageEra v
   , choiceBlock :: BlockHeader
   }
 
 data StandardContractNotified v = StandardContractNotified
   { makeReturnDeposit :: Integration (StandardContractClosed v)
-  , notified :: InputsApplied BabbageEra v
+  , notified :: InputsAppliedInEra BabbageEra v
   , notifiedBlock :: BlockHeader
   }
 
 data StandardContractClosed v = StandardContractClosed
-  { withdrawPartyAFunds :: Integration (WithdrawTx BabbageEra v, BlockHeader)
-  , returnDeposited :: InputsApplied BabbageEra v
+  { withdrawPartyAFunds :: Integration (WithdrawTxInEra BabbageEra v, BlockHeader)
+  , returnDeposited :: InputsAppliedInEra BabbageEra v
   , returnDepositBlock :: BlockHeader
   }
 
@@ -114,7 +119,9 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
       )
       2_000_000
       (Right contractHash)
-  contractCreated@ContractCreated{contractId, txBody = createTxBody} <-
+  ContractCreated
+    ReferenceTxInsScriptsInlineDatumsInBabbageEra
+    contractCreated@ContractCreatedInEra{contractId, txBody = createTxBody} <-
     expectRight "failed to create standard contract" result
   createdBlock <- submit partyAWallet createTxBody
 
@@ -123,7 +130,7 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
       { createdBlock
       , contractCreated
       , makeInitialDeposit = do
-          initialFundsDeposited@InputsApplied{txBody = initialDepositTxBody} <-
+          initialFundsDeposited@InputsAppliedInEra{txBody = initialDepositTxBody} <-
             deposit
               partyAWallet
               contractId
@@ -138,7 +145,7 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
               { initialDepositBlock
               , initialFundsDeposited
               , chooseGimmeTheMoney = do
-                  gimmeTheMoneyChosen@InputsApplied{txBody = choiceTxBody} <-
+                  gimmeTheMoneyChosen@InputsAppliedInEra{txBody = choiceTxBody} <-
                     choose
                       partyBWallet
                       contractId
@@ -152,7 +159,7 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
                       { choiceBlock
                       , gimmeTheMoneyChosen
                       , sendNotify = do
-                          notified@InputsApplied{txBody = notifyTxBody} <- notify partyAWallet contractId
+                          notified@InputsAppliedInEra{txBody = notifyTxBody} <- notify partyAWallet contractId
                           notifiedBlock <- submit partyAWallet notifyTxBody
 
                           pure
@@ -160,7 +167,7 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
                               { notifiedBlock
                               , notified
                               , makeReturnDeposit = do
-                                  returnDeposited@InputsApplied{txBody = returnTxBody} <-
+                                  returnDeposited@InputsAppliedInEra{txBody = returnTxBody} <-
                                     deposit
                                       partyBWallet
                                       contractId
@@ -175,7 +182,7 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
                                       { returnDepositBlock
                                       , returnDeposited
                                       , withdrawPartyAFunds = do
-                                          withdrawTx@WithdrawTx{txBody = withdrawTxBody} <- withdraw partyAWallet contractId "Party A"
+                                          withdrawTx@WithdrawTxInEra{txBody = withdrawTxBody} <- withdraw partyAWallet contractId "Party A"
                                           (withdrawTx,) <$> submit partyAWallet withdrawTxBody
                                       }
                               }

@@ -988,6 +988,22 @@ data ChainSyncQuery a where
   GetTip :: ChainSyncQuery ChainPoint
   GetEra :: ChainSyncQuery AnyCardanoEra
 
+instance Ord AnyCardanoEra where
+  compare = on compare fromEnum
+
+instance Binary AnyCardanoEra where
+  put = putWord8 . fromIntegral . fromEnum
+  get = do
+    tag <- getWord8
+    case tag of
+      0 -> pure $ AnyCardanoEra ByronEra
+      1 -> pure $ AnyCardanoEra ShelleyEra
+      2 -> pure $ AnyCardanoEra AllegraEra
+      3 -> pure $ AnyCardanoEra MaryEra
+      4 -> pure $ AnyCardanoEra AlonzoEra
+      5 -> pure $ AnyCardanoEra BabbageEra
+      _ -> fail $ "Invalid era tag: " <> show tag
+
 deriving instance Show (ChainSyncQuery a)
 deriving instance Eq (ChainSyncQuery a)
 
@@ -1124,7 +1140,7 @@ instance Query.BinaryRequest ChainSyncQuery where
     TagGetUTxOs -> put
     TagGetNodeTip -> put
     TagGetTip -> put
-    TagGetEra -> putWord8 . fromIntegral . fromEnum
+    TagGetEra -> put
   getResult = \case
     TagGetSecurityParameter -> get
     TagGetNetworkId -> maybe Mainnet (Testnet . NetworkMagic) <$> get
@@ -1142,16 +1158,7 @@ instance Query.BinaryRequest ChainSyncQuery where
     TagGetUTxOs -> get
     TagGetNodeTip -> get
     TagGetTip -> get
-    TagGetEra -> do
-      tag <- getWord8
-      case tag of
-        0 -> pure $ AnyCardanoEra ByronEra
-        1 -> pure $ AnyCardanoEra ShelleyEra
-        2 -> pure $ AnyCardanoEra AllegraEra
-        3 -> pure $ AnyCardanoEra MaryEra
-        4 -> pure $ AnyCardanoEra AlonzoEra
-        5 -> pure $ AnyCardanoEra BabbageEra
-        _ -> fail $ "Invalid era tag: " <> show tag
+    TagGetEra -> get
 
 instance Query.ShowRequest ChainSyncQuery where
   showsPrecResult p = \case

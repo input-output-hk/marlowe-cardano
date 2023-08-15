@@ -29,6 +29,8 @@ import Language.Marlowe.Runtime.App.Types (
   Config (Config, buildSeconds, confirmSeconds, retryLimit, retrySeconds),
   MarloweRequest (..),
   MarloweResponse (..),
+  TxBodyInEraWithReferenceScripts (TxBodyInEraWithReferenceScripts),
+  TxInEraWithReferenceScripts (TxInEraWithReferenceScripts),
  )
 import Language.Marlowe.Runtime.ChainSync.Api (Address, Lovelace)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag (V1))
@@ -135,18 +137,18 @@ transactWithEvents backend config@Config{buildSeconds, confirmSeconds, retryLimi
               . const
               $ liftIO . threadDelay . (buildSeconds *)
                 =<< randomRIO (1_000_000, 2_000_000)
-            (contractId, body) <-
+            (contractId, TxBodyInEraWithReferenceScripts era body) <-
               handleWithEvents subBackend "Build" config request $
                 \case
-                  Body{..} -> pure (resContractId, resTxBody)
+                  Body{..} -> pure (resContractId, TxBodyInEraWithReferenceScripts resTxEra resTxBody)
                   response -> unexpected response
-            tx <-
-              handleWithEvents subBackend "Sign" config (Sign body [] [key]) $
+            TxInEraWithReferenceScripts era' tx <-
+              handleWithEvents subBackend "Sign" config (Sign era body [] [key]) $
                 \case
-                  Tx{..} -> pure resTx
+                  Tx{..} -> pure $ TxInEraWithReferenceScripts resTxEra resTx
                   response -> unexpected response
             _txId' <-
-              handleWithEvents subBackend "Submit" config (Submit tx 1) $
+              handleWithEvents subBackend "Submit" config (Submit era' tx 1) $
                 \case
                   TxId{..} -> pure resTxId
                   response -> unexpected response

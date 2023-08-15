@@ -38,17 +38,17 @@ import Language.Marlowe.Runtime.Core.Api (
   Transaction (..),
  )
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
-import Language.Marlowe.Runtime.Transaction.Api (ContractCreated, InputsApplied (..))
-import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx (..), Withdrawn)
+import Language.Marlowe.Runtime.Transaction.Api (ContractCreatedInEra, InputsAppliedInEra (..), WithdrawTxInEra (..))
+import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx (..))
 import Language.Marlowe.Runtime.Web.Server.Util (applyRangeToAscList)
 import Network.Protocol.Connection (Connector, runConnector)
 import Servant.Pagination
 
 data SyncClientDependencies m = SyncClientDependencies
   { connector :: Connector MarloweRuntimeClient m
-  , lookupTempContract :: ContractId -> STM (Maybe (TempTx ContractCreated))
-  , lookupTempTransaction :: ContractId -> TxId -> STM (Maybe (TempTx InputsApplied))
-  , lookupTempWithdrawal :: TxId -> STM (Maybe (TempTx Withdrawn))
+  , lookupTempContract :: ContractId -> STM (Maybe (TempTx ContractCreatedInEra))
+  , lookupTempTransaction :: ContractId -> TxId -> STM (Maybe (TempTx InputsAppliedInEra))
+  , lookupTempWithdrawal :: TxId -> STM (Maybe (TempTx WithdrawTxInEra))
   }
 
 -- | Signature for a delegate that loads a list of contract headers.
@@ -69,14 +69,14 @@ type LoadWithdrawals m =
 type LoadContract m =
   ContractId
   -- ^ ID of the contract to load
-  -> m (Maybe (Either (TempTx ContractCreated) SomeContractState))
+  -> m (Maybe (Either (TempTx ContractCreatedInEra) SomeContractState))
   -- ^ Nothing if the ID is not found
 
 -- | Signature for a delegate that loads the state of a single contract.
 type LoadWithdrawal m =
   TxId
   -- ^ ID of the contract to load
-  -> m (Maybe (Either (TempTx Withdrawn) Withdrawal))
+  -> m (Maybe (Either (TempTx WithdrawTxInEra) Withdrawal))
   -- ^ Nothing if the ID is not found
 
 data LoadTxError
@@ -97,7 +97,7 @@ type LoadTransaction m =
   -- ^ ID of the contract to load transactions for.
   -> TxId
   -- ^ ID of the transaction to load.
-  -> m (Maybe (Either (TempTx InputsApplied) SomeTransaction))
+  -> m (Maybe (Either (TempTx InputsAppliedInEra) SomeTransaction))
 
 -- | Public API of the SyncClient
 data SyncClient m = SyncClient

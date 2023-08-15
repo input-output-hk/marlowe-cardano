@@ -37,7 +37,12 @@ import Cardano.Api (
  )
 import Cardano.Api.Byron (HasTextEnvelope (textEnvelopeType))
 import Cardano.Api.SerialiseTextEnvelope (TextEnvelopeDescr (..))
-import Cardano.Api.Shelley (ShelleyLedgerEra, StakeAddress (..), fromShelleyStakeCredential)
+import Cardano.Api.Shelley (
+  ReferenceTxInsScriptsInlineDatumsSupportedInEra (..),
+  ShelleyLedgerEra,
+  StakeAddress (..),
+  fromShelleyStakeCredential,
+ )
 import qualified Cardano.Binary as Binary
 import qualified Cardano.Ledger.Alonzo.Scripts as Ledger.Alonzo.Scripts
 import Cardano.Ledger.Alonzo.TxWitness (TxWitness)
@@ -100,7 +105,7 @@ import qualified Language.Marlowe.Runtime.Core.Api as Core.Api (Payout (datum))
 import qualified Language.Marlowe.Runtime.Discovery.Api as Discovery
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import qualified Language.Marlowe.Runtime.Web as Web
-import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx (..), TempTxStatus (..), Withdrawn (..))
+import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx (..), TempTxStatus (..))
 import Network.HTTP.Media (MediaType, parseAccept)
 import Servant.Pagination (IsRangeType)
 import qualified Servant.Pagination as Pagination
@@ -424,32 +429,32 @@ instance FromDTO TempTxStatus where
   fromDTO Web.Submitted = Just Submitted
   fromDTO _ = Nothing
 
-instance HasDTO (TempTx Tx.ContractCreated) where
-  type DTO (TempTx Tx.ContractCreated) = Web.ContractState
+instance HasDTO (TempTx Tx.ContractCreatedInEra) where
+  type DTO (TempTx Tx.ContractCreatedInEra) = Web.ContractState
 
-instance ToDTO (TempTx Tx.ContractCreated) where
-  toDTO (TempTx _ status tx) = toDTOWithTxStatus status tx
+instance ToDTO (TempTx Tx.ContractCreatedInEra) where
+  toDTO (TempTx era _ status tx) = toDTOWithTxStatus status $ Tx.ContractCreated era tx
 
-instance HasDTO (TempTx Tx.InputsApplied) where
-  type DTO (TempTx Tx.InputsApplied) = Web.Tx
+instance HasDTO (TempTx Tx.InputsAppliedInEra) where
+  type DTO (TempTx Tx.InputsAppliedInEra) = Web.Tx
 
-instance ToDTO (TempTx Tx.InputsApplied) where
-  toDTO (TempTx _ status tx) = toDTOWithTxStatus status tx
+instance ToDTO (TempTx Tx.InputsAppliedInEra) where
+  toDTO (TempTx era _ status tx) = toDTOWithTxStatus status $ Tx.InputsApplied era tx
 
-instance HasDTO (TempTx Withdrawn) where
-  type DTO (TempTx Withdrawn) = Web.Withdrawal
+instance HasDTO (TempTx Tx.WithdrawTxInEra) where
+  type DTO (TempTx Tx.WithdrawTxInEra) = Web.Withdrawal
 
-instance ToDTO (TempTx Withdrawn) where
-  toDTO (TempTx _ status tx) = toDTOWithTxStatus status tx
+instance ToDTO (TempTx Tx.WithdrawTxInEra) where
+  toDTO (TempTx era _ status tx) = toDTOWithTxStatus status $ Tx.WithdrawTx era tx
 
-instance HasDTO (Tx.ContractCreated era v) where
-  type DTO (Tx.ContractCreated era v) = Web.ContractState
+instance HasDTO (Tx.ContractCreated v) where
+  type DTO (Tx.ContractCreated v) = Web.ContractState
 
-instance HasDTO (Withdrawn era v) where
-  type DTO (Withdrawn era v) = Web.Withdrawal
+instance HasDTO (Tx.WithdrawTx v) where
+  type DTO (Tx.WithdrawTx v) = Web.Withdrawal
 
-instance ToDTOWithTxStatus (Withdrawn era v) where
-  toDTOWithTxStatus status (Withdrawn txBody) =
+instance ToDTOWithTxStatus (Tx.WithdrawTx v) where
+  toDTOWithTxStatus status (Tx.WithdrawTx _ Tx.WithdrawTxInEra{txBody}) =
     Web.Withdrawal
       { withdrawalId = toDTO $ fromCardanoTxId $ getTxId txBody
       , payouts = mempty -- TODO the information cannot be recovered here. Push creating Withdrawn to marlowe-tx.
@@ -457,8 +462,8 @@ instance ToDTOWithTxStatus (Withdrawn era v) where
       , block = Nothing
       }
 
-instance (IsCardanoEra era) => ToDTOWithTxStatus (Tx.ContractCreated era v) where
-  toDTOWithTxStatus status Tx.ContractCreated{..} =
+instance ToDTOWithTxStatus (Tx.ContractCreated v) where
+  toDTOWithTxStatus status (Tx.ContractCreated era Tx.ContractCreatedInEra{..}) =
     Web.ContractState
       { contractId = toDTO contractId
       , roleTokenMintingPolicyId = toDTO rolesCurrency
@@ -477,16 +482,17 @@ instance (IsCardanoEra era) => ToDTOWithTxStatus (Tx.ContractCreated era v) wher
           MarloweV1 -> Just $ Sem.marloweState datum
       , utxo = Nothing
       , txBody = case status of
-          Unsigned -> Just $ toDTO txBody
+          Unsigned -> Just case era of
+            ReferenceTxInsScriptsInlineDatumsInBabbageEra -> toDTO txBody
           Submitted -> Nothing
       , unclaimedPayouts = []
       }
 
-instance HasDTO (Tx.InputsApplied era v) where
-  type DTO (Tx.InputsApplied era v) = Web.Tx
+instance HasDTO (Tx.InputsApplied v) where
+  type DTO (Tx.InputsApplied v) = Web.Tx
 
-instance (IsCardanoEra era) => ToDTOWithTxStatus (Tx.InputsApplied era v) where
-  toDTOWithTxStatus status Tx.InputsApplied{..} =
+instance ToDTOWithTxStatus (Tx.InputsApplied v) where
+  toDTOWithTxStatus status (Tx.InputsApplied era Tx.InputsAppliedInEra{..}) =
     Web.Tx
       { contractId = toDTO contractId
       , transactionId = toDTO $ fromCardanoTxId $ getTxId txBody
@@ -507,7 +513,8 @@ instance (IsCardanoEra era) => ToDTOWithTxStatus (Tx.InputsApplied era v) where
       , invalidBefore = invalidBefore
       , invalidHereafter = invalidHereafter
       , txBody = case status of
-          Unsigned -> Just $ toDTO txBody
+          Unsigned -> Just case era of
+            ReferenceTxInsScriptsInlineDatumsInBabbageEra -> toDTO txBody
           Submitted -> Nothing
       }
 

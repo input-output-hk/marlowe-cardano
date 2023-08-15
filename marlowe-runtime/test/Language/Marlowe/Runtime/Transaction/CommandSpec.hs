@@ -6,6 +6,9 @@
 module Language.Marlowe.Runtime.Transaction.CommandSpec where
 
 import Cardano.Api (CardanoEra (..))
+import Cardano.Api.Shelley (
+  ReferenceTxInsScriptsInlineDatumsSupportedInEra (ReferenceTxInsScriptsInlineDatumsInBabbageEra),
+ )
 import Data.Foldable (fold)
 import Data.Void (absurd)
 import Gen.Cardano.Api.Typed (genTx)
@@ -57,7 +60,7 @@ instance ArbitraryCommand MarloweTxCommand where
         <$> arbitrary
         <*> arbitrary
         <*> arbitrary
-    TagSubmit -> hedgehog $ Submit <$> genTx BabbageEra
+    TagSubmit -> hedgehog $ Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> genTx BabbageEra
 
   arbitraryJobId = \case
     TagCreate MarloweV1 -> Nothing

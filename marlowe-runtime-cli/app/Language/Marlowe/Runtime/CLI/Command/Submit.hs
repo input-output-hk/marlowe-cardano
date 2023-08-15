@@ -1,6 +1,12 @@
+{-# LANGUAGE GADTs #-}
+
 module Language.Marlowe.Runtime.CLI.Command.Submit where
 
+import Cardano.Api (AsType (..), FromSomeType (..), Tx)
 import qualified Cardano.Api as C
+import Cardano.Api.Shelley (
+  ReferenceTxInsScriptsInlineDatumsSupportedInEra (ReferenceTxInsScriptsInlineDatumsInBabbageEra),
+ )
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.Delay (newDelay, waitDelay)
 import Control.Monad.IO.Class (liftIO)
@@ -52,11 +58,21 @@ data ClientSubmitError
   | TransactionDecodingFailed
   deriving (Show)
 
+data TxInEraWithReferenceScripts where
+  TxInEraWithReferenceScripts
+    :: ReferenceTxInsScriptsInlineDatumsSupportedInEra era -> Tx era -> TxInEraWithReferenceScripts
+
 runSubmitCommand :: SubmitCommand -> CLI ()
 runSubmitCommand SubmitCommand{txFile} = runCLIExceptT do
-  tx <-
-    ExceptT $ liftIO $ first (const TransactionDecodingFailed) <$> C.readFileTextEnvelope (C.AsTx C.AsBabbageEra) txFile
-  let cmd = Submit tx
+  TxInEraWithReferenceScripts era tx <-
+    ExceptT $
+      liftIO $
+        first (const TransactionDecodingFailed)
+          <$> C.readFileTextEnvelopeAnyOf
+            [ FromSomeType (AsTx AsBabbageEra) $ TxInEraWithReferenceScripts ReferenceTxInsScriptsInlineDatumsInBabbageEra
+            ]
+            txFile
+  let cmd = Submit era tx
       next =
         ClientStCmd
           { recvMsgAwait = \_ _ -> do

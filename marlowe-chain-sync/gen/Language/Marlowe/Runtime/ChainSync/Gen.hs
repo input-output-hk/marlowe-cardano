@@ -379,6 +379,17 @@ instance ChainSeek.QueryEq Move where
     TagFindTxsFor -> (==)
     TagAdvanceToTip -> (==)
 
+instance Arbitrary AnyCardanoEra where
+  arbitrary =
+    elements
+      [ AnyCardanoEra ByronEra
+      , AnyCardanoEra ShelleyEra
+      , AnyCardanoEra AllegraEra
+      , AnyCardanoEra MaryEra
+      , AnyCardanoEra AlonzoEra
+      , AnyCardanoEra BabbageEra
+      ]
+
 instance Query.ArbitraryRequest ChainSyncQuery where
   arbitraryTag =
     elements
@@ -410,15 +421,7 @@ instance Query.ArbitraryRequest ChainSyncQuery where
     TagGetUTxOs -> arbitrary
     TagGetNodeTip -> arbitrary
     TagGetTip -> arbitrary
-    TagGetEra ->
-      elements
-        [ AnyCardanoEra ByronEra
-        , AnyCardanoEra ShelleyEra
-        , AnyCardanoEra AllegraEra
-        , AnyCardanoEra MaryEra
-        , AnyCardanoEra AlonzoEra
-        , AnyCardanoEra BabbageEra
-        ]
+    TagGetEra -> arbitrary
 
   shrinkReq = \case
     GetSecurityParameter -> []
@@ -442,7 +445,7 @@ instance Query.ArbitraryRequest ChainSyncQuery where
     TagGetUTxOs -> shrink
     TagGetNodeTip -> shrink
     TagGetTip -> shrink
-    TagGetEra -> const []
+    TagGetEra -> shrink
 
 genEraHistory :: Gen (EraHistory CardanoMode)
 genEraHistory =

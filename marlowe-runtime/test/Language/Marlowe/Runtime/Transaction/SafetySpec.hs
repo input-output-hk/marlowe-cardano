@@ -42,6 +42,7 @@ import qualified Cardano.Api as Cardano (
   makeShelleyAddress,
   selectLovelace,
  )
+import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import qualified Cardano.Api.Shelley as Shelley (ReferenceScript (..), StakeAddressReference (..))
 import Data.Foldable (for_)
 import qualified Data.Map.Strict as M (fromList, keys, lookup, mapKeys, toList)
@@ -291,7 +292,17 @@ spec =
       for_ referenceContracts \(name, contract) -> it ("Passes for reference contract " <> name) do
         (policy, address) <- generate arbitrary
         let minAda = maybe 0 toInteger $ minAdaUpperBound protocolTestnet version contract continuations
-        actual <- checkTransactions protocolTestnet version marloweContext policy address minAda contract continuations
+        actual <-
+          checkTransactions
+            protocolTestnet
+            ReferenceTxInsScriptsInlineDatumsInBabbageEra
+            version
+            marloweContext
+            policy
+            address
+            minAda
+            contract
+            continuations
         case actual of
           -- Overspending or warnings are not a test failures.
           Right errs
@@ -314,7 +325,17 @@ spec =
                   ]
                   1000
                   V1.Close
-          actual <- checkTransactions protocolTestnet version marloweContext policy address minAda contract continuations
+          actual <-
+            checkTransactions
+              protocolTestnet
+              ReferenceTxInsScriptsInlineDatumsInBabbageEra
+              version
+              marloweContext
+              policy
+              address
+              minAda
+              contract
+              continuations
           case actual of
             Right errs
               | all overspent errs -> pure ()

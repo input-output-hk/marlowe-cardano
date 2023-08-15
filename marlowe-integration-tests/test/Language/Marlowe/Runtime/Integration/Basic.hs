@@ -24,7 +24,11 @@ import Language.Marlowe.Runtime.Core.Api (
 import Language.Marlowe.Runtime.History.Api (ContractStep (..), RedeemStep (..))
 import Language.Marlowe.Runtime.Integration.Common
 import Language.Marlowe.Runtime.Integration.StandardContract
-import Language.Marlowe.Runtime.Transaction.Api (ContractCreated (..), InputsApplied (..), WithdrawTx (..))
+import Language.Marlowe.Runtime.Transaction.Api (
+  ContractCreatedInEra (..),
+  InputsAppliedInEra (..),
+  WithdrawTxInEra (..),
+ )
 import Test.Hspec (Spec, it, shouldBe)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
@@ -65,7 +69,7 @@ spec = it "Basic e2e scenario" $ withLocalMarloweRuntime $ runIntegrationTest do
         -> StandardContractFundsDeposited 'V1
         -> MarloweSync.MarloweSyncClient Integration TxOutRef
       marloweSyncClient StandardContractInit{..} StandardContractFundsDeposited{..} = MarloweSync.MarloweSyncClient do
-        let ContractCreated{contractId, rolesCurrency} = contractCreated
+        let ContractCreatedInEra{contractId, rolesCurrency} = contractCreated
         pure $
           MarloweSync.SendMsgFollowContract contractId
           -- 10. Expect contract found
@@ -100,7 +104,7 @@ spec = it "Basic e2e scenario" $ withLocalMarloweRuntime $ runIntegrationTest do
                           StandardContractClosed{..} <- makeReturnDeposit
 
                           -- 22. Withdraw as party A
-                          (WithdrawTx{txBody = withdrawTxBody}, withdrawBlock) <- withdrawPartyAFunds
+                          (WithdrawTxInEra{txBody = withdrawTxBody}, withdrawBlock) <- withdrawPartyAFunds
 
                           -- 23. Poll
                           -- 24. Expect roll forward with notify
@@ -123,7 +127,7 @@ spec = it "Basic e2e scenario" $ withLocalMarloweRuntime $ runIntegrationTest do
                                   -- 30. Expect wait
                                   -- 31. Cancel
                                   -- 32. Done
-                                  let InputsApplied{output} = notified
+                                  let InputsAppliedInEra{output} = notified
                                   TransactionScriptOutput{utxo = notifyTxOutRef} <- expectJust "Failed to obtain deposit output" output
                                   pure $ marloweSyncRequestNextExpectWait $ pure $ MarloweSync.SendMsgCancel $ MarloweSync.SendMsgDone notifyTxOutRef
 
