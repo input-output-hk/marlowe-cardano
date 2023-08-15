@@ -13,6 +13,7 @@ import Cardano.Api (
   readFileTextEnvelope,
   serialiseToCBOR,
  )
+import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import qualified Cardano.Api.Shelley
 import qualified Control.Monad.Reader as Reader
 import qualified Data.Aeson as Aeson
@@ -151,15 +152,27 @@ marloweRuntimeJobClient = \case
   cmd@(Create _ MarloweV1 _ _ _ _ _) ->
     runMarloweTxClient (JobClient.liftCommand cmd) >>= \case
       Left err -> error ("Some JobClient create error: " <> show err)
-      Right Runtime.Transaction.Api.ContractCreated{txBody} -> pure txBody
+      Right
+        ( Runtime.Transaction.Api.ContractCreated
+            ReferenceTxInsScriptsInlineDatumsInBabbageEra
+            Runtime.Transaction.Api.ContractCreatedInEra{txBody}
+          ) -> pure txBody
   cmd@(ApplyInputs MarloweV1 _ _ _ _ _ _) ->
     runMarloweTxClient (JobClient.liftCommand cmd) >>= \case
       Left err -> error ("Some JobClient input error: " <> show err)
-      Right Runtime.Transaction.Api.InputsApplied{txBody} -> pure txBody
+      Right
+        ( Runtime.Transaction.Api.InputsApplied
+            ReferenceTxInsScriptsInlineDatumsInBabbageEra
+            Runtime.Transaction.Api.InputsAppliedInEra{txBody}
+          ) -> pure txBody
   cmd@(Withdraw MarloweV1 _ _ _) ->
     runMarloweTxClient (JobClient.liftCommand cmd) >>= \case
       Left err -> error ("Some JobClient withdraw error: " <> show err)
-      Right Runtime.Transaction.Api.WithdrawTx{txBody} -> pure txBody
+      Right
+        ( Runtime.Transaction.Api.WithdrawTx
+            ReferenceTxInsScriptsInlineDatumsInBabbageEra
+            Runtime.Transaction.Api.WithdrawTxInEra{txBody}
+          ) -> pure txBody
 
 expectSameResultFromCLIAndJobClient :: String -> [String] -> MarloweTxCommand Void err result -> Integration ()
 expectSameResultFromCLIAndJobClient outputFile extraCliArgs command = do
@@ -253,7 +266,7 @@ createSpec = describe "create" $
           :: MarloweTxCommand
               Void
               (Runtime.Transaction.Api.CreateError 'V1)
-              (Runtime.Transaction.Api.ContractCreated BabbageEra 'V1)
+              (Runtime.Transaction.Api.ContractCreated 'V1)
         creationCommand =
           Create
             Nothing
@@ -268,7 +281,7 @@ createSpec = describe "create" $
 
 depositSpec :: Hspec.SpecWith CLISpecTestData
 depositSpec = describe "deposit" $
-  it "generates a deposit tx body envelope" \CLISpecTestData{..} -> flip runIntegrationTest runtime do
+  it "generates a deposit tx body envelope" \CLISpecTestData{..} -> flip (runIntegrationTest @()) runtime do
     now <- liftIO Time.getCurrentTime
 
     let partyA :: V1.Party
@@ -284,7 +297,9 @@ depositSpec = describe "deposit" $
         tags :: Map MarloweMetadataTag (Maybe ChainSync.Api.Metadata)
         tags = Map.empty
 
-    Runtime.Transaction.Api.ContractCreated{contractId, txBody} <-
+    Runtime.Transaction.Api.ContractCreated
+      ReferenceTxInsScriptsInlineDatumsInBabbageEra
+      Runtime.Transaction.Api.ContractCreatedInEra{contractId, txBody} <-
       Runtime.Integration.Common.expectRight "failed to create deposit contract"
         =<< Runtime.Client.createContract
           Nothing
@@ -308,7 +323,7 @@ depositSpec = describe "deposit" $
           :: MarloweTxCommand
               Void
               (Runtime.Transaction.Api.ApplyInputsError 'V1)
-              (Runtime.Transaction.Api.InputsApplied BabbageEra 'V1)
+              (Runtime.Transaction.Api.InputsApplied 'V1)
         command =
           ApplyInputs
             MarloweV1
@@ -323,7 +338,7 @@ depositSpec = describe "deposit" $
 
 chooseSpec :: Hspec.SpecWith CLISpecTestData
 chooseSpec = describe "choose" $
-  it "generates a choose tx body envelope" \CLISpecTestData{..} -> flip runIntegrationTest runtime do
+  it "generates a choose tx body envelope" \CLISpecTestData{..} -> flip (runIntegrationTest @()) runtime do
     now <- liftIO Time.getCurrentTime
 
     let partyA :: V1.Party
@@ -339,7 +354,9 @@ chooseSpec = describe "choose" $
         tags :: Map MarloweMetadataTag (Maybe ChainSync.Api.Metadata)
         tags = Map.empty
 
-    Runtime.Transaction.Api.ContractCreated{contractId, txBody} <-
+    Runtime.Transaction.Api.ContractCreated
+      ReferenceTxInsScriptsInlineDatumsInBabbageEra
+      Runtime.Transaction.Api.ContractCreatedInEra{contractId, txBody} <-
       Runtime.Integration.Common.expectRight "failed to create choose contract"
         =<< Runtime.Client.createContract
           Nothing
@@ -363,7 +380,7 @@ chooseSpec = describe "choose" $
           :: MarloweTxCommand
               Void
               (Runtime.Transaction.Api.ApplyInputsError 'V1)
-              (Runtime.Transaction.Api.InputsApplied BabbageEra 'V1)
+              (Runtime.Transaction.Api.InputsApplied 'V1)
         command =
           ApplyInputs
             MarloweV1
@@ -378,7 +395,7 @@ chooseSpec = describe "choose" $
 
 notifySpec :: Hspec.SpecWith CLISpecTestData
 notifySpec = describe "notify" $
-  it "generates a notify tx body envelope" \CLISpecTestData{..} -> flip runIntegrationTest runtime do
+  it "generates a notify tx body envelope" \CLISpecTestData{..} -> flip (runIntegrationTest @()) runtime do
     now <- liftIO Time.getCurrentTime
 
     let contract :: V1.Contract
@@ -391,7 +408,9 @@ notifySpec = describe "notify" $
         tags :: Map MarloweMetadataTag (Maybe ChainSync.Api.Metadata)
         tags = Map.empty
 
-    Runtime.Transaction.Api.ContractCreated{contractId, txBody} <-
+    Runtime.Transaction.Api.ContractCreated
+      ReferenceTxInsScriptsInlineDatumsInBabbageEra
+      Runtime.Transaction.Api.ContractCreatedInEra{contractId, txBody} <-
       Runtime.Integration.Common.expectRight "failed to create notify contract"
         =<< Runtime.Client.createContract
           Nothing
@@ -415,7 +434,7 @@ notifySpec = describe "notify" $
           :: MarloweTxCommand
               Void
               (Runtime.Transaction.Api.ApplyInputsError 'V1)
-              (Runtime.Transaction.Api.InputsApplied BabbageEra 'V1)
+              (Runtime.Transaction.Api.InputsApplied 'V1)
         command =
           ApplyInputs
             MarloweV1
@@ -430,7 +449,7 @@ notifySpec = describe "notify" $
 
 applySpec :: Hspec.SpecWith CLISpecTestData
 applySpec = describe "apply" $
-  it "generates a deposit-choose-notify tx body envelope" \CLISpecTestData{..} -> flip runIntegrationTest runtime do
+  it "generates a deposit-choose-notify tx body envelope" \CLISpecTestData{..} -> flip (runIntegrationTest @()) runtime do
     now <- liftIO Time.getCurrentTime
 
     let partyA :: V1.Party
@@ -466,7 +485,9 @@ applySpec = describe "apply" $
           , V1.NormalInput V1.INotify
           ]
 
-    Runtime.Transaction.Api.ContractCreated{contractId, txBody} <-
+    Runtime.Transaction.Api.ContractCreated
+      ReferenceTxInsScriptsInlineDatumsInBabbageEra
+      Runtime.Transaction.Api.ContractCreatedInEra{contractId, txBody} <-
       Runtime.Integration.Common.expectRight "failed to create deposit-choose-notify contract"
         =<< Runtime.Client.createContract
           Nothing
@@ -494,7 +515,7 @@ applySpec = describe "apply" $
           :: MarloweTxCommand
               Void
               (Runtime.Transaction.Api.ApplyInputsError 'V1)
-              (Runtime.Transaction.Api.InputsApplied BabbageEra 'V1)
+              (Runtime.Transaction.Api.InputsApplied 'V1)
         command =
           ApplyInputs
             MarloweV1
@@ -509,7 +530,7 @@ applySpec = describe "apply" $
 
 withdrawSpec :: Hspec.SpecWith CLISpecTestData
 withdrawSpec = describe "withdraw" $
-  it "generates a withdraw tx body envelope" \CLISpecTestData{..} -> flip runIntegrationTest runtime do
+  it "generates a withdraw tx body envelope" \CLISpecTestData{..} -> flip (runIntegrationTest @()) runtime do
     now <- liftIO Time.getCurrentTime
 
     let partyA :: V1.Party
@@ -525,7 +546,9 @@ withdrawSpec = describe "withdraw" $
         tags :: Map MarloweMetadataTag (Maybe ChainSync.Api.Metadata)
         tags = Map.empty
 
-    Runtime.Transaction.Api.ContractCreated{contractId, txBody} <-
+    Runtime.Transaction.Api.ContractCreated
+      ReferenceTxInsScriptsInlineDatumsInBabbageEra
+      Runtime.Transaction.Api.ContractCreatedInEra{contractId, txBody} <-
       Runtime.Integration.Common.expectRight "failed to create withdraw contract"
         =<< Runtime.Client.createContract
           Nothing
@@ -547,7 +570,7 @@ withdrawSpec = describe "withdraw" $
           :: MarloweTxCommand
               Void
               (Runtime.Transaction.Api.ApplyInputsError 'V1)
-              (Runtime.Transaction.Api.InputsApplied BabbageEra 'V1)
+              (Runtime.Transaction.Api.InputsApplied 'V1)
         depositCommand =
           ApplyInputs
             MarloweV1
@@ -566,7 +589,7 @@ withdrawSpec = describe "withdraw" $
           :: MarloweTxCommand
               Void
               (Runtime.Transaction.Api.WithdrawError 'V1)
-              (WithdrawTx BabbageEra 'V1)
+              (WithdrawTx 'V1)
         command =
           Withdraw
             MarloweV1

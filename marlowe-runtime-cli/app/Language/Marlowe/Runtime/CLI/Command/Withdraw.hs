@@ -5,6 +5,7 @@
 module Language.Marlowe.Runtime.CLI.Command.Withdraw where
 
 import qualified Cardano.Api as C
+import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT (ExceptT))
 import Data.Aeson (toJSON)
@@ -21,7 +22,7 @@ import Language.Marlowe.Runtime.Core.Api (
   MarloweVersionTag (V1),
   SomeMarloweVersion (SomeMarloweVersion),
  )
-import Language.Marlowe.Runtime.Transaction.Api (WithdrawError, WithdrawTx (..))
+import Language.Marlowe.Runtime.Transaction.Api (WithdrawError, WithdrawTx (..), WithdrawTxInEra (..))
 import Options.Applicative
 
 data WithdrawCommand = WithdrawCommand
@@ -60,10 +61,14 @@ withdrawCommandParser = info (txCommandParser False parser) $ progDesc "Withdraw
 runWithdrawCommand :: TxCommand WithdrawCommand -> CLI ()
 runWithdrawCommand TxCommand{walletAddresses, signingMethod, subCommand = WithdrawCommand{..}} = case marloweVersion of
   SomeMarloweVersion MarloweV1 -> runCLIExceptT do
-    WithdrawTx{..} <- ExceptT $ first WithdrawFailed <$> withdraw MarloweV1 walletAddresses contractId role
+    WithdrawTx era WithdrawTxInEra{..} <-
+      ExceptT $ first WithdrawFailed <$> withdraw MarloweV1 walletAddresses contractId role
     case signingMethod of
       Manual outputFile -> do
-        ExceptT $ liftIO $ first TransactionFileWriteFailed <$> C.writeFileTextEnvelope outputFile Nothing txBody
+        ExceptT @_ @_ @() $
+          liftIO $
+            first TransactionFileWriteFailed <$> case era of
+              ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.writeFileTextEnvelope outputFile Nothing txBody
         let txId = C.getTxId txBody
             res =
               A.object

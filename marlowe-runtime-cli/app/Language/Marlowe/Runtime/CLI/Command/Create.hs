@@ -5,6 +5,7 @@
 module Language.Marlowe.Runtime.CLI.Command.Create where
 
 import qualified Cardano.Api as C
+import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import qualified Cardano.Api.Shelley as C
 import Control.Error.Util (hoistMaybe, noteT)
 import Control.Monad.IO.Class (liftIO)
@@ -50,6 +51,7 @@ import Language.Marlowe.Runtime.Core.Api (
  )
 import Language.Marlowe.Runtime.Transaction.Api (
   ContractCreated (..),
+  ContractCreatedInEra (..),
   CreateError,
   RoleTokenMetadata,
   RoleTokensConfig (..),
@@ -279,11 +281,14 @@ runCreateCommand TxCommand{walletAddresses, signingMethod, tagsFile, metadataFil
     run version rolesDistribution = do
       contract <- readContract version
       metadata <- MarloweTransactionMetadata <$> readTags <*> readMetadata
-      ContractCreated{contractId, txBody, safetyErrors} <-
+      ContractCreated era ContractCreatedInEra{contractId, txBody, safetyErrors} <-
         ExceptT $
           first CreateFailed
             <$> createContract stakeCredential version walletAddresses rolesDistribution metadata minUTxO contract
       case signingMethod of
         Manual outputFile -> do
-          ExceptT $ liftIO $ first TransactionFileWriteFailed <$> C.writeFileTextEnvelope outputFile Nothing txBody
+          ExceptT @_ @_ @() $
+            liftIO $
+              first TransactionFileWriteFailed <$> case era of
+                ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.writeFileTextEnvelope outputFile Nothing txBody
           pure (contractId, safetyErrors)

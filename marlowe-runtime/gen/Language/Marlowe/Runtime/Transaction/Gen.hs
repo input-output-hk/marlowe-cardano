@@ -1,9 +1,13 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Marlowe.Runtime.Transaction.Gen where
 
 import Cardano.Api (IsCardanoEra, cardanoEra)
+import Cardano.Api.Shelley (
+  ReferenceTxInsScriptsInlineDatumsSupportedInEra (ReferenceTxInsScriptsInlineDatumsInBabbageEra),
+ )
 import Control.Applicative (liftA2)
 import qualified Data.ByteString.Char8 as BS
 import Data.Foldable (fold)
@@ -13,9 +17,9 @@ import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.Core.Gen (ArbitraryMarloweVersion)
 import Language.Marlowe.Runtime.History.Gen ()
 import Language.Marlowe.Runtime.Transaction.Api
-import qualified Language.Marlowe.Runtime.Transaction.Api as ContractCreated (ContractCreated (..))
-import qualified Language.Marlowe.Runtime.Transaction.Api as InputsApplied (InputsApplied (..))
-import qualified Language.Marlowe.Runtime.Transaction.Api as WithdrawTx (WithdrawTx (..))
+import qualified Language.Marlowe.Runtime.Transaction.Api as ContractCreatedInEra (ContractCreatedInEra (..))
+import qualified Language.Marlowe.Runtime.Transaction.Api as InputsAppliedInEra (InputsAppliedInEra (..))
+import qualified Language.Marlowe.Runtime.Transaction.Api as WithdrawTxInEra (WithdrawTxInEra (..))
 import Network.HTTP.Media (MediaType, (//))
 import qualified Network.URI
 import qualified Network.URI as Network
@@ -159,6 +163,7 @@ instance (ArbitraryMarloweVersion v) => Arbitrary (CreateError v) where
   arbitrary =
     oneof
       [ CreateConstraintError <$> arbitrary
+      , CreateEraUnsupported <$> arbitrary
       , CreateLoadMarloweContextFailed <$> arbitrary
       , CreateBuildupFailed <$> arbitrary
       , pure CreateToCardanoError
@@ -176,7 +181,8 @@ instance Arbitrary ApplyInputsConstraintsBuildupError where
 instance (ArbitraryMarloweVersion v) => Arbitrary (ApplyInputsError v) where
   arbitrary =
     oneof
-      [ ApplyInputsConstraintError <$> arbitrary
+      [ ApplyInputsEraUnsupported <$> arbitrary
+      , ApplyInputsConstraintError <$> arbitrary
       , pure ScriptOutputNotFound
       , ApplyInputsLoadMarloweContextFailed <$> arbitrary
       , ApplyInputsConstraintsBuildupFailed <$> arbitrary
@@ -184,19 +190,13 @@ instance (ArbitraryMarloweVersion v) => Arbitrary (ApplyInputsError v) where
       , pure TipAtGenesis
       , ValidityLowerBoundTooHigh <$> arbitrary <*> arbitrary
       ]
-  shrink = \case
-    ApplyInputsConstraintError err -> ApplyInputsConstraintError <$> shrink err
-    ScriptOutputNotFound -> []
-    ApplyInputsLoadMarloweContextFailed err -> ApplyInputsLoadMarloweContextFailed <$> shrink err
-    ApplyInputsConstraintsBuildupFailed err -> ApplyInputsConstraintsBuildupFailed <$> shrink err
-    SlotConversionFailed err -> SlotConversionFailed <$> shrink err
-    TipAtGenesis -> []
-    ValidityLowerBoundTooHigh _ _ -> []
+  shrink = genericShrink
 
 instance (ArbitraryMarloweVersion v) => Arbitrary (WithdrawError v) where
   arbitrary =
     oneof
       [ WithdrawConstraintError <$> arbitrary
+      , WithdrawEraUnsupported <$> arbitrary
       , WithdrawLoadMarloweContextFailed <$> arbitrary
       , UnableToFindPayoutForAGivenRole <$> arbitrary
       ]
@@ -211,9 +211,14 @@ instance Arbitrary SubmitError where
       ]
   shrink = genericShrink
 
-instance (ArbitraryMarloweVersion v, IsCardanoEra era) => Arbitrary (ContractCreated era v) where
+instance (ArbitraryMarloweVersion v) => Arbitrary (ContractCreated v) where
+  arbitrary = ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> arbitrary
+  shrink (ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra created) =
+    ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> shrink created
+
+instance (ArbitraryMarloweVersion v, IsCardanoEra era) => Arbitrary (ContractCreatedInEra era v) where
   arbitrary =
-    ContractCreated
+    ContractCreatedInEra
       <$> arbitrary
       <*> arbitrary
       <*> arbitrary
@@ -226,17 +231,22 @@ instance (ArbitraryMarloweVersion v, IsCardanoEra era) => Arbitrary (ContractCre
       <*> arbitrary
       <*> hedgehog (genTxBody cardanoEra)
       <*> arbitrary
-  shrink ContractCreated{..} =
+  shrink ContractCreatedInEra{..} =
     fold
-      [ [ContractCreated{..}{ContractCreated.metadata = metadata'} | metadata' <- shrink metadata]
-      , [ContractCreated{..}{ContractCreated.datum = datum'} | datum' <- shrink datum]
-      , [ContractCreated{..}{ContractCreated.assets = assets'} | assets' <- shrink assets]
-      , [ContractCreated{..}{ContractCreated.safetyErrors = safetyErrors'} | safetyErrors' <- shrink safetyErrors]
+      [ [ContractCreatedInEra{..}{ContractCreatedInEra.metadata = metadata'} | metadata' <- shrink metadata]
+      , [ContractCreatedInEra{..}{ContractCreatedInEra.datum = datum'} | datum' <- shrink datum]
+      , [ContractCreatedInEra{..}{ContractCreatedInEra.assets = assets'} | assets' <- shrink assets]
+      , [ContractCreatedInEra{..}{ContractCreatedInEra.safetyErrors = safetyErrors'} | safetyErrors' <- shrink safetyErrors]
       ]
 
-instance (ArbitraryMarloweVersion v, IsCardanoEra era) => Arbitrary (InputsApplied era v) where
+instance (ArbitraryMarloweVersion v) => Arbitrary (InputsApplied v) where
+  arbitrary = InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> arbitrary
+  shrink (InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra created) =
+    InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> shrink created
+
+instance (ArbitraryMarloweVersion v, IsCardanoEra era) => Arbitrary (InputsAppliedInEra era v) where
   arbitrary =
-    InputsApplied Core.marloweVersion
+    InputsAppliedInEra Core.marloweVersion
       <$> arbitrary
       <*> arbitrary
       <*> arbitrary
@@ -245,18 +255,23 @@ instance (ArbitraryMarloweVersion v, IsCardanoEra era) => Arbitrary (InputsAppli
       <*> arbitrary
       <*> arbitrary
       <*> hedgehog (genTxBody cardanoEra)
-  shrink InputsApplied{..} =
+  shrink InputsAppliedInEra{..} =
     fold
-      [ [InputsApplied{..}{InputsApplied.metadata = metadata'} | metadata' <- shrink metadata]
-      , [InputsApplied{..}{InputsApplied.input = input'} | input' <- shrink input]
-      , [InputsApplied{..}{InputsApplied.output = output'} | output' <- shrink output]
-      , [InputsApplied{..}{InputsApplied.inputs = inputs'} | inputs' <- shrink inputs]
+      [ [InputsAppliedInEra{..}{InputsAppliedInEra.metadata = metadata'} | metadata' <- shrink metadata]
+      , [InputsAppliedInEra{..}{InputsAppliedInEra.input = input'} | input' <- shrink input]
+      , [InputsAppliedInEra{..}{InputsAppliedInEra.output = output'} | output' <- shrink output]
+      , [InputsAppliedInEra{..}{InputsAppliedInEra.inputs = inputs'} | inputs' <- shrink inputs]
       ]
 
-instance (ArbitraryMarloweVersion v, IsCardanoEra era) => Arbitrary (WithdrawTx era v) where
+instance (ArbitraryMarloweVersion v) => Arbitrary (WithdrawTx v) where
+  arbitrary = WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> arbitrary
+  shrink (WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra created) =
+    WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> shrink created
+
+instance (ArbitraryMarloweVersion v, IsCardanoEra era) => Arbitrary (WithdrawTxInEra era v) where
   arbitrary =
-    WithdrawTx Core.marloweVersion
+    WithdrawTxInEra Core.marloweVersion
       <$> arbitrary
       <*> arbitrary
       <*> hedgehog (genTxBody cardanoEra)
-  shrink WithdrawTx{..} = [WithdrawTx{..}{WithdrawTx.inputs = inputs'} | inputs' <- shrink inputs]
+  shrink WithdrawTxInEra{..} = [WithdrawTxInEra{..}{WithdrawTxInEra.inputs = inputs'} | inputs' <- shrink inputs]

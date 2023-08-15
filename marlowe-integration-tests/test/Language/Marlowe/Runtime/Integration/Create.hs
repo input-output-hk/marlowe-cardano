@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedLists #-}
 
 module Language.Marlowe.Runtime.Integration.Create where
@@ -21,6 +22,7 @@ import Cardano.Api (
   valueToList,
  )
 import qualified Cardano.Api as C
+import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import Control.Applicative (liftA2)
 import Control.Monad (guard)
 import Control.Monad.IO.Class (liftIO)
@@ -88,7 +90,7 @@ expectSuccess action = \case
   (a, Right b) -> action (a, b)
 
 runCreateCase
-  :: CreateCase -> ActionWith (TestData, Either (CreateError 'V1) (ContractCreated BabbageEra 'V1)) -> ActionWith TestData
+  :: CreateCase -> ActionWith (TestData, Either (CreateError 'V1) (ContractCreated 'V1)) -> ActionWith TestData
 runCreateCase createCase action testData = flip runIntegrationTest (runtime testData) do
   result <- runMarloweTxClient $ liftCommand $ mkCreateCommand testData createCase
   liftIO $ action (testData, result)
@@ -155,7 +157,7 @@ setup runSpec = withLocalMarloweRuntime $ runIntegrationTest do
         , runtime
         }
 
-mkSpec :: CreateCase -> Maybe (SpecWith (TestData, ContractCreated BabbageEra 'V1))
+mkSpec :: CreateCase -> Maybe (SpecWith (TestData, ContractCreated 'V1))
 mkSpec (CreateCase stakeCredential wallet (roleTokens, metadata) minLovelace) =
   mergeSpecs
     [ stakeCredentialsSpec stakeCredential
@@ -166,28 +168,28 @@ mkSpec (CreateCase stakeCredential wallet (roleTokens, metadata) minLovelace) =
     ]
 
 mergeSpecs
-  :: [Maybe (SpecWith (TestData, ContractCreated BabbageEra v))]
-  -> Maybe (SpecWith (TestData, ContractCreated BabbageEra v))
+  :: [Maybe (SpecWith (TestData, ContractCreated v))]
+  -> Maybe (SpecWith (TestData, ContractCreated v))
 mergeSpecs = foldr (liftA2 (*>)) $ Just $ pure ()
 
-stakeCredentialsSpec :: StakeCredentialCase -> Maybe (SpecWith (TestData, ContractCreated BabbageEra v))
+stakeCredentialsSpec :: StakeCredentialCase -> Maybe (SpecWith (TestData, ContractCreated v))
 stakeCredentialsSpec =
   Just . \case
     UseStakeCredential -> do
-      it "Attaches a stake credential to the Marlowe script address" \(TestData{..}, ContractCreated{..}) -> do
+      it "Attaches a stake credential to the Marlowe script address" \(TestData{..}, ContractCreated _ ContractCreatedInEra{..}) -> do
         stakeReference marloweScriptAddress `shouldBe` Just (StakeCredential stakeCredential)
     NoStakeCredential -> do
-      it "Does not attach a stake credential to the Marlowe script address" \(_, ContractCreated{..}) -> do
+      it "Does not attach a stake credential to the Marlowe script address" \(_, ContractCreated _ ContractCreatedInEra{..}) -> do
         stakeReference marloweScriptAddress `shouldBe` Nothing
 
-walletSpec :: RoleTokenCase -> WalletCase -> Maybe (SpecWith (TestData, ContractCreated BabbageEra v))
+walletSpec :: RoleTokenCase -> WalletCase -> Maybe (SpecWith (TestData, ContractCreated v))
 walletSpec roleTokens (WalletCase balance addresses collateral) =
   mergeSpecs
     [ balanceSpec balance
     , collateralSpec roleTokens addresses collateral
     ]
 
-balanceSpec :: WalletBalanceCase -> Maybe (SpecWith (TestData, ContractCreated BabbageEra v))
+balanceSpec :: WalletBalanceCase -> Maybe (SpecWith (TestData, ContractCreated v))
 balanceSpec = \case
   BalanceSufficient -> Just $ pure ()
   BalanceInsufficient -> Nothing
@@ -196,7 +198,7 @@ collateralSpec
   :: RoleTokenCase
   -> WalletAddressesCase
   -> WalletCollateralUTxOCase
-  -> Maybe (SpecWith (TestData, ContractCreated BabbageEra v))
+  -> Maybe (SpecWith (TestData, ContractCreated v))
 collateralSpec NoRoleTokens _ = const $ Just $ pure ()
 collateralSpec ExistingPolicyRoleTokens _ = const $ Just $ pure ()
 collateralSpec _ addresses = \case
@@ -204,7 +206,7 @@ collateralSpec _ addresses = \case
   OneCollateralUTxOInsufficient -> Just do
     it "Should fail if there is insufficient collateral" $ const pending
   OneCollateralUTxOSufficient -> Just do
-    it "Should only spend the one collateral UTxO" \(TestData{..}, ContractCreated{..}) -> do
+    it "Should only spend the one collateral UTxO" \(TestData{..}, ContractCreated _ ContractCreatedInEra{..}) -> do
       let collateral = case txBody of
             TxBody TxBodyContent{..} -> case txInsCollateral of
               TxInsCollateralNone -> mempty
@@ -215,7 +217,7 @@ collateralSpec _ addresses = \case
   MultipleCollateralUTxOsInsufficient -> Just do
     it "Should fail if there is insufficient collateral" $ const pending
   MultipleCollateralUTxOsSufficient -> Just do
-    it "Should only spend the one collateral UTxO" \(TestData{..}, ContractCreated{..}) -> do
+    it "Should only spend the one collateral UTxO" \(TestData{..}, ContractCreated _ ContractCreatedInEra{..}) -> do
       let collateral = case txBody of
             TxBody TxBodyContent{..} -> case txInsCollateral of
               TxInsCollateralNone -> mempty
@@ -225,62 +227,68 @@ collateralSpec _ addresses = \case
             MultiAddress -> multiAddressSufficientBalanceMultiSufficientCollateralWallet
       Set.toList availableCollateral `shouldContain` Set.toList collateral
 
-roleTokenSpec :: RoleTokenCase -> Maybe (SpecWith (TestData, ContractCreated BabbageEra v))
+roleTokenSpec :: RoleTokenCase -> Maybe (SpecWith (TestData, ContractCreated v))
 roleTokenSpec = \case
   NoRoleTokens -> Just do
-    it "Should use ADA as the role token currency" \(_, ContractCreated{..}) -> do
+    it "Should use ADA as the role token currency" \(_, ContractCreated _ ContractCreatedInEra{..}) -> do
       rolesCurrency `shouldBe` ""
-    it "Should not mint any tokens" \(_, ContractCreated{..}) -> do
+    it "Should not mint any tokens" \(_, ContractCreated _ ContractCreatedInEra{..}) -> do
       let mintValue = case txBody of
             TxBody TxBodyContent{..} -> txMintValue
       mintValue `shouldBe` TxMintNone
-    it "Should not output any non-ada tokens" \(_, ContractCreated{..}) -> do
+    it "Should not output any non-ada tokens" \(_, ContractCreated era ContractCreatedInEra{..}) -> do
       let tokensOutput = case txBody of
             TxBody TxBodyContent{..} ->
               txOuts & foldMap \(TxOut _ value _ _) -> case value of
-                TxOutAdaOnly era _ -> case era of {}
+                TxOutAdaOnly era' _ -> case (era, era') of {}
                 TxOutValue _ value' -> Set.fromList $ fst <$> valueToList value'
       tokensOutput `shouldBe` Set.singleton C.AdaAssetId
   ExistingPolicyRoleTokens -> Just do
-    it "Should use the given policyId as the role token currency" \(TestData{..}, ContractCreated{..}) -> do
+    it "Should use the given policyId as the role token currency" \(TestData{..}, ContractCreated _ ContractCreatedInEra{..}) -> do
       rolesCurrency `shouldBe` existingRoleTokenPolicy
-    it "Should not mint any tokens" \(_, ContractCreated{..}) -> do
+    it "Should not mint any tokens" \(_, ContractCreated _ ContractCreatedInEra{..}) -> do
       let mintValue = case txBody of
             TxBody TxBodyContent{..} -> txMintValue
       mintValue `shouldBe` TxMintNone
-    it "Should not output any non-ada tokens" \(_, ContractCreated{..}) -> do
+    it "Should not output any non-ada tokens" \(_, ContractCreated era ContractCreatedInEra{..}) -> do
       let tokensOutput = case txBody of
             TxBody TxBodyContent{..} ->
               txOuts & foldMap \(TxOut _ value _ _) -> case value of
-                TxOutAdaOnly era _ -> case era of {}
+                TxOutAdaOnly era' _ -> case (era, era') of {}
                 TxOutValue _ value' -> Set.fromList $ fst <$> valueToList value'
       tokensOutput `shouldBe` Set.singleton C.AdaAssetId
   -- Metadata checks done with other metadata checks.
   _ -> Just do
-    it "Should mint the required tokens" \(_, ContractCreated{..}) -> do
+    it "Should mint the required tokens" \(_, ContractCreated _ ContractCreatedInEra{..}) -> do
       let mintedTokenNames = case txBody of
             TxBody TxBodyContent{..} -> case txMintValue of
               TxMintNone -> mempty
               TxMintValue _ value _ -> Map.keysSet $ unTokens $ tokens $ assetsFromCardanoValue value
       mintedTokenNames `shouldBe` Set.singleton (AssetId rolesCurrency "Role")
-    it "Should distribute the role tokens" \(TestData{..}, ContractCreated{..}) -> do
+    it "Should distribute the role tokens" \(TestData{..}, ContractCreated era ContractCreatedInEra{..}) -> do
       let tokenDistribution = case txBody of
             TxBody TxBodyContent{..} ->
               Map.unionsWith (+) $
                 txOuts <&> \(TxOut address value _ _) ->
-                  Map.fromList $
-                    fmap (\(assetId, quantity) -> ((fromCardanoAddressInEra BabbageEra address, assetId), quantity)) $
-                      Map.toList $
-                        unTokens $
-                          tokens $
-                            fromCardanoTxOutValue value
+                  Map.fromList
+                    $ fmap
+                      ( \(assetId, quantity) ->
+                          ( (case era of ReferenceTxInsScriptsInlineDatumsInBabbageEra -> fromCardanoAddressInEra BabbageEra address, assetId)
+                          , quantity
+                          )
+                      )
+                    $ Map.toList
+                    $ unTokens
+                    $ tokens
+                    $ fromCardanoTxOutValue value
       tokenDistribution
         `shouldBe` Map.singleton (changeAddress singleAddressInsufficientBalanceWallet, AssetId rolesCurrency "Role") 1
 
-metadataSpec :: RoleTokenCase -> MetadataCase -> Maybe (SpecWith (TestData, ContractCreated BabbageEra 'V1))
+metadataSpec :: RoleTokenCase -> MetadataCase -> Maybe (SpecWith (TestData, ContractCreated 'V1))
 metadataSpec roleTokens metadataCase = Just do
-  it "Should write the expected metadata" \(_, contract@ContractCreated{..}) -> do
-    metadata `shouldBe` addNFTMetadata contract roleTokens (expectedMetadata metadataCase)
+  it "Should write the expected metadata" \(_, ContractCreated era contract@ContractCreatedInEra{..}) -> do
+    metadata `shouldBe` case era of
+      ReferenceTxInsScriptsInlineDatumsInBabbageEra -> addNFTMetadata contract roleTokens (expectedMetadata metadataCase)
 
 expectedMetadata :: MetadataCase -> MarloweTransactionMetadata
 expectedMetadata (MetadataCase marloweMetadata extraMetadata) = MarloweTransactionMetadata
@@ -299,8 +307,8 @@ expectedMetadata (MetadataCase marloweMetadata extraMetadata) = MarloweTransacti
             mkExtraMetadata extraMetadata
 
 addNFTMetadata
-  :: ContractCreated BabbageEra 'V1 -> RoleTokenCase -> MarloweTransactionMetadata -> MarloweTransactionMetadata
-addNFTMetadata ContractCreated{..} = \case
+  :: ContractCreatedInEra BabbageEra 'V1 -> RoleTokenCase -> MarloweTransactionMetadata -> MarloweTransactionMetadata
+addNFTMetadata ContractCreatedInEra{..} = \case
   MintRoleTokensMetadata -> \MarloweTransactionMetadata{..} ->
     MarloweTransactionMetadata
       { transactionMetadata =
@@ -319,12 +327,12 @@ addNFTMetadata ContractCreated{..} = \case
       }
   _ -> id
 
-minLovelaceSpec :: MinLovelaceCase -> Maybe (SpecWith (TestData, ContractCreated BabbageEra v))
+minLovelaceSpec :: MinLovelaceCase -> Maybe (SpecWith (TestData, ContractCreated v))
 minLovelaceSpec = \case
   MinLovelaceSufficient -> Just $ pure ()
   MinLovelaceInsufficient -> Nothing
 
-mkCreateCommand :: TestData -> CreateCase -> MarloweTxCommand Void (CreateError 'V1) (ContractCreated BabbageEra 'V1)
+mkCreateCommand :: TestData -> CreateCase -> MarloweTxCommand Void (CreateError 'V1) (ContractCreated 'V1)
 mkCreateCommand testData (CreateCase stakeCredential wallet (roleTokens, metadata) minLovelace) =
   Create
     (mkStakeCredential testData stakeCredential)

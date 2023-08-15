@@ -125,17 +125,21 @@ maxFees = Lovelace 2_170_000
 minAdaPerTokenOutput :: Lovelace
 minAdaPerTokenOutput = Lovelace 10_000
 
-type TxConstraintsBuilderM err v a = WriterT (TxConstraints v) (Either err) a
+type TxConstraintsBuilderM err era v a = WriterT (TxConstraints era v) (Either err) a
 
 runTxConstraintsBuilder
-  :: MarloweVersion v -> TxConstraintsBuilderM err v a -> Either err (a, TxConstraints v)
+  :: MarloweVersion v
+  -> TxConstraintsBuilderM err era v a
+  -> Either err (a, TxConstraints era v)
 runTxConstraintsBuilder v = runWriterT . withMarloweVersion v
 
 -- | Creates a set of Tx constraints that are used to build a transaction that
 -- instantiates a contract.
 buildCreateConstraints
-  :: forall v
-   . MarloweVersion v
+  :: forall era v
+   . C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  -- ^ The era in which the transaction is being built. Requires reference scripts.
+  -> MarloweVersion v
   -- ^ The Marlowe version to build the transaction for.
   -> WalletContext
   -- ^ The wallet used to mint tokens.
@@ -147,14 +151,17 @@ buildCreateConstraints
   -- ^ Min Lovelace value which should be used on the Marlowe output.
   -> Contract v
   -- ^ The contract being instantiated.
-  -> Either (CreateError v) ((Datum v, Assets, PolicyId), TxConstraints v)
-buildCreateConstraints version walletCtx roles metadata minAda contract = case version of
-  MarloweV1 -> runTxConstraintsBuilder version $ buildCreateConstraintsV1 walletCtx roles metadata minAda contract
+  -> Either (CreateError v) ((Datum v, Assets, PolicyId), TxConstraints era v)
+buildCreateConstraints era version walletCtx roles metadata minAda contract = case version of
+  MarloweV1 -> runTxConstraintsBuilder version $ buildCreateConstraintsV1 era walletCtx roles metadata minAda contract
 
 -- | Creates a set of Tx constraints that are used to build a transaction that
 -- instantiates a contract.
 buildCreateConstraintsV1
-  :: WalletContext
+  :: forall era
+   . C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  -- ^ The era in which the transaction is being built. Requires reference scripts.
+  -> WalletContext
   -- ^ The wallet used to mint tokens.
   -> RoleTokensConfig
   -- ^ The initial distribution of the role tokens.
@@ -164,8 +171,8 @@ buildCreateConstraintsV1
   -- ^ Min Lovelace value which should be used on the Marlowe output.
   -> Contract 'V1
   -- ^ The contract being instantiated.
-  -> TxConstraintsBuilderM (CreateError 'V1) 'V1 (Datum 'V1, Assets, PolicyId)
-buildCreateConstraintsV1 walletCtx roles metadata minAda contract = do
+  -> TxConstraintsBuilderM (CreateError 'V1) era 'V1 (Datum 'V1, Assets, PolicyId)
+buildCreateConstraintsV1 era walletCtx roles metadata minAda contract = do
   -- Output constraints.
   -- Role tokens minting and distribution.
   policyId <- mintRoleTokens
@@ -200,13 +207,13 @@ buildCreateConstraintsV1 walletCtx roles metadata minAda contract = do
       tell $ mustSendMarloweOutput assets datum
       pure (datum, assets)
 
-    mkMarloweDatum :: PolicyId -> TxConstraintsBuilderM (CreateError 'V1) 'V1 (Datum 'V1)
+    mkMarloweDatum :: PolicyId -> TxConstraintsBuilderM (CreateError 'V1) era 'V1 (Datum 'V1)
     mkMarloweDatum policyId = do
       marloweState <- mkInitialMarloweState
       let marloweParams = V1.MarloweParams . toPlutusCurrencySymbol $ policyId
       pure $ V1.MarloweData marloweParams marloweState contract
 
-    mkInitialMarloweState :: TxConstraintsBuilderM (CreateError 'V1) 'V1 V1.State
+    mkInitialMarloweState :: TxConstraintsBuilderM (CreateError 'V1) era 'V1 V1.State
     mkInitialMarloweState = do
       let WalletContext{changeAddress = minAdaProvider} = walletCtx
       (net, addr) <- liftMaybe (AddressDecodingFailed minAdaProvider) do
@@ -230,7 +237,7 @@ buildCreateConstraintsV1 walletCtx roles metadata minAda contract = do
     adaAsset amount = Assets amount mempty
 
     -- Role token distribution constraints
-    mintRoleTokens :: TxConstraintsBuilderM (CreateError 'V1) 'V1 PolicyId
+    mintRoleTokens :: TxConstraintsBuilderM (CreateError 'V1) era 'V1 PolicyId
     mintRoleTokens = case roles of
       RoleTokensUsePolicy policyId -> pure policyId
       RoleTokensMint (unMint -> minting) -> do
@@ -256,9 +263,12 @@ buildCreateConstraintsV1 walletCtx roles metadata minAda contract = do
           script <- toCardanoPlutusScript plutusScript
           scriptHash <- plutusScriptHash plutusScript
           pure (script, scriptHash)
-        let witness =
+        let plutusScriptV2InEra :: C.ScriptLanguageInEra C.PlutusScriptV2 era
+            plutusScriptV2InEra = case era of
+              C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.PlutusScriptV2InBabbage
+            witness =
               C.PlutusScriptWitness
-                C.PlutusScriptV2InBabbage
+                plutusScriptV2InEra
                 C.PlutusScriptV2
                 (C.PScript script)
                 C.NoScriptDatumForMint
@@ -300,7 +310,7 @@ buildApplyInputsConstraints
   -- in the contract.
   -> Inputs v
   -- ^ The inputs to apply to the contract.
-  -> ExceptT (ApplyInputsError v) m (ApplyResults v, TxConstraints v)
+  -> ExceptT (ApplyInputsError v) m (ApplyResults v, TxConstraints era v)
 buildApplyInputsConstraints merkleizeInputs systemStart eraHistory version marloweOutput tipSlot metadata invalidBefore invalidHereafter inputs =
   case version of
     MarloweV1 ->
@@ -318,7 +328,7 @@ buildApplyInputsConstraints merkleizeInputs systemStart eraHistory version marlo
 -- | Creates a set of Tx constraints that are used to build a transaction that
 -- applies an input to a contract.
 buildApplyInputsConstraintsV1
-  :: forall m
+  :: forall era m
    . (Monad m)
   => (TransactionInput -> m (Maybe TransactionInput))
   -> SystemStart
@@ -335,7 +345,7 @@ buildApplyInputsConstraintsV1
   -- ^ The maximum bound of the validity interval (exclusive).
   -> Inputs 'V1
   -- ^ The inputs to apply to the contract.
-  -> ExceptT (ApplyInputsError 'V1) m (ApplyResults 'V1, TxConstraints 'V1)
+  -> ExceptT (ApplyInputsError 'V1) m (ApplyResults 'V1, TxConstraints era 'V1)
 buildApplyInputsConstraintsV1 merkleizeInputs systemStart eraHistory marloweOutput tipSlot metadata invalidBefore invalidHereafter inputs = runWriterT do
   let TransactionScriptOutput _ _ _ datum = marloweOutput
       V1.MarloweData params state contract = datum
@@ -509,10 +519,10 @@ buildWithdrawConstraints
   -- ^ The Marlowe version to build the transaction for.
   -> PayoutDatum v
   -- ^ The role token from which to withdraw funds.
-  -> Either (WithdrawError v) (TxConstraints v)
+  -> Either (WithdrawError v) (TxConstraints era v)
 buildWithdrawConstraints = \case
   MarloweV1 -> Right . buildWithdrawConstraintsV1
   where
-    buildWithdrawConstraintsV1 :: AssetId -> TxConstraints 'V1
+    buildWithdrawConstraintsV1 :: AssetId -> TxConstraints era 'V1
     buildWithdrawConstraintsV1 =
       TxConstraints.mustConsumePayouts <> TxConstraints.mustSpendRoleToken

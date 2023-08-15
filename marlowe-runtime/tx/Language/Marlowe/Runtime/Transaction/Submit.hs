@@ -4,7 +4,7 @@
 
 module Language.Marlowe.Runtime.Transaction.Submit where
 
-import Cardano.Api (BabbageEra, ScriptDataSupportedInEra (..), Tx)
+import Cardano.Api (ScriptDataSupportedInEra (..), Tx)
 import qualified Cardano.Api as C
 import Colog (Message, WithLog, logWarning)
 import Control.Concurrent.STM (STM, newTVar, readTVar, writeTVar)
@@ -51,13 +51,15 @@ data SubmitJob m = SubmitJob
 mkSubmitJob
   :: (WithLog env Message m, MonadUnliftIO m)
   => SubmitJobDependencies m
-  -> Tx BabbageEra
+  -> forall era
+   . ScriptDataSupportedInEra era
+  -> Tx era
   -> STM (SubmitJob m)
-mkSubmitJob deps tx = do
+mkSubmitJob deps era tx = do
   statusVar <- newTVar $ Running Submitting
   pure $ SubmitJob (readTVar statusVar) do
     catch
-      (doSubmit deps (atomically . writeTVar statusVar) ScriptDataInBabbageEra tx)
+      (doSubmit deps (atomically . writeTVar statusVar) era tx)
       (atomically . writeTVar statusVar . Crashed)
 
 doSubmit

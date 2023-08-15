@@ -139,21 +139,21 @@ withdraw version addresses contractId role = do
 
 -- | Submit a contract creation transaction to the node
 submitContract :: ContractId -> Submit' ServerM
-submitContract contractId tx = do
+submitContract contractId era tx = do
   AppEnv{_eventBackend = backend, _requestParent, _submitContract = submit} <- ask
-  liftBackendM backend $ submit contractId _requestParent tx
+  liftBackendM backend $ submit contractId _requestParent era tx
 
 -- | Submit a withdrawal transaction to the node
 submitWithdrawal :: TxId -> Submit' ServerM
-submitWithdrawal txId tx = do
+submitWithdrawal txId era tx = do
   AppEnv{_eventBackend = backend, _requestParent, _submitWithdrawal = submit} <- ask
-  liftBackendM backend $ submit txId _requestParent tx
+  liftBackendM backend $ submit txId _requestParent era tx
 
 -- | Submit an apply inputs transaction to the node
 submitTransaction :: ContractId -> TxId -> Submit' ServerM
-submitTransaction contractId txId tx = do
+submitTransaction contractId txId era tx = do
   AppEnv{_eventBackend = backend, _requestParent, _submitTransaction = submit} <- ask
-  liftBackendM backend $ submit contractId txId _requestParent tx
+  liftBackendM backend $ submit contractId txId _requestParent era tx
 
 liftBackendM :: EventBackend (AppM r s) r s -> AppM r s a -> ServerM a
 liftBackendM backend m = ServerM do

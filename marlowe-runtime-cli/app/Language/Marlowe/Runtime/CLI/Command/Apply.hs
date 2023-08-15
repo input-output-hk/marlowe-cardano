@@ -2,10 +2,12 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 
 module Language.Marlowe.Runtime.CLI.Command.Apply where
 
 import qualified Cardano.Api as C
+import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import Control.Error (noteT)
 import Control.Error.Util (hoistMaybe)
 import Control.Monad.IO.Class (liftIO)
@@ -40,7 +42,7 @@ import Language.Marlowe.Runtime.Core.Api (
   MarloweVersion (MarloweV1),
   MarloweVersionTag (..),
  )
-import Language.Marlowe.Runtime.Transaction.Api (ApplyInputsError, InputsApplied (..))
+import Language.Marlowe.Runtime.Transaction.Api (ApplyInputsError, InputsApplied (..), InputsAppliedInEra (..))
 import qualified Language.Marlowe.Util as V1
 import Options.Applicative
 import qualified Plutus.V1.Ledger.Api as P
@@ -273,13 +275,16 @@ runApplyCommand TxCommand{walletAddresses, signingMethod, tagsFile, metadataFile
   let validityLowerBound' = posixTimeToUTCTime <$> validityLowerBound
       validityUpperBound' = posixTimeToUTCTime <$> validityUpperBound
 
-  InputsApplied{txBody} <-
+  InputsApplied era InputsAppliedInEra{txBody} <-
     ExceptT $
       first ApplyFailed
         <$> applyInputs' MarloweV1 walletAddresses contractId metadata validityLowerBound' validityUpperBound' inputs'
   case signingMethod of
     Manual outputFile -> do
-      ExceptT $ liftIO $ first TransactionFileWriteFailed <$> C.writeFileTextEnvelope outputFile Nothing txBody
+      ExceptT @_ @_ @() $
+        liftIO $
+          first TransactionFileWriteFailed <$> case era of
+            ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.writeFileTextEnvelope outputFile Nothing txBody
       let txId = C.getTxId txBody
           res =
             A.object

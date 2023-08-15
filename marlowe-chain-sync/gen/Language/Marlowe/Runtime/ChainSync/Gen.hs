@@ -20,6 +20,7 @@ import Cardano.Api (
   SystemStart (..),
   hashScriptData,
  )
+import Cardano.Api.Byron (AnyCardanoEra (..))
 import qualified Cardano.Api.Shelley as Shelley
 import Control.Monad (replicateM)
 import Data.Bifunctor (first)
@@ -378,6 +379,17 @@ instance ChainSeek.QueryEq Move where
     TagFindTxsFor -> (==)
     TagAdvanceToTip -> (==)
 
+instance Arbitrary AnyCardanoEra where
+  arbitrary =
+    elements
+      [ AnyCardanoEra ByronEra
+      , AnyCardanoEra ShelleyEra
+      , AnyCardanoEra AllegraEra
+      , AnyCardanoEra MaryEra
+      , AnyCardanoEra AlonzoEra
+      , AnyCardanoEra BabbageEra
+      ]
+
 instance Query.ArbitraryRequest ChainSyncQuery where
   arbitraryTag =
     elements
@@ -398,6 +410,7 @@ instance Query.ArbitraryRequest ChainSyncQuery where
     TagGetUTxOs -> GetUTxOs <$> arbitrary
     TagGetNodeTip -> pure GetNodeTip
     TagGetTip -> pure GetTip
+    TagGetEra -> pure GetEra
 
   arbitraryResult = \case
     TagGetSecurityParameter -> arbitrary
@@ -408,6 +421,7 @@ instance Query.ArbitraryRequest ChainSyncQuery where
     TagGetUTxOs -> arbitrary
     TagGetNodeTip -> arbitrary
     TagGetTip -> arbitrary
+    TagGetEra -> arbitrary
 
   shrinkReq = \case
     GetSecurityParameter -> []
@@ -418,6 +432,7 @@ instance Query.ArbitraryRequest ChainSyncQuery where
     GetUTxOs query -> GetUTxOs <$> shrink query
     GetNodeTip -> []
     GetTip -> []
+    GetEra -> []
 
   shrinkResult = \case
     TagGetSecurityParameter -> shrink
@@ -430,6 +445,7 @@ instance Query.ArbitraryRequest ChainSyncQuery where
     TagGetUTxOs -> shrink
     TagGetNodeTip -> shrink
     TagGetTip -> shrink
+    TagGetEra -> shrink
 
 genEraHistory :: Gen (EraHistory CardanoMode)
 genEraHistory =
@@ -501,6 +517,7 @@ instance Query.RequestEq ChainSyncQuery where
     TagGetUTxOs -> (==)
     TagGetNodeTip -> (==)
     TagGetTip -> (==)
+    TagGetEra -> (==)
 
 instance Command.ArbitraryCommand ChainSyncCommand where
   arbitraryTag =

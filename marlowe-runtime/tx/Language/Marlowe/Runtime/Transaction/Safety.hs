@@ -49,11 +49,12 @@ import Language.Marlowe.Runtime.Transaction.Constraints (
  )
 
 import qualified Cardano.Api as Cardano (Lovelace, NetworkId (Mainnet))
+import qualified Cardano.Api.Shelley as C
 import qualified Cardano.Api.Shelley as Shelley (
   CardanoMode,
   ConsensusMode (..),
   EraHistory (..),
-  ProtocolParameters (ProtocolParameters, protocolParamUTxOCostPerByte),
+  ProtocolParameters (..),
   SystemStart (..),
  )
 import Control.Monad.IO.Class (MonadIO)
@@ -171,6 +172,7 @@ checkContract network config MarloweV1 contract continuations =
 checkTransactions
   :: (MonadIO m)
   => Shelley.ProtocolParameters
+  -> C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
   -> MarloweVersion v
   -> MarloweContext v
   -> Chain.PolicyId
@@ -179,7 +181,7 @@ checkTransactions
   -> Contract v
   -> Continuations v
   -> m (Either String [SafetyError])
-checkTransactions protocolParameters version@MarloweV1 marloweContext rolesCurrency changeAddress minAda contract continuations =
+checkTransactions protocolParameters era version@MarloweV1 marloweContext rolesCurrency changeAddress minAda contract continuations =
   runExceptT $
     do
       let changeAddress' = uncurry V1.Address . fromJust . V1.deserialiseAddress $ Chain.unAddress changeAddress
@@ -187,18 +189,19 @@ checkTransactions protocolParameters version@MarloweV1 marloweContext rolesCurre
         findTransactions False changeAddress' minAda . V1.MerkleizedContract contract $ remapContinuations continuations
       either throwE (pure . mconcat)
         . forM transactions
-        $ checkTransaction protocolParameters version marloweContext rolesCurrency changeAddress
+        $ checkTransaction protocolParameters era version marloweContext rolesCurrency changeAddress
 
 -- | Check a transaction for safety issues.
 checkTransaction
   :: Shelley.ProtocolParameters
+  -> C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
   -> MarloweVersion v
   -> MarloweContext v
   -> Chain.PolicyId
   -> Chain.Address
   -> Transaction
   -> Either String [SafetyError]
-checkTransaction protocolParameters version@MarloweV1 marloweContext@MarloweContext{..} (Chain.PolicyId rolesCurrency) changeAddress transaction@Transaction{..} =
+checkTransaction protocolParameters era version@MarloweV1 marloweContext@MarloweContext{..} (Chain.PolicyId rolesCurrency) changeAddress transaction@Transaction{..} =
   do
     let V1.TransactionInput{..} = txInput
         rolesCurrency' = V1.MarloweParams . Plutus.CurrencySymbol $ Plutus.toBuiltin rolesCurrency
@@ -252,14 +255,14 @@ checkTransaction protocolParameters version@MarloweV1 marloweContext@MarloweCont
       . either
         (pure . TransactionValidationError transaction . show)
         (const $ TransactionWarning transaction <$> V1.txOutWarnings txOutput)
-      $ solveConstraints' version marloweContext' walletContext constraints
+      $ solveConstraints' era version marloweContext' walletContext constraints
 
 -- | Create a wallet context that will satisfy the given constraints.
 walletForConstraints
   :: MarloweVersion v
   -> MarloweContext v
   -> Chain.Address
-  -> TxConstraints v
+  -> TxConstraints era v
   -> WalletContext
 walletForConstraints MarloweV1 MarloweContext{scriptOutput} changeAddress TxConstraints{..} =
   let padValue assets@(Chain.Assets _ (Chain.Tokens tokens)) = assets <> makeLovelace (toInteger $ 2_000_000 * M.size tokens)

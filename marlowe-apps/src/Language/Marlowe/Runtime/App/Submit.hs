@@ -37,6 +37,7 @@ import qualified Cardano.Api as C (
   getTxBody,
   getTxId,
  )
+import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra)
 import qualified Network.Protocol.Job.Client as J (
   ClientStAwait (..),
   ClientStCmd (..),
@@ -46,9 +47,10 @@ import qualified Network.Protocol.Job.Client as J (
 
 submit
   :: Int
-  -> C.Tx C.BabbageEra
+  -> ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  -> C.Tx era
   -> Client (Either String TxId)
-submit pollingFrequency tx =
+submit pollingFrequency era tx =
   let next =
         J.ClientStCmd
           { J.recvMsgAwait = \_ _ -> do
@@ -57,7 +59,7 @@ submit pollingFrequency tx =
           , J.recvMsgFail = const . pure $ Left "Submission failed."
           , J.recvMsgSucceed = const . pure . Right . fromCardanoTxId . C.getTxId $ C.getTxBody tx
           }
-      jobClient = J.JobClient . pure $ J.SendMsgExec (Submit tx) next
+      jobClient = J.JobClient . pure $ J.SendMsgExec (Submit era tx) next
    in runMarloweTxClient jobClient
 
 {-# DEPRECATED submit' "Crashes the chain-sync worker!" #-}

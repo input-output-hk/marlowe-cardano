@@ -14,9 +14,11 @@ module Language.Marlowe.Runtime.Transaction.Api (
   ApplyInputsError (..),
   ConstraintError (..),
   ContractCreated (..),
+  ContractCreatedInEra (..),
   CreateBuildupError (..),
   CreateError (..),
   InputsApplied (..),
+  InputsAppliedInEra (..),
   JobId (..),
   LoadMarloweContextError (..),
   MarloweTxCommand (..),
@@ -30,12 +32,14 @@ module Language.Marlowe.Runtime.Transaction.Api (
   WalletAddresses (..),
   WithdrawError (..),
   WithdrawTx (..),
+  WithdrawTxInEra (..),
   decodeRoleTokenMetadata,
   encodeRoleTokenMetadata,
   mkMint,
 ) where
 
 import Cardano.Api (
+  AnyCardanoEra (..),
   AsType (..),
   BabbageEra,
   IsCardanoEra,
@@ -46,8 +50,9 @@ import Cardano.Api (
   serialiseToCBOR,
   serialiseToTextEnvelope,
  )
+import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import Control.Applicative ((<|>))
-import Data.Aeson (ToJSON (..), object, (.!=), (.:!), (.=))
+import Data.Aeson (ToJSON (..), Value (..), object, (.!=), (.:!), (.=))
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as Aeson.KeyMap
 import Data.Aeson.Types ((.:))
@@ -250,7 +255,40 @@ data RoleTokensConfig
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary, ToJSON)
 
-data ContractCreated era v = ContractCreated
+data ContractCreated v where
+  ContractCreated
+    :: ReferenceTxInsScriptsInlineDatumsSupportedInEra era -> ContractCreatedInEra era v -> ContractCreated v
+
+instance Show (ContractCreated 'V1) where
+  showsPrec p (ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra created) =
+    showParen (p > 10) $
+      showString "ContractCreated"
+        . showSpace
+        . showString "ReferenceTxInsScriptsInlineDatumsInBabbageEra"
+        . showsPrec 11 created
+
+instance Eq (ContractCreated 'V1) where
+  ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra a == ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra b =
+    a == b
+
+instance ToJSON (ContractCreated 'V1) where
+  toJSON (ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra created) =
+    object
+      [ "era" .= String "babbage"
+      , "contractCreated" .= created
+      ]
+
+instance Binary (ContractCreated 'V1) where
+  put (ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra created) = do
+    putWord8 0
+    put created
+  get = do
+    eraTag <- getWord8
+    case eraTag of
+      0 -> ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> get
+      _ -> fail $ "Invalid era tag value: " <> show eraTag
+
+data ContractCreatedInEra era v = ContractCreatedInEra
   { contractId :: ContractId
   , rolesCurrency :: PolicyId
   , metadata :: MarloweTransactionMetadata
@@ -265,11 +303,11 @@ data ContractCreated era v = ContractCreated
   , safetyErrors :: [SafetyError]
   }
 
-deriving instance Show (ContractCreated BabbageEra 'V1)
-deriving instance Eq (ContractCreated BabbageEra 'V1)
+deriving instance Show (ContractCreatedInEra BabbageEra 'V1)
+deriving instance Eq (ContractCreatedInEra BabbageEra 'V1)
 
-instance (IsCardanoEra era) => ToJSON (ContractCreated era 'V1) where
-  toJSON ContractCreated{..} =
+instance (IsCardanoEra era) => ToJSON (ContractCreatedInEra era 'V1) where
+  toJSON ContractCreatedInEra{..} =
     object
       [ "contract-id" .= contractId
       , "roles-currency" .= rolesCurrency
@@ -284,8 +322,8 @@ instance (IsCardanoEra era) => ToJSON (ContractCreated era 'V1) where
       , "safety-errors" .= safetyErrors
       ]
 
-instance (IsCardanoEra era) => Binary (ContractCreated era 'V1) where
-  put ContractCreated{..} = do
+instance (IsCardanoEra era) => Binary (ContractCreatedInEra era 'V1) where
+  put ContractCreatedInEra{..} = do
     put contractId
     put rolesCurrency
     put metadata
@@ -310,9 +348,42 @@ instance (IsCardanoEra era) => Binary (ContractCreated era 'V1) where
     txBody <- getTxBody
     safetyErrors <- get
     let version = MarloweV1
-    pure ContractCreated{..}
+    pure ContractCreatedInEra{..}
 
-data InputsApplied era v = InputsApplied
+data InputsApplied v where
+  InputsApplied
+    :: ReferenceTxInsScriptsInlineDatumsSupportedInEra era -> InputsAppliedInEra era v -> InputsApplied v
+
+instance Show (InputsApplied 'V1) where
+  showsPrec p (InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra created) =
+    showParen (p > 10) $
+      showString "InputsApplied"
+        . showSpace
+        . showString "ReferenceTxInsScriptsInlineDatumsInBabbageEra"
+        . showsPrec 11 created
+
+instance Eq (InputsApplied 'V1) where
+  InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra a == InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra b =
+    a == b
+
+instance ToJSON (InputsApplied 'V1) where
+  toJSON (InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra created) =
+    object
+      [ "era" .= String "babbage"
+      , "contractCreated" .= created
+      ]
+
+instance Binary (InputsApplied 'V1) where
+  put (InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra created) = do
+    putWord8 0
+    put created
+  get = do
+    eraTag <- getWord8
+    case eraTag of
+      0 -> InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> get
+      _ -> fail $ "Invalid era tag value: " <> show eraTag
+
+data InputsAppliedInEra era v = InputsAppliedInEra
   { version :: MarloweVersion v
   , contractId :: ContractId
   , metadata :: MarloweTransactionMetadata
@@ -324,11 +395,11 @@ data InputsApplied era v = InputsApplied
   , txBody :: TxBody era
   }
 
-deriving instance Show (InputsApplied BabbageEra 'V1)
-deriving instance Eq (InputsApplied BabbageEra 'V1)
+deriving instance Show (InputsAppliedInEra BabbageEra 'V1)
+deriving instance Eq (InputsAppliedInEra BabbageEra 'V1)
 
-instance (IsCardanoEra era) => Binary (InputsApplied era 'V1) where
-  put InputsApplied{..} = do
+instance (IsCardanoEra era) => Binary (InputsAppliedInEra era 'V1) where
+  put InputsAppliedInEra{..} = do
     put contractId
     put metadata
     put input
@@ -347,20 +418,46 @@ instance (IsCardanoEra era) => Binary (InputsApplied era 'V1) where
     invalidHereafter <- get
     inputs <- getInputs MarloweV1
     txBody <- getTxBody
-    pure InputsApplied{..}
+    pure InputsAppliedInEra{..}
 
-data WithdrawTx era v = WithdrawTx
+data WithdrawTx v where
+  WithdrawTx
+    :: ReferenceTxInsScriptsInlineDatumsSupportedInEra era -> WithdrawTxInEra era v -> WithdrawTx v
+
+instance Show (WithdrawTx 'V1) where
+  showsPrec p (WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra created) =
+    showParen (p > 10) $
+      showString "WithdrawTx"
+        . showSpace
+        . showString "ReferenceTxInsScriptsInlineDatumsInBabbageEra"
+        . showsPrec 11 created
+
+instance Eq (WithdrawTx 'V1) where
+  WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra a == WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra b =
+    a == b
+
+instance Binary (WithdrawTx 'V1) where
+  put (WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra created) = do
+    putWord8 0
+    put created
+  get = do
+    eraTag <- getWord8
+    case eraTag of
+      0 -> WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> get
+      _ -> fail $ "Invalid era tag value: " <> show eraTag
+
+data WithdrawTxInEra era v = WithdrawTxInEra
   { version :: MarloweVersion v
   , inputs :: Map TxOutRef (Payout v)
   , roleToken :: AssetId
   , txBody :: TxBody era
   }
 
-deriving instance Show (WithdrawTx BabbageEra 'V1)
-deriving instance Eq (WithdrawTx BabbageEra 'V1)
+deriving instance Show (WithdrawTxInEra BabbageEra 'V1)
+deriving instance Eq (WithdrawTxInEra BabbageEra 'V1)
 
-instance (IsCardanoEra era) => Binary (WithdrawTx era 'V1) where
-  put WithdrawTx{..} = do
+instance (IsCardanoEra era) => Binary (WithdrawTxInEra era 'V1) where
+  put WithdrawTxInEra{..} = do
     put inputs
     put roleToken
     putTxBody txBody
@@ -369,10 +466,10 @@ instance (IsCardanoEra era) => Binary (WithdrawTx era 'V1) where
     inputs <- get
     roleToken <- get
     txBody <- getTxBody
-    pure WithdrawTx{..}
+    pure WithdrawTxInEra{..}
 
-instance (IsCardanoEra era) => ToJSON (InputsApplied era 'V1) where
-  toJSON InputsApplied{..} =
+instance (IsCardanoEra era) => ToJSON (InputsAppliedInEra era 'V1) where
+  toJSON InputsAppliedInEra{..} =
     object
       [ "contract-id" .= contractId
       , "input" .= input
@@ -404,7 +501,7 @@ data MarloweTxCommand status err result where
     -- ^ Min Lovelace which should be used for the contract output.
     -> Either (Contract v) DatumHash
     -- ^ The contract to run, or the hash of the contract to load from the store.
-    -> MarloweTxCommand Void (CreateError v) (ContractCreated BabbageEra v)
+    -> MarloweTxCommand Void (CreateError v) (ContractCreated v)
   -- | Construct a transaction that advances an active Marlowe contract by
   -- applying a sequence of inputs. The resulting, unsigned transaction can be
   -- signed via the cardano API or a wallet provider. When signed, the 'Submit'
@@ -426,7 +523,7 @@ data MarloweTxCommand status err result where
     -- is computed from the contract.
     -> Inputs v
     -- ^ The inputs to apply.
-    -> MarloweTxCommand Void (ApplyInputsError v) (InputsApplied BabbageEra v)
+    -> MarloweTxCommand Void (ApplyInputsError v) (InputsApplied v)
   -- | Construct a transaction that withdraws available assets from an active
   -- Marlowe contract for a set of roles in the contract. The resulting,
   -- unsigned transaction can be signed via the cardano API or a wallet
@@ -444,11 +541,12 @@ data MarloweTxCommand status err result where
     -> MarloweTxCommand
         Void
         (WithdrawError v)
-        ( WithdrawTx BabbageEra v -- The unsigned tx body, to be signed by a wallet.
+        ( WithdrawTx v -- The unsigned tx body, to be signed by a wallet.
         )
   -- | Submits a signed transaction to the attached Cardano node.
   Submit
-    :: Tx BabbageEra
+    :: ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+    -> Tx era
     -- ^ A signed transaction to submit
     -> MarloweTxCommand
         SubmitStatus -- This job reports the status of the tx submission, which can take some time.
@@ -468,9 +566,9 @@ instance OTelCommand MarloweTxCommand where
 
 instance Command MarloweTxCommand where
   data Tag MarloweTxCommand status err result where
-    TagCreate :: MarloweVersion v -> Tag MarloweTxCommand Void (CreateError v) (ContractCreated BabbageEra v)
-    TagApplyInputs :: MarloweVersion v -> Tag MarloweTxCommand Void (ApplyInputsError v) (InputsApplied BabbageEra v)
-    TagWithdraw :: MarloweVersion v -> Tag MarloweTxCommand Void (WithdrawError v) (WithdrawTx BabbageEra v)
+    TagCreate :: MarloweVersion v -> Tag MarloweTxCommand Void (CreateError v) (ContractCreated v)
+    TagApplyInputs :: MarloweVersion v -> Tag MarloweTxCommand Void (ApplyInputsError v) (InputsApplied v)
+    TagWithdraw :: MarloweVersion v -> Tag MarloweTxCommand Void (WithdrawError v) (WithdrawTx v)
     TagSubmit :: Tag MarloweTxCommand SubmitStatus SubmitError BlockHeader
 
   data JobId MarloweTxCommand stats err result where
@@ -480,7 +578,7 @@ instance Command MarloweTxCommand where
     Create _ version _ _ _ _ _ -> TagCreate version
     ApplyInputs version _ _ _ _ _ _ -> TagApplyInputs version
     Withdraw version _ _ _ -> TagWithdraw version
-    Submit _ -> TagSubmit
+    Submit _ _ -> TagSubmit
 
   tagFromJobId = \case
     JobIdSubmit _ -> TagSubmit
@@ -544,7 +642,10 @@ instance Command MarloweTxCommand where
       put walletAddresses
       put contractId
       put tokenName
-    Submit tx -> put $ serialiseToCBOR tx
+    Submit era tx -> case era of
+      ReferenceTxInsScriptsInlineDatumsInBabbageEra -> do
+        putWord8 0
+        put $ serialiseToCBOR tx
 
   getCommand = \case
     TagCreate MarloweV1 -> do
@@ -577,10 +678,14 @@ instance Command MarloweTxCommand where
       tokenName <- get
       pure $ Withdraw version walletAddresses contractId tokenName
     TagSubmit -> do
-      bytes <- get @ByteString
-      Submit <$> case deserialiseFromCBOR (AsTx AsBabbage) bytes of
-        Left err -> fail $ show err
-        Right tx -> pure tx
+      eraTag <- getWord8
+      case eraTag of
+        0 -> do
+          bytes <- get @ByteString
+          Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> case deserialiseFromCBOR (AsTx AsBabbage) bytes of
+            Left err -> fail $ show err
+            Right tx -> pure tx
+        _ -> fail $ "Invalid era tag: " <> show eraTag
 
   putStatus = \case
     TagCreate _ -> absurd
@@ -654,7 +759,8 @@ deriving instance Binary (ConstraintError 'V1)
 deriving instance ToJSON (ConstraintError 'V1)
 
 data CreateError v
-  = CreateConstraintError (ConstraintError v)
+  = CreateEraUnsupported AnyCardanoEra
+  | CreateConstraintError (ConstraintError v)
   | CreateLoadMarloweContextFailed LoadMarloweContextError
   | CreateBuildupFailed CreateBuildupError
   | CreateToCardanoError
@@ -676,17 +782,18 @@ data CreateBuildupError
   deriving anyclass (Binary, ToJSON)
 
 data ApplyInputsError v
-  = ApplyInputsConstraintError (ConstraintError v)
+  = ApplyInputsEraUnsupported AnyCardanoEra
+  | ApplyInputsConstraintError (ConstraintError v)
   | ScriptOutputNotFound
   | ApplyInputsLoadMarloweContextFailed LoadMarloweContextError
   | ApplyInputsConstraintsBuildupFailed ApplyInputsConstraintsBuildupError
   | SlotConversionFailed String
   | TipAtGenesis
   | ValidityLowerBoundTooHigh SlotNo SlotNo
+  deriving (Generic)
 
 deriving instance Eq (ApplyInputsError 'V1)
 deriving instance Show (ApplyInputsError 'V1)
-deriving instance Generic (ApplyInputsError 'V1)
 instance Binary (ApplyInputsError 'V1)
 instance ToJSON (ApplyInputsError 'V1)
 
@@ -697,7 +804,8 @@ data ApplyInputsConstraintsBuildupError
   deriving anyclass (Binary, ToJSON)
 
 data WithdrawError v
-  = WithdrawConstraintError (ConstraintError v)
+  = WithdrawEraUnsupported AnyCardanoEra
+  | WithdrawConstraintError (ConstraintError v)
   | WithdrawLoadMarloweContextFailed LoadMarloweContextError
   | UnableToFindPayoutForAGivenRole TokenName
   deriving (Generic)
@@ -752,8 +860,8 @@ instance CommandEq MarloweTxCommand where
         wallet == wallet'
           && contractId == contractId'
           && role == role'
-    Submit tx -> \case
-      Submit tx' -> tx == tx'
+    Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra tx -> \case
+      Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra tx' -> tx == tx'
 
   jobIdEq = \case
     JobIdSubmit txId -> \case
@@ -849,8 +957,10 @@ instance ShowCommand MarloweTxCommand where
             . showSpace
             . showsPrec 11 role
         )
-      Submit tx ->
+      Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra tx ->
         ( showString "Submit"
+            . showSpace
+            . showString "ReferenceTxInsScriptsInlineDatumsInBabbageEra"
             . showSpace
             . showsPrec 11 tx
         )
