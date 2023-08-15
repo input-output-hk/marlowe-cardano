@@ -48,7 +48,7 @@ import qualified Cardano.Ledger.Alonzo.Scripts as Ledger.Alonzo.Scripts
 import Cardano.Ledger.Alonzo.TxWitness (TxWitness)
 import qualified Cardano.Ledger.Core as Ledger.Core
 import Cardano.Ledger.Era (ValidateScript)
-import Control.Arrow (second)
+import Control.Arrow (Arrow (..), second)
 import Control.Error.Util (hush)
 import Control.Monad ((<=<))
 import Control.Monad.Except (MonadError, throwError)
@@ -85,6 +85,8 @@ import Language.Marlowe.Protocol.Query.Types (
   Withdrawal (..),
  )
 
+import Data.Function (on)
+import Data.List (groupBy)
 import qualified Language.Marlowe.Protocol.Query.Types as Query
 import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType, fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api (AssetId (..))
@@ -101,7 +103,7 @@ import Language.Marlowe.Runtime.Core.Api (
   TransactionOutput (..),
   TransactionScriptOutput (..),
  )
-import qualified Language.Marlowe.Runtime.Core.Api as Core.Api (Payout (datum))
+import qualified Language.Marlowe.Runtime.Core.Api as Core.Api (Payout (..))
 import qualified Language.Marlowe.Runtime.Discovery.Api as Discovery
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import qualified Language.Marlowe.Runtime.Web as Web
@@ -187,6 +189,45 @@ instance (ToDTO a) => ToDTO (Maybe a) where
 
 instance (FromDTO a) => FromDTO (Maybe a) where
   fromDTO = traverse fromDTO
+
+instance HasDTO Chain.Tokens where
+  type DTO Chain.Tokens = Web.Tokens
+
+instance ToDTO Chain.Tokens where
+  toDTO =
+    Web.Tokens
+      . fmap Map.fromDistinctAscList
+      . Map.fromDistinctAscList
+      . fmap ((fst . head) &&& fmap snd)
+      . groupBy (on (==) fst)
+      . fmap (\(Chain.AssetId policy name, quantity) -> (toDTO policy, (toDTO name, fromIntegral quantity)))
+      . Map.toAscList
+      . Chain.unTokens
+
+instance FromDTO Chain.Tokens where
+  fromDTO =
+    fmap (Chain.Tokens . Map.fromAscList . concat)
+      . traverse
+        ( \(policy, tokens) -> for tokens \(name, quantity) ->
+            (,fromIntegral quantity) <$> (Chain.AssetId <$> fromDTO policy <*> fromDTO name)
+        )
+      . Map.toAscList
+      . fmap Map.toAscList
+      . Web.unTokens
+
+instance HasDTO Chain.Assets where
+  type DTO Chain.Assets = Web.Assets
+
+instance ToDTO Chain.Assets where
+  toDTO Chain.Assets{..} =
+    Web.Assets
+      { lovelace = fromIntegral ada
+      , tokens = toDTO tokens
+      }
+
+instance FromDTO Chain.Assets where
+  fromDTO Web.Assets{..} =
+    Chain.Assets (fromIntegral lovelace) <$> fromDTO tokens
 
 instance HasDTO Discovery.ContractHeader where
   type DTO Discovery.ContractHeader = Web.ContractHeader
@@ -380,10 +421,11 @@ instance ToDTO SomeContractState where
       , initialContract = Sem.marloweContract $ datum initialOutput
       , currentContract = Sem.marloweContract . datum <$> latestOutput
       , state = Sem.marloweState . datum <$> latestOutput
+      , assets = maybe emptyAssets (toDTO . assets) latestOutput
       , utxo = toDTO . utxo <$> latestOutput
       , txBody = Nothing
       , unclaimedPayouts =
-          (\(payoutId, payout) -> Web.Payout (toDTO payoutId) (toDTO (tokenName . Core.Api.datum $ payout)))
+          (\(payoutId, Core.Api.Payout{..}) -> Web.Payout (toDTO payoutId) (toDTO . tokenName $ datum) (toDTO assets))
             <$> M.toList unclaimedPayouts
       }
 
@@ -408,6 +450,7 @@ instance ToDTO SomeTransaction where
           MarloweV1 -> Sem.marloweContract . datum <$> scriptOutput
       , outputState = case version of
           MarloweV1 -> Sem.marloweState . datum <$> scriptOutput
+      , assets = maybe emptyAssets (toDTO . assets) scriptOutput
       , consumingTx = toDTO consumedBy
       , invalidBefore = validityLowerBound
       , invalidHereafter = validityUpperBound
@@ -480,6 +523,7 @@ instance ToDTOWithTxStatus (Tx.ContractCreated v) where
           MarloweV1 -> Just $ Sem.marloweContract datum
       , state = case version of
           MarloweV1 -> Just $ Sem.marloweState datum
+      , assets = toDTO assets
       , utxo = Nothing
       , txBody = case status of
           Unsigned -> Just case era of
@@ -509,6 +553,7 @@ instance ToDTOWithTxStatus (Tx.InputsApplied v) where
           MarloweV1 -> Sem.marloweContract . datum <$> output
       , outputState = case version of
           MarloweV1 -> Sem.marloweState . datum <$> output
+      , assets = maybe emptyAssets (toDTO . assets) output
       , consumingTx = Nothing
       , invalidBefore = invalidBefore
       , invalidHereafter = invalidHereafter
@@ -517,6 +562,9 @@ instance ToDTOWithTxStatus (Tx.InputsApplied v) where
             ReferenceTxInsScriptsInlineDatumsInBabbageEra -> toDTO txBody
           Submitted -> Nothing
       }
+
+emptyAssets :: Web.Assets
+emptyAssets = Web.Assets 0 $ Web.Tokens mempty
 
 instance HasDTO (Transaction 'V1) where
   type DTO (Transaction 'V1) = Web.TxHeader

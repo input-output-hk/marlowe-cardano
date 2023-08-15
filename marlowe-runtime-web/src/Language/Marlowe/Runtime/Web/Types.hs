@@ -16,7 +16,7 @@ import Control.Lens hiding ((.=))
 import Control.Monad ((<=<))
 import Data.Aeson
 import Data.Aeson.Text (encodeToLazyText)
-import Data.Aeson.Types (Parser, parseFail)
+import Data.Aeson.Types (Parser, parseFail, toJSONKeyText)
 import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
@@ -77,9 +77,15 @@ instance IsString Base16 where
 instance ToJSON Base16 where
   toJSON = String . toUrlPiece
 
+instance ToJSONKey Base16 where
+  toJSONKey = toJSONKeyText toUrlPiece
+
 instance FromJSON Base16 where
   parseJSON =
     withText "Base16" $ either (parseFail . T.unpack) pure . parseUrlPiece
+
+instance FromJSONKey Base16 where
+  fromJSONKey = FromJSONKeyTextParser $ either (parseFail . T.unpack) pure . parseUrlPiece
 
 instance ToHttpApiData Base16 where
   toUrlPiece = encodeBase16 . unBase16
@@ -89,6 +95,17 @@ instance FromHttpApiData Base16 where
 
 instance ToSchema Base16 where
   declareNamedSchema _ = NamedSchema Nothing <$> declareSchema (Proxy @String)
+
+data Assets = Assets
+  { lovelace :: Integer
+  , tokens :: Tokens
+  }
+  deriving (Eq, Show, Ord, Generic)
+  deriving anyclass (ToJSON, FromJSON, ToSchema)
+
+newtype Tokens = Tokens {unTokens :: Map PolicyId (Map Text Integer)}
+  deriving (Eq, Show, Ord, Generic)
+  deriving anyclass (ToJSON, FromJSON, ToSchema)
 
 newtype ContractSourceId = ContractSourceId {unContractSourceId :: ByteString}
   deriving (Eq, Ord, Generic)
@@ -198,7 +215,7 @@ splitOnNonEmpty sep t
 
 newtype PolicyId = PolicyId {unPolicyId :: ByteString}
   deriving (Eq, Ord, Generic)
-  deriving (Show, ToHttpApiData, FromHttpApiData, ToJSON, FromJSON) via Base16
+  deriving (Show, ToHttpApiData, FromHttpApiData, ToJSON, ToJSONKey, FromJSON, FromJSONKey) via Base16
 
 instance ToSchema PolicyId where
   declareNamedSchema proxy = pure $ NamedSchema (Just "PolicyId") $ toParamSchema proxy
@@ -308,6 +325,7 @@ data ContractState = ContractState
   , currentContract :: Maybe Semantics.Contract
   , state :: Maybe Semantics.State
   , utxo :: Maybe TxOutRef
+  , assets :: Assets
   , txBody :: Maybe TextEnvelope
   , unclaimedPayouts :: [Payout]
   }
@@ -315,7 +333,8 @@ data ContractState = ContractState
 
 data Payout = Payout
   { payoutId :: TxOutRef
-  , role :: Text -- TODO (N.H) : add assets that will be retrieved by the payout
+  , role :: Text
+  , assets :: Assets
   }
   deriving (FromJSON, ToJSON, ToSchema, Show, Eq, Generic)
 
@@ -422,6 +441,7 @@ data Tx = Tx
   , outputUtxo :: Maybe TxOutRef
   , outputContract :: Maybe Semantics.Contract
   , outputState :: Maybe Semantics.State
+  , assets :: Assets
   , consumingTx :: Maybe TxId
   , invalidBefore :: UTCTime
   , invalidHereafter :: UTCTime
