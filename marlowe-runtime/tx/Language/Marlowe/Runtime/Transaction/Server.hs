@@ -411,15 +411,14 @@ findMarloweOutput address = \case
 findPayouts
   :: forall era v. (IsCardanoEra era) => MarloweVersion v -> Chain.Address -> TxBody era -> Map Chain.TxOutRef (Payout v)
 findPayouts version address body@(TxBody TxBodyContent{..}) =
-  Map.fromDistinctAscList $
-    zipWith (\txIx payout -> (Chain.TxOutRef (fromCardanoTxId $ getTxId body) txIx, payout)) [0 ..] $
-      mapMaybe parsePayout txOuts
+  Map.fromDistinctAscList $ mapMaybe (uncurry parsePayout) $ zip [0 ..] txOuts
   where
-    parsePayout :: TxOut CtxTx era -> Maybe (Payout v)
-    parsePayout (TxOut addr value datum _) = do
+    txId = fromCardanoTxId $ getTxId body
+    parsePayout :: Chain.TxIx -> TxOut CtxTx era -> Maybe (Chain.TxOutRef, Payout v)
+    parsePayout txIx (TxOut addr value datum _) = do
       guard $ fromCardanoAddressInEra (cardanoEra @era) addr == address
       datum' <- fromChainPayoutDatum version =<< snd (fromCardanoTxOutDatum datum)
-      pure $ Payout address (fromCardanoTxOutValue value) datum'
+      pure (Chain.TxOutRef txId txIx, Payout address (fromCardanoTxOutValue value) datum')
 
 execApplyInputs
   :: (MonadUnliftIO m, IsCardanoEra era)

@@ -37,10 +37,11 @@ getsFirstTransactionValidSpec = it "returns the first transaction" \MarloweWebTe
   either throw pure =<< runWebClient do
     case transactionIds of
       (txId1 : _) -> do
-        Web.Tx{transactionId = actualTransactionId, assets} <- getTransaction contractId txId1
+        Web.Tx{transactionId = actualTransactionId, assets, payouts} <- getTransaction contractId txId1
 
         liftIO do
           actualTransactionId `shouldBe` txId1
+          payouts `shouldBe` []
           assets `shouldBe` Web.Assets{lovelace = 102_000_000, tokens = Web.Tokens mempty}
       _ -> do
         liftIO $ fail "Expected at least two transactions"
@@ -50,10 +51,11 @@ getsSecondTransactionValidSpec = it "returns the second transaction" \MarloweWeb
   either throw pure =<< runWebClient do
     case transactionIds of
       (_ : txId2 : _) -> do
-        Web.Tx{transactionId = actualTransactionId, assets} <- getTransaction contractId txId2
+        Web.Tx{transactionId = actualTransactionId, assets, payouts} <- getTransaction contractId txId2
 
         liftIO do
           actualTransactionId `shouldBe` txId2
+          payouts `shouldBe` []
           assets `shouldBe` Web.Assets{lovelace = 102_000_000, tokens = Web.Tokens mempty}
       _ -> do
         liftIO $ fail "Expected at least two transactions"
@@ -63,11 +65,16 @@ getsThirdTransactionValidSpec = it "returns the third transaction" \MarloweWebTe
   either throw pure =<< runWebClient do
     case transactionIds of
       (_ : _ : txId3 : _) -> do
-        Web.Tx{transactionId = actualTransactionId, assets} <- getTransaction contractId txId3
+        Web.Tx{transactionId = actualTransactionId, assets, payouts} <- getTransaction contractId txId3
 
         liftIO do
           actualTransactionId `shouldBe` txId3
           assets `shouldBe` Web.Assets{lovelace = 2_000_000, tokens = Web.Tokens mempty}
+          case payouts of
+            [Web.Payout{role, assets = payoutAssets}] -> do
+              role `shouldBe` "Party A"
+              payoutAssets `shouldBe` Web.Assets{lovelace = 100_000_000, tokens = Web.Tokens mempty}
+            _ -> fail "Expected one payout"
       _ -> do
         liftIO $ fail "Expected at least three transactions"
 
