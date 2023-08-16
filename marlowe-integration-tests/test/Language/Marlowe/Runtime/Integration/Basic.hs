@@ -128,7 +128,7 @@ spec = it "Basic e2e scenario" $ withLocalMarloweRuntime $ runIntegrationTest do
                                   -- 31. Cancel
                                   -- 32. Done
                                   let InputsAppliedInEra{output} = notified
-                                  TransactionScriptOutput{utxo = notifyTxOutRef} <- expectJust "Failed to obtain deposit output" output
+                                  TransactionScriptOutput{utxo = notifyTxOutRef} <- expectJust "Failed to obtain deposit output" $ scriptOutput output
                                   pure $ marloweSyncRequestNextExpectWait $ pure $ MarloweSync.SendMsgCancel $ MarloweSync.SendMsgDone notifyTxOutRef
 
   txOutRef <- startDiscoveryClient

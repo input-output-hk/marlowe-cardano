@@ -85,6 +85,7 @@ import Language.Marlowe.Protocol.Query.Types (
   Withdrawal (..),
  )
 
+import Data.Bitraversable (Bitraversable (..))
 import Data.Function (on)
 import Data.List (groupBy)
 import qualified Language.Marlowe.Protocol.Query.Types as Query
@@ -137,13 +138,13 @@ fromDTOThrow :: (MonadError e m, FromDTO a) => e -> DTO a -> m a
 fromDTOThrow e = maybe (throwError e) pure . fromDTO
 
 instance HasDTO (Map k a) where
-  type DTO (Map k a) = Map k (DTO a)
+  type DTO (Map k a) = Map (DTO k) (DTO a)
 
-instance (FromDTO a) => FromDTO (Map k a) where
-  fromDTO = traverse fromDTO
+instance (FromDTO k, FromDTO a) => FromDTO (Map k a) where
+  fromDTO = fmap Map.fromDistinctAscList . traverse (bitraverse fromDTO fromDTO) . Map.toAscList
 
-instance (ToDTO a) => ToDTO (Map k a) where
-  toDTO = fmap toDTO
+instance (ToDTO k, ToDTO a) => ToDTO (Map k a) where
+  toDTO = Map.mapKeysMonotonic toDTO . fmap toDTO
 
 instance HasDTO [a] where
   type DTO [a] = [DTO a]
@@ -326,6 +327,15 @@ instance ToDTO Chain.TxIx where
 instance FromDTO Chain.TxIx where
   fromDTO = pure . coerce
 
+instance HasDTO Word64 where
+  type DTO Word64 = Word64
+
+instance ToDTO Word64 where
+  toDTO = id
+
+instance FromDTO Word64 where
+  fromDTO = pure
+
 instance HasDTO Chain.Metadata where
   type DTO Chain.Metadata = Web.Metadata
 
@@ -451,6 +461,10 @@ instance ToDTO SomeTransaction where
       , outputState = case version of
           MarloweV1 -> Sem.marloweState . datum <$> scriptOutput
       , assets = maybe emptyAssets (toDTO . assets) scriptOutput
+      , payouts = case version of
+          MarloweV1 ->
+            (\(payoutId, Core.Api.Payout{..}) -> Web.Payout (toDTO payoutId) (toDTO . tokenName $ datum) (toDTO assets))
+              <$> M.toList payouts
       , consumingTx = toDTO consumedBy
       , invalidBefore = validityLowerBound
       , invalidHereafter = validityUpperBound
@@ -548,15 +562,19 @@ instance ToDTOWithTxStatus (Tx.InputsApplied v) where
       , inputUtxo = toDTO $ utxo input
       , inputs = case version of
           MarloweV1 -> inputs
-      , outputUtxo = toDTO $ utxo <$> output
+      , outputUtxo = toDTO $ utxo <$> scriptOutput output
       , outputContract = case version of
-          MarloweV1 -> Sem.marloweContract . datum <$> output
+          MarloweV1 -> Sem.marloweContract . datum <$> scriptOutput output
       , outputState = case version of
-          MarloweV1 -> Sem.marloweState . datum <$> output
-      , assets = maybe emptyAssets (toDTO . assets) output
+          MarloweV1 -> Sem.marloweState . datum <$> scriptOutput output
+      , assets = maybe emptyAssets (toDTO . assets) $ scriptOutput output
       , consumingTx = Nothing
       , invalidBefore = invalidBefore
       , invalidHereafter = invalidHereafter
+      , payouts = case version of
+          MarloweV1 ->
+            (\(payoutId, Core.Api.Payout{..}) -> Web.Payout (toDTO payoutId) (toDTO . tokenName $ datum) (toDTO assets))
+              <$> M.toList (payouts output)
       , txBody = case status of
           Unsigned -> Just case era of
             ReferenceTxInsScriptsInlineDatumsInBabbageEra -> toDTO txBody

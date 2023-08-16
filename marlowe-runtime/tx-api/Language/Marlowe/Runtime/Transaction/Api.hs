@@ -388,7 +388,7 @@ data InputsAppliedInEra era v = InputsAppliedInEra
   , contractId :: ContractId
   , metadata :: MarloweTransactionMetadata
   , input :: TransactionScriptOutput v
-  , output :: Maybe (TransactionScriptOutput v)
+  , output :: TransactionOutput v
   , invalidBefore :: UTCTime
   , invalidHereafter :: UTCTime
   , inputs :: Inputs v

@@ -19,6 +19,7 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (ask)
 import Data.Functor (void)
 import qualified Data.List.NonEmpty as NE
+import qualified Data.Map as Map
 import Data.Maybe (fromJust)
 import qualified Data.Set as Set
 import Data.Time (UTCTime, addUTCTime, getCurrentTime, secondsToNominalDiffTime)
@@ -111,7 +112,7 @@ closeSpec = parallel $ describe "Close contract" $ aroundAll setup do
     let utxo = TxOutRef txId 1
     liftIO $ input `shouldBe` TransactionScriptOutput{..}
   it "should contain no output" $ runAsIntegration \(_, InputsApplied _ InputsAppliedInEra{..}) -> do
-    liftIO $ output `shouldBe` Nothing
+    liftIO $ scriptOutput output `shouldBe` Nothing
   it "should specify invalid before in the past" $ runAsIntegration \(_, InputsApplied _ InputsAppliedInEra{..}) -> liftIO do
     now <- getCurrentTime
     compare invalidBefore now `shouldBe` LT
@@ -174,18 +175,17 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
   describe "Pay to role account" do
     it "should contain no output" $ runAsIntegration \PayTestData{..} -> do
       InputsApplied _ InputsAppliedInEra{..} <- pure payRoleAccountApplied
-      liftIO $ output `shouldBe` Nothing
+      liftIO $ scriptOutput output `shouldBe` Nothing
     it "should send a payout to the role validator" $ runAsIntegration \PayTestData{..} -> do
-      let ContractCreated _ ContractCreatedInEra{payoutScriptAddress} = payRoleAccountCreated
+      let ContractCreated _ ContractCreatedInEra{payoutScriptAddress, rolesCurrency} = payRoleAccountCreated
       InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra InputsAppliedInEra{..} <- pure payRoleAccountApplied
-      let isPayout (TxOut address _ _ _) = fromCardanoAddressInEra BabbageEra address == payoutScriptAddress
-      let getValue (TxOut _ value _ _) = fromCardanoTxOutValue value
-      let payoutOutputs = getValue <$> case txBody of TxBody TxBodyContent{..} -> filter isPayout txOuts
-      liftIO $ payoutOutputs `shouldBe` [Assets 2_000_000 mempty]
+      liftIO $
+        Map.elems (payouts output)
+          `shouldBe` [Payout payoutScriptAddress (Assets 2_000_000 mempty) $ AssetId rolesCurrency "Role"]
   describe "Pay to address account" do
     it "should contain no output" $ runAsIntegration \PayTestData{..} -> do
       InputsApplied _ InputsAppliedInEra{..} <- pure payAddressAccountApplied
-      liftIO $ output `shouldBe` Nothing
+      liftIO $ scriptOutput output `shouldBe` Nothing
     it "should send a payout to the wallet" $ runAsIntegration \PayTestData{..} -> do
       wallet2 <- getGenesisWallet 1
       InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra InputsAppliedInEra{..} <- pure payAddressAccountApplied
@@ -196,18 +196,17 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
   describe "Pay to role party" do
     it "should contain no output" $ runAsIntegration \PayTestData{..} -> do
       InputsApplied _ InputsAppliedInEra{..} <- pure payRolePartyApplied
-      liftIO $ output `shouldBe` Nothing
+      liftIO $ scriptOutput output `shouldBe` Nothing
     it "should send a payout to the role validator" $ runAsIntegration \PayTestData{..} -> do
-      let ContractCreated _ ContractCreatedInEra{payoutScriptAddress} = payRolePartyCreated
+      let ContractCreated _ ContractCreatedInEra{payoutScriptAddress, rolesCurrency} = payRolePartyCreated
       InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra InputsAppliedInEra{..} <- pure payRolePartyApplied
-      let isPayout (TxOut address _ _ _) = fromCardanoAddressInEra BabbageEra address == payoutScriptAddress
-      let getValue (TxOut _ value _ _) = fromCardanoTxOutValue value
-      let payoutOutputs = getValue <$> case txBody of TxBody TxBodyContent{..} -> filter isPayout txOuts
-      liftIO $ payoutOutputs `shouldBe` [Assets 2_000_000 mempty]
+      liftIO $
+        Map.elems (payouts output)
+          `shouldBe` [Payout payoutScriptAddress (Assets 2_000_000 mempty) $ AssetId rolesCurrency "Role"]
   describe "Pay to address party" do
     it "should contain no output" $ runAsIntegration \PayTestData{..} -> do
       InputsApplied _ InputsAppliedInEra{..} <- pure payAddressPartyApplied
-      liftIO $ output `shouldBe` Nothing
+      liftIO $ scriptOutput output `shouldBe` Nothing
     it "should send a payout to the wallet" $ runAsIntegration \PayTestData{..} -> do
       wallet2 <- getGenesisWallet 1
       InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra InputsAppliedInEra{..} <- pure payAddressPartyApplied
@@ -218,19 +217,18 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
   describe "Pay with input inside" do
     it "should contain no output" $ runAsIntegration \PayTestData{..} -> do
       InputsApplied _ InputsAppliedInEra{..} <- pure payDepth1Applied
-      liftIO $ output `shouldBe` Nothing
+      liftIO $ scriptOutput output `shouldBe` Nothing
     it "should send a payout to the role validator" $ runAsIntegration \PayTestData{..} -> do
-      let ContractCreated _ ContractCreatedInEra{payoutScriptAddress} = payDepth1Created
+      let ContractCreated _ ContractCreatedInEra{payoutScriptAddress, rolesCurrency} = payDepth1Created
       InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra InputsAppliedInEra{..} <- pure payDepth1Applied
-      let isPayout (TxOut address _ _ _) = fromCardanoAddressInEra BabbageEra address == payoutScriptAddress
-      let getValue (TxOut _ value _ _) = fromCardanoTxOutValue value
-      let payoutOutputs = getValue <$> case txBody of TxBody TxBodyContent{..} -> filter isPayout txOuts
-      liftIO $ payoutOutputs `shouldBe` [Assets 2_000_000 mempty]
+      liftIO $
+        Map.elems (payouts output)
+          `shouldBe` [Payout payoutScriptAddress (Assets 2_000_000 mempty) $ AssetId rolesCurrency "Role"]
   describe "Pay to account with two inputs inside" do
     it "should contain the correct output" $ runAsIntegration \PayTestData{..} -> do
       let ContractCreated _ ContractCreatedInEra{marloweScriptAddress, assets} = payDepth2AccountCreated
       InputsApplied _ InputsAppliedInEra{..} <- pure payDepth2AccountApplied
-      TransactionScriptOutput address assets' utxo' MarloweData{..} <- expectJust "Expected an output" output
+      TransactionScriptOutput address assets' utxo' MarloweData{..} <- expectJust "Expected an output" $ scriptOutput output
       liftIO $ address `shouldBe` marloweScriptAddress
       liftIO $ assets' `shouldBe` assets
       liftIO $ utxo' `shouldBe` TxOutRef (fromCardanoTxId $ getTxId txBody) 1
@@ -242,17 +240,13 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
             (utcTimeToPOSIXTime $ addUTCTime (secondsToNominalDiffTime 200) startTime)
             Close
     it "should send no payout" $ runAsIntegration \PayTestData{..} -> do
-      let ContractCreated _ ContractCreatedInEra{payoutScriptAddress} = payDepth2AccountCreated
       InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra InputsAppliedInEra{..} <- pure payDepth2AccountApplied
-      let isPayout (TxOut address _ _ _) = fromCardanoAddressInEra BabbageEra address == payoutScriptAddress
-      let getValue (TxOut _ value _ _) = fromCardanoTxOutValue value
-      let payoutOutputs = getValue <$> case txBody of TxBody TxBodyContent{..} -> filter isPayout txOuts
-      liftIO $ payoutOutputs `shouldBe` []
+      liftIO $ payouts output `shouldBe` mempty
   describe "Pay to party with two inputs inside" do
     it "should contain the correct output" $ runAsIntegration \PayTestData{..} -> do
       let ContractCreated _ ContractCreatedInEra{marloweScriptAddress} = payDepth2PartyCreated
       InputsApplied _ InputsAppliedInEra{..} <- pure payDepth2PartyApplied
-      TransactionScriptOutput address assets' utxo' MarloweData{..} <- expectJust "Expected an output" output
+      TransactionScriptOutput address assets' utxo' MarloweData{..} <- expectJust "Expected an output" $ scriptOutput output
       liftIO $ address `shouldBe` marloweScriptAddress
       liftIO $ assets' `shouldBe` Assets 8_000_000 mempty
       liftIO $ utxo' `shouldBe` TxOutRef (fromCardanoTxId $ getTxId txBody) 1
@@ -264,12 +258,11 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
             (utcTimeToPOSIXTime $ addUTCTime (secondsToNominalDiffTime 200) startTime)
             Close
     it "should send a payout to the role validator" $ runAsIntegration \PayTestData{..} -> do
-      let ContractCreated _ ContractCreatedInEra{payoutScriptAddress} = payDepth2PartyCreated
+      let ContractCreated _ ContractCreatedInEra{payoutScriptAddress, rolesCurrency} = payDepth2PartyCreated
       InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra InputsAppliedInEra{..} <- pure payDepth2PartyApplied
-      let isPayout (TxOut address _ _ _) = fromCardanoAddressInEra BabbageEra address == payoutScriptAddress
-      let getValue (TxOut _ value _ _) = fromCardanoTxOutValue value
-      let payoutOutputs = getValue <$> case txBody of TxBody TxBodyContent{..} -> filter isPayout txOuts
-      liftIO $ payoutOutputs `shouldBe` [Assets 2_000_000 mempty]
+      liftIO $
+        Map.elems (payouts output)
+          `shouldBe` [Payout payoutScriptAddress (Assets 2_000_000 mempty) $ AssetId rolesCurrency "Role"]
   where
     setup :: ActionWith (MarloweRuntime, PayTestData) -> IO ()
     setup runTests = withLocalMarloweRuntime $ runIntegrationTest do
@@ -478,7 +471,7 @@ whenTimeoutSpec = parallel $ describe "Timed out contracts" $ aroundAll setup do
   describe "Close continuation" do
     it "should contain no output" $ runAsIntegration \TimeoutTestData{..} -> do
       InputsApplied _ InputsAppliedInEra{..} <- pure depth1Applied
-      liftIO $ output `shouldBe` Nothing
+      liftIO $ scriptOutput output `shouldBe` Nothing
     it "should not accept any otherwise valid inputs" $ runAsIntegration \TimeoutTestData{..} -> do
       ContractCreated _ ContractCreatedInEra{..} <- pure depth1Created
       wallet <- getGenesisWallet 0
@@ -494,12 +487,12 @@ whenTimeoutSpec = parallel $ describe "Timed out contracts" $ aroundAll setup do
   describe "Timed out continuation" do
     it "should contain no output" $ runAsIntegration \TimeoutTestData{..} -> do
       InputsApplied _ InputsAppliedInEra{..} <- pure depth2InnerTimeoutApplied
-      liftIO $ output `shouldBe` Nothing
+      liftIO $ scriptOutput output `shouldBe` Nothing
   describe "Non-timed out continuation" do
     it "should contain the correct output" $ runAsIntegration \TimeoutTestData{..} -> do
       let ContractCreated _ ContractCreatedInEra{marloweScriptAddress, assets} = depth2Created
       InputsApplied _ InputsAppliedInEra{..} <- pure depth2Applied
-      TransactionScriptOutput address assets' utxo' MarloweData{..} <- expectJust "Expected an output" output
+      TransactionScriptOutput address assets' utxo' MarloweData{..} <- expectJust "Expected an output" $ scriptOutput output
       liftIO $ address `shouldBe` marloweScriptAddress
       liftIO $ assets' `shouldBe` assets
       liftIO $ utxo' `shouldBe` TxOutRef (fromCardanoTxId $ getTxId txBody) 1
@@ -668,7 +661,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
           contractId
           emptyMarloweTransactionMetadata
           [NormalInput INotify]
-    liftIO $ output `shouldBe` Nothing
+    liftIO $ scriptOutput output `shouldBe` Nothing
   it "should accept the correct deposit from wallet 1" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
     wallet <- getGenesisWallet 0
     InputsApplied _ InputsAppliedInEra{output} <-
@@ -679,7 +672,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
           contractId
           emptyMarloweTransactionMetadata
           [NormalInput $ IDeposit (Role "Role1") (Role "Role1") ada 1_000_000]
-    liftIO $ output `shouldBe` Nothing
+    liftIO $ scriptOutput output `shouldBe` Nothing
   it "should reject wallet2's deposit from wallet 1" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
     wallet <- getGenesisWallet 0
     result <-
@@ -714,7 +707,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
           contractId
           emptyMarloweTransactionMetadata
           [NormalInput $ IDeposit (Role "Role2") (Role "Role2") ada 1_000_000]
-    liftIO $ output `shouldBe` Nothing
+    liftIO $ scriptOutput output `shouldBe` Nothing
   it "should reject wallet1's deposit from wallet 2" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
     wallet <- getGenesisWallet 1
     result <-
@@ -750,7 +743,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
           contractId
           emptyMarloweTransactionMetadata
           [NormalInput $ IDeposit address address ada 1_000_000]
-    liftIO $ output `shouldBe` Nothing
+    liftIO $ scriptOutput output `shouldBe` Nothing
   it "should reject wallet1's deposit from wallet 3" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
     wallet <- getGenesisWallet 2
     result <-
@@ -781,7 +774,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
           contractId
           emptyMarloweTransactionMetadata
           [NormalInput $ IChoice (ChoiceId "choice1" (Role "Role1")) 0]
-    liftIO $ output `shouldBe` Nothing
+    liftIO $ scriptOutput output `shouldBe` Nothing
   it "should reject wallet2's choice from wallet 1" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
     wallet <- getGenesisWallet 0
     result <-
@@ -816,7 +809,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
           contractId
           emptyMarloweTransactionMetadata
           [NormalInput $ IChoice (ChoiceId "choice2" (Role "Role2")) 0]
-    liftIO $ output `shouldBe` Nothing
+    liftIO $ scriptOutput output `shouldBe` Nothing
   it "should reject wallet1's choice from wallet 2" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
     wallet <- getGenesisWallet 1
     result <-
@@ -852,7 +845,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
           contractId
           emptyMarloweTransactionMetadata
           [NormalInput $ IChoice (ChoiceId "choice3" address) 0]
-    liftIO $ output `shouldBe` Nothing
+    liftIO $ scriptOutput output `shouldBe` Nothing
   it "should reject wallet1's choice from wallet 3" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
     wallet <- getGenesisWallet 2
     result <-
@@ -925,7 +918,7 @@ merkleizedSpec = parallel $ describe "Merkleized contracts" $ aroundAll setup do
           contractId
           emptyMarloweTransactionMetadata
           [MerkleizedInput INotify hash Close]
-    liftIO $ output `shouldBe` Nothing
+    liftIO $ scriptOutput output `shouldBe` Nothing
   it "should reject an input with an incorrect hash" $ runAsIntegration \contractId -> do
     wallet <- getGenesisWallet 0
     result <-
@@ -979,7 +972,7 @@ multiInputsSpec = parallel $ describe "Multi inputs" $ aroundAll setup do
   it "should accept one input" $ runAsIntegration \(startTime, contractId) -> do
     wallet <- getGenesisWallet 0
     InputsAppliedInEra{output} <- deposit wallet contractId (Role "role") (Role "role") ada 1_000_000
-    TransactionScriptOutput{..} <- expectJust "Expected an output" output
+    TransactionScriptOutput{..} <- expectJust "Expected an output" $ scriptOutput output
     liftIO $
       marloweContract datum
         `shouldBe` When
@@ -998,7 +991,7 @@ multiInputsSpec = parallel $ describe "Multi inputs" $ aroundAll setup do
           [ NormalInput $ IDeposit (Role "role") (Role "role") ada 1_000_000
           , NormalInput $ IChoice (ChoiceId "choice" (Role "role")) 0
           ]
-    liftIO $ output `shouldBe` Nothing
+    liftIO $ scriptOutput output `shouldBe` Nothing
   it "should reject an invalid second input" $ runAsIntegration \(_, contractId) -> do
     wallet <- getGenesisWallet 0
     result <-

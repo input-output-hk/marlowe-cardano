@@ -258,6 +258,9 @@ instance FromJSON TxOutRef where
   parseJSON =
     withText "TxOutRef" $ either (parseFail . T.unpack) pure . parseUrlPiece
 
+instance FromJSONKey TxOutRef where
+  fromJSONKey = FromJSONKeyTextParser $ either (parseFail . T.unpack) pure . parseUrlPiece
+
 instance ToSchema TxOutRef where
   declareNamedSchema _ =
     pure $
@@ -280,6 +283,9 @@ instance ToParamSchema TxOutRef where
 
 instance ToJSON TxOutRef where
   toJSON = String . toUrlPiece
+
+instance ToJSONKey TxOutRef where
+  toJSONKey = toJSONKeyText toUrlPiece
 
 data MarloweVersion = V1
   deriving (Show, Eq, Ord)
@@ -442,6 +448,7 @@ data Tx = Tx
   , outputContract :: Maybe Semantics.Contract
   , outputState :: Maybe Semantics.State
   , assets :: Assets
+  , payouts :: [Payout]
   , consumingTx :: Maybe TxId
   , invalidBefore :: UTCTime
   , invalidHereafter :: UTCTime
