@@ -28,14 +28,14 @@ import Language.Marlowe.CLI.Format (maybeWriteJson, maybeWritePretty, readContra
 import Language.Marlowe.CLI.Types (CliError (..))
 import Options.Applicative qualified as O
 
--- | Marlowe CLI commands and options for convert templates.
+-- | Marlowe CLI options for formatting contracts.
 data FormatCommand
   = -- | Format a contract.
     Format
     { inputFile :: Maybe FilePath
-    -- ^ The Marlowe file containing the contract to be converted.
+    -- ^ The Marlowe file containing the contract to be formatted.
     , outputFile :: Maybe FilePath
-    -- ^ The output file for the converted Marlowe contract.
+    -- ^ The output file for the formatted Marlowe contract.
     , fromPretty :: Bool
     -- ^ Flag to indicate whether the input format is pretty printed Marlowe.
     , toPretty :: Bool
@@ -43,7 +43,7 @@ data FormatCommand
     }
   deriving stock (Eq, Generic, Show)
 
--- | Create a contract from a template.
+-- | Format a Marlowe contract.
 runFormatCommand
   :: (MonadError CliError m)
   => (MonadIO m)
@@ -80,7 +80,7 @@ runFormatCommand
     , toPretty = True
     } = readContractPretty inputFile >>= maybeWritePretty outputFile
 
--- | Parser for template commands.
+-- | Parser for format commands.
 parseFormatCommand :: O.Parser FormatCommand
 parseFormatCommand =
   Format
