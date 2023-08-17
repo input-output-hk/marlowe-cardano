@@ -27,6 +27,7 @@ getTransactionValidSpec = describe "Valid GET /contract/{contractId}/transaction
   getsFirstTransactionValidSpec
   getsSecondTransactionValidSpec
   getsThirdTransactionValidSpec
+  getsFourthTransactionValidSpec
 
 getTransactionInvalidSpec :: SpecWith MarloweWebTestData
 getTransactionInvalidSpec = describe "Invalid GET /contract/{contractId}/transactions/{transactionId}" do
@@ -70,6 +71,20 @@ getsThirdTransactionValidSpec = it "returns the third transaction" \MarloweWebTe
         liftIO do
           actualTransactionId `shouldBe` txId3
           assets `shouldBe` Web.Assets{lovelace = 2_000_000, tokens = Web.Tokens mempty}
+          payouts `shouldBe` []
+      _ -> do
+        liftIO $ fail "Expected at least three transactions"
+
+getsFourthTransactionValidSpec :: SpecWith MarloweWebTestData
+getsFourthTransactionValidSpec = it "returns the third transaction" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
+  either throw pure =<< runWebClient do
+    case transactionIds of
+      (_ : _ : _ : [txId4]) -> do
+        Web.Tx{transactionId = actualTransactionId, assets, payouts} <- getTransaction contractId txId4
+
+        liftIO do
+          actualTransactionId `shouldBe` txId4
+          assets `shouldBe` Web.Assets{lovelace = 0, tokens = Web.Tokens mempty}
           case payouts of
             [Web.Payout{role, assets = payoutAssets}] -> do
               role `shouldBe` "Party A"
