@@ -98,14 +98,14 @@ parseFormatCommand =
         mconcat
           [ O.long "in"
           , O.metavar "FORMAT"
-          , O.help "The format of the input Marlowe contract. Known formats are: Json, Yaml, Pretty"
+          , O.help "The format of the input Marlowe contract. Known formats are: Json, Yaml, Marlowe"
           ]
     outFormatParser =
       O.optional . O.option formatReader $
         mconcat
           [ O.long "out"
           , O.metavar "FORMAT"
-          , O.help "The format of the output Marlowe contract. Known formats are: Json, Yaml, Pretty"
+          , O.help "The format of the output Marlowe contract. Known formats are: Json, Yaml, Marlowe"
           ]
 
 data Format = Json | Yaml | Pretty
@@ -118,5 +118,5 @@ formatReader = readFormat =<< O.str
       case map toUpper arg of
         "JSON" -> return Json
         "YAML" -> return Yaml
-        "PRETTY" -> return Pretty
-        _ -> O.readerError $ "cannot parse argument '" <> arg <> "'. Valid are: json, yaml, pretty. Default: json"
+        "MARLOWE" -> return Pretty
+        _ -> O.readerError $ "cannot parse argument '" <> arg <> "'. Valid are: json, yaml, marlowe. Default: json"
