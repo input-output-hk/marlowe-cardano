@@ -44,9 +44,9 @@ data FormatCommand
     , outputFile :: Maybe FilePath
     -- ^ The output file for the formatted Marlowe contract.
     , inFormat :: Maybe Format
-    -- ^ Flag to indicate whether the input format is pretty printed Marlowe.
+    -- ^ Format of the input Marlowe contract.
     , outFormat :: Maybe Format
-    -- ^ Flag to indicate whether the output format should be pretty printed Marlowe.
+    -- ^ Format of the output Marlowe contract.
     }
   deriving stock (Eq, Generic, Show)
 
@@ -99,14 +99,14 @@ parseFormatCommand =
         mconcat
           [ O.long "in"
           , O.metavar "FORMAT"
-          , O.help "The format of the in-file. Known formats are: Json, Yaml, Pretty"
+          , O.help "The format of the input Marlowe contract. Known formats are: Json, Yaml, Pretty"
           ]
     outFormatParser =
       O.optional . O.option formatReader $
         mconcat
           [ O.long "out"
           , O.metavar "FORMAT"
-          , O.help "The format of the out-file. Known formats are: Json, Yaml, Pretty"
+          , O.help "The format of the output Marlowe contract. Known formats are: Json, Yaml, Pretty"
           ]
 
 data Format = Json | Yaml | Pretty
