@@ -281,7 +281,6 @@ observationParser = observationParser' <|> parens observationParser
         <|> valueLTParser
         <|> valueLEParser
         <|> valueEQParser
-        <|> notObsParser
         <|> trueObsParser
         <|> falseObsParser
     andObsParser =
