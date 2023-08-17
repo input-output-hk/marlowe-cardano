@@ -24,7 +24,6 @@ module Language.Marlowe.CLI.Command.Format (
 
 import Control.Monad.Except (MonadError, MonadIO (..))
 import Data.Char (toUpper)
-import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Format (
   maybeWriteJson,
   maybeWritePretty,
@@ -48,7 +47,7 @@ data FormatCommand
     , outFormat :: Maybe Format
     -- ^ Format of the output Marlowe contract.
     }
-  deriving stock (Eq, Generic, Show)
+  deriving stock (Eq, Show)
 
 -- | Format a Marlowe contract.
 runFormatCommand
@@ -110,7 +109,7 @@ parseFormatCommand =
           ]
 
 data Format = Json | Yaml | Pretty
-  deriving stock (Eq, Generic, Read, Show)
+  deriving stock (Eq, Read, Show)
 
 formatReader :: O.ReadM Format
 formatReader = readFormat =<< O.str
