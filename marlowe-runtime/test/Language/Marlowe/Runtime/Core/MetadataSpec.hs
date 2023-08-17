@@ -1,6 +1,6 @@
 module Language.Marlowe.Runtime.Core.MetadataSpec where
 
-import Language.Marlowe.Runtime.Core.Api (decodeMarloweTransactionMetadata, encodeMarloweTransactionMetadata)
+import Language.Marlowe.Runtime.Core.Api (decodeMarloweTransactionMetadataLenient, encodeMarloweTransactionMetadata)
 import Language.Marlowe.Runtime.Core.Gen ()
 import Test.Hspec
 import Test.Hspec.QuickCheck
@@ -11,4 +11,4 @@ spec = do
   prop "prop: roundtrip encoding" \metadata ->
     let encoded = encodeMarloweTransactionMetadata metadata
      in counterexample ("Encoded: " <> show encoded) $
-          decodeMarloweTransactionMetadata encoded === Right metadata
+          decodeMarloweTransactionMetadataLenient encoded === metadata
