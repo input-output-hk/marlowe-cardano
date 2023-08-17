@@ -37,6 +37,7 @@ import Language.Marlowe.Runtime.Core.Api (
   MarloweVersion (..),
   MarloweVersionTag (..),
   Payout (..),
+  TransactionOutput (..),
   TransactionScriptOutput (..),
  )
 import qualified Language.Marlowe.Runtime.Core.Api as Core
@@ -510,17 +511,17 @@ txNoToInputsApplied MarloweQueryTestData{..} = \case
 txNoToInput :: MarloweQueryTestData -> TxNo -> TxOutRef
 txNoToInput MarloweQueryTestData{..} = \case
   Contract1Step1 -> unContractId $ standardContractId contract1
-  Contract1Step2 -> utxo $ fromJust $ output $ initialFundsDeposited contract1Step1
-  Contract1Step3 -> utxo $ fromJust $ output $ gimmeTheMoneyChosen contract1Step2
-  Contract1Step4 -> utxo $ fromJust $ output $ notified contract1Step3
+  Contract1Step2 -> utxo $ fromJust $ scriptOutput $ output $ initialFundsDeposited contract1Step1
+  Contract1Step3 -> utxo $ fromJust $ scriptOutput $ output $ gimmeTheMoneyChosen contract1Step2
+  Contract1Step4 -> utxo $ fromJust $ scriptOutput $ output $ notified contract1Step3
   Contract2Step1 -> unContractId $ standardContractId contract2
-  Contract2Step2 -> utxo $ fromJust $ output $ initialFundsDeposited contract2Step1
-  Contract2Step3 -> utxo $ fromJust $ output $ gimmeTheMoneyChosen contract2Step2
-  Contract2Step4 -> utxo $ fromJust $ output $ notified contract2Step3
+  Contract2Step2 -> utxo $ fromJust $ scriptOutput $ output $ initialFundsDeposited contract2Step1
+  Contract2Step3 -> utxo $ fromJust $ scriptOutput $ output $ gimmeTheMoneyChosen contract2Step2
+  Contract2Step4 -> utxo $ fromJust $ scriptOutput $ output $ notified contract2Step3
   Contract3Step1 -> unContractId $ standardContractId contract3
-  Contract3Step2 -> utxo $ fromJust $ output $ initialFundsDeposited contract3Step1
-  Contract3Step3 -> utxo $ fromJust $ output $ gimmeTheMoneyChosen contract3Step2
-  Contract3Step4 -> utxo $ fromJust $ output $ notified contract3Step3
+  Contract3Step2 -> utxo $ fromJust $ scriptOutput $ output $ initialFundsDeposited contract3Step1
+  Contract3Step3 -> utxo $ fromJust $ scriptOutput $ output $ gimmeTheMoneyChosen contract3Step2
+  Contract3Step4 -> utxo $ fromJust $ scriptOutput $ output $ notified contract3Step3
 
 txNoToConsumer :: MarloweQueryTestData -> TxNo -> Maybe TxId
 txNoToConsumer MarloweQueryTestData{..} =
@@ -583,9 +584,9 @@ contractNoToLatestOutput :: MarloweQueryTestData -> RefSym GetHeaders -> Maybe (
 contractNoToLatestOutput MarloweQueryTestData{..} = \case
   Contract1 -> Nothing
   Contract2 -> case returnDeposited contract2Step4 of
-    InputsAppliedInEra{..} -> output
+    InputsAppliedInEra{..} -> scriptOutput output
   Contract3 -> case returnDeposited contract3Step4 of
-    InputsAppliedInEra{..} -> output
+    InputsAppliedInEra{..} -> scriptOutput output
   Contract4 -> case contractCreated contract4 of
     ContractCreatedInEra{..} ->
       Just

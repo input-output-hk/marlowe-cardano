@@ -582,7 +582,7 @@ interpret ro@RuntimeApplyInputs{..} = do
       Right
         ( Transaction.InputsApplied
             ReferenceTxInsScriptsInlineDatumsInBabbageEra
-            Transaction.InputsAppliedInEra{output = possibleMarloweOutput, txBody}
+            Transaction.InputsAppliedInEra{output = R.TransactionOutput{scriptOutput = possibleMarloweOutput}, txBody}
           ) -> do
           logStoreLabeledMsg ro "Successful application."
           let witness = somePaymentsigningKeyToTxWitness _waSigningKey

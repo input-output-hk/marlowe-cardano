@@ -16,6 +16,7 @@ import Cardano.Api (
   AnyCardanoEra (..),
   CardanoEra (..),
   CardanoMode,
+  CtxTx,
   EraHistory,
   IsCardanoEra,
   NetworkId (..),
@@ -45,7 +46,7 @@ import Control.Concurrent.STM (STM, modifyTVar, newEmptyTMVar, newTVar, putTMVar
 import Control.Error (MaybeT (..))
 import Control.Error.Util (hoistMaybe, hush, note, noteT)
 import Control.Exception (Exception (..), SomeException)
-import Control.Monad ((<=<))
+import Control.Monad (guard, (<=<))
 import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Trans.Class (lift)
@@ -65,6 +66,8 @@ import Language.Marlowe.Runtime.Cardano.Api (
   fromCardanoAddressInEra,
   fromCardanoTxId,
   fromCardanoTxIn,
+  fromCardanoTxOutDatum,
+  fromCardanoTxOutValue,
   toCardanoPaymentCredential,
   toCardanoStakeCredential,
  )
@@ -88,8 +91,10 @@ import Language.Marlowe.Runtime.Core.Api (
   MarloweVersion (..),
   MarloweVersionTag (..),
   Payout (Payout, datum),
+  TransactionOutput (..),
   TransactionScriptOutput (..),
   decodeMarloweTransactionMetadataLenient,
+  fromChainPayoutDatum,
   withMarloweVersion,
  )
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts (..))
@@ -138,6 +143,7 @@ import Observe.Event.Explicit (addField)
 import Ouroboros.Consensus.BlockchainTime (SystemStart)
 import UnliftIO (MonadUnliftIO, atomically, throwIO)
 import UnliftIO.Concurrent (forkFinally)
+import Witherable (mapMaybe)
 
 data TransactionServerSelector f where
   Exec :: TransactionServerSelector ExecField
@@ -402,6 +408,18 @@ findMarloweOutput address = \case
     isToCurrentScriptAddress (TxOut address' _ _ _) =
       address == fromCardanoAddressInEra (cardanoEra @era) address'
 
+findPayouts
+  :: forall era v. (IsCardanoEra era) => MarloweVersion v -> Chain.Address -> TxBody era -> Map Chain.TxOutRef (Payout v)
+findPayouts version address body@(TxBody TxBodyContent{..}) =
+  Map.fromDistinctAscList $ mapMaybe (uncurry parsePayout) $ zip [0 ..] txOuts
+  where
+    txId = fromCardanoTxId $ getTxId body
+    parsePayout :: Chain.TxIx -> TxOut CtxTx era -> Maybe (Chain.TxOutRef, Payout v)
+    parsePayout txIx (TxOut addr value datum _) = do
+      guard $ fromCardanoAddressInEra (cardanoEra @era) addr == address
+      datum' <- fromChainPayoutDatum version =<< snd (fromCardanoTxOutDatum datum)
+      pure (Chain.TxOutRef txId txIx, Payout address (fromCardanoTxOutValue value) datum')
+
 execApplyInputs
   :: (MonadUnliftIO m, IsCardanoEra era)
   => CardanoEra era
@@ -472,7 +490,11 @@ execApplyInputs
           solveConstraints referenceInputsSupported version marloweContext walletContext constraints
     let input = scriptOutput'
     let buildOutput (assets, datum) utxo = TransactionScriptOutput marloweAddress assets utxo datum
-    let output = buildOutput <$> mAssetsAndDatum <*> findMarloweOutput marloweAddress txBody
+    let output =
+          TransactionOutput
+            { payouts = findPayouts version payoutAddress txBody
+            , scriptOutput = buildOutput <$> mAssetsAndDatum <*> findMarloweOutput marloweAddress txBody
+            }
     pure $
       InputsApplied referenceInputsSupported $
         InputsAppliedInEra

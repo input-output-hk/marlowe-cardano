@@ -10,8 +10,6 @@ import Cardano.Api (
   AddressAny (AddressShelley),
   AsType (..),
   BabbageEra,
-  CardanoEra (..),
-  CtxTx,
   Key (verificationKeyHash),
   NetworkId (Testnet),
   NetworkMagic (NetworkMagic),
@@ -20,7 +18,6 @@ import Cardano.Api (
   StakeAddressReference (NoStakeAddress),
   TxBody (..),
   TxBodyContent (..),
-  TxOut (..),
   generateSigningKey,
   getTxId,
   getVerificationKey,
@@ -50,7 +47,6 @@ import Data.ByteString.Base16 (decodeBase16)
 import Data.Foldable (fold)
 import Data.Function (on)
 import Data.Functor (($>))
-import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes, fromJust)
 import qualified Data.Set as Set
@@ -67,10 +63,7 @@ import qualified Language.Marlowe.Protocol.HeaderSync.Client as HeaderSync
 import qualified Language.Marlowe.Protocol.Sync.Client as MarloweSync
 import Language.Marlowe.Runtime.Cardano.Api (
   fromCardanoAddressAny,
-  fromCardanoAddressInEra,
   fromCardanoTxId,
-  fromCardanoTxOutDatum,
-  fromCardanoTxOutValue,
   toCardanoAddressAny,
   toCardanoAddressInEra,
   toCardanoTxOut,
@@ -84,8 +77,6 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   SlotNo (..),
   TokenName,
   TxId,
-  TxIx,
-  TxOutRef (..),
   fromBech32,
  )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
@@ -102,13 +93,10 @@ import Language.Marlowe.Runtime.Core.Api (
   ContractId (..),
   MarloweVersion (..),
   MarloweVersionTag (..),
-  Payout (..),
   SomeMarloweVersion (..),
   Transaction (..),
-  TransactionOutput (..),
   TransactionScriptOutput (..),
   emptyMarloweTransactionMetadata,
-  fromChainPayoutDatum,
  )
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader (..))
 import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep (..))
@@ -469,27 +457,8 @@ inputsAppliedToTransaction blockHeader InputsAppliedInEra{..} =
     , validityLowerBound = invalidBefore
     , validityUpperBound = invalidHereafter
     , inputs
-    , output =
-        TransactionOutput
-          { payouts = foldMap (uncurry $ txOutToPayout version $ fromCardanoTxId $ getTxId txBody) case txBody of
-              TxBody TxBodyContent{..} -> zip [0 ..] txOuts
-          , scriptOutput = output
-          }
+    , output
     }
-
-txOutToPayout :: MarloweVersion v -> TxId -> TxIx -> TxOut CtxTx BabbageEra -> Map TxOutRef (Payout v)
-txOutToPayout version txId txIx (TxOut address value datum _) = case snd $ fromCardanoTxOutDatum datum of
-  Just datum' -> case fromChainPayoutDatum version datum' of
-    Just payoutDatum ->
-      Map.singleton
-        (TxOutRef txId txIx)
-        Payout
-          { address = fromCardanoAddressInEra BabbageEra address
-          , assets = fromCardanoTxOutValue value
-          , datum = payoutDatum
-          }
-    Nothing -> mempty
-  Nothing -> mempty
 
 contractCreatedToContractHeader :: BlockHeader -> ContractCreatedInEra BabbageEra v -> ContractHeader
 contractCreatedToContractHeader blockHeader ContractCreatedInEra{..} =

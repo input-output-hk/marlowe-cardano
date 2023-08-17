@@ -119,12 +119,14 @@ instance Arbitrary Web.ContractState where
       <*> arbitrary
       <*> arbitrary
       <*> arbitrary
+      <*> arbitrary
   shrink = genericShrink
 
 instance Arbitrary Web.Payout where
   arbitrary =
     Web.Payout
       <$> arbitrary
+      <*> arbitrary
       <*> arbitrary
   shrink = genericShrink
 
@@ -135,6 +137,14 @@ instance Arbitrary Web.PayoutRef where
       <*> arbitrary
       <*> arbitrary
       <*> arbitrary
+  shrink = genericShrink
+
+instance Arbitrary Web.Assets where
+  arbitrary = Web.Assets <$> arbitrary <*> arbitrary
+  shrink = genericShrink
+
+instance Arbitrary Web.Tokens where
+  arbitrary = Web.Tokens <$> arbitrary
   shrink = genericShrink
 
 instance Arbitrary Web.Withdrawal where
@@ -162,6 +172,8 @@ instance Arbitrary Web.Tx where
       -- size of 6 will result in a 1-layer deep contract being generated (this is
       -- all we care about for the purposes of schema checking).
       <*> resize 6 arbitrary
+      <*> arbitrary
+      <*> arbitrary
       <*> arbitrary
       <*> arbitrary
       <*> arbitrary
