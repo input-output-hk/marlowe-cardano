@@ -1,8 +1,8 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 -----------------------------------------------------------------------------
 --
@@ -23,8 +23,15 @@ module Language.Marlowe.CLI.Command.Format (
 ) where
 
 import Control.Monad.Except (MonadError, MonadIO (..))
+import Data.Char (toUpper)
 import GHC.Generics (Generic)
-import Language.Marlowe.CLI.Format (maybeWriteJson, maybeWritePretty, readContractJson, readContractPretty)
+import Language.Marlowe.CLI.Format (
+  maybeWriteJson,
+  maybeWritePretty,
+  maybeWriteYaml,
+  readContractJson,
+  readContractPretty,
+ )
 import Language.Marlowe.CLI.Types (CliError (..))
 import Options.Applicative qualified as O
 
@@ -36,9 +43,9 @@ data FormatCommand
     -- ^ The Marlowe file containing the contract to be formatted.
     , outputFile :: Maybe FilePath
     -- ^ The output file for the formatted Marlowe contract.
-    , fromPretty :: Bool
+    , inFormat :: Maybe Format
     -- ^ Flag to indicate whether the input format is pretty printed Marlowe.
-    , toPretty :: Bool
+    , outFormat :: Maybe Format
     -- ^ Flag to indicate whether the output format should be pretty printed Marlowe.
     }
   deriving stock (Eq, Generic, Show)
@@ -51,34 +58,18 @@ runFormatCommand
   -- ^ The command.
   -> m ()
   -- ^ Action for runninng the command.
-runFormatCommand
-  Format
-    { inputFile
-    , outputFile
-    , fromPretty = False
-    , toPretty = False
-    } = readContractJson inputFile >>= maybeWriteJson outputFile
-runFormatCommand
-  Format
-    { inputFile
-    , outputFile
-    , fromPretty = True
-    , toPretty = False
-    } = readContractPretty inputFile >>= maybeWriteJson outputFile
-runFormatCommand
-  Format
-    { inputFile
-    , outputFile
-    , fromPretty = False
-    , toPretty = True
-    } = readContractJson inputFile >>= maybeWritePretty outputFile
-runFormatCommand
-  Format
-    { inputFile
-    , outputFile
-    , fromPretty = True
-    , toPretty = True
-    } = readContractPretty inputFile >>= maybeWritePretty outputFile
+runFormatCommand Format{..} =
+  do
+    contract <- case inFormat of
+      Just Json -> readContractJson inputFile
+      Just Yaml -> readContractJson inputFile
+      Just Pretty -> readContractPretty inputFile
+      Nothing -> readContractJson inputFile
+    case outFormat of
+      Just Json -> maybeWriteJson outputFile contract
+      Just Yaml -> maybeWriteYaml outputFile contract
+      Just Pretty -> maybeWritePretty outputFile contract
+      Nothing -> maybeWriteJson outputFile contract
 
 -- | Parser for format commands.
 parseFormatCommand :: O.Parser FormatCommand
@@ -86,8 +77,8 @@ parseFormatCommand =
   Format
     <$> inFile
     <*> outFile
-    <*> readPrettyFlag
-    <*> writePrettyFlag
+    <*> inFormatParser
+    <*> outFormatParser
   where
     inFile =
       O.optional . O.strOption $
@@ -103,15 +94,30 @@ parseFormatCommand =
           , O.metavar "MARLOWE_FILE"
           , O.help "The Marlowe file containing the output contract. Stdout if omitted."
           ]
-    readPrettyFlag =
-      O.flag False True $
+    inFormatParser =
+      O.optional . O.option formatReader $
         mconcat
-          [ O.long "read-pretty"
-          , O.help "Whether to read a pretty printed Marlowe Contract instead of JSON."
+          [ O.long "in"
+          , O.metavar "FORMAT"
+          , O.help "The format of the in-file. Known formats are: Json, Yaml, Pretty"
           ]
-    writePrettyFlag =
-      O.flag False True $
+    outFormatParser =
+      O.optional . O.option formatReader $
         mconcat
-          [ O.long "write-pretty"
-          , O.help "Whether to write a pretty printed Marlowe Contract instead of JSON."
+          [ O.long "out"
+          , O.metavar "FORMAT"
+          , O.help "The format of the out-file. Known formats are: Json, Yaml, Pretty"
           ]
+
+data Format = Json | Yaml | Pretty
+  deriving stock (Eq, Generic, Read, Show)
+
+formatReader :: O.ReadM Format
+formatReader = readFormat =<< O.str
+  where
+    readFormat arg =
+      case map toUpper arg of
+        "JSON" -> return Json
+        "YAML" -> return Yaml
+        "PRETTY" -> return Pretty
+        _ -> O.readerError $ "cannot parse argument '" <> arg <> "'. Valid are: json, yaml, pretty. Default: json"

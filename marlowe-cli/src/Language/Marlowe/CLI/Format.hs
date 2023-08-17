@@ -15,6 +15,7 @@
 module Language.Marlowe.CLI.Format (
   maybeWritePretty,
   maybeWriteJson,
+  maybeWriteYaml,
   readContractPretty,
   readContractJson,
   contractParser,
@@ -33,7 +34,7 @@ import Data.Text (Text)
 import Data.Text.IO qualified as T
 import Data.Void
 import GHC.Generics (Generic (..))
-import Language.Marlowe.CLI.IO (decodeFileStrict, maybeWriteJson)
+import Language.Marlowe.CLI.IO (decodeFileStrict, maybeWriteJson, maybeWriteYaml)
 import Language.Marlowe.CLI.Types (CliError (..))
 import Language.Marlowe.Core.V1.Semantics.Types as S (
   AccountId,
