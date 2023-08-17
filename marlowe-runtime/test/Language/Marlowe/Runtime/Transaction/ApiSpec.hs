@@ -32,7 +32,7 @@ import Test.QuickCheck (Gen)
 import qualified Test.QuickCheck as Gen
 
 spec :: Spec
-spec =
+spec = do
   Hspec.describe "CIP-25 Metadata" do
     prop "uriGen is valid" uriGenValidityTests
     prop "NFTMetadataFile is valid" cip25MetadataFileDetailsValidityTests

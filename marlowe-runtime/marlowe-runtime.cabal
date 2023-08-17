@@ -112,6 +112,7 @@ library gen
     , http-media ^>=0.8
     , marlowe-cardano ==0.1.2.0
     , marlowe-chain-sync:{gen, plutus-compat} ==0.0.4
+    , marlowe-protocols ==0.2.0.0
     , marlowe-runtime:{marlowe-runtime, discovery-api, history-api, tx-api} ==0.0.4
     , marlowe-test ==0.1.3.0
     , network-uri >=2.6 && <3
@@ -379,6 +380,8 @@ library tx-api
     , marlowe-protocols ==0.2.0.0
     , marlowe-runtime:{marlowe-runtime, history-api} ==0.0.4
     , network-uri >=2.6 && <3
+    , plutus-core ==1.0.0.1
+    , plutus-ledger-api ==1.0.0.1
     , text >=1.2.4 && <2
     , time >=1.9 && <2
 
