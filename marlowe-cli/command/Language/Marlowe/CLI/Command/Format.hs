@@ -6,7 +6,7 @@
 
 -----------------------------------------------------------------------------
 --
--- Module      :  $Headers
+-- Module      :  Language.Marlowe.CLI.Command.Format
 -- License     :  Apache 2.0
 --
 -- Stability   :  Experimental
