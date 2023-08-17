@@ -3,7 +3,7 @@
 
 -----------------------------------------------------------------------------
 --
--- Module      :  $Headers
+-- Module      :  Language.Marlowe.CLI.Format
 -- License     :  Apache 2.0
 --
 -- Stability   :  Experimental
