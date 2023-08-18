@@ -188,7 +188,7 @@ mkCommandParser networkId socketPath version = do
                     O.progDesc "Run test scenario described using yaml based DSL."
               , O.command "format" $
                   O.info (FormatCommand <$> parseFormatCommand) $
-                    O.progDesc "Read and write a Marlowe contract in different formats."
+                    O.progDesc "Convert between formats and pretty-print Marlowe contracts."
               ]
         , O.hsubparser $
             fold
