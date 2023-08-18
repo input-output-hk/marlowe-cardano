@@ -33,6 +33,7 @@ import Language.Marlowe.CLI.Format (
  )
 import Language.Marlowe.CLI.Types (CliError (..))
 import Options.Applicative qualified as O
+import System.FilePath (takeExtension)
 
 -- | Marlowe CLI options for formatting contracts.
 data FormatCommand
@@ -63,7 +64,15 @@ runFormatCommand Format{..} =
       Just Json -> readContractJson inputFile
       Just Yaml -> readContractJson inputFile
       Just Pretty -> readContractPretty inputFile
-      Nothing -> readContractJson inputFile
+      Nothing ->
+        case inputFile of
+          Just fileName ->
+            case takeExtension fileName of
+              ".json" -> readContractJson inputFile
+              ".yaml" -> readContractJson inputFile
+              ".marlowe" -> readContractPretty inputFile
+              _ -> readContractJson inputFile
+          Nothing -> readContractJson inputFile
     case outFormat of
       Just Json -> maybeWriteJson outputFile contract
       Just Yaml -> maybeWriteYaml outputFile contract
@@ -84,28 +93,31 @@ parseFormatCommand =
         mconcat
           [ O.long "in-file"
           , O.metavar "MARLOWE_FILE"
-          , O.help "The Marlowe file containing the contract. Stdin if omitted."
+          , O.help "The Marlowe file containing the contract. If omitted, the Marlowe contract is read from stdin."
           ]
     outFile =
       O.optional . O.strOption $
         mconcat
           [ O.long "out-file"
           , O.metavar "MARLOWE_FILE"
-          , O.help "The Marlowe file containing the output contract. Stdout if omitted."
+          , O.help "The Marlowe file containing the output contract. If omitted, the Marlowe contract is written to stdout."
           ]
     inFormatParser =
       O.optional . O.option formatReader $
         mconcat
-          [ O.long "in"
+          [ O.long "in-format"
           , O.metavar "FORMAT"
-          , O.help "The format of the input Marlowe contract. Known formats are: Json, Yaml, Marlowe"
+          , O.help $
+              "The format of the input Marlowe contract. Known formats are: Json (default), Yaml, Marlowe. "
+                <> "If omitted and in-file is specified, the format is inferred from the file extension. "
           ]
     outFormatParser =
       O.optional . O.option formatReader $
         mconcat
-          [ O.long "out"
+          [ O.long "out-format"
           , O.metavar "FORMAT"
-          , O.help "The format of the output Marlowe contract. Known formats are: Json, Yaml, Marlowe"
+          , O.help
+              "The format of the output Marlowe contract. Known formats are: Json (default), Yaml, Marlowe. "
           ]
 
 data Format = Json | Yaml | Pretty

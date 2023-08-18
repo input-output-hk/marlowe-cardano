@@ -242,6 +242,7 @@ library command
     , cardano-api
     , cardano-slotting
     , containers
+    , filepath
     , marlowe-actus
     , marlowe-cardano
     , marlowe-cli:{marlowe-cli, cli-test}
