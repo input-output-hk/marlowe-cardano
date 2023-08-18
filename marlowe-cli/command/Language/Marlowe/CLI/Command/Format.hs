@@ -77,7 +77,15 @@ runFormatCommand Format{..} =
       Just Json -> maybeWriteJson outputFile contract
       Just Yaml -> maybeWriteYaml outputFile contract
       Just Pretty -> maybeWritePretty outputFile contract
-      Nothing -> maybeWriteJson outputFile contract
+      Nothing ->
+        case outputFile of
+          Just fileName ->
+            case takeExtension fileName of
+              ".json" -> maybeWriteJson outputFile contract
+              ".yaml" -> maybeWriteYaml outputFile contract
+              ".marlowe" -> maybeWritePretty outputFile contract
+              _ -> maybeWriteJson outputFile contract
+          Nothing -> maybeWriteJson outputFile contract
 
 -- | Parser for format commands.
 parseFormatCommand :: O.Parser FormatCommand
@@ -100,7 +108,7 @@ parseFormatCommand =
         mconcat
           [ O.long "out-file"
           , O.metavar "MARLOWE_FILE"
-          , O.help "The Marlowe file containing the output contract. If omitted, the Marlowe contract is written to stdout."
+          , O.help "The Marlowe file the output contract is written to. If omitted, the Marlowe contract is written to stdout."
           ]
     inFormatParser =
       O.optional . O.option formatReader $
@@ -109,15 +117,16 @@ parseFormatCommand =
           , O.metavar "FORMAT"
           , O.help $
               "The format of the input Marlowe contract. Known formats are: Json (default), Yaml, Marlowe. "
-                <> "If omitted and in-file is specified, the format is inferred from the file extension. "
+                <> "If omitted and in-file is specified, the format is inferred from the file extension."
           ]
     outFormatParser =
       O.optional . O.option formatReader $
         mconcat
           [ O.long "out-format"
           , O.metavar "FORMAT"
-          , O.help
+          , O.help $
               "The format of the output Marlowe contract. Known formats are: Json (default), Yaml, Marlowe. "
+                <> "If omitted and out-file is specified, the format is inferred from the file extension."
           ]
 
 data Format = Json | Yaml | Pretty
