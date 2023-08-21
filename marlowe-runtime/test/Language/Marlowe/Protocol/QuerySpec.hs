@@ -39,6 +39,7 @@ instance ArbitraryRequest MarloweSyncRequest where
     TagWithdrawal -> ReqWithdrawal <$> arbitrary
     TagWithdrawals -> ReqWithdrawals <$> arbitrary <*> arbitrary
     TagStatus -> pure ReqStatus
+    TagPayouts -> ReqPayouts <$> arbitrary <*> arbitrary
 
   shrinkReq = \case
     ReqContractHeaders cFilter range ->
@@ -56,6 +57,11 @@ instance ArbitraryRequest MarloweSyncRequest where
         , ReqWithdrawals wFilter <$> shrink range
         ]
     ReqStatus -> []
+    ReqPayouts pFilter range ->
+      fold
+        [ ReqPayouts <$> shrink pFilter <*> pure range
+        , ReqPayouts pFilter <$> shrink range
+        ]
 
   arbitraryResult = \case
     TagContractHeaders -> arbitrary
@@ -65,6 +71,7 @@ instance ArbitraryRequest MarloweSyncRequest where
     TagWithdrawal -> arbitrary
     TagWithdrawals -> arbitrary
     TagStatus -> arbitrary
+    TagPayouts -> arbitrary
 
   shrinkResult = \case
     TagContractHeaders -> shrink
@@ -74,6 +81,7 @@ instance ArbitraryRequest MarloweSyncRequest where
     TagWithdrawal -> shrink
     TagWithdrawals -> shrink
     TagStatus -> shrink
+    TagPayouts -> shrink
 
 instance Arbitrary SomeContractState where
   arbitrary = SomeContractState MarloweV1 <$> arbitrary
@@ -152,4 +160,8 @@ instance Arbitrary ContractFilter where
 
 instance Arbitrary WithdrawalFilter where
   arbitrary = WithdrawalFilter <$> arbitrary
+  shrink = genericShrink
+
+instance Arbitrary PayoutFilter where
+  arbitrary = PayoutFilter <$> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink
