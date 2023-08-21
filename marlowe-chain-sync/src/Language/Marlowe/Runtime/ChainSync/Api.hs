@@ -518,7 +518,7 @@ data AssetId = AssetId
   , tokenName :: TokenName
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON, ToJSONKey, Variations, Hashable)
+  deriving anyclass (Binary, ToJSON, ToJSONKey, FromJSON, Variations, Hashable)
 
 newtype PolicyId = PolicyId {unPolicyId :: ByteString}
   deriving stock (Eq, Ord, Generic)

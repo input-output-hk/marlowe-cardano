@@ -14,6 +14,8 @@ import GHC.Generics (Generic)
 import Language.Marlowe.Protocol.Query.Types (
   ContractFilter,
   Page,
+  PayoutFilter,
+  PayoutRef,
   Range,
   SomeContractState,
   SomeTransaction,
@@ -21,7 +23,7 @@ import Language.Marlowe.Protocol.Query.Types (
   Withdrawal,
   WithdrawalFilter,
  )
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, TxId)
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, TxId, TxOutRef)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion (..), SomeMarloweVersion)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Language.Marlowe.Runtime.History.Api (ContractStep, SomeCreateStep)
@@ -42,6 +44,14 @@ data DatabaseSelector f where
   GetTransactions :: DatabaseSelector (QueryField ContractId (Maybe SomeTransactions))
   GetWithdrawal :: DatabaseSelector (QueryField TxId (Maybe Withdrawal))
   GetWithdrawals :: DatabaseSelector (QueryField GetWithdrawalsArguments (Maybe (Page TxId Withdrawal)))
+  GetPayouts :: DatabaseSelector (QueryField GetPayoutsArguments (Maybe (Page TxOutRef PayoutRef)))
+
+data GetPayoutsArguments = GetPayoutsArguments
+  { filter :: PayoutFilter
+  , range :: Range TxOutRef
+  }
+  deriving stock (Generic)
+  deriving anyclass (ToJSON)
 
 data GetWithdrawalsArguments = GetWithdrawalsArguments
   { filter :: WithdrawalFilter
@@ -158,6 +168,11 @@ logDatabaseQueries DatabaseQueries{..} =
         result <- getWithdrawals wFilter range
         addField ev $ Result result
         pure result
+    , getPayouts = \pFilter range -> withEvent GetPayouts \ev -> do
+        addField ev $ Arguments $ GetPayoutsArguments pFilter range
+        result <- getPayouts pFilter range
+        addField ev $ Result result
+        pure result
     }
 
 hoistDatabaseQueries :: (forall x. m x -> n x) -> DatabaseQueries m -> DatabaseQueries n
@@ -176,6 +191,7 @@ hoistDatabaseQueries f DatabaseQueries{..} =
     , getTransactions = f . getTransactions
     , getWithdrawal = f . getWithdrawal
     , getWithdrawals = fmap f . getWithdrawals
+    , getPayouts = fmap f . getPayouts
     }
 
 data DatabaseQueries m = DatabaseQueries
@@ -192,6 +208,7 @@ data DatabaseQueries m = DatabaseQueries
   , getTransactions :: ContractId -> m (Maybe SomeTransactions)
   , getWithdrawal :: TxId -> m (Maybe Withdrawal)
   , getWithdrawals :: WithdrawalFilter -> Range TxId -> m (Maybe (Page TxId Withdrawal))
+  , getPayouts :: PayoutFilter -> Range TxOutRef -> m (Maybe (Page TxOutRef PayoutRef))
   }
 
 data Next a

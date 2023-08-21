@@ -63,9 +63,8 @@ common lang
     TypeApplications
 
   ghc-options:
-    -Wall -Wnoncanonical-monad-instances -Wunused-packages
-    -Wincomplete-uni-patterns -Wincomplete-record-updates
-    -Wredundant-constraints -Widentities
+    -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
+    -Wincomplete-record-updates -Wredundant-constraints -Widentities
 
   if flag(defer-plugin-errors)
     ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
@@ -305,12 +304,14 @@ library sync
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetIntersectionForContract
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetNextHeaders
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetNextSteps
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetPayouts
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTip
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTipForContract
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTransaction
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTransactions
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetWithdrawal
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetWithdrawals
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.SyntaxBuilder
     Language.Marlowe.Runtime.Sync.MarloweHeaderSyncServer
     Language.Marlowe.Runtime.Sync.MarloweSyncServer
     Language.Marlowe.Runtime.Sync.QueryServer
@@ -327,6 +328,7 @@ library sync
     , eventuo11y-otel ^>=0.1
     , foldl >=1.4 && <2
     , hasql >=1.6 && <2
+    , hasql-implicits ^>=0.1
     , hasql-th ^>=0.4
     , hasql-transaction ^>=1
     , hs-opentelemetry-api ==0.0.3.6
@@ -335,7 +337,9 @@ library sync
     , marlowe-protocols ==0.2.0.0
     , marlowe-runtime:{marlowe-runtime, discovery-api, history-api, sync-api} ==0.0.4
     , plutus-ledger-api ==1.0.0.1
+    , postgresql-syntax ^>=0.4.1
     , text >=1.2.4 && <2
+    , text-builder ^>=0.6.7
     , time >=1.9 && <2
     , transformers ^>=0.5.6
     , unliftio ^>=0.2.1

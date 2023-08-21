@@ -28,5 +28,6 @@ queryServer QueryServerDependencies{..} =
         getTransactions
         getWithdrawal
         getWithdrawals
+        getPayouts
   where
     DatabaseQueries{..} = databaseQueries

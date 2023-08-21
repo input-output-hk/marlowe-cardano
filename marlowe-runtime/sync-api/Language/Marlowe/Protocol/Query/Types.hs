@@ -19,7 +19,7 @@ import Data.Type.Equality (testEquality, type (:~:) (Refl))
 import Data.Version (Version)
 import GHC.Generics (Generic)
 import GHC.Show (showSpace)
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, PolicyId, TokenName, TxId, TxOutRef)
+import Language.Marlowe.Runtime.ChainSync.Api (AssetId, BlockHeader, ChainPoint, PolicyId, TokenName, TxId, TxOutRef)
 import Language.Marlowe.Runtime.Core.Api (
   ContractId,
   MarloweMetadataTag,
@@ -70,6 +70,30 @@ instance Monoid ContractFilter where
       , roleCurrencies = mempty
       }
 
+data PayoutFilter = PayoutFilter
+  { unclaimed :: Bool
+  , contractIds :: Set ContractId
+  , roleTokens :: Set AssetId
+  }
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving anyclass (ToJSON, FromJSON, Binary, Variations)
+
+instance Semigroup PayoutFilter where
+  a <> b =
+    PayoutFilter
+      { unclaimed = on (||) unclaimed a b
+      , contractIds = on (<>) contractIds a b
+      , roleTokens = on (<>) roleTokens a b
+      }
+
+instance Monoid PayoutFilter where
+  mempty =
+    PayoutFilter
+      { unclaimed = False
+      , contractIds = mempty
+      , roleTokens = mempty
+      }
+
 data RuntimeStatus = RuntimeStatus
   { nodeTip :: ChainPoint
   , nodeTipUTC :: UTCTime
@@ -91,6 +115,7 @@ data MarloweSyncRequest a where
   ReqTransactions :: ContractId -> MarloweSyncRequest (Maybe SomeTransactions)
   ReqWithdrawal :: TxId -> MarloweSyncRequest (Maybe Withdrawal)
   ReqWithdrawals :: WithdrawalFilter -> Range TxId -> MarloweSyncRequest (Maybe (Page TxId Withdrawal))
+  ReqPayouts :: PayoutFilter -> Range TxOutRef -> MarloweSyncRequest (Maybe (Page TxOutRef PayoutRef))
 
 deriving instance Show (MarloweSyncRequest a)
 deriving instance Eq (MarloweSyncRequest a)
@@ -104,6 +129,7 @@ instance Request MarloweSyncRequest where
     TagTransactions :: Tag MarloweSyncRequest (Maybe SomeTransactions)
     TagWithdrawal :: Tag MarloweSyncRequest (Maybe Withdrawal)
     TagWithdrawals :: Tag MarloweSyncRequest (Maybe (Page TxId Withdrawal))
+    TagPayouts :: Tag MarloweSyncRequest (Maybe (Page TxOutRef PayoutRef))
   tagFromReq = \case
     ReqStatus -> TagStatus
     ReqContractHeaders _ _ -> TagContractHeaders
@@ -112,6 +138,7 @@ instance Request MarloweSyncRequest where
     ReqTransactions _ -> TagTransactions
     ReqWithdrawal _ -> TagWithdrawal
     ReqWithdrawals _ _ -> TagWithdrawals
+    ReqPayouts _ _ -> TagPayouts
   tagEq = \case
     TagStatus -> \case
       TagStatus -> Just Refl
@@ -134,6 +161,9 @@ instance Request MarloweSyncRequest where
     TagWithdrawals -> \case
       TagWithdrawals -> Just Refl
       _ -> Nothing
+    TagPayouts -> \case
+      TagPayouts -> Just Refl
+      _ -> Nothing
 
 deriving instance Show (Tag MarloweSyncRequest a)
 deriving instance Eq (Tag MarloweSyncRequest a)
@@ -149,6 +179,7 @@ instance BinaryRequest MarloweSyncRequest where
       0x05 -> SomeRequest . ReqWithdrawal <$> get
       0x06 -> SomeRequest <$> (ReqWithdrawals <$> get <*> get)
       0x07 -> pure $ SomeRequest ReqStatus
+      0x08 -> SomeRequest <$> (ReqPayouts <$> get <*> get)
       _ -> fail "Invalid MarloweSyncRequest tag"
 
   putReq req = case req of
@@ -173,6 +204,10 @@ instance BinaryRequest MarloweSyncRequest where
       put wFilter
       put range
     ReqStatus -> putWord8 0x07
+    ReqPayouts pFilter range -> do
+      putWord8 0x08
+      put pFilter
+      put range
 
   getResult = \case
     TagContractHeaders -> get
@@ -181,6 +216,7 @@ instance BinaryRequest MarloweSyncRequest where
     TagTransactions -> get
     TagWithdrawal -> get
     TagWithdrawals -> get
+    TagPayouts -> get
     TagStatus -> get
 
   putResult = \case
@@ -190,6 +226,7 @@ instance BinaryRequest MarloweSyncRequest where
     TagTransactions -> put
     TagWithdrawal -> put
     TagWithdrawals -> put
+    TagPayouts -> put
     TagStatus -> put
 
 instance RequestVariations MarloweSyncRequest where
@@ -201,6 +238,7 @@ instance RequestVariations MarloweSyncRequest where
       , SomeTag TagTransactions
       , SomeTag TagWithdrawal
       , SomeTag TagWithdrawals
+      , SomeTag TagPayouts
       , SomeTag TagStatus
       ]
   requestVariations = \case
@@ -210,6 +248,7 @@ instance RequestVariations MarloweSyncRequest where
     TagTransactions -> ReqTransactions <$> variations
     TagWithdrawal -> ReqWithdrawal <$> variations
     TagWithdrawals -> ReqWithdrawals <$> variations `varyAp` variations
+    TagPayouts -> ReqPayouts <$> variations `varyAp` variations
     TagStatus -> pure ReqStatus
   resultVariations = \case
     TagContractHeaders -> variations
@@ -218,6 +257,7 @@ instance RequestVariations MarloweSyncRequest where
     TagTransactions -> variations
     TagWithdrawal -> variations
     TagWithdrawals -> variations
+    TagPayouts -> variations
     TagStatus -> variations
 
 instance ToJSON (MarloweSyncRequest a) where
@@ -251,6 +291,14 @@ instance ToJSON (MarloweSyncRequest a) where
         [ "get-withdrawals"
             .= object
               [ "filter" .= wFilter
+              , "range" .= range
+              ]
+        ]
+    ReqPayouts pFilter range ->
+      object
+        [ "get-payouts"
+            .= object
+              [ "filter" .= pFilter
               , "range" .= range
               ]
         ]
@@ -449,6 +497,7 @@ instance OTelRequest MarloweSyncRequest where
     TagTransactions -> "transactions"
     TagWithdrawal -> "withdrawal"
     TagWithdrawals -> "withdrawals"
+    TagPayouts -> "payouts"
     TagStatus -> "status"
 
 instance ShowRequest MarloweSyncRequest where
@@ -459,6 +508,7 @@ instance ShowRequest MarloweSyncRequest where
     TagTransactions -> showsPrec p
     TagWithdrawal -> showsPrec p
     TagWithdrawals -> showsPrec p
+    TagPayouts -> showsPrec p
     TagStatus -> showsPrec p
 
 instance RequestEq MarloweSyncRequest where
@@ -468,4 +518,5 @@ instance RequestEq MarloweSyncRequest where
   resultEq TagTransactions = (==)
   resultEq TagWithdrawal = (==)
   resultEq TagWithdrawals = (==)
+  resultEq TagPayouts = (==)
   resultEq TagStatus = (==)

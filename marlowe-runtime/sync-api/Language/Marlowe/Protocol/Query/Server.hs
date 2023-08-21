@@ -15,6 +15,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   ChainSyncQuery (..),
   SlotNo (unSlotNo),
   TxId,
+  TxOutRef,
   WithGenesis (..),
  )
 import Language.Marlowe.Runtime.Core.Api (ContractId)
@@ -40,31 +41,43 @@ marloweQueryServer
   -> (ContractId -> m (Maybe SomeTransactions))
   -> (TxId -> m (Maybe Withdrawal))
   -> (WithdrawalFilter -> Range TxId -> m (Maybe (Page TxId Withdrawal)))
+  -> (PayoutFilter -> Range TxOutRef -> m (Maybe (Page TxOutRef PayoutRef)))
   -> MarloweQueryServer m ()
-marloweQueryServer runtimeVersion chainQueryConnector getRuntimeTip getContractHeaders getContractState getTransaction getTransactions getWithdrawal getWithdrawals =
-  respond concurrently \case
-    ReqContractHeaders cFilter range -> getContractHeaders cFilter range
-    ReqContractState contractId -> getContractState contractId
-    ReqTransaction txId -> getTransaction txId
-    ReqTransactions contractId -> getTransactions contractId
-    ReqWithdrawal txId -> getWithdrawal txId
-    ReqWithdrawals wFilter range -> getWithdrawals wFilter range
-    ReqStatus -> do
-      ((nodeTip, runtimeChainTip, systemStart, history, networkId), runtimeTip) <-
-        concurrently
-          ( runConnector chainQueryConnector do
-              nodeTip <- request GetNodeTip
-              runtimeChainTip <- request GetTip
-              systemStart <- request GetSystemStart
-              history <- request GetEraHistory
-              networkId <- request GetNetworkId
-              pure (nodeTip, runtimeChainTip, systemStart, history, networkId)
-          )
-          getRuntimeTip
-      nodeTipUTC <- slotToUTCTime systemStart history nodeTip
-      runtimeChainTipUTC <- slotToUTCTime systemStart history runtimeChainTip
-      runtimeTipUTC <- slotToUTCTime systemStart history runtimeTip
-      pure RuntimeStatus{..}
+marloweQueryServer
+  runtimeVersion
+  chainQueryConnector
+  getRuntimeTip
+  getContractHeaders
+  getContractState
+  getTransaction
+  getTransactions
+  getWithdrawal
+  getWithdrawals
+  getPayouts =
+    respond concurrently \case
+      ReqContractHeaders cFilter range -> getContractHeaders cFilter range
+      ReqContractState contractId -> getContractState contractId
+      ReqTransaction txId -> getTransaction txId
+      ReqTransactions contractId -> getTransactions contractId
+      ReqWithdrawal txId -> getWithdrawal txId
+      ReqWithdrawals wFilter range -> getWithdrawals wFilter range
+      ReqPayouts pFilter range -> getPayouts pFilter range
+      ReqStatus -> do
+        ((nodeTip, runtimeChainTip, systemStart, history, networkId), runtimeTip) <-
+          concurrently
+            ( runConnector chainQueryConnector do
+                nodeTip <- request GetNodeTip
+                runtimeChainTip <- request GetTip
+                systemStart <- request GetSystemStart
+                history <- request GetEraHistory
+                networkId <- request GetNetworkId
+                pure (nodeTip, runtimeChainTip, systemStart, history, networkId)
+            )
+            getRuntimeTip
+        nodeTipUTC <- slotToUTCTime systemStart history nodeTip
+        runtimeChainTipUTC <- slotToUTCTime systemStart history runtimeChainTip
+        runtimeTipUTC <- slotToUTCTime systemStart history runtimeTip
+        pure RuntimeStatus{..}
 
 slotToUTCTime :: (MonadIO m) => SystemStart -> EraHistory CardanoMode -> ChainPoint -> m UTCTime
 slotToUTCTime systemStart (EraHistory _ interpreter) = \case
