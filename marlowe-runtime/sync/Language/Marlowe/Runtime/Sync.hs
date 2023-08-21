@@ -24,6 +24,7 @@ import Language.Marlowe.Runtime.Sync.Database (
   GetHeadersArguments (..),
   GetIntersectionForContractArguments (..),
   GetNextStepsArguments (..),
+  GetPayoutsArguments (..),
   GetWithdrawalsArguments (..),
   QueryField (..),
  )
@@ -116,6 +117,13 @@ renderDatabaseSelectorOTel dbName dbUser host port = \case
       Just . fromString . show
   GetWithdrawals -> renderQuerySelectorOTel "get_withdrawals" \case
     GetWithdrawalsArguments{..} ->
+      Just $
+        toAttribute
+          [ fromString @Text $ show filter
+          , fromString $ show range
+          ]
+  GetPayouts -> renderQuerySelectorOTel "get_payouts" \case
+    GetPayoutsArguments{..} ->
       Just $
         toAttribute
           [ fromString @Text $ show filter
