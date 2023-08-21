@@ -16,6 +16,8 @@ module Language.Marlowe.Runtime.Web.Client (
   getContractStatus,
   getContracts,
   getContractsStatus,
+  getPayouts,
+  getPayoutsStatus,
   getTransaction,
   getTransactionStatus,
   getTransactions,
@@ -92,7 +94,7 @@ data Page field resource = Page
 
 healthcheck :: ClientM Bool
 healthcheck = do
-  let _ :<|> _ :<|> healthcheck' = client
+  let _ :<|> _ :<|> _ :<|> healthcheck' = client
   (True <$ healthcheck') `catchError` const (pure False)
 
 extractStatus
@@ -392,6 +394,39 @@ putWithdrawalStatus withdrawalId tx = do
 
 putWithdrawal :: TxId -> TextEnvelope -> ClientM ()
 putWithdrawal = fmap void . putWithdrawalStatus
+
+getPayoutsStatus
+  :: Maybe (Set TxOutRef)
+  -> Maybe (Set AssetId)
+  -> Bool
+  -> Maybe (Range "payoutId" TxOutRef)
+  -> ClientM (RuntimeStatus, Page "payoutId" PayoutRef)
+getPayoutsStatus contractIds roleTokens unclaimed range = do
+  let _ :<|> _ :<|> payoutsClient :<|> _ = client
+  let getPayouts' = payoutsClient
+  response <-
+    getPayouts' (foldMap Set.toList contractIds) (foldMap Set.toList roleTokens) unclaimed $
+      putRange <$> range
+  totalCount <- reqHeaderValue $ lookupResponseHeader @"Total-Count" response
+  nextRanges <- headerValue $ lookupResponseHeader @"Next-Range" response
+  let ListObject items = getResponse response
+  status <- extractStatus response
+  pure
+    ( status
+    , Page
+        { totalCount
+        , nextRange = extractRangeSingleton @PayoutRef <$> nextRanges
+        , items = items
+        }
+    )
+
+getPayouts
+  :: Maybe (Set TxOutRef)
+  -> Maybe (Set AssetId)
+  -> Bool
+  -> Maybe (Range "payoutId" TxOutRef)
+  -> ClientM (Page "payoutId" PayoutRef)
+getPayouts = (fmap . fmap . fmap . fmap) snd . getPayoutsStatus
 
 getTransactionsStatus
   :: TxOutRef

@@ -24,6 +24,7 @@ import Language.Marlowe.Runtime.Web.Server.ContractClient (GetContract, ImportBu
 import Language.Marlowe.Runtime.Web.Server.SyncClient (
   LoadContract,
   LoadContractHeaders,
+  LoadPayouts,
   LoadTransaction,
   LoadTransactions,
   LoadWithdrawal,
@@ -56,6 +57,7 @@ data AppEnv = forall r s.
   , _loadContract :: LoadContract (AppM r s)
   , _loadWithdrawals :: LoadWithdrawals (AppM r s)
   , _loadWithdrawal :: LoadWithdrawal (AppM r s)
+  , _loadPayouts :: LoadPayouts (AppM r s)
   , _loadTransactions :: LoadTransactions (AppM r s)
   , _loadTransaction :: LoadTransaction (AppM r s)
   , _importBundle :: ImportBundle (AppM r s)
@@ -71,13 +73,13 @@ data AppEnv = forall r s.
   , _logAction :: LogAction IO Message
   }
 
--- | Load a list of contract headers.
+-- | Load a page of contract headers.
 importBundle :: ImportBundle ServerM
 importBundle label = do
   AppEnv{_eventBackend = backend, _importBundle = ib} <- ask
   hoist (liftBackendM backend) $ ib label
 
--- | Load a list of contract headers.
+-- | Load a page of contract headers.
 loadContractHeaders :: LoadContractHeaders ServerM
 loadContractHeaders cFilter range = do
   AppEnv{_eventBackend = backend, _loadContractHeaders = load} <- ask
@@ -89,10 +91,16 @@ loadContract contractId = do
   AppEnv{_eventBackend = backend, _loadContract = load} <- ask
   liftBackendM backend $ load contractId
 
--- | Load a list of withdrawal headers.
+-- | Load a page of withdrawal headers.
 loadWithdrawals :: LoadWithdrawals ServerM
 loadWithdrawals wFilter range = do
   AppEnv{_eventBackend = backend, _loadWithdrawals = load} <- ask
+  liftBackendM backend $ load wFilter range
+
+-- | Load a page of payouts.
+loadPayouts :: LoadPayouts ServerM
+loadPayouts wFilter range = do
+  AppEnv{_eventBackend = backend, _loadPayouts = load} <- ask
   liftBackendM backend $ load wFilter range
 
 -- | Get a contract by its hash.

@@ -227,6 +227,32 @@ instance ToParamSchema PolicyId where
       & OpenApi.description ?~ "The hex-encoded minting policy ID for a native Cardano token"
       & pattern ?~ "^[a-fA-F0-9]*$"
 
+data AssetId = AssetId
+  { policyId :: PolicyId
+  , tokenName :: Text
+  }
+  deriving (Show, Eq, Ord, Generic)
+
+instance ToSchema AssetId
+instance FromJSON AssetId
+instance ToJSON AssetId
+
+instance ToParamSchema AssetId where
+  toParamSchema _ =
+    mempty
+      & type_ ?~ OpenApiString
+      & OpenApi.description
+        ?~ "A minting policy ID and a token name identifying a specific asset type. Encoded as policyId.tokenName."
+      & pattern ?~ "^[a-fA-F0-9]*\\..*$"
+
+instance FromHttpApiData AssetId where
+  parseUrlPiece piece = case splitOn "." piece of
+    [policyId, tokenName] -> AssetId <$> parseUrlPiece policyId <*> parseUrlPiece tokenName
+    _ -> Left "Expected ^[a-fA-F0-9]*\\..*$"
+
+instance ToHttpApiData AssetId where
+  toUrlPiece AssetId{..} = toUrlPiece policyId <> "." <> toUrlPiece tokenName
+
 newtype Party = Party {unParty :: T.Text}
   deriving (Eq, Ord, Generic)
   deriving newtype (Show, ToHttpApiData, FromHttpApiData, ToJSON, FromJSON)
@@ -386,6 +412,10 @@ data PayoutRef = PayoutRef
   , role :: Text
   }
   deriving (Show, Eq, Ord, Generic)
+
+instance HasPagination PayoutRef "payoutId" where
+  type RangeType PayoutRef "payoutId" = TxOutRef
+  getFieldValue _ PayoutRef{..} = payout
 
 instance ToJSON PayoutRef
 instance FromJSON PayoutRef

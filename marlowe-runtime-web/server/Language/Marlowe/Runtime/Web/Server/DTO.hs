@@ -291,6 +291,22 @@ instance FromDTO Chain.TxOutRef where
       <$> fromDTO txId
       <*> fromDTO txIx
 
+instance HasDTO Chain.AssetId where
+  type DTO Chain.AssetId = Web.AssetId
+
+instance ToDTO Chain.AssetId where
+  toDTO Chain.AssetId{..} =
+    Web.AssetId
+      { policyId = toDTO policyId
+      , tokenName = toDTO tokenName
+      }
+
+instance FromDTO Chain.AssetId where
+  fromDTO Web.AssetId{..} =
+    Chain.AssetId
+      <$> fromDTO policyId
+      <*> fromDTO tokenName
+
 instance HasDTO Chain.TxId where
   type DTO Chain.TxId = Web.TxId
 
