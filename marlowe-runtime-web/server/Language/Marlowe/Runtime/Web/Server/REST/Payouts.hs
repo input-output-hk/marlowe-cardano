@@ -24,8 +24,8 @@ get
   :: [TxOutRef]
   -> [AssetId]
   -> Bool
-  -> Maybe (Ranges '["payoutId"] PayoutRef)
-  -> ServerM (PaginatedResponse '["payoutId"] PayoutRef)
+  -> Maybe (Ranges '["payoutId"] GetPayoutsResponse)
+  -> ServerM (PaginatedResponse '["payoutId"] GetPayoutsResponse)
 get contractIds roleTokens unclaimed ranges = do
   let range :: Range "payoutId" TxOutRef
       range = fromMaybe (getDefaultRange (Proxy @PayoutRef)) $ extractRange =<< ranges
@@ -44,11 +44,17 @@ get contractIds roleTokens unclaimed ranges = do
     Nothing -> throwError $ rangeNotSatisfiable' "Initial payout ID not found"
     Just Page{..} -> do
       let payouts = toDTO items
-      addHeader totalCount . fmap ListObject <$> returnRange range payouts
+      let response = IncludeLink (Proxy @"payout") <$> payouts
+      addHeader totalCount . fmap ListObject <$> returnRange range response
 
-getOne :: TxOutRef -> ServerM PayoutState
+getOne :: TxOutRef -> ServerM GetPayoutResponse
 getOne payoutId = do
   payoutId' <- fromDTOThrow (badRequest' "Invalid payout id value") payoutId
   loadPayout payoutId' >>= \case
     Nothing -> throwError $ notFound' "Payout not found"
-    Just result -> pure $ toDTO result
+    Just result ->
+      pure $
+        IncludeLink (Proxy @"contract") $
+          IncludeLink (Proxy @"transaction") $
+            IncludeLink (Proxy @"withdrawal") $
+              toDTO result

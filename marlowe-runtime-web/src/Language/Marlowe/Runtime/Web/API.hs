@@ -156,7 +156,7 @@ type WithdrawalsAPI =
 -- | /payouts sub-API
 type PayoutsAPI =
   GetPayoutsAPI
-    :<|> Capture "payoutId" TxOutRef :> Get '[JSON] PayoutState
+    :<|> Capture "payoutId" TxOutRef :> GetPayoutAPI
 
 -- | GET /contracts sub-API
 type GetContractsAPI =
@@ -346,18 +346,52 @@ type GetWithdrawalsAPI =
 
 type GetWithdrawalsResponse = WithLink "withdrawal" WithdrawalHeader
 
--- | GET /payouts sub-API
-type GetPayoutsAPI =
-  QueryParams "contractId" TxOutRef
-    :> QueryParams "roleToken" AssetId
-    :> QueryFlag "unclaimed"
-    :> PaginatedGet '["payoutId"] PayoutRef
-
 instance HasNamedLink WithdrawalHeader API "withdrawal" where
   type
     Endpoint WithdrawalHeader API "withdrawal" =
       "withdrawals" :> Capture "withdrawalId" TxId :> GetWithdrawalAPI
   namedLink _ _ mkLink WithdrawalHeader{..} = Just $ mkLink withdrawalId
+
+-- | GET /payouts sub-API
+type GetPayoutsAPI =
+  QueryParams "contractId" TxOutRef
+    :> QueryParams "roleToken" AssetId
+    :> QueryFlag "unclaimed"
+    :> PaginatedGet '["payoutId"] GetPayoutsResponse
+
+type GetPayoutsResponse = WithLink "payout" PayoutRef
+
+instance HasNamedLink PayoutRef API "payout" where
+  type
+    Endpoint PayoutRef API "payout" =
+      "payouts" :> Capture "payoutId" TxOutRef :> GetPayoutAPI
+  namedLink _ _ mkLink PayoutRef{..} = Just $ mkLink payout
+
+type GetPayoutAPI = Get '[JSON] GetPayoutResponse
+
+type GetPayoutResponse = WithLink "contract" (WithLink "transaction" (WithLink "withdrawal" PayoutState))
+
+instance HasNamedLink PayoutState API "contract" where
+  type
+    Endpoint PayoutState API "contract" =
+      "contracts" :> Capture "contractId" TxOutRef :> GetContractAPI
+  namedLink _ _ mkLink PayoutState{..} = Just $ mkLink contractId
+
+instance HasNamedLink PayoutState API "transaction" where
+  type
+    Endpoint PayoutState API "transaction" =
+      "contracts"
+        :> Capture "contractId" TxOutRef
+        :> "transactions"
+        :> Capture "transactionId" TxId
+        :> GetTransactionAPI
+  namedLink _ _ mkLink PayoutState{..} = Just $ mkLink contractId $ txId payout
+
+instance HasNamedLink PayoutState API "withdrawal" where
+  type
+    Endpoint PayoutState API "withdrawal" =
+      "withdrawals" :> Capture "withdrawalId" TxId :> GetWithdrawalAPI
+  namedLink _ _ mkLink PayoutState{..} = mkLink <$> withdrawalId
 
 -- | POST /contracts sub-API
 type PostWithdrawalsAPI =

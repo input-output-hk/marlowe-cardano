@@ -65,6 +65,7 @@ import GHC.TypeLits (KnownSymbol, symbolVal)
 import Language.Marlowe.Core.V1.Next
 import Language.Marlowe.Core.V1.Semantics.Types (Contract)
 import Language.Marlowe.Object.Types (Label, ObjectBundle)
+import Language.Marlowe.Runtime.Web (GetPayoutsResponse)
 import Language.Marlowe.Runtime.Web.API (
   API,
   GetContractsResponse,
@@ -417,8 +418,8 @@ getPayoutsStatus contractIds roleTokens unclaimed range = do
     ( status
     , Page
         { totalCount
-        , nextRange = extractRangeSingleton @PayoutRef <$> nextRanges
-        , items = items
+        , nextRange = extractRangeSingleton @GetPayoutsResponse <$> nextRanges
+        , items = retractLink @"payout" <$> items
         }
     )
 
@@ -440,7 +441,7 @@ getPayoutStatus payoutId = do
   status <- extractStatus response
   pure
     ( status
-    , getResponse response
+    , retractLink $ retractLink $ retractLink $ getResponse response
     )
 
 getPayout
