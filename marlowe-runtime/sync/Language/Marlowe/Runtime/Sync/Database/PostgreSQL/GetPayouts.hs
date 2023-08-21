@@ -38,22 +38,37 @@ getPayouts PayoutFilter{..} Range{..} = do
     V.toList . fmap (uncurry6 decodePayoutRef)
       <$> T.statement
         ()
-        [vectorStatement|
-          SELECT
-            applyTx.createTxId :: bytea,
-            applyTx.createTxIx :: smallint,
-            payoutTxOut.txId :: bytea,
-            payoutTxOut.txIx :: smallint,
-            payoutTxOut.rolesCurrency :: bytea,
-            payoutTxOut.role :: bytea
-          FROM marlowe.payoutTxOut
-          NATURAL JOIN marlowe.applyTx
-          LEFT JOIN marlowe.withdrawalTxIn
-            ON payoutTxOut.txId = withdrawalTxIn.payoutTxId
-            AND payoutTxOut.txIx = withdrawalTxIn.payoutTxIx
-          WHERE withdrawalTxIn.txId IS NULL
-          ORDER BY applyTx.slotNo, payoutTxOut.txId, payoutTxOut.txIx
-        |]
+        if unclaimed
+          then
+            [vectorStatement|
+              SELECT
+                applyTx.createTxId :: bytea,
+                applyTx.createTxIx :: smallint,
+                payoutTxOut.txId :: bytea,
+                payoutTxOut.txIx :: smallint,
+                payoutTxOut.rolesCurrency :: bytea,
+                payoutTxOut.role :: bytea
+              FROM marlowe.payoutTxOut
+              NATURAL JOIN marlowe.applyTx
+              LEFT JOIN marlowe.withdrawalTxIn
+                ON payoutTxOut.txId = withdrawalTxIn.payoutTxId
+                AND payoutTxOut.txIx = withdrawalTxIn.payoutTxIx
+              WHERE withdrawalTxIn.txId IS NULL
+              ORDER BY applyTx.slotNo, payoutTxOut.txId, payoutTxOut.txIx
+            |]
+          else
+            [vectorStatement|
+              SELECT
+                applyTx.createTxId :: bytea,
+                applyTx.createTxIx :: smallint,
+                payoutTxOut.txId :: bytea,
+                payoutTxOut.txIx :: smallint,
+                payoutTxOut.rolesCurrency :: bytea,
+                payoutTxOut.role :: bytea
+              FROM marlowe.payoutTxOut
+              NATURAL JOIN marlowe.applyTx
+              ORDER BY applyTx.slotNo, payoutTxOut.txId, payoutTxOut.txIx
+            |]
   pure do
     let contractIdsFiltered
           | Set.null contractIds = allPayouts
