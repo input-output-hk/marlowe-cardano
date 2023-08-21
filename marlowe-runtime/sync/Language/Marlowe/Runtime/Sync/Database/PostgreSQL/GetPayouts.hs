@@ -75,15 +75,15 @@ getPayouts PayoutFilter{..} Range{..} = do
           | otherwise = filter (flip Set.member contractIds . contractId) allPayouts
     let filtered
           | Set.null roleTokens = contractIdsFiltered
-          | otherwise = filter (flip Set.member roleTokens . payoutRefRoleToken) allPayouts
+          | otherwise = filter (flip Set.member roleTokens . payoutRefRoleToken) contractIdsFiltered
     let ordered = case rangeDirection of
           Ascending -> filtered
           Descending -> reverse filtered
     delimited <- case rangeStart of
       Nothing -> pure ordered
       Just startFrom -> do
-        guard $ any ((== startFrom) . payout) allPayouts
-        pure $ dropWhile ((/= startFrom) . payout) allPayouts
+        guard $ any ((== startFrom) . payout) ordered
+        pure $ dropWhile ((/= startFrom) . payout) ordered
     let items = take rangeLimit . drop rangeOffset $ delimited
     pure
       Page
@@ -91,7 +91,7 @@ getPayouts PayoutFilter{..} Range{..} = do
         , nextRange = do
             PayoutRef{..} <- listToMaybe $ reverse items
             pure $ Range{rangeStart = Just payout, rangeOffset = 1, ..}
-        , totalCount = length allPayouts
+        , totalCount = length filtered
         }
 
 payoutRefRoleToken :: PayoutRef -> AssetId
