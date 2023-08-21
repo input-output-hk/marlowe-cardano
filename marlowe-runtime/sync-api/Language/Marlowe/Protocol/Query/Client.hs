@@ -41,3 +41,6 @@ getStatus = request ReqStatus
 getPayouts
   :: (Applicative m) => PayoutFilter -> Range TxOutRef -> MarloweQueryClient m (Maybe (Page TxOutRef PayoutRef))
 getPayouts = fmap request . ReqPayouts
+
+getPayout :: (Applicative m) => TxOutRef -> MarloweQueryClient m (Maybe SomePayoutState)
+getPayout = request . ReqPayout

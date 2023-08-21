@@ -42,6 +42,7 @@ marloweQueryServer
   -> (TxId -> m (Maybe Withdrawal))
   -> (WithdrawalFilter -> Range TxId -> m (Maybe (Page TxId Withdrawal)))
   -> (PayoutFilter -> Range TxOutRef -> m (Maybe (Page TxOutRef PayoutRef)))
+  -> (TxOutRef -> m (Maybe SomePayoutState))
   -> MarloweQueryServer m ()
 marloweQueryServer
   runtimeVersion
@@ -53,7 +54,8 @@ marloweQueryServer
   getTransactions
   getWithdrawal
   getWithdrawals
-  getPayouts =
+  getPayouts
+  getPayout =
     respond concurrently \case
       ReqContractHeaders cFilter range -> getContractHeaders cFilter range
       ReqContractState contractId -> getContractState contractId
@@ -62,6 +64,7 @@ marloweQueryServer
       ReqWithdrawal txId -> getWithdrawal txId
       ReqWithdrawals wFilter range -> getWithdrawals wFilter range
       ReqPayouts pFilter range -> getPayouts pFilter range
+      ReqPayout payoutId -> getPayout payoutId
       ReqStatus -> do
         ((nodeTip, runtimeChainTip, systemStart, history, networkId), runtimeTip) <-
           concurrently

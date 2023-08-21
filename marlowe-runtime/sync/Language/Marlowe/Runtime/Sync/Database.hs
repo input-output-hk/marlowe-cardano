@@ -18,6 +18,7 @@ import Language.Marlowe.Protocol.Query.Types (
   PayoutRef,
   Range,
   SomeContractState,
+  SomePayoutState,
   SomeTransaction,
   SomeTransactions,
   Withdrawal,
@@ -45,6 +46,7 @@ data DatabaseSelector f where
   GetWithdrawal :: DatabaseSelector (QueryField TxId (Maybe Withdrawal))
   GetWithdrawals :: DatabaseSelector (QueryField GetWithdrawalsArguments (Maybe (Page TxId Withdrawal)))
   GetPayouts :: DatabaseSelector (QueryField GetPayoutsArguments (Maybe (Page TxOutRef PayoutRef)))
+  GetPayout :: DatabaseSelector (QueryField TxOutRef (Maybe SomePayoutState))
 
 data GetPayoutsArguments = GetPayoutsArguments
   { filter :: PayoutFilter
@@ -173,6 +175,11 @@ logDatabaseQueries DatabaseQueries{..} =
         result <- getPayouts pFilter range
         addField ev $ Result result
         pure result
+    , getPayout = \payoutId -> withEvent GetPayout \ev -> do
+        addField ev $ Arguments payoutId
+        result <- getPayout payoutId
+        addField ev $ Result result
+        pure result
     }
 
 hoistDatabaseQueries :: (forall x. m x -> n x) -> DatabaseQueries m -> DatabaseQueries n
@@ -192,6 +199,7 @@ hoistDatabaseQueries f DatabaseQueries{..} =
     , getWithdrawal = f . getWithdrawal
     , getWithdrawals = fmap f . getWithdrawals
     , getPayouts = fmap f . getPayouts
+    , getPayout = f . getPayout
     }
 
 data DatabaseQueries m = DatabaseQueries
@@ -209,6 +217,7 @@ data DatabaseQueries m = DatabaseQueries
   , getWithdrawal :: TxId -> m (Maybe Withdrawal)
   , getWithdrawals :: WithdrawalFilter -> Range TxId -> m (Maybe (Page TxId Withdrawal))
   , getPayouts :: PayoutFilter -> Range TxOutRef -> m (Maybe (Page TxOutRef PayoutRef))
+  , getPayout :: TxOutRef -> m (Maybe SomePayoutState)
   }
 
 data Next a

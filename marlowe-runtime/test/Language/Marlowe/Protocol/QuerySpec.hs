@@ -30,6 +30,9 @@ instance ArbitraryRequest MarloweSyncRequest where
       , SomeTag TagTransactions
       , SomeTag TagWithdrawal
       , SomeTag TagWithdrawals
+      , SomeTag TagPayout
+      , SomeTag TagPayouts
+      , SomeTag TagStatus
       ]
   arbitraryReq = \case
     TagContractHeaders -> ReqContractHeaders <$> arbitrary <*> arbitrary
@@ -40,6 +43,7 @@ instance ArbitraryRequest MarloweSyncRequest where
     TagWithdrawals -> ReqWithdrawals <$> arbitrary <*> arbitrary
     TagStatus -> pure ReqStatus
     TagPayouts -> ReqPayouts <$> arbitrary <*> arbitrary
+    TagPayout -> ReqPayout <$> arbitrary
 
   shrinkReq = \case
     ReqContractHeaders cFilter range ->
@@ -62,6 +66,7 @@ instance ArbitraryRequest MarloweSyncRequest where
         [ ReqPayouts <$> shrink pFilter <*> pure range
         , ReqPayouts pFilter <$> shrink range
         ]
+    ReqPayout payoutId -> ReqPayout <$> shrink payoutId
 
   arbitraryResult = \case
     TagContractHeaders -> arbitrary
@@ -72,6 +77,7 @@ instance ArbitraryRequest MarloweSyncRequest where
     TagWithdrawals -> arbitrary
     TagStatus -> arbitrary
     TagPayouts -> arbitrary
+    TagPayout -> arbitrary
 
   shrinkResult = \case
     TagContractHeaders -> shrink
@@ -82,10 +88,15 @@ instance ArbitraryRequest MarloweSyncRequest where
     TagWithdrawals -> shrink
     TagStatus -> shrink
     TagPayouts -> shrink
+    TagPayout -> shrink
 
 instance Arbitrary SomeContractState where
   arbitrary = SomeContractState MarloweV1 <$> arbitrary
   shrink (SomeContractState MarloweV1 state) = SomeContractState MarloweV1 <$> shrink state
+
+instance Arbitrary SomePayoutState where
+  arbitrary = SomePayoutState MarloweV1 <$> arbitrary
+  shrink (SomePayoutState MarloweV1 state) = SomePayoutState MarloweV1 <$> shrink state
 
 instance Arbitrary RuntimeStatus where
   arbitrary =
@@ -133,6 +144,10 @@ instance Arbitrary (ContractState 'V1) where
       <*> arbitrary
       <*> arbitrary
       <*> arbitrary
+  shrink = genericShrink
+
+instance Arbitrary (PayoutState 'V1) where
+  arbitrary = PayoutState <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink
 
 instance (Arbitrary a, Arbitrary b) => Arbitrary (Page a b) where
