@@ -49,6 +49,7 @@ import qualified Language.Marlowe.Runtime.Web.Server.REST as REST
 import Language.Marlowe.Runtime.Web.Server.SyncClient (
   LoadContract,
   LoadContractHeaders,
+  LoadPayout,
   LoadPayouts,
   LoadTransaction,
   LoadTransactions,
@@ -178,6 +179,7 @@ server = proc deps@ServerDependencies{connector} -> do
           , _loadWithdrawals = loadWithdrawals
           , _loadWithdrawal = loadWithdrawal
           , _loadPayouts = loadPayouts
+          , _loadPayout = loadPayout
           , _createContract = createContract
           , _getContract = getContract
           , _applyInputs = applyInputs
@@ -198,6 +200,7 @@ data WebServerDependencies r s = WebServerDependencies
   , _loadWithdrawals :: LoadWithdrawals (AppM r s)
   , _loadWithdrawal :: LoadWithdrawal (AppM r s)
   , _loadPayouts :: LoadPayouts (AppM r s)
+  , _loadPayout :: LoadPayout (AppM r s)
   , _loadTransactions :: LoadTransactions (AppM r s)
   , _loadTransaction :: LoadTransaction (AppM r s)
   , _createContract :: CreateContract (AppM r s)

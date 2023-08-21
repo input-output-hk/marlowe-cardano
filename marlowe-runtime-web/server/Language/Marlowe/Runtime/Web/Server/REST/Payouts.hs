@@ -9,15 +9,16 @@ import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 import Language.Marlowe.Protocol.Query.Types (Page (..), PayoutFilter (..))
 import Language.Marlowe.Runtime.Web
-import Language.Marlowe.Runtime.Web.Server.DTO (FromDTO (..), ToDTO (..), fromPaginationRange)
+import Language.Marlowe.Runtime.Web.Server.DTO (FromDTO (..), ToDTO (..), fromDTOThrow, fromPaginationRange)
 import Language.Marlowe.Runtime.Web.Server.Monad
-import Language.Marlowe.Runtime.Web.Server.REST.ApiError (badRequest', rangeNotSatisfiable')
+import Language.Marlowe.Runtime.Web.Server.REST.ApiError (badRequest', notFound', rangeNotSatisfiable')
 import Servant
 import Servant.Pagination
 
 server :: ServerT PayoutsAPI ServerM
 server =
   get
+    :<|> getOne
 
 get
   :: [TxOutRef]
@@ -44,3 +45,10 @@ get contractIds roleTokens unclaimed ranges = do
     Just Page{..} -> do
       let payouts = toDTO items
       addHeader totalCount . fmap ListObject <$> returnRange range payouts
+
+getOne :: TxOutRef -> ServerM PayoutState
+getOne payoutId = do
+  payoutId' <- fromDTOThrow (badRequest' "Invalid payout id value") payoutId
+  loadPayout payoutId' >>= \case
+    Nothing -> throwError $ notFound' "Payout not found"
+    Just result -> pure $ toDTO result

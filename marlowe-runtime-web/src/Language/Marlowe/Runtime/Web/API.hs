@@ -156,6 +156,7 @@ type WithdrawalsAPI =
 -- | /payouts sub-API
 type PayoutsAPI =
   GetPayoutsAPI
+    :<|> Capture "payoutId" TxOutRef :> Get '[JSON] PayoutState
 
 -- | GET /contracts sub-API
 type GetContractsAPI =

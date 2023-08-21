@@ -24,6 +24,7 @@ import Language.Marlowe.Runtime.Web.Server.ContractClient (GetContract, ImportBu
 import Language.Marlowe.Runtime.Web.Server.SyncClient (
   LoadContract,
   LoadContractHeaders,
+  LoadPayout,
   LoadPayouts,
   LoadTransaction,
   LoadTransactions,
@@ -58,6 +59,7 @@ data AppEnv = forall r s.
   , _loadWithdrawals :: LoadWithdrawals (AppM r s)
   , _loadWithdrawal :: LoadWithdrawal (AppM r s)
   , _loadPayouts :: LoadPayouts (AppM r s)
+  , _loadPayout :: LoadPayout (AppM r s)
   , _loadTransactions :: LoadTransactions (AppM r s)
   , _loadTransaction :: LoadTransaction (AppM r s)
   , _importBundle :: ImportBundle (AppM r s)
@@ -102,6 +104,12 @@ loadPayouts :: LoadPayouts ServerM
 loadPayouts wFilter range = do
   AppEnv{_eventBackend = backend, _loadPayouts = load} <- ask
   liftBackendM backend $ load wFilter range
+
+-- | Load a page of payouts.
+loadPayout :: LoadPayout ServerM
+loadPayout payoutId = do
+  AppEnv{_eventBackend = backend, _loadPayout = load} <- ask
+  liftBackendM backend $ load payoutId
 
 -- | Get a contract by its hash.
 getContract :: GetContract ServerM

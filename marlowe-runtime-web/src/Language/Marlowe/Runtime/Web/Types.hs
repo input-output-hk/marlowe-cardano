@@ -370,6 +370,17 @@ data Payout = Payout
   }
   deriving (FromJSON, ToJSON, ToSchema, Show, Eq, Generic)
 
+data PayoutState = PayoutState
+  { contractId :: TxOutRef
+  , payout :: TxOutRef
+  , roleTokenMintingPolicyId :: PolicyId
+  , role :: Text
+  , address :: Address
+  , assets :: Assets
+  , withdrawalId :: Maybe TxId
+  }
+  deriving (FromJSON, ToJSON, ToSchema, Show, Eq, Generic)
+
 instance ToJSON ContractState
 instance FromJSON ContractState
 instance ToSchema ContractState

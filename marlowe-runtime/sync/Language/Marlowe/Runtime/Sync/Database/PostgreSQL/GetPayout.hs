@@ -58,6 +58,7 @@ getPayout TxOutRef{..} =
             AND withdrawalTxIn.payoutTxIx = payoutTxOut.txIx
           WHERE payoutTxOut.txId = $1 :: bytea
             AND payoutTxOut.txIx = $2 :: smallint
+          GROUP BY payoutTxOut.txId, payoutTxOut.txIx
         |]
 
 decodeSomePayoutState

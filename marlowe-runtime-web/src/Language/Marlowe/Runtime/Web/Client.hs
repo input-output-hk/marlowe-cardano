@@ -16,6 +16,8 @@ module Language.Marlowe.Runtime.Web.Client (
   getContractStatus,
   getContracts,
   getContractsStatus,
+  getPayout,
+  getPayoutStatus,
   getPayouts,
   getPayoutsStatus,
   getTransaction,
@@ -403,7 +405,7 @@ getPayoutsStatus
   -> ClientM (RuntimeStatus, Page "payoutId" PayoutRef)
 getPayoutsStatus contractIds roleTokens unclaimed range = do
   let _ :<|> _ :<|> payoutsClient :<|> _ = client
-  let getPayouts' = payoutsClient
+  let getPayouts' :<|> _ = payoutsClient
   response <-
     getPayouts' (foldMap Set.toList contractIds) (foldMap Set.toList roleTokens) unclaimed $
       putRange <$> range
@@ -427,6 +429,24 @@ getPayouts
   -> Maybe (Range "payoutId" TxOutRef)
   -> ClientM (Page "payoutId" PayoutRef)
 getPayouts = (fmap . fmap . fmap . fmap) snd . getPayoutsStatus
+
+getPayoutStatus
+  :: TxOutRef
+  -> ClientM (RuntimeStatus, PayoutState)
+getPayoutStatus payoutId = do
+  let _ :<|> _ :<|> payoutsClient :<|> _ = client
+  let _ :<|> getPayout' = payoutsClient
+  response <- getPayout' payoutId
+  status <- extractStatus response
+  pure
+    ( status
+    , getResponse response
+    )
+
+getPayout
+  :: TxOutRef
+  -> ClientM PayoutState
+getPayout = fmap snd . getPayoutStatus
 
 getTransactionsStatus
   :: TxOutRef
