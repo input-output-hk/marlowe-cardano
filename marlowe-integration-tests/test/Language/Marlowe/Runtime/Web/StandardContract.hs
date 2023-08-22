@@ -25,11 +25,12 @@ import Language.Marlowe.Runtime.Web (
   CardanoTxBody,
   ContractOrSourceId (..),
   CreateTxEnvelope,
+  PayoutRef (..),
   RoleTokenConfig (RoleTokenSimple),
   WithdrawTxEnvelope,
  )
 import qualified Language.Marlowe.Runtime.Web as Web
-import Language.Marlowe.Runtime.Web.Client (postContract, postContractSource)
+import Language.Marlowe.Runtime.Web.Client (Page (..), getPayouts, postContract, postContractSource)
 import Language.Marlowe.Runtime.Web.Common (
   choose,
   deposit,
@@ -168,7 +169,9 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
                                       { returnDepositBlock
                                       , returnDeposited
                                       , withdrawPartyAFunds = do
-                                          withdrawTxBody <- withdraw partyAWallet contractId "Party A"
+                                          Page{..} <- getPayouts (Just $ Set.singleton contractId) Nothing True Nothing
+                                          let payouts = Set.fromList $ payout <$> items
+                                          withdrawTxBody <- withdraw partyAWallet payouts
                                           (withdrawTxBody,) <$> submitWithdrawal partyAWallet withdrawTxBody
                                       }
                               }

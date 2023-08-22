@@ -866,7 +866,7 @@ data ApplyInputsConstraintsBuildupError
 data WithdrawError
   = WithdrawEraUnsupported AnyCardanoEra
   | WithdrawConstraintError ConstraintError
-  | UnableToFindPayoutForAGivenRole TokenName
+  | EmptyPayouts
   deriving (Generic)
 
 deriving instance Eq WithdrawError

@@ -122,7 +122,7 @@ instance ToDTO WithdrawError where
       PayoutNotFound _ -> 400
       CoinSelectionFailed _ -> 400
       _ -> 500
-    UnableToFindPayoutForAGivenRole _ -> ApiError "No payouts available for given role" "UnableToFindPayoutForAGivenRole" Null 409
+    EmptyPayouts -> ApiError "Empty payouts" "EmptyPayouts" Null 400
 
 instance HasDTO CreateError where
   type DTO CreateError = ApiError

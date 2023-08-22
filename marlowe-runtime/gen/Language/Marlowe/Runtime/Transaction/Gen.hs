@@ -198,7 +198,7 @@ instance Arbitrary WithdrawError where
     oneof
       [ WithdrawConstraintError <$> arbitrary
       , WithdrawEraUnsupported <$> arbitrary
-      , UnableToFindPayoutForAGivenRole <$> arbitrary
+      , pure EmptyPayouts
       ]
   shrink = genericShrink
 

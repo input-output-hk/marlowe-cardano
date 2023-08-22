@@ -4,8 +4,9 @@ import Control.Monad.IO.Class (MonadIO (liftIO))
 import qualified Data.Set as Set
 import Language.Marlowe.Runtime.Integration.Common
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses (..))
+import Language.Marlowe.Runtime.Web (PayoutRef (..))
 import qualified Language.Marlowe.Runtime.Web as Web
-import Language.Marlowe.Runtime.Web.Client (postWithdrawal, putWithdrawal)
+import Language.Marlowe.Runtime.Web.Client (Page (..), getPayouts, postWithdrawal, putWithdrawal)
 import Language.Marlowe.Runtime.Web.Common (signShelleyTransaction')
 import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO (toDTO))
 import Language.Marlowe.Runtime.Web.StandardContract (
@@ -39,15 +40,11 @@ spec = describe "PUT /contracts/{contractId}/withdrawals/{withdrawalId}" do
       contractId <- case contractCreated of
         Web.CreateTxEnvelope{contractId} -> pure contractId
 
+      Page{..} <- getPayouts (Just $ Set.singleton contractId) Nothing True Nothing
+      let payouts = Set.fromList $ payout <$> items
+
       Web.WithdrawTxEnvelope{withdrawalId, txEnvelope} <-
-        postWithdrawal
-          webChangeAddress
-          (Just webExtraAddresses)
-          (Just webCollataralUtxos)
-          Web.PostWithdrawalsRequest
-            { role = "Party A"
-            , contractId
-            }
+        postWithdrawal webChangeAddress (Just webExtraAddresses) (Just webCollataralUtxos) Web.PostWithdrawalsRequest{..}
       signedWithdrawalTx <- liftIO $ signShelleyTransaction' txEnvelope signingKeys
       putWithdrawal withdrawalId signedWithdrawalTx
 

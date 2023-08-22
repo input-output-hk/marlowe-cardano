@@ -26,6 +26,7 @@ import Language.Marlowe.Runtime.Core.Api (
   MarloweTransactionMetadata (..),
   MarloweVersion (..),
   MarloweVersionTag (..),
+  TransactionOutput (..),
   emptyMarloweTransactionMetadata,
  )
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
@@ -167,7 +168,7 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
                               { notifiedBlock
                               , notified
                               , makeReturnDeposit = do
-                                  returnDeposited@InputsAppliedInEra{txBody = returnTxBody} <-
+                                  returnDeposited@InputsAppliedInEra{txBody = returnTxBody, output} <-
                                     deposit
                                       partyBWallet
                                       contractId
@@ -182,7 +183,8 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
                                       { returnDepositBlock
                                       , returnDeposited
                                       , withdrawPartyAFunds = do
-                                          withdrawTx@WithdrawTxInEra{txBody = withdrawTxBody} <- withdraw partyAWallet contractId "Party A"
+                                          withdrawTx@WithdrawTxInEra{txBody = withdrawTxBody} <-
+                                            withdraw partyAWallet $ Map.keysSet $ payouts output
                                           (withdrawTx,) <$> submit partyAWallet withdrawTxBody
                                       }
                               }

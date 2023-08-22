@@ -15,7 +15,7 @@ import qualified Cardano.Api.Shelley as C
 import qualified Cardano.Ledger.BaseTypes as CL (Network (..))
 import Control.Category ((>>>))
 import Control.Error (ExceptT, note)
-import Control.Monad (unless, (>=>))
+import Control.Monad (unless, when, (>=>))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (except, throwE, withExceptT)
 import Control.Monad.Trans.Writer (WriterT (runWriterT), tell)
@@ -535,6 +535,7 @@ buildWithdrawConstraints TxConstraints.PayoutContext{..} = \case
     buildWithdrawConstraintsV1
       :: Set TxOutRef -> ExceptT WithdrawError m (Map TxOutRef (Payout 'V1), TxConstraints era 'V1)
     buildWithdrawConstraintsV1 payouts = runWriterT do
+      when (Set.null payouts) $ lift $ throwE EmptyPayouts
       let payoutsList = Set.toAscList payouts
       traverse_ (tell . TxConstraints.mustConsumePayout) payoutsList
       Map.fromDistinctAscList <$> for payoutsList \payoutRef -> do
