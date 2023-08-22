@@ -56,9 +56,8 @@ postCreateTxBody PostWithdrawalsRequest{..} changeAddressDTO mAddresses mCollate
   collateralUtxos <-
     Set.fromList
       <$> fromDTOThrow (badRequest' "Invalid collateral header UTxO value") (maybe [] unCommaList mCollateralUtxos)
-  role' <- fromDTOThrow (badRequest' "Invalid role") role
-  contractId' <- fromDTOThrow (badRequest' "Invalid contract id") contractId
-  withdraw MarloweV1 WalletAddresses{..} contractId' role' >>= \case
+  payouts' <- fromDTOThrow (badRequest' "Invalid payouts") payouts
+  withdraw MarloweV1 WalletAddresses{..} payouts' >>= \case
     Left err -> throwDTOError err
     Right (WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra WithdrawTxInEra{txBody}) -> pure $ TxBodyInAnyEra txBody
 

@@ -90,6 +90,7 @@ import Language.Marlowe.Protocol.Query.Types (
 import Data.Bitraversable (Bitraversable (..))
 import Data.Function (on)
 import Data.List (groupBy)
+import Data.Set (Set)
 import qualified Language.Marlowe.Protocol.Query.Types as Query
 import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType, fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api (AssetId (..))
@@ -149,6 +150,15 @@ instance (FromDTO k, FromDTO a) => FromDTO (Map k a) where
 
 instance (ToDTO k, ToDTO a) => ToDTO (Map k a) where
   toDTO = Map.mapKeysMonotonic toDTO . fmap toDTO
+
+instance HasDTO (Set a) where
+  type DTO (Set a) = Set (DTO a)
+
+instance (FromDTO a) => FromDTO (Set a) where
+  fromDTO = fmap Set.fromDistinctAscList . traverse fromDTO . Set.toAscList
+
+instance (ToDTO a) => ToDTO (Set a) where
+  toDTO = Set.mapMonotonic toDTO
 
 instance HasDTO [a] where
   type DTO [a] = [DTO a]

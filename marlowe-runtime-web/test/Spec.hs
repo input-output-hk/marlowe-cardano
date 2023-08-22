@@ -194,7 +194,7 @@ instance Arbitrary Web.Tx where
   shrink = genericShrink
 
 instance Arbitrary Web.PostWithdrawalsRequest where
-  arbitrary = Web.PostWithdrawalsRequest <$> arbitrary <*> arbitrary
+  arbitrary = Web.PostWithdrawalsRequest <$> arbitrary
 
 instance Arbitrary Web.PostContractsRequest where
   arbitrary =

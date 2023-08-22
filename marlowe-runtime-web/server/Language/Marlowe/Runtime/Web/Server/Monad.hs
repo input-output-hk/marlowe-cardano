@@ -149,9 +149,9 @@ applyInputs version addresses contractId metadata invalidBefore invalidHereafter
 
 -- | Withdraw funds from a role.
 withdraw :: Withdraw ServerM
-withdraw version addresses contractId role = do
+withdraw version addresses payouts = do
   AppEnv{_eventBackend = backend, _withdraw = _withdraw} <- ask
-  liftBackendM backend $ _withdraw version addresses contractId role
+  liftBackendM backend $ _withdraw version addresses payouts
 
 -- | Submit a contract creation transaction to the node
 submitContract :: ContractId -> Submit' ServerM

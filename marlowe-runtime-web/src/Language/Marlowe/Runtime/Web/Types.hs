@@ -718,9 +718,8 @@ instance FromJSON PostContractSourceResponse
 instance ToJSON PostContractSourceResponse
 instance ToSchema PostContractSourceResponse
 
-data PostWithdrawalsRequest = PostWithdrawalsRequest
-  { role :: Text
-  , contractId :: TxOutRef
+newtype PostWithdrawalsRequest = PostWithdrawalsRequest
+  { payouts :: Set TxOutRef
   }
   deriving (Show, Eq, Ord, Generic)
 
