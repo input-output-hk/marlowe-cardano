@@ -1,4 +1,23 @@
 
+<a id='changelog-0.0.12.0'></a>
+# 0.0.12.0 — 2023-08-11
+
+## Added
+
+- Support for client side merkleization in both Runtime and CLI based runners.
+
+- Support for externaly minted currencies through currency symbol in the DSL.
+
+- Support for loading external wallets.
+
+- Support for direct usage of external addresses in the minting process and in contracts.
+
+- Golden test for Plutus execution-cost analysis (PLT-6907).
+
+## Changed
+
+- Minting logic so it creates minimal set of token bundled UTxOs
+
 <a id='changelog-0.0.11.0'></a>
 # 0.0.11.0 — 2023-06-15
 

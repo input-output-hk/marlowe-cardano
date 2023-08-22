@@ -1,0 +1,8 @@
+networks:
+  - preprod
+  - preview
+  - mainnet
+
+namespace: marlowe-staging
+
+databaseName: marlowe-runtime-database

@@ -5,12 +5,17 @@ operations:
 - RuntimeCreateContract:
     minLovelace: 2000000
     awaitConfirmed: 120
+    tags: {}
     contractSource:
       inline: "close"
 
 - RuntimeApplyInputs:
     awaitConfirmed: 120
     inputs: []
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800
 
 - RuntimeAwaitClosed:
     timeout: 120

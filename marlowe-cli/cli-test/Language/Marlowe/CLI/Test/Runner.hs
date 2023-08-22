@@ -46,7 +46,6 @@ import Data.Aeson qualified as A
 import Data.Aeson.OneLine qualified as A
 import Data.Bifunctor (first)
 import Data.Coerce (coerce)
-import Data.Default (Default (def))
 import Data.Foldable (for_)
 import Data.Foldable qualified as Foldable
 import Data.Functor ((<&>))
@@ -136,8 +135,10 @@ data TestRunnerFaucet era = TestRunnerFaucet
   { _trAddress :: AddressInEra era
   , _trSigningKey :: SomePaymentSigningKey
   , _trInitialBalance :: P.Value
-  , _trSubmittedTransactions :: [SomeTxBody]
-  , _trFundedTransactions :: [SomeTxBody]
+  , _trSubmittedTransactions :: ![SomeTxBody]
+  -- ^ Transactions submitted directly by the test runner (like subfaucets funding).
+  , _trFundedTransactions :: ![SomeTxBody]
+  -- ^ Transactions submitted non directly (subfaucets and test wallets)
   }
 
 makeLenses 'TestRunnerFaucet
@@ -221,6 +222,7 @@ toTestWallet faucet@TestRunnerFaucet{..} conversion = do
         , _waBalanceCheckBaseline = actualBalance
         , _waSigningKey = _trSigningKey
         , _waSubmittedTransactions = mempty
+        , _waExternal = False
         }
     IncludeAllTransactions -> do
       let actualBalance' =
@@ -232,6 +234,7 @@ toTestWallet faucet@TestRunnerFaucet{..} conversion = do
         , _waBalanceCheckBaseline = actualBalance'
         , _waSigningKey = _trSigningKey
         , _waSubmittedTransactions = _trSubmittedTransactions <> _trFundedTransactions
+        , _waExternal = False
         }
 
 updateFaucet
@@ -347,12 +350,19 @@ setupTestInterpretEnv = do
     let connector :: (Network.Protocol.Connector Marlowe.Protocol.MarloweRuntimeClient IO)
         connector = Network.Protocol.tcpClient rcRuntimeHost rcRuntimePort Marlowe.Protocol.marloweRuntimeClientPeer
         config =
-          def
+          Apps.Config
             { Apps.chainSeekHost = rcRuntimeHost
+            , Apps.runtimeHost = rcRuntimeHost
             , Apps.runtimePort = rcRuntimePort
             , Apps.chainSeekSyncPort = rcChainSeekSyncPort
             , Apps.chainSeekCommandPort = rcChainSeekCommandPort
+            , Apps.timeoutSeconds = 900
+            , Apps.buildSeconds = 3
+            , Apps.confirmSeconds = 3
+            , Apps.retrySeconds = 10
+            , Apps.retryLimit = 5
             }
+
     (connector,) <$> liftIO (Runtime.Monitor.mkRuntimeMonitor config)
 
   protocolParams <- view envProtocolParams
@@ -544,7 +554,7 @@ runTest (testFile, TestCase{testName, operations = testOperations}) = do
     modifyTVar' resultsRef (Map.insert (testFile, testName) result)
 
   whenM (view envStreamJSON) do
-    let resultJson = testResultToJSON testFile testName result
+    resultJson <- testResultToJSON testFile testName result
     liftIO $ putStrLn $ Text.unpack $ A.renderValue resultJson
 
   let printResultMsg msg = liftIO $ hPutStrLn stderr $ "***** " <> coerce testName <> ": " <> msg <> " *****"
@@ -703,14 +713,14 @@ data TestSuiteResult lang era = TestSuiteResult
   , _tsMasterFaucetInfo :: MasterFaucetInfo
   }
 
-testSuiteResultToJSON :: (C.IsCardanoEra era) => TestSuiteResult lang era -> A.Value
-testSuiteResultToJSON TestSuiteResult{..} =
-  A.object
-    [ "results" .= do
-        let step ((testFile, testName), result) = testResultToJSON testFile testName result
-        map step $ Map.toList _tsResult
-    , "masterFaucetInfo" A..= masterFauceInfoToJSON _tsMasterFaucetInfo
-    ]
+testSuiteResultToJSON :: (C.IsCardanoEra era) => (MonadIO m) => TestSuiteResult lang era -> m A.Value
+testSuiteResultToJSON TestSuiteResult{..} = do
+  resultsJSON <- for (Map.toList _tsResult) \((testFile, testName), result) -> testResultToJSON testFile testName result
+  pure $
+    A.object
+      [ "results" .= resultsJSON
+      , "masterFaucetInfo" A..= masterFauceInfoToJSON _tsMasterFaucetInfo
+      ]
 
 -- It is a bit surprising but the standard bracketing failes (hangs)
 -- when we have to perform node queries during the release action.

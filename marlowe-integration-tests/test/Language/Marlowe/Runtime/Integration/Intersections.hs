@@ -11,7 +11,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, TxId, TxOutRef (..))
 import Language.Marlowe.Runtime.Core.Api (ContractId (..))
 import Language.Marlowe.Runtime.Integration.Common
 import Language.Marlowe.Runtime.Integration.StandardContract
-import Language.Marlowe.Runtime.Transaction.Api (ContractCreated (..), InputsApplied (..))
+import Language.Marlowe.Runtime.Transaction.Api (ContractCreatedInEra (..), InputsAppliedInEra (..))
 import Test.Hspec (Spec, it)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
@@ -23,7 +23,7 @@ spec = it "Intersections" $ withLocalMarloweRuntime $ runIntegrationTest do
   pX <- getTip
   -- 2. Create a standard contract
   contractA <- createStandardContract wallet1 wallet2
-  let ContractCreated{contractId = idA} = contractCreated contractA
+  let ContractCreatedInEra{contractId = idA} = contractCreated contractA
   -- 3. Let A0 be the block the previous contract was created in
   let pA0 = createdBlock contractA
   -- 4. Create a standard contract
@@ -74,6 +74,6 @@ completeContract StandardContractInit{..} = do
   StandardContractNotified{..} <- sendNotify
   StandardContractClosed{..} <- makeReturnDeposit
   (_, withdrawBlock) <- withdrawPartyAFunds
-  let InputsApplied{txBody} = initialFundsDeposited
+  let InputsAppliedInEra{txBody} = initialFundsDeposited
   pure
     (initialDepositBlock, fromCardanoTxId $ getTxId txBody, choiceBlock, notifiedBlock, returnDepositBlock, withdrawBlock)

@@ -10,7 +10,7 @@ module Logging (
 
 import Control.Monad.Event.Class (Inject (..))
 import Data.ByteString (ByteString)
-import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery, RuntimeChainSeek)
+import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery)
 import Language.Marlowe.Runtime.Indexer (
   MarloweIndexerSelector (..),
   renderDatabaseSelectorOTel,
@@ -27,7 +27,6 @@ import Observe.Event.Render.OpenTelemetry
 import OpenTelemetry.Trace
 
 data RootSelector f where
-  ChainSeekClient :: TcpClientSelector (Handshake RuntimeChainSeek) f -> RootSelector f
   ChainQueryClient :: TcpClientSelector (Handshake (Query ChainSyncQuery)) f -> RootSelector f
   Database :: QuerySelector f -> RootSelector f
   App :: MarloweIndexerSelector Span f -> RootSelector f
@@ -51,7 +50,6 @@ renderRootSelectorOTel
   -> Maybe ByteString
   -> RenderSelectorOTel RootSelector
 renderRootSelectorOTel dbName dbUser host port = \case
-  ChainSeekClient sel -> renderTcpClientSelectorOTel sel
   ChainQueryClient sel -> renderTcpClientSelectorOTel sel
   Database sel -> renderDatabaseSelectorOTel dbName dbUser host port sel
   App sel -> renderMarloweIndexerSelectorOTel sel

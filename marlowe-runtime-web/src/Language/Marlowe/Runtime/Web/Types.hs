@@ -16,7 +16,7 @@ import Control.Lens hiding ((.=))
 import Control.Monad ((<=<))
 import Data.Aeson
 import Data.Aeson.Text (encodeToLazyText)
-import Data.Aeson.Types (Parser, parseFail)
+import Data.Aeson.Types (Parser, parseFail, toJSONKeyText)
 import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
@@ -77,9 +77,15 @@ instance IsString Base16 where
 instance ToJSON Base16 where
   toJSON = String . toUrlPiece
 
+instance ToJSONKey Base16 where
+  toJSONKey = toJSONKeyText toUrlPiece
+
 instance FromJSON Base16 where
   parseJSON =
     withText "Base16" $ either (parseFail . T.unpack) pure . parseUrlPiece
+
+instance FromJSONKey Base16 where
+  fromJSONKey = FromJSONKeyTextParser $ either (parseFail . T.unpack) pure . parseUrlPiece
 
 instance ToHttpApiData Base16 where
   toUrlPiece = encodeBase16 . unBase16
@@ -89,6 +95,17 @@ instance FromHttpApiData Base16 where
 
 instance ToSchema Base16 where
   declareNamedSchema _ = NamedSchema Nothing <$> declareSchema (Proxy @String)
+
+data Assets = Assets
+  { lovelace :: Integer
+  , tokens :: Tokens
+  }
+  deriving (Eq, Show, Ord, Generic)
+  deriving anyclass (ToJSON, FromJSON, ToSchema)
+
+newtype Tokens = Tokens {unTokens :: Map PolicyId (Map Text Integer)}
+  deriving (Eq, Show, Ord, Generic)
+  deriving anyclass (ToJSON, FromJSON, ToSchema)
 
 newtype ContractSourceId = ContractSourceId {unContractSourceId :: ByteString}
   deriving (Eq, Ord, Generic)
@@ -198,7 +215,7 @@ splitOnNonEmpty sep t
 
 newtype PolicyId = PolicyId {unPolicyId :: ByteString}
   deriving (Eq, Ord, Generic)
-  deriving (Show, ToHttpApiData, FromHttpApiData, ToJSON, FromJSON) via Base16
+  deriving (Show, ToHttpApiData, FromHttpApiData, ToJSON, ToJSONKey, FromJSON, FromJSONKey) via Base16
 
 instance ToSchema PolicyId where
   declareNamedSchema proxy = pure $ NamedSchema (Just "PolicyId") $ toParamSchema proxy
@@ -241,19 +258,34 @@ instance FromJSON TxOutRef where
   parseJSON =
     withText "TxOutRef" $ either (parseFail . T.unpack) pure . parseUrlPiece
 
+instance FromJSONKey TxOutRef where
+  fromJSONKey = FromJSONKeyTextParser $ either (parseFail . T.unpack) pure . parseUrlPiece
+
 instance ToSchema TxOutRef where
-  declareNamedSchema proxy = pure $ NamedSchema (Just "TxOutRef") $ toParamSchema proxy
+  declareNamedSchema _ =
+    pure $
+      NamedSchema (Just "TxOutRef") $
+        mempty
+          & type_ ?~ OpenApiString
+          & OpenApi.description
+            ?~ "A reference to a transaction output with a transaction ID and index."
+          & pattern ?~ "^[a-fA-F0-9]{64}#[0-9]+$"
+          & example ?~ "98d601c9307dd43307cf68a03aad0086d4e07a789b66919ccf9f7f7676577eb7#1"
 
 instance ToParamSchema TxOutRef where
   toParamSchema _ =
     mempty
       & type_ ?~ OpenApiString
-      & OpenApi.description ?~ "A reference to a transaction output with a transaction ID and index."
-      & pattern ?~ "^[a-fA-F0-9]{64}#[0-9]+$"
-      & example ?~ "98d601c9307dd43307cf68a03aad0086d4e07a789b66919ccf9f7f7676577eb7#1"
+      & OpenApi.description
+        ?~ "A reference to a transaction output with a transaction ID and index. The value must be URL encoded by replacing the '#' character with %23."
+      & pattern ?~ "^[a-fA-F0-9]{64}%23[0-9]+$"
+      & example ?~ "98d601c9307dd43307cf68a03aad0086d4e07a789b66919ccf9f7f7676577eb7%231"
 
 instance ToJSON TxOutRef where
   toJSON = String . toUrlPiece
+
+instance ToJSONKey TxOutRef where
+  toJSONKey = toJSONKeyText toUrlPiece
 
 data MarloweVersion = V1
   deriving (Show, Eq, Ord)
@@ -299,6 +331,7 @@ data ContractState = ContractState
   , currentContract :: Maybe Semantics.Contract
   , state :: Maybe Semantics.State
   , utxo :: Maybe TxOutRef
+  , assets :: Assets
   , txBody :: Maybe TextEnvelope
   , unclaimedPayouts :: [Payout]
   }
@@ -306,7 +339,8 @@ data ContractState = ContractState
 
 data Payout = Payout
   { payoutId :: TxOutRef
-  , role :: Text -- TODO (N.H) : add assets that will be retrieved by the payout
+  , role :: Text
+  , assets :: Assets
   }
   deriving (FromJSON, ToJSON, ToSchema, Show, Eq, Generic)
 
@@ -413,6 +447,8 @@ data Tx = Tx
   , outputUtxo :: Maybe TxOutRef
   , outputContract :: Maybe Semantics.Contract
   , outputState :: Maybe Semantics.State
+  , assets :: Assets
+  , payouts :: [Payout]
   , consumingTx :: Maybe TxId
   , invalidBefore :: UTCTime
   , invalidHereafter :: UTCTime
@@ -656,7 +692,7 @@ data PostContractsRequest = PostContractsRequest
   , metadata :: Map Word64 Metadata
   , version :: MarloweVersion
   , roles :: Maybe RolesConfig
-  , contract :: Semantics.Contract
+  , contract :: ContractOrSourceId
   , minUTxODeposit :: Word64
   }
   deriving (Show, Eq, Ord, Generic)
@@ -664,6 +700,30 @@ data PostContractsRequest = PostContractsRequest
 instance FromJSON PostContractsRequest
 instance ToJSON PostContractsRequest
 instance ToSchema PostContractsRequest
+
+newtype ContractOrSourceId = ContractOrSourceId (Either Semantics.Contract ContractSourceId)
+  deriving (Show, Eq, Ord, Generic)
+
+instance FromJSON ContractOrSourceId where
+  parseJSON =
+    fmap ContractOrSourceId . \case
+      String "close" -> pure $ Left Semantics.Close
+      String s -> Right <$> parseJSON (String s)
+      j -> Left <$> parseJSON j
+
+instance ToJSON ContractOrSourceId where
+  toJSON = \case
+    ContractOrSourceId (Left contract) -> toJSON contract
+    ContractOrSourceId (Right hash) -> toJSON hash
+
+instance ToSchema ContractOrSourceId where
+  declareNamedSchema _ = do
+    contractSchema <- declareSchemaRef $ Proxy @Semantics.Contract
+    contractSourceIdSchema <- declareSchemaRef $ Proxy @ContractSourceId
+    pure $
+      NamedSchema Nothing $
+        mempty
+          & oneOf ?~ [contractSchema, contractSourceIdSchema]
 
 data RolesConfig
   = UsePolicy PolicyId

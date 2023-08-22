@@ -1,6 +1,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE LambdaCase #-}
@@ -12,6 +14,8 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module Language.Marlowe.Runtime.App.Types (
+  TxBodyInEraWithReferenceScripts (..),
+  TxInEraWithReferenceScripts (..),
   App,
   Client (..),
   Config (..),
@@ -80,20 +84,11 @@ import Language.Marlowe.Runtime.History.Api (
 import Network.Protocol.Job.Client (JobClient)
 import Network.Socket (HostName, PortNumber)
 
-import qualified Cardano.Api as C (
-  AsType (AsBabbageEra, AsPaymentExtendedKey, AsPaymentKey, AsSigningKey, AsTx, AsTxBody),
-  BabbageEra,
-  HasTextEnvelope,
-  PaymentExtendedKey,
-  PaymentKey,
-  SigningKey,
-  TextEnvelope,
-  Tx,
-  TxBody,
-  deserialiseFromTextEnvelope,
-  getTxId,
-  serialiseToTextEnvelope,
+import Cardano.Api (AnyCardanoEra (..))
+import Cardano.Api.Shelley (
+  ReferenceTxInsScriptsInlineDatumsSupportedInEra (ReferenceTxInsScriptsInlineDatumsInBabbageEra),
  )
+import qualified Cardano.Api.Shelley as C
 import Control.Monad.Trans.Marlowe (MarloweT)
 import Control.Monad.Trans.Marlowe.Class (MonadMarlowe (..))
 import qualified Data.Aeson.Types as A (
@@ -115,6 +110,14 @@ import Data.Time.Units (Second)
 import Language.Marlowe.Protocol.Client (hoistMarloweRuntimeClient)
 import Language.Marlowe.Protocol.Query.Types (ContractFilter)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as CS (Transaction)
+
+data TxBodyInEraWithReferenceScripts where
+  TxBodyInEraWithReferenceScripts
+    :: ReferenceTxInsScriptsInlineDatumsSupportedInEra era -> C.TxBody era -> TxBodyInEraWithReferenceScripts
+
+data TxInEraWithReferenceScripts where
+  TxInEraWithReferenceScripts
+    :: ReferenceTxInsScriptsInlineDatumsSupportedInEra era -> C.Tx era -> TxInEraWithReferenceScripts
 
 type App = ExceptT String IO
 
@@ -228,13 +231,17 @@ data MarloweRequest v
       , reqChange :: Address
       , reqCollateral :: [TxOutRef]
       }
-  | Sign
-      { reqTxBody :: C.TxBody C.BabbageEra
+  | forall era.
+    Sign
+      { reqTxEra :: C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+      , reqTxBody :: C.TxBody era
       , reqPaymentKeys :: [C.SigningKey C.PaymentKey]
       , reqPaymentExtendedKeys :: [C.SigningKey C.PaymentExtendedKey]
       }
-  | Submit
-      { reqTx :: C.Tx C.BabbageEra
+  | forall era.
+    Submit
+      { reqTxEra :: C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+      , reqTx :: C.Tx era
       , reqPollingSeconds :: Int
       }
 
@@ -283,15 +290,25 @@ instance A.FromJSON (MarloweRequest 'V1) where
               reqCollateral <- fmap fromString <$> o A..: "collateral"
               pure Withdraw{..}
             "sign" -> do
-              reqTxBody <- textEnvelopeFromJSON (C.AsTxBody C.AsBabbageEra) =<< o A..: "body"
-              reqPaymentKeys <- mapM (textEnvelopeFromJSON $ C.AsSigningKey C.AsPaymentKey) =<< o A..: "paymentKeys"
-              reqPaymentExtendedKeys <-
-                mapM (textEnvelopeFromJSON $ C.AsSigningKey C.AsPaymentExtendedKey) =<< o A..: "paymentExtendedKeys"
-              pure Sign{..}
+              AnyCardanoEra reqTxEra' <- o A..: "era"
+              case reqTxEra' of
+                C.BabbageEra -> do
+                  let reqTxEra = ReferenceTxInsScriptsInlineDatumsInBabbageEra
+                  reqTxBody <- textEnvelopeFromJSON (C.AsTxBody C.AsBabbageEra) =<< o A..: "body"
+                  reqPaymentKeys <- mapM (textEnvelopeFromJSON $ C.AsSigningKey C.AsPaymentKey) =<< o A..: "paymentKeys"
+                  reqPaymentExtendedKeys <-
+                    mapM (textEnvelopeFromJSON $ C.AsSigningKey C.AsPaymentExtendedKey) =<< o A..: "paymentExtendedKeys"
+                  pure Sign{..}
+                _ -> fail $ "Unsupported era " <> show reqTxEra'
             "submit" -> do
-              reqTx <- textEnvelopeFromJSON (C.AsTx C.AsBabbageEra) =<< o A..: "tx"
-              reqPollingSeconds <- o A..: "pollingSeconds"
-              pure Submit{..}
+              AnyCardanoEra reqTxEra' <- o A..: "era"
+              case reqTxEra' of
+                C.BabbageEra -> do
+                  let reqTxEra = ReferenceTxInsScriptsInlineDatumsInBabbageEra
+                  reqTx <- textEnvelopeFromJSON (C.AsTx C.AsBabbageEra) =<< o A..: "tx"
+                  reqPollingSeconds <- o A..: "pollingSeconds"
+                  pure Submit{..}
+                _ -> fail $ "Unsupported era " <> show reqTxEra'
             {-
                         "wait" -> do
                                     reqTxId <- fromString <$> o A..: "txId"
@@ -349,14 +366,20 @@ instance A.ToJSON (MarloweRequest 'V1) where
   toJSON Sign{..} =
     A.object
       [ "request" A..= ("sign" :: String)
-      , "body" A..= textEnvelopeToJSON reqTxBody
+      , case reqTxEra of
+          ReferenceTxInsScriptsInlineDatumsInBabbageEra -> "era" A..= C.BabbageEra
+      , case reqTxEra of
+          ReferenceTxInsScriptsInlineDatumsInBabbageEra -> "body" A..= textEnvelopeToJSON reqTxBody
       , "paymentKeys" A..= fmap textEnvelopeToJSON reqPaymentKeys
       , "paymentExtendedKeys" A..= fmap textEnvelopeToJSON reqPaymentExtendedKeys
       ]
   toJSON Submit{..} =
     A.object
       [ "request" A..= ("submit" :: String)
-      , "tx" A..= textEnvelopeToJSON reqTx
+      , case reqTxEra of
+          ReferenceTxInsScriptsInlineDatumsInBabbageEra -> "era" A..= C.BabbageEra
+      , case reqTxEra of
+          ReferenceTxInsScriptsInlineDatumsInBabbageEra -> "tx" A..= textEnvelopeToJSON reqTx
       ]
 
 {-
@@ -382,14 +405,18 @@ data MarloweResponse v
       { resCreation :: CreateStep v
       , resSteps :: [ContractStep v]
       }
-  | Body
-      { resContractId :: ContractId
+  | forall era.
+    Body
+      { resTxEra :: C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+      , resContractId :: ContractId
       , resTxId :: TxId
-      , resTxBody :: C.TxBody C.BabbageEra
+      , resTxBody :: C.TxBody era
       }
-  | Tx
-      { resTxId :: TxId
-      , resTx :: C.Tx C.BabbageEra
+  | forall era.
+    Tx
+      { resTxEra :: C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+      , resTxId :: TxId
+      , resTx :: C.Tx era
       }
   | TxId
       { resTxId :: TxId
@@ -425,13 +452,19 @@ instance A.ToJSON (MarloweResponse 'V1) where
       [ "response" A..= ("body" :: String)
       , "contractId" A..= renderContractId resContractId
       , "txId" A..= C.getTxId resTxBody
-      , "body" A..= textEnvelopeToJSON resTxBody
+      , case resTxEra of
+          C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> "era" A..= C.BabbageEra
+      , case resTxEra of
+          C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> "body" A..= textEnvelopeToJSON resTxBody
       ]
   toJSON Tx{..} =
     A.object
       [ "response" A..= ("tx" :: String)
       , "txId" A..= resTxId
-      , "tx" A..= textEnvelopeToJSON resTx
+      , case resTxEra of
+          C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> "era" A..= C.BabbageEra
+      , case resTxEra of
+          C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> "tx" A..= textEnvelopeToJSON resTx
       ]
   toJSON TxId{..} =
     A.object
@@ -507,8 +540,8 @@ textEnvelopeToJSON x =
   let envelope = C.serialiseToTextEnvelope Nothing x
    in A.toJSON envelope
 
-mkBody :: ContractId -> C.TxBody C.BabbageEra -> MarloweResponse v
-mkBody resContractId resTxBody =
+mkBody :: ContractId -> TxBodyInEraWithReferenceScripts -> MarloweResponse v
+mkBody resContractId (TxBodyInEraWithReferenceScripts resTxEra resTxBody) =
   let resTxId = fromCardanoTxId $ C.getTxId resTxBody
    in Body{..}
 

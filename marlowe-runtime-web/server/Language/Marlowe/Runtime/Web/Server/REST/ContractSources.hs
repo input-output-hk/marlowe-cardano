@@ -1,6 +1,5 @@
 module Language.Marlowe.Runtime.Web.Server.REST.ContractSources where
 
-import Control.Monad.Except (runExceptT)
 import Data.Aeson (object)
 import Data.Aeson.Types ((.=))
 import Data.Coerce (coerce)
@@ -27,10 +26,10 @@ import Servant
 server :: ServerT ContractSourcesAPI ServerM
 server =
   post
-    :<|> contractServer
+    :<|> contractSourceServer
 
-contractServer :: ContractSourceId -> ServerT ContractSourceAPI ServerM
-contractServer sourceId =
+contractSourceServer :: ContractSourceId -> ServerT ContractSourceAPI ServerM
+contractSourceServer sourceId =
   getOne sourceId
     :<|> getAdjacency sourceId
     :<|> getClosure sourceId
@@ -41,7 +40,7 @@ getOne sourceId expand = do
   if expand
     then do
       continuations <- loadContinuations closure
-      case demerkleizeContract continuations $ deepDemerkleize contract of
+      case demerkleizeContract continuations $ deepDemerkleize False contract of
         Left err -> fail err
         Right expanded -> pure expanded
     else pure contract
@@ -63,8 +62,8 @@ getContractOrThrow sourceId = maybe (throwError err404) pure =<< getContract (co
 
 post :: Label -> Producer ObjectBundle IO () -> ServerM PostContractSourceResponse
 post main bundles = do
-  result <- runExceptT $ Pipes.fold (<>) mempty id $ hoist liftIO bundles >-> importBundle main
-  case result of
+  (intermediate, result) <- Pipes.fold' (<>) mempty id $ hoist liftIO (Right mempty <$ bundles) >-> importBundle main
+  case (intermediate <>) <$> result of
     Left err -> case err of
       ContinuationNotInStore hash ->
         throwError $ badRequest'' "Merkleized continuation not in store." "BadRequest" hash

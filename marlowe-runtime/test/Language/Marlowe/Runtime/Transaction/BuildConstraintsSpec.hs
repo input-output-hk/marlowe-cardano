@@ -7,7 +7,8 @@ module Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec (
   spec,
 ) where
 
-import Cardano.Api (ConsensusMode (..), EraHistory (EraHistory), SlotNo (SlotNo))
+import Cardano.Api (BabbageEra, ConsensusMode (..), EraHistory (EraHistory), SlotNo (SlotNo))
+import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import Control.Monad.Trans.Except (runExcept)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
@@ -177,24 +178,32 @@ createSpec = Hspec.describe "buildCreateConstraints" do
                 (Right (Just $ Semantics.emptyState 0))
             :: Property
 
-extractMarloweDatum :: TxConstraints v -> Maybe (Datum v)
+extractMarloweDatum :: TxConstraints BabbageEra v -> Maybe (Datum v)
 extractMarloweDatum TxConstraints{..} = case marloweOutputConstraints of
   MarloweOutput _ datum -> Just datum
   _ -> Nothing
 
-extractSentRoleTokens :: TxConstraints v -> Map Chain.TokenName Chain.Address
+extractSentRoleTokens :: TxConstraints BabbageEra v -> Map Chain.TokenName Chain.Address
 extractSentRoleTokens TxConstraints{..} = case roleTokenConstraints of
   MintRoleTokens _ _ distribution -> Map.mapKeys Chain.tokenName distribution
   _ -> mempty
 
-extractMarloweAssets :: TxConstraints v -> Maybe Chain.Assets
+extractMarloweAssets :: TxConstraints BabbageEra v -> Maybe Chain.Assets
 extractMarloweAssets TxConstraints{..} = case marloweOutputConstraints of
   MarloweOutput assets _ -> Just assets
   _ -> Nothing
 
-runBuildCreateConstraints :: CreateArgs v -> Either (CreateError v) (TxConstraints v)
+runBuildCreateConstraints :: CreateArgs v -> Either (CreateError v) (TxConstraints BabbageEra v)
 runBuildCreateConstraints CreateArgs{..} =
-  snd <$> buildCreateConstraints version walletContext roleTokensConfig metadata minAda contract
+  snd
+    <$> buildCreateConstraints
+      ReferenceTxInsScriptsInlineDatumsInBabbageEra
+      version
+      walletContext
+      roleTokensConfig
+      metadata
+      minAda
+      contract
 
 data CreateArgs v = CreateArgs
   { version :: MarloweVersion v
@@ -263,10 +272,10 @@ withdrawSpec = Hspec.describe "buildWithdrawConstraints" do
     let assetId :: Chain.AssetId
         assetId = Chain.AssetId policyId tokenName
 
-        actual :: Either (Transaction.Api.WithdrawError 'Core.Api.V1) (TxConstraints 'Core.Api.V1)
+        actual :: Either (Transaction.Api.WithdrawError 'Core.Api.V1) (TxConstraints BabbageEra 'Core.Api.V1)
         actual = BuildConstraints.buildWithdrawConstraints Core.Api.MarloweV1 assetId
 
-        expected :: Either (Transaction.Api.WithdrawError 'Core.Api.V1) (TxConstraints 'Core.Api.V1)
+        expected :: Either (Transaction.Api.WithdrawError 'Core.Api.V1) (TxConstraints BabbageEra 'Core.Api.V1)
         expected =
           Right $
             TxConstraints

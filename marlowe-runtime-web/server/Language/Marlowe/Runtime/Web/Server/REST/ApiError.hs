@@ -116,6 +116,7 @@ instance HasDTO (WithdrawError 'V1) where
 
 instance ToDTO (WithdrawError 'V1) where
   toDTO = \case
+    WithdrawEraUnsupported era -> ApiError ("Current network era not supported: " <> show era) "WithdrawEraUnsupported" Null 503
     WithdrawConstraintError (MintingUtxoNotFound _) -> ApiError "Minting UTxO not found" "MintingUtxoNotFound" Null 500
     WithdrawConstraintError (RoleTokenNotFound _) -> ApiError "Role token not found" "RoleTokenNotFound" Null 403
     WithdrawConstraintError ToCardanoError -> ApiError "Internal error" "ToCardanoError" Null 500
@@ -138,6 +139,7 @@ instance HasDTO (CreateError 'V1) where
 
 instance ToDTO (CreateError 'V1) where
   toDTO = \case
+    CreateEraUnsupported era -> ApiError ("Current network era not supported: " <> show era) "WithdrawEraUnsupported" Null 503
     CreateConstraintError (MintingUtxoNotFound _) -> ApiError "Minting UTxO not found" "MintingUtxoNotFound" Null 500
     CreateConstraintError (RoleTokenNotFound _) -> ApiError "Role token not found" "RoleTokenNotFound" Null 403
     CreateConstraintError ToCardanoError -> ApiError "Internal error" "ToCardanoError" Null 500
@@ -165,6 +167,7 @@ instance HasDTO (ApplyInputsError 'V1) where
 
 instance ToDTO (ApplyInputsError 'V1) where
   toDTO = \case
+    ApplyInputsEraUnsupported era -> ApiError ("Current network era not supported: " <> show era) "WithdrawEraUnsupported" Null 503
     ApplyInputsConstraintError (MintingUtxoNotFound _) -> ApiError "Minting UTxO not found" "MintingUtxoNotFound" Null 500
     ApplyInputsConstraintError (RoleTokenNotFound _) -> ApiError "Role token not found" "RoleTokenNotFound" Null 403
     ApplyInputsConstraintError ToCardanoError -> ApiError "Internal error" "ToCardnoError" Null 500

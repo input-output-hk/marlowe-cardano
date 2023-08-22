@@ -1,8 +1,10 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -10,14 +12,18 @@
 
 module Language.Marlowe.CLI.Test.Contract.Source where
 
+import Contrib.Data.Foldable (foldMapMFlipped)
 import Control.Monad (void)
 import Control.Monad.Except (MonadError, throwError)
 import Data.Aeson (FromJSON (..), ToJSON (..), (.=))
 import Data.Aeson qualified as A
 import Data.Aeson.KeyMap qualified as KeyMap
+import Data.List.NonEmpty (NonEmpty)
+import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
+import Language.Marlowe (Token (..))
 import Language.Marlowe.CLI.IO (liftCliMaybe)
 import Language.Marlowe.CLI.Run (marloweAddressFromCardanoAddress)
 import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (ParametrizedMarloweJSON)
@@ -25,6 +31,7 @@ import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError, rethrowCliE
 import Language.Marlowe.CLI.Test.Operation.Aeson qualified as Operation
 import Language.Marlowe.CLI.Test.Wallet.Interpret (
   assetIdToToken,
+  assetToPlutusValue,
   findWallet,
   findWalletByUniqueToken,
   getSingletonCurrency,
@@ -41,14 +48,21 @@ import Language.Marlowe.CLI.Test.Wallet.Types (
   tokenNameToJSON,
  )
 import Language.Marlowe.CLI.Test.Wallet.Types qualified as Wallet
-import Language.Marlowe.CLI.Types (CliError, SomeTimeout, toMarloweTimeout)
+import Language.Marlowe.CLI.Types (CliError, SomeTimeout, toMarloweExtendedTimeout, toMarloweTimeout)
 import Language.Marlowe.Core.V1.Semantics.Types qualified as C
 import Language.Marlowe.Core.V1.Semantics.Types qualified as M
+import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddressBech32, serialiseAddressBech32)
+import Language.Marlowe.Core.V1.Semantics.Types.Address qualified as V1
 import Language.Marlowe.Extended.V1 (toCore)
 import Language.Marlowe.Extended.V1 qualified as E
 import Ledger.Orphans ()
 import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
+import Marlowe.Contracts.ChunkedValueTransfer (chunkedValueTransfer)
+import Marlowe.Contracts.ChunkedValueTransfer qualified as ChunkedValueTransfer
+import Marlowe.Contracts.Raffle (raffle)
+import Marlowe.Contracts.Raffle qualified as Raffle
 import Plutus.V1.Ledger.Api (TokenName)
+import Plutus.V2.Ledger.Api qualified as Ledger
 
 -- | We encode `PartyRef` as `Party` so we can use role based contracts
 -- | without any change in the JSON structure.
@@ -58,14 +72,18 @@ import Plutus.V1.Ledger.Api (TokenName)
 -- |  "address": "Wallet-1"
 -- | ```
 data PartyRef
-  = WalletRef WalletNickname
-  | RoleRef TokenName
+  = WalletRef !WalletNickname
+  | KnownAddress !(V1.Network, Ledger.Address)
+  | RoleRef !TokenName
   deriving stock (Eq, Generic, Show)
 
 instance FromJSON PartyRef where
   parseJSON = \case
-    A.Object (KeyMap.toList -> [("address", A.String walletNickname)]) ->
-      pure . WalletRef . WalletNickname . T.unpack $ walletNickname
+    A.Object (KeyMap.toList -> [("address", A.String addr)]) ->
+      case deserialiseAddressBech32 addr of
+        Just parts -> pure $ KnownAddress parts
+        Nothing ->
+          pure . WalletRef . WalletNickname . T.unpack $ addr
     A.Object (KeyMap.toList -> [("role_token", roleTokenJSON)]) -> do
       roleToken <- parseTokenNameJSON roleTokenJSON
       pure $ RoleRef roleToken
@@ -75,9 +93,33 @@ instance ToJSON PartyRef where
   toJSON (WalletRef (WalletNickname walletNickname)) =
     A.object
       ["address" .= A.String (T.pack walletNickname)]
+  toJSON (KnownAddress (network, address)) = do
+    let address' = serialiseAddressBech32 network address
+    A.object
+      ["address" .= A.String address']
   toJSON (RoleRef tokenName) =
     A.object
       ["role_token" .= tokenNameToJSON tokenName]
+
+data ValueTransferRecipient = ValueTransferRecipient
+  { vtrRecipient :: !PartyRef
+  , vtrAssets :: ![Asset]
+  }
+  deriving stock (Eq, Generic, Show)
+
+instance A.FromJSON ValueTransferRecipient where
+  parseJSON json = do
+    obj <- parseJSON json
+    vtrRecipient <- obj A..: "recipient"
+    vtrAssets <- obj A..: "assets"
+    pure ValueTransferRecipient{..}
+
+instance A.ToJSON ValueTransferRecipient where
+  toJSON ValueTransferRecipient{..} =
+    A.object
+      [ "recipient" .= vtrRecipient
+      , "assets" .= vtrAssets
+      ]
 
 data UseTemplate
   = UseTrivial
@@ -167,6 +209,22 @@ data UseTemplate
       , utActusTermsFile :: FilePath
       -- ^ The Actus contract terms.
       }
+  | UseRaffle
+      { utSponsor :: PartyRef
+      , utOracle :: PartyRef
+      , utChunkSize :: Raffle.ChunkSize
+      , utParties :: NonEmpty PartyRef
+      , utprizeNFTPerRound :: NonEmpty Token
+      , utDepositDeadline :: SomeTimeout
+      , utSelectDeadline :: SomeTimeout
+      , utPayoutDeadline :: SomeTimeout
+      }
+  | UseChunkedValueTransfer
+      { utSender :: PartyRef
+      , utRecipientsAmounts :: [ValueTransferRecipient]
+      , utTimeout :: SomeTimeout
+      , utPayoutChunkSize :: ChunkedValueTransfer.PayoutChunkSize
+      }
   deriving stock (Eq, Generic, Show)
 
 instance FromJSON UseTemplate where
@@ -210,6 +268,7 @@ buildParty mRoleCurrency = \case
   WalletRef nickname -> do
     wallet <- findWallet nickname
     uncurry M.Address <$> rethrowCliError (marloweAddressFromCardanoAddress (_waAddress wallet))
+  KnownAddress (n, a) -> pure $ M.Address n a
   RoleRef token -> do
     -- Consistency check
     currency <- case mRoleCurrency of
@@ -226,7 +285,7 @@ useTemplate
   -> m M.Contract
 useTemplate currency = \case
   UseTrivial{..} -> do
-    timeout' <- toMarloweTimeout utTimeout
+    timeout' <- toMarloweExtendedTimeout utTimeout
     let partyRef = fromMaybe (WalletRef faucetNickname) utParty
     party <- buildParty currency partyRef
     makeContract' $
@@ -236,8 +295,8 @@ useTemplate currency = \case
         utWithdrawalLovelace
         timeout'
   UseSwap{..} -> do
-    aTimeout' <- toMarloweTimeout utATimeout
-    bTimeout' <- toMarloweTimeout utBTimeout
+    aTimeout' <- toMarloweExtendedTimeout utATimeout
+    bTimeout' <- toMarloweExtendedTimeout utBTimeout
 
     let Asset aAssetId aAmount = utAAsset
         Asset bAssetId bAmount = utBAsset
@@ -260,10 +319,10 @@ useTemplate currency = \case
         bTimeout'
         E.Close
   UseEscrow{..} -> do
-    paymentDeadline' <- toMarloweTimeout utPaymentDeadline
-    complaintDeadline' <- toMarloweTimeout utComplaintDeadline
-    disputeDeadline' <- toMarloweTimeout utDisputeDeadline
-    mediationDeadline' <- toMarloweTimeout utMediationDeadline
+    paymentDeadline' <- toMarloweExtendedTimeout utPaymentDeadline
+    complaintDeadline' <- toMarloweExtendedTimeout utComplaintDeadline
+    disputeDeadline' <- toMarloweExtendedTimeout utDisputeDeadline
+    mediationDeadline' <- toMarloweExtendedTimeout utMediationDeadline
 
     seller <- buildParty currency utSeller
     buyer <- buildParty currency utBuyer
@@ -280,9 +339,9 @@ useTemplate currency = \case
         disputeDeadline'
         mediationDeadline'
   UseCoveredCall{..} -> do
-    issueDate <- toMarloweTimeout utIssueDate
-    maturityDate <- toMarloweTimeout utMaturityDate
-    settlementDate <- toMarloweTimeout utSettlementDate
+    issueDate <- toMarloweExtendedTimeout utIssueDate
+    maturityDate <- toMarloweExtendedTimeout utMaturityDate
+    settlementDate <- toMarloweExtendedTimeout utSettlementDate
     issuer <- buildParty currency utIssuer
     counterParty <- buildParty currency utCounterParty
 
@@ -302,8 +361,8 @@ useTemplate currency = \case
         maturityDate
         settlementDate
   UseZeroCouponBond{..} -> do
-    lendingDeadline <- toMarloweTimeout utLendingDeadline
-    paybackDeadline <- toMarloweTimeout utPaybackDeadline
+    lendingDeadline <- toMarloweExtendedTimeout utLendingDeadline
+    paybackDeadline <- toMarloweExtendedTimeout utPaybackDeadline
 
     lender <- buildParty currency utLender
     borrower <- buildParty currency utBorrower
@@ -318,4 +377,36 @@ useTemplate currency = \case
         (E.Constant utPrincipal `E.AddValue` E.Constant utInterest)
         adaToken
         E.Close
+  UseRaffle{..} -> do
+    depositDeadline' <- toMarloweTimeout utDepositDeadline
+    selectDeadline' <- toMarloweTimeout utSelectDeadline
+    payoutDeadline' <- toMarloweTimeout utPayoutDeadline
+
+    sponsor <- buildParty currency utSponsor
+    oracle <- buildParty currency utOracle
+    parties <- traverse (buildParty currency) utParties
+
+    pure $
+      raffle
+        (Raffle.Sponsor sponsor)
+        (Raffle.Oracle oracle)
+        utChunkSize
+        parties
+        utprizeNFTPerRound
+        depositDeadline'
+        selectDeadline'
+        payoutDeadline'
+  UseChunkedValueTransfer{..} -> do
+    timeout' <- toMarloweTimeout utTimeout
+    sender <- buildParty currency utSender
+    recipientsAmounts <- foldMapMFlipped utRecipientsAmounts \ValueTransferRecipient{vtrRecipient, vtrAssets} -> do
+      recipient <- buildParty currency vtrRecipient
+      value <- foldMapMFlipped vtrAssets assetToPlutusValue
+      pure $ Map.fromList [(ChunkedValueTransfer.Recipient recipient, value)]
+    pure $
+      chunkedValueTransfer
+        (ChunkedValueTransfer.Sender sender)
+        (ChunkedValueTransfer.RecipientsAmounts recipientsAmounts)
+        utPayoutChunkSize
+        timeout'
   template -> throwError $ testExecutionFailed' $ "Template not implemented: " <> show template

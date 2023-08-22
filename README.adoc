@@ -119,15 +119,6 @@ If you get errors about missing shared libraries, try running `cabal clean` firs
 If that fails you might have a corrupt cabal store, in which case you should `rm -rf ~/.cabal/store` and try `cabal build all` again.
 ====
 
-=== Deployment
-
-Marlowe Run and the Marlowe Playground are automatically deployed upon certain pushes to GitHub
-
-* https://marlowe-playground-staging.plutus.aws.iohkdev.io/[Marlowe Playground staging] and https://marlowe-run-staging.plutus.aws.iohkdev.io/[Marlowe Run staging] are deployed from every commit pushed to `main` (these URLs subject to change)
-* https://play.marlowe-finance.io/[Marlowe Playground production] and https://run.marlowe-finance.io/[Marlowe Run production] are deployed from every commit pushed to `production`
-
-For more details, including instructions for setting up ad hoc testing deployments, see https://github.com/input-output-hk/plutus-ops[the plutus-ops repo].
-
 
 [[nix-advice]]
 == Nix

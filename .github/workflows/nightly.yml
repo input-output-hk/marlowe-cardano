@@ -14,6 +14,10 @@ on:
 
 jobs:
   check-deploy:
+    # Disable this job for now, we need to get automatic deploys working again and
+    # make the version of the latest deploy inspectable.
+    # Reenable the dependency of the other jobs on this one when enabled
+    if: false
     runs-on: ubuntu-latest
     steps:
       - name: Check deploy
@@ -31,7 +35,8 @@ jobs:
 
   marlowe-finder:
     runs-on: ubuntu-latest
-    needs: [check-deploy]
+    # Dependency disabled pending automatic deploys
+    # needs: [check-deploy]
     env:
       ENVIRONMENT: preprod
     steps:
@@ -55,28 +60,16 @@ jobs:
           name: ${{ env.CACHE_NAME }}
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
 
-      - name: Build Marlowe Finder
-        run: |
-          nix build .#ghc8107-marlowe-apps-exe-marlowe-finder
-
-      - name: Install SSH keys
-        uses: shimataro/ssh-key-action@v2
-        with:
-          key: ${{ secrets.SSH_KEY }}
-          known_hosts: ${{ secrets.KNOWN_HOSTS }}
-
       - name: Run Marlowe Finder on Preprod
         run: |
-          scripts/setup-dev-connection &
-          while ! nc -zv 127.0.0.1 3700 > /dev/null 2>&1
-          do
-            :
-          done
-          result/bin/marlowe-finder --end-at-tip
+          nix run .#marlowe-apps-exe-marlowe-finder-ghc8107 -- \
+            --marlowe-runtime-host marlowe-runtime-preprod.scdev.aws.iohkdev.io \
+            --end-at-tip
 
   marlowe-scaling:
     runs-on: ubuntu-latest
-    needs: [check-deploy]
+    # Dependency disabled pending automatic deploys
+    # needs: [check-deploy]
     env:
       ENVIRONMENT: preview
     steps:
@@ -100,16 +93,6 @@ jobs:
           name: ${{ env.CACHE_NAME }}
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
 
-      - name: Build Marlowe Scaling
-        run: |
-          nix build .#ghc8107-marlowe-apps-exe-marlowe-scaling
-
-      - name: Install SSH keys
-        uses: shimataro/ssh-key-action@v2
-        with:
-          key: ${{ secrets.SSH_KEY }}
-          known_hosts: ${{ secrets.KNOWN_HOSTS }}
-
       - name: Copy Signing Keys
         env:
           TEST_WALLET_SIGNING_KEYS: ${{ secrets.TEST_WALLET_SIGNING_KEYS }}
@@ -123,12 +106,9 @@ jobs:
 
       - name: Run Marlowe Scaling on Preview
         run: |
-          scripts/setup-dev-connection &
-          while ! nc -zv 127.0.0.1 3700 > /dev/null 2>&1
-          do
-            :
-          done
-          result/bin/marlowe-scaling 2 \
+          nix run .#marlowe-apps-exe-marlowe-scaling-ghc8107 -- \
+            --marlowe-runtime-host marlowe-runtime-preview.scdev.aws.iohkdev.io \
+            2 \
             "$(cat test-wallets/test.0.addr)=test-wallets/test.0.skey" \
             "$(cat test-wallets/test.1.addr)=test-wallets/test.1.skey" \
             "$(cat test-wallets/test.2.addr)=test-wallets/test.2.skey" \

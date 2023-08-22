@@ -1,0 +1,83 @@
+{{- range .Values.networks }}
+---
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: marlowe-web-server-{{ . }}
+  namespace: {{ $.Values.namespace }}
+  annotations:
+    app.oam.dev/publishVersion: {{ $.Chart.AppVersion }}
+    meta.helm.sh/release-name: {{ $.Values.releaseName }}
+    meta.helm.sh/release-namespace: {{ $.Values.namespace }}
+spec:
+  components:
+    - name: marlowe-web-server-{{ . }}
+      type: webservice
+      properties:
+        env:
+        - name: PORT
+          value: "3780"
+        - name: RUNTIME_HOST
+          value: marlowe-proxy-{{ . }}.{{ $.Values.namespace }}
+        - name: RUNTIME_PORT
+          value: "3701"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://grafana-agent.grafana-agent:4318
+        - name: OTEL_SERVICE_NAME
+          value: marlowe-web-server-{{ . }}
+        cpu: "0.5"
+        image: {{ $.Values.images.repo }}/{{ $.Values.images.org }}/marlowe-web-server:{{ $.Values.images.tag }}
+        imagePullPolicy: Always
+        memory: 1024Mi
+        ports:
+        - expose: true
+          port: 3780
+          protocol: TCP
+      traits:
+      - type: https-route
+        properties:
+          domains:
+          - marlowe-runtime-{{ . }}-web.scdev.aws.iohkdev.io
+          rules:
+          - port: 3780
+      - type: opentelemetry-collector
+        properties:
+          mode: sidecar
+          config: |
+            receivers:
+              otlp:
+                protocols:
+                  http:
+                  grpc:
+            processors:
+
+            exporters:
+              logging:
+
+            service:
+              pipelines:
+                traces:
+                  receivers: [otlp]
+                  processors: []
+                  exporters: [logging]
+
+  policies:
+  - name: local-{{ $.Values.namespace }}
+    properties:
+      clusters:
+      - local
+      namespace: {{ $.Values.namespace }}
+    type: topology
+
+  workflow:
+    mode:
+      steps: DAG
+    steps:
+    - meta:
+        alias: Deploy To local-{{ $.Values.namespace }}
+      name: local-{{ $.Values.namespace }}
+      properties:
+        policies:
+        - local-{{ $.Values.namespace }}
+      type: deploy
+{{- end }}

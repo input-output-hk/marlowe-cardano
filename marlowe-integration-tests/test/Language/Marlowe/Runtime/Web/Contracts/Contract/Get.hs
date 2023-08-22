@@ -36,21 +36,27 @@ getsFirstContractValidSpec = it "returns the first contract" \MarloweWebTestData
   either throw pure =<< runWebClient do
     Web.ContractState{..} <- waitUntilConfirmed (\Web.ContractState{status} -> status) $ getContract expectedContractId1
 
-    liftIO $ contractId `shouldBe` expectedContractId1
+    liftIO do
+      contractId `shouldBe` expectedContractId1
+      assets `shouldBe` Web.Assets{lovelace = 2_000_000, tokens = Web.Tokens mempty}
 
 getsSecondContractValidSpec :: SpecWith MarloweWebTestData
 getsSecondContractValidSpec = it "returns the second contract" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
   either throw pure =<< runWebClient do
     Web.ContractState{..} <- waitUntilConfirmed (\Web.ContractState{status} -> status) $ getContract expectedContractId2
 
-    liftIO $ contractId `shouldBe` expectedContractId2
+    liftIO do
+      contractId `shouldBe` expectedContractId2
+      assets `shouldBe` Web.Assets{lovelace = 2_000_000, tokens = Web.Tokens mempty}
 
 getsThirdContractValidSpec :: SpecWith MarloweWebTestData
 getsThirdContractValidSpec = it "returns the third contract" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
   either throw pure =<< runWebClient do
     Web.ContractState{..} <- waitUntilConfirmed (\Web.ContractState{status} -> status) $ getContract expectedContractId3
 
-    liftIO $ contractId `shouldBe` expectedContractId3
+    liftIO do
+      contractId `shouldBe` expectedContractId3
+      assets `shouldBe` Web.Assets{lovelace = 2_000_000, tokens = Web.Tokens mempty}
 
 invalidTxIdSpec :: SpecWith MarloweWebTestData
 invalidTxIdSpec = it "returns not found for invalid contract id" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do

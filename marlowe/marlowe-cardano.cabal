@@ -1,6 +1,6 @@
 cabal-version:   2.2
 name:            marlowe-cardano
-version:         0.1.1.0
+version:         0.1.2.0
 license:         Apache-2.0
 license-files:
   LICENSE
@@ -82,7 +82,6 @@ library
     , ordered-containers ^>=0.2
     , plutus-ledger ^>=1.2
     , plutus-ledger-api ==1.0.0.1
-    , plutus-ledger-slot ==0.0.1
     , plutus-script-utils ==1.2.0.0
     , plutus-tx ==1.0.0.0
     , range ==0.3.0.2

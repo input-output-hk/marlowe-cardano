@@ -15,7 +15,9 @@
 module Language.Marlowe.Runtime.ChainSync.Api where
 
 import Cardano.Api (
+  AnyCardanoEra (..),
   AsType (..),
+  CardanoEra (..),
   CardanoMode,
   ConsensusMode (..),
   EraHistory (..),
@@ -49,6 +51,7 @@ import Data.Aeson (
  )
 import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Aeson.Types (parseFail, toJSONKeyText)
 import Data.Bifunctor (bimap)
@@ -250,6 +253,22 @@ fromJSONEncodedMetadata = \case
       pure (MetadataText key, value')
   A.Bool _ -> Nothing
   A.Null -> Nothing
+
+toJSONEncodedMetadata :: Metadata -> Maybe A.Value
+toJSONEncodedMetadata = \case
+  MetadataMap ms ->
+    A.Object . KeyMap.fromList <$> for ms \case
+      (MetadataText k, v) -> do
+        let k' = Key.fromText k
+        v' <- toJSONEncodedMetadata v
+        pure (k', v')
+      _ -> Nothing
+  MetadataList ds ->
+    A.Array . Vector.fromList <$> for ds \e -> do
+      toJSONEncodedMetadata e
+  MetadataNumber i -> Just $ A.Number $ fromInteger i
+  MetadataBytes _ -> Nothing
+  MetadataText bs -> Just $ A.String bs
 
 -- Encodes `transaction_metadata`:
 -- https://github.com/input-output-hk/cardano-ledger/blob/node/1.35.3/eras/shelley/test-suite/cddl-files/shelley.cddl#L212
@@ -967,6 +986,23 @@ data ChainSyncQuery a where
   GetUTxOs :: GetUTxOsQuery -> ChainSyncQuery UTxOs
   GetNodeTip :: ChainSyncQuery ChainPoint
   GetTip :: ChainSyncQuery ChainPoint
+  GetEra :: ChainSyncQuery AnyCardanoEra
+
+instance Ord AnyCardanoEra where
+  compare = on compare fromEnum
+
+instance Binary AnyCardanoEra where
+  put = putWord8 . fromIntegral . fromEnum
+  get = do
+    tag <- getWord8
+    case tag of
+      0 -> pure $ AnyCardanoEra ByronEra
+      1 -> pure $ AnyCardanoEra ShelleyEra
+      2 -> pure $ AnyCardanoEra AllegraEra
+      3 -> pure $ AnyCardanoEra MaryEra
+      4 -> pure $ AnyCardanoEra AlonzoEra
+      5 -> pure $ AnyCardanoEra BabbageEra
+      _ -> fail $ "Invalid era tag: " <> show tag
 
 deriving instance Show (ChainSyncQuery a)
 deriving instance Eq (ChainSyncQuery a)
@@ -983,6 +1019,9 @@ instance Query.RequestVariations ChainSyncQuery where
       , Query.SomeTag TagGetSystemStart
       , Query.SomeTag TagGetEraHistory
       , Query.SomeTag TagGetUTxOs
+      , Query.SomeTag TagGetNodeTip
+      , Query.SomeTag TagGetTip
+      , Query.SomeTag TagGetEra
       ]
   requestVariations = \case
     TagGetSecurityParameter -> pure GetSecurityParameter
@@ -993,6 +1032,7 @@ instance Query.RequestVariations ChainSyncQuery where
     TagGetUTxOs -> GetUTxOs <$> variations
     TagGetNodeTip -> pure GetNodeTip
     TagGetTip -> pure GetTip
+    TagGetEra -> pure GetEra
   resultVariations = \case
     TagGetSecurityParameter -> variations
     TagGetNetworkId -> Mainnet NE.:| [Testnet $ NetworkMagic 0]
@@ -1002,6 +1042,7 @@ instance Query.RequestVariations ChainSyncQuery where
     TagGetUTxOs -> variations
     TagGetNodeTip -> variations
     TagGetTip -> variations
+    TagGetEra -> variations
 
 instance Query.Request ChainSyncQuery where
   data Tag ChainSyncQuery result where
@@ -1013,6 +1054,7 @@ instance Query.Request ChainSyncQuery where
     TagGetUTxOs :: Query.Tag ChainSyncQuery UTxOs
     TagGetNodeTip :: Query.Tag ChainSyncQuery ChainPoint
     TagGetTip :: Query.Tag ChainSyncQuery ChainPoint
+    TagGetEra :: Query.Tag ChainSyncQuery AnyCardanoEra
   tagEq TagGetSecurityParameter TagGetSecurityParameter = Just Refl
   tagEq TagGetSecurityParameter _ = Nothing
   tagEq TagGetNetworkId TagGetNetworkId = Just Refl
@@ -1029,6 +1071,8 @@ instance Query.Request ChainSyncQuery where
   tagEq TagGetNodeTip _ = Nothing
   tagEq TagGetTip TagGetTip = Just Refl
   tagEq TagGetTip _ = Nothing
+  tagEq TagGetEra TagGetEra = Just Refl
+  tagEq TagGetEra _ = Nothing
   tagFromReq = \case
     GetSecurityParameter -> TagGetSecurityParameter
     GetNetworkId -> TagGetNetworkId
@@ -1038,6 +1082,7 @@ instance Query.Request ChainSyncQuery where
     GetUTxOs _ -> TagGetUTxOs
     GetNodeTip -> TagGetNodeTip
     GetTip -> TagGetTip
+    GetEra -> TagGetEra
 
 deriving instance Show (Query.Tag ChainSyncQuery a)
 deriving instance Eq (Query.Tag ChainSyncQuery a)
@@ -1060,6 +1105,7 @@ instance Query.BinaryRequest ChainSyncQuery where
           put txOutRefs
     GetNodeTip -> putWord8 0x07
     GetTip -> putWord8 0x08
+    GetEra -> putWord8 0x09
   getReq = do
     tag <- getWord8
     case tag of
@@ -1078,6 +1124,7 @@ instance Query.BinaryRequest ChainSyncQuery where
           _ -> fail "Invalid GetUTxOsQuery tag"
       0x07 -> pure $ Query.SomeRequest GetNodeTip
       0x08 -> pure $ Query.SomeRequest GetTip
+      0x09 -> pure $ Query.SomeRequest GetEra
       _ -> fail "Invalid ChainSyncQuery tag"
   putResult = \case
     TagGetSecurityParameter -> put
@@ -1093,6 +1140,7 @@ instance Query.BinaryRequest ChainSyncQuery where
     TagGetUTxOs -> put
     TagGetNodeTip -> put
     TagGetTip -> put
+    TagGetEra -> put
   getResult = \case
     TagGetSecurityParameter -> get
     TagGetNetworkId -> maybe Mainnet (Testnet . NetworkMagic) <$> get
@@ -1110,6 +1158,7 @@ instance Query.BinaryRequest ChainSyncQuery where
     TagGetUTxOs -> get
     TagGetNodeTip -> get
     TagGetTip -> get
+    TagGetEra -> get
 
 instance Query.ShowRequest ChainSyncQuery where
   showsPrecResult p = \case
@@ -1134,6 +1183,7 @@ instance Query.ShowRequest ChainSyncQuery where
     TagGetUTxOs -> showsPrec p
     TagGetNodeTip -> showsPrec p
     TagGetTip -> showsPrec p
+    TagGetEra -> showsPrec p
 
 instance Query.OTelRequest ChainSyncQuery where
   reqTypeName _ = "chain_sync"
@@ -1146,6 +1196,7 @@ instance Query.OTelRequest ChainSyncQuery where
     TagGetUTxOs -> "utxos"
     TagGetNodeTip -> "node_tip"
     TagGetTip -> "tip"
+    TagGetEra -> "era"
 
 unInterpreter :: Interpreter xs -> Summary xs
 unInterpreter = unsafeCoerce
@@ -1252,6 +1303,9 @@ eraEq ScriptDataInBabbageEra ScriptDataInBabbageEra = Just Refl
 eraEq ScriptDataInBabbageEra _ = Nothing
 
 -- * Orphan instances
+
+instance Variations AnyCardanoEra where
+  variations = NE.fromList [minBound .. maxBound]
 
 instance Variations ProtocolParameters
 

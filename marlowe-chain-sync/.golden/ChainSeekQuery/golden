@@ -24,6 +24,12 @@ Show: MsgRequest (ReqLeaf (GetUTxOs (GetUTxOsForTxOutRefs (fromList [TxOutRef {t
 Binary: 01000602000000000000000100000000000000000001
 Show: MsgRequest (ReqLeaf (GetUTxOs (GetUTxOsForTxOutRefs (fromList [TxOutRef {txId = "61", txIx = TxIx {unTxIx = 1}}]))))
 Binary: 0100060200000000000000010000000000000001610001
+Show: MsgRequest (ReqLeaf GetNodeTip)
+Binary: 010007
+Show: MsgRequest (ReqLeaf GetTip)
+Binary: 010008
+Show: MsgRequest (ReqLeaf GetEra)
+Binary: 010009
 Show: MsgRespond (1, 1)
 Binary: 00000000000000010000000000000001
 Show: MsgRespond 1
@@ -110,3 +116,27 @@ Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {
 Binary: 000000000000000100000000000000000001000000000000000161000000000000000100000000000000000000
 Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "61", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}, datumHash = Nothing, datum = Nothing})]})
 Binary: 000000000000000100000000000000016100010000000000000000000000000000000100000000000000000000
+Show: MsgRespond Genesis
+Binary: 00
+Show: MsgRespond (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 01000000000000000100000000000000000000000000000001
+Show: MsgRespond (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0100000000000000010000000000000001610000000000000001
+Show: MsgRespond Genesis
+Binary: 00
+Show: MsgRespond (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 01000000000000000100000000000000000000000000000001
+Show: MsgRespond (At (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}))
+Binary: 0100000000000000010000000000000001610000000000000001
+Show: MsgRespond (AnyCardanoEra ByronEra)
+Binary: 00
+Show: MsgRespond (AnyCardanoEra ShelleyEra)
+Binary: 01
+Show: MsgRespond (AnyCardanoEra AllegraEra)
+Binary: 02
+Show: MsgRespond (AnyCardanoEra MaryEra)
+Binary: 03
+Show: MsgRespond (AnyCardanoEra AlonzoEra)
+Binary: 04
+Show: MsgRespond (AnyCardanoEra BabbageEra)
+Binary: 05

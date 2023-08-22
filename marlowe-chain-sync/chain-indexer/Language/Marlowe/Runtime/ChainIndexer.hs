@@ -13,7 +13,7 @@ module Language.Marlowe.Runtime.ChainIndexer (
   renderDatabaseSelectorOTel,
 ) where
 
-import Cardano.Api (BlockHeader (..), CardanoMode, ChainTip (..), LocalNodeClientProtocolsInMode)
+import Cardano.Api (CardanoMode, LocalNodeClientProtocolsInMode)
 import Colog (Message, WithLog)
 import Control.Arrow (returnA)
 import Control.Concurrent.Component
@@ -24,7 +24,6 @@ import Control.Monad.Event.Class (Inject, MonadEvent)
 import Data.ByteString (ByteString)
 import Data.Maybe (catMaybes)
 import Data.String (fromString)
-import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
 import Data.Time (NominalDiffTime)
 import Language.Marlowe.Runtime.ChainIndexer.Database (DatabaseQueries (..))
@@ -35,9 +34,6 @@ import Language.Marlowe.Runtime.ChainIndexer.NodeClient (
   CostModel,
   NodeClient (..),
   NodeClientDependencies (..),
-  NodeClientSelector (..),
-  RollBackwardField (..),
-  RollForwardField (..),
   nodeClient,
  )
 import Language.Marlowe.Runtime.ChainIndexer.Store (
@@ -50,12 +46,11 @@ import Observe.Event.Render.OpenTelemetry (OTelRendered (..), RenderSelectorOTel
 import OpenTelemetry.Trace.Core (SpanKind (..), toAttribute)
 import UnliftIO (MonadUnliftIO)
 
-data ChainIndexerSelector r f where
-  NodeClientEvent :: NodeClientSelector f -> ChainIndexerSelector r f
-  ChainStoreEvent :: ChainStoreSelector r f -> ChainIndexerSelector r f
+data ChainIndexerSelector f where
+  ChainStoreEvent :: ChainStoreSelector f -> ChainIndexerSelector f
 
-data ChainIndexerDependencies r m = ChainIndexerDependencies
-  { connectToLocalNode :: !((r -> LocalNodeClientProtocolsInMode CardanoMode) -> m ())
+data ChainIndexerDependencies m = ChainIndexerDependencies
+  { connectToLocalNode :: !(LocalNodeClientProtocolsInMode CardanoMode -> m ())
   , maxCost :: !Int
   , costModel :: !CostModel
   , databaseQueries :: !(DatabaseQueries m)
@@ -66,11 +61,10 @@ data ChainIndexerDependencies r m = ChainIndexerDependencies
 chainIndexer
   :: ( MonadUnliftIO m
      , MonadEvent r s m
-     , Inject NodeClientSelector s
-     , Inject (ChainStoreSelector r) s
+     , Inject ChainStoreSelector s
      , WithLog env Message m
      )
-  => Component m (ChainIndexerDependencies r m) Probes
+  => Component m (ChainIndexerDependencies m) Probes
 chainIndexer = proc ChainIndexerDependencies{..} -> do
   let DatabaseQueries{..} = databaseQueries
   NodeClient{..} <-
@@ -103,61 +97,11 @@ chainIndexer = proc ChainIndexerDependencies{..} -> do
         , readiness = atomically ready
         }
 
-renderChainIndexerSelectorOTel :: RenderSelectorOTel (ChainIndexerSelector r)
+renderChainIndexerSelectorOTel :: RenderSelectorOTel ChainIndexerSelector
 renderChainIndexerSelectorOTel = \case
-  NodeClientEvent sel -> renderNodeClientSelectorOTel sel
   ChainStoreEvent sel -> renderChainStoreSelectorOTel sel
 
-renderNodeClientSelectorOTel :: RenderSelectorOTel NodeClientSelector
-renderNodeClientSelectorOTel = \case
-  Intersect ->
-    OTelRendered
-      { eventName = "marlowe_chain_indexer/intersect"
-      , eventKind = Internal
-      , renderField = \points ->
-          [("cardano.sync.intersect.points", toAttribute $ T.pack . show <$> points)]
-      }
-  IntersectFound ->
-    OTelRendered
-      { eventName = "marlowe_chain_indexer/intersect/found"
-      , eventKind = Internal
-      , renderField = \(point, tip) ->
-          [ ("cardano.sync.intersect", fromString $ show point)
-          , ("cardano.sync.local_tip", fromString $ show point)
-          , ("cardano.sync.remote_tip", fromString $ show tip)
-          ]
-      }
-  IntersectNotFound ->
-    OTelRendered
-      { eventName = "marlowe_chain_indexer/intersect/not_found"
-      , eventKind = Internal
-      , renderField = \tip ->
-          [("cardano.sync.remote_tip", fromString $ show tip)]
-      }
-  RollForward ->
-    OTelRendered
-      { eventName = "marlowe_chain_indexer/roll_forward"
-      , eventKind = Producer
-      , renderField = \case
-          RollForwardBlock (BlockHeader slot hash block) ->
-            [("cardano.sync.local_tip", fromString $ show $ show $ ChainTip slot hash block)]
-          RollForwardTip tip ->
-            [("cardano.sync.remote_tip", fromString $ show $ show tip)]
-          _ -> []
-      }
-  RollBackward ->
-    OTelRendered
-      { eventName = "marlowe_chain_indexer/roll_backward"
-      , eventKind = Producer
-      , renderField = \case
-          RollBackwardPoint point ->
-            [("cardano.sync.local_tip", fromString $ show $ show point)]
-          RollBackwardTip tip ->
-            [("cardano.sync.remote_tip", fromString $ show $ show tip)]
-          _ -> []
-      }
-
-renderChainStoreSelectorOTel :: RenderSelectorOTel (ChainStoreSelector r)
+renderChainStoreSelectorOTel :: RenderSelectorOTel ChainStoreSelector
 renderChainStoreSelectorOTel = \case
   CheckGenesisBlock ->
     OTelRendered

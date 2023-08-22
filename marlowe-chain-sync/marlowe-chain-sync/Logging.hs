@@ -12,7 +12,7 @@ module Logging (
 import Control.Monad.Event.Class (Inject (..))
 import Data.ByteString (ByteString)
 import Language.Marlowe.Runtime.ChainSync (renderDatabaseSelectorOTel, renderNodeServiceSelectorOTel)
-import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand, ChainSyncQuery, RuntimeChainSeek)
+import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand, ChainSyncQuery)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as DB
 import Language.Marlowe.Runtime.ChainSync.NodeClient (NodeClientSelector (..))
 import Network.Protocol.Driver.Trace (TcpServerSelector, renderTcpServerSelectorOTel)
@@ -23,7 +23,6 @@ import Observe.Event (idInjectSelector, injectSelector)
 import Observe.Event.Render.OpenTelemetry
 
 data RootSelector f where
-  ChainSeekServer :: TcpServerSelector (Handshake RuntimeChainSeek) f -> RootSelector f
   QueryServer :: TcpServerSelector (Handshake (Query ChainSyncQuery)) f -> RootSelector f
   JobServer :: TcpServerSelector (Handshake (Job ChainSyncCommand)) f -> RootSelector f
   Database :: DB.QuerySelector f -> RootSelector f
@@ -45,7 +44,6 @@ renderRootSelectorOTel
   -> Maybe ByteString
   -> RenderSelectorOTel RootSelector
 renderRootSelectorOTel dbName dbUser host port = \case
-  ChainSeekServer sel -> renderTcpServerSelectorOTel sel
   QueryServer sel -> renderTcpServerSelectorOTel sel
   JobServer sel -> renderTcpServerSelectorOTel sel
   Database sel -> renderDatabaseSelectorOTel dbName dbUser host port sel

@@ -1,6 +1,6 @@
 cabal-version:   3.0
 name:            marlowe-cli
-version:         0.0.11.0
+version:         0.0.12.0
 license:         Apache-2.0
 license-files:
   LICENSE
@@ -60,6 +60,7 @@ library
   import:          lang
   hs-source-dirs:  src
   exposed-modules:
+    Contrib.Cardano.Formatting
     Contrib.Control.Concurrent
     Language.Marlowe.Cardano
     Language.Marlowe.Cardano.Thread
@@ -174,6 +175,7 @@ library cli-test
     , async
     , async-pool
     , base >=4.9 && <5
+    , base16-aeson ==0.1.0.0
     , bytestring
     , cardano-api
     , containers
@@ -229,12 +231,13 @@ library command
     Language.Marlowe.CLI.Command.Util
 
   build-depends:
-    , aeson
+    , appendmap
     , base >=4.9 && <5
     , base16-bytestring
     , bytestring
     , cardano-api
     , cardano-slotting
+    , containers
     , marlowe-actus
     , marlowe-cardano
     , marlowe-cli:{marlowe-cli, cli-test}
@@ -269,3 +272,23 @@ executable marlowe-cli
     , text
 
   ghc-options:     -threaded
+
+test-suite marlowe-cli-test
+  import:         lang
+  hs-source-dirs: tests
+  type:           exitcode-stdio-1.0
+  main-is:        Spec.hs
+  other-modules:  Spec.Analysis
+  build-depends:
+    , aeson
+    , base >=4.9 && <5
+    , cardano-api
+    , containers
+    , marlowe-cardano
+    , marlowe-cli
+    , mtl
+    , plutus-ledger-api
+    , plutus-ledger-slot
+    , plutus-tx
+    , tasty
+    , tasty-hunit

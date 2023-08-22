@@ -41,7 +41,7 @@ packages:
   marlowe-runtime-web
   marlowe-test
 
-  libs/aeson-applicative
+  libs/aeson-record
   libs/aeson-via-serialise
   libs/base16-aeson
   libs/plutus-ledger-aeson
@@ -69,7 +69,7 @@ package marlowe-object
   tests: True
   ghc-options: -Werror
 
-package aeson-applicative
+package aeson-record
   tests: True
   ghc-options: -Werror
 

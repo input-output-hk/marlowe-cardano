@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecursiveDo #-}
 
@@ -9,8 +10,6 @@ import Cardano.Api (
   AddressAny (AddressShelley),
   AsType (..),
   BabbageEra,
-  CardanoEra (..),
-  CtxTx,
   Key (verificationKeyHash),
   NetworkId (Testnet),
   NetworkMagic (NetworkMagic),
@@ -19,7 +18,6 @@ import Cardano.Api (
   StakeAddressReference (NoStakeAddress),
   TxBody (..),
   TxBodyContent (..),
-  TxOut (..),
   generateSigningKey,
   getTxId,
   getVerificationKey,
@@ -28,6 +26,9 @@ import Cardano.Api (
  )
 import qualified Cardano.Api as C
 import Cardano.Api.Byron (deserialiseFromTextEnvelope)
+import Cardano.Api.Shelley (
+  ReferenceTxInsScriptsInlineDatumsSupportedInEra (ReferenceTxInsScriptsInlineDatumsInBabbageEra),
+ )
 import qualified Cardano.Api.Shelley as C
 import Control.Concurrent (threadDelay)
 import Control.DeepSeq (NFData)
@@ -46,7 +47,6 @@ import Data.ByteString.Base16 (decodeBase16)
 import Data.Foldable (fold)
 import Data.Function (on)
 import Data.Functor (($>))
-import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes, fromJust)
 import qualified Data.Set as Set
@@ -63,10 +63,7 @@ import qualified Language.Marlowe.Protocol.HeaderSync.Client as HeaderSync
 import qualified Language.Marlowe.Protocol.Sync.Client as MarloweSync
 import Language.Marlowe.Runtime.Cardano.Api (
   fromCardanoAddressAny,
-  fromCardanoAddressInEra,
   fromCardanoTxId,
-  fromCardanoTxOutDatum,
-  fromCardanoTxOutValue,
   toCardanoAddressAny,
   toCardanoAddressInEra,
   toCardanoTxOut,
@@ -80,8 +77,6 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   SlotNo (..),
   TokenName,
   TxId,
-  TxIx,
-  TxOutRef (..),
   fromBech32,
  )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
@@ -98,23 +93,22 @@ import Language.Marlowe.Runtime.Core.Api (
   ContractId (..),
   MarloweVersion (..),
   MarloweVersionTag (..),
-  Payout (..),
   SomeMarloweVersion (..),
   Transaction (..),
-  TransactionOutput (..),
   TransactionScriptOutput (..),
   emptyMarloweTransactionMetadata,
-  fromChainPayoutDatum,
  )
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader (..))
 import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep (..))
 import Language.Marlowe.Runtime.Transaction.Api (
-  ContractCreated (..),
+  ContractCreatedInEra (..),
   InputsApplied (..),
+  InputsAppliedInEra (..),
   MarloweTxCommand (..),
   SubmitError,
   WalletAddresses (..),
-  WithdrawTx,
+  WithdrawTx (..),
+  WithdrawTxInEra,
  )
 import Network.Protocol.Job.Client (liftCommandWait)
 import qualified Plutus.V2.Ledger.Api as PV2
@@ -365,7 +359,7 @@ submit'
   -> Integration (Either SubmitError BlockHeader)
 submit' Wallet{..} txBody = do
   let tx = signShelleyTransaction txBody signingKeys
-  runMarloweTxClient $ liftCommandWait $ Submit tx
+  runMarloweTxClient $ liftCommandWait $ Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra tx
 
 deposit
   :: Wallet
@@ -374,7 +368,7 @@ deposit
   -> Party
   -> Token
   -> Integer
-  -> Integration (InputsApplied BabbageEra 'V1)
+  -> Integration (InputsAppliedInEra BabbageEra 'V1)
 deposit Wallet{..} contractId intoAccount fromParty ofToken quantity = do
   result <-
     applyInputs
@@ -383,7 +377,9 @@ deposit Wallet{..} contractId intoAccount fromParty ofToken quantity = do
       contractId
       emptyMarloweTransactionMetadata
       [NormalInput $ IDeposit intoAccount fromParty ofToken quantity]
-  expectRight "Failed to create deposit transaction" result
+  InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra tx <-
+    expectRight "Failed to create deposit transaction" result
+  pure tx
 
 choose
   :: Wallet
@@ -391,7 +387,7 @@ choose
   -> PV2.BuiltinByteString
   -> Party
   -> Integer
-  -> Integration (InputsApplied BabbageEra 'V1)
+  -> Integration (InputsAppliedInEra BabbageEra 'V1)
 choose Wallet{..} contractId choice party chosenNum = do
   result <-
     applyInputs
@@ -400,12 +396,14 @@ choose Wallet{..} contractId choice party chosenNum = do
       contractId
       emptyMarloweTransactionMetadata
       [NormalInput $ IChoice (ChoiceId choice party) chosenNum]
-  expectRight "Failed to create choice transaction" result
+  InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra tx <-
+    expectRight "Failed to create choice transaction" result
+  pure tx
 
 notify
   :: Wallet
   -> ContractId
-  -> Integration (InputsApplied BabbageEra 'V1)
+  -> Integration (InputsAppliedInEra BabbageEra 'V1)
 notify Wallet{..} contractId = do
   result <-
     applyInputs
@@ -414,16 +412,20 @@ notify Wallet{..} contractId = do
       contractId
       emptyMarloweTransactionMetadata
       [NormalInput INotify]
-  expectRight "Failed to create notify transaction" result
+  InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra tx <-
+    expectRight "Failed to create notify transaction" result
+  pure tx
 
 withdraw
   :: Wallet
   -> ContractId
   -> TokenName
-  -> Integration (WithdrawTx BabbageEra 'V1)
+  -> Integration (WithdrawTxInEra BabbageEra 'V1)
 withdraw Wallet{..} contractId role = do
   result <- Client.withdraw MarloweV1 addresses contractId role
-  expectRight "Failed to create withdraw transaction" result
+  WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra tx <-
+    expectRight "Failed to create withdraw transaction" result
+  pure tx
 
 timeout :: NominalDiffTime
 timeout = secondsToNominalDiffTime 2
@@ -431,8 +433,8 @@ timeout = secondsToNominalDiffTime 2
 retryDelayMicroSeconds :: Int
 retryDelayMicroSeconds = 100_000
 
-contractCreatedToCreateStep :: ContractCreated BabbageEra v -> CreateStep v
-contractCreatedToCreateStep ContractCreated{..} =
+contractCreatedToCreateStep :: ContractCreatedInEra BabbageEra v -> CreateStep v
+contractCreatedToCreateStep ContractCreatedInEra{..} =
   CreateStep
     { createOutput =
         TransactionScriptOutput
@@ -445,8 +447,8 @@ contractCreatedToCreateStep ContractCreated{..} =
     , payoutValidatorHash = payoutScriptHash
     }
 
-inputsAppliedToTransaction :: BlockHeader -> InputsApplied BabbageEra v -> Transaction v
-inputsAppliedToTransaction blockHeader InputsApplied{..} =
+inputsAppliedToTransaction :: BlockHeader -> InputsAppliedInEra BabbageEra v -> Transaction v
+inputsAppliedToTransaction blockHeader InputsAppliedInEra{..} =
   Transaction
     { transactionId = fromCardanoTxId $ getTxId txBody
     , contractId
@@ -455,30 +457,11 @@ inputsAppliedToTransaction blockHeader InputsApplied{..} =
     , validityLowerBound = invalidBefore
     , validityUpperBound = invalidHereafter
     , inputs
-    , output =
-        TransactionOutput
-          { payouts = foldMap (uncurry $ txOutToPayout version $ fromCardanoTxId $ getTxId txBody) case txBody of
-              TxBody TxBodyContent{..} -> zip [0 ..] txOuts
-          , scriptOutput = output
-          }
+    , output
     }
 
-txOutToPayout :: MarloweVersion v -> TxId -> TxIx -> TxOut CtxTx BabbageEra -> Map TxOutRef (Payout v)
-txOutToPayout version txId txIx (TxOut address value datum _) = case snd $ fromCardanoTxOutDatum datum of
-  Just datum' -> case fromChainPayoutDatum version datum' of
-    Just payoutDatum ->
-      Map.singleton
-        (TxOutRef txId txIx)
-        Payout
-          { address = fromCardanoAddressInEra BabbageEra address
-          , assets = fromCardanoTxOutValue value
-          , datum = payoutDatum
-          }
-    Nothing -> mempty
-  Nothing -> mempty
-
-contractCreatedToContractHeader :: BlockHeader -> ContractCreated BabbageEra v -> ContractHeader
-contractCreatedToContractHeader blockHeader ContractCreated{..} =
+contractCreatedToContractHeader :: BlockHeader -> ContractCreatedInEra BabbageEra v -> ContractHeader
+contractCreatedToContractHeader blockHeader ContractCreatedInEra{..} =
   ContractHeader
     { contractId
     , rolesCurrency

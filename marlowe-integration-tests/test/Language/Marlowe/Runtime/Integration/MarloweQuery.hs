@@ -37,13 +37,18 @@ import Language.Marlowe.Runtime.Core.Api (
   MarloweVersion (..),
   MarloweVersionTag (..),
   Payout (..),
+  TransactionOutput (..),
   TransactionScriptOutput (..),
  )
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Language.Marlowe.Runtime.Integration.Common
 import Language.Marlowe.Runtime.Integration.StandardContract
-import Language.Marlowe.Runtime.Transaction.Api (ContractCreated (..), InputsApplied (..), WithdrawTx (..))
+import Language.Marlowe.Runtime.Transaction.Api (
+  ContractCreatedInEra (..),
+  InputsAppliedInEra (..),
+  WithdrawTxInEra (..),
+ )
 import Test.Hspec
 import Test.Integration.Marlowe (MarloweRuntime, withLocalMarloweRuntime)
 
@@ -121,8 +126,8 @@ instance PaginatedQuery GetWithdrawals where
       Withdrawal2 -> Set.member Contract2 withdrawalRoleCurrenciesSym
   toRef _ MarloweQueryTestData{..} = \case
     Unknown -> "0000000000000000000000000000000000000000000000000000000000000000"
-    Known Withdrawal1 -> fromCardanoTxId $ getTxId case fst contract1Step5 of WithdrawTx{..} -> txBody
-    Known Withdrawal2 -> fromCardanoTxId $ getTxId case fst contract2Step5 of WithdrawTx{..} -> txBody
+    Known Withdrawal1 -> fromCardanoTxId $ getTxId case fst contract1Step5 of WithdrawTxInEra{..} -> txBody
+    Known Withdrawal2 -> fromCardanoTxId $ getTxId case fst contract2Step5 of WithdrawTxInEra{..} -> txBody
   toItem _ MarloweQueryTestData{..} ref =
     Withdrawal
       { block
@@ -132,7 +137,7 @@ instance PaginatedQuery GetWithdrawals where
     where
       ((txBody, block), withdrawnPayouts) = case ref of
         Withdrawal1 -> case contract1Step5 of
-          (WithdrawTx{txBody = txBody', ..}, block') ->
+          (WithdrawTxInEra{txBody = txBody', ..}, block') ->
             ( (txBody', block')
             , flip Map.mapWithKey inputs \payout Payout{..} -> case datum of
                 AssetId{..} ->
@@ -144,7 +149,7 @@ instance PaginatedQuery GetWithdrawals where
                     }
             )
         Withdrawal2 -> case contract2Step5 of
-          (WithdrawTx{txBody = txBody', ..}, block') ->
+          (WithdrawTxInEra{txBody = txBody', ..}, block') ->
             ( (txBody', block')
             , flip Map.mapWithKey inputs \payout Payout{..} -> case datum of
                 AssetId{..} ->
@@ -168,7 +173,7 @@ instance PaginatedQuery GetWithdrawals where
 
 standardContractRoleCurrency :: StandardContractInit 'V1 -> PolicyId
 standardContractRoleCurrency StandardContractInit{..} = case contractCreated of
-  ContractCreated{..} -> rolesCurrency
+  ContractCreatedInEra{..} -> rolesCurrency
 
 data TestTag = Tag1 | Tag2
   deriving (Eq, Ord, Show, Enum, Bounded)
@@ -194,7 +199,7 @@ getContractStateSpec = describe "getContractState" do
             SomeContractState MarloweV1 <$> case contractNo of
               Unknown -> Nothing
               Known contractNo' -> case contractNoToContractCreated testData contractNo' of
-                ContractCreated{..} ->
+                ContractCreatedInEra{..} ->
                   Just
                     ContractState
                       { contractId
@@ -249,7 +254,7 @@ getWithdrawalSpec = describe "getWithdrawal" do
     actual <- getWithdrawal $ contractOrTxNoToTxId testData $ Known $ Right Contract1Step4
     liftIO $ actual `shouldBe` Nothing
   it "Returns Just for a withdrawal txId" $ runMarloweQueryIntegrationTest \testData@MarloweQueryTestData{..} -> do
-    actual <- getWithdrawal $ fromCardanoTxId $ getTxId case fst contract1Step5 of WithdrawTx{..} -> txBody
+    actual <- getWithdrawal $ fromCardanoTxId $ getTxId case fst contract1Step5 of WithdrawTxInEra{..} -> txBody
     liftIO $ actual `shouldBe` Just (contract1Step5Withdrawal testData)
 
 setup :: ActionWith MarloweQueryTestData -> IO ()
@@ -286,13 +291,13 @@ data MarloweQueryTestData = MarloweQueryTestData
   , contract1Step2 :: StandardContractChoiceMade 'V1
   , contract1Step3 :: StandardContractNotified 'V1
   , contract1Step4 :: StandardContractClosed 'V1
-  , contract1Step5 :: (WithdrawTx BabbageEra 'V1, BlockHeader)
+  , contract1Step5 :: (WithdrawTxInEra BabbageEra 'V1, BlockHeader)
   , contract2 :: StandardContractInit 'V1
   , contract2Step1 :: StandardContractFundsDeposited 'V1
   , contract2Step2 :: StandardContractChoiceMade 'V1
   , contract2Step3 :: StandardContractNotified 'V1
   , contract2Step4 :: StandardContractClosed 'V1
-  , contract2Step5 :: (WithdrawTx BabbageEra 'V1, BlockHeader)
+  , contract2Step5 :: (WithdrawTxInEra BabbageEra 'V1, BlockHeader)
   , contract3 :: StandardContractInit 'V1
   , contract3Step1 :: StandardContractFundsDeposited 'V1
   , contract3Step2 :: StandardContractChoiceMade 'V1
@@ -488,7 +493,7 @@ contractOrTxNoToTxId testData = \case
     ContractId TxOutRef{..} -> txId
   Known (Right txNo) -> txNoToTxId testData txNo
 
-txNoToInputsApplied :: MarloweQueryTestData -> TxNo -> InputsApplied BabbageEra 'V1
+txNoToInputsApplied :: MarloweQueryTestData -> TxNo -> InputsAppliedInEra BabbageEra 'V1
 txNoToInputsApplied MarloweQueryTestData{..} = \case
   Contract1Step1 -> initialFundsDeposited contract1Step1
   Contract1Step2 -> gimmeTheMoneyChosen contract1Step2
@@ -506,17 +511,17 @@ txNoToInputsApplied MarloweQueryTestData{..} = \case
 txNoToInput :: MarloweQueryTestData -> TxNo -> TxOutRef
 txNoToInput MarloweQueryTestData{..} = \case
   Contract1Step1 -> unContractId $ standardContractId contract1
-  Contract1Step2 -> utxo $ fromJust $ output $ initialFundsDeposited contract1Step1
-  Contract1Step3 -> utxo $ fromJust $ output $ gimmeTheMoneyChosen contract1Step2
-  Contract1Step4 -> utxo $ fromJust $ output $ notified contract1Step3
+  Contract1Step2 -> utxo $ fromJust $ scriptOutput $ output $ initialFundsDeposited contract1Step1
+  Contract1Step3 -> utxo $ fromJust $ scriptOutput $ output $ gimmeTheMoneyChosen contract1Step2
+  Contract1Step4 -> utxo $ fromJust $ scriptOutput $ output $ notified contract1Step3
   Contract2Step1 -> unContractId $ standardContractId contract2
-  Contract2Step2 -> utxo $ fromJust $ output $ initialFundsDeposited contract2Step1
-  Contract2Step3 -> utxo $ fromJust $ output $ gimmeTheMoneyChosen contract2Step2
-  Contract2Step4 -> utxo $ fromJust $ output $ notified contract2Step3
+  Contract2Step2 -> utxo $ fromJust $ scriptOutput $ output $ initialFundsDeposited contract2Step1
+  Contract2Step3 -> utxo $ fromJust $ scriptOutput $ output $ gimmeTheMoneyChosen contract2Step2
+  Contract2Step4 -> utxo $ fromJust $ scriptOutput $ output $ notified contract2Step3
   Contract3Step1 -> unContractId $ standardContractId contract3
-  Contract3Step2 -> utxo $ fromJust $ output $ initialFundsDeposited contract3Step1
-  Contract3Step3 -> utxo $ fromJust $ output $ gimmeTheMoneyChosen contract3Step2
-  Contract3Step4 -> utxo $ fromJust $ output $ notified contract3Step3
+  Contract3Step2 -> utxo $ fromJust $ scriptOutput $ output $ initialFundsDeposited contract3Step1
+  Contract3Step3 -> utxo $ fromJust $ scriptOutput $ output $ gimmeTheMoneyChosen contract3Step2
+  Contract3Step4 -> utxo $ fromJust $ scriptOutput $ output $ notified contract3Step3
 
 txNoToConsumer :: MarloweQueryTestData -> TxNo -> Maybe TxId
 txNoToConsumer MarloweQueryTestData{..} =
@@ -552,8 +557,8 @@ txNoToBlockHeader MarloweQueryTestData{..} = \case
 txNoToTxId :: MarloweQueryTestData -> TxNo -> TxId
 txNoToTxId testData = inputsAppliedTxId . txNoToInputsApplied testData
 
-inputsAppliedTxId :: InputsApplied era v -> TxId
-inputsAppliedTxId InputsApplied{..} = fromCardanoTxId $ getTxId txBody
+inputsAppliedTxId :: InputsAppliedInEra era v -> TxId
+inputsAppliedTxId InputsAppliedInEra{..} = fromCardanoTxId $ getTxId txBody
 
 contractNoToStandardContract :: MarloweQueryTestData -> RefSym GetHeaders -> StandardContractInit 'V1
 contractNoToStandardContract MarloweQueryTestData{..} = \case
@@ -562,7 +567,7 @@ contractNoToStandardContract MarloweQueryTestData{..} = \case
   Contract3 -> contract3
   Contract4 -> contract4
 
-contractNoToContractCreated :: MarloweQueryTestData -> RefSym GetHeaders -> ContractCreated BabbageEra 'V1
+contractNoToContractCreated :: MarloweQueryTestData -> RefSym GetHeaders -> ContractCreatedInEra BabbageEra 'V1
 contractNoToContractCreated testData = contractCreated . contractNoToStandardContract testData
 
 contractNoToInitialBlock :: MarloweQueryTestData -> RefSym GetHeaders -> BlockHeader
@@ -579,11 +584,11 @@ contractNoToLatestOutput :: MarloweQueryTestData -> RefSym GetHeaders -> Maybe (
 contractNoToLatestOutput MarloweQueryTestData{..} = \case
   Contract1 -> Nothing
   Contract2 -> case returnDeposited contract2Step4 of
-    InputsApplied{..} -> output
+    InputsAppliedInEra{..} -> scriptOutput output
   Contract3 -> case returnDeposited contract3Step4 of
-    InputsApplied{..} -> output
+    InputsAppliedInEra{..} -> scriptOutput output
   Contract4 -> case contractCreated contract4 of
-    ContractCreated{..} ->
+    ContractCreatedInEra{..} ->
       Just
         TransactionScriptOutput
           { address = marloweScriptAddress
@@ -635,7 +640,7 @@ contract1Step5Withdrawal MarloweQueryTestData{..} =
   Withdrawal
     { block = snd contract1Step5
     , withdrawnPayouts = case fst contract1Step5 of
-        WithdrawTx{..} -> flip Map.mapWithKey inputs \payout Payout{..} -> case datum of
+        WithdrawTxInEra{..} -> flip Map.mapWithKey inputs \payout Payout{..} -> case datum of
           AssetId{..} ->
             PayoutRef
               { contractId = standardContractId contract1
@@ -643,7 +648,7 @@ contract1Step5Withdrawal MarloweQueryTestData{..} =
               , rolesCurrency = policyId
               , role = tokenName
               }
-    , withdrawalTx = fromCardanoTxId $ getTxId $ case fst contract1Step5 of WithdrawTx{txBody} -> txBody
+    , withdrawalTx = fromCardanoTxId $ getTxId $ case fst contract1Step5 of WithdrawTxInEra{txBody} -> txBody
     }
 
 runMarloweQueryIntegrationTest

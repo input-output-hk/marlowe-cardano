@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
@@ -38,13 +39,15 @@ import Control.Monad.State.Class (MonadState)
 import Data.Aeson (FromJSON (..), ToJSON (..), ToJSONKey)
 import Data.Aeson qualified as A
 import Data.Aeson qualified as Aeson
+import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Aeson.OneLine qualified as A
 import Data.Aeson.Types (toJSONKeyText)
 import Data.Aeson.Types qualified as A
 import Data.Fixed qualified as F
 import Data.Fixed qualified as Fixed
 import Data.Foldable (fold)
-import Data.List.NonEmpty qualified as List
+import Data.List (sort)
+import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
 import Data.Map.Strict qualified as Map
 import Data.String (IsString (fromString))
@@ -74,6 +77,13 @@ import Plutus.V1.Ledger.Api (CurrencySymbol, TokenName)
 import Plutus.V1.Ledger.Value qualified as P
 import Text.Read (readMaybe)
 
+-- import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1
+-- import qualified Plutus.V2.Ledger.Api as Ledger
+
+import Data.ByteString.Base16.Aeson (EncodeBase16)
+import Data.Text (Text)
+import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddressBech32)
+
 -- | Runtime interaction (submission) works against specific era (Babbage).
 -- | On the other hand CLI is more flexible and is able to decode and handle
 -- | transactions from different eras.
@@ -102,18 +112,24 @@ data Wallet era = Wallet
   , _waSubmittedTransactions :: [SomeTxBody]
   -- ^ We keep track of all the transactions so we can
   -- discard fees from the balance check calculation.
+  , _waExternal :: Bool
+  -- ^ We allow loading of external wallets from the file system.
+  -- We keep track of them so we don't move funds out of these wallet
+  -- at the end of the scenario.
   }
   deriving stock (Generic, Show)
 
 makeLenses ''Wallet
 
 emptyWallet :: AddressInEra era -> SomePaymentSigningKey -> Wallet era
-emptyWallet address signignKey = Wallet address mempty signignKey mempty -- mempty
+emptyWallet address signignKey = Wallet address mempty signignKey mempty False -- mempty
 
-fromUTxO :: AddressInEra era -> SomePaymentSigningKey -> UTxO era -> Wallet era
-fromUTxO address signignKey (UTxO utxo) = do
+newtype IsExternalWallet = IsExternalWallet {unExternalWallet :: Bool}
+
+fromUTxO :: AddressInEra era -> SomePaymentSigningKey -> UTxO era -> IsExternalWallet -> Wallet era
+fromUTxO address signignKey (UTxO utxo) (IsExternalWallet isExternalWallet) = do
   let total = foldMap (toPlutusValue . txOutValueValue) (Map.elems utxo)
-  Wallet address total signignKey mempty
+  Wallet address total signignKey mempty isExternalWallet
 
 -- | In many contexts this defaults to the `RoleName` but at some
 -- | point we want to also support multiple marlowe contracts scenarios
@@ -153,15 +169,18 @@ instance IsString CurrencyNickname where fromString = CurrencyNickname
 instance ToJSONKey CurrencyNickname where
   toJSONKey = toJSONKeyText $ T.pack . unCurrencyNickname
 
+-- We want to probably issuer with minting strategies
 data Currency = Currency
   { ccCurrencySymbol :: CurrencySymbol
-  , ccIssuer :: WalletNickname
+  , ccIssuer :: Maybe WalletNickname -- , ccMintingExpirationSlot :: C.SlotNo
   , ccPolicyId :: PolicyId
   }
   deriving stock (Eq, Ord, Generic, Show)
   deriving anyclass (FromJSON, ToJSON)
 
-newtype Currencies = Currencies {unCurrencies :: Map CurrencyNickname Currency}
+newtype Currencies = Currencies
+  { unCurrencies :: Map CurrencyNickname Currency
+  }
 
 data AssetId = AdaAssetId | AssetId CurrencyNickname TokenName
   deriving (Eq, Ord, Show)
@@ -325,25 +344,48 @@ instance ToJSON AssetsBalance where
           [toJSON currencyNickname, toJSON tokenName, toJSON [toJSON minValue, toJSON maxValue]]
 
 data TokenAssignment = TokenAssignment
-  { taWalletNickname :: WalletNickname
+  { taWalletNickname :: Either Text WalletNickname
   -- ^ Default to the same wallet nickname as a token name.
-  , taTokenName :: TokenName
-  , taAmount :: Natural
+  , tokens :: [(TokenName, Natural)]
   }
   deriving stock (Eq, Generic, Show)
 
 instance FromJSON TokenAssignment where
-  parseJSON = \case
-    A.Array (V.toList -> [walletNicknameJSON, tokenNameJSON, amountJSON]) -> do
-      walletNickname <- parseJSON walletNicknameJSON
-      tokenName <- parseTokenNameJSON tokenNameJSON
-      amount <- parseJSON amountJSON
-      pure $ TokenAssignment walletNickname tokenName amount
-    _ -> fail "Expecting a `TokenAssignment` tuple: `[WalletNickname, TokenName, Integer]`."
+  parseJSON = do
+    let parseRecipient json = do
+          txt <- parseJSON json
+          case deserialiseAddressBech32 txt of
+            Just _ -> pure $ Left txt
+            Nothing -> pure $ Right $ WalletNickname $ T.unpack txt
+    \case
+      A.Array (V.toList -> [recipientJSON, tokenNameJSON, amountJSON]) -> do
+        walletNickname <- parseRecipient recipientJSON
+        tokenName <- parseTokenNameJSON tokenNameJSON
+        amount <- parseJSON amountJSON
+        pure $ TokenAssignment walletNickname [(tokenName, amount)]
+      A.Object (sort . KeyMap.toList -> [("recipient", recipientJSON), ("tokens", A.Array tokensJSONs)]) -> do
+        walletNickname <- parseRecipient recipientJSON
+        tokensVector <- for tokensJSONs \case
+          A.Array (V.toList -> [tokenNameJSON, amountJSON]) -> do
+            tokenName <- parseTokenNameJSON tokenNameJSON
+            amount <- parseJSON amountJSON
+            pure (tokenName, amount)
+          _ -> fail "Expecting a `TokenAssignment` tuple: `[TokenName, Integer]`."
+        pure $ TokenAssignment walletNickname $ V.toList tokensVector
+      _ -> fail "Expecting a `TokenAssignment` tuple: `[WalletNickname, TokenName, Integer]`."
 
 instance ToJSON TokenAssignment where
-  toJSON (TokenAssignment (WalletNickname walletNickname) tokenName amount) =
-    toJSON [toJSON walletNickname, tokenNameToJSON tokenName, toJSON amount]
+  toJSON (TokenAssignment recipient tokens) = do
+    let recipientJSON = case recipient of
+          Left txt -> toJSON txt
+          Right walletNickname -> toJSON walletNickname
+    A.object
+      [ ("recipient", recipientJSON)
+      , ("tokens", A.Array $ V.fromList $ map tokenToJSON tokens)
+      ]
+    where
+      tokenToJSON (tokenName, amount) =
+        A.Array $ V.fromList [toJSON tokenName, toJSON amount]
 
 -- Parts of this operation set is implemented in `marlowe-cli`. Should we extract
 -- this to a separate package/tool like `cardano-testing-wallet`?
@@ -374,8 +416,19 @@ data WalletOperation
       , woIssuer :: Maybe WalletNickname
       -- ^ Fallbacks to faucet
       , woMetadata :: Maybe Aeson.Object
-      , woTokenDistribution :: List.NonEmpty TokenAssignment
+      , woTokenDistribution :: NonEmpty TokenAssignment
       , woMinLovelace :: Lovelace
+      -- We should make this relative
+      -- , woMitingExpirationSlot :: Maybe C.SlotNo
+      }
+  | ExternalCurrency
+      { woCurrencyNickname :: CurrencyNickname
+      , woCurrencySymbol :: Maybe EncodeBase16
+      , woPolicyId :: Maybe EncodeBase16
+      }
+  | ExternalWallet
+      { woWalletNickname :: WalletNickname
+      , woSigningKeyFile :: String
       }
   | SplitWallet
       { woWalletNickname :: WalletNickname

@@ -6,6 +6,7 @@ module Language.Marlowe.Runtime.Web.Server.REST.Transactions where
 
 import Cardano.Api (BabbageEra, TxBody, getTxId, makeSignedTransaction)
 import qualified Cardano.Api as Cardano
+import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import Cardano.Ledger.Alonzo.TxWitness (TxWitness (TxWitness))
 import Data.Aeson (Value (Null))
 import qualified Data.Map as Map
@@ -13,14 +14,14 @@ import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 import Language.Marlowe.Protocol.Query.Types (Page (..))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
+import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (
   MarloweTransactionMetadata (MarloweTransactionMetadata),
   MarloweVersion (..),
   SomeMarloweVersion (..),
  )
 import qualified Language.Marlowe.Runtime.Core.Api as Core
-import Language.Marlowe.Runtime.Transaction.Api (InputsApplied (..), WalletAddresses (..))
-import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
+import Language.Marlowe.Runtime.Transaction.Api (InputsApplied (..), InputsAppliedInEra (..), WalletAddresses (..))
 import Language.Marlowe.Runtime.Web hiding (Unsigned)
 import Language.Marlowe.Runtime.Web.Server.DTO
 import Language.Marlowe.Runtime.Web.Server.Monad (
@@ -38,6 +39,7 @@ import Language.Marlowe.Runtime.Web.Server.REST.ApiError (
   throwDTOError,
  )
 import qualified Language.Marlowe.Runtime.Web.Server.REST.ApiError as ApiError
+import Language.Marlowe.Runtime.Web.Server.REST.Withdrawals (TxBodyInAnyEra (..))
 import Language.Marlowe.Runtime.Web.Server.SyncClient (LoadTxError (..))
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx (TempTx), TempTxStatus (..))
 import Language.Marlowe.Runtime.Web.Server.Util (makeSignedTxWithWitnessKeys)
@@ -72,7 +74,7 @@ postCreateTxBody
   -> Address
   -> Maybe (CommaList Address)
   -> Maybe (CommaList TxOutRef)
-  -> ServerM (TxBody BabbageEra)
+  -> ServerM TxBodyInAnyEra
 postCreateTxBody contractId PostTransactionsRequest{..} changeAddressDTO mAddresses mCollateralUtxos = do
   SomeMarloweVersion v@MarloweV1 <- fromDTOThrow (badRequest' "Invalid Marlowe version") version
   changeAddress <- fromDTOThrow (badRequest' "Invalid change address") changeAddressDTO
@@ -89,7 +91,7 @@ postCreateTxBody contractId PostTransactionsRequest{..} changeAddressDTO mAddres
       if Map.null tags then Nothing else Just (tags, Nothing)
   applyInputs v WalletAddresses{..} contractId' MarloweTransactionMetadata{..} invalidBefore invalidHereafter inputs >>= \case
     Left err -> throwDTOError err
-    Right InputsApplied{txBody} -> pure txBody
+    Right (InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra InputsAppliedInEra{txBody}) -> pure $ TxBodyInAnyEra txBody
 
 postCreateTxBodyResponse
   :: TxOutRef
@@ -99,7 +101,7 @@ postCreateTxBodyResponse
   -> Maybe (CommaList TxOutRef)
   -> ServerM (PostTransactionsResponse CardanoTxBody)
 postCreateTxBodyResponse contractId req changeAddressDTO mAddresses mCollateralUtxos = do
-  txBody <- postCreateTxBody contractId req changeAddressDTO mAddresses mCollateralUtxos
+  TxBodyInAnyEra txBody <- postCreateTxBody contractId req changeAddressDTO mAddresses mCollateralUtxos
   let txBody' = toDTO txBody
   let txId = toDTO $ fromCardanoTxId $ getTxId txBody
   let body = ApplyInputsTxEnvelope contractId txId txBody'
@@ -113,7 +115,7 @@ postCreateTxResponse
   -> Maybe (CommaList TxOutRef)
   -> ServerM (PostTransactionsResponse CardanoTx)
 postCreateTxResponse contractId req changeAddressDTO mAddresses mCollateralUtxos = do
-  txBody <- postCreateTxBody contractId req changeAddressDTO mAddresses mCollateralUtxos
+  TxBodyInAnyEra txBody <- postCreateTxBody contractId req changeAddressDTO mAddresses mCollateralUtxos
   let txId = toDTO $ fromCardanoTxId $ getTxId txBody
   let tx = makeSignedTransaction [] txBody
   let tx' = toDTO tx
@@ -143,7 +145,15 @@ put contractId txId body = do
   txId' <- fromDTOThrow (badRequest' "Invalid transaction id value") txId
   loadTransaction contractId' txId' >>= \case
     Nothing -> throwError $ notFound' "Transaction not found"
-    Just (Left (TempTx _ Unsigned Tx.InputsApplied{txBody})) -> do
+    Just (Left (TempTx era _ Unsigned InputsAppliedInEra{txBody})) -> handleLoaded contractId' txId' era txBody
+    Just _ ->
+      throwError $
+        ApiError.toServerError $
+          ApiError "Transaction already submitted" "ContractAlreadySubmitted" Null 409
+  where
+    handleLoaded
+      :: Core.ContractId -> Chain.TxId -> ReferenceTxInsScriptsInlineDatumsSupportedInEra era -> TxBody era -> ServerM NoContent
+    handleLoaded contractId' txId' ReferenceTxInsScriptsInlineDatumsInBabbageEra txBody = do
       (req :: Maybe (Either (Cardano.Tx BabbageEra) (ShelleyTxWitness BabbageEra))) <- case teType body of
         "Tx BabbageEra" -> pure $ Left <$> fromDTO body
         "ShelleyTxWitness BabbageEra" -> pure $ Right <$> fromDTO body
@@ -153,14 +163,10 @@ put contractId txId body = do
       tx <- case req of
         Nothing -> throwError $ badRequest' "Invalid text envelope cbor value"
         Just (Left tx) -> pure tx
-        Just (Right (ShelleyTxWitness (TxWitness wtKeys _ _ _ _))) -> do
+        Just (Right (ShelleyTxWitness (TxWitness wtKeys _ _ _ _))) ->
           case makeSignedTxWithWitnessKeys txBody wtKeys of
             Just tx -> pure tx
             Nothing -> throwError $ badRequest' "Invalid witness keys"
-      submitTransaction contractId' txId' tx >>= \case
+      submitTransaction contractId' txId' ReferenceTxInsScriptsInlineDatumsInBabbageEra tx >>= \case
         Nothing -> pure NoContent
         Just err -> throwError $ ApiError.toServerError $ ApiError (show err) "SubmissionError" Null 403
-    Just _ ->
-      throwError $
-        ApiError.toServerError $
-          ApiError "Transaction already submitted" "ContractAlreadySubmitted" Null 409

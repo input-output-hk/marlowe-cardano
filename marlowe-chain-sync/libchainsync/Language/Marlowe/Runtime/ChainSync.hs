@@ -32,6 +32,7 @@ import Language.Marlowe.Runtime.ChainSync.Server (ChainSyncServerDependencies (.
 import Network.Protocol.Connection (ServerSource (..))
 import Network.Protocol.Job.Server (JobServer)
 import Network.Protocol.Query.Server (QueryServer)
+import Numeric.Natural (Natural)
 import Observe.Event.Render.OpenTelemetry (OTelRendered (..), RenderSelectorOTel)
 import OpenTelemetry.Trace.Core (SpanKind (..), toAttribute)
 import Ouroboros.Network.Protocol.LocalStateQuery.Client (Some (..))
@@ -51,6 +52,7 @@ data ChainSyncDependencies m = ChainSyncDependencies
       -> Tx era
       -> m (SubmitResult (TxValidationErrorInMode CardanoMode))
   , nodeTip :: STM ChainPoint
+  , scanBatchSize :: Natural
   }
 
 data ChainSync m = ChainSync

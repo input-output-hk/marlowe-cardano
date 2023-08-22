@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name:          marlowe-chain-sync
-version:       0.0.3
+version:       0.0.4
 synopsis:      Cardano chain sync system for thee Marlowe Runtime
 description:
   Marlowe runtime component for Cardano node synchronization. Communicates with
@@ -70,7 +70,7 @@ library
     , cardano-ledger-core ==0.1.0.0
     , containers ^>=0.6.5
     , hashable >=1.3 && <2
-    , marlowe-protocols ==0.1.1.0
+    , marlowe-protocols ==0.2.0.0
     , nonempty-containers ^>=0.3.4
     , ouroboros-consensus ==0.1.0.1
     , ouroboros-network ==0.1.0.1
@@ -113,8 +113,8 @@ library libchainsync
     , hasql-th ^>=0.4
     , hasql-transaction ^>=1
     , hs-opentelemetry-api >=0.0.3 && <0.0.4
-    , marlowe-chain-sync ==0.0.3
-    , marlowe-protocols ==0.1.1.0
+    , marlowe-chain-sync ==0.0.4
+    , marlowe-protocols ==0.2.0.0
     , nonempty-containers ^>=0.3.4
     , ouroboros-network ==0.1.0.1
     , stm ^>=2.5
@@ -183,7 +183,7 @@ library plutus-compat
     , cardano-api ==1.35.4
     , cardano-ledger-byron ==0.1.0.0
     , containers ^>=0.6.5
-    , marlowe-chain-sync ==0.0.3
+    , marlowe-chain-sync ==0.0.4
     , plutus-ledger-api ==1.0.0.1
     , plutus-tx ==1.0.0.0
     , serialise ^>=0.2.6
@@ -199,8 +199,8 @@ library gen
     , bytestring >=0.10.12 && <0.12
     , cardano-api:{cardano-api, gen} ==1.35.4
     , hedgehog-quickcheck ^>=0.1
-    , marlowe-chain-sync ==0.0.3
-    , marlowe-protocols ==0.1.1.0
+    , marlowe-chain-sync ==0.0.4
+    , marlowe-protocols ==0.2.0.0
     , nonempty-containers ^>=0.3.4
     , ouroboros-consensus ==0.1.0.1
     , QuickCheck >=2.14 && <3
@@ -219,8 +219,8 @@ test-suite marlowe-chain-sync-test
   build-depends:
     , base >=4.9 && <5
     , hspec >=2.10 && <3
-    , marlowe-chain-sync:{marlowe-chain-sync, gen} ==0.0.3
-    , marlowe-protocols ==0.1.1.0
+    , marlowe-chain-sync:{marlowe-chain-sync, gen} ==0.0.4
+    , marlowe-protocols ==0.2.0.0
 
   build-tool-depends: hspec-discover:hspec-discover
   ghc-options:        -threaded
@@ -285,8 +285,8 @@ executable marlowe-chain-sync
     , hasql-pool ^>=0.8
     , hs-opentelemetry-api ==0.0.3.6
     , hs-opentelemetry-sdk ==0.0.3.4
-    , marlowe-chain-sync:{marlowe-chain-sync, libchainsync} ==0.0.3
-    , marlowe-protocols ==0.1.1.0
+    , marlowe-chain-sync:{marlowe-chain-sync, libchainsync} ==0.0.4
+    , marlowe-protocols ==0.2.0.0
     , mtl >=2.2 && <3
     , network >=3.1 && <4
     , optparse-applicative

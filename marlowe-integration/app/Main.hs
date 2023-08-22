@@ -19,7 +19,11 @@ import Data.Maybe (fromJust)
 import qualified Data.Text as T
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.ChainSync.Api (Address (..), fromBech32, toBech32)
-import Language.Marlowe.Runtime.Web (CreateTxEnvelope (CreateTxEnvelope), PostContractsRequest (..))
+import Language.Marlowe.Runtime.Web (
+  ContractOrSourceId (..),
+  CreateTxEnvelope (CreateTxEnvelope),
+  PostContractsRequest (..),
+ )
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Client (
   getContract,
@@ -54,7 +58,7 @@ main = withLocalMarloweRuntime \MarloweRuntime{..} -> do
           , tags = mempty
           , version = Web.V1
           , roles = Nothing
-          , contract = V1.Close
+          , contract = ContractOrSourceId $ Left V1.Close
           , minUTxODeposit = 2_000_000
           }
 

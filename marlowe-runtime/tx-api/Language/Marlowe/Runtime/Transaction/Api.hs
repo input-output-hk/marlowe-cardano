@@ -14,9 +14,11 @@ module Language.Marlowe.Runtime.Transaction.Api (
   ApplyInputsError (..),
   ConstraintError (..),
   ContractCreated (..),
+  ContractCreatedInEra (..),
   CreateBuildupError (..),
   CreateError (..),
   InputsApplied (..),
+  InputsAppliedInEra (..),
   JobId (..),
   LoadMarloweContextError (..),
   MarloweTxCommand (..),
@@ -30,24 +32,32 @@ module Language.Marlowe.Runtime.Transaction.Api (
   WalletAddresses (..),
   WithdrawError (..),
   WithdrawTx (..),
+  WithdrawTxInEra (..),
   decodeRoleTokenMetadata,
   encodeRoleTokenMetadata,
   mkMint,
 ) where
 
 import Cardano.Api (
+  AnyCardanoEra (..),
   AsType (..),
   BabbageEra,
   IsCardanoEra,
+  IsShelleyBasedEra,
   Tx,
   TxBody,
+  TxBodyContent (..),
   cardanoEra,
   deserialiseFromCBOR,
+  makeTransactionBody,
   serialiseToCBOR,
   serialiseToTextEnvelope,
  )
+import qualified Cardano.Api as C
+import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
+import qualified Cardano.Api.Shelley as CS
 import Control.Applicative ((<|>))
-import Data.Aeson (ToJSON (..), object, (.!=), (.:!), (.=))
+import Data.Aeson (ToJSON (..), Value (..), object, (.!=), (.:!), (.=))
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as Aeson.KeyMap
 import Data.Aeson.Types ((.:))
@@ -55,11 +65,13 @@ import qualified Data.Aeson.Types as Aeson.Types
 import Data.Binary (Binary, Get, get, getWord8, put)
 import Data.Binary.Put (Put, putWord8)
 import Data.ByteString (ByteString)
+import qualified Data.ByteString as BS
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Map (Map)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (fromMaybe, maybeToList)
+import Data.Maybe (fromJust, fromMaybe, maybeToList)
+import Data.SatInt (SatInt)
 import Data.Set (Set)
 import Data.String (fromString)
 import Data.Text (Text)
@@ -70,6 +82,8 @@ import Data.Void (Void, absurd)
 import GHC.Generics (Generic)
 import GHC.Show (showSpace)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError)
+import qualified Language.Marlowe.Analysis.Safety.Types as Safety
+import qualified Language.Marlowe.Core.V1.Semantics as V1
 import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType)
 import Language.Marlowe.Runtime.ChainSync.Api (
   Address,
@@ -94,16 +108,26 @@ import Language.Marlowe.Runtime.ChainSync.Api (
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.History.Api (ExtractCreationError, ExtractMarloweTransactionError)
 import Network.HTTP.Media (MediaType)
+import Network.Protocol.Codec.Spec (Variations (..), varyAp)
 import Network.Protocol.Handshake.Types (HasSignature (..))
 import Network.Protocol.Job.Types
 import qualified Network.URI as Network
+import qualified Plutus.V2.Ledger.Api as PV2
+import PlutusCore.Evaluation.Machine.ExBudget (ExBudget)
+import PlutusCore.Evaluation.Machine.ExMemory (ExCPU, ExMemory)
 
 instance Binary Network.URIAuth
 instance Binary Network.URI
 
+instance Variations Network.URIAuth
+instance Variations Network.URI
+
 instance Binary MediaType where
   put = put . show
   get = fromString <$> get
+
+instance Variations MediaType where
+  variations = pure "text/plain"
 
 instance Aeson.ToJSON MediaType where
   toJSON = Aeson.String . Text.pack . show
@@ -117,7 +141,7 @@ data NFTMetadataFile = NFTMetadataFile
   , src :: Network.URI
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving (Binary)
+  deriving (Binary, Variations)
 
 instance Aeson.ToJSON NFTMetadataFile where
   toJSON NFTMetadataFile{..} =
@@ -146,7 +170,7 @@ data RoleTokenMetadata = RoleTokenMetadata
   , files :: [NFTMetadataFile]
   }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving (Binary)
+  deriving (Binary, Variations)
 
 instance Aeson.ToJSON RoleTokenMetadata where
   toJSON RoleTokenMetadata{..} =
@@ -238,7 +262,7 @@ encodeRoleTokenMetadata = encodeNFTMetadataDetails
 -- | Non empty mint request.
 newtype Mint = Mint {unMint :: Map TokenName (Address, Maybe RoleTokenMetadata)}
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Binary, Semigroup, Monoid, ToJSON)
+  deriving newtype (Binary, Semigroup, Monoid, ToJSON, Variations)
 
 mkMint :: NonEmpty (TokenName, (Address, Maybe RoleTokenMetadata)) -> Mint
 mkMint = Mint . Map.fromList . NonEmpty.toList
@@ -248,9 +272,45 @@ data RoleTokensConfig
   | RoleTokensUsePolicy PolicyId
   | RoleTokensMint Mint
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON)
+  deriving anyclass (Binary, ToJSON, Variations)
 
-data ContractCreated era v = ContractCreated
+data ContractCreated v where
+  ContractCreated
+    :: ReferenceTxInsScriptsInlineDatumsSupportedInEra era -> ContractCreatedInEra era v -> ContractCreated v
+
+instance Variations (ContractCreated 'V1) where
+  variations = ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> variations
+
+instance Show (ContractCreated 'V1) where
+  showsPrec p (ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra created) =
+    showParen (p > 10) $
+      showString "ContractCreated"
+        . showSpace
+        . showString "ReferenceTxInsScriptsInlineDatumsInBabbageEra"
+        . showsPrec 11 created
+
+instance Eq (ContractCreated 'V1) where
+  ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra a == ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra b =
+    a == b
+
+instance ToJSON (ContractCreated 'V1) where
+  toJSON (ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra created) =
+    object
+      [ "era" .= String "babbage"
+      , "contractCreated" .= created
+      ]
+
+instance Binary (ContractCreated 'V1) where
+  put (ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra created) = do
+    putWord8 0
+    put created
+  get = do
+    eraTag <- getWord8
+    case eraTag of
+      0 -> ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> get
+      _ -> fail $ "Invalid era tag value: " <> show eraTag
+
+data ContractCreatedInEra era v = ContractCreatedInEra
   { contractId :: ContractId
   , rolesCurrency :: PolicyId
   , metadata :: MarloweTransactionMetadata
@@ -265,11 +325,27 @@ data ContractCreated era v = ContractCreated
   , safetyErrors :: [SafetyError]
   }
 
-deriving instance Show (ContractCreated BabbageEra 'V1)
-deriving instance Eq (ContractCreated BabbageEra 'V1)
+deriving instance Show (ContractCreatedInEra BabbageEra 'V1)
+deriving instance Eq (ContractCreatedInEra BabbageEra 'V1)
 
-instance (IsCardanoEra era) => ToJSON (ContractCreated era 'V1) where
-  toJSON ContractCreated{..} =
+instance (IsShelleyBasedEra era) => Variations (ContractCreatedInEra era 'V1) where
+  variations =
+    ContractCreatedInEra
+      <$> variations
+        `varyAp` variations
+        `varyAp` variations
+        `varyAp` variations
+        `varyAp` variations
+        `varyAp` variations
+        `varyAp` variations
+        `varyAp` pure MarloweV1
+        `varyAp` variations
+        `varyAp` variations
+        `varyAp` variations
+        `varyAp` variations
+
+instance (IsCardanoEra era) => ToJSON (ContractCreatedInEra era 'V1) where
+  toJSON ContractCreatedInEra{..} =
     object
       [ "contract-id" .= contractId
       , "roles-currency" .= rolesCurrency
@@ -284,8 +360,8 @@ instance (IsCardanoEra era) => ToJSON (ContractCreated era 'V1) where
       , "safety-errors" .= safetyErrors
       ]
 
-instance (IsCardanoEra era) => Binary (ContractCreated era 'V1) where
-  put ContractCreated{..} = do
+instance (IsCardanoEra era) => Binary (ContractCreatedInEra era 'V1) where
+  put ContractCreatedInEra{..} = do
     put contractId
     put rolesCurrency
     put metadata
@@ -310,25 +386,73 @@ instance (IsCardanoEra era) => Binary (ContractCreated era 'V1) where
     txBody <- getTxBody
     safetyErrors <- get
     let version = MarloweV1
-    pure ContractCreated{..}
+    pure ContractCreatedInEra{..}
 
-data InputsApplied era v = InputsApplied
+data InputsApplied v where
+  InputsApplied
+    :: ReferenceTxInsScriptsInlineDatumsSupportedInEra era -> InputsAppliedInEra era v -> InputsApplied v
+
+instance Variations (InputsApplied 'V1) where
+  variations = InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> variations
+
+instance Show (InputsApplied 'V1) where
+  showsPrec p (InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra created) =
+    showParen (p > 10) $
+      showString "InputsApplied"
+        . showSpace
+        . showString "ReferenceTxInsScriptsInlineDatumsInBabbageEra"
+        . showsPrec 11 created
+
+instance Eq (InputsApplied 'V1) where
+  InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra a == InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra b =
+    a == b
+
+instance ToJSON (InputsApplied 'V1) where
+  toJSON (InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra created) =
+    object
+      [ "era" .= String "babbage"
+      , "contractCreated" .= created
+      ]
+
+instance Binary (InputsApplied 'V1) where
+  put (InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra created) = do
+    putWord8 0
+    put created
+  get = do
+    eraTag <- getWord8
+    case eraTag of
+      0 -> InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> get
+      _ -> fail $ "Invalid era tag value: " <> show eraTag
+
+data InputsAppliedInEra era v = InputsAppliedInEra
   { version :: MarloweVersion v
   , contractId :: ContractId
   , metadata :: MarloweTransactionMetadata
   , input :: TransactionScriptOutput v
-  , output :: Maybe (TransactionScriptOutput v)
+  , output :: TransactionOutput v
   , invalidBefore :: UTCTime
   , invalidHereafter :: UTCTime
   , inputs :: Inputs v
   , txBody :: TxBody era
   }
 
-deriving instance Show (InputsApplied BabbageEra 'V1)
-deriving instance Eq (InputsApplied BabbageEra 'V1)
+deriving instance Show (InputsAppliedInEra BabbageEra 'V1)
+deriving instance Eq (InputsAppliedInEra BabbageEra 'V1)
 
-instance (IsCardanoEra era) => Binary (InputsApplied era 'V1) where
-  put InputsApplied{..} = do
+instance (IsShelleyBasedEra era) => Variations (InputsAppliedInEra era 'V1) where
+  variations =
+    InputsAppliedInEra MarloweV1
+      <$> variations
+        `varyAp` variations
+        `varyAp` variations
+        `varyAp` variations
+        `varyAp` variations
+        `varyAp` variations
+        `varyAp` variations
+        `varyAp` variations
+
+instance (IsCardanoEra era) => Binary (InputsAppliedInEra era 'V1) where
+  put InputsAppliedInEra{..} = do
     put contractId
     put metadata
     put input
@@ -347,20 +471,56 @@ instance (IsCardanoEra era) => Binary (InputsApplied era 'V1) where
     invalidHereafter <- get
     inputs <- getInputs MarloweV1
     txBody <- getTxBody
-    pure InputsApplied{..}
+    pure InputsAppliedInEra{..}
 
-data WithdrawTx era v = WithdrawTx
+data WithdrawTx v where
+  WithdrawTx
+    :: ReferenceTxInsScriptsInlineDatumsSupportedInEra era -> WithdrawTxInEra era v -> WithdrawTx v
+
+instance Variations (WithdrawTx 'V1) where
+  variations = WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> variations
+
+instance Show (WithdrawTx 'V1) where
+  showsPrec p (WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra created) =
+    showParen (p > 10) $
+      showString "WithdrawTx"
+        . showSpace
+        . showString "ReferenceTxInsScriptsInlineDatumsInBabbageEra"
+        . showsPrec 11 created
+
+instance Eq (WithdrawTx 'V1) where
+  WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra a == WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra b =
+    a == b
+
+instance Binary (WithdrawTx 'V1) where
+  put (WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra created) = do
+    putWord8 0
+    put created
+  get = do
+    eraTag <- getWord8
+    case eraTag of
+      0 -> WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> get
+      _ -> fail $ "Invalid era tag value: " <> show eraTag
+
+data WithdrawTxInEra era v = WithdrawTxInEra
   { version :: MarloweVersion v
   , inputs :: Map TxOutRef (Payout v)
   , roleToken :: AssetId
   , txBody :: TxBody era
   }
 
-deriving instance Show (WithdrawTx BabbageEra 'V1)
-deriving instance Eq (WithdrawTx BabbageEra 'V1)
+deriving instance Show (WithdrawTxInEra BabbageEra 'V1)
+deriving instance Eq (WithdrawTxInEra BabbageEra 'V1)
 
-instance (IsCardanoEra era) => Binary (WithdrawTx era 'V1) where
-  put WithdrawTx{..} = do
+instance (IsShelleyBasedEra era) => Variations (WithdrawTxInEra era 'V1) where
+  variations =
+    WithdrawTxInEra MarloweV1
+      <$> variations
+        `varyAp` variations
+        `varyAp` variations
+
+instance (IsCardanoEra era) => Binary (WithdrawTxInEra era 'V1) where
+  put WithdrawTxInEra{..} = do
     put inputs
     put roleToken
     putTxBody txBody
@@ -369,10 +529,10 @@ instance (IsCardanoEra era) => Binary (WithdrawTx era 'V1) where
     inputs <- get
     roleToken <- get
     txBody <- getTxBody
-    pure WithdrawTx{..}
+    pure WithdrawTxInEra{..}
 
-instance (IsCardanoEra era) => ToJSON (InputsApplied era 'V1) where
-  toJSON InputsApplied{..} =
+instance (IsCardanoEra era) => ToJSON (InputsAppliedInEra era 'V1) where
+  toJSON InputsAppliedInEra{..} =
     object
       [ "contract-id" .= contractId
       , "input" .= input
@@ -404,7 +564,7 @@ data MarloweTxCommand status err result where
     -- ^ Min Lovelace which should be used for the contract output.
     -> Either (Contract v) DatumHash
     -- ^ The contract to run, or the hash of the contract to load from the store.
-    -> MarloweTxCommand Void (CreateError v) (ContractCreated BabbageEra v)
+    -> MarloweTxCommand Void (CreateError v) (ContractCreated v)
   -- | Construct a transaction that advances an active Marlowe contract by
   -- applying a sequence of inputs. The resulting, unsigned transaction can be
   -- signed via the cardano API or a wallet provider. When signed, the 'Submit'
@@ -426,7 +586,7 @@ data MarloweTxCommand status err result where
     -- is computed from the contract.
     -> Inputs v
     -- ^ The inputs to apply.
-    -> MarloweTxCommand Void (ApplyInputsError v) (InputsApplied BabbageEra v)
+    -> MarloweTxCommand Void (ApplyInputsError v) (InputsApplied v)
   -- | Construct a transaction that withdraws available assets from an active
   -- Marlowe contract for a set of roles in the contract. The resulting,
   -- unsigned transaction can be signed via the cardano API or a wallet
@@ -444,11 +604,12 @@ data MarloweTxCommand status err result where
     -> MarloweTxCommand
         Void
         (WithdrawError v)
-        ( WithdrawTx BabbageEra v -- The unsigned tx body, to be signed by a wallet.
+        ( WithdrawTx v -- The unsigned tx body, to be signed by a wallet.
         )
   -- | Submits a signed transaction to the attached Cardano node.
   Submit
-    :: Tx BabbageEra
+    :: ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+    -> Tx era
     -- ^ A signed transaction to submit
     -> MarloweTxCommand
         SubmitStatus -- This job reports the status of the tx submission, which can take some time.
@@ -468,9 +629,9 @@ instance OTelCommand MarloweTxCommand where
 
 instance Command MarloweTxCommand where
   data Tag MarloweTxCommand status err result where
-    TagCreate :: MarloweVersion v -> Tag MarloweTxCommand Void (CreateError v) (ContractCreated BabbageEra v)
-    TagApplyInputs :: MarloweVersion v -> Tag MarloweTxCommand Void (ApplyInputsError v) (InputsApplied BabbageEra v)
-    TagWithdraw :: MarloweVersion v -> Tag MarloweTxCommand Void (WithdrawError v) (WithdrawTx BabbageEra v)
+    TagCreate :: MarloweVersion v -> Tag MarloweTxCommand Void (CreateError v) (ContractCreated v)
+    TagApplyInputs :: MarloweVersion v -> Tag MarloweTxCommand Void (ApplyInputsError v) (InputsApplied v)
+    TagWithdraw :: MarloweVersion v -> Tag MarloweTxCommand Void (WithdrawError v) (WithdrawTx v)
     TagSubmit :: Tag MarloweTxCommand SubmitStatus SubmitError BlockHeader
 
   data JobId MarloweTxCommand stats err result where
@@ -480,7 +641,7 @@ instance Command MarloweTxCommand where
     Create _ version _ _ _ _ _ -> TagCreate version
     ApplyInputs version _ _ _ _ _ _ -> TagApplyInputs version
     Withdraw version _ _ _ -> TagWithdraw version
-    Submit _ -> TagSubmit
+    Submit _ _ -> TagSubmit
 
   tagFromJobId = \case
     JobIdSubmit _ -> TagSubmit
@@ -544,7 +705,10 @@ instance Command MarloweTxCommand where
       put walletAddresses
       put contractId
       put tokenName
-    Submit tx -> put $ serialiseToCBOR tx
+    Submit era tx -> case era of
+      ReferenceTxInsScriptsInlineDatumsInBabbageEra -> do
+        putWord8 0
+        put $ serialiseToCBOR tx
 
   getCommand = \case
     TagCreate MarloweV1 -> do
@@ -577,10 +741,14 @@ instance Command MarloweTxCommand where
       tokenName <- get
       pure $ Withdraw version walletAddresses contractId tokenName
     TagSubmit -> do
-      bytes <- get @ByteString
-      Submit <$> case deserialiseFromCBOR (AsTx AsBabbage) bytes of
-        Left err -> fail $ show err
-        Right tx -> pure tx
+      eraTag <- getWord8
+      case eraTag of
+        0 -> do
+          bytes <- get @ByteString
+          Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> case deserialiseFromCBOR (AsTx AsBabbage) bytes of
+            Left err -> fail $ show err
+            Right tx -> pure tx
+        _ -> fail $ "Invalid era tag: " <> show eraTag
 
   putStatus = \case
     TagCreate _ -> absurd
@@ -633,7 +801,7 @@ data WalletAddresses = WalletAddresses
   , extraAddresses :: Set Address
   , collateralUtxos :: Set TxOutRef
   }
-  deriving (Eq, Show, Generic, Binary, ToJSON)
+  deriving (Eq, Show, Generic, Binary, ToJSON, Variations)
 
 -- | Errors that can occur when trying to solve the constraints.
 data ConstraintError v
@@ -651,10 +819,12 @@ deriving instance Eq (ConstraintError 'V1)
 deriving instance Ord (ConstraintError 'V1)
 deriving instance Show (ConstraintError 'V1)
 deriving instance Binary (ConstraintError 'V1)
+deriving instance Variations (ConstraintError 'V1)
 deriving instance ToJSON (ConstraintError 'V1)
 
 data CreateError v
-  = CreateConstraintError (ConstraintError v)
+  = CreateEraUnsupported AnyCardanoEra
+  | CreateConstraintError (ConstraintError v)
   | CreateLoadMarloweContextFailed LoadMarloweContextError
   | CreateBuildupFailed CreateBuildupError
   | CreateToCardanoError
@@ -666,6 +836,7 @@ deriving instance Eq (CreateError 'V1)
 deriving instance Show (CreateError 'V1)
 deriving instance Ord (CreateError 'V1)
 instance Binary (CreateError 'V1)
+instance Variations (CreateError 'V1)
 instance ToJSON (CreateError 'V1)
 
 data CreateBuildupError
@@ -673,31 +844,34 @@ data CreateBuildupError
   | AddressDecodingFailed Address
   | MintingScriptDecodingFailed PlutusScript
   deriving (Eq, Ord, Show, Generic)
-  deriving anyclass (Binary, ToJSON)
+  deriving anyclass (Binary, ToJSON, Variations)
 
 data ApplyInputsError v
-  = ApplyInputsConstraintError (ConstraintError v)
+  = ApplyInputsEraUnsupported AnyCardanoEra
+  | ApplyInputsConstraintError (ConstraintError v)
   | ScriptOutputNotFound
   | ApplyInputsLoadMarloweContextFailed LoadMarloweContextError
   | ApplyInputsConstraintsBuildupFailed ApplyInputsConstraintsBuildupError
   | SlotConversionFailed String
   | TipAtGenesis
   | ValidityLowerBoundTooHigh SlotNo SlotNo
+  deriving (Generic)
 
 deriving instance Eq (ApplyInputsError 'V1)
 deriving instance Show (ApplyInputsError 'V1)
-deriving instance Generic (ApplyInputsError 'V1)
 instance Binary (ApplyInputsError 'V1)
+instance Variations (ApplyInputsError 'V1)
 instance ToJSON (ApplyInputsError 'V1)
 
 data ApplyInputsConstraintsBuildupError
   = MarloweComputeTransactionFailed String
   | UnableToDetermineTransactionTimeout
   deriving (Eq, Show, Generic)
-  deriving anyclass (Binary, ToJSON)
+  deriving anyclass (Binary, Variations, ToJSON)
 
 data WithdrawError v
-  = WithdrawConstraintError (ConstraintError v)
+  = WithdrawEraUnsupported AnyCardanoEra
+  | WithdrawConstraintError (ConstraintError v)
   | WithdrawLoadMarloweContextFailed LoadMarloweContextError
   | UnableToFindPayoutForAGivenRole TokenName
   deriving (Generic)
@@ -705,6 +879,7 @@ data WithdrawError v
 deriving instance Eq (WithdrawError 'V1)
 deriving instance Show (WithdrawError 'V1)
 instance Binary (WithdrawError 'V1)
+instance Variations (WithdrawError 'V1)
 instance ToJSON (WithdrawError 'V1)
 
 data LoadMarloweContextError
@@ -716,18 +891,18 @@ data LoadMarloweContextError
   | ExtractCreationError ExtractCreationError
   | ExtractMarloweTransactionError ExtractMarloweTransactionError
   deriving (Eq, Show, Ord, Generic)
-  deriving anyclass (Binary, ToJSON)
+  deriving anyclass (Binary, ToJSON, Variations)
 
 data SubmitError
   = SubmitException String
   | SubmitFailed String -- should be from show TxValidationErrorInMode
   | TxDiscarded
-  deriving (Eq, Show, Generic, Binary, ToJSON)
+  deriving (Eq, Show, Generic, Binary, ToJSON, Variations)
 
 data SubmitStatus
   = Submitting
   | Accepted
-  deriving (Eq, Show, Generic, Binary, ToJSON)
+  deriving (Eq, Show, Generic, Binary, ToJSON, Variations)
 
 instance CommandEq MarloweTxCommand where
   commandEq = \case
@@ -752,8 +927,8 @@ instance CommandEq MarloweTxCommand where
         wallet == wallet'
           && contractId == contractId'
           && role == role'
-    Submit tx -> \case
-      Submit tx' -> tx == tx'
+    Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra tx -> \case
+      Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra tx' -> tx == tx'
 
   jobIdEq = \case
     JobIdSubmit txId -> \case
@@ -849,8 +1024,10 @@ instance ShowCommand MarloweTxCommand where
             . showSpace
             . showsPrec 11 role
         )
-      Submit tx ->
+      Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra tx ->
         ( showString "Submit"
+            . showSpace
+            . showString "ReferenceTxInsScriptsInlineDatumsInBabbageEra"
             . showSpace
             . showsPrec 11 tx
         )
@@ -881,3 +1058,75 @@ instance ShowCommand MarloweTxCommand where
     TagApplyInputs MarloweV1 -> showsPrec p
     TagWithdraw MarloweV1 -> showsPrec p
     TagSubmit -> showsPrec p
+
+instance Variations V1.TransactionError
+instance Variations V1.TransactionWarning
+instance Variations V1.Payment
+instance Variations V1.TransactionOutput
+instance Variations Safety.Transaction
+instance Variations SatInt
+instance Variations ExCPU
+instance Variations ExMemory
+instance Variations ExBudget
+instance Variations PV2.DatumHash where
+  variations = PV2.DatumHash . PV2.toBuiltin <$> variations @ByteString
+instance Variations SafetyError
+
+instance (IsShelleyBasedEra era) => Variations (TxBody era) where
+  variations =
+    either (error . show) pure $
+      makeTransactionBody
+        TxBodyContent
+          { txIns =
+              [
+                ( C.TxIn
+                    (fromJust $ C.deserialiseFromRawBytes C.AsTxId $ BS.pack $ replicate 32 0)
+                    $ C.TxIx 0
+                , C.BuildTxWith $ C.KeyWitness C.KeyWitnessForSpending
+                )
+              ]
+          , txInsCollateral = C.TxInsCollateralNone
+          , txTotalCollateral = C.TxTotalCollateralNone
+          , txReturnCollateral = C.TxReturnCollateralNone
+          , txInsReference = C.TxInsReferenceNone
+          , txOuts = [C.TxOut addr value C.TxOutDatumNone CS.ReferenceScriptNone]
+          , txFee = case C.txFeesExplicitInEra (cardanoEra @era) of
+              Left implicit -> C.TxFeeImplicit implicit
+              Right explicit -> C.TxFeeExplicit explicit 1
+          , txValidityRange =
+              ( C.TxValidityNoLowerBound
+              , case era of
+                  C.ShelleyBasedEraShelley -> C.TxValidityUpperBound C.ValidityUpperBoundInShelleyEra $ C.SlotNo 0
+                  C.ShelleyBasedEraAllegra -> C.TxValidityNoUpperBound C.ValidityNoUpperBoundInAllegraEra
+                  C.ShelleyBasedEraMary -> C.TxValidityNoUpperBound C.ValidityNoUpperBoundInMaryEra
+                  C.ShelleyBasedEraAlonzo -> C.TxValidityNoUpperBound C.ValidityNoUpperBoundInAlonzoEra
+                  C.ShelleyBasedEraBabbage -> C.TxValidityNoUpperBound C.ValidityNoUpperBoundInBabbageEra
+              )
+          , txMetadata = C.TxMetadataNone
+          , txAuxScripts = C.TxAuxScriptsNone
+          , txExtraKeyWits = C.TxExtraKeyWitnessesNone
+          , txProtocolParams = C.BuildTxWith Nothing
+          , txWithdrawals = C.TxWithdrawalsNone
+          , txCertificates = C.TxCertificatesNone
+          , txUpdateProposal = C.TxUpdateProposalNone
+          , txMintValue = C.TxMintNone
+          , txScriptValidity = C.TxScriptValidityNone
+          }
+    where
+      era = C.shelleyBasedEra @era
+
+      addr :: C.AddressInEra era
+      addr =
+        either (error . show) (C.AddressInEra $ C.ShelleyAddressInEra era) $
+          C.deserialiseFromBech32 (C.AsAddress C.AsShelleyAddr) "addr1vy9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupceql82h"
+
+      value :: C.TxOutValue era
+      value = case era of
+        C.ShelleyBasedEraShelley -> C.TxOutAdaOnly C.AdaOnlyInShelleyEra 1
+        C.ShelleyBasedEraAllegra -> C.TxOutAdaOnly C.AdaOnlyInAllegraEra 1
+        C.ShelleyBasedEraMary -> C.TxOutValue C.MultiAssetInMaryEra $ C.lovelaceToValue 1
+        C.ShelleyBasedEraAlonzo -> C.TxOutValue C.MultiAssetInAlonzoEra $ C.lovelaceToValue 1
+        C.ShelleyBasedEraBabbage -> C.TxOutValue C.MultiAssetInBabbageEra $ C.lovelaceToValue 1
+
+instance (IsShelleyBasedEra era) => Variations (Tx era) where
+  variations = C.signShelleyTransaction <$> variations <*> pure []

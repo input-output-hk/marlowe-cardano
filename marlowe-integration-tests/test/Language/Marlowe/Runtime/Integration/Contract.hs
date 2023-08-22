@@ -49,6 +49,7 @@ import Language.Marlowe.Runtime.Client (
   importIncremental,
   runClientStreaming,
  )
+import Language.Marlowe.Runtime.Client.Transfer (BundlePart (..))
 import qualified Language.Marlowe.Runtime.Contract as Contract
 import Language.Marlowe.Runtime.Contract.Api (ContractWithAdjacency (adjacency), merkleizeInputs)
 import qualified Language.Marlowe.Runtime.Contract.Api as Api
@@ -58,7 +59,7 @@ import Network.Protocol.Driver.Trace (HasSpanContext (..))
 import Network.Protocol.Peer.Trace (defaultSpanContext)
 import Network.Protocol.Query.Client (QueryClient, serveQueryClient)
 import Network.TypedProtocol (unsafeIntToNat)
-import Pipes (each, (>->))
+import Pipes (each, yield, (>->))
 import qualified Pipes.Internal as PI
 import qualified Pipes.Prelude as P
 import qualified Plutus.V2.Ledger.Api as PV2
@@ -91,9 +92,9 @@ getMerkleizedInputsSpec = describe "merkleizeInputs" do
           counterexample (show contract) $ runContractTest do
             hash <- expectJust "failed to push contract" $ runLoad $ pushContract contract
             let input = TransactionInput interval $ NormalInput <$> inputs
-            input' <- either (fail . show) pure =<< runQuery (merkleizeInputs hash state input)
             Api.ContractWithAdjacency{contract = merkleizedContract} <-
               expectJust "Failed to get contract" $ runQuery $ Api.getContract hash
+            input' <- either (fail . show) pure =<< runQuery (merkleizeInputs merkleizedContract state input)
             let expected = computeTransaction input state contract
             let expected' = case expected of
                   TransactionOutput warnings payment state' contract' ->
@@ -233,11 +234,11 @@ transferSpec = do
             actual <-
               runContractTest do
                 P.fold (<>) mempty id $
-                  each (ObjectBundle <$> chunks) >-> do
+                  each (toParts $ ObjectBundle <$> chunks) >-> do
                     result <- runTransferIncremental importIncremental
                     case result of
-                      Nothing -> pure ()
-                      Just err -> throwIO $ userError $ "Failed to import contract incrementally: " <> show err
+                      Left err -> throwIO $ userError $ "Failed to import contract incrementally: " <> show err
+                      Right ids -> yield ids
             expected `shouldBe` actual
 
   describe "Export" do
@@ -273,6 +274,13 @@ transferSpec = do
           success <- runTransferIncremental $ exportIncremental 100 hash
           unless success $ throwIO $ userError "Failed to export contract incrementally"
       liftIO $ expected `shouldBe` actual
+
+toParts :: [ObjectBundle] -> [BundlePart]
+toParts = reverse . go . reverse
+  where
+    go :: [ObjectBundle] -> [BundlePart]
+    go [] = []
+    go (x : xs) = FinalPart x : (IntermediatePart <$> xs)
 
 genChunks :: [a] -> Gen [[a]]
 genChunks [] = pure []

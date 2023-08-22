@@ -6,7 +6,8 @@
 
 module Language.Marlowe.Runtime.Web.Server.TxClient where
 
-import Cardano.Api (BabbageEra, Tx, TxBody, getTxId)
+import Cardano.Api (Tx, getTxId)
+import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra)
 import Colog (Message, WithLog)
 import Control.Concurrent.Async (concurrently_)
 import Control.Concurrent.Component
@@ -31,12 +32,11 @@ import Control.Monad (when, (<=<))
 import Control.Monad.Event.Class
 import Control.Monad.IO.Unlift (MonadUnliftIO, liftIO, withRunInIO)
 import Data.Foldable (for_)
-import Data.Functor ((<&>))
 import qualified Data.Map as Map
 import Data.Time (UTCTime)
 import Language.Marlowe.Protocol.Client (MarloweRuntimeClient (..))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
-import Language.Marlowe.Runtime.ChainSync.Api (Lovelace, StakeCredential, TokenName, TxId)
+import Language.Marlowe.Runtime.ChainSync.Api (DatumHash, Lovelace, StakeCredential, TokenName, TxId)
 import Language.Marlowe.Runtime.Core.Api (
   Contract,
   ContractId,
@@ -48,8 +48,10 @@ import Language.Marlowe.Runtime.Core.Api (
 import Language.Marlowe.Runtime.Transaction.Api (
   ApplyInputsError,
   ContractCreated (..),
+  ContractCreatedInEra (..),
   CreateError,
   InputsApplied (..),
+  InputsAppliedInEra (..),
   MarloweTxCommand (..),
   RoleTokensConfig,
   SubmitError,
@@ -57,6 +59,7 @@ import Language.Marlowe.Runtime.Transaction.Api (
   WalletAddresses,
   WithdrawError,
   WithdrawTx (..),
+  WithdrawTxInEra (..),
  )
 import Network.Protocol.Connection (Connector, runConnector)
 import Network.Protocol.Job.Client
@@ -74,8 +77,8 @@ type CreateContract m =
   -> RoleTokensConfig
   -> MarloweTransactionMetadata
   -> Lovelace
-  -> Contract v
-  -> m (Either (CreateError v) (ContractCreated BabbageEra v))
+  -> Either (Contract v) DatumHash
+  -> m (Either (CreateError v) (ContractCreated v))
 
 type ApplyInputs m =
   forall v
@@ -86,7 +89,7 @@ type ApplyInputs m =
   -> Maybe UTCTime
   -> Maybe UTCTime
   -> Inputs v
-  -> m (Either (ApplyInputsError v) (InputsApplied BabbageEra v))
+  -> m (Either (ApplyInputsError v) (InputsApplied v))
 
 type Withdraw m =
   forall v
@@ -94,18 +97,17 @@ type Withdraw m =
   -> WalletAddresses
   -> ContractId
   -> TokenName
-  -> m (Either (WithdrawError v) (TxBody BabbageEra))
+  -> m (Either (WithdrawError v) (WithdrawTx v))
 
 data TempTxStatus = Unsigned | Submitted
 
 type Submit r m = r -> Submit' m
 
-type Submit' m = Tx BabbageEra -> m (Maybe SubmitError)
-
-newtype Withdrawn era (v :: MarloweVersionTag) = Withdrawn {unWithdrawn :: TxBody era}
+type Submit' m = forall era. ReferenceTxInsScriptsInlineDatumsSupportedInEra era -> Tx era -> m (Maybe SubmitError)
 
 data TempTx (tx :: * -> MarloweVersionTag -> *) where
-  TempTx :: MarloweVersion v -> TempTxStatus -> tx BabbageEra v -> TempTx tx
+  TempTx
+    :: ReferenceTxInsScriptsInlineDatumsSupportedInEra era -> MarloweVersion v -> TempTxStatus -> tx era v -> TempTx tx
 
 -- | Public API of the TxClient
 data TxClient r m = TxClient
@@ -115,12 +117,12 @@ data TxClient r m = TxClient
   , submitContract :: ContractId -> Submit r m
   , submitTransaction :: ContractId -> TxId -> Submit r m
   , submitWithdrawal :: TxId -> Submit r m
-  , lookupTempContract :: ContractId -> STM (Maybe (TempTx ContractCreated))
-  , getTempContracts :: STM [TempTx ContractCreated]
-  , lookupTempTransaction :: ContractId -> TxId -> STM (Maybe (TempTx InputsApplied))
-  , getTempTransactions :: ContractId -> STM [TempTx InputsApplied]
-  , lookupTempWithdrawal :: TxId -> STM (Maybe (TempTx Withdrawn))
-  , getTempWithdrawals :: STM [TempTx Withdrawn]
+  , lookupTempContract :: ContractId -> STM (Maybe (TempTx ContractCreatedInEra))
+  , getTempContracts :: STM [TempTx ContractCreatedInEra]
+  , lookupTempTransaction :: ContractId -> TxId -> STM (Maybe (TempTx InputsAppliedInEra))
+  , getTempTransactions :: ContractId -> STM [TempTx InputsAppliedInEra]
+  , lookupTempWithdrawal :: TxId -> STM (Maybe (TempTx WithdrawTxInEra))
+  , getTempWithdrawals :: STM [TempTx WithdrawTxInEra]
   }
 
 -- Basically a lens to the actual map of temp txs to modify within a structure.
@@ -137,6 +139,12 @@ type WithMapUpdate k tx a =
 -- existentialize the type parameters.
 data SomeTVarWithMapUpdate = forall k tx a. (Ord k) => SomeTVarWithMapUpdate (TVar a) (WithMapUpdate k tx a)
 
+data TxInEraWithReferenceScripts where
+  TxInEraWithReferenceScripts
+    :: ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+    -> Tx era
+    -> TxInEraWithReferenceScripts
+
 txClient
   :: forall r s env m
    . (MonadEvent r s m, MonadUnliftIO m, WithLog env Message m)
@@ -147,9 +155,14 @@ txClient = component "web-tx-client" \TxClientDependencies{..} -> do
   tempWithdrawals <- newTVar mempty
   submitQueue <- newTQueue
 
-  let runSubmitGeneric :: SomeTVarWithMapUpdate -> Tx BabbageEra -> TMVar (Maybe SubmitError) -> m ()
-      runSubmitGeneric (SomeTVarWithMapUpdate tempVar updateTemp) tx sender = do
-        let cmd = Submit tx
+  let runSubmitGeneric
+        :: SomeTVarWithMapUpdate
+        -> ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+        -> Tx era
+        -> TMVar (Maybe SubmitError)
+        -> m ()
+      runSubmitGeneric (SomeTVarWithMapUpdate tempVar updateTemp) era tx sender = do
+        let cmd = Submit era tx
             client = JobClient $ pure $ SendMsgExec cmd $ clientCmd True
             clientCmd report =
               ClientStCmd
@@ -176,23 +189,24 @@ txClient = component "web-tx-client" \TxClientDependencies{..} -> do
       genericSubmit
         :: SomeTVarWithMapUpdate
         -> r
-        -> Tx BabbageEra
+        -> ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+        -> Tx era
         -> m (Maybe SubmitError)
-      genericSubmit tVarWithUpdate currentParent tx = do
+      genericSubmit tVarWithUpdate currentParent era tx = do
         liftIO do
           sender <- atomically do
             sender <- newEmptyTMVar
-            writeTQueue submitQueue (tVarWithUpdate, tx, sender, currentParent)
+            writeTQueue submitQueue (tVarWithUpdate, TxInEraWithReferenceScripts era tx, sender, currentParent)
             pure sender
           atomically $ takeTMVar sender
 
       runTxClient = withRunInIO \runInIO -> do
-        (tVarWithUpdate, tx, sender, currentParent) <- atomically $ readTQueue submitQueue
+        (tVarWithUpdate, TxInEraWithReferenceScripts era tx, sender, currentParent) <- atomically $ readTQueue submitQueue
         concurrently_
           ( try @SomeException $
               runInIO $
                 localBackend (setAncestorEventBackend currentParent) $
-                  runSubmitGeneric tVarWithUpdate tx sender
+                  runSubmitGeneric tVarWithUpdate era tx sender
           )
           (runInIO runTxClient)
 
@@ -204,13 +218,12 @@ txClient = component "web-tx-client" \TxClientDependencies{..} -> do
               runConnector connector $
                 RunTxClient $
                   liftCommand $
-                    Create stakeCredential version addresses roles metadata minUTxODeposit $
-                      Left contract
-            liftIO $ for_ response \creation@ContractCreated{contractId} ->
+                    Create stakeCredential version addresses roles metadata minUTxODeposit contract
+            liftIO $ for_ response \(ContractCreated era creation@ContractCreatedInEra{contractId}) ->
               atomically $
                 modifyTVar tempContracts $
                   Map.insert contractId $
-                    TempTx version Unsigned creation
+                    TempTx era version Unsigned creation
             pure response
         , applyInputs = \version addresses contractId metadata invalidBefore invalidHereafter inputs -> do
             response <-
@@ -218,9 +231,9 @@ txClient = component "web-tx-client" \TxClientDependencies{..} -> do
                 RunTxClient $
                   liftCommand $
                     ApplyInputs version addresses contractId metadata invalidBefore invalidHereafter inputs
-            liftIO $ for_ response \application@InputsApplied{txBody} -> do
+            liftIO $ for_ response \(InputsApplied era application@InputsAppliedInEra{txBody}) -> do
               let txId = fromCardanoTxId $ getTxId txBody
-              let tempTx = TempTx version Unsigned application
+              let tempTx = TempTx era version Unsigned application
               atomically $
                 modifyTVar tempTransactions $
                   Map.alter (Just . maybe (Map.singleton txId tempTx) (Map.insert txId tempTx)) contractId
@@ -231,13 +244,12 @@ txClient = component "web-tx-client" \TxClientDependencies{..} -> do
                 RunTxClient $
                   liftCommand $
                     Withdraw version addresses contractId role
-            liftIO $ for_ response \WithdrawTx{txBody} ->
+            liftIO $ for_ response \(WithdrawTx era withdrawal@WithdrawTxInEra{txBody}) ->
               atomically $
                 modifyTVar tempWithdrawals $
                   Map.insert (fromCardanoTxId $ getTxId txBody) $
-                    TempTx version Unsigned $
-                      Withdrawn txBody
-            pure $ response <&> \WithdrawTx{txBody} -> txBody
+                    TempTx era version Unsigned withdrawal
+            pure response
         , submitContract = \contractId -> genericSubmit $ SomeTVarWithMapUpdate tempContracts ($ contractId)
         , submitTransaction = \contractId txId -> genericSubmit $ SomeTVarWithMapUpdate tempTransactions \update -> Map.update (Just . update txId) contractId
         , submitWithdrawal = \txId -> genericSubmit $ SomeTVarWithMapUpdate tempWithdrawals ($ txId)
@@ -251,7 +263,7 @@ txClient = component "web-tx-client" \TxClientDependencies{..} -> do
     )
 
 toSubmitted :: TempTx tx -> TempTx tx
-toSubmitted (TempTx v _ tx) = TempTx v Submitted tx
+toSubmitted (TempTx era v _ tx) = TempTx era v Submitted tx
 
 toUnsigned :: TempTx tx -> TempTx tx
-toUnsigned (TempTx v _ tx) = TempTx v Unsigned tx
+toUnsigned (TempTx era v _ tx) = TempTx era v Unsigned tx

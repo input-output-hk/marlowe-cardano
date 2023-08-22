@@ -16,7 +16,7 @@ import Language.Marlowe.Runtime.Integration.Common (
 import Language.Marlowe.Runtime.Integration.StandardContract (standardContract)
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses (..))
-import Language.Marlowe.Runtime.Web (RoleTokenConfig (RoleTokenSimple))
+import Language.Marlowe.Runtime.Web (ContractOrSourceId (..), RoleTokenConfig (RoleTokenSimple))
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Client (postContract, postTransaction, putTransaction)
 import Language.Marlowe.Runtime.Web.Common (signShelleyTransaction', submitContract)
@@ -34,7 +34,7 @@ spec = describe "PUT /contracts/{contractId}/transactions/{transaction}" do
       let partyAWalletAddresses = addresses partyAWallet
       let partyAWebChangeAddress = toDTO $ changeAddress partyAWalletAddresses
       let partyAWebExtraAddresses = Set.map toDTO $ extraAddresses partyAWalletAddresses
-      let partyAWebCollataralUtxos = Set.map toDTO $ collateralUtxos partyAWalletAddresses
+      let partyAWebCollateralUtxos = Set.map toDTO $ collateralUtxos partyAWalletAddresses
 
       let partyBWalletAddresses = addresses partyBWallet
 
@@ -49,12 +49,12 @@ spec = describe "PUT /contracts/{contractId}/transactions/{transaction}" do
           Nothing
           partyAWebChangeAddress
           (Just partyAWebExtraAddresses)
-          (Just partyAWebCollataralUtxos)
+          (Just partyAWebCollateralUtxos)
           Web.PostContractsRequest
             { metadata = mempty
             , version = Web.V1
             , roles = Just $ Web.Mint $ Map.singleton "Party A" $ RoleTokenSimple partyAWebChangeAddress
-            , contract = contract
+            , contract = ContractOrSourceId $ Left contract
             , minUTxODeposit = 2_000_000
             , tags = mempty
             }
@@ -67,7 +67,7 @@ spec = describe "PUT /contracts/{contractId}/transactions/{transaction}" do
         postTransaction
           partyAWebChangeAddress
           (Just partyAWebExtraAddresses)
-          (Just partyAWebCollataralUtxos)
+          (Just partyAWebCollateralUtxos)
           contractId
           Web.PostTransactionsRequest
             { version = Web.V1

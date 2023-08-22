@@ -22,13 +22,13 @@ import Control.Monad.Event.Class
 import Data.Set (Set)
 import Data.Set.NonEmpty (NESet)
 import Data.String (fromString)
-import Data.Time (NominalDiffTime)
+import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
 import Data.Version (Version)
 import Language.Marlowe.Protocol.Server (MarloweRuntimeServerDirect)
 import Language.Marlowe.Runtime.ChainIndexer (ChainIndexerDependencies (..), chainIndexer)
 import qualified Language.Marlowe.Runtime.ChainIndexer.Database as ChainIndexer
 import Language.Marlowe.Runtime.ChainIndexer.Genesis (GenesisBlock)
-import Language.Marlowe.Runtime.ChainIndexer.NodeClient (CostModel, NodeClientSelector)
+import Language.Marlowe.Runtime.ChainIndexer.NodeClient (CostModel)
 import Language.Marlowe.Runtime.ChainIndexer.Store (ChainStoreSelector)
 import Language.Marlowe.Runtime.ChainSync (ChainSyncDependencies (..), chainSync)
 import qualified Language.Marlowe.Runtime.ChainSync as ChainSync
@@ -66,9 +66,10 @@ import Network.Protocol.Connection (ServerSource (..), directConnector, runConne
 import Network.Protocol.Job.Client (serveJobClient)
 import Network.Protocol.Query.Client (request, serveQueryClient)
 import Network.TypedProtocol (N (..), Nat)
+import System.Random (randomRIO)
 import UnliftIO (
   Concurrently (Concurrently),
-  MonadIO,
+  MonadIO (..),
   MonadUnliftIO,
   STM,
   SomeException (SomeException),
@@ -76,12 +77,12 @@ import UnliftIO (
   newTVar,
   readTVar,
   try,
-  withRunInIO,
   writeTVar,
  )
+import UnliftIO.Concurrent (threadDelay)
 
 data MarloweRuntimeDependencies r n m = MarloweRuntimeDependencies
-  { connectToLocalNode :: (r -> LocalNodeClientProtocolsInMode CardanoMode) -> m ()
+  { connectToLocalNode :: LocalNodeClientProtocolsInMode CardanoMode -> m ()
   , batchSize :: Nat ('S n)
   , chainIndexerDatabaseQueries :: ChainIndexer.DatabaseQueries m
   , chainSyncDatabaseQueries :: ChainSync.DatabaseQueries m
@@ -112,8 +113,7 @@ marloweRuntime
   :: ( MonadUnliftIO m
      , MonadFail m
      , MonadEvent r s m
-     , Inject (ChainStoreSelector r) s
-     , Inject NodeClientSelector s
+     , Inject ChainStoreSelector s
      , Inject Sync.NodeClientSelector s
      , Inject (MarloweIndexer.ChainSeekClientSelector r) s
      , Inject MarloweIndexer.StoreSelector s
@@ -128,7 +128,7 @@ marloweRuntime = proc MarloweRuntimeDependencies{..} -> do
     unnestNodeClient <$> supervisor "node-client" nodeClient
       -<
         NodeClientDependencies
-          { connectToLocalNode = \client -> withRunInIO \runInIO -> runInIO $ connectToLocalNode $ const client
+          { ..
           }
 
   supervisor "chain-indexer" chainIndexer
@@ -151,6 +151,7 @@ marloweRuntime = proc MarloweRuntimeDependencies{..} -> do
               MaryEra -> MaryEraInCardanoMode
               AlonzoEra -> AlonzoEraInCardanoMode
               BabbageEra -> BabbageEraInCardanoMode
+          , scanBatchSize = 8192
           , ..
           }
 
@@ -229,21 +230,44 @@ supervisor :: (MonadUnliftIO m, WithLog env Message m) => String -> Component m 
 supervisor name (Component f) = Component \a -> do
   (Concurrently initialAction, initialOutput) <- f a
   currentOutput <- newTVar initialOutput
-  let supervisedAction action = do
-        logInfo $ "Supervisor starting component " <> fromString name
+  let baseDelay = secondsToNominalDiffTime 0.1
+  let supervisedAction action attemptNumber = do
+        logInfo $
+          "Supervisor starting component "
+            <> fromString name
+            <> if attemptNumber > 0
+              then " (attempt #" <> fromString (show $ attemptNumber + 1) <> ")"
+              else ""
+        startTime <- liftIO getCurrentTime
         result <- try action
         case result of
           Left (SomeException _) -> do
-            logWarning $ "Supervised component " <> fromString name <> " crashed, restarting"
+            crashedAt <- liftIO getCurrentTime
+            let uptime = diffUTCTime crashedAt startTime
+            let nextAttemptNumber = if uptime > secondsToNominalDiffTime 10 then 0 else attemptNumber + 1
+            delay <- fullJitterBackoff baseDelay nextAttemptNumber
+            logWarning $ "Supervised component " <> fromString name <> " crashed, restarting after " <> fromString (show delay)
+            threadDelay $ floor $ 1_000_000 * nominalDiffTimeToSeconds delay
             Concurrently action' <- atomically do
               (action', output) <- f a
               writeTVar currentOutput output
               pure action'
-            supervisedAction action'
+            supervisedAction action' nextAttemptNumber
           Right () -> do
             logInfo $ "Supervised component " <> fromString name <> " finished"
             pure ()
-  pure (Concurrently $ supervisedAction initialAction, readTVar currentOutput)
+  pure (Concurrently $ supervisedAction initialAction 0, readTVar currentOutput)
+
+-- | See @http:\/\/www.awsarchitectureblog.com\/2015\/03\/backoff.html@
+fullJitterBackoff :: (MonadIO m) => NominalDiffTime -> Int -> m NominalDiffTime
+fullJitterBackoff baseDelay attemptNumber = do
+  let cappedAttempt = fromIntegral $ min 10 attemptNumber
+  let baseDelaySeconds = nominalDiffTimeToSeconds baseDelay
+  let delayN = baseDelaySeconds * (cappedAttempt ^ (2 :: Int))
+  let delayNMinus1 = baseDelaySeconds * ((cappedAttempt - 1) ^ (2 :: Int))
+  let variability = delayN - delayNMinus1
+  variation <- liftIO $ randomRIO @Double (0, realToFrac variability)
+  pure $ secondsToNominalDiffTime $ delayN + realToFrac variation
 
 unnestProbes :: STM Probes -> Probes
 unnestProbes probes =

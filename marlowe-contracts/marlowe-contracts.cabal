@@ -51,18 +51,19 @@ library
   hs-source-dirs:  src
   exposed-modules:
     Marlowe.Contracts
+    Marlowe.Contracts.ChunkedValueTransfer
     Marlowe.Contracts.Common
     Marlowe.Contracts.Escrow
     Marlowe.Contracts.Forward
     Marlowe.Contracts.Futures
     Marlowe.Contracts.Options
+    Marlowe.Contracts.Raffle
     Marlowe.Contracts.StructuredProducts
     Marlowe.Contracts.Swap
     Marlowe.Contracts.Trivial
     Marlowe.Contracts.UTC.Common
     Marlowe.Contracts.UTC.CouponBond
     Marlowe.Contracts.UTC.Forward
-    Marlowe.Contracts.UTC.Futures
     Marlowe.Contracts.UTC.Options
     Marlowe.Contracts.UTC.StructuredProducts
     Marlowe.Contracts.UTC.Swap
@@ -71,8 +72,16 @@ library
 
   other-modules:
   build-depends:
+    , aeson
     , base >=4.9 && <5
+    , containers
+    , ilist
     , marlowe-cardano
+    , marlowe-object
+    , plutus-ledger-api ==1.0.0.1
+    , plutus-tx ==1.0.0.0
+    , split
+    , text
     , time
 
 test-suite marlowe-contracts-test
@@ -89,6 +98,7 @@ test-suite marlowe-contracts-test
     , bytestring
     , marlowe-cardano
     , marlowe-contracts
+    , marlowe-object
     , plutus-ledger-ada
     , plutus-ledger-api
     , plutus-tx
@@ -98,4 +108,5 @@ test-suite marlowe-contracts-test
     , tasty-quickcheck
     , text
     , time
+    , unordered-containers
     , uuid

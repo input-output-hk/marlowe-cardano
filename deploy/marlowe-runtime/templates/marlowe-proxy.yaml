@@ -1,0 +1,85 @@
+{{- range .Values.networks }}
+---
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: marlowe-proxy-{{ . }}
+  namespace: {{ $.Values.namespace }}
+  annotations:
+    app.oam.dev/publishVersion: {{ $.Chart.AppVersion }}
+    meta.helm.sh/release-name: {{ $.Values.releaseName }}
+    meta.helm.sh/release-namespace: {{ $.Values.namespace }}
+spec:
+  components:
+    - name: marlowe-proxy-{{ . }}
+      type: webservice
+      properties:
+        env:
+        - name: HOST
+          value: 0.0.0.0
+        - name: PORT
+          value: "3700"
+        - name: TRACED_PORT
+          value: "3701"
+        - name: TRANSFER_PORT
+          value: "3729"
+        - name: TX_HOST
+          value: marlowe-tx-{{ . }}.{{ $.Values.namespace }}
+        - name: TX_PORT
+          value: "3723"
+        - name: CONTRACT_HOST
+          value: marlowe-contract-{{ . }}.{{ $.Values.namespace }}
+        - name: LOAD_PORT
+          value: "3727"
+        - name: CONTRACT_QUERY_PORT
+          value: "3728"
+        - name: SYNC_HOST
+          value: marlowe-sync-{{ . }}.{{ $.Values.namespace }}
+        - name: MARLOWE_SYNC_PORT
+          value: "3724"
+        - name: MARLOWE_HEADER_SYNC_PORT
+          value: "3725"
+        - name: MARLOWE_QUERY_PORT
+          value: "3726"
+        - name: HTTP_PORT
+          value: "3786"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://grafana-agent.grafana-agent:4318
+        - name: OTEL_SERVICE_NAME
+          value: marlowe-proxy-{{ . }}
+        cpu: "0.5"
+        image: {{ $.Values.images.repo }}/{{ $.Values.images.org }}/marlowe-proxy:{{ $.Values.images.tag }}
+        imagePullPolicy: Always
+        memory: 1024Mi
+      traits:
+      - type: expose
+        properties:
+          annotations:
+            "external-dns.alpha.kubernetes.io/hostname": "marlowe-runtime-{{ . }}.scdev.aws.iohkdev.io"
+          type: LoadBalancer
+          ports:
+          - port: 3700
+          - port: 3701
+          - port: 3786
+
+
+  policies:
+  - name: local-{{ $.Values.namespace }}
+    properties:
+      clusters:
+      - local
+      namespace: {{ $.Values.namespace }}
+    type: topology
+
+  workflow:
+    mode:
+      steps: DAG
+    steps:
+    - meta:
+        alias: Deploy To local-{{ $.Values.namespace }}
+      name: local-{{ $.Values.namespace }}
+      properties:
+        policies:
+        - local-{{ $.Values.namespace }}
+      type: deploy
+{{- end }}

@@ -1,5 +1,10 @@
+{-# LANGUAGE GADTs #-}
+
 module Language.Marlowe.Runtime.Integration.Withdraw where
 
+import Cardano.Api.Shelley (
+  ReferenceTxInsScriptsInlineDatumsSupportedInEra (ReferenceTxInsScriptsInlineDatumsInBabbageEra),
+ )
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Marlowe.Class (withdraw)
 import qualified Data.Map as Map
@@ -9,9 +14,10 @@ import Language.Marlowe.Runtime.Integration.Common (Wallet (..), expectRight, ge
 import Language.Marlowe.Runtime.Integration.StandardContract
 import Language.Marlowe.Runtime.Transaction.Api (
   ConstraintError (RoleTokenNotFound),
-  ContractCreated (..),
+  ContractCreatedInEra (..),
   WithdrawError (..),
   WithdrawTx (..),
+  WithdrawTxInEra (..),
  )
 import Test.Hspec
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
@@ -31,8 +37,8 @@ missingRoleTokenTest = withLocalMarloweRuntime $ runIntegrationTest do
   step3 <- chooseGimmeTheMoney step2
   step4 <- sendNotify step3
   _ <- makeReturnDeposit step4
-  result <- case contractCreated step1 of ContractCreated{..} -> withdraw MarloweV1 (addresses wallet2) contractId "Party A"
-  let policyId = case contractCreated step1 of ContractCreated{..} -> rolesCurrency
+  result <- case contractCreated step1 of ContractCreatedInEra{..} -> withdraw MarloweV1 (addresses wallet2) contractId "Party A"
+  let policyId = case contractCreated step1 of ContractCreatedInEra{..} -> rolesCurrency
   liftIO $ result `shouldBe` Left (WithdrawConstraintError $ RoleTokenNotFound $ AssetId policyId "Party A")
 
 noPayoutsTest :: IO ()
@@ -43,7 +49,7 @@ noPayoutsTest = withLocalMarloweRuntime $ runIntegrationTest do
   step2 <- makeInitialDeposit step1
   step3 <- chooseGimmeTheMoney step2
   _ <- sendNotify step3
-  result <- case contractCreated step1 of ContractCreated{..} -> withdraw MarloweV1 (addresses wallet1) contractId "Party A"
+  result <- case contractCreated step1 of ContractCreatedInEra{..} -> withdraw MarloweV1 (addresses wallet1) contractId "Party A"
   liftIO $ result `shouldBe` Left (UnableToFindPayoutForAGivenRole "Party A")
 
 payoutsTest :: IO ()
@@ -51,12 +57,12 @@ payoutsTest = withLocalMarloweRuntime $ runIntegrationTest do
   wallet1 <- getGenesisWallet 0
   wallet2 <- getGenesisWallet 1
   StandardContractInit{..} <- createStandardContract wallet1 wallet2
-  let ContractCreated{..} = contractCreated
+  let ContractCreatedInEra{..} = contractCreated
   step2 <- makeInitialDeposit
   step3 <- chooseGimmeTheMoney step2
   step4 <- sendNotify step3
   _ <- makeReturnDeposit step4
-  WithdrawTx{inputs, roleToken = AssetId{..}} <-
+  WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra WithdrawTxInEra{inputs, roleToken = AssetId{..}} <-
     expectRight "failed to withdraw payouts" =<< withdraw MarloweV1 (addresses wallet1) contractId "Party A"
   liftIO $ tokenName `shouldBe` "Party A"
   liftIO $ Map.elems inputs `shouldBe` [Payout payoutScriptAddress (Assets 100_000_000 mempty) AssetId{..}]

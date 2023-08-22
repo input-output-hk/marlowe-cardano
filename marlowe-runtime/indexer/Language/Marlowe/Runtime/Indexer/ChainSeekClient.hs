@@ -7,14 +7,18 @@
 module Language.Marlowe.Runtime.Indexer.ChainSeekClient where
 
 import Cardano.Api (SystemStart)
-import Colog (Message, WithLog)
+import Colog (Message, WithLog, logInfo)
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, TVar, newTQueue, newTVar, readTQueue, readTVar, writeTQueue, writeTVar)
 import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
+import Control.Monad.State (execStateT, get, put)
 import Control.Monad.Trans (lift)
+import Data.Foldable (for_)
+import Data.Functor ((<&>))
 import Data.Set (Set)
 import Data.Set.NonEmpty (NESet)
 import qualified Data.Set.NonEmpty as NESet
+import Data.String (fromString)
 import Data.Time (NominalDiffTime, nominalDiffTimeToSeconds)
 import Data.Void (Void, absurd)
 import Language.Marlowe.Runtime.ChainSync.Api
@@ -24,6 +28,7 @@ import Network.Protocol.ChainSeek.Client
 import Network.Protocol.Connection (Connector, runConnector)
 import Network.Protocol.Query.Client (QueryClient, request)
 import Observe.Event (addField, reference)
+import Text.Printf (printf)
 import UnliftIO (MonadUnliftIO, atomically, finally)
 import UnliftIO.Concurrent (threadDelay)
 
@@ -80,6 +85,39 @@ chainSeekClient = component "indexer-chain-seek-client" \ChainSeekClientDependen
                 let event = mkEvent (reference ev)
                 addField ev event
                 atomically $ writeTQueue eventQueue event
+                case event of
+                  RollBackward local remote _ -> do
+                    logInfo case remote of
+                      Genesis -> "Chain-sync rolled back to genesis"
+                      At (BlockHeader _ hash no) ->
+                        fromString $ printf "Chain sync switched to new tip %s (#%d)" (show hash) (unBlockNo no)
+                    let remoteNo = case remote of
+                          Genesis -> 0
+                          At (BlockHeader _ _ no) -> unBlockNo no
+                    logInfo case local of
+                      Genesis -> "Rolled back to genesis"
+                      At (BlockHeader _ hash (BlockNo no)) ->
+                        fromString $
+                          printf
+                            "Rolled back to block %s (#%d of %d) (%d%%)"
+                            (show hash)
+                            no
+                            remoteNo
+                            ((no * 100) `div` remoteNo)
+                  RollForward _ local remote _ -> do
+                    let remoteNo = case remote of
+                          Genesis -> 0
+                          At (BlockHeader _ _ no) -> unBlockNo no
+                    logInfo case local of
+                      Genesis -> "Rolled forward to genesis"
+                      At (BlockHeader _ hash (BlockNo no)) ->
+                        fromString $
+                          printf
+                            "Rolled forward to block %s (#%d of %d) (%d%%)"
+                            (show hash)
+                            no
+                            remoteNo
+                            ((no * 100) `div` remoteNo)
             )
             databaseQueries
             pollingInterval
@@ -104,23 +142,28 @@ chainSeekClient = component "indexer-chain-seek-client" \ChainSeekClientDependen
       ChainSeekClient $ runConnector chainSyncQueryConnector do
         atomically $ writeTVar connectedVar True
         systemStart <- request GetSystemStart
-        securityParameter <- request GetSecurityParameter
         -- Get the intersection points - the most recent block headers stored locally.
         intersectionPoints <- lift getIntersectionPoints
+        lift case intersectionPoints of
+          ((BlockHeader _ hash no) : _) ->
+            logInfo $ fromString $ printf "Tip of local chain: %s (#%d)" (show hash) (unBlockNo no)
+          _ -> logInfo "Local chain empty"
         let -- A client state for handling the intersect response.
             clientNextIntersect =
               ClientStNext
                 { -- Rejection of an intersection request implies no intersection was found.
                   -- In this case, we have no choice but to start synchronization from Genesis.
                   recvMsgQueryRejected = \_ tip -> do
+                    logInfo "No intersection with chain-sync"
                     -- Roll everything back to Genesis.
                     emit $ RollBackward Genesis tip
 
                     -- Start the main synchronization loop
-                    pure $ clientIdle securityParameter systemStart $ MarloweUTxO mempty mempty
+                    pure $ clientIdle systemStart $ MarloweUTxO mempty mempty
                 , -- An intersection point was found, resume synchronization from
                   -- that point.
                   recvMsgRollForward = \_ point tip -> do
+                    logInfo "Intersected with chain-sync"
                     -- Always emit a rollback at the start.
                     emit $ RollBackward point tip
 
@@ -135,7 +178,7 @@ chainSeekClient = component "indexer-chain-seek-client" \ChainSeekClientDependen
                         pure utxo
 
                     -- Start the main synchronization loop.
-                    pure $ clientIdle securityParameter systemStart utxo
+                    pure $ clientIdle systemStart utxo
                 , -- Since the client is at Genesis at the start of this request,
                   -- it will never be rolled back. Handle the perfunctory case by
                   -- looping.
@@ -149,7 +192,7 @@ chainSeekClient = component "indexer-chain-seek-client" \ChainSeekClientDependen
 
         pure case intersectionPoints of
           -- Just start the loop right away with an empty UTxO.
-          [] -> clientIdle securityParameter systemStart $ MarloweUTxO mempty mempty
+          [] -> clientIdle systemStart $ MarloweUTxO mempty mempty
           -- Request an intersection
           _ -> clientIdleIntersect
       where
@@ -168,60 +211,82 @@ chainSeekClient = component "indexer-chain-seek-client" \ChainSeekClientDependen
           pure $ SendMsgPoll next
 
         -- The client's idle state handler for the main synchronization loop.
-        -- Sends the next query to the chain sync server and handles the
-        -- response.
+        -- Scans the chain for marlowe transactions.
         clientIdle
-          :: Int
-          -> SystemStart
+          :: SystemStart
           -> MarloweUTxO
           -> ClientStIdle Move ChainPoint (WithGenesis BlockHeader) m a
-        clientIdle securityParameter systemStart = SendMsgQueryNext (FindTxsFor allScriptCredentials) . clientNext securityParameter systemStart
+        clientIdle systemStart = let move = FindTxsFor allScriptCredentials in SendMsgScan move . clientScan move systemStart
 
-        -- Handles responses from the main synchronization loop query.
-        clientNext
-          :: Int
+        -- The client's scan loop.
+        clientScan
+          :: Move Void (Set Transaction)
           -> SystemStart
           -> MarloweUTxO
-          -> ClientStNext Move Void (Set Transaction) ChainPoint (WithGenesis BlockHeader) m a
-        clientNext securityParameter systemStart utxo =
-          ClientStNext
+          -> ClientStScan Move Void (Set Transaction) ChainPoint (WithGenesis BlockHeader) m a
+        clientScan move systemStart = SendMsgCollect . clientCollect move systemStart
+
+        -- Handles responses from the main synchronization loop query.
+        clientCollect
+          :: Move Void (Set Transaction)
+          -> SystemStart
+          -> MarloweUTxO
+          -> ClientStCollect Move Void (Set Transaction) ChainPoint (WithGenesis BlockHeader) m a
+        clientCollect move systemStart utxo =
+          ClientStCollect
             { -- Fail with an error if marlowe-chain-sync rejects the query. This is safe
               -- from bad user input, because our queries are derived from the ledger
               -- state, and so will only be rejected if the query derivation is
               -- incorrect, or marlowe-chain-sync is corrupt. Because both are unexpected
               -- errors, it is a non-recoverable error state.
-              recvMsgQueryRejected = absurd
+              recvMsgCollectFailed = absurd
             , -- Handle the next block by extracting Marlowe transactions into a
               -- MarloweBlock and updating the MarloweUTxO.
-              recvMsgRollForward = \txs point tip -> do
-                -- Get the current block (not expected ever to be Genesis).
-                block <- case point of
-                  Genesis -> fail "Rolled forward to Genesis"
-                  At block -> pure block
-
+              recvMsgCollected = \blocks tip -> do
                 -- Get the era history
                 eraHistory <- runConnector chainSyncQueryConnector $ request GetEraHistory
 
-                -- Extract the Marlowe block and compute the next MarloweUTxO.
-                nextUtxo <- case extractMarloweBlock systemStart eraHistory (NESet.toSet marloweScriptHashes) block txs utxo of
-                  -- If no MarloweBlock was extracted (not expected, but harmless), do nothing and return the current MarloweUTxO.
-                  -- This is not expected because the query would only be satisfied by a block that contains some usable Marlowe information.
-                  Nothing -> pure utxo
-                  Just (nextUtxo, marloweBlock) -> do
-                    -- Emit the marlowe block in a roll forward event to a downstream consumer.
-                    emit $ RollForward marloweBlock point tip
+                nextUtxo <- flip execStateT utxo $ for_ blocks \(point, txs) -> do
+                  -- Get the current block (not expected ever to be Genesis).
+                  block <- case point of
+                    Genesis -> fail "Rolled forward to Genesis"
+                    At block -> pure block
 
-                    -- Return the new MarloweUTxO
-                    pure nextUtxo
+                  utxo' <- get
+
+                  -- Extract the Marlowe block and compute the next MarloweUTxO.
+                  for_ (extractMarloweBlock systemStart eraHistory (NESet.toSet marloweScriptHashes) block txs utxo') \(nextUtxo, marloweBlock) -> do
+                    -- Emit the marlowe block in a roll forward event to a downstream consumer.
+                    lift $ emit $ RollForward marloweBlock point tip
+
+                    -- Update the MarloweUTxO
+                    put nextUtxo
 
                 -- Loop back into the main synchronization loop with an updated
                 -- rollback state.
-                pure $ clientIdle securityParameter systemStart nextUtxo
-            , recvMsgRollBackward = \point tip -> do
+                pure $ clientScan move systemStart nextUtxo
+            , recvMsgCollectRollBackward = \point tip -> do
                 emit $ RollBackward point tip
                 nextUtxo <- case point of
                   Genesis -> pure $ MarloweUTxO mempty mempty
                   At block -> getMarloweUTxO block
-                pure $ clientIdle securityParameter systemStart nextUtxo
-            , recvMsgWait = pollWithNext $ clientNext securityParameter systemStart utxo
+                pure $ clientIdle systemStart nextUtxo
+            , recvMsgCollectWait = \tip -> pollWithNext $ collectToNext move tip $ clientCollect move systemStart utxo
             }
+
+collectToNext
+  :: (Monad m)
+  => q err result
+  -> tip
+  -> ClientStCollect q err result point tip m a
+  -> ClientStNext q err result point tip m a
+collectToNext q tip ClientStCollect{..} =
+  ClientStNext
+    { recvMsgQueryRejected = recvMsgCollectFailed
+    , recvMsgRollBackward = recvMsgCollectRollBackward
+    , recvMsgWait = recvMsgCollectWait tip
+    , recvMsgRollForward = \result point tip' ->
+        recvMsgCollected [(point, result)] tip' <&> \case
+          SendMsgCollect collect -> SendMsgScan q $ SendMsgCollect collect
+          SendMsgCancelScan idle -> idle
+    }

@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -8,6 +9,7 @@ module Language.Marlowe.Runtime.App (
   handle,
 ) where
 
+import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (race)
 import Control.Exception (SomeException, catch)
@@ -60,8 +62,10 @@ handle config request =
                   reqChange
                   reqCollateral
             Withdraw{..} -> second (uncurry mkBody) <$> buildWithdrawal MarloweV1 reqContractId reqRole reqAddresses reqChange reqCollateral
-            Sign{..} -> pure . Right . uncurry Tx $ sign reqTxBody reqPaymentKeys reqPaymentExtendedKeys
-            Submit{..} -> second TxId <$> submit reqPollingSeconds reqTx
+            Sign{reqTxEra = ReferenceTxInsScriptsInlineDatumsInBabbageEra, ..} ->
+              pure . Right . uncurry (Tx ReferenceTxInsScriptsInlineDatumsInBabbageEra) $
+                sign reqTxBody reqPaymentKeys reqPaymentExtendedKeys
+            Submit{..} -> second TxId <$> submit reqPollingSeconds reqTxEra reqTx
     {-
               Wait{..} -> second TxInfo <$> waitForTx reqPollingSeconds reqTxId
     -}

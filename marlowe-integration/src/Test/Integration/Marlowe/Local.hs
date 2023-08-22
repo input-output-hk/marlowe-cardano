@@ -502,9 +502,7 @@ data TestContainerDependencies r m = TestContainerDependencies
   }
 
 testContainer
-  :: forall r
-   . (Monoid r)
-  => Component
+  :: Component
       (AppM r RuntimeSelector)
       (TestContainerDependencies r (AppM r RuntimeSelector))
       (Runtime.MarloweRuntime (AppM r RuntimeSelector))
@@ -521,7 +519,7 @@ testContainer = proc TestContainerDependencies{..} -> do
         let maxCost = 100_000
             costModel = CostModel 1 10
             persistRateLimit = 0.1
-            connectToLocalNode client = liftIO $ Cardano.connectToLocalNode localNodeConnectInfo $ client mempty
+            connectToLocalNode = liftIO . Cardano.connectToLocalNode localNodeConnectInfo
             batchSize = unsafeIntToNat 10
             marloweScriptHashes = NESet.singleton $ marloweScript marloweScripts
             payoutScriptHashes = NESet.singleton $ payoutScript marloweScripts

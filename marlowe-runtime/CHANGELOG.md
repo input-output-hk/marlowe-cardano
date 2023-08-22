@@ -1,4 +1,67 @@
 
+<a id='changelog-0.0.4'></a>
+# 0.0.4 — 2023-08-10
+
+## Removed
+
+- BREAKING `MarloweTracedT` - now there is only `MarloweT`.
+
+- Custom Marlowe JSON with imports format for `marlowe-runtime-cli load`
+
+- Traces from chain sync and chain seek clients
+
+## Added
+
+- `marlowe-runtime` executable and Docker image providing an all-in-one runtime option.
+
+- Safety analysis integrated into contract creation result.
+
+- New `ReqStatus` query to Marlowe Query that returns sync info and version info.
+- Status information is now included in response headers of all REST API calls.
+
+- Added `--stake-address` to `marlowe-runtime-cli create` command, for attaching stake credentials to Marlowe's validator address.
+
+- New main protocol `MarloweTransfer` for copying contracts to / from contract store.
+- `marlowe-runtime-cli export` command to download a contract bundle from the store.
+
+- POST /contracts/sources endpoint provides access to contract import in the
+  REST API (via MarloweTransfer).
+
+- `/contracts/sources/:contractSourceId` endpoint with `GET` method and two sub-resources for `adjacency` and `closure`.
+
+- Request body for `POST /contracts` now accepts a contract source ID as well as contract JSON.
+
+- Console logs for marlowe-chain-indexer and marlowe-indexer sync progress
+
+## Changed
+
+- `marlowe-runtime-cli load` now accepts a contract bundle
+
+- Sync performance of `marlowe-indexer` improved via bulk queries.
+
+- New partitions added to accommodate slots upt to 200 million in chain database.
+
+- BREAKING `MerkleizeInputs` accepts a contract instead of a hash.
+
+- Signature of `Language.Marlowe.Runtime.Transaction.Safety.checkTransactions` change to use protocol parameters in place of constraint solver.
+
+## Fixed
+
+- Metadata tag length cannot be longer than 64 characters
+  - metadata tags now get chunked into lists of text of max. 64 characters
+    each to comply with the CDDL specification for transaction metadata.
+
+- Importing a JSON contract doesn't work
+- Importing an exported contract archive doesn't work
+
+- Computation of maximum possible Plutus execution costs now rounds upwards.
+
+- Transaction submission hangs when chain sync loses connection to node.
+
+- Auto-merkleization of inputs fails if contract in datum got reduced.
+
+- Removed inconsistency in system start for safety checks (PLT-6849).
+
 <a id='changelog-0.0.3'></a>
 # 0.0.3 — 2023-07-11
 

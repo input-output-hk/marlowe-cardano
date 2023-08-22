@@ -13,17 +13,24 @@ import Cardano.Api (
   readFileTextEnvelope,
   serialiseToCBOR,
  )
+import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import qualified Cardano.Api.Shelley
 import qualified Control.Monad.Reader as Reader
+import qualified Data.Aeson as Aeson
+import Data.Foldable (for_)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Maybe as Maybe
 import qualified Data.Set as Set
+import Data.String (fromString)
 import qualified Data.Text as Text
 import qualified Data.Time as Time
 import qualified Data.Time.Clock.POSIX as POSIX
 import Data.Void (Void)
+import GHC.IO.Exception (ExitCode (ExitSuccess))
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
+import Language.Marlowe.Object.Archive (packArchive)
+import Language.Marlowe.Object.Types (LabelledObject (LabelledObject), ObjectType (ContractType), fromCoreContract)
 import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as ChainSync.Api
 import Language.Marlowe.Runtime.Client (runMarloweTxClient)
@@ -36,14 +43,28 @@ import Language.Marlowe.Runtime.Core.Api (
   MarloweVersionTag (V1),
   renderContractId,
  )
-import Language.Marlowe.Runtime.Integration.Common (Integration, Wallet (..), getGenesisWallet, runIntegrationTest)
+import Language.Marlowe.Runtime.Integration.Common (
+  Integration,
+  Wallet (..),
+  getGenesisWallet,
+  runIntegrationTest,
+ )
 import qualified Language.Marlowe.Runtime.Integration.Common as Runtime.Integration.Common
-import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand (..), WalletAddresses (..), WithdrawTx (..))
+import Language.Marlowe.Runtime.Transaction.Api (
+  MarloweTxCommand (..),
+  WalletAddresses (..),
+  WithdrawTx (..),
+ )
 import qualified Language.Marlowe.Runtime.Transaction.Api as Runtime.Transaction.Api
 import Language.Marlowe.Util (ada)
 import qualified Network.Protocol.Job.Client as JobClient
 import qualified Plutus.V2.Ledger.Api
-import Test.Hspec (Spec, describe, it, shouldBe)
+import Test.Hspec (
+  Spec,
+  describe,
+  it,
+  shouldBe,
+ )
 import qualified Test.Hspec as Hspec
 import Test.Integration.Marlowe (
   LocalTestnet (..),
@@ -53,7 +74,10 @@ import Test.Integration.Marlowe (
   withLocalMarloweRuntime,
   writeWorkspaceFileJSON,
  )
-import UnliftIO (concurrently, liftIO)
+import UnliftIO (
+  concurrently,
+  liftIO,
+ )
 
 data CLISpecTestData = CLISpecTestData
   { partyAWallet :: Wallet
@@ -69,6 +93,7 @@ spec = Hspec.describe "Marlowe runtime CLI" $ Hspec.aroundAll setup do
   notifySpec
   applySpec
   withdrawSpec
+  bugPLT6773
   where
     setup :: Hspec.ActionWith CLISpecTestData -> IO ()
     setup runSpec = withLocalMarloweRuntime $ runIntegrationTest do
@@ -127,15 +152,27 @@ marloweRuntimeJobClient = \case
   cmd@(Create _ MarloweV1 _ _ _ _ _) ->
     runMarloweTxClient (JobClient.liftCommand cmd) >>= \case
       Left err -> error ("Some JobClient create error: " <> show err)
-      Right Runtime.Transaction.Api.ContractCreated{txBody} -> pure txBody
+      Right
+        ( Runtime.Transaction.Api.ContractCreated
+            ReferenceTxInsScriptsInlineDatumsInBabbageEra
+            Runtime.Transaction.Api.ContractCreatedInEra{txBody}
+          ) -> pure txBody
   cmd@(ApplyInputs MarloweV1 _ _ _ _ _ _) ->
     runMarloweTxClient (JobClient.liftCommand cmd) >>= \case
       Left err -> error ("Some JobClient input error: " <> show err)
-      Right Runtime.Transaction.Api.InputsApplied{txBody} -> pure txBody
+      Right
+        ( Runtime.Transaction.Api.InputsApplied
+            ReferenceTxInsScriptsInlineDatumsInBabbageEra
+            Runtime.Transaction.Api.InputsAppliedInEra{txBody}
+          ) -> pure txBody
   cmd@(Withdraw MarloweV1 _ _ _) ->
     runMarloweTxClient (JobClient.liftCommand cmd) >>= \case
       Left err -> error ("Some JobClient withdraw error: " <> show err)
-      Right Runtime.Transaction.Api.WithdrawTx{txBody} -> pure txBody
+      Right
+        ( Runtime.Transaction.Api.WithdrawTx
+            ReferenceTxInsScriptsInlineDatumsInBabbageEra
+            Runtime.Transaction.Api.WithdrawTxInEra{txBody}
+          ) -> pure txBody
 
 expectSameResultFromCLIAndJobClient :: String -> [String] -> MarloweTxCommand Void err result -> Integration ()
 expectSameResultFromCLIAndJobClient outputFile extraCliArgs command = do
@@ -229,7 +266,7 @@ createSpec = describe "create" $
           :: MarloweTxCommand
               Void
               (Runtime.Transaction.Api.CreateError 'V1)
-              (Runtime.Transaction.Api.ContractCreated BabbageEra 'V1)
+              (Runtime.Transaction.Api.ContractCreated 'V1)
         creationCommand =
           Create
             Nothing
@@ -244,7 +281,7 @@ createSpec = describe "create" $
 
 depositSpec :: Hspec.SpecWith CLISpecTestData
 depositSpec = describe "deposit" $
-  it "generates a deposit tx body envelope" \CLISpecTestData{..} -> flip runIntegrationTest runtime do
+  it "generates a deposit tx body envelope" \CLISpecTestData{..} -> flip (runIntegrationTest @()) runtime do
     now <- liftIO Time.getCurrentTime
 
     let partyA :: V1.Party
@@ -260,7 +297,9 @@ depositSpec = describe "deposit" $
         tags :: Map MarloweMetadataTag (Maybe ChainSync.Api.Metadata)
         tags = Map.empty
 
-    Runtime.Transaction.Api.ContractCreated{contractId, txBody} <-
+    Runtime.Transaction.Api.ContractCreated
+      ReferenceTxInsScriptsInlineDatumsInBabbageEra
+      Runtime.Transaction.Api.ContractCreatedInEra{contractId, txBody} <-
       Runtime.Integration.Common.expectRight "failed to create deposit contract"
         =<< Runtime.Client.createContract
           Nothing
@@ -284,7 +323,7 @@ depositSpec = describe "deposit" $
           :: MarloweTxCommand
               Void
               (Runtime.Transaction.Api.ApplyInputsError 'V1)
-              (Runtime.Transaction.Api.InputsApplied BabbageEra 'V1)
+              (Runtime.Transaction.Api.InputsApplied 'V1)
         command =
           ApplyInputs
             MarloweV1
@@ -299,7 +338,7 @@ depositSpec = describe "deposit" $
 
 chooseSpec :: Hspec.SpecWith CLISpecTestData
 chooseSpec = describe "choose" $
-  it "generates a choose tx body envelope" \CLISpecTestData{..} -> flip runIntegrationTest runtime do
+  it "generates a choose tx body envelope" \CLISpecTestData{..} -> flip (runIntegrationTest @()) runtime do
     now <- liftIO Time.getCurrentTime
 
     let partyA :: V1.Party
@@ -315,7 +354,9 @@ chooseSpec = describe "choose" $
         tags :: Map MarloweMetadataTag (Maybe ChainSync.Api.Metadata)
         tags = Map.empty
 
-    Runtime.Transaction.Api.ContractCreated{contractId, txBody} <-
+    Runtime.Transaction.Api.ContractCreated
+      ReferenceTxInsScriptsInlineDatumsInBabbageEra
+      Runtime.Transaction.Api.ContractCreatedInEra{contractId, txBody} <-
       Runtime.Integration.Common.expectRight "failed to create choose contract"
         =<< Runtime.Client.createContract
           Nothing
@@ -339,7 +380,7 @@ chooseSpec = describe "choose" $
           :: MarloweTxCommand
               Void
               (Runtime.Transaction.Api.ApplyInputsError 'V1)
-              (Runtime.Transaction.Api.InputsApplied BabbageEra 'V1)
+              (Runtime.Transaction.Api.InputsApplied 'V1)
         command =
           ApplyInputs
             MarloweV1
@@ -354,7 +395,7 @@ chooseSpec = describe "choose" $
 
 notifySpec :: Hspec.SpecWith CLISpecTestData
 notifySpec = describe "notify" $
-  it "generates a notify tx body envelope" \CLISpecTestData{..} -> flip runIntegrationTest runtime do
+  it "generates a notify tx body envelope" \CLISpecTestData{..} -> flip (runIntegrationTest @()) runtime do
     now <- liftIO Time.getCurrentTime
 
     let contract :: V1.Contract
@@ -367,7 +408,9 @@ notifySpec = describe "notify" $
         tags :: Map MarloweMetadataTag (Maybe ChainSync.Api.Metadata)
         tags = Map.empty
 
-    Runtime.Transaction.Api.ContractCreated{contractId, txBody} <-
+    Runtime.Transaction.Api.ContractCreated
+      ReferenceTxInsScriptsInlineDatumsInBabbageEra
+      Runtime.Transaction.Api.ContractCreatedInEra{contractId, txBody} <-
       Runtime.Integration.Common.expectRight "failed to create notify contract"
         =<< Runtime.Client.createContract
           Nothing
@@ -391,7 +434,7 @@ notifySpec = describe "notify" $
           :: MarloweTxCommand
               Void
               (Runtime.Transaction.Api.ApplyInputsError 'V1)
-              (Runtime.Transaction.Api.InputsApplied BabbageEra 'V1)
+              (Runtime.Transaction.Api.InputsApplied 'V1)
         command =
           ApplyInputs
             MarloweV1
@@ -406,7 +449,7 @@ notifySpec = describe "notify" $
 
 applySpec :: Hspec.SpecWith CLISpecTestData
 applySpec = describe "apply" $
-  it "generates a deposit-choose-notify tx body envelope" \CLISpecTestData{..} -> flip runIntegrationTest runtime do
+  it "generates a deposit-choose-notify tx body envelope" \CLISpecTestData{..} -> flip (runIntegrationTest @()) runtime do
     now <- liftIO Time.getCurrentTime
 
     let partyA :: V1.Party
@@ -442,7 +485,9 @@ applySpec = describe "apply" $
           , V1.NormalInput V1.INotify
           ]
 
-    Runtime.Transaction.Api.ContractCreated{contractId, txBody} <-
+    Runtime.Transaction.Api.ContractCreated
+      ReferenceTxInsScriptsInlineDatumsInBabbageEra
+      Runtime.Transaction.Api.ContractCreatedInEra{contractId, txBody} <-
       Runtime.Integration.Common.expectRight "failed to create deposit-choose-notify contract"
         =<< Runtime.Client.createContract
           Nothing
@@ -470,7 +515,7 @@ applySpec = describe "apply" $
           :: MarloweTxCommand
               Void
               (Runtime.Transaction.Api.ApplyInputsError 'V1)
-              (Runtime.Transaction.Api.InputsApplied BabbageEra 'V1)
+              (Runtime.Transaction.Api.InputsApplied 'V1)
         command =
           ApplyInputs
             MarloweV1
@@ -485,7 +530,7 @@ applySpec = describe "apply" $
 
 withdrawSpec :: Hspec.SpecWith CLISpecTestData
 withdrawSpec = describe "withdraw" $
-  it "generates a withdraw tx body envelope" \CLISpecTestData{..} -> flip runIntegrationTest runtime do
+  it "generates a withdraw tx body envelope" \CLISpecTestData{..} -> flip (runIntegrationTest @()) runtime do
     now <- liftIO Time.getCurrentTime
 
     let partyA :: V1.Party
@@ -501,7 +546,9 @@ withdrawSpec = describe "withdraw" $
         tags :: Map MarloweMetadataTag (Maybe ChainSync.Api.Metadata)
         tags = Map.empty
 
-    Runtime.Transaction.Api.ContractCreated{contractId, txBody} <-
+    Runtime.Transaction.Api.ContractCreated
+      ReferenceTxInsScriptsInlineDatumsInBabbageEra
+      Runtime.Transaction.Api.ContractCreatedInEra{contractId, txBody} <-
       Runtime.Integration.Common.expectRight "failed to create withdraw contract"
         =<< Runtime.Client.createContract
           Nothing
@@ -523,7 +570,7 @@ withdrawSpec = describe "withdraw" $
           :: MarloweTxCommand
               Void
               (Runtime.Transaction.Api.ApplyInputsError 'V1)
-              (Runtime.Transaction.Api.InputsApplied BabbageEra 'V1)
+              (Runtime.Transaction.Api.InputsApplied 'V1)
         depositCommand =
           ApplyInputs
             MarloweV1
@@ -542,7 +589,7 @@ withdrawSpec = describe "withdraw" $
           :: MarloweTxCommand
               Void
               (Runtime.Transaction.Api.WithdrawError 'V1)
-              (WithdrawTx BabbageEra 'V1)
+              (WithdrawTx 'V1)
         command =
           Withdraw
             MarloweV1
@@ -551,3 +598,107 @@ withdrawSpec = describe "withdraw" $
             "Party A"
 
     expectSameResultFromCLIAndJobClient "withdraw-tx-body.json" extraCliArgs command
+
+bugPLT6773 :: Hspec.SpecWith CLISpecTestData
+bugPLT6773 = do
+  describe "[BUG] PLT-6773: Marlowe runtime cannot load any contracts" do
+    it "Marlowe runtime can load a JSON contract" \CLISpecTestData{..} -> flip runIntegrationTest runtime do
+      workspace <- Reader.asks $ workspace . testnet
+      let contractHashRelation :: [(String, V1.Contract, Aeson.Value)]
+          contractHashRelation =
+            [ ("923918e403bf43c34b4ef6b48eb2ee04babed17320d8d1b9ff9ad086e86f44ec", V1.Close, Aeson.String "close")
+            ,
+              ( "ee5ab3bfda75834c3c1503ec7cd0b7fccbce7ceb3909e5404910bfd9e09b1be4"
+              , V1.Assert V1.TrueObs V1.Close
+              , Aeson.object [("assert", Aeson.Bool True), ("then", Aeson.String "close")]
+              )
+            ]
+
+      for_ contractHashRelation \(expectedHash :: String, contract :: V1.Contract, expectedContract :: Aeson.Value) -> do
+        contractFilePath <- writeWorkspaceFileJSON workspace "contract.json" contract
+
+        do
+          (code, stdout, stderr) <- Runtime.Integration.Common.execMarlowe' ["load", "--read-json", contractFilePath]
+
+          liftIO do
+            stderr `shouldBe` ""
+            (code, stdout) `shouldBe` (ExitSuccess, expectedHash ++ "\n")
+
+        do
+          (code, stdout, stderr) <- Runtime.Integration.Common.execMarlowe' ["query", "store", "contract", expectedHash]
+
+          let actualContractJSON :: Maybe Aeson.Value = Aeson.decode $ fromString stdout
+
+          liftIO do
+            stderr `shouldBe` ""
+            (code, actualContractJSON) `shouldBe` (ExitSuccess, Just expectedContract)
+
+    it "Marlowe runtime can load a bundle archive" \CLISpecTestData{..} -> flip runIntegrationTest runtime do
+      workspace <- Reader.asks $ workspace . testnet
+      let contractHashRelation :: [(String, V1.Contract, Aeson.Value)]
+          contractHashRelation =
+            [
+              ( "a5a461145b2621873bd8f23d6b1b2d511d07b5afabfff8cc24134a657c9fb23b"
+              , V1.Assert V1.TrueObs $ V1.Assert V1.TrueObs V1.Close
+              , Aeson.object
+                  [ ("assert", Aeson.Bool True)
+                  , ("then", Aeson.object [("assert", Aeson.Bool True), ("then", Aeson.String "close")])
+                  ]
+              )
+            ]
+
+      for_ contractHashRelation \(expectedHash :: String, contract :: V1.Contract, expectedContract :: Aeson.Value) -> do
+        let archivePath = resolveWorkspacePath workspace "archive.zip"
+        packArchive archivePath "main" \writeObject -> do
+          writeObject $ LabelledObject "main" ContractType $ fromCoreContract contract
+
+        do
+          (code, stdout, stderr) <- Runtime.Integration.Common.execMarlowe' ["load", archivePath]
+
+          liftIO do
+            stderr `shouldBe` ""
+            (code, stdout) `shouldBe` (ExitSuccess, expectedHash ++ "\n")
+
+        do
+          (code, stdout, stderr) <- Runtime.Integration.Common.execMarlowe' ["query", "store", "contract", expectedHash]
+
+          let actualContractJSON :: Maybe Aeson.Value = Aeson.decode $ fromString stdout
+
+          liftIO do
+            stderr `shouldBe` ""
+            (code, actualContractJSON) `shouldBe` (ExitSuccess, Just expectedContract)
+
+    it "Marlowe runtime can load an exported contract" \CLISpecTestData{..} -> flip runIntegrationTest runtime do
+      workspace <- Reader.asks $ workspace . testnet
+      let contractHashRelation :: [(String, V1.Contract)]
+          contractHashRelation =
+            [
+              ( "35eea4e90b656c443ebb90eb68375725c7041ce804b8e2fd1c718c819e2f234e"
+              , V1.Assert V1.FalseObs V1.Close
+              )
+            ]
+
+      for_ contractHashRelation \(expectedHash :: String, contract :: V1.Contract) -> do
+        contractFilePath <- writeWorkspaceFileJSON workspace "contract.json" contract
+
+        (loadCode, loadStdout, loadStderr) <- Runtime.Integration.Common.execMarlowe' ["load", "--read-json", contractFilePath]
+
+        liftIO do
+          loadStderr `shouldBe` ""
+          (loadCode, loadStdout) `shouldBe` (ExitSuccess, expectedHash ++ "\n")
+
+        let archivePath = resolveWorkspacePath workspace "out.zip"
+
+        (exportCode, _, exportStderr) <-
+          Runtime.Integration.Common.execMarlowe' ["export", "-o", archivePath, expectedHash]
+
+        liftIO do
+          exportStderr `shouldBe` ""
+          exportCode `shouldBe` ExitSuccess
+
+        (loadCode', loadStdout', loadStderr') <- Runtime.Integration.Common.execMarlowe' ["load", archivePath]
+
+        liftIO do
+          loadStderr' `shouldBe` ""
+          loadCode' `shouldBe` ExitSuccess
+          loadStdout' `shouldBe` loadStdout

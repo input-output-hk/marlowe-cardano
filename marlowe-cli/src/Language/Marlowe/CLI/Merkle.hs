@@ -73,7 +73,7 @@ demerkleize marloweFile outputFile =
     SomeMarloweTransaction lang era marlowe <- decodeFileStrict marloweFile
     contract <-
       runReaderT
-        (deepDemerkleize $ mtContract marlowe)
+        (deepDemerkleize True $ mtContract marlowe)
         $ mtContinuations marlowe
     let marlowe' =
           marlowe
