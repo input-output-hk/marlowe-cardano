@@ -243,7 +243,7 @@ loadMarloweContext getScripts networkId chainSyncConnector chainSyncQueryConnect
       -> NonEmpty (BlockHeader, MarloweContext v)
       -> ClientStIdle Move ChainPoint ChainPoint m (Either LoadMarloweContextError (MarloweContext v))
     clientFollowContract version contexts = case scriptUtxo of
-      Nothing -> SendMsgDone $ Right context
+      Nothing -> SendMsgDone $ Left LoadMarloweContextErrorNotFound
       Just lastOutput ->
         SendMsgQueryNext
           (FindConsumingTxs $ Set.singleton lastOutput)
