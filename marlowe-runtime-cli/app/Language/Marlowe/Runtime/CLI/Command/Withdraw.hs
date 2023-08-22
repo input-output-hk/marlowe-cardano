@@ -11,58 +11,48 @@ import Control.Monad.Trans.Except (ExceptT (ExceptT))
 import Data.Aeson (toJSON)
 import qualified Data.Aeson as A
 import Data.Bifunctor (first)
+import Data.Set (Set)
+import qualified Data.Set as Set
 import Language.Marlowe.Runtime.CLI.Command.Tx (SigningMethod (Manual), TxCommand (..), txCommandParser)
 import Language.Marlowe.Runtime.CLI.Monad (CLI, runCLIExceptT)
 import Language.Marlowe.Runtime.CLI.Option (marloweVersionParser, txOutRefParser)
-import Language.Marlowe.Runtime.ChainSync.Api (TokenName (TokenName))
+import Language.Marlowe.Runtime.ChainSync.Api (TxOutRef)
 import Language.Marlowe.Runtime.Client (withdraw)
 import Language.Marlowe.Runtime.Core.Api (
-  ContractId (ContractId),
   MarloweVersion (MarloweV1),
-  MarloweVersionTag (V1),
   SomeMarloweVersion (SomeMarloweVersion),
  )
 import Language.Marlowe.Runtime.Transaction.Api (WithdrawError, WithdrawTx (..), WithdrawTxInEra (..))
 import Options.Applicative
 
 data WithdrawCommand = WithdrawCommand
-  { contractId :: ContractId
-  , marloweVersion :: SomeMarloweVersion
-  , role :: TokenName
+  { marloweVersion :: SomeMarloweVersion
+  , payouts :: Set TxOutRef
   }
 
-data WithdrawCommandError v
-  = WithdrawFailed (WithdrawError v)
+data WithdrawCommandError
+  = WithdrawFailed WithdrawError
   | TransactionFileWriteFailed (C.FileError ())
-
-deriving instance Show (WithdrawCommandError 'V1)
+  deriving (Show)
 
 withdrawCommandParser :: ParserInfo (TxCommand WithdrawCommand)
-withdrawCommandParser = info (txCommandParser False parser) $ progDesc "Withdraw funds paid to a role in a contract"
+withdrawCommandParser = info (txCommandParser False parser) $ progDesc "Withdraw funds paid roles in contracts"
   where
-    parser = WithdrawCommand <$> contractIdParser <*> marloweVersionParser <*> roleParser
-    contractIdParser =
-      option (ContractId <$> txOutRefParser) $
-        mconcat
-          [ long "contract"
-          , short 'c'
-          , metavar "CONTRACT_ID"
-          , help "The ID of the Marlowe contract from which to withdraw funds."
-          ]
-    roleParser =
-      fmap TokenName $
-        strOption $
-          mconcat
-            [ long "role"
-            , metavar "ROLE_NAME"
-            , help "The name of the role from which to withdraw funds."
-            ]
+    parser = WithdrawCommand <$> marloweVersionParser <*> payoutsParser
+    payoutsParser =
+      fmap Set.fromList $
+        some $
+          argument txOutRefParser $
+            mconcat
+              [ metavar "TX_ID#TX_IX"
+              , help "A payout output to withdraw."
+              ]
 
 runWithdrawCommand :: TxCommand WithdrawCommand -> CLI ()
 runWithdrawCommand TxCommand{walletAddresses, signingMethod, subCommand = WithdrawCommand{..}} = case marloweVersion of
   SomeMarloweVersion MarloweV1 -> runCLIExceptT do
     WithdrawTx era WithdrawTxInEra{..} <-
-      ExceptT $ first WithdrawFailed <$> withdraw MarloweV1 walletAddresses contractId role
+      ExceptT $ first WithdrawFailed <$> withdraw MarloweV1 walletAddresses payouts
     case signingMethod of
       Manual outputFile -> do
         ExceptT @_ @_ @() $
