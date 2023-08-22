@@ -7,6 +7,7 @@
 module Language.Marlowe.Runtime.Transaction.Constraints (
   ConstraintError (..),
   MarloweContext (..),
+  PayoutContext (..),
   MarloweInputConstraints (..),
   MarloweOutputConstraints (..),
   RoleTokenConstraints (..),
@@ -18,7 +19,7 @@ module Language.Marlowe.Runtime.Transaction.Constraints (
   ensureMinUtxo,
   findMinUtxo,
   mustConsumeMarloweOutput,
-  mustConsumePayouts,
+  mustConsumePayout,
   mustMintRoleToken,
   mustPayToAddress,
   mustPayToRole,
@@ -36,20 +37,31 @@ import qualified Cardano.Api as C
 import qualified Cardano.Api.Shelley as C
 import Control.Applicative ((<|>))
 import Control.Error (note)
-import Control.Monad (forM, unless, when)
+import Control.Monad (forM, unless, when, (<=<))
 import Data.Aeson (ToJSON)
 import Data.Crosswalk (Crosswalk (sequenceL))
 import Data.Function (on)
 import Data.Functor ((<&>))
 import Data.List (delete, find, minimumBy, nub)
-import qualified Data.List.NonEmpty as NE (NonEmpty (..), toList)
 import Data.Map (Map)
-import qualified Data.Map as Map (elems, fromSet, keysSet, mapWithKey, member, null, singleton, toList, unionWith)
+import qualified Data.Map as Map (
+  elems,
+  fromSet,
+  keysSet,
+  lookup,
+  mapWithKey,
+  member,
+  null,
+  singleton,
+  toList,
+  unionWith,
+ )
 import qualified Data.Map.Strict as SMap (fromList, toList)
 import Data.Maybe (mapMaybe, maybeToList)
 import Data.Monoid (First (..), getFirst)
 import Data.Set (Set)
-import qualified Data.Set as Set (fromAscList, member, null, singleton, toAscList, toList, union)
+import qualified Data.Set as Set
+import Data.Traversable (for)
 import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.Cardano.Api (
@@ -67,7 +79,13 @@ import Language.Marlowe.Runtime.Cardano.Api (
   tokensToCardanoValue,
  )
 import Language.Marlowe.Runtime.Cardano.Feature (withShelleyBasedEra)
-import Language.Marlowe.Runtime.ChainSync.Api (lookupUTxO, toCardanoMetadata, toPlutusData, toUTxOTuple, toUTxOsList)
+import Language.Marlowe.Runtime.ChainSync.Api (
+  lookupUTxO,
+  toCardanoMetadata,
+  toPlutusData,
+  toUTxOTuple,
+  toUTxOsList,
+ )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (
   MarloweTransactionMetadata (..),
@@ -75,18 +93,19 @@ import Language.Marlowe.Runtime.Core.Api (
   TransactionScriptOutput (utxo),
   emptyMarloweTransactionMetadata,
   encodeMarloweTransactionMetadata,
+  fromChainPayoutDatum,
  )
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.Core.ScriptRegistry (ReferenceScriptUtxo (..))
+import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
 import Language.Marlowe.Runtime.Transaction.Api (ConstraintError (..))
 import qualified Language.Marlowe.Scripts as V1
 import Ouroboros.Consensus.BlockchainTime (SystemStart)
-import Witherable (wither)
 
 -- | Describes a set of Marlowe-specific conditions that a transaction must satisfy.
 data TxConstraints era v = TxConstraints
   { marloweInputConstraints :: MarloweInputConstraints v
-  , payoutInputConstraints :: Set (Core.PayoutDatum v)
+  , payoutInputConstraints :: Set Chain.TxOutRef
   , roleTokenConstraints :: RoleTokenConstraints era
   , payToAddresses :: Map Chain.Address Chain.Assets
   , payToRoles :: Map (Core.PayoutDatum v) Chain.Assets
@@ -239,14 +258,15 @@ mustConsumeMarloweOutput :: (Core.IsMarloweVersion v) => C.SlotNo -> C.SlotNo ->
 mustConsumeMarloweOutput invalidBefore invalidHereafter inputs =
   mempty{marloweInputConstraints = MarloweInput invalidBefore invalidHereafter inputs}
 
--- | Require the transaction to consume any input from the payout script that
--- bear the given datum.
+-- | Require the transaction to consume the given payout transaction output.
 --
 -- Requires that:
---   1. At least one UTXO is consumed that bears the correct payout datum.
---   2. All such inputs that satisfy rule 1 come from the same address.
-mustConsumePayouts :: (Core.IsMarloweVersion v) => Core.PayoutDatum v -> TxConstraints era v
-mustConsumePayouts payoutDatum = mempty{payoutInputConstraints = Set.singleton payoutDatum}
+--   1. The output is consumed.
+--   2. The witness for the output is a script witness
+--   3. The script witness specifies a valid payout datum for the correct version
+--   4. The script witness specifies a reference script
+mustConsumePayout :: (Core.IsMarloweVersion v) => Chain.TxOutRef -> TxConstraints era v
+mustConsumePayout output = mempty{payoutInputConstraints = Set.singleton output}
 
 -- | Require the transaction to hold a signature for the given payment key
 -- hash.
@@ -311,12 +331,10 @@ data WalletContext = WalletContext
   }
   deriving (Show, Generic, ToJSON)
 
--- | Data from Marlowe Scripts needed to solve the constraints.
+-- | Data from Marlowe Script needed to solve the constraints.
 data MarloweContext v = MarloweContext
   { scriptOutput :: Maybe (Core.TransactionScriptOutput v)
   -- ^ The UTXO at the script address, if any.
-  , payoutOutputs :: Map Chain.TxOutRef (Core.Payout v)
-  -- ^ The UTXOs at the payout address.
   , marloweAddress :: Chain.Address
   , payoutAddress :: Chain.Address
   , marloweScriptUTxO :: ReferenceScriptUtxo
@@ -329,14 +347,23 @@ data MarloweContext v = MarloweContext
 deriving instance Show (MarloweContext 'V1)
 deriving instance ToJSON (MarloweContext 'V1)
 
+-- | Data from Payout Scripts needed to solve the constraints.
+data PayoutContext = PayoutContext
+  { payoutOutputs :: Map Chain.TxOutRef Chain.TransactionOutput
+  -- ^ The unspent payout outputs.
+  , payoutScriptOutputs :: Map Chain.ScriptHash ReferenceScriptUtxo
+  -- ^ The unspent payout reference script outputs indexed by script hash.
+  }
+  deriving (Generic, Show, Eq)
+
 type SolveConstraints =
   forall era v
    . C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
   -> Core.MarloweVersion v
-  -> MarloweContext v
+  -> Either (MarloweContext v) PayoutContext
   -> WalletContext
   -> TxConstraints era v
-  -> Either (ConstraintError v) (C.TxBody era)
+  -> Either ConstraintError (C.TxBody era)
 
 -- | Given a set of constraints and the context of a wallet, produces a
 -- balanced, unsigned transaction that satisfies the constraints.
@@ -345,12 +372,12 @@ solveConstraints
   -> C.EraHistory C.CardanoMode
   -> C.ProtocolParameters
   -> SolveConstraints
-solveConstraints start history protocol era version marloweCtx walletCtx constraints =
+solveConstraints start history protocol era version scriptCtx walletCtx constraints =
   withShelleyBasedEra era $
-    solveInitialTxBodyContent era protocol version marloweCtx walletCtx constraints
-      >>= adjustTxForMinUtxo era protocol (marloweAddress marloweCtx)
-      >>= selectCoins era protocol version marloweCtx walletCtx
-      >>= balanceTx era start history protocol version marloweCtx walletCtx
+    solveInitialTxBodyContent era protocol version scriptCtx walletCtx constraints
+      >>= adjustTxForMinUtxo era protocol (either (Just . marloweAddress) (const Nothing) scriptCtx)
+      >>= selectCoins era protocol version scriptCtx walletCtx
+      >>= balanceTx era start history protocol version scriptCtx walletCtx
 
 -- | 2022-08 This function was written to compensate for a bug in Cardano's
 --   calculateMinimumUTxO. It's called by adjustOutputForMinUTxO below. We will
@@ -367,12 +394,12 @@ ensureAtLeastHalfAnAda origValue =
 -- | Compute the `minAda` and adjust the lovelace in a single output to conform
 --   to the minimum ADA requirement.
 adjustOutputForMinUtxo
-  :: forall era v
+  :: forall era
    . (IsShelleyBasedEra era)
   => MultiAssetSupportedInEra era
   -> C.ProtocolParameters
   -> C.TxOut C.CtxTx era
-  -> Either (ConstraintError v) (C.TxOut C.CtxTx era)
+  -> Either ConstraintError (C.TxOut C.CtxTx era)
 adjustOutputForMinUtxo era protocol (C.TxOut address txOrigValue datum script) = do
   let origValue = C.txOutValueToValue txOrigValue
       adjustedForCalculateMin = ensureAtLeastHalfAnAda origValue
@@ -392,16 +419,17 @@ adjustOutputForMinUtxo era protocol (C.TxOut address txOrigValue datum script) =
 -- requirements. Additionally, ensures that the Value of the marlowe output
 -- does not change (fails with an error if it does).
 adjustTxForMinUtxo
-  :: forall era v
+  :: forall era
    . (IsShelleyBasedEra era)
   => C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
   -> C.ProtocolParameters
-  -> Chain.Address
+  -> Maybe Chain.Address
   -> C.TxBodyContent C.BuildTx era
-  -> Either (ConstraintError v) (C.TxBodyContent C.BuildTx era)
-adjustTxForMinUtxo era protocol marloweAddress txBodyContent = do
+  -> Either ConstraintError (C.TxBodyContent C.BuildTx era)
+adjustTxForMinUtxo era protocol mMarloweAddress txBodyContent = do
   let getMarloweOutputValue :: [C.TxOut C.CtxTx era] -> Maybe (C.TxOutValue era)
-      getMarloweOutputValue =
+      getMarloweOutputValue outputs = do
+        marloweAddress <- mMarloweAddress
         getFirst
           . mconcat
           . map
@@ -412,6 +440,7 @@ adjustTxForMinUtxo era protocol marloweAddress txBodyContent = do
                         else Nothing
                   )
             )
+          $ outputs
 
       origTxOuts = C.txOuts txBodyContent
       origMarloweValue = getMarloweOutputValue origTxOuts
@@ -444,12 +473,12 @@ maximumFee C.ProtocolParameters{..} =
 --   the "none" reference script in order to use it with C.calculateMinimumUTxO
 --   in a subsequent call
 findMinUtxo
-  :: forall era v
+  :: forall era
    . (IsShelleyBasedEra era)
   => C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
   -> C.ProtocolParameters
   -> (Chain.Address, Maybe Chain.Datum, C.Value)
-  -> Either (ConstraintError v) C.Value
+  -> Either ConstraintError C.Value
 findMinUtxo era protocol (chAddress, mbDatum, origValue) =
   do
     let atLeastHalfAnAda :: C.Value
@@ -479,12 +508,12 @@ findMinUtxo era protocol (chAddress, mbDatum, origValue) =
 
 -- | Ensure that the minimum UTxO requirement is satisfied for outputs.
 ensureMinUtxo
-  :: forall era v
+  :: forall era
    . (IsShelleyBasedEra era)
   => C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
   -> C.ProtocolParameters
   -> (Chain.Address, C.Value)
-  -> Either (ConstraintError v) (Chain.Address, C.Value)
+  -> Either ConstraintError (Chain.Address, C.Value)
 ensureMinUtxo era protocol (chAddress, origValue) =
   case findMinUtxo era protocol (chAddress, Nothing, origValue) of
     Right minValue ->
@@ -503,7 +532,7 @@ makeTxOut
   -> C.TxOutDatum C.CtxTx era
   -> C.Value
   -> C.ReferenceScript era
-  -> Either (ConstraintError v) (C.TxOut C.CtxTx era)
+  -> Either ConstraintError (C.TxOut C.CtxTx era)
 makeTxOut era address datum value referenceScript = do
   cardanoAddress <-
     note
@@ -528,11 +557,11 @@ selectCoins
   => C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
   -> C.ProtocolParameters
   -> Core.MarloweVersion v
-  -> MarloweContext v
+  -> Either (MarloweContext v) PayoutContext
   -> WalletContext
   -> C.TxBodyContent C.BuildTx era
-  -> Either (ConstraintError v) (C.TxBodyContent C.BuildTx era)
-selectCoins era protocol marloweVersion marloweCtx walletCtx@WalletContext{..} txBodyContent = do
+  -> Either ConstraintError (C.TxBodyContent C.BuildTx era)
+selectCoins era protocol marloweVersion scriptCtx walletCtx@WalletContext{..} txBodyContent = do
   let -- Extract the value of a UTxO
       txOutToValue :: C.TxOut C.CtxTx era -> C.Value
       txOutToValue (C.TxOut _ value _ _) = C.txOutValueToValue value
@@ -540,7 +569,7 @@ selectCoins era protocol marloweVersion marloweCtx walletCtx@WalletContext{..} t
       -- All utxos that are spendable from either the Marlowe context or wallet context
       -- False means not including the reference utxo
       utxos :: [(C.TxIn, C.TxOut C.CtxTx era)]
-      utxos = allUtxos era marloweVersion marloweCtx walletCtx False
+      utxos = allUtxos era marloweVersion scriptCtx walletCtx False
 
       -- Compute the value of all available UTxOs
       universe :: C.Value
@@ -743,11 +772,11 @@ balanceTx
   -> C.EraHistory C.CardanoMode
   -> C.ProtocolParameters
   -> Core.MarloweVersion v
-  -> MarloweContext v
+  -> Either (MarloweContext v) PayoutContext
   -> WalletContext
   -> C.TxBodyContent C.BuildTx era
-  -> Either (ConstraintError v) (C.TxBody era)
-balanceTx era systemStart eraHistory protocol marloweVersion marloweCtx walletCtx@WalletContext{..} C.TxBodyContent{..} = do
+  -> Either ConstraintError (C.TxBody era)
+balanceTx era systemStart eraHistory protocol marloweVersion scriptCtx walletCtx@WalletContext{..} C.TxBodyContent{..} = do
   changeAddress' <-
     maybe
       (Left $ BalancingError "Failed to convert change address.")
@@ -771,9 +800,7 @@ balanceTx era systemStart eraHistory protocol marloweVersion marloweCtx walletCt
       balancingLoop
         :: Integer
         -> C.Value
-        -> Either
-            (ConstraintError v)
-            (C.TxBodyContent C.BuildTx era, C.BalancedTxBody era)
+        -> Either ConstraintError (C.TxBodyContent C.BuildTx era, C.BalancedTxBody era)
       balancingLoop counter changeValue = do
         when (counter == 0) $
           Left . BalancingError $
@@ -805,7 +832,7 @@ balanceTx era systemStart eraHistory protocol marloweVersion marloweCtx walletCt
       -- FIXME: This only needs to be the subset of available UTxOs that are actually `TxIns`, but including extras should be harmless.
       -- This time we call allUtxos we need to know the total cost, so we do want the reference script (passing True)
       utxos :: C.UTxO era
-      utxos = C.UTxO . SMap.fromList $ allUtxos era marloweVersion marloweCtx walletCtx True
+      utxos = C.UTxO . SMap.fromList $ allUtxos era marloweVersion scriptCtx walletCtx True
 
       -- Compute net of inputs and outputs, accounting for minting.
       totalIn =
@@ -837,11 +864,11 @@ allUtxos
    . (IsCardanoEra era)
   => C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
   -> Core.MarloweVersion v
-  -> MarloweContext v
+  -> Either (MarloweContext v) PayoutContext
   -> WalletContext
   -> Bool -- False if we do not want to include the script reference
   -> [(C.TxIn, C.TxOut ctx era)]
-allUtxos era marloweVersion MarloweContext{..} WalletContext{..} includeReferences =
+allUtxos era marloweVersion scriptCtx WalletContext{..} includeReferences =
   let -- Convert chain UTxOs to Cardano API ones.
       multiAssetSupported :: C.MultiAssetSupportedInEra era
       multiAssetSupported = case era of
@@ -865,20 +892,6 @@ allUtxos era marloweVersion MarloweContext{..} WalletContext{..} includeReferenc
                   <*> pure C.ReferenceScriptNone
               )
 
-      mkPayoutUtxo :: (Chain.TxOutRef, Core.Payout v) -> Maybe (C.TxIn, C.TxOut ctx era)
-      mkPayoutUtxo (utxo, Core.Payout{..}) =
-        (,)
-          <$> toCardanoTxIn utxo
-          <*> ( C.TxOut
-                  <$> toCardanoAddressInEra C.cardanoEra address
-                  <*> toCardanoTxOutValue multiAssetSupported assets
-                  <*> pure
-                    ( C.TxOutDatumInline era . toCardanoScriptData $
-                        Core.toChainPayoutDatum marloweVersion datum
-                    )
-                  <*> pure C.ReferenceScriptNone
-              )
-
       -- Extra UTxOs for reference scripts.
       mkReferenceUtxo :: ReferenceScriptUtxo -> Maybe (C.TxIn, C.TxOut ctx era)
       mkReferenceUtxo ReferenceScriptUtxo{..} =
@@ -886,22 +899,26 @@ allUtxos era marloweVersion MarloweContext{..} WalletContext{..} includeReferenc
           <$> toCardanoTxIn txOutRef
           <*> toCardanoTxOut' multiAssetSupported txOut (Just . C.toScriptInAnyLang $ C.PlutusScript C.PlutusScriptV2 script)
    in mapMaybe convertUtxo (SMap.toList . Chain.unUTxOs $ availableUtxos)
-        <> maybe mempty pure (mkMarloweUtxo =<< scriptOutput)
-        <> mapMaybe mkPayoutUtxo (Map.toList payoutOutputs)
-        <> mapMaybe mkReferenceUtxo (filter (const includeReferences) [marloweScriptUTxO, payoutScriptUTxO])
+        <> either
+          (maybe mempty pure . (mkMarloweUtxo <=< scriptOutput))
+          (mapMaybe convertUtxo . Map.toList . payoutOutputs)
+          scriptCtx
+        <> mapMaybe
+          mkReferenceUtxo
+          (filter (const includeReferences) $ either (pure . marloweScriptUTxO) (Map.elems . payoutScriptOutputs) scriptCtx)
 
 solveInitialTxBodyContent
   :: forall era v
    . C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
   -> C.ProtocolParameters
   -> Core.MarloweVersion v
-  -> MarloweContext v
+  -> Either (MarloweContext v) PayoutContext
   -> WalletContext
   -> TxConstraints era v
-  -> Either (ConstraintError v) (C.TxBodyContent C.BuildTx era)
-solveInitialTxBodyContent era protocol marloweVersion MarloweContext{..} WalletContext{..} TxConstraints{..} = do
-  txIns <- solveTxIns
-  txInsReference <- solveTxInsReference
+  -> Either ConstraintError (C.TxBodyContent C.BuildTx era)
+solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..} TxConstraints{..} = do
+  (txIns, requiredPayoutScriptHashes) <- solveTxIns
+  txInsReference <- solveTxInsReference requiredPayoutScriptHashes
   txOuts <- solveTxOuts
   txValidityRange <- solveTxValidityRange
   txExtraKeyWits <- solveTxExtraKeyWits
@@ -955,7 +972,7 @@ solveInitialTxBodyContent era protocol marloweVersion MarloweContext{..} WalletC
     extraKeyWitnessesSupported = case era of
       C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.ExtraKeyWitnessesInBabbageEra
 
-    getWalletInputs :: Either (ConstraintError v) [(C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn era))]
+    getWalletInputs :: Either ConstraintError [(C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn era))]
     getWalletInputs = case roleTokenConstraints of
       RoleTokenConstraintsNone -> pure []
       MintRoleTokens txOutRef _ _ -> do
@@ -973,11 +990,10 @@ solveInitialTxBodyContent era protocol marloweVersion MarloweContext{..} WalletC
             note ToCardanoError $ toCardanoTxIn txOutRef
         pure $ (,C.BuildTxWith $ C.KeyWitness C.KeyWitnessForSpending) <$> txIns
 
-    getMarloweInput
-      :: Either (ConstraintError v) (Maybe (C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn era)))
-    getMarloweInput = case marloweInputConstraints of
-      MarloweInputConstraintsNone -> pure Nothing
-      MarloweInput _ _ inputs -> fmap Just $ do
+    getMarloweInput :: Either ConstraintError (Maybe (C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn era)))
+    getMarloweInput = case (marloweInputConstraints, scriptCtx) of
+      (MarloweInputConstraintsNone, _) -> pure Nothing
+      (MarloweInput _ _ inputs, Left MarloweContext{..}) -> fmap Just $ do
         Core.TransactionScriptOutput{..} <- note MissingMarloweInput scriptOutput
         txIn <- note ToCardanoError $ toCardanoTxIn utxo
         plutusScriptOrRefInput <-
@@ -1004,55 +1020,49 @@ solveInitialTxBodyContent era protocol marloweVersion MarloweContext{..} WalletC
                 )
                 (C.ExecutionUnits 0 0)
         pure (txIn, C.BuildTxWith $ C.ScriptWitness C.ScriptWitnessForSpending scriptWitness)
+      (MarloweInput{}, Right _) -> Left MarloweInputInWithdraw
 
-    getPayoutInputs :: Either (ConstraintError v) [(C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn era))]
-    getPayoutInputs = do
-      let availableUtxoList = Map.toList payoutOutputs
-      foldMap NE.toList <$> forM (Set.toList payoutInputConstraints) \payoutDatum ->
-        note (PayoutInputNotFound payoutDatum) . toNonEmpty
-          =<< wither (maybeGetPayoutInput payoutDatum) availableUtxoList
-
-    -- Because Data.List.NonEmpty.fromList is a partial function(!)
-    toNonEmpty [] = Nothing
-    toNonEmpty (x : xs) = Just $ x NE.:| xs
-
-    maybeGetPayoutInput
-      :: Core.PayoutDatum v
-      -> (Chain.TxOutRef, Core.Payout v)
-      -> Either
-          (ConstraintError v)
-          (Maybe (C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn era)))
-    maybeGetPayoutInput payoutDatum (txOutRef, Core.Payout{..})
-      | case marloweVersion of
-          Core.MarloweV1 -> datum == payoutDatum = do
-          txIn <- note ToCardanoError $ toCardanoTxIn txOutRef
-          plutusScriptOrRefInput <-
-            note ToCardanoError $
-              C.PReferenceScript
-                <$> toCardanoTxIn (Language.Marlowe.Runtime.Core.ScriptRegistry.txOutRef payoutScriptUTxO)
-                <*> (Just <$> toCardanoScriptHash payoutScriptHash)
-          let plutusScriptV2InEra :: C.ScriptLanguageInEra C.PlutusScriptV2 era
-              plutusScriptV2InEra = case era of
-                C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.PlutusScriptV2InBabbage
-              scriptWitness =
-                C.PlutusScriptWitness
-                  plutusScriptV2InEra
-                  C.PlutusScriptV2
-                  plutusScriptOrRefInput
-                  (C.ScriptDatumForTxIn $ toCardanoScriptData $ Core.toChainPayoutDatum marloweVersion datum)
-                  (C.ScriptDataConstructor 0 [])
-                  (C.ExecutionUnits 0 0)
-          pure $ Just (txIn, C.BuildTxWith $ C.ScriptWitness C.ScriptWitnessForSpending scriptWitness)
-      | otherwise = pure Nothing
+    getPayoutInputs
+      :: Either ConstraintError [((C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn era)), Chain.ScriptHash)]
+    getPayoutInputs
+      | Set.null payoutInputConstraints = pure []
+      | otherwise = case scriptCtx of
+          Right PayoutContext{..} -> for (Set.toList payoutInputConstraints) \payoutRef -> do
+            Chain.TransactionOutput{..} <- note (PayoutNotFound payoutRef) $ Map.lookup payoutRef payoutOutputs
+            scriptHash <- note (InvalidPayoutScriptAddress payoutRef address) do
+              credential <- Chain.paymentCredential address
+              case credential of
+                Chain.ScriptCredential hash -> pure hash
+                _ -> Nothing
+            cardanoScriptHash <- note ToCardanoError $ toCardanoScriptHash scriptHash
+            payoutDatum <- note (InvalidPayoutDatum payoutRef datum) $ fromChainPayoutDatum marloweVersion =<< datum
+            txIn <- note ToCardanoError $ toCardanoTxIn payoutRef
+            referenceScriptOutput <-
+              note (UnknownPayoutScript scriptHash) $ Map.lookup scriptHash payoutScriptOutputs
+            referenceScriptTxIn <- note ToCardanoError $ toCardanoTxIn $ ScriptRegistry.txOutRef referenceScriptOutput
+            let plutusScriptOrRefInput = C.PReferenceScript referenceScriptTxIn $ Just cardanoScriptHash
+                plutusScriptV2InEra :: C.ScriptLanguageInEra C.PlutusScriptV2 era
+                plutusScriptV2InEra = case era of
+                  C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.PlutusScriptV2InBabbage
+                scriptWitness =
+                  C.PlutusScriptWitness
+                    plutusScriptV2InEra
+                    C.PlutusScriptV2
+                    plutusScriptOrRefInput
+                    (C.ScriptDatumForTxIn $ toCardanoScriptData $ Core.toChainPayoutDatum marloweVersion payoutDatum)
+                    (C.ScriptDataConstructor 0 [])
+                    (C.ExecutionUnits 0 0)
+            pure ((txIn, C.BuildTxWith $ C.ScriptWitness C.ScriptWitnessForSpending scriptWitness), scriptHash)
+          Left _ -> Left PayoutInputInCreateOrApply
 
     solveTxIns = do
       walletInputs <- getWalletInputs
       marloweInputs <- maybeToList <$> getMarloweInput
       payoutInputs <- getPayoutInputs
-      pure $ walletInputs <> marloweInputs <> payoutInputs
+      pure (walletInputs <> marloweInputs <> (fst <$> payoutInputs), Set.fromList $ snd <$> payoutInputs)
 
-    solveTxInsReference :: Either (ConstraintError v) (C.TxInsReference C.BuildTx era)
-    solveTxInsReference =
+    solveTxInsReference :: Set Chain.ScriptHash -> Either ConstraintError (C.TxInsReference C.BuildTx era)
+    solveTxInsReference requiredPayoutScriptHashes =
       maybe (pure C.TxInsReferenceNone) (fmap (C.TxInsReference era) . sequence)
       -- sequenceL is from the 'Crosswalk' type class. It behaves similarly to
       -- 'sequenceA' except that it uses 'Align' semantics instead of
@@ -1067,30 +1077,40 @@ solveInitialTxBodyContent era protocol marloweVersion MarloweContext{..} WalletC
       -- sequenceL [Nothing, Just 2, Just 1] = Just [2, 1]
       -- sequenceL [Nothing, Nothing, Nothing] = Nothing
       $
-        sequenceL [marloweTxInReference, payoutTxInReference]
+        sequenceL $
+          marloweTxInReference : payoutTxInReferences requiredPayoutScriptHashes
 
     -- Only include the marlowe reference script if we are consuming a marlowe
     -- input.
-    marloweTxInReference :: Maybe (Either (ConstraintError v) C.TxIn)
-    marloweTxInReference = case marloweInputConstraints of
-      MarloweInputConstraintsNone -> Nothing
-      _ -> Just $ note ToCardanoError $ toCardanoTxIn (txOutRef marloweScriptUTxO)
+    marloweTxInReference :: Maybe (Either ConstraintError C.TxIn)
+    marloweTxInReference = case (marloweInputConstraints, scriptCtx) of
+      (MarloweInputConstraintsNone, _) -> Nothing
+      (_, Left MarloweContext{..}) -> Just $ note ToCardanoError $ toCardanoTxIn (txOutRef marloweScriptUTxO)
+      (_, Right _) -> Just $ Left MarloweInputInWithdraw
 
-    -- Only include the payout reference script if we are consuming any payout
+    -- Only include the payout reference scripts if we are consuming any payout
     -- inputs.
-    payoutTxInReference :: Maybe (Either (ConstraintError v) C.TxIn)
-    payoutTxInReference
-      | Set.null payoutInputConstraints = Nothing
-      | otherwise = Just $ note ToCardanoError $ toCardanoTxIn (txOutRef payoutScriptUTxO)
+    payoutTxInReferences :: Set Chain.ScriptHash -> [Maybe (Either ConstraintError C.TxIn)]
+    payoutTxInReferences requiredScriptHashes
+      | Set.null requiredScriptHashes = []
+      | otherwise = case scriptCtx of
+          Right PayoutContext{..} ->
+            Set.toList requiredScriptHashes <&> \payoutScriptHash -> Just do
+              ScriptRegistry.ReferenceScriptUtxo{..} <-
+                note (UnknownPayoutScript payoutScriptHash) $ Map.lookup payoutScriptHash payoutScriptOutputs
+              note ToCardanoError $ toCardanoTxIn txOutRef
+          Left _ -> [Just $ Left PayoutInputInCreateOrApply]
 
-    getMarloweOutput :: Maybe Chain.TransactionOutput
-    getMarloweOutput = case marloweOutputConstraints of
-      MarloweOutputConstraintsNone -> Nothing
-      MarloweOutput assets datum ->
-        Just $
-          Chain.TransactionOutput marloweAddress assets Nothing $
-            Just $
-              Core.toChainDatum marloweVersion datum
+    getMarloweOutput :: Either ConstraintError (Maybe Chain.TransactionOutput)
+    getMarloweOutput = case (marloweOutputConstraints, scriptCtx) of
+      (MarloweOutputConstraintsNone, _) -> Right Nothing
+      (MarloweOutput assets datum, Left MarloweContext{..}) ->
+        Right $
+          Just $
+            Chain.TransactionOutput marloweAddress assets Nothing $
+              Just $
+                Core.toChainDatum marloweVersion datum
+      _ -> Left MarloweOutputInWithdraw
 
     getMerkleizedContinuationOutputs :: [Chain.TransactionOutput]
     getMerkleizedContinuationOutputs = case marloweInputConstraints of
@@ -1104,7 +1124,7 @@ solveInitialTxBodyContent era protocol marloweVersion MarloweContext{..} WalletC
           _ -> Nothing
       _ -> []
 
-    getRoleTokenOutputs :: Either (ConstraintError v) [Chain.TransactionOutput]
+    getRoleTokenOutputs :: Either ConstraintError [Chain.TransactionOutput]
     getRoleTokenOutputs = case roleTokenConstraints of
       RoleTokenConstraintsNone -> pure []
       MintRoleTokens _ _ distribution ->
@@ -1122,11 +1142,13 @@ solveInitialTxBodyContent era protocol marloweVersion MarloweContext{..} WalletC
               containsToken = Map.member token . Chain.unTokens . Chain.tokens . Chain.assets
           note (RoleTokenNotFound token) $ snd <$> find (containsToken . snd) availTuples
 
-    getPayoutOutputs :: [Chain.TransactionOutput]
-    getPayoutOutputs = uncurry getPayoutOutput <$> Map.toList payToRoles
+    getPayoutOutputs :: Either ConstraintError [Chain.TransactionOutput]
+    getPayoutOutputs = traverse (uncurry getPayoutOutput) $ Map.toList payToRoles
 
-    getPayoutOutput :: Core.PayoutDatum v -> Chain.Assets -> Chain.TransactionOutput
-    getPayoutOutput payoutDatum assets = Chain.TransactionOutput payoutAddress assets Nothing $ Just datum
+    getPayoutOutput :: Core.PayoutDatum v -> Chain.Assets -> Either ConstraintError Chain.TransactionOutput
+    getPayoutOutput payoutDatum assets = case scriptCtx of
+      Left MarloweContext{..} -> Right $ Chain.TransactionOutput payoutAddress assets Nothing $ Just datum
+      _ -> Left PayoutOutputInWithdraw
       where
         datum = Core.toChainPayoutDatum marloweVersion payoutDatum
 
@@ -1139,12 +1161,14 @@ solveInitialTxBodyContent era protocol marloweVersion MarloweContext{..} WalletC
     solveTxOuts =
       note ToCardanoError . traverse (toCardanoTxOut multiAssetSupported) =<< do
         roleTokenOutputs <- getRoleTokenOutputs
+        marloweOutput <- getMarloweOutput
+        payoutOutputs <- getPayoutOutputs
         pure $
           concat
-            [ maybeToList getMarloweOutput
+            [ maybeToList marloweOutput
             , getMerkleizedContinuationOutputs
             , roleTokenOutputs
-            , getPayoutOutputs
+            , payoutOutputs
             , getAddressOutputs
             ]
 
@@ -1167,7 +1191,7 @@ solveInitialTxBodyContent era protocol marloweVersion MarloweContext{..} WalletC
       | Map.null encodedMetadata = C.TxMetadataNone
       | otherwise = C.TxMetadataInEra metadataSupported $ C.TxMetadata $ toCardanoMetadata <$> encodedMetadata
 
-    solveTxExtraKeyWits :: Either (ConstraintError v) (C.TxExtraKeyWitnesses era)
+    solveTxExtraKeyWits :: Either ConstraintError (C.TxExtraKeyWitnesses era)
     solveTxExtraKeyWits
       | Set.null signatureConstraints = pure C.TxExtraKeyWitnessesNone
       | otherwise =
@@ -1175,7 +1199,7 @@ solveInitialTxBodyContent era protocol marloweVersion MarloweContext{..} WalletC
             C.TxExtraKeyWitnesses extraKeyWitnessesSupported
               <$> traverse toCardanoPaymentKeyHash (Set.toList signatureConstraints)
 
-    solveTxMintValue :: Either (ConstraintError v) (C.TxMintValue C.BuildTx era)
+    solveTxMintValue :: Either ConstraintError (C.TxMintValue C.BuildTx era)
     solveTxMintValue = case roleTokenConstraints of
       MintRoleTokens _ witness distribution -> do
         let assetIds = Map.keysSet distribution

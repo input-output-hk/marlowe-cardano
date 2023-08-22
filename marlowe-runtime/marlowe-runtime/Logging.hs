@@ -31,6 +31,7 @@ import qualified Language.Marlowe.Runtime.Sync as Sync
 import qualified Language.Marlowe.Runtime.Sync.Database as Sync
 import Language.Marlowe.Runtime.Transaction (
   renderLoadMarloweContextSelectorOTel,
+  renderLoadPayoutContextSelectorOTel,
   renderLoadWalletContextSelectorOTel,
   renderTransactionServerSelectorOTel,
  )
@@ -56,6 +57,7 @@ data RootSelector f where
   MarloweTx :: TransactionServerSelector f -> RootSelector f
   LoadWalletContext :: Q.LoadWalletContextSelector f -> RootSelector f
   LoadMarloweContext :: Q.LoadMarloweContextSelector f -> RootSelector f
+  LoadPayoutContext :: Q.LoadPayoutContextSelector f -> RootSelector f
   ContractStoreSelector :: ContractStoreSelector f -> RootSelector f
 
 instance Inject RootSelector RootSelector where
@@ -90,6 +92,9 @@ instance Inject Q.LoadWalletContextSelector RootSelector where
 
 instance Inject Q.LoadMarloweContextSelector RootSelector where
   inject = injectSelector LoadMarloweContext
+
+instance Inject Q.LoadPayoutContextSelector RootSelector where
+  inject = injectSelector LoadPayoutContext
 
 instance Inject TransactionServerSelector RootSelector where
   inject = injectSelector MarloweTx
@@ -132,4 +137,5 @@ renderRootSelectorOTel dbName dbUser host port = \case
   MarloweTx sel -> renderTransactionServerSelectorOTel sel
   LoadWalletContext sel -> renderLoadWalletContextSelectorOTel sel
   LoadMarloweContext sel -> renderLoadMarloweContextSelectorOTel sel
+  LoadPayoutContext sel -> renderLoadPayoutContextSelectorOTel sel
   ContractStoreSelector sel -> renderContractStoreSelectorOTel sel

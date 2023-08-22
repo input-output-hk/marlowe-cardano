@@ -89,6 +89,14 @@ run Options{..} = flip runComponent_ () proc _ -> do
               networkId <- runConnector chainSyncQueryConnector $ request GetNetworkId
               Query.loadMarloweContext ScriptRegistry.getScripts networkId chainSyncConnector chainSyncQueryConnector v contractId
           , loadWalletContext = Query.loadWalletContext $ runConnector chainSyncQueryConnector . request . GetUTxOs
+          , loadPayoutContext = \v payouts -> do
+              networkId <- runConnector chainSyncQueryConnector $ request GetNetworkId
+              Query.loadPayoutContext
+                ScriptRegistry.getScripts
+                networkId
+                (runConnector chainSyncQueryConnector . request . GetUTxOs)
+                v
+                payouts
           , getCurrentScripts = ScriptRegistry.getCurrentScripts
           , analysisTimeout = analysisTimeout
           , ..

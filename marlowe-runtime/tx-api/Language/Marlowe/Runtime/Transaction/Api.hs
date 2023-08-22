@@ -105,6 +105,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   parseMetadataMap,
   parseMetadataText,
  )
+import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.History.Api (ExtractCreationError, ExtractMarloweTransactionError)
 import Network.HTTP.Media (MediaType)
@@ -225,7 +226,7 @@ decodeRoleTokenMetadata = parseNFTMetadataDetails
     parseMetadataRecord = parseMetadataMap parseMetadataText Just
 
     parseSplittableText :: Metadata -> Maybe Text
-    parseSplittableText md = parseMetadataText md <|> (mconcat <$> parseMetadataList parseMetadataText md)
+    parseSplittableText md = parseMetadataText md <|> mconcat <$> parseMetadataList parseMetadataText md
 
 encodeRoleTokenMetadata :: RoleTokenMetadata -> Metadata
 encodeRoleTokenMetadata = encodeNFTMetadataDetails
@@ -505,7 +506,6 @@ instance Binary (WithdrawTx 'V1) where
 data WithdrawTxInEra era v = WithdrawTxInEra
   { version :: MarloweVersion v
   , inputs :: Map TxOutRef (Payout v)
-  , roleToken :: AssetId
   , txBody :: TxBody era
   }
 
@@ -513,21 +513,15 @@ deriving instance Show (WithdrawTxInEra BabbageEra 'V1)
 deriving instance Eq (WithdrawTxInEra BabbageEra 'V1)
 
 instance (IsShelleyBasedEra era) => Variations (WithdrawTxInEra era 'V1) where
-  variations =
-    WithdrawTxInEra MarloweV1
-      <$> variations
-        `varyAp` variations
-        `varyAp` variations
+  variations = WithdrawTxInEra MarloweV1 <$> variations `varyAp` variations
 
 instance (IsCardanoEra era) => Binary (WithdrawTxInEra era 'V1) where
   put WithdrawTxInEra{..} = do
     put inputs
-    put roleToken
     putTxBody txBody
   get = do
     let version = MarloweV1
     inputs <- get
-    roleToken <- get
     txBody <- getTxBody
     pure WithdrawTxInEra{..}
 
@@ -564,7 +558,7 @@ data MarloweTxCommand status err result where
     -- ^ Min Lovelace which should be used for the contract output.
     -> Either (Contract v) DatumHash
     -- ^ The contract to run, or the hash of the contract to load from the store.
-    -> MarloweTxCommand Void (CreateError v) (ContractCreated v)
+    -> MarloweTxCommand Void CreateError (ContractCreated v)
   -- | Construct a transaction that advances an active Marlowe contract by
   -- applying a sequence of inputs. The resulting, unsigned transaction can be
   -- signed via the cardano API or a wallet provider. When signed, the 'Submit'
@@ -586,24 +580,21 @@ data MarloweTxCommand status err result where
     -- is computed from the contract.
     -> Inputs v
     -- ^ The inputs to apply.
-    -> MarloweTxCommand Void (ApplyInputsError v) (InputsApplied v)
-  -- | Construct a transaction that withdraws available assets from an active
-  -- Marlowe contract for a set of roles in the contract. The resulting,
-  -- unsigned transaction can be signed via the cardano API or a wallet
-  -- provider. When signed, the 'Submit' command can be used to submit the
-  -- transaction to the attached Cardano node.
+    -> MarloweTxCommand Void ApplyInputsError (InputsApplied v)
+  -- | Construct a transaction that withdraws available assets from a set of
+  -- Marlowe contract payouts. The resulting, unsigned transaction can be signed
+  -- via the cardano API or a wallet provider. When signed, the 'Submit' command
+  -- can be used to submit the transaction to the attached Cardano node.
   Withdraw
     :: MarloweVersion v
     -- ^ The Marlowe version to use
     -> WalletAddresses
     -- ^ The wallet addresses to use when constructing the transaction
-    -> ContractId
-    -- ^ The ID of the contract to apply the inputs to.
-    -> TokenName
-    -- ^ The names of the roles whose assets to withdraw.
+    -> Set TxOutRef
+    -- ^ The payouts to withdraw.
     -> MarloweTxCommand
         Void
-        (WithdrawError v)
+        WithdrawError
         ( WithdrawTx v -- The unsigned tx body, to be signed by a wallet.
         )
   -- | Submits a signed transaction to the attached Cardano node.
@@ -629,9 +620,9 @@ instance OTelCommand MarloweTxCommand where
 
 instance Command MarloweTxCommand where
   data Tag MarloweTxCommand status err result where
-    TagCreate :: MarloweVersion v -> Tag MarloweTxCommand Void (CreateError v) (ContractCreated v)
-    TagApplyInputs :: MarloweVersion v -> Tag MarloweTxCommand Void (ApplyInputsError v) (InputsApplied v)
-    TagWithdraw :: MarloweVersion v -> Tag MarloweTxCommand Void (WithdrawError v) (WithdrawTx v)
+    TagCreate :: MarloweVersion v -> Tag MarloweTxCommand Void CreateError (ContractCreated v)
+    TagApplyInputs :: MarloweVersion v -> Tag MarloweTxCommand Void ApplyInputsError (InputsApplied v)
+    TagWithdraw :: MarloweVersion v -> Tag MarloweTxCommand Void WithdrawError (WithdrawTx v)
     TagSubmit :: Tag MarloweTxCommand SubmitStatus SubmitError BlockHeader
 
   data JobId MarloweTxCommand stats err result where
@@ -640,7 +631,7 @@ instance Command MarloweTxCommand where
   tagFromCommand = \case
     Create _ version _ _ _ _ _ -> TagCreate version
     ApplyInputs version _ _ _ _ _ _ -> TagApplyInputs version
-    Withdraw version _ _ _ -> TagWithdraw version
+    Withdraw version _ _ -> TagWithdraw version
     Submit _ _ -> TagSubmit
 
   tagFromJobId = \case
@@ -701,10 +692,9 @@ instance Command MarloweTxCommand where
       maybe (putWord8 0) (\t -> putWord8 1 *> put t) invalidBefore
       maybe (putWord8 0) (\t -> putWord8 1 *> put t) invalidHereafter
       putInputs version redeemer
-    Withdraw _ walletAddresses contractId tokenName -> do
+    Withdraw _ walletAddresses payoutIds -> do
       put walletAddresses
-      put contractId
-      put tokenName
+      put payoutIds
     Submit era tx -> case era of
       ReferenceTxInsScriptsInlineDatumsInBabbageEra -> do
         putWord8 0
@@ -717,8 +707,7 @@ instance Command MarloweTxCommand where
       roles <- get
       metadata <- get
       minAda <- get
-      contract <- get
-      pure $ Create mStakeCredential MarloweV1 walletAddresses roles metadata minAda contract
+      Create mStakeCredential MarloweV1 walletAddresses roles metadata minAda <$> get
     TagApplyInputs version -> do
       walletAddresses <- get
       contractId <- get
@@ -737,9 +726,7 @@ instance Command MarloweTxCommand where
       pure $ ApplyInputs version walletAddresses contractId metadata invalidBefore invalidHereafter redeemer
     TagWithdraw version -> do
       walletAddresses <- get
-      contractId <- get
-      tokenName <- get
-      pure $ Withdraw version walletAddresses contractId tokenName
+      Withdraw version walletAddresses <$> get
     TagSubmit -> do
       eraTag <- getWord8
       case eraTag of
@@ -804,27 +791,34 @@ data WalletAddresses = WalletAddresses
   deriving (Eq, Show, Generic, Binary, ToJSON, Variations)
 
 -- | Errors that can occur when trying to solve the constraints.
-data ConstraintError v
+data ConstraintError
   = MintingUtxoNotFound TxOutRef
   | RoleTokenNotFound AssetId
   | ToCardanoError
   | MissingMarloweInput
-  | PayoutInputNotFound (PayoutDatum v)
+  | PayoutNotFound TxOutRef
+  | InvalidPayoutDatum TxOutRef (Maybe Chain.Datum)
+  | InvalidPayoutScriptAddress TxOutRef Address
   | CalculateMinUtxoFailed String
   | CoinSelectionFailed String
   | BalancingError String
+  | MarloweInputInWithdraw
+  | MarloweOutputInWithdraw
+  | PayoutOutputInWithdraw
+  | PayoutInputInCreateOrApply
+  | UnknownPayoutScript ScriptHash
   deriving (Generic)
 
-deriving instance Eq (ConstraintError 'V1)
-deriving instance Ord (ConstraintError 'V1)
-deriving instance Show (ConstraintError 'V1)
-deriving instance Binary (ConstraintError 'V1)
-deriving instance Variations (ConstraintError 'V1)
-deriving instance ToJSON (ConstraintError 'V1)
+deriving instance Eq ConstraintError
+deriving instance Ord ConstraintError
+deriving instance Show ConstraintError
+deriving instance Binary ConstraintError
+deriving instance Variations ConstraintError
+deriving instance ToJSON ConstraintError
 
-data CreateError v
+data CreateError
   = CreateEraUnsupported AnyCardanoEra
-  | CreateConstraintError (ConstraintError v)
+  | CreateConstraintError ConstraintError
   | CreateLoadMarloweContextFailed LoadMarloweContextError
   | CreateBuildupFailed CreateBuildupError
   | CreateToCardanoError
@@ -832,12 +826,12 @@ data CreateError v
   | CreateContractNotFound
   deriving (Generic)
 
-deriving instance Eq (CreateError 'V1)
-deriving instance Show (CreateError 'V1)
-deriving instance Ord (CreateError 'V1)
-instance Binary (CreateError 'V1)
-instance Variations (CreateError 'V1)
-instance ToJSON (CreateError 'V1)
+deriving instance Eq CreateError
+deriving instance Show CreateError
+deriving instance Ord CreateError
+instance Binary CreateError
+instance Variations CreateError
+instance ToJSON CreateError
 
 data CreateBuildupError
   = MintingUtxoSelectionFailed
@@ -846,9 +840,9 @@ data CreateBuildupError
   deriving (Eq, Ord, Show, Generic)
   deriving anyclass (Binary, ToJSON, Variations)
 
-data ApplyInputsError v
+data ApplyInputsError
   = ApplyInputsEraUnsupported AnyCardanoEra
-  | ApplyInputsConstraintError (ConstraintError v)
+  | ApplyInputsConstraintError ConstraintError
   | ScriptOutputNotFound
   | ApplyInputsLoadMarloweContextFailed LoadMarloweContextError
   | ApplyInputsConstraintsBuildupFailed ApplyInputsConstraintsBuildupError
@@ -857,11 +851,11 @@ data ApplyInputsError v
   | ValidityLowerBoundTooHigh SlotNo SlotNo
   deriving (Generic)
 
-deriving instance Eq (ApplyInputsError 'V1)
-deriving instance Show (ApplyInputsError 'V1)
-instance Binary (ApplyInputsError 'V1)
-instance Variations (ApplyInputsError 'V1)
-instance ToJSON (ApplyInputsError 'V1)
+deriving instance Eq ApplyInputsError
+deriving instance Show ApplyInputsError
+instance Binary ApplyInputsError
+instance Variations ApplyInputsError
+instance ToJSON ApplyInputsError
 
 data ApplyInputsConstraintsBuildupError
   = MarloweComputeTransactionFailed String
@@ -869,18 +863,17 @@ data ApplyInputsConstraintsBuildupError
   deriving (Eq, Show, Generic)
   deriving anyclass (Binary, Variations, ToJSON)
 
-data WithdrawError v
+data WithdrawError
   = WithdrawEraUnsupported AnyCardanoEra
-  | WithdrawConstraintError (ConstraintError v)
-  | WithdrawLoadMarloweContextFailed LoadMarloweContextError
+  | WithdrawConstraintError ConstraintError
   | UnableToFindPayoutForAGivenRole TokenName
   deriving (Generic)
 
-deriving instance Eq (WithdrawError 'V1)
-deriving instance Show (WithdrawError 'V1)
-instance Binary (WithdrawError 'V1)
-instance Variations (WithdrawError 'V1)
-instance ToJSON (WithdrawError 'V1)
+deriving instance Eq WithdrawError
+deriving instance Show WithdrawError
+instance Binary WithdrawError
+instance Variations WithdrawError
+instance ToJSON WithdrawError
 
 data LoadMarloweContextError
   = LoadMarloweContextErrorNotFound
@@ -922,11 +915,10 @@ instance CommandEq MarloweTxCommand where
           && invalidBefore == invalidBefore'
           && invalidHereafter == invalidHereafter'
           && inputs == inputs'
-    Withdraw MarloweV1 wallet contractId role -> \case
-      Withdraw MarloweV1 wallet' contractId' role' ->
+    Withdraw MarloweV1 wallet payoutIds -> \case
+      Withdraw MarloweV1 wallet' payoutIds' ->
         wallet == wallet'
-          && contractId == contractId'
-          && role == role'
+          && payoutIds == payoutIds'
     Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra tx -> \case
       Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra tx' -> tx == tx'
 
@@ -1013,16 +1005,14 @@ instance ShowCommand MarloweTxCommand where
             . showSpace
             . showsPrec 11 inputs
         )
-      Withdraw MarloweV1 wallet contractId role ->
+      Withdraw MarloweV1 wallet payoutIds ->
         ( showString "Withdraw"
             . showSpace
             . showsPrec 11 MarloweV1
             . showSpace
             . showsPrec 11 wallet
             . showSpace
-            . showsPrec 11 contractId
-            . showSpace
-            . showsPrec 11 role
+            . showsPrec 11 payoutIds
         )
       Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra tx ->
         ( showString "Submit"

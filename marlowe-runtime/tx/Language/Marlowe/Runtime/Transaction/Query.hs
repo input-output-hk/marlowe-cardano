@@ -17,7 +17,7 @@ import Data.Foldable (find)
 import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as Map
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, mapMaybe)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Type.Equality (testEquality, type (:~:) (Refl))
@@ -33,7 +33,6 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   Move (..),
   RuntimeChainSeekClient,
   ScriptHash,
-  Transaction (..),
   TxOutRef (TxOutRef),
   UTxOs (..),
   WithGenesis (..),
@@ -70,6 +69,13 @@ data LoadWalletContextField
   = ForAddresses (Set Address)
   | WalletContextLoaded WalletContext
 
+data LoadPayoutContextSelector f where
+  LoadPayoutContext :: LoadPayoutContextSelector LoadPayoutContextField
+
+data LoadPayoutContextField
+  = ForPayouts (Set TxOutRef)
+  | PayoutContextLoaded PayoutContext
+
 data LoadMarloweContextSelector f where
   LoadMarloweContext :: LoadMarloweContextSelector LoadMarloweContextField
   ContractNotFound :: LoadMarloweContextSelector Void
@@ -88,6 +94,12 @@ data ContractFoundField where
   PayoutScriptHash :: ScriptHash -> ContractFoundField
 
 type LoadWalletContext m = WalletAddresses -> m WalletContext
+
+type LoadPayoutContext m =
+  forall v
+   . MarloweVersion v
+  -> Set TxOutRef
+  -> m PayoutContext
 
 type LoadMarloweContext m =
   forall v
@@ -113,6 +125,29 @@ loadWalletContext runQuery WalletAddresses{..} =
             }
     addField ev $ WalletContextLoaded walletContext
     pure walletContext
+
+loadPayoutContext
+  :: (MonadInjectEvent r LoadPayoutContextSelector s m)
+  => (forall v. MarloweVersion v -> Set MarloweScripts)
+  -> C.NetworkId
+  -> (GetUTxOsQuery -> m UTxOs)
+  -> LoadPayoutContext m
+loadPayoutContext getScripts networkId runQuery version payouts =
+  withEvent LoadPayoutContext \ev -> do
+    addField ev $ ForPayouts payouts
+    UTxOs payoutOutputs <- runQuery $ GetUTxOsForTxOutRefs payouts
+    let payoutContext =
+          PayoutContext
+            { payoutOutputs
+            , payoutScriptOutputs =
+                Map.fromList
+                  . mapMaybe \case
+                    MarloweScripts{..} -> (payoutScript,) <$> Map.lookup networkId payoutScriptUTxOs
+                  . Set.toList
+                  $ getScripts version
+            }
+    addField ev $ PayoutContextLoaded payoutContext
+    pure payoutContext
 
 -- | Loads the current MarloweContext for a contract by its ID.
 loadMarloweContext
@@ -193,8 +228,6 @@ loadMarloweContext getScripts networkId chainSyncConnector chainSyncQueryConnect
                                             C.NoStakeAddress
                                   , -- Get the script output of the create event.
                                     scriptOutput = Just createOutput
-                                  , -- No payouts to start with
-                                    payoutOutputs = mempty
                                   , marloweScriptUTxO
                                   , payoutScriptUTxO
                                   }
@@ -209,62 +242,58 @@ loadMarloweContext getScripts networkId chainSyncConnector chainSyncQueryConnect
        . MarloweVersion v
       -> NonEmpty (BlockHeader, MarloweContext v)
       -> ClientStIdle Move ChainPoint ChainPoint m (Either LoadMarloweContextError (MarloweContext v))
-    clientFollowContract version contexts =
-      SendMsgQueryNext
-        (FindConsumingTxs utxos)
-        ClientStNext
-          { recvMsgQueryRejected = \_ _ -> do
-              emitImmediateEvent_ ContractNotFound
-              pure $ SendMsgDone $ Left LoadMarloweContextErrorNotFound
-          , recvMsgRollBackward = \point _ -> case rollbackContexts point contexts of
-              Nothing -> do
+    clientFollowContract version contexts = case scriptUtxo of
+      Nothing -> SendMsgDone $ Right context
+      Just lastOutput ->
+        SendMsgQueryNext
+          (FindConsumingTxs $ Set.singleton lastOutput)
+          ClientStNext
+            { recvMsgQueryRejected = \_ _ -> do
                 emitImmediateEvent_ ContractNotFound
                 pure $ SendMsgDone $ Left LoadMarloweContextErrorNotFound
-              Just contexts' -> pure $ clientFollowContract version contexts'
-          , recvMsgRollForward = \txs point _ -> case point of
-              Genesis -> error "Roll forward to Genesis"
-              At blockHeader -> case scriptUtxo >>= \u -> (u,) <$> Map.lookup u txs of
-                Nothing -> pure $ clientFollowContract version $ updateContext blockHeader Nothing txs contexts
-                Just (u, scriptConsumer) -> runConnector chainSyncQueryConnector do
-                  systemStart <- request GetSystemStart
-                  eraHistory <- request GetEraHistory
-                  lift case extractMarloweTransaction
-                    version
-                    systemStart
-                    eraHistory
-                    contractId
-                    marloweAddress
-                    payoutScriptHash
-                    u
-                    blockHeader
-                    scriptConsumer of
-                    Left e -> do
-                      emitImmediateEventFields_ ExtractMarloweTransactionFailed [e]
-                      pure $ SendMsgDone $ Left $ ExtractMarloweTransactionError e
-                    Right marloweTransaction -> pure $ clientFollowContract version $ updateContext blockHeader (Just marloweTransaction) txs contexts
-          , recvMsgWait = do
-              emitImmediateEventFields_ (ContractTipFound version) [context]
-              pure $ SendMsgCancel $ SendMsgDone $ Right context
-          }
+            , recvMsgRollBackward = \point _ -> case rollbackContexts point contexts of
+                Nothing -> do
+                  emitImmediateEvent_ ContractNotFound
+                  pure $ SendMsgDone $ Left LoadMarloweContextErrorNotFound
+                Just contexts' -> pure $ clientFollowContract version contexts'
+            , recvMsgRollForward = \txs point _ -> case point of
+                Genesis -> error "Roll forward to Genesis"
+                At blockHeader -> case scriptUtxo >>= \u -> (u,) <$> Map.lookup u txs of
+                  Nothing -> pure $ clientFollowContract version $ updateContext blockHeader Nothing contexts
+                  Just (u, scriptConsumer) -> runConnector chainSyncQueryConnector do
+                    systemStart <- request GetSystemStart
+                    eraHistory <- request GetEraHistory
+                    lift case extractMarloweTransaction
+                      version
+                      systemStart
+                      eraHistory
+                      contractId
+                      marloweAddress
+                      payoutScriptHash
+                      u
+                      blockHeader
+                      scriptConsumer of
+                      Left e -> do
+                        emitImmediateEventFields_ ExtractMarloweTransactionFailed [e]
+                        pure $ SendMsgDone $ Left $ ExtractMarloweTransactionError e
+                      Right marloweTransaction -> pure $ clientFollowContract version $ updateContext blockHeader (Just marloweTransaction) contexts
+            , recvMsgWait = do
+                emitImmediateEventFields_ (ContractTipFound version) [context]
+                pure $ SendMsgCancel $ SendMsgDone $ Right context
+            }
       where
         context@MarloweContext{..} = snd $ NE.head contexts
         scriptUtxo = utxo <$> scriptOutput
-        utxos = maybe id Set.insert scriptUtxo $ Map.keysSet payoutOutputs
 
     updateContext
       :: BlockHeader
       -> Maybe (Core.Transaction v)
-      -> Map.Map TxOutRef Transaction
       -> NonEmpty (BlockHeader, MarloweContext v)
       -> NonEmpty (BlockHeader, MarloweContext v)
-    updateContext blockHeader mTransaction txs ((bh, context) :| contexts') =
+    updateContext blockHeader mTransaction ((bh, context) :| contexts') =
       ( blockHeader
       , context
           { scriptOutput = maybe (scriptOutput context) (Core.scriptOutput . Core.output) mTransaction
-          , payoutOutputs =
-              Map.withoutKeys
-                (maybe id (Map.union . Core.payouts . Core.output) mTransaction $ payoutOutputs context)
-                (Map.keysSet txs)
           }
       )
         :| ((bh, context) : contexts')

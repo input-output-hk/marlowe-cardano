@@ -131,27 +131,25 @@ instance Arbitrary LoadMarloweContextError where
       ]
   shrink = genericShrink
 
-instance (ArbitraryMarloweVersion v) => Arbitrary (ConstraintError v) where
+instance Arbitrary ConstraintError where
   arbitrary =
     oneof
       [ MintingUtxoNotFound <$> arbitrary
       , RoleTokenNotFound <$> arbitrary
       , pure ToCardanoError
       , pure MissingMarloweInput
-      , PayoutInputNotFound <$> arbitrary
+      , PayoutNotFound <$> arbitrary
       , CalculateMinUtxoFailed <$> arbitrary
       , CoinSelectionFailed <$> arbitrary
       , BalancingError <$> arbitrary
+      , InvalidPayoutDatum <$> arbitrary <*> arbitrary
+      , InvalidPayoutScriptAddress <$> arbitrary <*> arbitrary
+      , pure MarloweInputInWithdraw
+      , pure MarloweOutputInWithdraw
+      , pure PayoutOutputInWithdraw
+      , pure PayoutInputInCreateOrApply
       ]
-  shrink = \case
-    MintingUtxoNotFound err -> MintingUtxoNotFound <$> shrink err
-    RoleTokenNotFound _ -> []
-    ToCardanoError -> []
-    MissingMarloweInput -> []
-    PayoutInputNotFound _ -> []
-    CalculateMinUtxoFailed err -> CalculateMinUtxoFailed <$> shrink err
-    CoinSelectionFailed err -> CoinSelectionFailed <$> shrink err
-    BalancingError err -> BalancingError <$> shrink err
+  shrink = genericShrink
 
 instance Arbitrary CreateBuildupError where
   arbitrary =
@@ -162,7 +160,7 @@ instance Arbitrary CreateBuildupError where
       ]
   shrink = genericShrink
 
-instance (ArbitraryMarloweVersion v) => Arbitrary (CreateError v) where
+instance Arbitrary CreateError where
   arbitrary =
     oneof
       [ CreateConstraintError <$> arbitrary
@@ -181,7 +179,7 @@ instance Arbitrary ApplyInputsConstraintsBuildupError where
       ]
   shrink = genericShrink
 
-instance (ArbitraryMarloweVersion v) => Arbitrary (ApplyInputsError v) where
+instance Arbitrary ApplyInputsError where
   arbitrary =
     oneof
       [ ApplyInputsEraUnsupported <$> arbitrary
@@ -195,12 +193,11 @@ instance (ArbitraryMarloweVersion v) => Arbitrary (ApplyInputsError v) where
       ]
   shrink = genericShrink
 
-instance (ArbitraryMarloweVersion v) => Arbitrary (WithdrawError v) where
+instance Arbitrary WithdrawError where
   arbitrary =
     oneof
       [ WithdrawConstraintError <$> arbitrary
       , WithdrawEraUnsupported <$> arbitrary
-      , WithdrawLoadMarloweContextFailed <$> arbitrary
       , UnableToFindPayoutForAGivenRole <$> arbitrary
       ]
   shrink = genericShrink
@@ -275,7 +272,6 @@ instance (ArbitraryMarloweVersion v, IsCardanoEra era) => Arbitrary (WithdrawTxI
   arbitrary =
     WithdrawTxInEra Core.marloweVersion
       <$> arbitrary
-      <*> arbitrary
       <*> hedgehog (genTxBody cardanoEra)
   shrink WithdrawTxInEra{..} = [WithdrawTxInEra{..}{WithdrawTxInEra.inputs = inputs'} | inputs' <- shrink inputs]
 
@@ -308,7 +304,6 @@ instance ArbitraryCommand MarloweTxCommand where
     TagWithdraw Core.MarloweV1 ->
       Withdraw Core.MarloweV1
         <$> arbitrary
-        <*> arbitrary
         <*> arbitrary
     TagSubmit -> Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> hedgehog (genTx BabbageEra)
   arbitraryJobId = \case
@@ -393,18 +388,9 @@ instance ArbitraryCommand MarloweTxCommand where
         , ApplyInputs Core.MarloweV1 wallet contractId meta minValid maxValid
             <$> shrink inputs
         ]
-    Withdraw Core.MarloweV1 wallet contractId role ->
-      concat
-        [ Withdraw Core.MarloweV1
-            <$> shrink wallet
-            <*> pure contractId
-            <*> pure role
-        , Withdraw Core.MarloweV1 wallet
-            <$> shrink contractId
-            <*> pure role
-        , Withdraw Core.MarloweV1 wallet contractId
-            <$> shrink role
-        ]
+    Withdraw Core.MarloweV1 wallet payouts ->
+      (Withdraw Core.MarloweV1 <$> shrink wallet <*> pure payouts)
+        <> (Withdraw Core.MarloweV1 wallet <$> shrink payouts)
     Submit _ _ -> []
   shrinkJobId = \case
     JobIdSubmit txId -> JobIdSubmit <$> shrink txId
@@ -451,10 +437,7 @@ instance CommandVariations MarloweTxCommand where
           `varyAp` variations
           `varyAp` variations
     TagWithdraw Core.MarloweV1 ->
-      Withdraw Core.MarloweV1
-        <$> variations
-          `varyAp` variations
-          `varyAp` variations
+      Withdraw Core.MarloweV1 <$> variations `varyAp` variations
     TagSubmit ->
       Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra
         <$> variations
