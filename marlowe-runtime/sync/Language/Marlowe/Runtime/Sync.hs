@@ -16,7 +16,7 @@ import Data.Version (Version)
 import Language.Marlowe.Protocol.HeaderSync.Server (MarloweHeaderSyncServer)
 import Language.Marlowe.Protocol.Query.Server (MarloweQueryServer)
 import Language.Marlowe.Protocol.Sync.Server (MarloweSyncServer)
-import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery)
+import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery, renderTxOutRef)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion (..), renderContractId)
 import Language.Marlowe.Runtime.Sync.Database (
   DatabaseQueries,
@@ -24,6 +24,7 @@ import Language.Marlowe.Runtime.Sync.Database (
   GetHeadersArguments (..),
   GetIntersectionForContractArguments (..),
   GetNextStepsArguments (..),
+  GetPayoutsArguments (..),
   GetWithdrawalsArguments (..),
   QueryField (..),
  )
@@ -121,6 +122,16 @@ renderDatabaseSelectorOTel dbName dbUser host port = \case
           [ fromString @Text $ show filter
           , fromString $ show range
           ]
+  GetPayouts -> renderQuerySelectorOTel "get_payouts" \case
+    GetPayoutsArguments{..} ->
+      Just $
+        toAttribute
+          [ fromString @Text $ show filter
+          , fromString $ show range
+          ]
+  GetPayout ->
+    renderQuerySelectorOTel "get_payout" $
+      Just . toAttribute . renderTxOutRef
   where
     renderQuerySelectorOTel :: Text -> (p -> Maybe Attribute) -> OTelRendered (QueryField p r)
     renderQuerySelectorOTel queryName renderArguments =

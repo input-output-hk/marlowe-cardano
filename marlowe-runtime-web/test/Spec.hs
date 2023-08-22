@@ -100,6 +100,18 @@ instance Arbitrary Web.TxHeader where
       <*> arbitrary
       <*> arbitrary
 
+instance Arbitrary Web.PayoutState where
+  arbitrary =
+    Web.PayoutState
+      <$> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+  shrink = genericShrink
+
 instance Arbitrary Web.ContractState where
   arbitrary =
     Web.ContractState

@@ -30,6 +30,9 @@ instance ArbitraryRequest MarloweSyncRequest where
       , SomeTag TagTransactions
       , SomeTag TagWithdrawal
       , SomeTag TagWithdrawals
+      , SomeTag TagPayout
+      , SomeTag TagPayouts
+      , SomeTag TagStatus
       ]
   arbitraryReq = \case
     TagContractHeaders -> ReqContractHeaders <$> arbitrary <*> arbitrary
@@ -39,6 +42,8 @@ instance ArbitraryRequest MarloweSyncRequest where
     TagWithdrawal -> ReqWithdrawal <$> arbitrary
     TagWithdrawals -> ReqWithdrawals <$> arbitrary <*> arbitrary
     TagStatus -> pure ReqStatus
+    TagPayouts -> ReqPayouts <$> arbitrary <*> arbitrary
+    TagPayout -> ReqPayout <$> arbitrary
 
   shrinkReq = \case
     ReqContractHeaders cFilter range ->
@@ -56,6 +61,12 @@ instance ArbitraryRequest MarloweSyncRequest where
         , ReqWithdrawals wFilter <$> shrink range
         ]
     ReqStatus -> []
+    ReqPayouts pFilter range ->
+      fold
+        [ ReqPayouts <$> shrink pFilter <*> pure range
+        , ReqPayouts pFilter <$> shrink range
+        ]
+    ReqPayout payoutId -> ReqPayout <$> shrink payoutId
 
   arbitraryResult = \case
     TagContractHeaders -> arbitrary
@@ -65,6 +76,8 @@ instance ArbitraryRequest MarloweSyncRequest where
     TagWithdrawal -> arbitrary
     TagWithdrawals -> arbitrary
     TagStatus -> arbitrary
+    TagPayouts -> arbitrary
+    TagPayout -> arbitrary
 
   shrinkResult = \case
     TagContractHeaders -> shrink
@@ -74,10 +87,16 @@ instance ArbitraryRequest MarloweSyncRequest where
     TagWithdrawal -> shrink
     TagWithdrawals -> shrink
     TagStatus -> shrink
+    TagPayouts -> shrink
+    TagPayout -> shrink
 
 instance Arbitrary SomeContractState where
   arbitrary = SomeContractState MarloweV1 <$> arbitrary
   shrink (SomeContractState MarloweV1 state) = SomeContractState MarloweV1 <$> shrink state
+
+instance Arbitrary SomePayoutState where
+  arbitrary = SomePayoutState MarloweV1 <$> arbitrary
+  shrink (SomePayoutState MarloweV1 state) = SomePayoutState MarloweV1 <$> shrink state
 
 instance Arbitrary RuntimeStatus where
   arbitrary =
@@ -127,6 +146,10 @@ instance Arbitrary (ContractState 'V1) where
       <*> arbitrary
   shrink = genericShrink
 
+instance Arbitrary (PayoutState 'V1) where
+  arbitrary = PayoutState <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+  shrink = genericShrink
+
 instance (Arbitrary a, Arbitrary b) => Arbitrary (Page a b) where
   arbitrary = Page <$> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink
@@ -152,4 +175,8 @@ instance Arbitrary ContractFilter where
 
 instance Arbitrary WithdrawalFilter where
   arbitrary = WithdrawalFilter <$> arbitrary
+  shrink = genericShrink
+
+instance Arbitrary PayoutFilter where
+  arbitrary = PayoutFilter <$> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink

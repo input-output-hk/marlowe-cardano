@@ -79,8 +79,10 @@ import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddressBech3
 import Language.Marlowe.Protocol.Query.Types (
   ContractState (..),
   PayoutRef (..),
+  PayoutState (..),
   RuntimeStatus (..),
   SomeContractState (..),
+  SomePayoutState (..),
   SomeTransaction (..),
   Withdrawal (..),
  )
@@ -99,11 +101,13 @@ import Language.Marlowe.Runtime.Core.Api (
   MarloweTransactionMetadata (..),
   MarloweVersion (..),
   MarloweVersionTag (..),
+  Payout (Payout),
   SomeMarloweVersion (..),
   Transaction (..),
   TransactionOutput (..),
   TransactionScriptOutput (..),
  )
+import qualified Language.Marlowe.Runtime.Core.Api as Core
 import qualified Language.Marlowe.Runtime.Core.Api as Core.Api (Payout (..))
 import qualified Language.Marlowe.Runtime.Discovery.Api as Discovery
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
@@ -291,6 +295,22 @@ instance FromDTO Chain.TxOutRef where
       <$> fromDTO txId
       <*> fromDTO txIx
 
+instance HasDTO Chain.AssetId where
+  type DTO Chain.AssetId = Web.AssetId
+
+instance ToDTO Chain.AssetId where
+  toDTO Chain.AssetId{..} =
+    Web.AssetId
+      { policyId = toDTO policyId
+      , tokenName = toDTO tokenName
+      }
+
+instance FromDTO Chain.AssetId where
+  fromDTO Web.AssetId{..} =
+    Chain.AssetId
+      <$> fromDTO policyId
+      <*> fromDTO tokenName
+
 instance HasDTO Chain.TxId where
   type DTO Chain.TxId = Web.TxId
 
@@ -431,13 +451,29 @@ instance ToDTO SomeContractState where
       , initialContract = Sem.marloweContract $ datum initialOutput
       , currentContract = Sem.marloweContract . datum <$> latestOutput
       , state = Sem.marloweState . datum <$> latestOutput
-      , assets = maybe emptyAssets (toDTO . assets) latestOutput
+      , assets = maybe emptyAssets (\Core.TransactionScriptOutput{..} -> toDTO assets) latestOutput
       , utxo = toDTO . utxo <$> latestOutput
       , txBody = Nothing
       , unclaimedPayouts =
           (\(payoutId, Core.Api.Payout{..}) -> Web.Payout (toDTO payoutId) (toDTO . tokenName $ datum) (toDTO assets))
             <$> M.toList unclaimedPayouts
       }
+
+instance HasDTO SomePayoutState where
+  type DTO SomePayoutState = Web.PayoutState
+
+instance ToDTO SomePayoutState where
+  toDTO (SomePayoutState MarloweV1 PayoutState{..}) = case payout of
+    Payout address assets AssetId{..} ->
+      Web.PayoutState
+        { contractId = toDTO contractId
+        , payout = toDTO payoutId
+        , roleTokenMintingPolicyId = toDTO policyId
+        , role = toDTO tokenName
+        , address = toDTO address
+        , assets = toDTO assets
+        , withdrawalId = toDTO withdrawalId
+        }
 
 instance HasDTO SomeTransaction where
   type DTO SomeTransaction = Web.Tx
@@ -460,7 +496,7 @@ instance ToDTO SomeTransaction where
           MarloweV1 -> Sem.marloweContract . datum <$> scriptOutput
       , outputState = case version of
           MarloweV1 -> Sem.marloweState . datum <$> scriptOutput
-      , assets = maybe emptyAssets (toDTO . assets) scriptOutput
+      , assets = maybe emptyAssets (\Core.TransactionScriptOutput{..} -> toDTO assets) scriptOutput
       , payouts = case version of
           MarloweV1 ->
             (\(payoutId, Core.Api.Payout{..}) -> Web.Payout (toDTO payoutId) (toDTO . tokenName $ datum) (toDTO assets))
@@ -567,7 +603,7 @@ instance ToDTOWithTxStatus (Tx.InputsApplied v) where
           MarloweV1 -> Sem.marloweContract . datum <$> scriptOutput output
       , outputState = case version of
           MarloweV1 -> Sem.marloweState . datum <$> scriptOutput output
-      , assets = maybe emptyAssets (toDTO . assets) $ scriptOutput output
+      , assets = maybe emptyAssets (\Core.TransactionScriptOutput{..} -> toDTO assets) $ scriptOutput output
       , consumingTx = Nothing
       , invalidBefore = invalidBefore
       , invalidHereafter = invalidHereafter

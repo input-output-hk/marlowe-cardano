@@ -16,6 +16,8 @@ import Language.Marlowe.Protocol.Client (MarloweRuntimeClient (..))
 import Language.Marlowe.Protocol.Query.Client (
   getContractHeaders,
   getContractState,
+  getPayout,
+  getPayouts,
   getTransaction,
   getTransactions,
   getWithdrawal,
@@ -23,14 +25,17 @@ import Language.Marlowe.Protocol.Query.Client (
  )
 import Language.Marlowe.Protocol.Query.Types (
   ContractFilter,
+  PayoutFilter (..),
+  PayoutRef,
   SomeContractState,
+  SomePayoutState,
   SomeTransaction (..),
   SomeTransactions (..),
   Withdrawal,
   WithdrawalFilter,
  )
 import qualified Language.Marlowe.Protocol.Query.Types as Query
-import Language.Marlowe.Runtime.ChainSync.Api (TxId)
+import Language.Marlowe.Runtime.ChainSync.Api (TxId, TxOutRef)
 import Language.Marlowe.Runtime.Core.Api (
   ContractId,
   MarloweVersion (MarloweV1),
@@ -58,12 +63,24 @@ type LoadContractHeaders m =
   -> m (Maybe (Query.Page ContractId ContractHeader))
   -- ^ Nothing if the initial ID is not found
 
--- | Signature for a delegate that loads a list of contract headers.
+-- | Signature for a delegate that loads a list of withdrawals.
 type LoadWithdrawals m =
   WithdrawalFilter
   -> Query.Range TxId
   -> m (Maybe (Query.Page TxId Withdrawal))
   -- ^ Nothing if the initial ID is not found
+
+-- | Signature for a delegate that loads a list of payouts.
+type LoadPayouts m =
+  PayoutFilter
+  -> Query.Range TxOutRef
+  -> m (Maybe (Query.Page TxOutRef PayoutRef))
+  -- ^ Nothing if the initial ID is not found
+
+-- | Signature for a delegate that loads a single payout.
+type LoadPayout m =
+  TxOutRef
+  -> m (Maybe SomePayoutState)
 
 -- | Signature for a delegate that loads the state of a single contract.
 type LoadContract m =
@@ -107,6 +124,8 @@ data SyncClient m = SyncClient
   , loadContractHeaders :: LoadContractHeaders m
   , loadWithdrawals :: LoadWithdrawals m
   , loadWithdrawal :: LoadWithdrawal m
+  , loadPayouts :: LoadPayouts m
+  , loadPayout :: LoadPayout m
   }
 
 syncClient :: (MonadUnliftIO m) => Component m (SyncClientDependencies m) (SyncClient m)
@@ -152,4 +171,6 @@ syncClient = arr \SyncClientDependencies{..} ->
         case result of
           Nothing -> liftIO $ atomically $ fmap Left <$> lookupTempWithdrawal txId
           Just contract -> pure $ Just $ Right contract
+    , loadPayouts = fmap (runConnector connector . RunMarloweQueryClient) . getPayouts
+    , loadPayout = runConnector connector . RunMarloweQueryClient . getPayout
     }

@@ -8,7 +8,7 @@
 module Language.Marlowe.Protocol.Query.Client where
 
 import Language.Marlowe.Protocol.Query.Types
-import Language.Marlowe.Runtime.ChainSync.Api (TxId)
+import Language.Marlowe.Runtime.ChainSync.Api (TxId, TxOutRef)
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Network.Protocol.Query.Client
@@ -37,3 +37,10 @@ getTransaction = request . ReqTransaction
 
 getStatus :: (Applicative m) => MarloweQueryClient m RuntimeStatus
 getStatus = request ReqStatus
+
+getPayouts
+  :: (Applicative m) => PayoutFilter -> Range TxOutRef -> MarloweQueryClient m (Maybe (Page TxOutRef PayoutRef))
+getPayouts = fmap request . ReqPayouts
+
+getPayout :: (Applicative m) => TxOutRef -> MarloweQueryClient m (Maybe SomePayoutState)
+getPayout = request . ReqPayout

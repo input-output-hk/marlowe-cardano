@@ -106,6 +106,7 @@ library server
     Language.Marlowe.Runtime.Web.Server.REST.Contracts
     Language.Marlowe.Runtime.Web.Server.REST.Contracts.Next
     Language.Marlowe.Runtime.Web.Server.REST.ContractSources
+    Language.Marlowe.Runtime.Web.Server.REST.Payouts
     Language.Marlowe.Runtime.Web.Server.REST.Transactions
     Language.Marlowe.Runtime.Web.Server.REST.Withdrawals
     Language.Marlowe.Runtime.Web.Server.SyncClient
