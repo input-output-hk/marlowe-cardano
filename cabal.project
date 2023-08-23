@@ -25,6 +25,7 @@ packages:
   async-components
   cardano-integration
   eventuo11y-extras
+  hasql-dynamic-syntax
   marlowe
   marlowe-actus
   marlowe-apps
