@@ -30,6 +30,7 @@ import Language.Marlowe.CLI.Format (
   maybeWriteYaml,
   readContractJson,
   readContractPretty,
+  readContractYaml,
  )
 import Language.Marlowe.CLI.Types (CliError (..))
 import Options.Applicative qualified as O
@@ -62,14 +63,14 @@ runFormatCommand Format{..} =
   do
     contract <- case inFormat of
       Just Json -> readContractJson inputFile
-      Just Yaml -> readContractJson inputFile
+      Just Yaml -> readContractYaml inputFile
       Just Pretty -> readContractPretty inputFile
       Nothing ->
         case inputFile of
           Just fileName ->
             case takeExtension fileName of
               ".json" -> readContractJson inputFile
-              ".yaml" -> readContractJson inputFile
+              ".yaml" -> readContractYaml inputFile
               ".marlowe" -> readContractPretty inputFile
               _ -> readContractJson inputFile
           Nothing -> readContractJson inputFile

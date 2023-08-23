@@ -18,12 +18,12 @@ module Language.Marlowe.CLI.Format (
   maybeWriteYaml,
   readContractPretty,
   readContractJson,
+  readContractYaml,
   contractParser,
 ) where
 
 import Control.Monad.Combinators as C
 import Control.Monad.Except (MonadError, MonadIO, liftEither, liftIO)
-import Data.Aeson (eitherDecodeStrict)
 import Data.Bifunctor (first)
 import Data.ByteString.Base16 qualified as Base16
 import Data.ByteString.Char8 qualified as BS (getContents, pack)
@@ -33,6 +33,7 @@ import Data.String (IsString (..))
 import Data.Text (Text)
 import Data.Text.IO qualified as T
 import Data.Void
+import Data.Yaml qualified as Yaml (decodeEither')
 import GHC.Generics (Generic (..))
 import Language.Marlowe.CLI.IO (decodeFileStrict, maybeWriteJson, maybeWriteYaml)
 import Language.Marlowe.CLI.Types (CliError (..))
@@ -68,10 +69,18 @@ readContractJson
   => (MonadIO m)
   => Maybe FilePath
   -> m Contract
-readContractJson (Just inputFile) =
+readContractJson = readContractYaml
+
+-- | Read a Marlowe Contract as YAML from a file.
+readContractYaml
+  :: (MonadError CliError m)
+  => (MonadIO m)
+  => Maybe FilePath
+  -> m Contract
+readContractYaml (Just inputFile) =
   decodeFileStrict inputFile
-readContractJson Nothing =
-  (liftEither . first (CliError . show)) . eitherDecodeStrict
+readContractYaml Nothing =
+  (liftEither . first (CliError . show)) . Yaml.decodeEither'
     =<< liftIO BS.getContents
 
 -- | Read a pretty printed Marlowe Contract from a file.
