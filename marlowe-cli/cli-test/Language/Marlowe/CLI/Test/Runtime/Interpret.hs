@@ -99,9 +99,10 @@ import Language.Marlowe.Core.V1.Merkle (MerkleizedContract (MerkleizedContract),
 import Language.Marlowe.Core.V1.Semantics qualified as M
 import Language.Marlowe.Protocol.Client qualified as Marlowe.Protocol
 import Language.Marlowe.Protocol.Query.Client (getPayouts)
-import Language.Marlowe.Protocol.Query.Types (Order (..), Page (..), PayoutFilter (..), PayoutRef (..), Range (..))
+import Language.Marlowe.Protocol.Query.Types (Order (..), Page (..), PayoutFilter (..), PayoutHeader (..), Range (..))
 import Language.Marlowe.Runtime.Cardano.Api qualified as MRCA
 import Language.Marlowe.Runtime.Cardano.Api qualified as RCA
+import Language.Marlowe.Runtime.ChainSync.Api (AssetId (..))
 import Language.Marlowe.Runtime.ChainSync.Api qualified as ChainSync
 import Language.Marlowe.Runtime.Core.Api (
   ContractId,
@@ -326,7 +327,7 @@ withdraw ro contractId tokenName walletNickname Wallet{_waAddress, _waSigningKey
             , extraAddresses = mempty
             , collateralUtxos = mempty
             }
-    let unclaimed = True
+    let isWithdrawn = Just False
     let contractIds = Set.singleton contractId
     let roleTokens = mempty
     let rangeStart = Nothing
@@ -334,8 +335,8 @@ withdraw ro contractId tokenName walletNickname Wallet{_waAddress, _waSigningKey
     let rangeLimit = 100
     let rangeDirection = Descending
     Just Page{..} <- Marlowe.Class.runMarloweQueryClient $ getPayouts PayoutFilter{..} $ Range{..}
-    let matchesRole PayoutRef{role} = tokenName' == role
-    let payouts = Set.fromList $ payout <$> filter matchesRole items
+    let matchesRole PayoutHeader{role = AssetId{tokenName = roleName}} = tokenName' == roleName
+    let payouts = Set.fromList $ payoutId <$> filter matchesRole items
     Marlowe.Class.withdraw MarloweV1 walletAddresses payouts
   case result of
     Right (WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra WithdrawTxInEra{..}) -> do

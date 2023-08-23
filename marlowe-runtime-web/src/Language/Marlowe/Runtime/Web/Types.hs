@@ -229,7 +229,7 @@ instance ToParamSchema PolicyId where
 
 data AssetId = AssetId
   { policyId :: PolicyId
-  , tokenName :: Text
+  , assetName :: Text
   }
   deriving (Show, Eq, Ord, Generic)
 
@@ -251,7 +251,7 @@ instance FromHttpApiData AssetId where
     _ -> Left "Expected ^[a-fA-F0-9]*\\..*$"
 
 instance ToHttpApiData AssetId where
-  toUrlPiece AssetId{..} = toUrlPiece policyId <> "." <> toUrlPiece tokenName
+  toUrlPiece AssetId{..} = toUrlPiece policyId <> "." <> toUrlPiece assetName
 
 newtype Party = Party {unParty :: T.Text}
   deriving (Eq, Ord, Generic)
@@ -344,6 +344,13 @@ instance ToSchema MarloweVersion where
           & OpenApi.description ?~ "A version of the Marlowe language."
           & enum_ ?~ ["v1"]
 
+data Payout = Payout
+  { payoutId :: TxOutRef
+  , role :: Text
+  , assets :: Assets
+  }
+  deriving (FromJSON, ToJSON, ToSchema, Show, Eq, Generic)
+
 data ContractState = ContractState
   { contractId :: TxOutRef
   , roleTokenMintingPolicyId :: PolicyId
@@ -362,24 +369,6 @@ data ContractState = ContractState
   , unclaimedPayouts :: [Payout]
   }
   deriving (Show, Eq, Generic)
-
-data Payout = Payout
-  { payoutId :: TxOutRef
-  , role :: Text
-  , assets :: Assets
-  }
-  deriving (FromJSON, ToJSON, ToSchema, Show, Eq, Generic)
-
-data PayoutState = PayoutState
-  { contractId :: TxOutRef
-  , payout :: TxOutRef
-  , roleTokenMintingPolicyId :: PolicyId
-  , role :: Text
-  , address :: Address
-  , assets :: Assets
-  , withdrawalId :: Maybe TxId
-  }
-  deriving (FromJSON, ToJSON, ToSchema, Show, Eq, Generic)
 
 instance ToJSON ContractState
 instance FromJSON ContractState
@@ -416,24 +405,75 @@ instance HasPagination WithdrawalHeader "withdrawalId" where
   type RangeType WithdrawalHeader "withdrawalId" = TxId
   getFieldValue _ WithdrawalHeader{..} = withdrawalId
 
-data PayoutRef = PayoutRef
-  { contractId :: TxOutRef
-  , payout :: TxOutRef
-  , roleTokenMintingPolicyId :: PolicyId
-  , role :: Text
+data PayoutStatus
+  = Available
+  | Withdrawn
+  deriving (Show, Eq, Ord, Generic)
+
+instance ToJSON PayoutStatus where
+  toJSON =
+    String . \case
+      Available -> "available"
+      Withdrawn -> "withdrawn"
+
+instance FromJSON PayoutStatus where
+  parseJSON = withText "PayoutStatus" \str -> case T.toLower str of
+    "available" -> pure Available
+    "withdrawn" -> pure Withdrawn
+    _ -> fail "expected \"available\" or \"withdrawn\""
+
+instance ToHttpApiData PayoutStatus where
+  toQueryParam = \case
+    Available -> "available"
+    Withdrawn -> "withdrawn"
+
+instance FromHttpApiData PayoutStatus where
+  parseQueryParam str = case T.toLower str of
+    "available" -> pure Available
+    "withdrawn" -> pure Withdrawn
+    _ -> Left "expected \"available\" or \"withdrawn\""
+
+instance ToSchema PayoutStatus where
+  declareNamedSchema = pure . NamedSchema (Just "PayoutStatus") . toParamSchema
+
+instance ToParamSchema PayoutStatus where
+  toParamSchema _ =
+    mempty
+      & type_ ?~ OpenApiString
+      & enum_ ?~ ["available", "withdrawn"]
+      & OpenApi.description
+        ?~ "The status of a payout. Either it is available to be withdrawn, or it has already been withdrawn."
+
+data PayoutHeader = PayoutHeader
+  { payoutId :: TxOutRef
+  , contractId :: TxOutRef
+  , withdrawalId :: Maybe TxId
+  , role :: AssetId
+  , status :: PayoutStatus
   }
   deriving (Show, Eq, Ord, Generic)
 
-instance HasPagination PayoutRef "payoutId" where
-  type RangeType PayoutRef "payoutId" = TxOutRef
-  getFieldValue _ PayoutRef{..} = payout
+instance HasPagination PayoutHeader "payoutId" where
+  type RangeType PayoutHeader "payoutId" = TxOutRef
+  getFieldValue _ PayoutHeader{..} = payoutId
 
-instance ToJSON PayoutRef
-instance FromJSON PayoutRef
-instance ToSchema PayoutRef
+instance ToJSON PayoutHeader
+instance FromJSON PayoutHeader
+instance ToSchema PayoutHeader
+
+data PayoutState = PayoutState
+  { payoutId :: TxOutRef
+  , contractId :: TxOutRef
+  , withdrawalId :: Maybe TxId
+  , role :: AssetId
+  , payoutValidatorAddress :: Address
+  , status :: PayoutStatus
+  , assets :: Assets
+  }
+  deriving (FromJSON, ToJSON, ToSchema, Show, Eq, Generic)
 
 data Withdrawal = Withdrawal
-  { payouts :: Set PayoutRef
+  { payouts :: Set PayoutHeader
   , withdrawalId :: TxId
   , status :: TxStatus
   , block :: Maybe BlockHeader
@@ -525,11 +565,11 @@ instance FromJSON TxStatus where
 instance ToSchema TxStatus where
   declareNamedSchema _ =
     pure $
-      NamedSchema (Just "TxStatusHeader") $
+      NamedSchema (Just "TxStatus") $
         mempty
           & type_ ?~ OpenApiString
           & enum_ ?~ ["unsigned", "submitted", "confirmed"]
-          & OpenApi.description ?~ "A header of the status of a transaction on the local node."
+          & OpenApi.description ?~ "The status of a transaction on the local node."
 
 data BlockHeader = BlockHeader
   { slotNo :: Word64

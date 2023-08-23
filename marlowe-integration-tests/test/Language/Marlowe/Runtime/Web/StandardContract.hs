@@ -25,7 +25,8 @@ import Language.Marlowe.Runtime.Web (
   CardanoTxBody,
   ContractOrSourceId (..),
   CreateTxEnvelope,
-  PayoutRef (..),
+  PayoutHeader (..),
+  PayoutStatus (..),
   RoleTokenConfig (RoleTokenSimple),
   WithdrawTxEnvelope,
  )
@@ -169,8 +170,8 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
                                       { returnDepositBlock
                                       , returnDeposited
                                       , withdrawPartyAFunds = do
-                                          Page{..} <- getPayouts (Just $ Set.singleton contractId) Nothing True Nothing
-                                          let payouts = Set.fromList $ payout <$> items
+                                          Page{..} <- getPayouts (Just $ Set.singleton contractId) Nothing (Just Available) Nothing
+                                          let payouts = Set.fromList $ payoutId <$> items
                                           withdrawTxBody <- withdraw partyAWallet payouts
                                           (withdrawTxBody,) <$> submitWithdrawal partyAWallet withdrawTxBody
                                       }

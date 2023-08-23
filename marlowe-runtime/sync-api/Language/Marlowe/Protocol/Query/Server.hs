@@ -41,7 +41,7 @@ marloweQueryServer
   -> (ContractId -> m (Maybe SomeTransactions))
   -> (TxId -> m (Maybe Withdrawal))
   -> (WithdrawalFilter -> Range TxId -> m (Maybe (Page TxId Withdrawal)))
-  -> (PayoutFilter -> Range TxOutRef -> m (Maybe (Page TxOutRef PayoutRef)))
+  -> (PayoutFilter -> Range TxOutRef -> m (Maybe (Page TxOutRef PayoutHeader)))
   -> (TxOutRef -> m (Maybe SomePayoutState))
   -> MarloweQueryServer m ()
 marloweQueryServer

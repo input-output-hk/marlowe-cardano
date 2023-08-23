@@ -401,9 +401,9 @@ putWithdrawal = fmap void . putWithdrawalStatus
 getPayoutsStatus
   :: Maybe (Set TxOutRef)
   -> Maybe (Set AssetId)
-  -> Bool
+  -> Maybe PayoutStatus
   -> Maybe (Range "payoutId" TxOutRef)
-  -> ClientM (RuntimeStatus, Page "payoutId" PayoutRef)
+  -> ClientM (RuntimeStatus, Page "payoutId" PayoutHeader)
 getPayoutsStatus contractIds roleTokens unclaimed range = do
   let _ :<|> _ :<|> payoutsClient :<|> _ = client
   let getPayouts' :<|> _ = payoutsClient
@@ -426,9 +426,9 @@ getPayoutsStatus contractIds roleTokens unclaimed range = do
 getPayouts
   :: Maybe (Set TxOutRef)
   -> Maybe (Set AssetId)
-  -> Bool
+  -> Maybe PayoutStatus
   -> Maybe (Range "payoutId" TxOutRef)
-  -> ClientM (Page "payoutId" PayoutRef)
+  -> ClientM (Page "payoutId" PayoutHeader)
 getPayouts = (fmap . fmap . fmap . fmap) snd . getPayoutsStatus
 
 getPayoutStatus

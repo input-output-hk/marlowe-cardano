@@ -29,7 +29,7 @@ import Language.Marlowe.Protocol.Query.Client (
  )
 import Language.Marlowe.Protocol.Query.Types
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
-import Language.Marlowe.Runtime.ChainSync.Api (AssetId (..), BlockHeader, PolicyId, TxId, TxOutRef (..))
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, PolicyId, TxId, TxOutRef (..))
 import Language.Marlowe.Runtime.Client (runMarloweQueryClient)
 import Language.Marlowe.Runtime.Core.Api (
   ContractId (..),
@@ -139,26 +139,24 @@ instance PaginatedQuery GetWithdrawals where
         Withdrawal1 -> case contract1Step5 of
           (WithdrawTxInEra{txBody = txBody', ..}, block') ->
             ( (txBody', block')
-            , flip Map.mapWithKey inputs \payout Payout{..} -> case datum of
-                AssetId{..} ->
-                  PayoutRef
-                    { contractId = standardContractId contract1
-                    , payout
-                    , rolesCurrency = policyId
-                    , role = tokenName
-                    }
+            , flip Map.mapWithKey inputs \payoutId Payout{..} ->
+                PayoutHeader
+                  { contractId = standardContractId contract1
+                  , withdrawalId = Just $ fromCardanoTxId $ getTxId txBody'
+                  , payoutId
+                  , role = datum
+                  }
             )
         Withdrawal2 -> case contract2Step5 of
           (WithdrawTxInEra{txBody = txBody', ..}, block') ->
             ( (txBody', block')
-            , flip Map.mapWithKey inputs \payout Payout{..} -> case datum of
-                AssetId{..} ->
-                  PayoutRef
-                    { contractId = standardContractId contract2
-                    , payout
-                    , rolesCurrency = policyId
-                    , role = tokenName
-                    }
+            , flip Map.mapWithKey inputs \payoutId Payout{..} ->
+                PayoutHeader
+                  { contractId = standardContractId contract2
+                  , withdrawalId = Just $ fromCardanoTxId $ getTxId txBody'
+                  , payoutId
+                  , role = datum
+                  }
             )
   toFilter _ MarloweQueryTestData{..} WithdrawalFilterSym{..} =
     WithdrawalFilter
@@ -640,14 +638,13 @@ contract1Step5Withdrawal MarloweQueryTestData{..} =
   Withdrawal
     { block = snd contract1Step5
     , withdrawnPayouts = case fst contract1Step5 of
-        WithdrawTxInEra{..} -> flip Map.mapWithKey inputs \payout Payout{..} -> case datum of
-          AssetId{..} ->
-            PayoutRef
-              { contractId = standardContractId contract1
-              , payout
-              , rolesCurrency = policyId
-              , role = tokenName
-              }
+        WithdrawTxInEra{..} -> flip Map.mapWithKey inputs \payoutId Payout{..} ->
+          PayoutHeader
+            { contractId = standardContractId contract1
+            , withdrawalId = Just $ fromCardanoTxId $ getTxId txBody
+            , payoutId
+            , role = datum
+            }
     , withdrawalTx = fromCardanoTxId $ getTxId $ case fst contract1Step5 of WithdrawTxInEra{txBody} -> txBody
     }
 

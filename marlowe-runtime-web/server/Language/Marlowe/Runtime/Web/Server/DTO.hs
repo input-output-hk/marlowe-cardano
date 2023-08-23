@@ -78,7 +78,7 @@ import qualified Language.Marlowe.Core.V1.Semantics.Types as Sem
 import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddressBech32, serialiseAddressBech32)
 import Language.Marlowe.Protocol.Query.Types (
   ContractState (..),
-  PayoutRef (..),
+  PayoutHeader (..),
   PayoutState (..),
   RuntimeStatus (..),
   SomeContractState (..),
@@ -312,14 +312,14 @@ instance ToDTO Chain.AssetId where
   toDTO Chain.AssetId{..} =
     Web.AssetId
       { policyId = toDTO policyId
-      , tokenName = toDTO tokenName
+      , assetName = toDTO tokenName
       }
 
 instance FromDTO Chain.AssetId where
   fromDTO Web.AssetId{..} =
     Chain.AssetId
       <$> fromDTO policyId
-      <*> fromDTO tokenName
+      <*> fromDTO assetName
 
 instance HasDTO Chain.TxId where
   type DTO Chain.TxId = Web.TxId
@@ -420,16 +420,17 @@ instance HasDTO Chain.BlockHeaderHash where
 instance ToDTO Chain.BlockHeaderHash where
   toDTO = coerce
 
-instance HasDTO PayoutRef where
-  type DTO PayoutRef = Web.PayoutRef
+instance HasDTO PayoutHeader where
+  type DTO PayoutHeader = Web.PayoutHeader
 
-instance ToDTO PayoutRef where
-  toDTO PayoutRef{..} =
-    Web.PayoutRef
+instance ToDTO PayoutHeader where
+  toDTO PayoutHeader{..} =
+    Web.PayoutHeader
       { contractId = toDTO contractId
-      , payout = toDTO payout
-      , roleTokenMintingPolicyId = toDTO rolesCurrency
+      , payoutId = toDTO payoutId
+      , withdrawalId = toDTO withdrawalId
       , role = toDTO role
+      , status = maybe Web.Available (const Web.Withdrawn) withdrawalId
       }
 
 instance HasDTO Withdrawal where
@@ -474,15 +475,15 @@ instance HasDTO SomePayoutState where
 
 instance ToDTO SomePayoutState where
   toDTO (SomePayoutState MarloweV1 PayoutState{..}) = case payout of
-    Payout address assets AssetId{..} ->
+    Payout address assets role ->
       Web.PayoutState
         { contractId = toDTO contractId
-        , payout = toDTO payoutId
-        , roleTokenMintingPolicyId = toDTO policyId
-        , role = toDTO tokenName
-        , address = toDTO address
-        , assets = toDTO assets
+        , payoutId = toDTO payoutId
         , withdrawalId = toDTO withdrawalId
+        , role = toDTO role
+        , payoutValidatorAddress = toDTO address
+        , assets = toDTO assets
+        , status = maybe Web.Available (const Web.Withdrawn) withdrawalId
         }
 
 instance HasDTO SomeTransaction where
