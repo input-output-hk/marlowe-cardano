@@ -1,9 +1,13 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Hasql.DynamicSyntax.Statement (
   StatementBuilder,
+  HasRowHandler (..),
   buildStatement,
   encodeParam,
   param,
@@ -12,6 +16,7 @@ module Hasql.DynamicSyntax.Statement (
 import Control.Monad.Trans.RWS (RWS, runRWS, rws)
 import Data.Bifunctor (Bifunctor (..))
 import Data.Functor.Contravariant ((>$))
+import Data.Kind (Type)
 import qualified Data.List.NonEmpty as NE
 import qualified Hasql.Decoders as Decoders
 import Hasql.DynamicSyntax.Ast
@@ -31,8 +36,13 @@ param :: (DefaultParamEncoder param) => param -> StatementBuilder Param
 param = encodeParam defaultParam
 
 buildStatement
-  :: (Decoders.Row (RowResult row) -> Decoders.Result a) -> StatementBuilder (PreparableStmt row) -> Statement () a
-buildStatement toResult stmt = Statement sql params (toResult $ compileDecoders row) (paramCount > 0)
+  :: (HasRowHandler row r)
+  => RowHandler row r
+  -> (Decoders.Row r -> Decoders.Result a)
+  -> StatementBuilder (PreparableStmt row)
+  -> Statement () a
+buildStatement handler toResult stmt =
+  Statement sql params (toResult $ handle handler <$> compileDecoders row) (paramCount > 0)
   where
     ((stmt', row), paramCount, params) = runRWS (runStatementBuilder $ buildPreparableStmt <$> stmt) () 0
     sql = Render.toByteString $ Render.preparableStmt stmt'
@@ -867,3 +877,15 @@ data RowResult row where
 compileDecoders :: RowDecoders row -> Decoders.Row (RowResult row)
 compileDecoders DecodersNil = pure ResultNil
 compileDecoders (DecodersCons row decoders) = (:::) <$> row <*> compileDecoders decoders
+
+class HasRowHandler row a where
+  type RowHandler row a :: Type
+  handle :: RowHandler row a -> RowResult row -> a
+
+instance HasRowHandler '[] a where
+  type RowHandler '[] a = a
+  handle a _ = a
+
+instance (HasRowHandler row a) => HasRowHandler (t ': row) a where
+  type RowHandler (t ': row) a = ColumnToHask t -> RowHandler row a
+  handle f (t ::: row) = handle (f t) row
