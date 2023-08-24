@@ -21,7 +21,7 @@ import Data.Text (Text)
 import Data.Time (Day, DiffTime, LocalTime, TimeOfDay, TimeZone, UTCTime)
 import Data.UUID (UUID)
 import Data.Vector (Vector)
-import qualified Hasql.Encoders as Encoders
+import qualified Hasql.DynamicSyntax.Ast.Internal as Internal
 import Network.IP.Addr (IP, NetAddr)
 import PostgresqlSyntax.Ast (
   AliasClause,
@@ -1203,6 +1203,8 @@ data BExpr
   | QualOpBExpr QualOp BExpr
   | IsOpBExpr BExpr Bool BExprIsOp
 
+newtype Param = Param Internal.Param
+
 -- |
 -- ==== References
 -- @
@@ -1225,7 +1227,7 @@ data BExpr
 data CExpr
   = ColumnrefCExpr Columnref
   | AexprConstCExpr AexprConst
-  | ParamCExpr (Encoders.Params ())
+  | ParamCExpr Param
   | InParensCExpr AExpr (Maybe Indirection)
   | CaseCExpr CaseExpr
   | FuncCExpr FuncExpr
