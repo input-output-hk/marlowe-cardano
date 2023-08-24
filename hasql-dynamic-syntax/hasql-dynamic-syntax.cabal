@@ -54,6 +54,7 @@ library
   hs-source-dirs:  src
   exposed-modules:
     Hasql.DynamicSyntax.Ast
+    Hasql.DynamicSyntax.Schema
     Hasql.DynamicSyntax.Statement
 
   build-depends:
