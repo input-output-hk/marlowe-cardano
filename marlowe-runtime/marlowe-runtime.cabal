@@ -75,6 +75,7 @@ library
   exposed-modules:
     Language.Marlowe.Runtime.Core.Api
     Language.Marlowe.Runtime.Core.ScriptRegistry
+    Language.Marlowe.Runtime.Schema
 
   build-depends:
     , aeson >=2 && <3
@@ -84,12 +85,14 @@ library
     , bytestring >=0.10.12 && <0.12
     , cardano-api ==1.35.4
     , containers ^>=0.6.5
+    , hasql-dynamic-syntax ^>=0.1
     , marlowe-cardano ==0.1.2.0
     , marlowe-chain-sync ==0.0.4
     , marlowe-protocols ==0.2.0.0
     , ouroboros-network ==0.1.0.1
     , plutus-ledger-api ==1.0.0.1
     , plutus-tx ==1.0.0.0
+    , postgresql-syntax ^>=0.4.1
     , text >=1.2.4 && <2
     , time >=1.9 && <2
 
