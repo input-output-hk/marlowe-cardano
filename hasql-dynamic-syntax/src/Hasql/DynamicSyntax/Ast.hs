@@ -70,6 +70,10 @@ data Nullability a where
   Null :: Nullability Null
   NotNull :: Nullability NotNull
 
+deriving instance Show (Nullability a)
+deriving instance Eq (Nullability a)
+deriving instance Ord (Nullability a)
+
 data SqlBool
 data SqlInt2
 data SqlInt4
@@ -113,14 +117,26 @@ data SqlType t where
   SqlInet :: SqlType SqlInet
   SqlJson :: SqlType SqlJson
   SqlJsonb :: SqlType SqlJsonb
-  SqlArray :: ColumnType t -> SqlType (SqlArray (ColumnType t))
+  SqlArray :: !(ColumnType t) -> SqlType (SqlArray (ColumnType t))
+
+deriving instance Show (SqlType t)
+deriving instance Eq (SqlType t)
+deriving instance Ord (SqlType t)
 
 data ColumnType t where
-  ColumnType :: SqlType t -> Nullability nullable -> ColumnType '(t, nullable)
+  ColumnType :: !(SqlType t) -> !(Nullability nullable) -> ColumnType '(t, nullable)
+
+deriving instance Show (ColumnType t)
+deriving instance Eq (ColumnType t)
+deriving instance Ord (ColumnType t)
 
 data DeclareRow row where
   DeclareNil :: DeclareRow '[]
   DeclareCons :: ColumnType t -> DeclareRow row -> DeclareRow (t ': row)
+
+deriving instance Show (DeclareRow t)
+deriving instance Eq (DeclareRow t)
+deriving instance Ord (DeclareRow t)
 
 type family SqlToHask (t :: Type) :: Type where
   SqlToHask SqlBool = Bool
@@ -464,8 +480,20 @@ data Targeting row where
 --   | target_list ',' target_el
 -- @
 data TargetList row where
-  TargetListOne :: DeclareRow (a ': row) -> TargetEl -> TargetList (a ': row)
-  TargetListCons :: DeclareRow (a ': row) -> TargetEl -> TargetList row' -> TargetList (a ': (row ++ row'))
+  TargetListOne :: TargetElRow row -> TargetList row
+  TargetListCons :: TargetElRow row -> TargetList row' -> TargetList (row ++ row')
+
+-- |
+-- ==== References
+-- @
+-- target_el:
+--   |  a_expr AS ColLabel
+--   |  a_expr IDENT
+--   |  a_expr
+--   |  '*'
+-- @
+data TargetElRow row where
+  TargetElRow :: DeclareRow (a ': row) -> TargetEl -> TargetElRow (a ': row)
 
 -- |
 -- ==== References

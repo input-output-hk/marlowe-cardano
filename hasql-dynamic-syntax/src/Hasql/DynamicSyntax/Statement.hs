@@ -554,22 +554,15 @@ buildTargeting = \case
 
 buildTargetList :: TargetList row -> BuildM (P.TargetList, RowDecoders row)
 buildTargetList = \case
-  TargetListOne row target -> (,rowDecoders row) . pure <$> buildTargetEl target
-  TargetListCons row target list -> buildTargetListCons row target list
+  TargetListOne target -> first pure <$> buildTargetElRow target
+  TargetListCons target list -> do
+    (target', row) <- buildTargetElRow target
+    (list', row') <- buildTargetList list
+    pure (NE.cons target' list', row `appendRowDecoders` row')
 
-buildTargetListCons
-  :: forall a row row'
-   . DeclareRow (a ': row)
-  -> TargetEl
-  -> TargetList row'
-  -> BuildM (P.TargetList, RowDecoders (a ': row ++ row'))
-buildTargetListCons (DeclareCons a row) target list = do
-  target' <- buildTargetEl target
-  (list', row') <- buildTargetList list
-  pure
-    ( NE.cons target' list'
-    , Decoders.column (columnDecoder a) `DecodersCons` (rowDecoders row `appendRowDecoders` row')
-    )
+buildTargetElRow :: TargetElRow row -> BuildM (P.TargetEl, RowDecoders row)
+buildTargetElRow = \case
+  TargetElRow row target -> (,rowDecoders row) <$> buildTargetEl target
 
 buildTargetEl :: TargetEl -> BuildM P.TargetEl
 buildTargetEl = \case
