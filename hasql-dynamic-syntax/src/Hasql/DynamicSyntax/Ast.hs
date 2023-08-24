@@ -1,5 +1,8 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
@@ -70,6 +73,10 @@ data Nullability a where
   Null :: Nullability Null
   NotNull :: Nullability NotNull
 
+class SingNullability a where singNullability :: Nullability a
+instance SingNullability Null where singNullability = Null
+instance SingNullability NotNull where singNullability = NotNull
+
 deriving instance Show (Nullability a)
 deriving instance Eq (Nullability a)
 deriving instance Ord (Nullability a)
@@ -119,12 +126,41 @@ data SqlType t where
   SqlJsonb :: SqlType SqlJsonb
   SqlArray :: !(ColumnType t) -> SqlType (SqlArray (ColumnType t))
 
+class SingSqlType a where singSqlType :: SqlType a
+instance SingSqlType SqlBool where singSqlType = SqlBool
+instance SingSqlType SqlInt2 where singSqlType = SqlInt2
+instance SingSqlType SqlInt4 where singSqlType = SqlInt4
+instance SingSqlType SqlInt8 where singSqlType = SqlInt8
+instance SingSqlType SqlFloat4 where singSqlType = SqlFloat4
+instance SingSqlType SqlFloat8 where singSqlType = SqlFloat8
+instance SingSqlType SqlNumeric where singSqlType = SqlNumeric
+instance SingSqlType SqlChar where singSqlType = SqlChar
+instance SingSqlType SqlText where singSqlType = SqlText
+instance SingSqlType SqlBytea where singSqlType = SqlBytea
+instance SingSqlType SqlDate where singSqlType = SqlDate
+instance SingSqlType SqlTimestamp where singSqlType = SqlTimestamp
+instance SingSqlType SqlTimestampz where singSqlType = SqlTimestampz
+instance SingSqlType SqlTime where singSqlType = SqlTime
+instance SingSqlType SqlTimez where singSqlType = SqlTimez
+instance SingSqlType SqlInterval where singSqlType = SqlInterval
+instance SingSqlType SqlUUID where singSqlType = SqlUUID
+instance SingSqlType SqlInet where singSqlType = SqlInet
+instance SingSqlType SqlJson where singSqlType = SqlJson
+instance SingSqlType SqlJsonb where singSqlType = SqlJsonb
+instance (SingColumnType t nullability) => SingSqlType (SqlArray (ColumnType '(t, nullability))) where
+  singSqlType = SqlArray singColumnType
+
 deriving instance Show (SqlType t)
 deriving instance Eq (SqlType t)
 deriving instance Ord (SqlType t)
 
 data ColumnType t where
   ColumnType :: !(SqlType t) -> !(Nullability nullable) -> ColumnType '(t, nullable)
+
+type SingColumnType t nullability = (SingSqlType t, SingNullability nullability)
+
+singColumnType :: (SingColumnType t nullability) => ColumnType '(t, nullability)
+singColumnType = ColumnType singSqlType singNullability
 
 deriving instance Show (ColumnType t)
 deriving instance Eq (ColumnType t)
