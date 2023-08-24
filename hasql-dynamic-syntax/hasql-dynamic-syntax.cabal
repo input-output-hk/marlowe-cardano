@@ -57,11 +57,13 @@ library
     Hasql.DynamicSyntax.Schema
     Hasql.DynamicSyntax.Statement
 
+  other-modules:   Hasql.DynamicSyntax.Ast.Internal
   build-depends:
     , aeson >=2 && <3
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
     , hasql ^>=1.6
+    , hasql-implicits ^>=0.1
     , network-ip
     , postgresql-syntax ^>=0.4.1
     , scientific ^>=0.3.7
