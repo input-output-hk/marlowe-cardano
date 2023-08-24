@@ -1,17 +1,25 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
 -- | This is a modified version of PostgresqlSyntax.Ast which carries values to apply to parameters and decoders for
 -- results.
 module Hasql.DynamicSyntax.Ast where
 
-import Data.Int (Int64)
+import Data.Aeson (Value)
+import Data.ByteString (ByteString)
+import Data.Int (Int16, Int32, Int64)
 import Data.Kind (Type)
 import Data.List.NonEmpty (NonEmpty)
-import qualified Hasql.Decoders as Decoders
+import Data.Scientific (Scientific)
+import Data.Text (Text)
+import Data.Time (Day, DiffTime, LocalTime, TimeOfDay, TimeZone, UTCTime)
+import Data.UUID (UUID)
+import Data.Vector (Vector)
 import qualified Hasql.Encoders as Encoders
+import Network.IP.Addr (IP, NetAddr)
 import PostgresqlSyntax.Ast (
   AliasClause,
   AnyName,
@@ -55,9 +63,95 @@ import PostgresqlSyntax.Ast (
   Xconst,
  )
 
-data HList (as :: [Type]) where
-  HNil :: HList '[]
-  HCons :: a -> HList as -> HList (a ': as)
+data Null
+data NotNull
+
+data Nullability a where
+  Null :: Nullability Null
+  NotNull :: Nullability NotNull
+
+data SqlBool
+data SqlInt2
+data SqlInt4
+data SqlInt8
+data SqlFloat4
+data SqlFloat8
+data SqlNumeric
+data SqlChar
+data SqlText
+data SqlBytea
+data SqlDate
+data SqlTimestamp
+data SqlTimestampz
+data SqlTime
+data SqlTimez
+data SqlInterval
+data SqlUUID
+data SqlInet
+data SqlJson
+data SqlJsonb
+data SqlArray t
+
+data SqlType t where
+  SqlBool :: SqlType SqlBool
+  SqlInt2 :: SqlType SqlInt2
+  SqlInt4 :: SqlType SqlInt4
+  SqlInt8 :: SqlType SqlInt8
+  SqlFloat4 :: SqlType SqlFloat4
+  SqlFloat8 :: SqlType SqlFloat8
+  SqlNumeric :: SqlType SqlNumeric
+  SqlChar :: SqlType SqlChar
+  SqlText :: SqlType SqlText
+  SqlBytea :: SqlType SqlBytea
+  SqlDate :: SqlType SqlDate
+  SqlTimestamp :: SqlType SqlTimestamp
+  SqlTimestampz :: SqlType SqlTimestampz
+  SqlTime :: SqlType SqlTime
+  SqlTimez :: SqlType SqlTimez
+  SqlInterval :: SqlType SqlInterval
+  SqlUUID :: SqlType SqlUUID
+  SqlInet :: SqlType SqlInet
+  SqlJson :: SqlType SqlJson
+  SqlJsonb :: SqlType SqlJsonb
+  SqlArray :: ColumnType t -> SqlType (SqlArray (ColumnType t))
+
+data ColumnType t where
+  ColumnType :: SqlType t -> Nullability nullable -> ColumnType '(t, nullable)
+
+data DeclareRow row where
+  DeclareNil :: DeclareRow '[]
+  DeclareCons :: ColumnType t -> DeclareRow row -> DeclareRow (t ': row)
+
+type family SqlToHask (t :: Type) :: Type where
+  SqlToHask SqlBool = Bool
+  SqlToHask SqlInt2 = Int16
+  SqlToHask SqlInt4 = Int32
+  SqlToHask SqlInt8 = Int64
+  SqlToHask SqlFloat4 = Float
+  SqlToHask SqlFloat8 = Double
+  SqlToHask SqlNumeric = Scientific
+  SqlToHask SqlChar = Char
+  SqlToHask SqlText = Text
+  SqlToHask SqlBytea = ByteString
+  SqlToHask SqlDate = Day
+  SqlToHask SqlTimestamp = LocalTime
+  SqlToHask SqlTimestampz = UTCTime
+  SqlToHask SqlTime = TimeOfDay
+  SqlToHask SqlTimez = (TimeOfDay, TimeZone)
+  SqlToHask SqlInterval = DiffTime
+  SqlToHask SqlUUID = UUID
+  SqlToHask SqlInet = NetAddr IP
+  SqlToHask SqlJson = Value
+  SqlToHask SqlJsonb = Value
+  SqlToHask (SqlArray (ColumnType t)) = Vector (ColumnToHask t)
+
+type family ColumnToHask (t :: (Type, Type)) :: Type where
+  ColumnToHask '(t, Null) = Maybe (SqlToHask t)
+  ColumnToHask '(t, NotNull) = (SqlToHask t)
+
+type family (++) (as :: [k]) (as' :: [k]) :: [k] where
+  '[] ++ as' = as'
+  (a ': as) ++ as' = a ': (as ++ as')
 
 -- * Statement
 
@@ -81,7 +175,7 @@ data PreparableStmt row
 -- * Call
 
 data CallStmt row
-  = CallStmt (Decoders.Row (HList row)) FuncApplication
+  = CallStmt (DeclareRow row) FuncApplication
 
 -- * Insert
 
@@ -92,7 +186,7 @@ data CallStmt row
 --   | opt_with_clause INSERT INTO insert_target insert_rest
 --       opt_on_conflict returning_clause
 -- @
-data InsertStmt row = InsertStmt (Maybe WithClause) InsertTarget (InsertRest row) (Maybe OnConflict) (ReturningClause row)
+data InsertStmt row = InsertStmt (Maybe WithClause) InsertTarget InsertRest (Maybe OnConflict) (ReturningClause row)
 
 -- |
 -- ==== References
@@ -113,8 +207,8 @@ data InsertTarget = InsertTarget QualifiedName (Maybe ColId)
 --   | '(' insert_column_list ')' OVERRIDING override_kind VALUE_P SelectStmt
 --   | DEFAULT VALUES
 -- @
-data InsertRest row
-  = SelectInsertRest (Maybe InsertColumnList) (Maybe OverrideKind) (SelectStmt row)
+data InsertRest
+  = forall row. SelectInsertRest (Maybe InsertColumnList) (Maybe OverrideKind) (SelectStmt row)
   | DefaultValuesInsertRest
 
 -- |
@@ -175,7 +269,9 @@ data ConfExpr
 --   | RETURNING target_list
 --   | EMPTY
 -- @
-type ReturningClause row = TargetList row
+data ReturningClause row where
+  EmptyReturningClause :: ReturningClause '[]
+  TargetListReturningClause :: TargetList row -> ReturningClause row
 
 -- * Update
 
@@ -333,8 +429,8 @@ data SimpleSelect row
       (Maybe GroupClause)
       (Maybe HavingClause)
       (Maybe WindowClause)
-  | ValuesSimpleSelect ValuesClause
-  | TableSimpleSelect RelationExpr
+  | ValuesSimpleSelect (DeclareRow row) ValuesClause
+  | TableSimpleSelect (DeclareRow row) RelationExpr
   | BinSimpleSelect SelectBinOp (SelectClause row) (Maybe Bool) (SelectClause row)
 
 -- |
@@ -355,9 +451,10 @@ data SimpleSelect row
 --   |  DISTINCT ON '(' expr_list ')'
 -- @
 data Targeting row where
+  EmptyTargeting :: Targeting '[]
   NormalTargeting :: TargetList row -> Targeting row
   AllTargeting :: TargetList row -> Targeting row
-  DistinctTargeting :: Maybe ExprList -> TargetList (a ': row) -> Targeting (a ': row)
+  DistinctTargeting :: Maybe ExprList -> TargetList row -> Targeting row
 
 -- |
 -- ==== References
@@ -366,9 +463,9 @@ data Targeting row where
 --   | target_el
 --   | target_list ',' target_el
 -- @
-data TargetList (row :: [Type]) where
-  TargetListNil :: TargetList '[]
-  (:::) :: TargetEl a -> TargetList row -> TargetList (a ': row)
+data TargetList row where
+  TargetListOne :: DeclareRow (a ': row) -> TargetEl -> TargetList (a ': row)
+  TargetListCons :: DeclareRow (a ': row) -> TargetEl -> TargetList row' -> TargetList (a ': (row ++ row'))
 
 -- |
 -- ==== References
@@ -379,11 +476,11 @@ data TargetList (row :: [Type]) where
 --   |  a_expr
 --   |  '*'
 -- @
-data TargetEl a where
-  AliasedExprTargetEl :: Decoders.Row a -> AExpr -> Ident -> TargetEl a
-  ImplicitlyAliasedExprTargetEl :: Decoders.Row a -> AExpr -> Ident -> TargetEl a
-  ExprTargetEl :: Decoders.Row a -> AExpr -> TargetEl a
-  AsteriskTargetEl :: Decoders.Row a -> TargetEl a
+data TargetEl
+  = AliasedExprTargetEl AExpr Ident
+  | ImplicitlyAliasedExprTargetEl AExpr Ident
+  | ExprTargetEl AExpr
+  | AsteriskTargetEl
 
 -- |
 -- ==== References
@@ -791,7 +888,7 @@ type RepeatableClause = AExpr
 -- @
 data FuncTable
   = FuncExprFuncTable FuncExprWindowless OptOrdinality
-  | RowsFromFuncTable RowsfromList OptOrdinality
+  | RowsFromFuncTable RowsFromList OptOrdinality
 
 -- |
 -- ==== References
@@ -799,7 +896,7 @@ data FuncTable
 -- rowsfrom_item:
 --   | func_expr_windowless opt_col_def_list
 -- @
-data RowsfromItem = RowsfromItem FuncExprWindowless (Maybe ColDefList)
+data RowsFromItem = RowsFromItem FuncExprWindowless (Maybe ColDefList)
 
 -- |
 -- ==== References
@@ -808,7 +905,7 @@ data RowsfromItem = RowsfromItem FuncExprWindowless (Maybe ColDefList)
 --   | rowsfrom_item
 --   | rowsfrom_list ',' rowsfrom_item
 -- @
-type RowsfromList = NonEmpty RowsfromItem
+type RowsFromList = NonEmpty RowsFromItem
 
 -- |
 -- ==== References
