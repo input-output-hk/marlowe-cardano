@@ -105,7 +105,7 @@ data Assets = Assets
 
 newtype Tokens = Tokens {unTokens :: Map PolicyId (Map Text Integer)}
   deriving (Eq, Show, Ord, Generic)
-  deriving anyclass (ToJSON, FromJSON, ToSchema)
+  deriving newtype (ToJSON, FromJSON, ToSchema)
 
 newtype ContractSourceId = ContractSourceId {unContractSourceId :: ByteString}
   deriving (Eq, Ord, Generic)
