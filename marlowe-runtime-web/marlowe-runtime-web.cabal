@@ -150,6 +150,7 @@ library server
     , servant-server ^>=0.19
     , stm ^>=2.5
     , stm-delay ^>=0.1.1
+    , string-conversions ^>=0.4
     , text >=1.2.4 && <2
     , time >=1.9 && <2
     , transformers ^>=0.5.6
