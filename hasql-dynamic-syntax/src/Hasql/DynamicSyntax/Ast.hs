@@ -1,11 +1,14 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 -- | This is a modified version of PostgresqlSyntax.Ast which carries values to apply to parameters and decoders for
 -- results.
@@ -17,7 +20,9 @@ import Data.Int (Int16, Int32, Int64)
 import Data.Kind (Type)
 import Data.List.NonEmpty (NonEmpty)
 import Data.Scientific (Scientific)
+import Data.String (IsString (..))
 import Data.Text (Text)
+import qualified Data.Text as T
 import Data.Time (Day, DiffTime, LocalTime, TimeOfDay, TimeZone, UTCTime)
 import Data.UUID (UUID)
 import Data.Vector (Vector)
@@ -65,6 +70,7 @@ import PostgresqlSyntax.Ast (
   WindowExclusionClause,
   Xconst,
  )
+import qualified PostgresqlSyntax.Parsing as Parsing
 
 data Null
 data NotNull
@@ -166,13 +172,21 @@ deriving instance Show (ColumnType t)
 deriving instance Eq (ColumnType t)
 deriving instance Ord (ColumnType t)
 
-data DeclareRow row where
-  DeclareNil :: DeclareRow '[]
-  DeclareCons :: ColumnType t -> DeclareRow row -> DeclareRow (t ': row)
+data TargetTypes row where
+  TargetTypesNil :: TargetTypes '[]
+  TargetTypesCons :: ColumnType t -> TargetTypes row -> TargetTypes (t ': row)
 
-deriving instance Show (DeclareRow t)
-deriving instance Eq (DeclareRow t)
-deriving instance Ord (DeclareRow t)
+deriving instance Show (TargetTypes row)
+deriving instance Eq (TargetTypes row)
+deriving instance Ord (TargetTypes row)
+
+data TargetTypesList rows where
+  TargetTypesListNil :: TargetTypesList '[]
+  TargetTypesListCons :: TargetTypes (r ': row) -> TargetTypesList rows -> TargetTypesList ((r ': row) ': rows)
+
+deriving instance Show (TargetTypesList rows)
+deriving instance Eq (TargetTypesList rows)
+deriving instance Ord (TargetTypesList rows)
 
 type family SqlToHask (t :: Type) :: Type where
   SqlToHask SqlBool = Bool
@@ -217,17 +231,21 @@ type family (++) (as :: [k]) (as' :: [k]) :: [k] where
 --   |  DeleteStmt
 --   |  CallStmt
 -- @
-data PreparableStmt row
-  = SelectPreparableStmt (SelectStmt row)
-  | InsertPreparableStmt (InsertStmt row)
-  | UpdatePreparableStmt (UpdateStmt row)
-  | DeletePreparableStmt (DeleteStmt row)
-  | CallPreparableStmt (CallStmt row)
+data PreparableStmt rows
+  = SelectPreparableStmt (SelectStmt rows)
+  | InsertPreparableStmt (InsertStmt rows)
+  | UpdatePreparableStmt (UpdateStmt rows)
+  | DeletePreparableStmt (DeleteStmt rows)
+  | CallPreparableStmt (CallStmt rows)
+
+simpleSelectPreparableStmt :: SimpleSelect rows -> PreparableStmt rows
+simpleSelectPreparableStmt select =
+  SelectPreparableStmt $ Left $ SelectNoParens Nothing (Left select) Nothing Nothing Nothing
 
 -- * Call
 
-data CallStmt row
-  = CallStmt (DeclareRow row) FuncApplication
+data CallStmt rows
+  = CallStmt (TargetTypesList rows) FuncApplication
 
 -- * Insert
 
@@ -238,7 +256,7 @@ data CallStmt row
 --   | opt_with_clause INSERT INTO insert_target insert_rest
 --       opt_on_conflict returning_clause
 -- @
-data InsertStmt row = InsertStmt (Maybe WithClause) InsertTarget InsertRest (Maybe OnConflict) (ReturningClause row)
+data InsertStmt rows = InsertStmt (Maybe WithClause) InsertTarget InsertRest (Maybe OnConflict) (ReturningClause rows)
 
 -- |
 -- ==== References
@@ -260,7 +278,7 @@ data InsertTarget = InsertTarget QualifiedName (Maybe ColId)
 --   | DEFAULT VALUES
 -- @
 data InsertRest
-  = forall row. SelectInsertRest (Maybe InsertColumnList) (Maybe OverrideKind) (SelectStmt row)
+  = forall rows. SelectInsertRest (Maybe InsertColumnList) (Maybe OverrideKind) (SelectStmt rows)
   | DefaultValuesInsertRest
 
 -- |
@@ -299,7 +317,7 @@ data OnConflict = OnConflict (Maybe ConfExpr) OnConflictDo
 --   | EMPTY
 -- @
 data OnConflictDo
-  = UpdateOnConflictDo SetClauseList (Maybe WhereClause)
+  = UpdateOnConflictDo SetClauseList (Maybe AExpr)
   | NothingOnConflictDo
 
 -- |
@@ -311,7 +329,7 @@ data OnConflictDo
 --   | EMPTY
 -- @
 data ConfExpr
-  = WhereConfExpr IndexParams (Maybe WhereClause)
+  = WhereConfExpr IndexParams (Maybe AExpr)
   | ConstraintConfExpr Name
 
 -- |
@@ -321,9 +339,9 @@ data ConfExpr
 --   | RETURNING target_list
 --   | EMPTY
 -- @
-data ReturningClause row where
+data ReturningClause rows where
   EmptyReturningClause :: ReturningClause '[]
-  TargetListReturningClause :: TargetList row -> ReturningClause row
+  TargetListReturningClause :: TargetList (row ': rows) -> ReturningClause (row ': rows)
 
 -- * Update
 
@@ -337,14 +355,14 @@ data ReturningClause row where
 --       where_or_current_clause
 --       returning_clause
 -- @
-data UpdateStmt row
+data UpdateStmt rows
   = UpdateStmt
       (Maybe WithClause)
       RelationExprOptAlias
       SetClauseList
       (Maybe FromClause)
       (Maybe WhereOrCurrentClause)
-      (ReturningClause row)
+      (ReturningClause rows)
 
 -- |
 -- ==== References
@@ -363,8 +381,8 @@ type SetClauseList = NonEmpty SetClause
 --   | '(' set_target_list ')' '=' a_expr
 -- @
 data SetClause
-  = TargetSetClause SetTarget AExpr
-  | TargetListSetClause SetTargetList AExpr
+  = forall a. (IsAExpr a) => TargetSetClause SetTarget a
+  | forall a. (IsAExpr a) => TargetListSetClause SetTargetList a
 
 -- |
 -- ==== References
@@ -392,13 +410,13 @@ type SetTargetList = NonEmpty SetTarget
 --   | opt_with_clause DELETE_P FROM relation_expr_opt_alias
 --       using_clause where_or_current_clause returning_clause
 -- @
-data DeleteStmt row
+data DeleteStmt rows
   = DeleteStmt
       (Maybe WithClause)
       RelationExprOptAlias
       (Maybe UsingClause)
       (Maybe WhereOrCurrentClause)
-      (ReturningClause row)
+      (ReturningClause rows)
 
 -- |
 -- ==== References
@@ -418,7 +436,7 @@ type UsingClause = FromList
 --   |  select_no_parens
 --   |  select_with_parens
 -- @
-type SelectStmt row = Either (SelectNoParens row) (SelectWithParens row)
+type SelectStmt rows = Either (SelectNoParens rows) (SelectWithParens rows)
 
 -- |
 -- ==== References
@@ -427,9 +445,9 @@ type SelectStmt row = Either (SelectNoParens row) (SelectWithParens row)
 --   |  '(' select_no_parens ')'
 --   |  '(' select_with_parens ')'
 -- @
-data SelectWithParens row
-  = NoParensSelectWithParens (SelectNoParens row)
-  | WithParensSelectWithParens (SelectWithParens row)
+data SelectWithParens rows
+  = NoParensSelectWithParens (SelectNoParens rows)
+  | WithParensSelectWithParens (SelectWithParens rows)
 
 -- |
 -- Covers the following cases:
@@ -445,8 +463,8 @@ data SelectWithParens row
 --   |  with_clause select_clause opt_sort_clause for_locking_clause opt_select_limit
 --   |  with_clause select_clause opt_sort_clause select_limit opt_for_locking_clause
 -- @
-data SelectNoParens row
-  = SelectNoParens (Maybe WithClause) (SelectClause row) (Maybe SortClause) (Maybe SelectLimit) (Maybe ForLockingClause)
+data SelectNoParens rows
+  = SelectNoParens (Maybe WithClause) (SelectClause rows) (Maybe SortClause) (Maybe SelectLimit) (Maybe ForLockingClause)
 
 -- |
 -- @
@@ -454,7 +472,7 @@ data SelectNoParens row
 --   |  simple_select
 --   |  select_with_parens
 -- @
-type SelectClause row = Either (SimpleSelect row) (SelectWithParens row)
+type SelectClause rows = Either (SimpleSelect rows) (SelectWithParens rows)
 
 -- |
 -- ==== References
@@ -472,18 +490,18 @@ type SelectClause row = Either (SimpleSelect row) (SelectWithParens row)
 --   |  select_clause INTERSECT all_or_distinct select_clause
 --   |  select_clause EXCEPT all_or_distinct select_clause
 -- @
-data SimpleSelect row
+data SimpleSelect rows
   = NormalSimpleSelect
-      (Targeting row)
+      (Targeting rows)
       (Maybe IntoClause)
       (Maybe FromClause)
-      (Maybe WhereClause)
+      (Maybe AExpr)
       (Maybe GroupClause)
-      (Maybe HavingClause)
+      (Maybe AExpr)
       (Maybe WindowClause)
-  | ValuesSimpleSelect (DeclareRow row) ValuesClause
-  | TableSimpleSelect (DeclareRow row) RelationExpr
-  | BinSimpleSelect SelectBinOp (SelectClause row) (Maybe Bool) (SelectClause row)
+  | ValuesSimpleSelect (TargetTypesList rows) ValuesClause
+  | TableSimpleSelect (TargetTypesList rows) RelationExpr
+  | BinSimpleSelect SelectBinOp (SelectClause rows) (Maybe Bool) (SelectClause rows)
 
 -- |
 -- Covers these parts of spec:
@@ -502,11 +520,11 @@ data SimpleSelect row
 --   |  DISTINCT
 --   |  DISTINCT ON '(' expr_list ')'
 -- @
-data Targeting row where
+data Targeting rows where
   EmptyTargeting :: Targeting '[]
-  NormalTargeting :: TargetList row -> Targeting row
-  AllTargeting :: TargetList row -> Targeting row
-  DistinctTargeting :: Maybe ExprList -> TargetList row -> Targeting row
+  NormalTargeting :: TargetList (row ': rows) -> Targeting (row ': rows)
+  AllTargeting :: TargetList (row ': rows) -> Targeting (row ': rows)
+  DistinctTargeting :: Maybe ExprList -> TargetList (row ': rows) -> Targeting (row ': rows)
 
 -- |
 -- ==== References
@@ -515,9 +533,11 @@ data Targeting row where
 --   | target_el
 --   | target_list ',' target_el
 -- @
-data TargetList row where
-  TargetListOne :: TargetElRow row -> TargetList row
-  TargetListCons :: TargetElRow row -> TargetList row' -> TargetList (row ++ row')
+data TargetList rows where
+  TargetListNil :: TargetList '[]
+  (:.) :: (IsTargetElRow a) => a -> TargetList rows -> TargetList (TargetRow a ': rows)
+
+infixr 5 :.
 
 -- |
 -- ==== References
@@ -529,7 +549,15 @@ data TargetList row where
 --   |  '*'
 -- @
 data TargetElRow row where
-  TargetElRow :: DeclareRow (a ': row) -> TargetEl -> TargetElRow (a ': row)
+  TargetElRow :: (IsTargetEl el) => TargetTypes (a ': row) -> el -> TargetElRow (a ': row)
+
+class IsTargetElRow a where
+  type TargetRow a :: [(Type, Type)]
+  toTargetElRow :: a -> TargetElRow (TargetRow a)
+
+instance IsTargetElRow (TargetElRow row) where
+  type TargetRow (TargetElRow row) = row
+  toTargetElRow = id
 
 -- |
 -- ==== References
@@ -541,10 +569,31 @@ data TargetElRow row where
 --   |  '*'
 -- @
 data TargetEl
-  = AliasedExprTargetEl AExpr Ident
-  | ImplicitlyAliasedExprTargetEl AExpr Ident
+  = forall a. (IsAExpr a) => AliasedExprTargetEl a Ident
+  | forall a. (IsAExpr a) => ImplicitlyAliasedExprTargetEl a Ident
   | ExprTargetEl AExpr
   | AsteriskTargetEl
+
+class IsTargetEl a where
+  toTargetEl :: a -> TargetEl
+  default toTargetEl :: (IsAExpr a) => a -> TargetEl
+  toTargetEl = ExprTargetEl . toAExpr
+
+instance IsTargetEl TargetEl where toTargetEl = id
+instance IsTargetEl AExpr
+instance IsTargetEl CExpr
+instance IsTargetEl Columnref
+instance IsTargetEl AexprConst
+instance IsTargetEl Param
+instance IsTargetEl CaseExpr
+instance IsTargetEl FuncExpr
+instance IsTargetEl (SelectWithParens rows)
+instance IsTargetEl ArrayExpr
+instance IsTargetEl ExplicitRow
+instance IsTargetEl ImplicitRow
+instance IsTargetEl Iconst
+instance IsTargetEl Fconst
+instance IsTargetEl Bool
 
 -- |
 -- ==== References
@@ -566,7 +615,7 @@ data WithClause = WithClause Bool (NonEmpty CommonTableExpr)
 --   | NOT MATERIALIZED
 --   | EMPTY
 -- @
-data CommonTableExpr = forall row. CommonTableExpr Ident (Maybe (NonEmpty Ident)) (Maybe Bool) (PreparableStmt row)
+data CommonTableExpr = forall rows. CommonTableExpr Ident (Maybe (NonEmpty Ident)) (Maybe Bool) (PreparableStmt rows)
 
 type IntoClause = OptTempTableName
 
@@ -624,13 +673,22 @@ data GroupByItem
   | CubeGroupByItem ExprList
   | GroupingSetsGroupByItem (NonEmpty GroupByItem)
 
--- |
--- @
--- having_clause:
---   |  HAVING a_expr
---   |  EMPTY
--- @
-type HavingClause = AExpr
+class IsGroupByItem a where toGroupByItem :: a -> GroupByItem
+instance IsGroupByItem GroupByItem where toGroupByItem = id
+instance IsGroupByItem AExpr where toGroupByItem = ExprGroupByItem
+instance IsGroupByItem CExpr where toGroupByItem = toGroupByItem . toCExpr
+instance IsGroupByItem Columnref where toGroupByItem = toGroupByItem . toCExpr
+instance IsGroupByItem AexprConst where toGroupByItem = toGroupByItem . toCExpr
+instance IsGroupByItem Param where toGroupByItem = toGroupByItem . toCExpr
+instance IsGroupByItem CaseExpr where toGroupByItem = toGroupByItem . toCExpr
+instance IsGroupByItem FuncExpr where toGroupByItem = toGroupByItem . toCExpr
+instance IsGroupByItem (SelectWithParens rows) where toGroupByItem = toGroupByItem . toCExpr
+instance IsGroupByItem ArrayExpr where toGroupByItem = toGroupByItem . toCExpr
+instance IsGroupByItem ExplicitRow where toGroupByItem = toGroupByItem . toCExpr
+instance IsGroupByItem ImplicitRow where toGroupByItem = toGroupByItem . toCExpr
+instance IsGroupByItem Iconst where toGroupByItem = toGroupByItem . toCExpr
+instance IsGroupByItem Fconst where toGroupByItem = toGroupByItem . toCExpr
+instance IsGroupByItem Bool where toGroupByItem = toGroupByItem . toCExpr
 
 -- |
 -- @
@@ -696,7 +754,7 @@ data FrameExtent = SingularFrameExtent FrameBound | BetweenFrameExtent FrameBoun
 -- frame_bound:
 --   |  UNBOUNDED PRECEDING
 --   |  UNBOUNDED FOLLOWING
---   |  CURRENT_P ROW
+--   |  CURRENT_P rows
 --   |  a_expr PRECEDING
 --   |  a_expr FOLLOWING
 -- @
@@ -704,8 +762,8 @@ data FrameBound
   = UnboundedPrecedingFrameBound
   | UnboundedFollowingFrameBound
   | CurrentRowFrameBound
-  | PrecedingFrameBound AExpr
-  | FollowingFrameBound AExpr
+  | forall a. (IsAExpr a) => PrecedingFrameBound a
+  | forall a. (IsAExpr a) => FollowingFrameBound a
 
 -- |
 -- ==== References
@@ -734,8 +792,8 @@ type SortClause = NonEmpty SortBy
 --   |  a_expr opt_asc_desc opt_nulls_order
 -- @
 data SortBy
-  = UsingSortBy AExpr QualAllOp (Maybe NullsOrder)
-  | AscDescSortBy AExpr (Maybe AscDesc) (Maybe NullsOrder)
+  = forall a. (IsAExpr a) => UsingSortBy a QualAllOp (Maybe NullsOrder)
+  | forall a. (IsAExpr a) => AscDescSortBy a (Maybe AscDesc) (Maybe NullsOrder)
 
 -- |
 -- ==== References
@@ -747,10 +805,10 @@ data SortBy
 --   | offset_clause
 -- @
 data SelectLimit
-  = LimitOffsetSelectLimit LimitClause OffsetClause
-  | OffsetLimitSelectLimit OffsetClause LimitClause
-  | LimitSelectLimit LimitClause
-  | OffsetSelectLimit OffsetClause
+  = forall a b. (IsLimitClause a, IsOffsetClause b) => LimitOffsetSelectLimit a b
+  | forall a b. (IsOffsetClause a, IsLimitClause b) => OffsetLimitSelectLimit a b
+  | forall a. (IsLimitClause a) => LimitSelectLimit a
+  | forall a. (IsOffsetClause a) => OffsetSelectLimit a
 
 -- |
 -- ==== References
@@ -766,12 +824,34 @@ data SelectLimit
 --   | FIRST_P
 --   | NEXT
 -- row_or_rows:
---   | ROW
+--   | rows
 --   | ROWS
 -- @
 data LimitClause
-  = LimitLimitClause SelectLimitValue (Maybe AExpr)
+  = forall a. (IsSelectLimitValue a) => LimitLimitClause a (Maybe AExpr)
   | FetchOnlyLimitClause Bool (Maybe SelectFetchFirstValue) Bool
+
+class IsLimitClause a where
+  toLimitClause :: a -> LimitClause
+  default toLimitClause :: (IsSelectLimitValue a) => a -> LimitClause
+  toLimitClause = flip LimitLimitClause Nothing . toSelectLimitValue
+
+instance IsLimitClause LimitClause where toLimitClause = id
+instance IsLimitClause SelectLimitValue
+instance IsLimitClause AExpr
+instance IsLimitClause CExpr
+instance IsLimitClause Columnref
+instance IsLimitClause AexprConst
+instance IsLimitClause Param
+instance IsLimitClause CaseExpr
+instance IsLimitClause FuncExpr
+instance IsLimitClause (SelectWithParens rows)
+instance IsLimitClause ArrayExpr
+instance IsLimitClause ExplicitRow
+instance IsLimitClause ImplicitRow
+instance IsLimitClause Iconst
+instance IsLimitClause Fconst
+instance IsLimitClause Bool
 
 -- |
 -- ==== References
@@ -785,6 +865,23 @@ data SelectFetchFirstValue
   = ExprSelectFetchFirstValue CExpr
   | NumSelectFetchFirstValue Bool (Either Int64 Double)
 
+class IsSelectFetchFirstValue a where toSelectFetchFirstValue :: a -> SelectFetchFirstValue
+instance IsSelectFetchFirstValue SelectFetchFirstValue where toSelectFetchFirstValue = id
+instance IsSelectFetchFirstValue CExpr where toSelectFetchFirstValue = ExprSelectFetchFirstValue
+instance IsSelectFetchFirstValue Columnref where toSelectFetchFirstValue = toSelectFetchFirstValue . toCExpr
+instance IsSelectFetchFirstValue AexprConst where toSelectFetchFirstValue = toSelectFetchFirstValue . toCExpr
+instance IsSelectFetchFirstValue Param where toSelectFetchFirstValue = toSelectFetchFirstValue . toCExpr
+instance IsSelectFetchFirstValue CaseExpr where toSelectFetchFirstValue = toSelectFetchFirstValue . toCExpr
+instance IsSelectFetchFirstValue FuncExpr where toSelectFetchFirstValue = toSelectFetchFirstValue . toCExpr
+instance IsSelectFetchFirstValue (SelectWithParens rows) where
+  toSelectFetchFirstValue = toSelectFetchFirstValue . toCExpr
+instance IsSelectFetchFirstValue ArrayExpr where toSelectFetchFirstValue = toSelectFetchFirstValue . toCExpr
+instance IsSelectFetchFirstValue ExplicitRow where toSelectFetchFirstValue = toSelectFetchFirstValue . toCExpr
+instance IsSelectFetchFirstValue ImplicitRow where toSelectFetchFirstValue = toSelectFetchFirstValue . toCExpr
+instance IsSelectFetchFirstValue Iconst where toSelectFetchFirstValue = toSelectFetchFirstValue . toCExpr
+instance IsSelectFetchFirstValue Fconst where toSelectFetchFirstValue = toSelectFetchFirstValue . toCExpr
+instance IsSelectFetchFirstValue Bool where toSelectFetchFirstValue = toSelectFetchFirstValue . toCExpr
+
 -- |
 -- ==== References
 -- @
@@ -796,6 +893,23 @@ data SelectLimitValue
   = ExprSelectLimitValue AExpr
   | AllSelectLimitValue
 
+class IsSelectLimitValue a where toSelectLimitValue :: a -> SelectLimitValue
+instance IsSelectLimitValue SelectLimitValue where toSelectLimitValue = id
+instance IsSelectLimitValue AExpr where toSelectLimitValue = ExprSelectLimitValue
+instance IsSelectLimitValue CExpr where toSelectLimitValue = toSelectLimitValue . toCExpr
+instance IsSelectLimitValue Columnref where toSelectLimitValue = toSelectLimitValue . toCExpr
+instance IsSelectLimitValue AexprConst where toSelectLimitValue = toSelectLimitValue . toCExpr
+instance IsSelectLimitValue Param where toSelectLimitValue = toSelectLimitValue . toCExpr
+instance IsSelectLimitValue CaseExpr where toSelectLimitValue = toSelectLimitValue . toCExpr
+instance IsSelectLimitValue FuncExpr where toSelectLimitValue = toSelectLimitValue . toCExpr
+instance IsSelectLimitValue (SelectWithParens rows) where toSelectLimitValue = toSelectLimitValue . toCExpr
+instance IsSelectLimitValue ArrayExpr where toSelectLimitValue = toSelectLimitValue . toCExpr
+instance IsSelectLimitValue ExplicitRow where toSelectLimitValue = toSelectLimitValue . toCExpr
+instance IsSelectLimitValue ImplicitRow where toSelectLimitValue = toSelectLimitValue . toCExpr
+instance IsSelectLimitValue Iconst where toSelectLimitValue = toSelectLimitValue . toCExpr
+instance IsSelectLimitValue Fconst where toSelectLimitValue = toSelectLimitValue . toCExpr
+instance IsSelectLimitValue Bool where toSelectLimitValue = toSelectLimitValue . toCExpr
+
 -- |
 -- ==== References
 -- @
@@ -805,12 +919,29 @@ data SelectLimitValue
 -- select_offset_value:
 --   | a_expr
 -- row_or_rows:
---   | ROW
+--   | rows
 --   | ROWS
 -- @
 data OffsetClause
   = ExprOffsetClause AExpr
-  | FetchFirstOffsetClause SelectFetchFirstValue Bool
+  | forall a. (IsSelectFetchFirstValue a) => FetchFirstOffsetClause a Bool
+
+class IsOffsetClause a where toOffsetClause :: a -> OffsetClause
+instance IsOffsetClause OffsetClause where toOffsetClause = id
+instance IsOffsetClause AExpr where toOffsetClause = ExprOffsetClause
+instance IsOffsetClause CExpr where toOffsetClause = toOffsetClause . toCExpr
+instance IsOffsetClause Columnref where toOffsetClause = toOffsetClause . toCExpr
+instance IsOffsetClause AexprConst where toOffsetClause = toOffsetClause . toCExpr
+instance IsOffsetClause Param where toOffsetClause = toOffsetClause . toCExpr
+instance IsOffsetClause CaseExpr where toOffsetClause = toOffsetClause . toCExpr
+instance IsOffsetClause FuncExpr where toOffsetClause = toOffsetClause . toCExpr
+instance IsOffsetClause (SelectWithParens rows) where toOffsetClause = toOffsetClause . toCExpr
+instance IsOffsetClause ArrayExpr where toOffsetClause = toOffsetClause . toCExpr
+instance IsOffsetClause ExplicitRow where toOffsetClause = toOffsetClause . toCExpr
+instance IsOffsetClause ImplicitRow where toOffsetClause = toOffsetClause . toCExpr
+instance IsOffsetClause Iconst where toOffsetClause = toOffsetClause . toCExpr
+instance IsOffsetClause Fconst where toOffsetClause = toOffsetClause . toCExpr
+instance IsOffsetClause Bool where toOffsetClause = toOffsetClause . toCExpr
 
 -- * For Locking
 
@@ -888,13 +1019,22 @@ data TableRef
     --    | select_with_parens opt_alias_clause
     --    | LATERAL_P select_with_parens opt_alias_clause
     -- @
-    forall row. SelectTableRef Bool (SelectWithParens row) (Maybe AliasClause)
+    forall rows. SelectTableRef Bool (SelectWithParens rows) (Maybe AliasClause)
   | -- |
     -- @
     --    | joined_table
     --    | '(' joined_table ')' alias_clause
     -- @
     JoinTableRef JoinedTable (Maybe AliasClause)
+
+class IsTableRef a where toTableRef :: a -> TableRef
+instance IsTableRef TableRef where toTableRef = id
+instance IsTableRef FuncTable where toTableRef = flip (FuncTableRef False) Nothing
+instance IsTableRef RelationExpr where toTableRef a = RelationExprTableRef a Nothing Nothing
+instance IsTableRef JoinedTable where toTableRef a = JoinTableRef a Nothing
+
+joinTable :: (IsTableRef l, IsTableRef r) => JoinMeth -> l -> r -> TableRef
+joinTable meth l r = JoinTableRef (MethJoinedTable meth l r) Nothing
 
 -- |
 -- ==== References
@@ -932,16 +1072,7 @@ data RelationExprOptAlias = RelationExprOptAlias RelationExpr (Maybe (Bool, ColI
 -- tablesample_clause:
 --   | TABLESAMPLE func_name '(' expr_list ')' opt_repeatable_clause
 -- @
-data TablesampleClause = TablesampleClause FuncName ExprList (Maybe RepeatableClause)
-
--- |
--- ==== References
--- @
--- opt_repeatable_clause:
---   | REPEATABLE '(' a_expr ')'
---   | EMPTY
--- @
-type RepeatableClause = AExpr
+data TablesampleClause = TablesampleClause FuncName ExprList (Maybe AExpr)
 
 -- |
 -- ==== References
@@ -1027,7 +1158,7 @@ data FuncAliasClause
 -- @
 data JoinedTable
   = InParensJoinedTable JoinedTable
-  | MethJoinedTable JoinMeth TableRef TableRef
+  | forall a b. (IsTableRef a, IsTableRef b) => MethJoinedTable JoinMeth a b
 
 -- |
 -- ==== References
@@ -1052,11 +1183,9 @@ data JoinMeth
 -- @
 data JoinQual
   = UsingJoinQual (NonEmpty Ident)
-  | OnJoinQual AExpr
+  | forall a. (IsAExpr a) => OnJoinQual a
 
 -- * Where
-
-type WhereClause = AExpr
 
 -- |
 -- ==== References
@@ -1068,6 +1197,24 @@ type WhereClause = AExpr
 data WhereOrCurrentClause
   = ExprWhereOrCurrentClause AExpr
   | CursorWhereOrCurrentClause CursorName
+
+class IsWhereOrCurrentClause a where toWhereOrCurrentClause :: a -> WhereOrCurrentClause
+instance IsWhereOrCurrentClause WhereOrCurrentClause where toWhereOrCurrentClause = id
+instance IsWhereOrCurrentClause AExpr where toWhereOrCurrentClause = ExprWhereOrCurrentClause
+instance IsWhereOrCurrentClause CursorName where toWhereOrCurrentClause = CursorWhereOrCurrentClause
+instance IsWhereOrCurrentClause CExpr where toWhereOrCurrentClause = toWhereOrCurrentClause . toCExpr
+instance IsWhereOrCurrentClause Columnref where toWhereOrCurrentClause = toWhereOrCurrentClause . toCExpr
+instance IsWhereOrCurrentClause AexprConst where toWhereOrCurrentClause = toWhereOrCurrentClause . toCExpr
+instance IsWhereOrCurrentClause Param where toWhereOrCurrentClause = toWhereOrCurrentClause . toCExpr
+instance IsWhereOrCurrentClause CaseExpr where toWhereOrCurrentClause = toWhereOrCurrentClause . toCExpr
+instance IsWhereOrCurrentClause FuncExpr where toWhereOrCurrentClause = toWhereOrCurrentClause . toCExpr
+instance IsWhereOrCurrentClause (SelectWithParens rows) where toWhereOrCurrentClause = toWhereOrCurrentClause . toCExpr
+instance IsWhereOrCurrentClause ArrayExpr where toWhereOrCurrentClause = toWhereOrCurrentClause . toCExpr
+instance IsWhereOrCurrentClause ExplicitRow where toWhereOrCurrentClause = toWhereOrCurrentClause . toCExpr
+instance IsWhereOrCurrentClause ImplicitRow where toWhereOrCurrentClause = toWhereOrCurrentClause . toCExpr
+instance IsWhereOrCurrentClause Iconst where toWhereOrCurrentClause = toWhereOrCurrentClause . toCExpr
+instance IsWhereOrCurrentClause Fconst where toWhereOrCurrentClause = toWhereOrCurrentClause . toCExpr
+instance IsWhereOrCurrentClause Bool where toWhereOrCurrentClause = toWhereOrCurrentClause . toCExpr
 
 -- * Expression
 
@@ -1118,7 +1265,7 @@ type ExprList = NonEmpty AExpr
 --   | a_expr ISNULL
 --   | a_expr IS NOT NULL_P
 --   | a_expr NOTNULL
---   | row OVERLAPS row
+--   | rows OVERLAPS rows
 --   | a_expr IS TRUE_P
 --   | a_expr IS NOT TRUE_P
 --   | a_expr IS FALSE_P
@@ -1144,25 +1291,41 @@ type ExprList = NonEmpty AExpr
 -- @
 data AExpr
   = CExprAExpr CExpr
-  | TypecastAExpr AExpr Typename
-  | CollateAExpr AExpr AnyName
-  | AtTimeZoneAExpr AExpr AExpr
-  | PlusAExpr AExpr
-  | MinusAExpr AExpr
-  | SymbolicBinOpAExpr AExpr SymbolicExprBinOp AExpr
-  | PrefixQualOpAExpr QualOp AExpr
-  | SuffixQualOpAExpr AExpr QualOp
-  | AndAExpr AExpr AExpr
-  | OrAExpr AExpr AExpr
-  | NotAExpr AExpr
-  | VerbalExprBinOpAExpr AExpr Bool VerbalExprBinOp AExpr (Maybe AExpr)
-  | ReversableOpAExpr AExpr Bool AExprReversableOp
-  | IsnullAExpr AExpr
-  | NotnullAExpr AExpr
+  | forall a. (IsAExpr a) => TypecastAExpr a Typename
+  | forall a. (IsAExpr a) => CollateAExpr a AnyName
+  | forall a b. (IsAExpr a, IsAExpr b) => AtTimeZoneAExpr a b
+  | forall a. (IsAExpr a) => PlusAExpr a
+  | forall a. (IsAExpr a) => MinusAExpr a
+  | forall a b. (IsAExpr a, IsAExpr b) => SymbolicBinOpAExpr a SymbolicExprBinOp b
+  | forall a. (IsAExpr a) => PrefixQualOpAExpr QualOp a
+  | forall a. (IsAExpr a) => SuffixQualOpAExpr a QualOp
+  | forall a b. (IsAExpr a, IsAExpr b) => AndAExpr a b
+  | forall a b. (IsAExpr a, IsAExpr b) => OrAExpr a b
+  | forall a. (IsAExpr a) => NotAExpr a
+  | forall a b. (IsAExpr a, IsAExpr b) => VerbalExprBinOpAExpr a Bool VerbalExprBinOp b (Maybe AExpr)
+  | forall a. (IsAExpr a) => ReversableOpAExpr a Bool AExprReversableOp
+  | forall a. (IsAExpr a) => IsnullAExpr a
+  | forall a. (IsAExpr a) => NotnullAExpr a
   | OverlapsAExpr Row Row
-  | forall row. SubqueryAExpr AExpr SubqueryOp SubType (Either (SelectWithParens row) AExpr)
-  | forall row. UniqueAExpr (SelectWithParens row)
+  | forall a b rows. (IsAExpr a, IsAExpr b) => SubqueryAExpr a SubqueryOp SubType (Either (SelectWithParens rows) b)
+  | forall rows. UniqueAExpr (SelectWithParens rows)
   | DefaultAExpr
+
+class IsAExpr a where toAExpr :: a -> AExpr
+instance IsAExpr AExpr where toAExpr = id
+instance IsAExpr CExpr where toAExpr = CExprAExpr
+instance IsAExpr Columnref where toAExpr = toAExpr . toCExpr
+instance IsAExpr AexprConst where toAExpr = toAExpr . toCExpr
+instance IsAExpr Param where toAExpr = toAExpr . toCExpr
+instance IsAExpr CaseExpr where toAExpr = toAExpr . toCExpr
+instance IsAExpr FuncExpr where toAExpr = toAExpr . toCExpr
+instance IsAExpr (SelectWithParens rows) where toAExpr = toAExpr . toCExpr
+instance IsAExpr ArrayExpr where toAExpr = toAExpr . toCExpr
+instance IsAExpr ExplicitRow where toAExpr = toAExpr . toCExpr
+instance IsAExpr ImplicitRow where toAExpr = toAExpr . toCExpr
+instance IsAExpr Iconst where toAExpr = toAExpr . toCExpr
+instance IsAExpr Fconst where toAExpr = toAExpr . toCExpr
+instance IsAExpr Bool where toAExpr = toAExpr . toCExpr
 
 -- |
 -- ==== References
@@ -1196,12 +1359,28 @@ data AExpr
 -- @
 data BExpr
   = CExprBExpr CExpr
-  | TypecastBExpr BExpr Typename
-  | PlusBExpr BExpr
-  | MinusBExpr BExpr
-  | SymbolicBinOpBExpr BExpr SymbolicExprBinOp BExpr
-  | QualOpBExpr QualOp BExpr
-  | IsOpBExpr BExpr Bool BExprIsOp
+  | forall a. (IsBExpr a) => TypecastBExpr a Typename
+  | forall a. (IsBExpr a) => PlusBExpr a
+  | forall a. (IsBExpr a) => MinusBExpr a
+  | forall a b. (IsBExpr a, IsBExpr b) => SymbolicBinOpBExpr a SymbolicExprBinOp b
+  | forall a. (IsBExpr a) => QualOpBExpr QualOp a
+  | forall a. (IsBExpr a) => IsOpBExpr a Bool BExprIsOp
+
+class IsBExpr a where toBExpr :: a -> BExpr
+instance IsBExpr BExpr where toBExpr = id
+instance IsBExpr CExpr where toBExpr = CExprBExpr
+instance IsBExpr Columnref where toBExpr = toBExpr . toCExpr
+instance IsBExpr AexprConst where toBExpr = toBExpr . toCExpr
+instance IsBExpr Param where toBExpr = toBExpr . toCExpr
+instance IsBExpr CaseExpr where toBExpr = toBExpr . toCExpr
+instance IsBExpr FuncExpr where toBExpr = toBExpr . toCExpr
+instance IsBExpr (SelectWithParens rows) where toBExpr = toBExpr . toCExpr
+instance IsBExpr ArrayExpr where toBExpr = toBExpr . toCExpr
+instance IsBExpr ExplicitRow where toBExpr = toBExpr . toCExpr
+instance IsBExpr ImplicitRow where toBExpr = toBExpr . toCExpr
+instance IsBExpr Iconst where toBExpr = toBExpr . toCExpr
+instance IsBExpr Fconst where toBExpr = toBExpr . toCExpr
+instance IsBExpr Bool where toBExpr = toBExpr . toCExpr
 
 newtype Param = Param Internal.Param
 
@@ -1228,15 +1407,30 @@ data CExpr
   = ColumnrefCExpr Columnref
   | AexprConstCExpr AexprConst
   | ParamCExpr Param
-  | InParensCExpr AExpr (Maybe Indirection)
+  | forall a. (IsAExpr a) => InParensCExpr a (Maybe Indirection)
   | CaseCExpr CaseExpr
   | FuncCExpr FuncExpr
-  | forall row. SelectWithParensCExpr (SelectWithParens row) (Maybe Indirection)
-  | forall row. ExistsCExpr (SelectWithParens row)
-  | forall row. ArrayCExpr (Either (SelectWithParens row) ArrayExpr)
+  | forall rows. SelectWithParensCExpr (SelectWithParens rows) (Maybe Indirection)
+  | forall rows. ExistsCExpr (SelectWithParens rows)
+  | forall rows. ArrayCExpr (Either (SelectWithParens rows) ArrayExpr)
   | ExplicitRowCExpr ExplicitRow
   | ImplicitRowCExpr ImplicitRow
   | GroupingCExpr ExprList
+
+class IsCExpr a where toCExpr :: a -> CExpr
+instance IsCExpr CExpr where toCExpr = id
+instance IsCExpr Columnref where toCExpr = ColumnrefCExpr
+instance IsCExpr AexprConst where toCExpr = AexprConstCExpr
+instance IsCExpr Param where toCExpr = ParamCExpr
+instance IsCExpr CaseExpr where toCExpr = CaseCExpr
+instance IsCExpr FuncExpr where toCExpr = FuncCExpr
+instance IsCExpr (SelectWithParens rows) where toCExpr = flip SelectWithParensCExpr Nothing
+instance IsCExpr ArrayExpr where toCExpr = ArrayCExpr . Right
+instance IsCExpr ExplicitRow where toCExpr = ExplicitRowCExpr
+instance IsCExpr ImplicitRow where toCExpr = ImplicitRowCExpr
+instance IsCExpr Iconst where toCExpr = toCExpr . toAexprConst
+instance IsCExpr Fconst where toCExpr = toCExpr . toAexprConst
+instance IsCExpr Bool where toCExpr = toCExpr . toAexprConst
 
 -- |
 -- ==== References
@@ -1246,7 +1440,7 @@ data CExpr
 --   | '(' expr_list ')'
 -- @
 data InExpr
-  = forall row. SelectInExpr (SelectWithParens row)
+  = forall rows. SelectInExpr (SelectWithParens rows)
   | ExprListInExpr ExprList
 
 -- |
@@ -1274,9 +1468,9 @@ type ArrayExprList = NonEmpty ArrayExpr
 -- |
 -- ==== References
 -- @
--- row:
---   | ROW '(' expr_list ')'
---   | ROW '(' ')'
+-- rows:
+--   | rows '(' expr_list ')'
+--   | rows '(' ')'
 --   | '(' expr_list ',' a_expr ')'
 -- @
 data Row
@@ -1287,8 +1481,8 @@ data Row
 -- ==== References
 -- @
 -- explicit_row:
---   | ROW '(' expr_list ')'
---   | ROW '(' ')'
+--   | rows '(' expr_list ')'
+--   | rows '(' ')'
 -- @
 type ExplicitRow = Maybe ExprList
 
@@ -1298,7 +1492,7 @@ type ExplicitRow = Maybe ExprList
 -- implicit_row:
 --   | '(' expr_list ',' a_expr ')'
 -- @
-data ImplicitRow = ImplicitRow ExprList AExpr
+data ImplicitRow = forall a. (IsAExpr a) => ImplicitRow ExprList a
 
 -- |
 -- ==== References
@@ -1308,7 +1502,7 @@ data ImplicitRow = ImplicitRow ExprList AExpr
 --   | func_expr_common_subexpr
 -- @
 data FuncExpr
-  = ApplicationFuncExpr FuncApplication (Maybe WithinGroupClause) (Maybe FilterClause) (Maybe OverClause)
+  = ApplicationFuncExpr FuncApplication (Maybe WithinGroupClause) (Maybe AExpr) (Maybe OverClause)
   | SubexprFuncExpr FuncExprCommonSubexpr
 
 -- |
@@ -1330,15 +1524,6 @@ data FuncExprWindowless
 --   | EMPTY
 -- @
 type WithinGroupClause = SortClause
-
--- |
--- ==== References
--- @
--- filter_clause:
---   | FILTER '(' WHERE a_expr ')'
---   | EMPTY
--- @
-type FilterClause = AExpr
 
 -- |
 -- ==== References
@@ -1402,7 +1587,7 @@ data OverClause
 -- TODO: Implement the XML cases
 -- @
 data FuncExprCommonSubexpr
-  = CollationForFuncExprCommonSubexpr AExpr
+  = forall a. (IsAExpr a) => CollationForFuncExprCommonSubexpr a
   | CurrentDateFuncExprCommonSubexpr
   | CurrentTimeFuncExprCommonSubexpr (Maybe Int64)
   | CurrentTimestampFuncExprCommonSubexpr (Maybe Int64)
@@ -1414,14 +1599,14 @@ data FuncExprCommonSubexpr
   | UserFuncExprCommonSubexpr
   | CurrentCatalogFuncExprCommonSubexpr
   | CurrentSchemaFuncExprCommonSubexpr
-  | CastFuncExprCommonSubexpr AExpr Typename
+  | forall a. (IsAExpr a) => CastFuncExprCommonSubexpr a Typename
   | ExtractFuncExprCommonSubexpr (Maybe ExtractList)
   | OverlayFuncExprCommonSubexpr OverlayList
   | PositionFuncExprCommonSubexpr (Maybe PositionList)
   | SubstringFuncExprCommonSubexpr (Maybe SubstrList)
-  | TreatFuncExprCommonSubexpr AExpr Typename
+  | forall a. (IsAExpr a) => TreatFuncExprCommonSubexpr a Typename
   | TrimFuncExprCommonSubexpr (Maybe TrimModifier) TrimList
-  | NullIfFuncExprCommonSubexpr AExpr AExpr
+  | forall a b. (IsAExpr a, IsAExpr b) => NullIfFuncExprCommonSubexpr a b
   | CoalesceFuncExprCommonSubexpr ExprList
   | GreatestFuncExprCommonSubexpr ExprList
   | LeastFuncExprCommonSubexpr ExprList
@@ -1433,7 +1618,7 @@ data FuncExprCommonSubexpr
 --   | extract_arg FROM a_expr
 --   | EMPTY
 -- @
-data ExtractList = ExtractList ExtractArg AExpr
+data ExtractList = forall a. (IsAExpr a) => ExtractList ExtractArg a
 
 -- |
 -- ==== References
@@ -1442,15 +1627,7 @@ data ExtractList = ExtractList ExtractArg AExpr
 --   | a_expr overlay_placing substr_from substr_for
 --   | a_expr overlay_placing substr_from
 -- @
-data OverlayList = OverlayList AExpr OverlayPlacing SubstrFrom (Maybe SubstrFor)
-
--- |
--- ==== References
--- @
--- overlay_placing:
---   | PLACING a_expr
--- @
-type OverlayPlacing = AExpr
+data OverlayList = forall a b c. (IsAExpr a, IsAExpr b, IsAExpr c) => OverlayList a b c (Maybe AExpr)
 
 -- |
 -- ==== References
@@ -1473,7 +1650,7 @@ data PositionList = PositionList BExpr BExpr
 --   | EMPTY
 -- @
 data SubstrList
-  = ExprSubstrList AExpr SubstrListFromFor
+  = forall a. (IsAExpr a) => ExprSubstrList a SubstrListFromFor
   | ExprListSubstrList ExprList
 
 -- |
@@ -1485,26 +1662,10 @@ data SubstrList
 --   | a_expr substr_for
 -- @
 data SubstrListFromFor
-  = FromForSubstrListFromFor SubstrFrom SubstrFor
-  | ForFromSubstrListFromFor SubstrFor SubstrFrom
-  | FromSubstrListFromFor SubstrFrom
-  | ForSubstrListFromFor SubstrFor
-
--- |
--- ==== References
--- @
--- substr_from:
---   | FROM a_expr
--- @
-type SubstrFrom = AExpr
-
--- |
--- ==== References
--- @
--- substr_for:
---   | FOR a_expr
--- @
-type SubstrFor = AExpr
+  = forall a b. (IsAExpr a, IsAExpr b) => FromForSubstrListFromFor a b
+  | forall a b. (IsAExpr a, IsAExpr b) => ForFromSubstrListFromFor a b
+  | forall a. (IsAExpr a) => FromSubstrListFromFor a
+  | forall a. (IsAExpr a) => ForSubstrListFromFor a
 
 -- |
 -- ==== References
@@ -1515,7 +1676,7 @@ type SubstrFor = AExpr
 --   | expr_list
 -- @
 data TrimList
-  = ExprFromExprListTrimList AExpr ExprList
+  = forall a. (IsAExpr a) => ExprFromExprListTrimList a ExprList
   | FromExprListTrimList ExprList
   | ExprListTrimList ExprList
 
@@ -1525,16 +1686,7 @@ data TrimList
 -- case_expr:
 --   | CASE case_arg when_clause_list case_default END_P
 -- @
-data CaseExpr = CaseExpr (Maybe CaseArg) WhenClauseList (Maybe CaseDefault)
-
--- |
--- ==== References
--- @
--- case_arg:
---   | a_expr
---   | EMPTY
--- @
-type CaseArg = AExpr
+data CaseExpr = CaseExpr (Maybe AExpr) WhenClauseList (Maybe AExpr)
 
 -- |
 -- ==== References
@@ -1548,19 +1700,10 @@ type WhenClauseList = NonEmpty WhenClause
 -- |
 -- ==== References
 -- @
--- case_default:
---   | ELSE a_expr
---   | EMPTY
--- @
-type CaseDefault = AExpr
-
--- |
--- ==== References
--- @
 -- when_clause:
 --   |  WHEN a_expr THEN a_expr
 -- @
-data WhenClause = WhenClause AExpr AExpr
+data WhenClause = forall a b. (IsAExpr a, IsAExpr b) => WhenClause a b
 
 -- |
 -- ==== References
@@ -1595,8 +1738,28 @@ data FuncApplicationParams
 
 data FuncArgExpr
   = ExprFuncArgExpr AExpr
-  | ColonEqualsFuncArgExpr Ident AExpr
-  | EqualsGreaterFuncArgExpr Ident AExpr
+  | forall a. (IsAExpr a) => ColonEqualsFuncArgExpr Ident a
+  | forall a. (IsAExpr a) => EqualsGreaterFuncArgExpr Ident a
+
+class IsFuncArgExpr a where toFuncArgExpr :: a -> FuncArgExpr
+instance IsFuncArgExpr FuncArgExpr where toFuncArgExpr = id
+instance IsFuncArgExpr AExpr where toFuncArgExpr = ExprFuncArgExpr
+instance IsFuncArgExpr CExpr where toFuncArgExpr = toFuncArgExpr . toCExpr
+instance IsFuncArgExpr Columnref where toFuncArgExpr = toFuncArgExpr . toCExpr
+instance IsFuncArgExpr AexprConst where toFuncArgExpr = toFuncArgExpr . toCExpr
+instance IsFuncArgExpr Param where toFuncArgExpr = toFuncArgExpr . toCExpr
+instance IsFuncArgExpr CaseExpr where toFuncArgExpr = toFuncArgExpr . toCExpr
+instance IsFuncArgExpr FuncExpr where toFuncArgExpr = toFuncArgExpr . toCExpr
+instance IsFuncArgExpr (SelectWithParens rows) where toFuncArgExpr = toFuncArgExpr . toCExpr
+instance IsFuncArgExpr ArrayExpr where toFuncArgExpr = toFuncArgExpr . toCExpr
+instance IsFuncArgExpr ExplicitRow where toFuncArgExpr = toFuncArgExpr . toCExpr
+instance IsFuncArgExpr ImplicitRow where toFuncArgExpr = toFuncArgExpr . toCExpr
+instance IsFuncArgExpr Iconst where toFuncArgExpr = toFuncArgExpr . toCExpr
+instance IsFuncArgExpr Fconst where toFuncArgExpr = toFuncArgExpr . toCExpr
+instance IsFuncArgExpr Bool where toFuncArgExpr = toFuncArgExpr . toCExpr
+
+paramFuncArgExpr :: Param -> FuncArgExpr
+paramFuncArgExpr = ExprFuncArgExpr . CExprAExpr . ParamCExpr
 
 -- * Constants
 
@@ -1627,6 +1790,12 @@ data AexprConst
   | IntIntervalAexprConst Iconst Sconst
   | BoolAexprConst Bool
   | NullAexprConst
+
+class IsAexprConst a where toAexprConst :: a -> AexprConst
+instance IsAexprConst AexprConst where toAexprConst = id
+instance IsAexprConst Iconst where toAexprConst = IAexprConst
+instance IsAexprConst Fconst where toAexprConst = FAexprConst
+instance IsAexprConst Bool where toAexprConst = BoolAexprConst
 
 -- |
 -- ==== References
@@ -1725,6 +1894,9 @@ data FuncName
   = TypeFuncName TypeFunctionName
   | IndirectedFuncName ColId Indirection
 
+instance IsString FuncName where
+  fromString = TypeFuncName . fromString
+
 -- |
 -- ==== References
 -- @
@@ -1765,6 +1937,25 @@ data IndirectionEl
   | AllIndirectionEl
   | ExprIndirectionEl AExpr
   | SliceIndirectionEl (Maybe AExpr) (Maybe AExpr)
+
+class IsIndirectionEl a where toIndirectionEl :: a -> IndirectionEl
+instance IsIndirectionEl IndirectionEl where toIndirectionEl = id
+instance IsIndirectionEl Ident where toIndirectionEl = AttrNameIndirectionEl
+instance IsIndirectionEl String where toIndirectionEl = AttrNameIndirectionEl . fromString
+instance IsIndirectionEl AExpr where toIndirectionEl = ExprIndirectionEl
+instance IsIndirectionEl CExpr where toIndirectionEl = toIndirectionEl . toCExpr
+instance IsIndirectionEl Columnref where toIndirectionEl = toIndirectionEl . toCExpr
+instance IsIndirectionEl AexprConst where toIndirectionEl = toIndirectionEl . toCExpr
+instance IsIndirectionEl Param where toIndirectionEl = toIndirectionEl . toCExpr
+instance IsIndirectionEl CaseExpr where toIndirectionEl = toIndirectionEl . toCExpr
+instance IsIndirectionEl FuncExpr where toIndirectionEl = toIndirectionEl . toCExpr
+instance IsIndirectionEl (SelectWithParens rows) where toIndirectionEl = toIndirectionEl . toCExpr
+instance IsIndirectionEl ArrayExpr where toIndirectionEl = toIndirectionEl . toCExpr
+instance IsIndirectionEl ExplicitRow where toIndirectionEl = toIndirectionEl . toCExpr
+instance IsIndirectionEl ImplicitRow where toIndirectionEl = toIndirectionEl . toCExpr
+instance IsIndirectionEl Iconst where toIndirectionEl = toIndirectionEl . toCExpr
+instance IsIndirectionEl Fconst where toIndirectionEl = toIndirectionEl . toCExpr
+instance IsIndirectionEl Bool where toIndirectionEl = toIndirectionEl . toCExpr
 
 -- * Types
 
@@ -1863,10 +2054,10 @@ data AExprReversableOp
   | TrueAExprReversableOp
   | FalseAExprReversableOp
   | UnknownAExprReversableOp
-  | DistinctFromAExprReversableOp AExpr
+  | forall a. (IsAExpr a) => DistinctFromAExprReversableOp a
   | OfAExprReversableOp TypeList
-  | BetweenAExprReversableOp Bool BExpr AExpr
-  | BetweenSymmetricAExprReversableOp BExpr AExpr
+  | forall a. (IsAExpr a) => BetweenAExprReversableOp Bool BExpr a
+  | forall a. (IsAExpr a) => BetweenSymmetricAExprReversableOp BExpr a
   | InAExprReversableOp InExpr
   | DocumentAExprReversableOp
 
@@ -1904,7 +2095,7 @@ type IndexParams = NonEmpty IndexElem
 --   | func_expr_windowless opt_collate opt_class opt_asc_desc opt_nulls_order
 --   | '(' a_expr ')' opt_collate opt_class opt_asc_desc opt_nulls_order
 -- @
-data IndexElem = IndexElem IndexElemDef (Maybe Collate) (Maybe Class) (Maybe AscDesc) (Maybe NullsOrder)
+data IndexElem = forall a. (IsIndexElemDef a) => IndexElem a (Maybe Collate) (Maybe Class) (Maybe AscDesc) (Maybe NullsOrder)
 
 -- |
 -- ==== References
@@ -1917,3 +2108,25 @@ data IndexElemDef
   = IdIndexElemDef ColId
   | FuncIndexElemDef FuncExprWindowless
   | ExprIndexElemDef AExpr
+
+class IsIndexElemDef a where toIndexElemDef :: a -> IndexElemDef
+instance IsIndexElemDef IndexElemDef where toIndexElemDef = id
+instance IsIndexElemDef ColId where toIndexElemDef = IdIndexElemDef
+instance IsIndexElemDef FuncExprWindowless where toIndexElemDef = FuncIndexElemDef
+instance IsIndexElemDef AExpr where toIndexElemDef = ExprIndexElemDef
+instance IsIndexElemDef CExpr where toIndexElemDef = toIndexElemDef . toCExpr
+instance IsIndexElemDef Columnref where toIndexElemDef = toIndexElemDef . toCExpr
+instance IsIndexElemDef AexprConst where toIndexElemDef = toIndexElemDef . toCExpr
+instance IsIndexElemDef Param where toIndexElemDef = toIndexElemDef . toCExpr
+instance IsIndexElemDef CaseExpr where toIndexElemDef = toIndexElemDef . toCExpr
+instance IsIndexElemDef FuncExpr where toIndexElemDef = toIndexElemDef . toCExpr
+instance IsIndexElemDef (SelectWithParens rows) where toIndexElemDef = toIndexElemDef . toCExpr
+instance IsIndexElemDef ArrayExpr where toIndexElemDef = toIndexElemDef . toCExpr
+instance IsIndexElemDef ExplicitRow where toIndexElemDef = toIndexElemDef . toCExpr
+instance IsIndexElemDef ImplicitRow where toIndexElemDef = toIndexElemDef . toCExpr
+instance IsIndexElemDef Iconst where toIndexElemDef = toIndexElemDef . toCExpr
+instance IsIndexElemDef Fconst where toIndexElemDef = toIndexElemDef . toCExpr
+instance IsIndexElemDef Bool where toIndexElemDef = toIndexElemDef . toCExpr
+
+instance IsString Ident where
+  fromString = either error id . Parsing.run Parsing.ident . T.pack

@@ -2,115 +2,131 @@
 
 module Language.Marlowe.Runtime.Schema where
 
+import Data.List.NonEmpty (NonEmpty (..))
 import Hasql.DynamicSyntax.Ast
 import Hasql.DynamicSyntax.Schema
-import PostgresqlSyntax.Ast (Ident)
+import PostgresqlSyntax.Ast (Ident, JoinType (..), MathOp (..), SymbolicExprBinOp (..))
 
 type BlockColumns =
-  '[ 'Column "id" SqlBytea NotNull
-   , 'Column "slotNo" SqlInt8 NotNull
-   , 'Column "blockNo" SqlInt8 NotNull
-   , 'Column "rollbackToBlock" SqlBytea Null
-   , 'Column "rollbackToSlot" SqlInt8 Null
+  '[ '("id", SqlBytea, NotNull)
+   , '("slotNo", SqlInt8, NotNull)
+   , '("blockNo", SqlInt8, NotNull)
+   , '("rollbackToBlock", SqlBytea, Null)
+   , '("rollbackToSlot", SqlInt8, Null)
    ]
 
 block :: Table BlockColumns
 block = marloweTable "block"
 
 type TxOutColumns =
-  '[ 'Column "txId" SqlBytea NotNull
-   , 'Column "txIx" SqlInt2 NotNull
-   , 'Column "blockId" SqlBytea NotNull
-   , 'Column "address" SqlBytea NotNull
-   , 'Column "lovelace" SqlInt8 NotNull
+  '[ '("txId", SqlBytea, NotNull)
+   , '("txIx", SqlInt2, NotNull)
+   , '("blockId", SqlBytea, NotNull)
+   , '("address", SqlBytea, NotNull)
+   , '("lovelace", SqlInt8, NotNull)
    ]
 
 txOut :: Table TxOutColumns
 txOut = marloweTable "txOut"
 
 type TxOutAssetColumns =
-  '[ 'Column "txId" SqlBytea NotNull
-   , 'Column "txIx" SqlInt2 NotNull
-   , 'Column "blockId" SqlBytea NotNull
-   , 'Column "policyId" SqlBytea NotNull
-   , 'Column "name" SqlBytea NotNull
-   , 'Column "quantity" SqlInt8 NotNull
+  '[ '("txId", SqlBytea, NotNull)
+   , '("txIx", SqlInt2, NotNull)
+   , '("blockId", SqlBytea, NotNull)
+   , '("policyId", SqlBytea, NotNull)
+   , '("name", SqlBytea, NotNull)
+   , '("quantity", SqlInt8, NotNull)
    ]
 
 txOutAsset :: Table TxOutAssetColumns
 txOutAsset = marloweTable "txOutAsset"
 
-type ContractTxOutAssetColumns =
-  '[ 'Column "txId" SqlBytea NotNull
-   , 'Column "txIx" SqlInt2 NotNull
-   , 'Column "blockId" SqlBytea NotNull
-   , 'Column "payoutScriptHash" SqlBytea NotNull
-   , 'Column "contract" SqlBytea NotNull
-   , 'Column "state" SqlInt8 NotNull
-   , 'Column "rolesCurrency" SqlBytea NotNull
+type ContractTxOutColumns =
+  '[ '("txId", SqlBytea, NotNull)
+   , '("txIx", SqlInt2, NotNull)
+   , '("blockId", SqlBytea, NotNull)
+   , '("payoutScriptHash", SqlBytea, NotNull)
+   , '("contract", SqlBytea, NotNull)
+   , '("state", SqlInt8, NotNull)
+   , '("rolesCurrency", SqlBytea, NotNull)
    ]
 
-contractTxOutAsset :: Table ContractTxOutAssetColumns
-contractTxOutAsset = marloweTable "contractTxOut"
+contractTxOut :: Table ContractTxOutColumns
+contractTxOut = marloweTable "contractTxOut"
 
-type CreateTxOutAssetColumns =
-  '[ 'Column "txId" SqlBytea NotNull
-   , 'Column "txIx" SqlInt2 NotNull
-   , 'Column "blockId" SqlBytea NotNull
-   , 'Column "metadata" SqlBytea Null
-   , 'Column "slotNo" SqlInt8 NotNull
-   , 'Column "blockNo" SqlInt8 NotNull
+type CreateTxOutColumns =
+  '[ '("txId", SqlBytea, NotNull)
+   , '("txIx", SqlInt2, NotNull)
+   , '("blockId", SqlBytea, NotNull)
+   , '("metadata", SqlBytea, Null)
+   , '("slotNo", SqlInt8, NotNull)
+   , '("blockNo", SqlInt8, NotNull)
    ]
 
-createTxOutAsset :: Table CreateTxOutAssetColumns
-createTxOutAsset = marloweTable "createTxOut"
+createTxOut :: Table CreateTxOutColumns
+createTxOut = marloweTable "createTxOut"
 
-type PayoutTxOutAssetColumns =
-  '[ 'Column "txId" SqlBytea NotNull
-   , 'Column "txIx" SqlInt2 NotNull
-   , 'Column "blockId" SqlBytea NotNull
-   , 'Column "rolesCurrency" SqlBytea NotNull
-   , 'Column "role" SqlBytea NotNull
+type PayoutTxOutColumns =
+  '[ '("txId", SqlBytea, NotNull)
+   , '("txIx", SqlInt2, NotNull)
+   , '("blockId", SqlBytea, NotNull)
+   , '("rolesCurrency", SqlBytea, NotNull)
+   , '("role", SqlBytea, NotNull)
    ]
 
-payoutTxOutAsset :: Table PayoutTxOutAssetColumns
-payoutTxOutAsset = marloweTable "payoutTxOut"
+payoutTxOut :: Table PayoutTxOutColumns
+payoutTxOut = marloweTable "payoutTxOut"
 
-type ApplyTxAssetColumns =
-  '[ 'Column "txId" SqlBytea NotNull
-   , 'Column "createTxId" SqlBytea NotNull
-   , 'Column "createTxIx" SqlInt2 NotNull
-   , 'Column "blockId" SqlBytea NotNull
-   , 'Column "invalidBefore" SqlTimestamp NotNull
-   , 'Column "invalidHereafter" SqlTimestamp NotNull
-   , 'Column "metadata" SqlBytea Null
-   , 'Column "inputTxId" SqlBytea NotNull
-   , 'Column "inputTxIx" SqlInt2 NotNull
-   , 'Column "inputs" SqlBytea NotNull
-   , 'Column "outputTxIx" SqlInt2 Null
-   , 'Column "slotNo" SqlInt8 NotNull
-   , 'Column "blockNo" SqlInt8 NotNull
+type ApplyTxColumns =
+  '[ '("txId", SqlBytea, NotNull)
+   , '("createTxId", SqlBytea, NotNull)
+   , '("createTxIx", SqlInt2, NotNull)
+   , '("blockId", SqlBytea, NotNull)
+   , '("invalidBefore", SqlTimestamp, NotNull)
+   , '("invalidHereafter", SqlTimestamp, NotNull)
+   , '("metadata", SqlBytea, Null)
+   , '("inputTxId", SqlBytea, NotNull)
+   , '("inputTxIx", SqlInt2, NotNull)
+   , '("inputs", SqlBytea, NotNull)
+   , '("outputTxIx", SqlInt2, Null)
+   , '("slotNo", SqlInt8, NotNull)
+   , '("blockNo", SqlInt8, NotNull)
    ]
 
-applyTxAsset :: Table ApplyTxAssetColumns
-applyTxAsset = marloweTable "applyTx"
+applyTx :: Table ApplyTxColumns
+applyTx = marloweTable "applyTx"
 
-type WithdrawalTxInAssetColumns =
-  '[ 'Column "txId" SqlBytea NotNull
-   , 'Column "blockId" SqlBytea NotNull
-   , 'Column "payoutTxId" SqlBytea NotNull
-   , 'Column "payoutTxIx" SqlInt2 NotNull
-   , 'Column "createTxId" SqlBytea NotNull
-   , 'Column "createTxIx" SqlInt2 NotNull
-   , 'Column "slotNo" SqlInt8 NotNull
-   , 'Column "blockNo" SqlInt8 NotNull
+type WithdrawalTxInColumns =
+  '[ '("txId", SqlBytea, NotNull)
+   , '("blockId", SqlBytea, NotNull)
+   , '("payoutTxId", SqlBytea, NotNull)
+   , '("payoutTxIx", SqlInt2, NotNull)
+   , '("createTxId", SqlBytea, NotNull)
+   , '("createTxIx", SqlInt2, NotNull)
+   , '("slotNo", SqlInt8, NotNull)
+   , '("blockNo", SqlInt8, NotNull)
    ]
 
-withdrawalTxInAsset :: Table WithdrawalTxInAssetColumns
-withdrawalTxInAsset = marloweTable "withdrawalTxIn"
+withdrawalTxIn :: Table WithdrawalTxInColumns
+withdrawalTxIn = marloweTable "withdrawalTxIn"
 
 marloweTable :: (SingColumns cols) => Ident -> Table cols
-marloweTable name = Table name (Just "marlowe") singColumns
+marloweTable name = singTable name (Just "marlowe")
 
 tempTable :: (SingColumns cols) => Ident -> Table cols
-tempTable name = Table name Nothing singColumns
+tempTable name = singTable name Nothing
+
+-- * helpers
+
+withCTEs :: Bool -> [CommonTableExpr] -> Maybe WithClause
+withCTEs _ [] = Nothing
+withCTEs recursive (x : xs) = Just $ WithClause recursive $ x :| xs
+
+naturalJoin :: (IsTableRef a, IsTableRef b) => a -> b -> TableRef
+naturalJoin = joinTable $ NaturalJoinMeth Nothing
+
+leftJoinOn :: (IsAExpr expr, IsTableRef a, IsTableRef b) => expr -> a -> b -> TableRef
+leftJoinOn expr = joinTable $ QualJoinMeth (Just $ LeftJoinType False) $ OnJoinQual expr
+
+equals :: (IsAExpr a, IsAExpr b) => a -> b -> AExpr
+equals l = SymbolicBinOpAExpr l (MathSymbolicExprBinOp EqualsMathOp)

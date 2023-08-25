@@ -332,6 +332,7 @@ library sync
     , eventuo11y-otel ^>=0.1
     , foldl >=1.4 && <2
     , hasql >=1.6 && <2
+    , hasql-dynamic-syntax ^>=0.1
     , hasql-implicits ^>=0.1
     , hasql-th ^>=0.4
     , hasql-transaction ^>=1

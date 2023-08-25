@@ -1,14 +1,18 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Hasql.DynamicSyntax.Statement (
   StatementBuilder,
-  HasRowHandler (..),
+  HasTargetResultHandler (..),
   buildStatement,
+  renderStatement,
   encodeParam,
   param,
 ) where
@@ -18,6 +22,7 @@ import Data.Bifunctor (Bifunctor (..))
 import Data.Functor.Contravariant ((>$))
 import Data.Kind (Type)
 import qualified Data.List.NonEmpty as NE
+import Data.Text (Text)
 import qualified Hasql.Decoders as Decoders
 import Hasql.DynamicSyntax.Ast
 import qualified Hasql.DynamicSyntax.Ast.Internal as Internal
@@ -36,21 +41,27 @@ param :: (DefaultParamEncoder param) => param -> StatementBuilder Param
 param = encodeParam defaultParam
 
 buildStatement
-  :: (HasRowHandler row r)
-  => RowHandler row r
+  :: (HasTargetListResultHandler rows r)
+  => TargetListResultHandler rows r
   -> (Decoders.Row r -> Decoders.Result a)
-  -> StatementBuilder (PreparableStmt row)
+  -> StatementBuilder (PreparableStmt rows)
   -> Statement () a
 buildStatement handler toResult stmt =
-  Statement sql params (toResult $ handle handler <$> compileDecoders row) (paramCount > 0)
+  Statement sql params (toResult $ handleTargetResultList handler <$> compileListDecoders rows) (paramCount > 0)
   where
-    ((stmt', row), paramCount, params) = runRWS (runStatementBuilder $ buildPreparableStmt <$> stmt) () 0
+    ((stmt', rows), paramCount, params) = runRWS (runStatementBuilder $ buildPreparableStmt <$> stmt) () 0
     sql = Render.toByteString $ Render.preparableStmt stmt'
+
+renderStatement :: StatementBuilder (PreparableStmt row) -> Text
+renderStatement stmt = sql
+  where
+    ((stmt', _), _, _) = runRWS (runStatementBuilder $ buildPreparableStmt <$> stmt) () 0
+    sql = Render.toText $ Render.preparableStmt stmt'
 
 newtype StatementBuilder a = StatementBuilder {runStatementBuilder :: RWS () (Params ()) Int a}
   deriving newtype (Functor, Applicative, Monad)
 
-buildPreparableStmt :: PreparableStmt row -> (P.PreparableStmt, RowDecoders row)
+buildPreparableStmt :: PreparableStmt row -> (P.PreparableStmt, TargetListDecoders row)
 buildPreparableStmt = \case
   SelectPreparableStmt stmt -> first P.SelectPreparableStmt $ buildSelectStmt stmt
   InsertPreparableStmt stmt -> first P.InsertPreparableStmt $ buildInsertStmt stmt
@@ -58,12 +69,12 @@ buildPreparableStmt = \case
   DeletePreparableStmt stmt -> first P.DeletePreparableStmt $ buildDeleteStmt stmt
   CallPreparableStmt stmt -> first P.CallPreparableStmt $ buildCallStmt stmt
 
-buildSelectStmt :: SelectStmt row -> (P.SelectStmt, RowDecoders row)
+buildSelectStmt :: SelectStmt row -> (P.SelectStmt, TargetListDecoders row)
 buildSelectStmt = \case
   Left s -> first Left $ buildSelectNoParens s
   Right s -> first Right $ buildSelectWithParens s
 
-buildInsertStmt :: InsertStmt row -> (P.InsertStmt, RowDecoders row)
+buildInsertStmt :: InsertStmt row -> (P.InsertStmt, TargetListDecoders row)
 buildInsertStmt = \case
   InsertStmt with target rest onConflict returning -> do
     let with' = buildWithClause <$> with
@@ -73,7 +84,7 @@ buildInsertStmt = \case
     let (returning', row) = buildReturningClause returning
     (P.InsertStmt with' target' rest' onConflict' returning', row)
 
-buildUpdateStmt :: UpdateStmt row -> (P.UpdateStmt, RowDecoders row)
+buildUpdateStmt :: UpdateStmt row -> (P.UpdateStmt, TargetListDecoders row)
 buildUpdateStmt = \case
   UpdateStmt with rel setClauseList from whereOrCurrent returning -> do
     let with' = buildWithClause <$> with
@@ -84,7 +95,7 @@ buildUpdateStmt = \case
     let (returning', row) = buildReturningClause returning
     (P.UpdateStmt with' rel' setClauseList' from' whereOrCurrent' returning', row)
 
-buildDeleteStmt :: DeleteStmt row -> (P.DeleteStmt, RowDecoders row)
+buildDeleteStmt :: DeleteStmt row -> (P.DeleteStmt, TargetListDecoders row)
 buildDeleteStmt = \case
   DeleteStmt with rel usingClause whereOrCurrent returning -> do
     let with' = buildWithClause <$> with
@@ -94,16 +105,16 @@ buildDeleteStmt = \case
     let (returning', row) = buildReturningClause returning
     (P.DeleteStmt with' rel' usingClause' whereOrCurrent' returning', row)
 
-buildCallStmt :: CallStmt row -> (P.CallStmt, RowDecoders row)
+buildCallStmt :: CallStmt row -> (P.CallStmt, TargetListDecoders row)
 buildCallStmt = \case
-  CallStmt row funcApplication -> (P.CallStmt $ buildFuncApplication funcApplication, rowDecoders row)
+  CallStmt row funcApplication -> (P.CallStmt $ buildFuncApplication funcApplication, targetListDecoders row)
 
-buildSelectWithParens :: SelectWithParens row -> (P.SelectWithParens, RowDecoders row)
+buildSelectWithParens :: SelectWithParens row -> (P.SelectWithParens, TargetListDecoders row)
 buildSelectWithParens = \case
   NoParensSelectWithParens s -> first P.NoParensSelectWithParens $ buildSelectNoParens s
   WithParensSelectWithParens s -> first P.WithParensSelectWithParens $ buildSelectWithParens s
 
-buildSelectNoParens :: SelectNoParens row -> (P.SelectNoParens, RowDecoders row)
+buildSelectNoParens :: SelectNoParens row -> (P.SelectNoParens, TargetListDecoders row)
 buildSelectNoParens = \case
   SelectNoParens with select sort limit forLocking -> do
     let with' = buildWithClause <$> with
@@ -122,26 +133,26 @@ buildCommonTableExpr = \case
   CommonTableExpr name cols materialized stmt ->
     P.CommonTableExpr name cols materialized . fst $ buildPreparableStmt stmt
 
-buildSelectClause :: SelectClause row -> (P.SelectClause, RowDecoders row)
+buildSelectClause :: SelectClause row -> (P.SelectClause, TargetListDecoders row)
 buildSelectClause = \case
   Left s -> first Left $ buildSimpleSelect s
   Right s -> first Right $ buildSelectWithParens s
 
-buildSimpleSelect :: SimpleSelect row -> (P.SimpleSelect, RowDecoders row)
+buildSimpleSelect :: SimpleSelect row -> (P.SimpleSelect, TargetListDecoders row)
 buildSimpleSelect = \case
   NormalSimpleSelect targeting into from where_ group having window -> do
     let (targeting', row) = buildTargeting targeting
     let into' = buildIntoClause <$> into
     let from' = buildFromClause <$> from
-    let where_' = buildWhereClause <$> where_
+    let where_' = buildAExpr <$> where_
     let group' = buildGroupClause <$> group
-    let having' = buildHavingClause <$> having
+    let having' = buildAExpr <$> having
     let window' = buildWindowClause <$> window
     (P.NormalSimpleSelect targeting' into' from' where_' group' having' window', row)
   ValuesSimpleSelect row values ->
-    (,rowDecoders row) . P.ValuesSimpleSelect $ buildValuesClause values
+    (,targetListDecoders row) . P.ValuesSimpleSelect $ buildValuesClause values
   TableSimpleSelect row rel ->
-    (,rowDecoders row) . P.TableSimpleSelect $ buildRelationExpr rel
+    (,targetListDecoders row) . P.TableSimpleSelect $ buildRelationExpr rel
   BinSimpleSelect op lhs allOrDistinct rhs -> do
     let (lhs', row) = buildSelectClause lhs
     let (rhs', _) = buildSelectClause rhs
@@ -167,8 +178,8 @@ buildIndirectionEl = \case
   ExprIndirectionEl expr -> P.ExprIndirectionEl $ buildAExpr expr
   SliceIndirectionEl lowBound hiBound -> P.SliceIndirectionEl (buildAExpr <$> lowBound) $ buildAExpr <$> hiBound
 
-buildAExpr :: AExpr -> P.AExpr
-buildAExpr = \case
+buildAExpr :: (IsAExpr a) => a -> P.AExpr
+buildAExpr a = case toAExpr a of
   CExprAExpr expr -> P.CExprAExpr $ buildCExpr expr
   TypecastAExpr expr ty -> P.TypecastAExpr (buildAExpr expr) (buildTypename ty)
   CollateAExpr expr collation -> P.CollateAExpr (buildAExpr expr) collation
@@ -290,12 +301,9 @@ buildCaseExpr :: CaseExpr -> P.CaseExpr
 buildCaseExpr = \case
   CaseExpr arg clauseList def ->
     P.CaseExpr
-      (buildCaseArg <$> arg)
+      (buildAExpr <$> arg)
       (buildWhenClauseList clauseList)
-      (buildCaseDefault <$> def)
-
-buildCaseArg :: CaseArg -> P.CaseArg
-buildCaseArg = buildAExpr
+      (buildAExpr <$> def)
 
 buildWhenClauseList :: WhenClauseList -> P.WhenClauseList
 buildWhenClauseList = fmap buildWhenClause
@@ -304,16 +312,13 @@ buildWhenClause :: WhenClause -> P.WhenClause
 buildWhenClause = \case
   WhenClause a b -> P.WhenClause (buildAExpr a) (buildAExpr b)
 
-buildCaseDefault :: CaseDefault -> P.CaseDefault
-buildCaseDefault = buildAExpr
-
 buildFuncExpr :: FuncExpr -> P.FuncExpr
 buildFuncExpr = \case
   ApplicationFuncExpr application withinGroup filter_ over ->
     P.ApplicationFuncExpr
       (buildFuncApplication application)
       (buildWithinGroupClause <$> withinGroup)
-      (buildFilterClause <$> filter_)
+      (buildAExpr <$> filter_)
       (buildOverClause <$> over)
   SubexprFuncExpr subexpr -> P.SubexprFuncExpr $ buildFuncExprCommonSubexpr subexpr
 
@@ -358,18 +363,9 @@ buildOverlayList = \case
   OverlayList expr placing substrFrom substrFor ->
     P.OverlayList
       (buildAExpr expr)
-      (buildOverlayPlacing placing)
-      (buildSubstrFrom substrFrom)
-      (buildSubstrFor <$> substrFor)
-
-buildOverlayPlacing :: OverlayPlacing -> P.OverlayPlacing
-buildOverlayPlacing = buildAExpr
-
-buildSubstrFrom :: SubstrFrom -> P.SubstrFrom
-buildSubstrFrom = buildAExpr
-
-buildSubstrFor :: SubstrFor -> P.SubstrFor
-buildSubstrFor = buildAExpr
+      (buildAExpr placing)
+      (buildAExpr substrFrom)
+      (buildAExpr <$> substrFor)
 
 buildPositionList :: PositionList -> P.PositionList
 buildPositionList = \case
@@ -382,10 +378,10 @@ buildSubstrList = \case
 
 buildSubstrListFromFor :: SubstrListFromFor -> P.SubstrListFromFor
 buildSubstrListFromFor = \case
-  FromForSubstrListFromFor from for -> P.FromForSubstrListFromFor (buildSubstrFrom from) (buildSubstrFor for)
-  ForFromSubstrListFromFor for from -> P.ForFromSubstrListFromFor (buildSubstrFor for) (buildSubstrFrom from)
-  FromSubstrListFromFor from -> P.FromSubstrListFromFor $ buildSubstrFrom from
-  ForSubstrListFromFor for -> P.ForSubstrListFromFor $ buildSubstrFor for
+  FromForSubstrListFromFor from for -> P.FromForSubstrListFromFor (buildAExpr from) (buildAExpr for)
+  ForFromSubstrListFromFor for from -> P.ForFromSubstrListFromFor (buildAExpr for) (buildAExpr from)
+  FromSubstrListFromFor from -> P.FromSubstrListFromFor $ buildAExpr from
+  ForSubstrListFromFor for -> P.ForSubstrListFromFor $ buildAExpr for
 
 buildTrimList :: TrimList -> P.TrimList
 buildTrimList = \case
@@ -414,9 +410,6 @@ buildFuncApplicationParams = \case
 
 buildWithinGroupClause :: WithinGroupClause -> P.WithinGroupClause
 buildWithinGroupClause = buildSortClause
-
-buildFilterClause :: FilterClause -> P.FilterClause
-buildFilterClause = buildAExpr
 
 buildOverClause :: OverClause -> P.OverClause
 buildOverClause = \case
@@ -507,8 +500,8 @@ buildInExpr = \case
   SelectInExpr select -> P.SelectInExpr . fst $ buildSelectWithParens select
   ExprListInExpr exprs -> P.ExprListInExpr $ buildExprList exprs
 
-buildBExpr :: BExpr -> P.BExpr
-buildBExpr = \case
+buildBExpr :: (IsBExpr a) => a -> P.BExpr
+buildBExpr a = case toBExpr a of
   CExprBExpr expr -> P.CExprBExpr $ buildCExpr expr
   TypecastBExpr expr typename -> P.TypecastBExpr (buildBExpr expr) (buildTypename typename)
   PlusBExpr expr -> P.PlusBExpr $ buildBExpr expr
@@ -534,10 +527,15 @@ buildRow = \case
 buildValuesClause :: ValuesClause -> P.ValuesClause
 buildValuesClause = fmap buildExprList
 
-rowDecoders :: DeclareRow row -> RowDecoders row
-rowDecoders = \case
-  DeclareNil -> DecodersNil
-  DeclareCons sqlType row -> DecodersCons (Decoders.column $ columnDecoder sqlType) $ rowDecoders row
+targetListDecoders :: TargetTypesList rows -> TargetListDecoders rows
+targetListDecoders = \case
+  TargetTypesListNil -> ListDecodersNil
+  TargetTypesListCons target targets -> ListDecodersCons (targetDecoders target) $ targetListDecoders targets
+
+targetDecoders :: TargetTypes row -> TargetDecoders row
+targetDecoders = \case
+  TargetTypesNil -> DecodersNil
+  TargetTypesCons sqlType row -> DecodersCons (Decoders.column $ columnDecoder sqlType) $ targetDecoders row
 
 columnDecoder :: ColumnType a -> Decoders.NullableOrNot Decoders.Value (ColumnToHask a)
 columnDecoder = \case
@@ -568,29 +566,35 @@ sqlDecoder = \case
   SqlJsonb -> Decoders.jsonb
   SqlArray t -> Decoders.vectorArray $ columnDecoder t
 
-buildTargeting :: Targeting row -> (Maybe P.Targeting, RowDecoders row)
+buildTargeting :: Targeting row -> (Maybe P.Targeting, TargetListDecoders row)
 buildTargeting = \case
-  EmptyTargeting -> (Nothing, DecodersNil)
+  EmptyTargeting -> (Nothing, ListDecodersNil)
   NormalTargeting targets -> first (Just . P.NormalTargeting) $ buildTargetList targets
   AllTargeting targets -> first (Just . P.NormalTargeting) $ buildTargetList targets
   DistinctTargeting exprs targets -> do
     let exprs' = buildExprList <$> exprs
     first (Just . P.DistinctTargeting exprs') $ buildTargetList targets
 
-buildTargetList :: TargetList row -> (P.TargetList, RowDecoders row)
-buildTargetList = \case
-  TargetListOne target -> first pure $ buildTargetElRow target
-  TargetListCons target list -> do
-    let (target', row) = buildTargetElRow target
-    let (list', row') = buildTargetList list
-    (NE.cons target' list', row `appendRowDecoders` row')
+buildTargetList :: TargetList (a ': row) -> (P.TargetList, TargetListDecoders (a ': row))
+buildTargetList ((toTargetElRow -> target0@TargetElRow{}) :. targets) = (target0' NE.:| targets', ListDecodersCons row0 rows)
+  where
+    (target0', row0) = buildTargetElRow target0
+    (targets', rows) = go targets
 
-buildTargetElRow :: TargetElRow row -> (P.TargetEl, RowDecoders row)
+    go :: TargetList row -> ([P.TargetEl], TargetListDecoders row)
+    go = \case
+      TargetListNil -> ([], ListDecodersNil)
+      (toTargetElRow -> target@TargetElRow{}) :. list -> do
+        let (target', row) = buildTargetElRow target
+        let (list', row') = go list
+        (target' : list', ListDecodersCons row row')
+
+buildTargetElRow :: TargetElRow (t ': row) -> (P.TargetEl, TargetDecoders (t ': row))
 buildTargetElRow = \case
-  TargetElRow row target -> (,rowDecoders row) $ buildTargetEl target
+  TargetElRow row target -> (,targetDecoders row) $ buildTargetEl target
 
-buildTargetEl :: TargetEl -> P.TargetEl
-buildTargetEl = \case
+buildTargetEl :: (IsTargetEl a) => a -> P.TargetEl
+buildTargetEl a = case toTargetEl a of
   AliasedExprTargetEl expr alias -> P.AliasedExprTargetEl (buildAExpr expr) alias
   ImplicitlyAliasedExprTargetEl expr alias -> P.ImplicitlyAliasedExprTargetEl (buildAExpr expr) alias
   ExprTargetEl expr -> P.ExprTargetEl $ buildAExpr expr
@@ -611,8 +615,8 @@ buildIntoClause = \case
 buildFromClause :: FromClause -> P.FromClause
 buildFromClause = fmap buildTableRef
 
-buildTableRef :: TableRef -> P.TableRef
-buildTableRef = \case
+buildTableRef :: (IsTableRef a) => a -> P.TableRef
+buildTableRef a = case toTableRef a of
   RelationExprTableRef expr alias tablesample ->
     P.RelationExprTableRef (buildRelationExpr expr) alias (buildTablesampleClause <$> tablesample)
   FuncTableRef lateral funcTable alias ->
@@ -628,10 +632,7 @@ buildTablesampleClause = \case
     P.TablesampleClause
       (buildFuncName funcName)
       (buildExprList exprs)
-      (buildRepeatableClause <$> repeatable)
-
-buildRepeatableClause :: RepeatableClause -> P.RepeatableClause
-buildRepeatableClause = buildAExpr
+      (buildAExpr <$> repeatable)
 
 buildFuncTable :: FuncTable -> P.FuncTable
 buildFuncTable = \case
@@ -692,9 +693,6 @@ buildJoinQual = \case
   UsingJoinQual cols -> P.UsingJoinQual cols
   OnJoinQual expr -> P.OnJoinQual $ buildAExpr expr
 
-buildWhereClause :: WhereClause -> P.WhereClause
-buildWhereClause = buildAExpr
-
 buildGroupClause :: GroupClause -> P.GroupClause
 buildGroupClause = fmap buildGroupByItem
 
@@ -705,9 +703,6 @@ buildGroupByItem = \case
   RollupGroupByItem exprs -> P.RollupGroupByItem $ buildExprList exprs
   CubeGroupByItem exprs -> P.CubeGroupByItem $ buildExprList exprs
   GroupingSetsGroupByItem items -> P.GroupingSetsGroupByItem $ fmap buildGroupByItem items
-
-buildHavingClause :: HavingClause -> P.HavingClause
-buildHavingClause = buildAExpr
 
 buildWindowClause :: WindowClause -> P.WindowClause
 buildWindowClause = fmap buildWindowDefinition
@@ -734,8 +729,8 @@ buildSelectLimit = \case
   LimitSelectLimit limit -> P.LimitSelectLimit $ buildLimitClause limit
   OffsetSelectLimit offset -> P.OffsetSelectLimit $ buildOffsetClause offset
 
-buildLimitClause :: LimitClause -> P.LimitClause
-buildLimitClause = \case
+buildLimitClause :: (IsLimitClause a) => a -> P.LimitClause
+buildLimitClause a = case toLimitClause a of
   LimitLimitClause selectLimitValue expr ->
     P.LimitLimitClause
       (buildSelectLimitValue selectLimitValue)
@@ -746,18 +741,18 @@ buildLimitClause = \case
       (buildSelectFetchFirstValue <$> selectFetchFirstValue)
       rowOrRows
 
-buildSelectLimitValue :: SelectLimitValue -> P.SelectLimitValue
-buildSelectLimitValue = \case
+buildSelectLimitValue :: (IsSelectLimitValue a) => a -> P.SelectLimitValue
+buildSelectLimitValue a = case toSelectLimitValue a of
   ExprSelectLimitValue expr -> P.ExprSelectLimitValue $ buildAExpr expr
   AllSelectLimitValue -> P.AllSelectLimitValue
 
-buildSelectFetchFirstValue :: SelectFetchFirstValue -> P.SelectFetchFirstValue
-buildSelectFetchFirstValue = \case
+buildSelectFetchFirstValue :: (IsSelectFetchFirstValue a) => a -> P.SelectFetchFirstValue
+buildSelectFetchFirstValue a = case toSelectFetchFirstValue a of
   ExprSelectFetchFirstValue expr -> P.ExprSelectFetchFirstValue $ buildCExpr expr
   NumSelectFetchFirstValue plusOrMinus iOrF -> P.NumSelectFetchFirstValue plusOrMinus iOrF
 
-buildOffsetClause :: OffsetClause -> P.OffsetClause
-buildOffsetClause = \case
+buildOffsetClause :: (IsOffsetClause a) => a -> P.OffsetClause
+buildOffsetClause a = case toOffsetClause a of
   ExprOffsetClause expr -> P.ExprOffsetClause $ buildAExpr expr
   FetchFirstOffsetClause selectFetchFirstValue rowOrRows ->
     P.FetchFirstOffsetClause
@@ -803,7 +798,7 @@ buildConfExpr = \case
   WhereConfExpr params whereClause ->
     P.WhereConfExpr
       (buildIndexParams params)
-      (buildWhereClause <$> whereClause)
+      (buildAExpr <$> whereClause)
   ConstraintConfExpr name -> P.ConstraintConfExpr name
 
 buildIndexParams :: IndexParams -> P.IndexParams
@@ -815,8 +810,8 @@ buildIndexElem = \case
     let elemDef' = buildIndexElemDef elemDef
     P.IndexElem elemDef' collate class_ ascDesc nullsOrder
 
-buildIndexElemDef :: IndexElemDef -> P.IndexElemDef
-buildIndexElemDef = \case
+buildIndexElemDef :: (IsIndexElemDef a) => a -> P.IndexElemDef
+buildIndexElemDef a = case toIndexElemDef a of
   IdIndexElemDef col -> P.IdIndexElemDef col
   FuncIndexElemDef expr -> P.FuncIndexElemDef $ buildFuncExprWindowless expr
   ExprIndexElemDef expr -> P.ExprIndexElemDef $ buildAExpr expr
@@ -824,7 +819,7 @@ buildIndexElemDef = \case
 buildOnConflictDo :: OnConflictDo -> P.OnConflictDo
 buildOnConflictDo = \case
   UpdateOnConflictDo setClauses whereClause ->
-    P.UpdateOnConflictDo (buildSetClauseList setClauses) (buildWhereClause <$> whereClause)
+    P.UpdateOnConflictDo (buildSetClauseList setClauses) (buildAExpr <$> whereClause)
   NothingOnConflictDo -> P.NothingOnConflictDo
 
 buildSetClauseList :: SetClauseList -> P.SetClauseList
@@ -842,9 +837,9 @@ buildSetTarget = \case
 buildSetTargetList :: SetTargetList -> P.SetTargetList
 buildSetTargetList = fmap buildSetTarget
 
-buildReturningClause :: ReturningClause row -> (Maybe P.ReturningClause, RowDecoders row)
+buildReturningClause :: ReturningClause row -> (Maybe P.ReturningClause, TargetListDecoders row)
 buildReturningClause = \case
-  EmptyReturningClause -> (Nothing, DecodersNil)
+  EmptyReturningClause -> (Nothing, ListDecodersNil)
   TargetListReturningClause targets -> first Just $ buildTargetList targets
 
 buildRelationExprOptAlias :: RelationExprOptAlias -> P.RelationExprOptAlias
@@ -862,30 +857,56 @@ buildUsingClause = buildFromList
 buildFromList :: FromList -> P.FromList
 buildFromList = fmap buildTableRef
 
-data RowDecoders row where
-  DecodersNil :: RowDecoders '[]
-  DecodersCons :: Decoders.Row (ColumnToHask t) -> RowDecoders row -> RowDecoders (t ': row)
+data TargetDecoders row where
+  DecodersNil :: TargetDecoders '[]
+  DecodersCons :: Decoders.Row (ColumnToHask t) -> TargetDecoders row -> TargetDecoders (t ': row)
 
-appendRowDecoders :: RowDecoders row -> RowDecoders row' -> RowDecoders (row ++ row')
-appendRowDecoders DecodersNil row' = row'
-appendRowDecoders (DecodersCons a row) row' = DecodersCons a (appendRowDecoders row row')
+data TargetListDecoders rows where
+  ListDecodersNil :: TargetListDecoders '[]
+  ListDecodersCons :: TargetDecoders (t ': row) -> TargetListDecoders rows -> TargetListDecoders ((t ': row) ': rows)
 
-data RowResult row where
-  ResultNil :: RowResult '[]
-  (:::) :: ColumnToHask t -> RowResult row -> RowResult (t ': row)
+data TargetListResult rows where
+  ListResultNil :: TargetListResult '[]
+  ListResultCons :: TargetResult row -> TargetListResult rows -> TargetListResult (row ': rows)
 
-compileDecoders :: RowDecoders row -> Decoders.Row (RowResult row)
+data TargetResult row where
+  ResultNil :: TargetResult '[]
+  ResultCons :: ColumnToHask t -> TargetResult row -> TargetResult (t ': row)
+
+compileListDecoders :: TargetListDecoders rows -> Decoders.Row (TargetListResult rows)
+compileListDecoders ListDecodersNil = pure ListResultNil
+compileListDecoders (ListDecodersCons row decoders) = ListResultCons <$> compileDecoders row <*> compileListDecoders decoders
+
+compileDecoders :: TargetDecoders row -> Decoders.Row (TargetResult row)
 compileDecoders DecodersNil = pure ResultNil
-compileDecoders (DecodersCons row decoders) = (:::) <$> row <*> compileDecoders decoders
+compileDecoders (DecodersCons row decoders) = ResultCons <$> row <*> compileDecoders decoders
 
-class HasRowHandler row a where
-  type RowHandler row a :: Type
-  handle :: RowHandler row a -> RowResult row -> a
+class HasTargetListResultHandler rows a where
+  type TargetListResultHandler rows a :: Type
+  handleTargetResultList :: TargetListResultHandler rows a -> TargetListResult rows -> a
 
-instance HasRowHandler '[] a where
-  type RowHandler '[] a = a
-  handle a _ = a
+instance HasTargetListResultHandler '[] a where
+  type TargetListResultHandler '[] a = a
+  handleTargetResultList a _ = a
 
-instance (HasRowHandler row a) => HasRowHandler (t ': row) a where
-  type RowHandler (t ': row) a = ColumnToHask t -> RowHandler row a
-  handle f (t ::: row) = handle (f t) row
+instance
+  ( HasTargetResultHandler row (TargetListResultHandler rows a)
+  , HasTargetListResultHandler rows a
+  )
+  => HasTargetListResultHandler (row ': rows) a
+  where
+  type TargetListResultHandler (row ': rows) a = TargetResultHandler row (TargetListResultHandler rows a)
+  handleTargetResultList handler (ListResultCons row rows) =
+    handleTargetResultList (handleTargetResult handler row) rows
+
+class HasTargetResultHandler row a where
+  type TargetResultHandler row a :: Type
+  handleTargetResult :: TargetResultHandler row a -> TargetResult row -> a
+
+instance HasTargetResultHandler '[] a where
+  type TargetResultHandler '[] a = a
+  handleTargetResult a _ = a
+
+instance (HasTargetResultHandler row a) => HasTargetResultHandler (t ': row) a where
+  type TargetResultHandler (t ': row) a = ColumnToHask t -> TargetResultHandler row a
+  handleTargetResult f (ResultCons t row) = handleTargetResult (f t) row
