@@ -253,7 +253,7 @@ buildCreateConstraintsV1 era walletCtx roles metadata minAda contract = do
               )
                 <|> listToMaybe (toUTxOsList availableUtxos)
 
-        UTxO txOutRef _ <- liftMaybe MintingUtxoSelectionFailed possibleInput
+        UTxO txOutRef _ <- liftMaybe (MintingUtxoSelectionFailed availableUtxos) possibleInput
         let txOutRef' = toPlutusTxOutRef txOutRef
 
             roleTokens = RoleTokensPolicy.mkRoleTokens (map ((,1) . toPlutusTokenName) . Map.keys $ minting)

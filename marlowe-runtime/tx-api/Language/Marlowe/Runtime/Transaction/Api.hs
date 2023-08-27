@@ -101,6 +101,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   TokenName (..),
   TxId,
   TxOutRef,
+  UTxOs,
   parseMetadataList,
   parseMetadataMap,
   parseMetadataText,
@@ -840,7 +841,7 @@ instance Variations (CreateError 'V1)
 instance ToJSON (CreateError 'V1)
 
 data CreateBuildupError
-  = MintingUtxoSelectionFailed
+  = MintingUtxoSelectionFailed UTxOs
   | AddressDecodingFailed Address
   | MintingScriptDecodingFailed PlutusScript
   deriving (Eq, Ord, Show, Generic)

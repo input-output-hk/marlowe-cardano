@@ -155,7 +155,7 @@ instance ToDTO (CreateError 'V1) where
     CreateLoadMarloweContextFailed (PayoutScriptNotPublished _) -> ApiError "Internal error" "PayoutScriptNotPublished" Null 500
     CreateLoadMarloweContextFailed (ExtractCreationError _) -> ApiError "Internal error" "ExtractCreationError" Null 500
     CreateLoadMarloweContextFailed (ExtractMarloweTransactionError _) -> ApiError "Internal error" "ExtractMarloweTransactionError" Null 500
-    CreateBuildupFailed MintingUtxoSelectionFailed -> ApiError "Minting UTxO selection failed" "MintingUtxoSelectionFailed" Null 400
+    CreateBuildupFailed (MintingUtxoSelectionFailed utxos) -> ApiError "Minting UTxO selection failed" "MintingUtxoSelectionFailed" (toJSON utxos) 400
     CreateBuildupFailed (AddressDecodingFailed _) -> ApiError "Internal error" "AddressDecodingFailed" Null 500
     CreateBuildupFailed (MintingScriptDecodingFailed _) -> ApiError "Internal error" "MintingScriptDecodingFailed" Null 500
     CreateToCardanoError -> ApiError "Internal error" "CreateToCardanoError" Null 400
