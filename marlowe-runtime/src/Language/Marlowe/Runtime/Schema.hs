@@ -11,12 +11,19 @@ type BlockColumns =
   '[ '("id", SqlBytea, NotNull)
    , '("slotNo", SqlInt8, NotNull)
    , '("blockNo", SqlInt8, NotNull)
-   , '("rollbackToBlock", SqlBytea, Null)
-   , '("rollbackToSlot", SqlInt8, Null)
    ]
 
 block :: Table BlockColumns
 block = marloweTable "block"
+
+type RollbackBlockColumns =
+  '[ '("fromBlock", SqlBytea, NotNull)
+   , '("toBlock", SqlInt8, NotNull)
+   , '("slotNo", SqlInt8, NotNull)
+   ]
+
+rollbackBlock :: Table RollbackBlockColumns
+rollbackBlock = marloweTable "rollbackBlock"
 
 type TxOutColumns =
   '[ '("txId", SqlBytea, NotNull)
@@ -53,6 +60,15 @@ type ContractTxOutColumns =
 
 contractTxOut :: Table ContractTxOutColumns
 contractTxOut = marloweTable "contractTxOut"
+
+type ContractTxOutTagColumns =
+  '[ '("tag", SqlText, NotNull)
+   , '("txId", SqlBytea, NotNull)
+   , '("txIx", SqlInt2, NotNull)
+   ]
+
+contractTxOutTag :: Table ContractTxOutTagColumns
+contractTxOutTag = marloweTable "contractTxOutTag"
 
 type CreateTxOutColumns =
   '[ '("txId", SqlBytea, NotNull)
