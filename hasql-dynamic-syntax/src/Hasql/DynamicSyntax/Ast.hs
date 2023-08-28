@@ -22,7 +22,6 @@ import Data.List.NonEmpty (NonEmpty)
 import Data.Scientific (Scientific)
 import Data.String (IsString (..))
 import Data.Text (Text)
-import qualified Data.Text as T
 import Data.Time (Day, DiffTime, LocalTime, TimeOfDay, TimeZone, UTCTime)
 import Data.UUID (UUID)
 import Data.Vector (Vector)
@@ -48,7 +47,7 @@ import PostgresqlSyntax.Ast (
   ForLockingStrength,
   FrameClauseMode,
   Iconst,
-  Ident,
+  Ident (..),
   Interval,
   JoinType,
   Name,
@@ -70,7 +69,6 @@ import PostgresqlSyntax.Ast (
   WindowExclusionClause,
   Xconst,
  )
-import qualified PostgresqlSyntax.Parsing as Parsing
 
 data Null
 data NotNull
@@ -676,19 +674,19 @@ data GroupByItem
 class IsGroupByItem a where toGroupByItem :: a -> GroupByItem
 instance IsGroupByItem GroupByItem where toGroupByItem = id
 instance IsGroupByItem AExpr where toGroupByItem = ExprGroupByItem
-instance IsGroupByItem CExpr where toGroupByItem = toGroupByItem . toCExpr
-instance IsGroupByItem Columnref where toGroupByItem = toGroupByItem . toCExpr
-instance IsGroupByItem AexprConst where toGroupByItem = toGroupByItem . toCExpr
-instance IsGroupByItem Param where toGroupByItem = toGroupByItem . toCExpr
-instance IsGroupByItem CaseExpr where toGroupByItem = toGroupByItem . toCExpr
-instance IsGroupByItem FuncExpr where toGroupByItem = toGroupByItem . toCExpr
-instance IsGroupByItem (SelectWithParens rows) where toGroupByItem = toGroupByItem . toCExpr
-instance IsGroupByItem ArrayExpr where toGroupByItem = toGroupByItem . toCExpr
-instance IsGroupByItem ExplicitRow where toGroupByItem = toGroupByItem . toCExpr
-instance IsGroupByItem ImplicitRow where toGroupByItem = toGroupByItem . toCExpr
-instance IsGroupByItem Iconst where toGroupByItem = toGroupByItem . toCExpr
-instance IsGroupByItem Fconst where toGroupByItem = toGroupByItem . toCExpr
-instance IsGroupByItem Bool where toGroupByItem = toGroupByItem . toCExpr
+instance IsGroupByItem CExpr where toGroupByItem = toGroupByItem . toAExpr
+instance IsGroupByItem Columnref where toGroupByItem = toGroupByItem . toAExpr
+instance IsGroupByItem AexprConst where toGroupByItem = toGroupByItem . toAExpr
+instance IsGroupByItem Param where toGroupByItem = toGroupByItem . toAExpr
+instance IsGroupByItem CaseExpr where toGroupByItem = toGroupByItem . toAExpr
+instance IsGroupByItem FuncExpr where toGroupByItem = toGroupByItem . toAExpr
+instance IsGroupByItem (SelectWithParens rows) where toGroupByItem = toGroupByItem . toAExpr
+instance IsGroupByItem ArrayExpr where toGroupByItem = toGroupByItem . toAExpr
+instance IsGroupByItem ExplicitRow where toGroupByItem = toGroupByItem . toAExpr
+instance IsGroupByItem ImplicitRow where toGroupByItem = toGroupByItem . toAExpr
+instance IsGroupByItem Iconst where toGroupByItem = toGroupByItem . toAExpr
+instance IsGroupByItem Fconst where toGroupByItem = toGroupByItem . toAExpr
+instance IsGroupByItem Bool where toGroupByItem = toGroupByItem . toAExpr
 
 -- |
 -- @
@@ -896,19 +894,19 @@ data SelectLimitValue
 class IsSelectLimitValue a where toSelectLimitValue :: a -> SelectLimitValue
 instance IsSelectLimitValue SelectLimitValue where toSelectLimitValue = id
 instance IsSelectLimitValue AExpr where toSelectLimitValue = ExprSelectLimitValue
-instance IsSelectLimitValue CExpr where toSelectLimitValue = toSelectLimitValue . toCExpr
-instance IsSelectLimitValue Columnref where toSelectLimitValue = toSelectLimitValue . toCExpr
-instance IsSelectLimitValue AexprConst where toSelectLimitValue = toSelectLimitValue . toCExpr
-instance IsSelectLimitValue Param where toSelectLimitValue = toSelectLimitValue . toCExpr
-instance IsSelectLimitValue CaseExpr where toSelectLimitValue = toSelectLimitValue . toCExpr
-instance IsSelectLimitValue FuncExpr where toSelectLimitValue = toSelectLimitValue . toCExpr
-instance IsSelectLimitValue (SelectWithParens rows) where toSelectLimitValue = toSelectLimitValue . toCExpr
-instance IsSelectLimitValue ArrayExpr where toSelectLimitValue = toSelectLimitValue . toCExpr
-instance IsSelectLimitValue ExplicitRow where toSelectLimitValue = toSelectLimitValue . toCExpr
-instance IsSelectLimitValue ImplicitRow where toSelectLimitValue = toSelectLimitValue . toCExpr
-instance IsSelectLimitValue Iconst where toSelectLimitValue = toSelectLimitValue . toCExpr
-instance IsSelectLimitValue Fconst where toSelectLimitValue = toSelectLimitValue . toCExpr
-instance IsSelectLimitValue Bool where toSelectLimitValue = toSelectLimitValue . toCExpr
+instance IsSelectLimitValue CExpr where toSelectLimitValue = toSelectLimitValue . toAExpr
+instance IsSelectLimitValue Columnref where toSelectLimitValue = toSelectLimitValue . toAExpr
+instance IsSelectLimitValue AexprConst where toSelectLimitValue = toSelectLimitValue . toAExpr
+instance IsSelectLimitValue Param where toSelectLimitValue = toSelectLimitValue . toAExpr
+instance IsSelectLimitValue CaseExpr where toSelectLimitValue = toSelectLimitValue . toAExpr
+instance IsSelectLimitValue FuncExpr where toSelectLimitValue = toSelectLimitValue . toAExpr
+instance IsSelectLimitValue (SelectWithParens rows) where toSelectLimitValue = toSelectLimitValue . toAExpr
+instance IsSelectLimitValue ArrayExpr where toSelectLimitValue = toSelectLimitValue . toAExpr
+instance IsSelectLimitValue ExplicitRow where toSelectLimitValue = toSelectLimitValue . toAExpr
+instance IsSelectLimitValue ImplicitRow where toSelectLimitValue = toSelectLimitValue . toAExpr
+instance IsSelectLimitValue Iconst where toSelectLimitValue = toSelectLimitValue . toAExpr
+instance IsSelectLimitValue Fconst where toSelectLimitValue = toSelectLimitValue . toAExpr
+instance IsSelectLimitValue Bool where toSelectLimitValue = toSelectLimitValue . toAExpr
 
 -- |
 -- ==== References
@@ -929,19 +927,19 @@ data OffsetClause
 class IsOffsetClause a where toOffsetClause :: a -> OffsetClause
 instance IsOffsetClause OffsetClause where toOffsetClause = id
 instance IsOffsetClause AExpr where toOffsetClause = ExprOffsetClause
-instance IsOffsetClause CExpr where toOffsetClause = toOffsetClause . toCExpr
-instance IsOffsetClause Columnref where toOffsetClause = toOffsetClause . toCExpr
-instance IsOffsetClause AexprConst where toOffsetClause = toOffsetClause . toCExpr
-instance IsOffsetClause Param where toOffsetClause = toOffsetClause . toCExpr
-instance IsOffsetClause CaseExpr where toOffsetClause = toOffsetClause . toCExpr
-instance IsOffsetClause FuncExpr where toOffsetClause = toOffsetClause . toCExpr
-instance IsOffsetClause (SelectWithParens rows) where toOffsetClause = toOffsetClause . toCExpr
-instance IsOffsetClause ArrayExpr where toOffsetClause = toOffsetClause . toCExpr
-instance IsOffsetClause ExplicitRow where toOffsetClause = toOffsetClause . toCExpr
-instance IsOffsetClause ImplicitRow where toOffsetClause = toOffsetClause . toCExpr
-instance IsOffsetClause Iconst where toOffsetClause = toOffsetClause . toCExpr
-instance IsOffsetClause Fconst where toOffsetClause = toOffsetClause . toCExpr
-instance IsOffsetClause Bool where toOffsetClause = toOffsetClause . toCExpr
+instance IsOffsetClause CExpr where toOffsetClause = toOffsetClause . toAExpr
+instance IsOffsetClause Columnref where toOffsetClause = toOffsetClause . toAExpr
+instance IsOffsetClause AexprConst where toOffsetClause = toOffsetClause . toAExpr
+instance IsOffsetClause Param where toOffsetClause = toOffsetClause . toAExpr
+instance IsOffsetClause CaseExpr where toOffsetClause = toOffsetClause . toAExpr
+instance IsOffsetClause FuncExpr where toOffsetClause = toOffsetClause . toAExpr
+instance IsOffsetClause (SelectWithParens rows) where toOffsetClause = toOffsetClause . toAExpr
+instance IsOffsetClause ArrayExpr where toOffsetClause = toOffsetClause . toAExpr
+instance IsOffsetClause ExplicitRow where toOffsetClause = toOffsetClause . toAExpr
+instance IsOffsetClause ImplicitRow where toOffsetClause = toOffsetClause . toAExpr
+instance IsOffsetClause Iconst where toOffsetClause = toOffsetClause . toAExpr
+instance IsOffsetClause Fconst where toOffsetClause = toOffsetClause . toAExpr
+instance IsOffsetClause Bool where toOffsetClause = toOffsetClause . toAExpr
 
 -- * For Locking
 
@@ -1202,19 +1200,19 @@ class IsWhereOrCurrentClause a where toWhereOrCurrentClause :: a -> WhereOrCurre
 instance IsWhereOrCurrentClause WhereOrCurrentClause where toWhereOrCurrentClause = id
 instance IsWhereOrCurrentClause AExpr where toWhereOrCurrentClause = ExprWhereOrCurrentClause
 instance IsWhereOrCurrentClause CursorName where toWhereOrCurrentClause = CursorWhereOrCurrentClause
-instance IsWhereOrCurrentClause CExpr where toWhereOrCurrentClause = toWhereOrCurrentClause . toCExpr
-instance IsWhereOrCurrentClause Columnref where toWhereOrCurrentClause = toWhereOrCurrentClause . toCExpr
-instance IsWhereOrCurrentClause AexprConst where toWhereOrCurrentClause = toWhereOrCurrentClause . toCExpr
-instance IsWhereOrCurrentClause Param where toWhereOrCurrentClause = toWhereOrCurrentClause . toCExpr
-instance IsWhereOrCurrentClause CaseExpr where toWhereOrCurrentClause = toWhereOrCurrentClause . toCExpr
-instance IsWhereOrCurrentClause FuncExpr where toWhereOrCurrentClause = toWhereOrCurrentClause . toCExpr
-instance IsWhereOrCurrentClause (SelectWithParens rows) where toWhereOrCurrentClause = toWhereOrCurrentClause . toCExpr
-instance IsWhereOrCurrentClause ArrayExpr where toWhereOrCurrentClause = toWhereOrCurrentClause . toCExpr
-instance IsWhereOrCurrentClause ExplicitRow where toWhereOrCurrentClause = toWhereOrCurrentClause . toCExpr
-instance IsWhereOrCurrentClause ImplicitRow where toWhereOrCurrentClause = toWhereOrCurrentClause . toCExpr
-instance IsWhereOrCurrentClause Iconst where toWhereOrCurrentClause = toWhereOrCurrentClause . toCExpr
-instance IsWhereOrCurrentClause Fconst where toWhereOrCurrentClause = toWhereOrCurrentClause . toCExpr
-instance IsWhereOrCurrentClause Bool where toWhereOrCurrentClause = toWhereOrCurrentClause . toCExpr
+instance IsWhereOrCurrentClause CExpr where toWhereOrCurrentClause = toWhereOrCurrentClause . toAExpr
+instance IsWhereOrCurrentClause Columnref where toWhereOrCurrentClause = toWhereOrCurrentClause . toAExpr
+instance IsWhereOrCurrentClause AexprConst where toWhereOrCurrentClause = toWhereOrCurrentClause . toAExpr
+instance IsWhereOrCurrentClause Param where toWhereOrCurrentClause = toWhereOrCurrentClause . toAExpr
+instance IsWhereOrCurrentClause CaseExpr where toWhereOrCurrentClause = toWhereOrCurrentClause . toAExpr
+instance IsWhereOrCurrentClause FuncExpr where toWhereOrCurrentClause = toWhereOrCurrentClause . toAExpr
+instance IsWhereOrCurrentClause (SelectWithParens rows) where toWhereOrCurrentClause = toWhereOrCurrentClause . toAExpr
+instance IsWhereOrCurrentClause ArrayExpr where toWhereOrCurrentClause = toWhereOrCurrentClause . toAExpr
+instance IsWhereOrCurrentClause ExplicitRow where toWhereOrCurrentClause = toWhereOrCurrentClause . toAExpr
+instance IsWhereOrCurrentClause ImplicitRow where toWhereOrCurrentClause = toWhereOrCurrentClause . toAExpr
+instance IsWhereOrCurrentClause Iconst where toWhereOrCurrentClause = toWhereOrCurrentClause . toAExpr
+instance IsWhereOrCurrentClause Fconst where toWhereOrCurrentClause = toWhereOrCurrentClause . toAExpr
+instance IsWhereOrCurrentClause Bool where toWhereOrCurrentClause = toWhereOrCurrentClause . toAExpr
 
 -- * Expression
 
@@ -1744,19 +1742,19 @@ data FuncArgExpr
 class IsFuncArgExpr a where toFuncArgExpr :: a -> FuncArgExpr
 instance IsFuncArgExpr FuncArgExpr where toFuncArgExpr = id
 instance IsFuncArgExpr AExpr where toFuncArgExpr = ExprFuncArgExpr
-instance IsFuncArgExpr CExpr where toFuncArgExpr = toFuncArgExpr . toCExpr
-instance IsFuncArgExpr Columnref where toFuncArgExpr = toFuncArgExpr . toCExpr
-instance IsFuncArgExpr AexprConst where toFuncArgExpr = toFuncArgExpr . toCExpr
-instance IsFuncArgExpr Param where toFuncArgExpr = toFuncArgExpr . toCExpr
-instance IsFuncArgExpr CaseExpr where toFuncArgExpr = toFuncArgExpr . toCExpr
-instance IsFuncArgExpr FuncExpr where toFuncArgExpr = toFuncArgExpr . toCExpr
-instance IsFuncArgExpr (SelectWithParens rows) where toFuncArgExpr = toFuncArgExpr . toCExpr
-instance IsFuncArgExpr ArrayExpr where toFuncArgExpr = toFuncArgExpr . toCExpr
-instance IsFuncArgExpr ExplicitRow where toFuncArgExpr = toFuncArgExpr . toCExpr
-instance IsFuncArgExpr ImplicitRow where toFuncArgExpr = toFuncArgExpr . toCExpr
-instance IsFuncArgExpr Iconst where toFuncArgExpr = toFuncArgExpr . toCExpr
-instance IsFuncArgExpr Fconst where toFuncArgExpr = toFuncArgExpr . toCExpr
-instance IsFuncArgExpr Bool where toFuncArgExpr = toFuncArgExpr . toCExpr
+instance IsFuncArgExpr CExpr where toFuncArgExpr = toFuncArgExpr . toAExpr
+instance IsFuncArgExpr Columnref where toFuncArgExpr = toFuncArgExpr . toAExpr
+instance IsFuncArgExpr AexprConst where toFuncArgExpr = toFuncArgExpr . toAExpr
+instance IsFuncArgExpr Param where toFuncArgExpr = toFuncArgExpr . toAExpr
+instance IsFuncArgExpr CaseExpr where toFuncArgExpr = toFuncArgExpr . toAExpr
+instance IsFuncArgExpr FuncExpr where toFuncArgExpr = toFuncArgExpr . toAExpr
+instance IsFuncArgExpr (SelectWithParens rows) where toFuncArgExpr = toFuncArgExpr . toAExpr
+instance IsFuncArgExpr ArrayExpr where toFuncArgExpr = toFuncArgExpr . toAExpr
+instance IsFuncArgExpr ExplicitRow where toFuncArgExpr = toFuncArgExpr . toAExpr
+instance IsFuncArgExpr ImplicitRow where toFuncArgExpr = toFuncArgExpr . toAExpr
+instance IsFuncArgExpr Iconst where toFuncArgExpr = toFuncArgExpr . toAExpr
+instance IsFuncArgExpr Fconst where toFuncArgExpr = toFuncArgExpr . toAExpr
+instance IsFuncArgExpr Bool where toFuncArgExpr = toFuncArgExpr . toAExpr
 
 paramFuncArgExpr :: Param -> FuncArgExpr
 paramFuncArgExpr = ExprFuncArgExpr . CExprAExpr . ParamCExpr
@@ -1943,19 +1941,19 @@ instance IsIndirectionEl IndirectionEl where toIndirectionEl = id
 instance IsIndirectionEl Ident where toIndirectionEl = AttrNameIndirectionEl
 instance IsIndirectionEl String where toIndirectionEl = AttrNameIndirectionEl . fromString
 instance IsIndirectionEl AExpr where toIndirectionEl = ExprIndirectionEl
-instance IsIndirectionEl CExpr where toIndirectionEl = toIndirectionEl . toCExpr
-instance IsIndirectionEl Columnref where toIndirectionEl = toIndirectionEl . toCExpr
-instance IsIndirectionEl AexprConst where toIndirectionEl = toIndirectionEl . toCExpr
-instance IsIndirectionEl Param where toIndirectionEl = toIndirectionEl . toCExpr
-instance IsIndirectionEl CaseExpr where toIndirectionEl = toIndirectionEl . toCExpr
-instance IsIndirectionEl FuncExpr where toIndirectionEl = toIndirectionEl . toCExpr
-instance IsIndirectionEl (SelectWithParens rows) where toIndirectionEl = toIndirectionEl . toCExpr
-instance IsIndirectionEl ArrayExpr where toIndirectionEl = toIndirectionEl . toCExpr
-instance IsIndirectionEl ExplicitRow where toIndirectionEl = toIndirectionEl . toCExpr
-instance IsIndirectionEl ImplicitRow where toIndirectionEl = toIndirectionEl . toCExpr
-instance IsIndirectionEl Iconst where toIndirectionEl = toIndirectionEl . toCExpr
-instance IsIndirectionEl Fconst where toIndirectionEl = toIndirectionEl . toCExpr
-instance IsIndirectionEl Bool where toIndirectionEl = toIndirectionEl . toCExpr
+instance IsIndirectionEl CExpr where toIndirectionEl = toIndirectionEl . toAExpr
+instance IsIndirectionEl Columnref where toIndirectionEl = toIndirectionEl . toAExpr
+instance IsIndirectionEl AexprConst where toIndirectionEl = toIndirectionEl . toAExpr
+instance IsIndirectionEl Param where toIndirectionEl = toIndirectionEl . toAExpr
+instance IsIndirectionEl CaseExpr where toIndirectionEl = toIndirectionEl . toAExpr
+instance IsIndirectionEl FuncExpr where toIndirectionEl = toIndirectionEl . toAExpr
+instance IsIndirectionEl (SelectWithParens rows) where toIndirectionEl = toIndirectionEl . toAExpr
+instance IsIndirectionEl ArrayExpr where toIndirectionEl = toIndirectionEl . toAExpr
+instance IsIndirectionEl ExplicitRow where toIndirectionEl = toIndirectionEl . toAExpr
+instance IsIndirectionEl ImplicitRow where toIndirectionEl = toIndirectionEl . toAExpr
+instance IsIndirectionEl Iconst where toIndirectionEl = toIndirectionEl . toAExpr
+instance IsIndirectionEl Fconst where toIndirectionEl = toIndirectionEl . toAExpr
+instance IsIndirectionEl Bool where toIndirectionEl = toIndirectionEl . toAExpr
 
 -- * Types
 
@@ -2114,19 +2112,19 @@ instance IsIndexElemDef IndexElemDef where toIndexElemDef = id
 instance IsIndexElemDef ColId where toIndexElemDef = IdIndexElemDef
 instance IsIndexElemDef FuncExprWindowless where toIndexElemDef = FuncIndexElemDef
 instance IsIndexElemDef AExpr where toIndexElemDef = ExprIndexElemDef
-instance IsIndexElemDef CExpr where toIndexElemDef = toIndexElemDef . toCExpr
-instance IsIndexElemDef Columnref where toIndexElemDef = toIndexElemDef . toCExpr
-instance IsIndexElemDef AexprConst where toIndexElemDef = toIndexElemDef . toCExpr
-instance IsIndexElemDef Param where toIndexElemDef = toIndexElemDef . toCExpr
-instance IsIndexElemDef CaseExpr where toIndexElemDef = toIndexElemDef . toCExpr
-instance IsIndexElemDef FuncExpr where toIndexElemDef = toIndexElemDef . toCExpr
-instance IsIndexElemDef (SelectWithParens rows) where toIndexElemDef = toIndexElemDef . toCExpr
-instance IsIndexElemDef ArrayExpr where toIndexElemDef = toIndexElemDef . toCExpr
-instance IsIndexElemDef ExplicitRow where toIndexElemDef = toIndexElemDef . toCExpr
-instance IsIndexElemDef ImplicitRow where toIndexElemDef = toIndexElemDef . toCExpr
-instance IsIndexElemDef Iconst where toIndexElemDef = toIndexElemDef . toCExpr
-instance IsIndexElemDef Fconst where toIndexElemDef = toIndexElemDef . toCExpr
-instance IsIndexElemDef Bool where toIndexElemDef = toIndexElemDef . toCExpr
+instance IsIndexElemDef CExpr where toIndexElemDef = toIndexElemDef . toAExpr
+instance IsIndexElemDef Columnref where toIndexElemDef = toIndexElemDef . toAExpr
+instance IsIndexElemDef AexprConst where toIndexElemDef = toIndexElemDef . toAExpr
+instance IsIndexElemDef Param where toIndexElemDef = toIndexElemDef . toAExpr
+instance IsIndexElemDef CaseExpr where toIndexElemDef = toIndexElemDef . toAExpr
+instance IsIndexElemDef FuncExpr where toIndexElemDef = toIndexElemDef . toAExpr
+instance IsIndexElemDef (SelectWithParens rows) where toIndexElemDef = toIndexElemDef . toAExpr
+instance IsIndexElemDef ArrayExpr where toIndexElemDef = toIndexElemDef . toAExpr
+instance IsIndexElemDef ExplicitRow where toIndexElemDef = toIndexElemDef . toAExpr
+instance IsIndexElemDef ImplicitRow where toIndexElemDef = toIndexElemDef . toAExpr
+instance IsIndexElemDef Iconst where toIndexElemDef = toIndexElemDef . toAExpr
+instance IsIndexElemDef Fconst where toIndexElemDef = toIndexElemDef . toAExpr
+instance IsIndexElemDef Bool where toIndexElemDef = toIndexElemDef . toAExpr
 
 instance IsString Ident where
-  fromString = either error id . Parsing.run Parsing.ident . T.pack
+  fromString = QuotedIdent . fromString
