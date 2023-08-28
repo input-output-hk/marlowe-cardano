@@ -8,7 +8,7 @@ import Colog.Message (Message)
 import Control.Arrow ((&&&))
 import Control.Concurrent.Component (runComponent_)
 import Control.Concurrent.Component.Run (runAppMTraced)
-import Control.Exception (Exception (fromException), SomeException)
+import Control.Exception (Exception (fromException))
 import Control.Monad.Reader (ask)
 import Control.Monad.Trans.Marlowe (MarloweT (..))
 import Data.Function (on)
@@ -21,11 +21,11 @@ import Data.Version (showVersion)
 import Language.Marlowe.Runtime.Client (connectToMarloweRuntimeTraced)
 import Language.Marlowe.Runtime.Web.Server
 import Network.HTTP.Types
+import Network.Protocol.Codec (DeserializeError (DeserializeError))
 import Network.Protocol.Driver.Trace (TcpClientSelector, renderTcpClientSelectorOTel, sockAddrToAttributes)
 import Network.Socket (PortNumber)
 import Network.Wai
 import Network.Wai.Handler.Warp (
-  InvalidRequest (..),
   defaultOnExceptionResponse,
   defaultSettings,
   runSettings,
@@ -63,17 +63,13 @@ main = do
         { libraryName = "marlowe-web-server"
         , libraryVersion = fromString $ showVersion version
         }
-
-    onExceptionResponse :: SomeException -> Response
     onExceptionResponse e
-      | Just PayloadTooLarge <- fromException e = defaultOnExceptionResponse e
-      | Just RequestHeaderFieldsTooLarge <- fromException e = defaultOnExceptionResponse e
-      | Just (_ :: InvalidRequest) <- fromException e = defaultOnExceptionResponse e
-      | otherwise =
+      | Just DeserializeError{} <- fromException e =
           responseLBS
-            internalServerError500
+            badGateway502
             [(hContentType, "text/plain; charset=utf-8")]
-            ("Something went wrong / " <> (fromString $ show e))
+            ("Bad Gateway / " <> (fromString $ show e))
+      | otherwise = defaultOnExceptionResponse e
 
 concurrentLogger :: (MonadUnliftIO m) => IO (LogAction m Message)
 concurrentLogger = do
