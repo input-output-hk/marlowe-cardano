@@ -23,6 +23,7 @@ import qualified Data.Map as Map
 import qualified Data.Maybe as Maybe
 import qualified Data.Set as Set
 import Data.String (fromString)
+import qualified Data.Text as T
 import qualified Data.Text as Text
 import qualified Data.Time as Time
 import qualified Data.Time.Clock.POSIX as POSIX
@@ -32,6 +33,7 @@ import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Object.Archive (packArchive)
 import Language.Marlowe.Object.Types (LabelledObject (LabelledObject), ObjectType (ContractType), fromCoreContract)
 import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType)
+import Language.Marlowe.Runtime.ChainSync.Api (renderTxOutRef)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as ChainSync.Api
 import Language.Marlowe.Runtime.Client (runMarloweTxClient)
 import qualified Language.Marlowe.Runtime.Client as Runtime.Client
@@ -41,6 +43,7 @@ import Language.Marlowe.Runtime.Core.Api (
   MarloweTransactionMetadata (..),
   MarloweVersion (MarloweV1),
   MarloweVersionTag (V1),
+  TransactionOutput (..),
   renderContractId,
  )
 import Language.Marlowe.Runtime.Integration.Common (
@@ -51,6 +54,8 @@ import Language.Marlowe.Runtime.Integration.Common (
  )
 import qualified Language.Marlowe.Runtime.Integration.Common as Runtime.Integration.Common
 import Language.Marlowe.Runtime.Transaction.Api (
+  InputsApplied (..),
+  InputsAppliedInEra (..),
   MarloweTxCommand (..),
   WalletAddresses (..),
   WithdrawTx (..),
@@ -138,41 +143,40 @@ toCliArgs = \case
               <> do address <- Set.toList extraAddresses; ["--address", serializeAddress address]
               <> ["--contract", Text.unpack $ renderContractId contractId]
           _ -> undefined
-  Withdraw MarloweV1 WalletAddresses{changeAddress, extraAddresses} contractId tokenName ->
+  Withdraw MarloweV1 WalletAddresses{changeAddress, extraAddresses} payouts ->
     ["withdraw", "--change-address", serializeAddress changeAddress]
       <> do address <- Set.toList extraAddresses; ["--address", serializeAddress address]
-      <> ["--contract", Text.unpack $ renderContractId contractId]
-      <> ["--role", removeQuotes $ show tokenName]
+      <> (T.unpack . renderTxOutRef <$> Set.toList payouts)
   where
     removeQuotes :: String -> String
     removeQuotes = init . tail
 
-marloweRuntimeJobClient :: MarloweTxCommand Void err result -> Integration (TxBody BabbageEra)
+marloweRuntimeJobClient :: MarloweTxCommand Void err result -> Integration (TxBody BabbageEra, result)
 marloweRuntimeJobClient = \case
   cmd@(Create _ MarloweV1 _ _ _ _ _) ->
     runMarloweTxClient (JobClient.liftCommand cmd) >>= \case
       Left err -> error ("Some JobClient create error: " <> show err)
       Right
-        ( Runtime.Transaction.Api.ContractCreated
-            ReferenceTxInsScriptsInlineDatumsInBabbageEra
-            Runtime.Transaction.Api.ContractCreatedInEra{txBody}
-          ) -> pure txBody
+        result@( Runtime.Transaction.Api.ContractCreated
+                  ReferenceTxInsScriptsInlineDatumsInBabbageEra
+                  Runtime.Transaction.Api.ContractCreatedInEra{txBody}
+                ) -> pure (txBody, result)
   cmd@(ApplyInputs MarloweV1 _ _ _ _ _ _) ->
     runMarloweTxClient (JobClient.liftCommand cmd) >>= \case
       Left err -> error ("Some JobClient input error: " <> show err)
       Right
-        ( Runtime.Transaction.Api.InputsApplied
-            ReferenceTxInsScriptsInlineDatumsInBabbageEra
-            Runtime.Transaction.Api.InputsAppliedInEra{txBody}
-          ) -> pure txBody
-  cmd@(Withdraw MarloweV1 _ _ _) ->
+        result@( Runtime.Transaction.Api.InputsApplied
+                  ReferenceTxInsScriptsInlineDatumsInBabbageEra
+                  Runtime.Transaction.Api.InputsAppliedInEra{txBody}
+                ) -> pure (txBody, result)
+  cmd@(Withdraw MarloweV1 _ _) ->
     runMarloweTxClient (JobClient.liftCommand cmd) >>= \case
       Left err -> error ("Some JobClient withdraw error: " <> show err)
       Right
-        ( Runtime.Transaction.Api.WithdrawTx
-            ReferenceTxInsScriptsInlineDatumsInBabbageEra
-            Runtime.Transaction.Api.WithdrawTxInEra{txBody}
-          ) -> pure txBody
+        result@( Runtime.Transaction.Api.WithdrawTx
+                  ReferenceTxInsScriptsInlineDatumsInBabbageEra
+                  Runtime.Transaction.Api.WithdrawTxInEra{txBody}
+                ) -> pure (txBody, result)
 
 expectSameResultFromCLIAndJobClient :: String -> [String] -> MarloweTxCommand Void err result -> Integration ()
 expectSameResultFromCLIAndJobClient outputFile extraCliArgs command = do
@@ -188,7 +192,7 @@ expectSameResultFromCLIAndJobClient outputFile extraCliArgs command = do
 
       jobClientEffect :: Integration (TxBody BabbageEra)
       jobClientEffect =
-        either (error . show) id . deserialiseFromCBOR (AsTxBody AsBabbageEra) . serialiseToCBOR
+        either (error . show) id . deserialiseFromCBOR (AsTxBody AsBabbageEra) . serialiseToCBOR . fst
           <$> marloweRuntimeJobClient command
 
   (_, expected) <- concurrently cliEffect jobClientEffect
@@ -265,7 +269,7 @@ createSpec = describe "create" $
         creationCommand
           :: MarloweTxCommand
               Void
-              (Runtime.Transaction.Api.CreateError 'V1)
+              Runtime.Transaction.Api.CreateError
               (Runtime.Transaction.Api.ContractCreated 'V1)
         creationCommand =
           Create
@@ -322,7 +326,7 @@ depositSpec = describe "deposit" $
         command
           :: MarloweTxCommand
               Void
-              (Runtime.Transaction.Api.ApplyInputsError 'V1)
+              Runtime.Transaction.Api.ApplyInputsError
               (Runtime.Transaction.Api.InputsApplied 'V1)
         command =
           ApplyInputs
@@ -379,7 +383,7 @@ chooseSpec = describe "choose" $
         command
           :: MarloweTxCommand
               Void
-              (Runtime.Transaction.Api.ApplyInputsError 'V1)
+              Runtime.Transaction.Api.ApplyInputsError
               (Runtime.Transaction.Api.InputsApplied 'V1)
         command =
           ApplyInputs
@@ -433,7 +437,7 @@ notifySpec = describe "notify" $
         command
           :: MarloweTxCommand
               Void
-              (Runtime.Transaction.Api.ApplyInputsError 'V1)
+              Runtime.Transaction.Api.ApplyInputsError
               (Runtime.Transaction.Api.InputsApplied 'V1)
         command =
           ApplyInputs
@@ -514,7 +518,7 @@ applySpec = describe "apply" $
         command
           :: MarloweTxCommand
               Void
-              (Runtime.Transaction.Api.ApplyInputsError 'V1)
+              Runtime.Transaction.Api.ApplyInputsError
               (Runtime.Transaction.Api.InputsApplied 'V1)
         command =
           ApplyInputs
@@ -569,7 +573,7 @@ withdrawSpec = describe "withdraw" $
         depositCommand
           :: MarloweTxCommand
               Void
-              (Runtime.Transaction.Api.ApplyInputsError 'V1)
+              Runtime.Transaction.Api.ApplyInputsError
               (Runtime.Transaction.Api.InputsApplied 'V1)
         depositCommand =
           ApplyInputs
@@ -581,21 +585,24 @@ withdrawSpec = describe "withdraw" $
             Nothing
             [V1.NormalInput $ V1.IDeposit partyA partyA ada 100_000_000]
 
-    _ <- Runtime.Integration.Common.submit partyAWallet =<< marloweRuntimeJobClient depositCommand
+    (depositTxBody, InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra InputsAppliedInEra{output}) <-
+      marloweRuntimeJobClient depositCommand
+
+    _ <- Runtime.Integration.Common.submit partyAWallet depositTxBody
 
     let extraCliArgs = []
 
         command
           :: MarloweTxCommand
               Void
-              (Runtime.Transaction.Api.WithdrawError 'V1)
+              Runtime.Transaction.Api.WithdrawError
               (WithdrawTx 'V1)
         command =
           Withdraw
             MarloweV1
             addresses
-            contractId
-            "Party A"
+            $ Map.keysSet
+            $ payouts output
 
     expectSameResultFromCLIAndJobClient "withdraw-tx-body.json" extraCliArgs command
 

@@ -264,7 +264,6 @@ spec =
           marloweContext =
             MarloweContext
               { scriptOutput = Nothing
-              , payoutOutputs = mempty
               , marloweAddress =
                   Chain.fromCardanoAddressInEra Cardano.BabbageEra
                     . Cardano.AddressInEra (Cardano.ShelleyAddressInEra Cardano.ShelleyBasedEraBabbage)

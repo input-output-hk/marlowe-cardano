@@ -22,16 +22,13 @@ import Language.Marlowe.Runtime.App.Types (Client, TxBodyInEraWithReferenceScrip
 import Language.Marlowe.Runtime.ChainSync.Api (Address, Lovelace (..), TokenName, TxOutRef)
 import Language.Marlowe.Runtime.Core.Api (ContractId, IsMarloweVersion (..), MarloweTransactionMetadata, MarloweVersion)
 import Language.Marlowe.Runtime.Transaction.Api (
-  ApplyInputsError,
   ContractCreated (..),
   ContractCreatedInEra (..),
-  CreateError,
   InputsApplied (..),
   InputsAppliedInEra (..),
   MarloweTxCommand (ApplyInputs, Create, Withdraw),
   RoleTokensConfig (..),
   WalletAddresses (WalletAddresses),
-  WithdrawError,
   WithdrawTx (..),
   WithdrawTxInEra (..),
   mkMint,
@@ -40,12 +37,12 @@ import Network.Protocol.Job.Client (liftCommand)
 
 import qualified Data.List.NonEmpty as NE (fromList)
 import qualified Data.Map.Strict as M (Map, null, toList)
+import Data.Set (Set)
 import qualified Data.Set as S (fromList)
 import Language.Marlowe.Runtime.Client (runMarloweTxClient)
 
 buildCreation
-  :: (Show (CreateError v))
-  => MarloweVersion v
+  :: MarloweVersion v
   -> Contract v
   -> M.Map TokenName Address
   -> Lovelace
@@ -63,8 +60,7 @@ buildCreation version' contract roles minUtxo metadata' =
         \w -> Create Nothing version' w roles' metadata' minUtxo $ Left contract
 
 buildApplication
-  :: (Show (ApplyInputsError v))
-  => MarloweVersion v
+  :: MarloweVersion v
   -> ContractId
   -> Inputs v
   -> Maybe POSIXTime
@@ -82,17 +78,15 @@ buildApplication version' contractId' inputs lower upper metadata' =
     $ \w -> ApplyInputs version' w contractId' metadata' (utcTime <$> lower) (utcTime <$> upper) inputs
 
 buildWithdrawal
-  :: (Show (WithdrawError v))
-  => MarloweVersion v
-  -> ContractId
-  -> TokenName
+  :: MarloweVersion v
+  -> Set TxOutRef
   -> [Address]
   -> Address
   -> [TxOutRef]
-  -> Client (Either String (ContractId, TxBodyInEraWithReferenceScripts))
-buildWithdrawal version contractId' role =
-  build show (\(WithdrawTx era WithdrawTxInEra{txBody}) -> (contractId', TxBodyInEraWithReferenceScripts era txBody)) $
-    \w -> Withdraw version w contractId' role
+  -> Client (Either String TxBodyInEraWithReferenceScripts)
+buildWithdrawal version payouts =
+  build show (\(WithdrawTx era WithdrawTxInEra{txBody}) -> TxBodyInEraWithReferenceScripts era txBody) $
+    \w -> Withdraw version w payouts
 
 build
   :: (err -> String)

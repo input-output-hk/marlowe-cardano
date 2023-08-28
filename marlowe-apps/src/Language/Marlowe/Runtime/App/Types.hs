@@ -54,6 +54,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   TxOutRef,
   fromBech32,
   fromJSONEncodedTransactionMetadata,
+  parseTxOutRef,
   toBech32,
  )
 import Language.Marlowe.Runtime.Core.Api (
@@ -105,6 +106,8 @@ import qualified Data.Aeson.Types as A (
  )
 import Data.Foldable (fold)
 import qualified Data.Map.Strict as M (Map, map, mapKeys)
+import Data.Set (Set)
+import qualified Data.Set as Set
 import qualified Data.Text as T (Text)
 import Data.Time.Units (Second)
 import Language.Marlowe.Protocol.Client (hoistMarloweRuntimeClient)
@@ -225,8 +228,7 @@ data MarloweRequest v
       , reqCollateral :: [TxOutRef]
       }
   | Withdraw
-      { reqContractId :: ContractId
-      , reqRole :: TokenName
+      { reqPayouts :: Set TxOutRef
       , reqAddresses :: [Address]
       , reqChange :: Address
       , reqCollateral :: [TxOutRef]
@@ -283,8 +285,8 @@ instance A.FromJSON (MarloweRequest 'V1) where
               reqCollateral <- fmap fromString <$> o A..: "collateral"
               pure Apply{..}
             "withdraw" -> do
-              reqContractId <- fromString <$> o A..: "contractId"
-              reqRole <- fromString <$> o A..: "role"
+              reqPayouts <-
+                Set.fromList <$> (traverse (maybe (fail "invalid tx out ref syntax") pure . parseTxOutRef) =<< o A..: "payouts")
               reqAddresses <- mapM addressFromJSON =<< o A..: "addresses"
               reqChange <- addressFromJSON =<< o A..: "change"
               reqCollateral <- fmap fromString <$> o A..: "collateral"
@@ -358,7 +360,7 @@ instance A.ToJSON (MarloweRequest 'V1) where
   toJSON Withdraw{..} =
     A.object
       [ "request" A..= ("withdraw" :: String)
-      , "role" A..= reqRole
+      , "payouts" A..= reqPayouts
       , "addresses" A..= fmap addressToJSON reqAddresses
       , "change" A..= addressToJSON reqChange
       , "collateral" A..= reqCollateral
@@ -408,7 +410,7 @@ data MarloweResponse v
   | forall era.
     Body
       { resTxEra :: C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
-      , resContractId :: ContractId
+      , resContractId :: Maybe ContractId
       , resTxId :: TxId
       , resTxBody :: C.TxBody era
       }
@@ -448,15 +450,17 @@ instance A.ToJSON (MarloweResponse 'V1) where
       , "steps" A..= fmap contractStepToJSON resSteps
       ]
   toJSON Body{..} =
-    A.object
+    A.object $
       [ "response" A..= ("body" :: String)
-      , "contractId" A..= renderContractId resContractId
       , "txId" A..= C.getTxId resTxBody
       , case resTxEra of
           C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> "era" A..= C.BabbageEra
       , case resTxEra of
           C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> "body" A..= textEnvelopeToJSON resTxBody
       ]
+        <> case resContractId of
+          Nothing -> []
+          Just contractId -> ["contractId" A..= contractId]
   toJSON Tx{..} =
     A.object
       [ "response" A..= ("tx" :: String)
@@ -540,7 +544,7 @@ textEnvelopeToJSON x =
   let envelope = C.serialiseToTextEnvelope Nothing x
    in A.toJSON envelope
 
-mkBody :: ContractId -> TxBodyInEraWithReferenceScripts -> MarloweResponse v
+mkBody :: Maybe ContractId -> TxBodyInEraWithReferenceScripts -> MarloweResponse v
 mkBody resContractId (TxBodyInEraWithReferenceScripts resTxEra resTxBody) =
   let resTxId = fromCardanoTxId $ C.getTxId resTxBody
    in Body{..}

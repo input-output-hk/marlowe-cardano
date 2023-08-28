@@ -12,7 +12,7 @@ import qualified Data.Vector as V
 import Hasql.TH (maybeStatement)
 import qualified Hasql.Transaction as T
 import Language.Marlowe.Protocol.Query.Types
-import Language.Marlowe.Runtime.ChainSync.Api (PolicyId (..), TokenName (..), TxId (..))
+import Language.Marlowe.Runtime.ChainSync.Api (AssetId (..), PolicyId (..), TokenName (..), TxId (..))
 import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetContractState (
   decodeBlockHeader,
   decodeContractId,
@@ -65,15 +65,16 @@ decodeWithdrawal (txId, slot, hash, block, payoutTxIds, payoutTxIxs, createTxIds
         Map.fromList $
           V.toList $
             V.zip (V.zipWith decodeTxOutRef payoutTxIds payoutTxIxs) $
-              V.zipWith6 decodePayoutRef createTxIds createTxIxs payoutTxIds payoutTxIxs roleCurrencies roles
+              V.zipWith6 (decodePayoutHeader $ Just txId) createTxIds createTxIxs payoutTxIds payoutTxIxs roleCurrencies roles
     , withdrawalTx = TxId txId
     }
 
-decodePayoutRef :: ByteString -> Int16 -> ByteString -> Int16 -> ByteString -> ByteString -> PayoutRef
-decodePayoutRef createTxId createTxIx txId txIx rolesCurrency role =
-  PayoutRef
-    { contractId = decodeContractId createTxId createTxIx
-    , payout = decodeTxOutRef txId txIx
-    , rolesCurrency = PolicyId rolesCurrency
-    , role = TokenName role
+decodePayoutHeader
+  :: Maybe ByteString -> ByteString -> Int16 -> ByteString -> Int16 -> ByteString -> ByteString -> PayoutHeader
+decodePayoutHeader withdrawalId contractTxId contractTxIx txId txIx rolesCurrency role =
+  PayoutHeader
+    { contractId = decodeContractId contractTxId contractTxIx
+    , payoutId = decodeTxOutRef txId txIx
+    , withdrawalId = TxId <$> withdrawalId
+    , role = AssetId (PolicyId rolesCurrency) $ TokenName role
     }

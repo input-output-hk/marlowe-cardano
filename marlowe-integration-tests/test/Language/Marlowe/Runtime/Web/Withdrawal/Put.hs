@@ -4,8 +4,9 @@ import Control.Monad.IO.Class (MonadIO (liftIO))
 import qualified Data.Set as Set
 import Language.Marlowe.Runtime.Integration.Common
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses (..))
+import Language.Marlowe.Runtime.Web (PayoutHeader (..))
 import qualified Language.Marlowe.Runtime.Web as Web
-import Language.Marlowe.Runtime.Web.Client (postWithdrawal, putWithdrawal)
+import Language.Marlowe.Runtime.Web.Client (Page (..), getPayouts, postWithdrawal, putWithdrawal)
 import Language.Marlowe.Runtime.Web.Common (signShelleyTransaction')
 import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO (toDTO))
 import Language.Marlowe.Runtime.Web.StandardContract (
@@ -16,6 +17,7 @@ import Language.Marlowe.Runtime.Web.StandardContract (
   StandardContractNotified (..),
   createStandardContract,
  )
+import Language.Marlowe.Runtime.Web.Types (PayoutStatus (..))
 import Test.Hspec (Spec, describe, it)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
@@ -29,7 +31,7 @@ spec = describe "PUT /contracts/{contractId}/withdrawals/{withdrawalId}" do
       let WalletAddresses{..} = addresses partyAWallet
       let webChangeAddress = toDTO changeAddress
       let webExtraAddresses = Set.map toDTO extraAddresses
-      let webCollataralUtxos = Set.map toDTO collateralUtxos
+      let webCollateralUtxos = Set.map toDTO collateralUtxos
       StandardContractInit{contractCreated, makeInitialDeposit} <- createStandardContract partyAWallet partyBWallet
       StandardContractFundsDeposited{chooseGimmeTheMoney} <- makeInitialDeposit
       StandardContractChoiceMade{sendNotify} <- chooseGimmeTheMoney
@@ -39,15 +41,11 @@ spec = describe "PUT /contracts/{contractId}/withdrawals/{withdrawalId}" do
       contractId <- case contractCreated of
         Web.CreateTxEnvelope{contractId} -> pure contractId
 
+      Page{..} <- getPayouts (Just $ Set.singleton contractId) Nothing (Just Available) Nothing
+      let payouts = Set.fromList $ payoutId <$> items
+
       Web.WithdrawTxEnvelope{withdrawalId, txEnvelope} <-
-        postWithdrawal
-          webChangeAddress
-          (Just webExtraAddresses)
-          (Just webCollataralUtxos)
-          Web.PostWithdrawalsRequest
-            { role = "Party A"
-            , contractId
-            }
+        postWithdrawal webChangeAddress (Just webExtraAddresses) (Just webCollateralUtxos) Web.PostWithdrawalsRequest{..}
       signedWithdrawalTx <- liftIO $ signShelleyTransaction' txEnvelope signingKeys
       putWithdrawal withdrawalId signedWithdrawalTx
 

@@ -9,18 +9,22 @@ module Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec (
 
 import Cardano.Api (BabbageEra, ConsensusMode (..), EraHistory (EraHistory), SlotNo (SlotNo))
 import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
-import Control.Monad.Trans.Except (runExcept)
+import Control.Monad.Trans.Except (runExcept, runExceptT)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.Function (on)
+import Data.Functor ((<&>))
+import Data.Functor.Identity (Identity (..))
 import Data.List (isPrefixOf)
 import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Maybe (maybeToList)
 import Data.SOP.Strict (K (..), NP (..))
 import qualified Data.Set as Set
 import Data.Time (UTCTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
+import Data.Traversable (for)
 import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics as Semantics
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics
@@ -52,6 +56,7 @@ import qualified Language.Marlowe.Runtime.Transaction.BuildConstraints as BuildC
 import Language.Marlowe.Runtime.Transaction.Constraints (
   MarloweInputConstraints (..),
   MarloweOutputConstraints (..),
+  PayoutContext (..),
   RoleTokenConstraints (..),
   TxConstraints (..),
   WalletContext (..),
@@ -193,7 +198,7 @@ extractMarloweAssets TxConstraints{..} = case marloweOutputConstraints of
   MarloweOutput assets _ -> Just assets
   _ -> Nothing
 
-runBuildCreateConstraints :: CreateArgs v -> Either (CreateError v) (TxConstraints BabbageEra v)
+runBuildCreateConstraints :: CreateArgs v -> Either CreateError (TxConstraints BabbageEra v)
 runBuildCreateConstraints CreateArgs{..} =
   snd
     <$> buildCreateConstraints
@@ -265,31 +270,53 @@ instance Show SomeCreateArgs where
 
 withdrawSpec :: Spec
 withdrawSpec = Hspec.describe "buildWithdrawConstraints" do
-  Hspec.QuickCheck.prop "implements Marlowe V1" do
-    tokenName <- Chain.TokenName <$> byteStringGen
-    policyId <- Chain.PolicyId <$> byteStringGen
+  Hspec.QuickCheck.prop "builds the correct constraints" \payouts' payout -> do
+    let payouts = Set.insert payout payouts'
+    forAllShrink (genPayoutContext payouts) shrinkPayoutContext \(roleTokens, payoutContext) -> do
+      let actual :: Either Transaction.Api.WithdrawError (TxConstraints BabbageEra 'Core.Api.V1)
+          actual = runIdentity $ runExceptT $ snd <$> BuildConstraints.buildWithdrawConstraints payoutContext Core.Api.MarloweV1 payouts
 
-    let assetId :: Chain.AssetId
-        assetId = Chain.AssetId policyId tokenName
+          expected :: Either Transaction.Api.WithdrawError (TxConstraints BabbageEra 'Core.Api.V1)
+          expected =
+            Right $
+              TxConstraints
+                { marloweInputConstraints = TxConstraints.MarloweInputConstraintsNone
+                , payoutInputConstraints = payouts
+                , roleTokenConstraints = TxConstraints.SpendRoleTokens roleTokens
+                , payToAddresses = Map.empty
+                , payToRoles = Map.empty
+                , marloweOutputConstraints = TxConstraints.MarloweOutputConstraintsNone
+                , signatureConstraints = Set.empty
+                , metadataConstraints = emptyMarloweTransactionMetadata
+                }
 
-        actual :: Either (Transaction.Api.WithdrawError 'Core.Api.V1) (TxConstraints BabbageEra 'Core.Api.V1)
-        actual = BuildConstraints.buildWithdrawConstraints Core.Api.MarloweV1 assetId
+      actual `shouldBe` expected
 
-        expected :: Either (Transaction.Api.WithdrawError 'Core.Api.V1) (TxConstraints BabbageEra 'Core.Api.V1)
-        expected =
-          Right $
-            TxConstraints
-              { marloweInputConstraints = TxConstraints.MarloweInputConstraintsNone
-              , payoutInputConstraints = Set.singleton assetId
-              , roleTokenConstraints = TxConstraints.SpendRoleTokens $ Set.singleton assetId
-              , payToAddresses = Map.empty
-              , payToRoles = Map.empty
-              , marloweOutputConstraints = TxConstraints.MarloweOutputConstraintsNone
-              , signatureConstraints = Set.empty
-              , metadataConstraints = emptyMarloweTransactionMetadata
-              }
+shrinkPayoutContext :: (Set.Set Chain.AssetId, PayoutContext) -> [(Set.Set Chain.AssetId, PayoutContext)]
+shrinkPayoutContext (roleTokens, PayoutContext{..}) = (roleTokens,) <$> contextShrinks
+  where
+    contextShrinks = flip PayoutContext payoutScriptOutputs <$> foldMap shrinkPayoutOutput (Map.keys payoutOutputs)
 
-    pure $ actual `shouldBe` expected
+    shrinkPayoutOutput :: Chain.TxOutRef -> [Map Chain.TxOutRef Chain.TransactionOutput]
+    shrinkPayoutOutput payout = do
+      Chain.TransactionOutput{..} <- maybeToList $ Map.lookup payout payoutOutputs
+      flip (Map.insert payout) payoutOutputs
+        <$> [Chain.TransactionOutput{address = address', ..} | address' <- shrink address]
+          <> [Chain.TransactionOutput{assets = assets', ..} | assets' <- shrink assets]
+
+genPayoutContext :: Set.Set Chain.TxOutRef -> QuickCheck.Gen (Set.Set Chain.AssetId, TxConstraints.PayoutContext)
+genPayoutContext payouts = do
+  relations <- for (Set.toAscList payouts) \payout -> do
+    roleToken <- arbitrary
+    output <- arbitrary
+    pure (payout, roleToken, output{Chain.datum = Just $ Core.Api.toChainPayoutDatum MarloweV1 roleToken})
+  pure
+    ( Set.fromList $ relations <&> \(_, roleToken, _) -> roleToken
+    , PayoutContext
+        { payoutOutputs = Map.fromDistinctAscList $ relations <&> \(payout, _, txOut) -> (payout, txOut)
+        , payoutScriptOutputs = mempty
+        }
+    )
 
 buildApplyInputsConstraintsSpec :: Spec
 buildApplyInputsConstraintsSpec =

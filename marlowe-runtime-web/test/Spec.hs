@@ -142,10 +142,15 @@ instance Arbitrary Web.Payout where
       <*> arbitrary
   shrink = genericShrink
 
-instance Arbitrary Web.PayoutRef where
+instance Arbitrary Web.PayoutStatus where
+  arbitrary = elements [Web.Available, Web.Withdrawn]
+  shrink = genericShrink
+
+instance Arbitrary Web.PayoutHeader where
   arbitrary =
-    Web.PayoutRef
+    Web.PayoutHeader
       <$> arbitrary
+      <*> arbitrary
       <*> arbitrary
       <*> arbitrary
       <*> arbitrary
@@ -194,7 +199,7 @@ instance Arbitrary Web.Tx where
   shrink = genericShrink
 
 instance Arbitrary Web.PostWithdrawalsRequest where
-  arbitrary = Web.PostWithdrawalsRequest <$> arbitrary <*> arbitrary
+  arbitrary = Web.PostWithdrawalsRequest <$> arbitrary
 
 instance Arbitrary Web.PostContractsRequest where
   arbitrary =
@@ -287,6 +292,11 @@ instance Arbitrary Web.TextEnvelope where
 
 instance Arbitrary Web.TxOutRef where
   arbitrary = Web.TxOutRef <$> arbitrary <*> arbitrary
+  shrink = genericShrink
+
+instance Arbitrary Web.AssetId where
+  arbitrary = Web.AssetId <$> arbitrary <*> arbitrary
+  shrink = genericShrink
 
 instance Arbitrary Web.ContractSourceId where
   arbitrary = Web.ContractSourceId . BS.pack <$> replicateM 32 arbitrary

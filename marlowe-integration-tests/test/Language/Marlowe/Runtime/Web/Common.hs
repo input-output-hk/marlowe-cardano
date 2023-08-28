@@ -25,6 +25,7 @@ import Cardano.Api (
 import Cardano.Api.SerialiseTextEnvelope (TextEnvelopeDescr (..))
 import Control.Concurrent (threadDelay)
 import Control.Monad.IO.Class (MonadIO (liftIO))
+import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Text as T
 import qualified Language.Marlowe as V1
@@ -166,10 +167,9 @@ notify wallet contractId = applyInputs wallet contractId [NormalInput INotify]
 
 withdraw
   :: Wallet
-  -> Web.TxOutRef
-  -> T.Text
+  -> Set Web.TxOutRef
   -> ClientM (Web.WithdrawTxEnvelope Web.CardanoTxBody)
-withdraw Wallet{..} contractId role = do
+withdraw Wallet{..} payouts = do
   let WalletAddresses{..} = addresses
   let webChangeAddress = toDTO changeAddress
   let webExtraAddresses = Set.map toDTO extraAddresses
@@ -180,8 +180,7 @@ withdraw Wallet{..} contractId role = do
     (Just webExtraAddresses)
     (Just webCollateralUtxos)
     Web.PostWithdrawalsRequest
-      { role
-      , contractId
+      { payouts
       }
 applyInputs
   :: Wallet

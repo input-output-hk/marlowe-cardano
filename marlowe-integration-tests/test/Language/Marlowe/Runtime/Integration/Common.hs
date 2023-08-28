@@ -49,6 +49,7 @@ import Data.Function (on)
 import Data.Functor (($>))
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes, fromJust)
+import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.String (fromString)
 import qualified Data.Text as T
@@ -75,8 +76,8 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   BlockNo (..),
   Lovelace,
   SlotNo (..),
-  TokenName,
   TxId,
+  TxOutRef,
   fromBech32,
  )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
@@ -418,11 +419,10 @@ notify Wallet{..} contractId = do
 
 withdraw
   :: Wallet
-  -> ContractId
-  -> TokenName
+  -> Set TxOutRef
   -> Integration (WithdrawTxInEra BabbageEra 'V1)
-withdraw Wallet{..} contractId role = do
-  result <- Client.withdraw MarloweV1 addresses contractId role
+withdraw Wallet{..} payouts = do
+  result <- Client.withdraw MarloweV1 addresses payouts
   WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra tx <-
     expectRight "Failed to create withdraw transaction" result
   pure tx

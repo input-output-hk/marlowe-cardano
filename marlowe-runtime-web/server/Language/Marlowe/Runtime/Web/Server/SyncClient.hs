@@ -26,7 +26,7 @@ import Language.Marlowe.Protocol.Query.Client (
 import Language.Marlowe.Protocol.Query.Types (
   ContractFilter,
   PayoutFilter (..),
-  PayoutRef,
+  PayoutHeader,
   SomeContractState,
   SomePayoutState,
   SomeTransaction (..),
@@ -74,7 +74,7 @@ type LoadWithdrawals m =
 type LoadPayouts m =
   PayoutFilter
   -> Query.Range TxOutRef
-  -> m (Maybe (Query.Page TxOutRef PayoutRef))
+  -> m (Maybe (Query.Page TxOutRef PayoutHeader))
   -- ^ Nothing if the initial ID is not found
 
 -- | Signature for a delegate that loads a single payout.
