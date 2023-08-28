@@ -64,7 +64,8 @@ common lang
 
   ghc-options:
     -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
-    -Wincomplete-record-updates -Wredundant-constraints -Widentities
+    -Wunused-packages -Wincomplete-record-updates
+    -Wredundant-constraints -Widentities
 
   if flag(defer-plugin-errors)
     ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors
@@ -75,7 +76,6 @@ library
   exposed-modules:
     Language.Marlowe.Runtime.Core.Api
     Language.Marlowe.Runtime.Core.ScriptRegistry
-    Language.Marlowe.Runtime.Schema
 
   build-depends:
     , aeson >=2 && <3
@@ -85,16 +85,24 @@ library
     , bytestring >=0.10.12 && <0.12
     , cardano-api ==1.35.4
     , containers ^>=0.6.5
-    , hasql-dynamic-syntax ^>=0.1
     , marlowe-cardano ==0.1.2.0
     , marlowe-chain-sync ==0.0.4
     , marlowe-protocols ==0.2.0.0
     , ouroboros-network ==0.1.0.1
     , plutus-ledger-api ==1.0.0.1
     , plutus-tx ==1.0.0.0
-    , postgresql-syntax ^>=0.4.1
     , text >=1.2.4 && <2
     , time >=1.9 && <2
+
+library schema
+  import:          lang
+  hs-source-dirs:  schema
+  visibility:      public
+  exposed-modules: Language.Marlowe.Runtime.Schema
+  build-depends:
+    , base >=4.9 && <5
+    , hasql-dynamic-syntax ^>=0.1
+    , postgresql-syntax ^>=0.4.1
 
 library gen
   import:          lang
@@ -332,18 +340,16 @@ library sync
     , foldl >=1.4 && <2
     , hasql >=1.6 && <2
     , hasql-dynamic-syntax ^>=0.1
-    , hasql-implicits ^>=0.1
     , hasql-th ^>=0.4
     , hasql-transaction ^>=1
     , hs-opentelemetry-api ==0.0.3.6
     , marlowe-cardano ==0.1.2.0
     , marlowe-chain-sync ==0.0.4
     , marlowe-protocols ==0.2.0.0
-    , marlowe-runtime:{marlowe-runtime, discovery-api, history-api, sync-api} ==0.0.4
+    , marlowe-runtime:{marlowe-runtime, discovery-api, history-api, schema, sync-api} ==0.0.4
     , plutus-ledger-api ==1.0.0.1
     , postgresql-syntax ^>=0.4.1
     , text >=1.2.4 && <2
-    , text-builder ^>=0.6.7
     , time >=1.9 && <2
     , transformers ^>=0.5.6
     , unliftio ^>=0.2.1
@@ -737,7 +743,6 @@ test-suite marlowe-runtime-test
     , containers ^>=0.6.5
     , errors >=2.3 && <3
     , hasql >=1.6 && <2
-    , hasql-dynamic-syntax ^>=0.1
     , hedgehog-quickcheck ^>=0.1
     , hspec
     , hspec-golden ^>=0.2
