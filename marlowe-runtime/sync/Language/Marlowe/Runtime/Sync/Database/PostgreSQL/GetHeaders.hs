@@ -1,7 +1,6 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE QuasiQuotes #-}
 
 module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetHeaders where
 
@@ -13,11 +12,17 @@ import Data.Binary (get)
 import Data.Binary.Get (runGet)
 import Data.ByteString (ByteString)
 import Data.ByteString.Lazy (fromStrict)
-import Data.Int (Int16, Int64)
+import Data.Int (Int16, Int32, Int64)
+import qualified Data.List.NonEmpty as NE
 import Data.Maybe (fromJust)
+import Data.Set (Set)
 import qualified Data.Set as Set
-import qualified Data.Vector as V
-import Hasql.TH (foldStatement, maybeStatement, singletonStatement)
+import qualified Data.Vector as Vector
+import qualified Hasql.Decoders as Decoders
+import Hasql.DynamicSyntax.Ast
+import Hasql.DynamicSyntax.Schema (tableColumn)
+import Hasql.DynamicSyntax.Statement (StatementBuilder, buildStatement, param)
+import Hasql.Statement (Statement)
 import qualified Hasql.Transaction as T
 import Language.Marlowe.Protocol.Query.Types
 import Language.Marlowe.Runtime.ChainSync.Api (
@@ -39,6 +44,15 @@ import Language.Marlowe.Runtime.Core.Api (
   emptyMarloweTransactionMetadata,
  )
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader (..))
+import Language.Marlowe.Runtime.Schema (equals, naturalJoin)
+import qualified Language.Marlowe.Runtime.Schema as Schema
+import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetPayouts (
+  countAll,
+  laxComparisonCond,
+  rangeSortBy,
+  strictComparisonCond,
+ )
+import PostgresqlSyntax.Ast (AliasClause (..))
 import Prelude hiding (init)
 
 getHeaders
@@ -51,656 +65,16 @@ getHeaders _ Range{..}
   -- clients as they could get caught in an infinite loop if consuming all
   -- pages.
   | rangeLimit <= 0 || rangeOffset < 0 = pure Nothing
-getHeaders cFilter@ContractFilter{..} Range{rangeStart = Just (ContractId TxOutRef{..}), ..} = runMaybeT do
-  pivot <- MaybeT case (Set.null tags, Set.null roleCurrencies) of
-    -- unconstrained
-    (True, True) ->
-      T.statement
-        (unTxId txId, fromIntegral txIx)
-        [maybeStatement|
-        SELECT slotNo :: bigint, txId :: bytea, txIx :: smallint
-        FROM marlowe.createTxOut
-        WHERE txId = $1 :: bytea
-          AND txIx = $2 :: smallint
-      |]
-    -- role currencies constrained
-    (True, False) ->
-      T.statement
-        (unTxId txId, fromIntegral txIx, V.fromList $ unPolicyId <$> Set.toList roleCurrencies)
-        [maybeStatement|
-        SELECT createTxOut.slotNo :: bigint, createTxOut.txId :: bytea, createTxOut.txIx :: smallint
-        FROM marlowe.createTxOut
-        JOIN marlowe.contractTxOut USING (txId, txIx)
-        JOIN (SELECT UNNEST($3 :: bytea[]) AS rolesCurrency) as roles USING (rolesCurrency)
-        WHERE createTxOut.txId = $1 :: bytea
-          AND createTxOut.txIx = $2 :: smallint
-      |]
-    -- tags constrained
-    (False, True) ->
-      T.statement
-        (unTxId txId, fromIntegral txIx, V.fromList $ getMarloweMetadataTag <$> Set.toList tags)
-        [maybeStatement|
-        SELECT createTxOut.slotNo :: bigint, createTxOut.txId :: bytea, createTxOut.txIx :: smallint
-        FROM marlowe.createTxOut
-        WHERE createTxOut.txId = $1 :: bytea
-          AND createTxOut.txIx = $2 :: smallint
-          AND EXISTS
-            ( SELECT 1
-              FROM marlowe.contractTxOutTag
-              JOIN (SELECT UNNEST($3 :: text[]) AS tag) as tags USING (tag)
-              WHERE contractTxOutTag.txId = createTxOut.txId
-                AND contractTxOutTag.txIx = createTxOut.txIx
-            )
-      |]
-    -- tags and role currencies constrained
-    (False, False) ->
-      T.statement
-        ( unTxId txId
-        , fromIntegral txIx
-        , V.fromList $ unPolicyId <$> Set.toList roleCurrencies
-        , V.fromList $ getMarloweMetadataTag <$> Set.toList tags
-        )
-        [maybeStatement|
-        SELECT createTxOut.slotNo :: bigint, createTxOut.txId :: bytea, createTxOut.txIx :: smallint
-        FROM marlowe.createTxOut
-        JOIN marlowe.contractTxOut USING (txId, txIx)
-        JOIN (SELECT UNNEST($3 :: bytea[]) AS rolesCurrency) as roles USING (rolesCurrency)
-        WHERE createTxOut.txId = $1 :: bytea
-          AND createTxOut.txIx = $2 :: smallint
-          AND EXISTS
-            ( SELECT 1
-              FROM marlowe.contractTxOutTag
-              JOIN (SELECT UNNEST($4 :: text[]) AS tag) as tags USING (tag)
-              WHERE contractTxOutTag.txId = createTxOut.txId
-                AND contractTxOutTag.txIx = createTxOut.txIx
-            )
-      |]
-  totalCount <- lift $ getTotalCount cFilter
-  lift $ getHeadersFrom cFilter totalCount pivot rangeOffset rangeLimit rangeDirection
-
--- TODO If we ever add another filter field, the combinations of cases will get
--- even worse. At that point, we should consider using a different library to
--- generate the sql queries dynamically, as they are mostly the same with
--- different JOINs and conditions.
-getHeaders cFilter@ContractFilter{..} Range{..} = do
-  totalCount <- getTotalCount cFilter
-  Just <$> case (Set.null tags, Set.null roleCurrencies, rangeDirection) of
-    (True, True, Descending) ->
-      T.statement nullFilterParams $
-        [foldStatement|
-        SELECT
-          createTxOut.slotNo :: bigint,
-          createTxOut.blockId :: bytea,
-          createTxOut.blockNo :: bigint,
-          createTxOut.txId :: bytea,
-          createTxOut.txIx :: smallint,
-          contractTxOut.rolesCurrency :: bytea,
-          createTxOut.metadata :: bytea?,
-          txOut.address :: bytea,
-          contractTxOut.payoutScriptHash :: bytea
-        FROM marlowe.createTxOut
-        JOIN marlowe.contractTxOut USING (txId, txIx)
-        JOIN marlowe.txOut USING (txId, txIx)
-        ORDER BY createTxOut.slotNo DESC, createTxOut.txId DESC, createTxOut.txIx DESC
-        OFFSET ($1 :: int) ROWS
-        FETCH NEXT ($2 :: int) ROWS ONLY
-      |]
-          (foldPage decodeContractId decodeContractHeader rangeLimit rangeDirection totalCount)
-    (True, True, Ascending) ->
-      T.statement nullFilterParams $
-        [foldStatement|
-        SELECT
-          createTxOut.slotNo :: bigint,
-          createTxOut.blockId :: bytea,
-          createTxOut.blockNo :: bigint,
-          createTxOut.txId :: bytea,
-          createTxOut.txIx :: smallint,
-          contractTxOut.rolesCurrency :: bytea,
-          createTxOut.metadata :: bytea?,
-          txOut.address :: bytea,
-          contractTxOut.payoutScriptHash :: bytea
-        FROM marlowe.createTxOut
-        JOIN marlowe.contractTxOut USING (txId, txIx)
-        JOIN marlowe.txOut USING (txId, txIx)
-        ORDER BY createTxOut.slotNo, createTxOut.txId, createTxOut.txIx
-        OFFSET ($1 :: int) ROWS
-        FETCH NEXT ($2 :: int) ROWS ONLY
-      |]
-          (foldPage decodeContractId decodeContractHeader rangeLimit rangeDirection totalCount)
-    (True, False, Descending) ->
-      T.statement nullTagsParams $
-        [foldStatement|
-        SELECT
-          createTxOut.slotNo :: bigint,
-          createTxOut.blockId :: bytea,
-          createTxOut.blockNo :: bigint,
-          createTxOut.txId :: bytea,
-          createTxOut.txIx :: smallint,
-          contractTxOut.rolesCurrency :: bytea,
-          createTxOut.metadata :: bytea?,
-          txOut.address :: bytea,
-          contractTxOut.payoutScriptHash :: bytea
-        FROM marlowe.createTxOut
-        JOIN marlowe.contractTxOut USING (txId, txIx)
-        JOIN marlowe.txOut USING (txId, txIx)
-        JOIN (SELECT UNNEST($3 :: bytea[]) AS rolesCurrency) as roles USING (rolesCurrency)
-        ORDER BY createTxOut.slotNo DESC, createTxOut.txId DESC, createTxOut.txIx DESC
-        OFFSET ($1 :: int) ROWS
-        FETCH NEXT ($2 :: int) ROWS ONLY
-      |]
-          (foldPage decodeContractId decodeContractHeader rangeLimit rangeDirection totalCount)
-    (True, False, Ascending) ->
-      T.statement nullTagsParams $
-        [foldStatement|
-        SELECT
-          createTxOut.slotNo :: bigint,
-          createTxOut.blockId :: bytea,
-          createTxOut.blockNo :: bigint,
-          createTxOut.txId :: bytea,
-          createTxOut.txIx :: smallint,
-          contractTxOut.rolesCurrency :: bytea,
-          createTxOut.metadata :: bytea?,
-          txOut.address :: bytea,
-          contractTxOut.payoutScriptHash :: bytea
-        FROM marlowe.createTxOut
-        JOIN marlowe.contractTxOut USING (txId, txIx)
-        JOIN marlowe.txOut USING (txId, txIx)
-        JOIN (SELECT UNNEST($3 :: bytea[]) AS rolesCurrency) as roles USING (rolesCurrency)
-        ORDER BY createTxOut.slotNo, createTxOut.txId, createTxOut.txIx
-        OFFSET ($1 :: int) ROWS
-        FETCH NEXT ($2 :: int) ROWS ONLY
-      |]
-          (foldPage decodeContractId decodeContractHeader rangeLimit rangeDirection totalCount)
-    (False, True, Descending) ->
-      T.statement nullRoleCurrenciesParams $
-        [foldStatement|
-        SELECT
-          createTxOut.slotNo :: bigint,
-          createTxOut.blockId :: bytea,
-          createTxOut.blockNo :: bigint,
-          createTxOut.txId :: bytea,
-          createTxOut.txIx :: smallint,
-          contractTxOut.rolesCurrency :: bytea,
-          createTxOut.metadata :: bytea?,
-          txOut.address :: bytea,
-          contractTxOut.payoutScriptHash :: bytea
-        FROM marlowe.createTxOut
-        JOIN marlowe.contractTxOut USING (txId, txIx)
-        JOIN marlowe.txOut USING (txId, txIx)
-        WHERE EXISTS
-          ( SELECT 1
-            FROM marlowe.contractTxOutTag
-            JOIN (SELECT UNNEST($3 :: text[]) AS tag) as tags USING (tag)
-            WHERE contractTxOutTag.txId = createTxOut.txId
-              AND contractTxOutTag.txIx = createTxOut.txIx
-          )
-        ORDER BY createTxOut.slotNo DESC, createTxOut.txId DESC, createTxOut.txIx DESC
-        OFFSET ($1 :: int) ROWS
-        FETCH NEXT ($2 :: int) ROWS ONLY
-      |]
-          (foldPage decodeContractId decodeContractHeader rangeLimit rangeDirection totalCount)
-    (False, True, Ascending) ->
-      T.statement nullRoleCurrenciesParams $
-        [foldStatement|
-        SELECT
-          createTxOut.slotNo :: bigint,
-          createTxOut.blockId :: bytea,
-          createTxOut.blockNo :: bigint,
-          createTxOut.txId :: bytea,
-          createTxOut.txIx :: smallint,
-          contractTxOut.rolesCurrency :: bytea,
-          createTxOut.metadata :: bytea?,
-          txOut.address :: bytea,
-          contractTxOut.payoutScriptHash :: bytea
-        FROM marlowe.createTxOut
-        JOIN marlowe.contractTxOut USING (txId, txIx)
-        JOIN marlowe.txOut USING (txId, txIx)
-        WHERE EXISTS
-          ( SELECT 1
-            FROM marlowe.contractTxOutTag
-            JOIN (SELECT UNNEST($3 :: text[]) AS tag) as tags USING (tag)
-            WHERE contractTxOutTag.txId = createTxOut.txId
-              AND contractTxOutTag.txIx = createTxOut.txIx
-          )
-        ORDER BY createTxOut.slotNo, createTxOut.txId, createTxOut.txIx
-        OFFSET ($1 :: int) ROWS
-        FETCH NEXT ($2 :: int) ROWS ONLY
-      |]
-          (foldPage decodeContractId decodeContractHeader rangeLimit rangeDirection totalCount)
-    (False, False, Descending) ->
-      T.statement nonNullFilterParams $
-        [foldStatement|
-        SELECT
-          createTxOut.slotNo :: bigint,
-          createTxOut.blockId :: bytea,
-          createTxOut.blockNo :: bigint,
-          createTxOut.txId :: bytea,
-          createTxOut.txIx :: smallint,
-          contractTxOut.rolesCurrency :: bytea,
-          createTxOut.metadata :: bytea?,
-          txOut.address :: bytea,
-          contractTxOut.payoutScriptHash :: bytea
-        FROM marlowe.createTxOut
-        JOIN marlowe.contractTxOut USING (txId, txIx)
-        JOIN marlowe.txOut USING (txId, txIx)
-        JOIN (SELECT UNNEST($3 :: bytea[]) AS rolesCurrency) as roles USING (rolesCurrency)
-        WHERE EXISTS
-          ( SELECT 1
-            FROM marlowe.contractTxOutTag
-            JOIN (SELECT UNNEST($4 :: text[]) AS tag) as tags USING (tag)
-            WHERE contractTxOutTag.txId = createTxOut.txId
-              AND contractTxOutTag.txIx = createTxOut.txIx
-          )
-        ORDER BY createTxOut.slotNo DESC, createTxOut.txId DESC, createTxOut.txIx DESC
-        OFFSET ($1 :: int) ROWS
-        FETCH NEXT ($2 :: int) ROWS ONLY
-      |]
-          (foldPage decodeContractId decodeContractHeader rangeLimit rangeDirection totalCount)
-    (False, False, Ascending) ->
-      T.statement nonNullFilterParams $
-        [foldStatement|
-        SELECT
-          createTxOut.slotNo :: bigint,
-          createTxOut.blockId :: bytea,
-          createTxOut.blockNo :: bigint,
-          createTxOut.txId :: bytea,
-          createTxOut.txIx :: smallint,
-          contractTxOut.rolesCurrency :: bytea,
-          createTxOut.metadata :: bytea?,
-          txOut.address :: bytea,
-          contractTxOut.payoutScriptHash :: bytea
-        FROM marlowe.createTxOut
-        JOIN marlowe.contractTxOut USING (txId, txIx)
-        JOIN marlowe.txOut USING (txId, txIx)
-        JOIN (SELECT UNNEST($3 :: bytea[]) AS rolesCurrency) as roles USING (rolesCurrency)
-        WHERE EXISTS
-          ( SELECT 1
-            FROM marlowe.contractTxOutTag
-            JOIN (SELECT UNNEST($4 :: text[]) AS tag) as tags USING (tag)
-            WHERE contractTxOutTag.txId = createTxOut.txId
-              AND contractTxOutTag.txIx = createTxOut.txIx
-          )
-        ORDER BY createTxOut.slotNo, createTxOut.txId, createTxOut.txIx
-        OFFSET ($1 :: int) ROWS
-        FETCH NEXT ($2 :: int) ROWS ONLY
-      |]
-          (foldPage decodeContractId decodeContractHeader rangeLimit rangeDirection totalCount)
-  where
-    -- Load one extra item so we can detect when we've hit the end
-    nullFilterParams = (fromIntegral rangeOffset, fromIntegral rangeLimit + 1)
-    nullTagsParams = (fromIntegral rangeOffset, fromIntegral rangeLimit + 1, V.fromList $ unPolicyId <$> Set.toList roleCurrencies)
-    nullRoleCurrenciesParams = (fromIntegral rangeOffset, fromIntegral rangeLimit + 1, V.fromList $ getMarloweMetadataTag <$> Set.toList tags)
-    nonNullFilterParams =
-      ( fromIntegral rangeOffset
-      , fromIntegral rangeLimit + 1
-      , V.fromList $ unPolicyId <$> Set.toList roleCurrencies
-      , V.fromList $ getMarloweMetadataTag <$> Set.toList tags
-      )
-
-getHeadersFrom
-  :: ContractFilter
-  -> Int
-  -> (Int64, ByteString, Int16)
-  -> Int
-  -> Int
-  -> Order
-  -> T.Transaction (Page ContractId ContractHeader)
-getHeadersFrom ContractFilter{..} totalCount (pivotSlot, pivotTxId, pivotTxIx) offset limit order = case (Set.null tags, Set.null roleCurrencies, order) of
-  (True, True, Descending) ->
-    T.statement nullFilterParams $
-      [foldStatement|
-      SELECT
-        createTxOut.slotNo :: bigint,
-        createTxOut.blockId :: bytea,
-        createTxOut.blockNo :: bigint,
-        createTxOut.txId :: bytea,
-        createTxOut.txIx :: smallint,
-        contractTxOut.rolesCurrency :: bytea,
-        createTxOut.metadata :: bytea?,
-        txOut.address :: bytea,
-        contractTxOut.payoutScriptHash :: bytea
-      FROM marlowe.createTxOut
-      JOIN marlowe.contractTxOut USING (txId, txIx)
-      JOIN marlowe.txOut USING (txId, txIx)
-      WHERE createTxOut.slotNo < $1 :: bigint OR
-        ( createTxOut.slotNo = $1 :: bigint AND
-          ( createTxOut.txId < $2 :: bytea OR
-            ( createTxOut.txId = $2 :: bytea AND
-                createTxOut.txIx <= $3 :: smallint
-            )
-          )
-        )
-      ORDER BY createTxOut.slotNo DESC, createTxOut.txId DESC, createTxOut.txIx DESC
-      OFFSET ($4 :: int) ROWS
-      FETCH NEXT ($5 :: int) ROWS ONLY
-    |]
-        (foldPage decodeContractId decodeContractHeader limit Descending totalCount)
-  (True, True, Ascending) ->
-    T.statement nullFilterParams $
-      [foldStatement|
-      SELECT
-        createTxOut.slotNo :: bigint,
-        createTxOut.blockId :: bytea,
-        createTxOut.blockNo :: bigint,
-        createTxOut.txId :: bytea,
-        createTxOut.txIx :: smallint,
-        contractTxOut.rolesCurrency :: bytea,
-        createTxOut.metadata :: bytea?,
-        txOut.address :: bytea,
-        contractTxOut.payoutScriptHash :: bytea
-      FROM marlowe.createTxOut
-      JOIN marlowe.contractTxOut USING (txId, txIx)
-      JOIN marlowe.txOut USING (txId, txIx)
-      WHERE createTxOut.slotNo > $1 :: bigint OR
-        ( createTxOut.slotNo = $1 :: bigint AND
-          ( createTxOut.txId > $2 :: bytea OR
-            ( createTxOut.txId = $2 :: bytea AND
-                createTxOut.txIx >= $3 :: smallint
-            )
-          )
-        )
-      ORDER BY createTxOut.slotNo, createTxOut.txId, createTxOut.txIx
-      OFFSET ($4 :: int) ROWS
-      FETCH NEXT ($5 :: int) ROWS ONLY
-    |]
-        (foldPage decodeContractId decodeContractHeader limit Ascending totalCount)
-  (True, False, Descending) ->
-    T.statement nullTagsParams $
-      [foldStatement|
-      SELECT
-        createTxOut.slotNo :: bigint,
-        createTxOut.blockId :: bytea,
-        createTxOut.blockNo :: bigint,
-        createTxOut.txId :: bytea,
-        createTxOut.txIx :: smallint,
-        contractTxOut.rolesCurrency :: bytea,
-        createTxOut.metadata :: bytea?,
-        txOut.address :: bytea,
-        contractTxOut.payoutScriptHash :: bytea
-      FROM marlowe.createTxOut
-      JOIN marlowe.contractTxOut USING (txId, txIx)
-      JOIN marlowe.txOut USING (txId, txIx)
-      JOIN (SELECT UNNEST($6 :: bytea[]) AS rolesCurrency) as roles USING (rolesCurrency)
-      WHERE createTxOut.slotNo < $1 :: bigint OR
-        ( createTxOut.slotNo = $1 :: bigint AND
-          ( createTxOut.txId < $2 :: bytea OR
-            ( createTxOut.txId = $2 :: bytea AND
-                createTxOut.txIx <= $3 :: smallint
-            )
-          )
-        )
-      ORDER BY createTxOut.slotNo DESC, createTxOut.txId DESC, createTxOut.txIx DESC
-      OFFSET ($4 :: int) ROWS
-      FETCH NEXT ($5 :: int) ROWS ONLY
-    |]
-        (foldPage decodeContractId decodeContractHeader limit Descending totalCount)
-  (True, False, Ascending) ->
-    T.statement nullTagsParams $
-      [foldStatement|
-      SELECT
-        createTxOut.slotNo :: bigint,
-        createTxOut.blockId :: bytea,
-        createTxOut.blockNo :: bigint,
-        createTxOut.txId :: bytea,
-        createTxOut.txIx :: smallint,
-        contractTxOut.rolesCurrency :: bytea,
-        createTxOut.metadata :: bytea?,
-        txOut.address :: bytea,
-        contractTxOut.payoutScriptHash :: bytea
-      FROM marlowe.createTxOut
-      JOIN marlowe.contractTxOut USING (txId, txIx)
-      JOIN marlowe.txOut USING (txId, txIx)
-      JOIN (SELECT UNNEST($6 :: bytea[]) AS rolesCurrency) as roles USING (rolesCurrency)
-      WHERE createTxOut.slotNo > $1 :: bigint OR
-        ( createTxOut.slotNo = $1 :: bigint AND
-          ( createTxOut.txId > $2 :: bytea OR
-            ( createTxOut.txId = $2 :: bytea AND
-                createTxOut.txIx >= $3 :: smallint
-            )
-          )
-        )
-      ORDER BY createTxOut.slotNo, createTxOut.txId, createTxOut.txIx
-      OFFSET ($4 :: int) ROWS
-      FETCH NEXT ($5 :: int) ROWS ONLY
-    |]
-        (foldPage decodeContractId decodeContractHeader limit Ascending totalCount)
-  (False, True, Descending) ->
-    T.statement nullRoleCurrenciesParams $
-      [foldStatement|
-      SELECT
-        createTxOut.slotNo :: bigint,
-        createTxOut.blockId :: bytea,
-        createTxOut.blockNo :: bigint,
-        createTxOut.txId :: bytea,
-        createTxOut.txIx :: smallint,
-        contractTxOut.rolesCurrency :: bytea,
-        createTxOut.metadata :: bytea?,
-        txOut.address :: bytea,
-        contractTxOut.payoutScriptHash :: bytea
-      FROM marlowe.createTxOut
-      JOIN marlowe.contractTxOut USING (txId, txIx)
-      JOIN marlowe.txOut USING (txId, txIx)
-      WHERE (createTxOut.slotNo < $1 :: bigint OR
-        ( createTxOut.slotNo = $1 :: bigint AND
-          ( createTxOut.txId < $2 :: bytea OR
-            ( createTxOut.txId = $2 :: bytea AND
-                createTxOut.txIx <= $3 :: smallint
-            )
-          )
-        ))
-        AND EXISTS
-          ( SELECT 1
-            FROM marlowe.contractTxOutTag
-            JOIN (SELECT UNNEST($6 :: text[]) AS tag) as tags USING (tag)
-            WHERE contractTxOutTag.txId = createTxOut.txId
-              AND contractTxOutTag.txIx = createTxOut.txIx
-          )
-      ORDER BY createTxOut.slotNo DESC, createTxOut.txId DESC, createTxOut.txIx DESC
-      OFFSET ($4 :: int) ROWS
-      FETCH NEXT ($5 :: int) ROWS ONLY
-    |]
-        (foldPage decodeContractId decodeContractHeader limit Descending totalCount)
-  (False, True, Ascending) ->
-    T.statement nullRoleCurrenciesParams $
-      [foldStatement|
-      SELECT
-        createTxOut.slotNo :: bigint,
-        createTxOut.blockId :: bytea,
-        createTxOut.blockNo :: bigint,
-        createTxOut.txId :: bytea,
-        createTxOut.txIx :: smallint,
-        contractTxOut.rolesCurrency :: bytea,
-        createTxOut.metadata :: bytea?,
-        txOut.address :: bytea,
-        contractTxOut.payoutScriptHash :: bytea
-      FROM marlowe.createTxOut
-      JOIN marlowe.contractTxOut USING (txId, txIx)
-      JOIN marlowe.txOut USING (txId, txIx)
-      WHERE (createTxOut.slotNo > $1 :: bigint OR
-        ( createTxOut.slotNo = $1 :: bigint AND
-          ( createTxOut.txId > $2 :: bytea OR
-            ( createTxOut.txId = $2 :: bytea AND
-                createTxOut.txIx >= $3 :: smallint
-            )
-          )
-        ))
-        AND EXISTS
-          ( SELECT 1
-            FROM marlowe.contractTxOutTag
-            JOIN (SELECT UNNEST($6 :: text[]) AS tag) as tags USING (tag)
-            WHERE contractTxOutTag.txId = createTxOut.txId
-              AND contractTxOutTag.txIx = createTxOut.txIx
-          )
-      ORDER BY createTxOut.slotNo, createTxOut.txId, createTxOut.txIx
-      OFFSET ($4 :: int) ROWS
-      FETCH NEXT ($5 :: int) ROWS ONLY
-    |]
-        (foldPage decodeContractId decodeContractHeader limit Ascending totalCount)
-  (False, False, Descending) ->
-    T.statement nonNullFilterParams $
-      [foldStatement|
-      SELECT
-        createTxOut.slotNo :: bigint,
-        createTxOut.blockId :: bytea,
-        createTxOut.blockNo :: bigint,
-        createTxOut.txId :: bytea,
-        createTxOut.txIx :: smallint,
-        contractTxOut.rolesCurrency :: bytea,
-        createTxOut.metadata :: bytea?,
-        txOut.address :: bytea,
-        contractTxOut.payoutScriptHash :: bytea
-      FROM marlowe.createTxOut
-      JOIN marlowe.contractTxOut USING (txId, txIx)
-      JOIN marlowe.txOut USING (txId, txIx)
-      JOIN (SELECT UNNEST($6 :: bytea[]) AS rolesCurrency) as roles USING (rolesCurrency)
-      WHERE (createTxOut.slotNo < $1 :: bigint OR
-        ( createTxOut.slotNo = $1 :: bigint AND
-          ( createTxOut.txId < $2 :: bytea OR
-            ( createTxOut.txId = $2 :: bytea AND
-                createTxOut.txIx <= $3 :: smallint
-            )
-          )
-        ))
-        AND EXISTS
-          ( SELECT 1
-            FROM marlowe.contractTxOutTag
-            JOIN (SELECT UNNEST($7 :: text[]) AS tag) as tags USING (tag)
-            WHERE contractTxOutTag.txId = createTxOut.txId
-              AND contractTxOutTag.txIx = createTxOut.txIx
-          )
-      ORDER BY createTxOut.slotNo DESC, createTxOut.txId DESC, createTxOut.txIx DESC
-      OFFSET ($4 :: int) ROWS
-      FETCH NEXT ($5 :: int) ROWS ONLY
-    |]
-        (foldPage decodeContractId decodeContractHeader limit Descending totalCount)
-  (False, False, Ascending) ->
-    T.statement nonNullFilterParams $
-      [foldStatement|
-      SELECT
-        createTxOut.slotNo :: bigint,
-        createTxOut.blockId :: bytea,
-        createTxOut.blockNo :: bigint,
-        createTxOut.txId :: bytea,
-        createTxOut.txIx :: smallint,
-        contractTxOut.rolesCurrency :: bytea,
-        createTxOut.metadata :: bytea?,
-        txOut.address :: bytea,
-        contractTxOut.payoutScriptHash :: bytea
-      FROM marlowe.createTxOut
-      JOIN marlowe.contractTxOut USING (txId, txIx)
-      JOIN marlowe.txOut USING (txId, txIx)
-      JOIN (SELECT UNNEST($6 :: bytea[]) AS rolesCurrency) as roles USING (rolesCurrency)
-      WHERE (createTxOut.slotNo > $1 :: bigint OR
-        ( createTxOut.slotNo = $1 :: bigint AND
-          ( createTxOut.txId > $2 :: bytea OR
-            ( createTxOut.txId = $2 :: bytea AND
-                createTxOut.txIx >= $3 :: smallint
-            )
-          )
-        ))
-        AND EXISTS
-          ( SELECT 1
-            FROM marlowe.contractTxOutTag
-            JOIN (SELECT UNNEST($7 :: text[]) AS tag) as tags USING (tag)
-            WHERE contractTxOutTag.txId = createTxOut.txId
-              AND contractTxOutTag.txIx = createTxOut.txIx
-          )
-      ORDER BY createTxOut.slotNo, createTxOut.txId, createTxOut.txIx
-      OFFSET ($4 :: int) ROWS
-      FETCH NEXT ($5 :: int) ROWS ONLY
-    |]
-        (foldPage decodeContractId decodeContractHeader limit Ascending totalCount)
-  where
-    -- Load one extra item so we can detect when we've hit the end
-    nullFilterParams = (pivotSlot, pivotTxId, pivotTxIx, fromIntegral offset, fromIntegral limit + 1)
-    nullTagsParams =
-      ( pivotSlot
-      , pivotTxId
-      , pivotTxIx
-      , fromIntegral offset
-      , fromIntegral limit + 1
-      , V.fromList $ unPolicyId <$> Set.toList roleCurrencies
-      )
-    nullRoleCurrenciesParams =
-      ( pivotSlot
-      , pivotTxId
-      , pivotTxIx
-      , fromIntegral offset
-      , fromIntegral limit + 1
-      , V.fromList $ getMarloweMetadataTag <$> Set.toList tags
-      )
-    nonNullFilterParams =
-      ( pivotSlot
-      , pivotTxId
-      , pivotTxIx
-      , fromIntegral offset
-      , fromIntegral limit + 1
-      , V.fromList $ unPolicyId <$> Set.toList roleCurrencies
-      , V.fromList $ getMarloweMetadataTag <$> Set.toList tags
-      )
-
-getTotalCount :: ContractFilter -> T.Transaction Int
-getTotalCount ContractFilter{..} =
-  fromIntegral <$> case (Set.null tags, Set.null roleCurrencies) of
-    (True, True) ->
-      T.statement
-        ()
-        [singletonStatement|
-      SELECT COUNT(*) :: int FROM marlowe.createTxOut
-    |]
-    (True, False) ->
-      T.statement
-        (V.fromList $ unPolicyId <$> Set.toList roleCurrencies)
-        [singletonStatement|
-      SELECT COUNT(*) :: int
-      FROM marlowe.createTxOut
-      JOIN marlowe.contractTxOut USING (txId, txIx)
-      JOIN (SELECT UNNEST($1 :: bytea[]) AS rolesCurrency) as roles USING (rolesCurrency)
-    |]
-    (False, True) ->
-      T.statement
-        (V.fromList $ getMarloweMetadataTag <$> Set.toList tags)
-        [singletonStatement|
-      SELECT COUNT(*) :: int
-      FROM marlowe.createTxOut
-      WHERE EXISTS
-        ( SELECT 1
-          FROM marlowe.contractTxOutTag
-          JOIN (SELECT UNNEST($1 :: text[]) AS tag) as tags USING (tag)
-          WHERE contractTxOutTag.txId = createTxOut.txId
-            AND contractTxOutTag.txIx = createTxOut.txIx
-        )
-    |]
-    (False, False) ->
-      T.statement
-        ( V.fromList $ unPolicyId <$> Set.toList roleCurrencies
-        , V.fromList $ getMarloweMetadataTag <$> Set.toList tags
-        )
-        [singletonStatement|
-      SELECT COUNT(*) :: int
-      FROM marlowe.createTxOut
-      JOIN marlowe.contractTxOut USING (txId, txIx)
-      JOIN (SELECT UNNEST($1 :: bytea[]) AS rolesCurrency) as roles USING (rolesCurrency)
-      WHERE EXISTS
-        ( SELECT 1
-          FROM marlowe.contractTxOutTag
-          JOIN (SELECT UNNEST($2 :: text[]) AS tag) as tags USING (tag)
-          WHERE contractTxOutTag.txId = createTxOut.txId
-            AND contractTxOutTag.txIx = createTxOut.txIx
-        )
-    |]
-
-type ResultRow =
-  ( Int64
-  , ByteString
-  , Int64
-  , ByteString
-  , Int16
-  , ByteString
-  , Maybe ByteString
-  , ByteString
-  , ByteString
-  )
+getHeaders cFilter range@Range{..} = runMaybeT do
+  mDelimiter <- traverse (MaybeT . T.statement () . delimiterStatement cFilter) rangeStart
+  lift do
+    totalCount <- T.statement () $ totalCountStatement cFilter
+    itemsWithNext <- T.statement () $ headersStatement cFilter range mDelimiter
+    let nextRange = case drop rangeLimit itemsWithNext of
+          [] -> Nothing
+          ContractHeader{..} : _ -> Just Range{rangeStart = Just contractId, rangeOffset = 0, ..}
+        items = take rangeLimit itemsWithNext
+    pure Page{..}
 
 foldPage :: (row -> id) -> (row -> item) -> Int -> Order -> Int -> Fold row (Page id item)
 foldPage decodeId decodeItem limit direction totalCount =
@@ -712,36 +86,36 @@ foldPage decodeId decodeItem limit direction totalCount =
 foldItems :: (row -> item) -> Int -> Fold row [item]
 foldItems decodeItem limit = fmap decodeItem . take limit <$> Fold.list
 
-decodeContractHeader :: ResultRow -> ContractHeader
 decodeContractHeader
-  ( slotNo
-    , blockHeaderHash
-    , blockNo
-    , txId
-    , txIx
-    , rolesCurrency
-    , metadata
-    , address
-    , payoutScriptHash
-    ) =
-    ContractHeader
-      { contractId = ContractId (TxOutRef (TxId txId) (fromIntegral txIx))
-      , rolesCurrency = PolicyId rolesCurrency
-      , metadata = maybe emptyMarloweTransactionMetadata (runGet get . fromStrict) metadata
-      , marloweScriptHash = fromJust do
-          credential <- paymentCredential $ Address address
-          case credential of
-            ScriptCredential hash -> pure hash
-            _ -> Nothing
-      , marloweScriptAddress = Address address
-      , payoutScriptHash = ScriptHash payoutScriptHash
-      , marloweVersion = SomeMarloweVersion MarloweV1
-      , blockHeader =
-          BlockHeader
-            (fromIntegral slotNo)
-            (BlockHeaderHash blockHeaderHash)
-            (fromIntegral blockNo)
-      }
+  :: Int64
+  -> ByteString
+  -> Int64
+  -> ByteString
+  -> Int16
+  -> ByteString
+  -> Maybe ByteString
+  -> ByteString
+  -> ByteString
+  -> ContractHeader
+decodeContractHeader slotNo blockHeaderHash blockNo txId txIx rolesCurrency metadata address payoutScriptHash =
+  ContractHeader
+    { contractId = ContractId (TxOutRef (TxId txId) (fromIntegral txIx))
+    , rolesCurrency = PolicyId rolesCurrency
+    , metadata = maybe emptyMarloweTransactionMetadata (runGet get . fromStrict) metadata
+    , marloweScriptHash = fromJust do
+        credential <- paymentCredential $ Address address
+        case credential of
+          ScriptCredential hash -> pure hash
+          _ -> Nothing
+    , marloweScriptAddress = Address address
+    , payoutScriptHash = ScriptHash payoutScriptHash
+    , marloweVersion = SomeMarloweVersion MarloweV1
+    , blockHeader =
+        BlockHeader
+          (fromIntegral slotNo)
+          (BlockHeaderHash blockHeaderHash)
+          (fromIntegral blockNo)
+    }
 
 foldNextRange :: (row -> id) -> Int -> Order -> Fold row (Maybe (Range id))
 foldNextRange decodeId rangeLimit rangeDirection = do
@@ -755,5 +129,228 @@ foldNextRange decodeId rangeLimit rangeDirection = do
         , ..
         }
 
-decodeContractId :: ResultRow -> ContractId
-decodeContractId (_, _, _, txId, txIx, _, _, _, _) = ContractId (TxOutRef (TxId txId) (fromIntegral txIx))
+data DelimiterRow = DelimiterRow
+  { delimiterTxId :: ByteString
+  , delimiterTxIx :: Int16
+  , delimiterSlotNo :: Int64
+  }
+
+-- | A select statement which looks for the delimiter specified by the given contractId.
+delimiterStatement :: ContractFilter -> ContractId -> Statement () (Maybe DelimiterRow)
+delimiterStatement cFilter (ContractId TxOutRef{..}) = buildStatement DelimiterRow Decoders.rowMaybe do
+  -- Allocate the tables.
+  fromClause <- delimiterTables cFilter
+  -- Allocate parameters for the delimiter.
+  txIdParam <- param $ unTxId txId
+  txIxParam <- param @Int16 $ fromIntegral txIx
+  whereClause <- filterCondition cFilter $ Just $ delimiterIdCond txIdParam txIxParam
+  let selectClause =
+        NormalSimpleSelect
+          ( NormalTargeting $
+              tableColumn @"txId" Schema.createTxOut
+                :. tableColumn @"txIx" Schema.createTxOut
+                :. tableColumn @"slotNo" Schema.createTxOut
+                :. TargetListNil
+          )
+          Nothing
+          (Just $ pure fromClause)
+          whereClause
+          Nothing
+          Nothing
+          Nothing
+  pure $ SelectPreparableStmt $ Left $ SelectNoParens Nothing (Left selectClause) Nothing Nothing Nothing
+
+-- | A select statement which looks for the delimiter specified by the given contractId.
+totalCountStatement :: ContractFilter -> Statement () Int
+totalCountStatement cFilter = buildStatement fromIntegral Decoders.singleRow do
+  -- Allocate the tables.
+  fromClause <- delimiterTables cFilter
+  whereClause <- filterCondition cFilter Nothing
+  let selectClause =
+        NormalSimpleSelect
+          (NormalTargeting $ countAll :. TargetListNil)
+          Nothing
+          (Just $ pure fromClause)
+          whereClause
+          Nothing
+          Nothing
+          Nothing
+  pure $ SelectPreparableStmt $ Left $ SelectNoParens Nothing (Left selectClause) Nothing Nothing Nothing
+
+headersStatement :: ContractFilter -> Range ContractId -> Maybe DelimiterRow -> Statement () [ContractHeader]
+headersStatement cFilter Range{..} mDelimiter = buildStatement decodeContractHeader Decoders.rowList do
+  -- Allocate the tables.
+  fromClause <- headersTables cFilter
+  -- Allocate the where clause
+  whereClause <- filterCondition cFilter =<< traverse (delimiterComparisonCond rangeDirection) mDelimiter
+  -- Allocate limit and offset params
+  offsetParam <- param $ fromIntegral @_ @Int32 rangeOffset
+  limitParam <- param $ fromIntegral @_ @Int32 (rangeLimit + 1)
+  let selectClause =
+        NormalSimpleSelect
+          ( NormalTargeting $
+              tableColumn @"slotNo" Schema.createTxOut
+                :. tableColumn @"blockId" Schema.createTxOut
+                :. tableColumn @"blockNo" Schema.createTxOut
+                :. tableColumn @"txId" Schema.createTxOut
+                :. tableColumn @"txIx" Schema.createTxOut
+                :. tableColumn @"rolesCurrency" Schema.contractTxOut
+                :. tableColumn @"metadata" Schema.createTxOut
+                :. tableColumn @"address" Schema.txOut
+                :. tableColumn @"payoutScriptHash" Schema.contractTxOut
+                :. TargetListNil
+          )
+          Nothing
+          (Just $ pure fromClause)
+          whereClause
+          Nothing
+          Nothing
+          Nothing
+      sortClause =
+        NE.fromList
+          [ rangeSortBy rangeDirection $ tableColumn @"slotNo" Schema.createTxOut
+          , rangeSortBy rangeDirection $ tableColumn @"txId" Schema.createTxOut
+          , rangeSortBy rangeDirection $ tableColumn @"txIx" Schema.createTxOut
+          ]
+      selectLimit =
+        OffsetLimitSelectLimit offsetParam $
+          FetchOnlyLimitClause True (Just $ toSelectFetchFirstValue limitParam) True
+  pure $
+    SelectPreparableStmt $
+      Left $
+        SelectNoParens Nothing (Left selectClause) (Just sortClause) (Just selectLimit) Nothing
+
+-- * Tables
+
+delimiterTables :: ContractFilter -> StatementBuilder TableRef
+delimiterTables ContractFilter{..}
+  | Set.null roleCurrencies = pure $ toTableRef Schema.createTxOut
+  | otherwise = do
+      rolesTableRef <- rolesTable roleCurrencies
+      pure $
+        Schema.createTxOut
+          `naturalJoin` Schema.contractTxOut
+          `naturalJoin` rolesTableRef
+
+headersTables :: ContractFilter -> StatementBuilder TableRef
+headersTables ContractFilter{..}
+  | Set.null roleCurrencies =
+      pure $
+        Schema.createTxOut
+          `naturalJoin` Schema.contractTxOut
+          `naturalJoin` Schema.txOut
+  | otherwise = do
+      rolesTableRef <- rolesTable roleCurrencies
+      pure $
+        Schema.createTxOut
+          `naturalJoin` Schema.contractTxOut
+          `naturalJoin` Schema.txOut
+          `naturalJoin` rolesTableRef
+
+rolesTable :: Set.Set PolicyId -> StatementBuilder TableRef
+rolesTable roleCurrencies = do
+  roleCurrenciesParam <- param $ Vector.fromList $ unPolicyId <$> Set.toList roleCurrencies
+  let unnestApplication =
+        FuncApplication "UNNEST" $
+          Just $
+            NormalFuncApplicationParams Nothing (pure $ toFuncArgExpr roleCurrenciesParam) Nothing
+      unnestReturnTypes =
+        TargetTypesCons
+          (ColumnType (SqlArray (ColumnType SqlBytea NotNull)) NotNull)
+          TargetTypesNil
+      selectClause =
+        NormalSimpleSelect
+          ( NormalTargeting $
+              TargetElRow unnestReturnTypes (ApplicationFuncExpr unnestApplication Nothing Nothing Nothing)
+                :. TargetListNil
+          )
+          Nothing
+          Nothing
+          Nothing
+          Nothing
+          Nothing
+          Nothing
+  pure $
+    SelectTableRef False (NoParensSelectWithParens $ SelectNoParens Nothing (Left selectClause) Nothing Nothing Nothing) $
+      Just $
+        AliasClause True "roles" $
+          Just $
+            pure "rolesCurrency"
+
+-- * Conditions
+
+delimiterIdCond :: Param -> Param -> AExpr
+delimiterIdCond txIdParam txIxParam = do
+  AndAExpr
+    (tableColumn @"txId" Schema.createTxOut `equals` txIdParam)
+    (tableColumn @"txIx" Schema.createTxOut `equals` txIxParam)
+
+delimiterComparisonCond :: Order -> DelimiterRow -> StatementBuilder AExpr
+delimiterComparisonCond order DelimiterRow{..} = do
+  slotNoParam <- param delimiterSlotNo
+  txIdParam <- param delimiterTxId
+  txIxParam <- param delimiterTxIx
+  pure $
+    CExprAExpr $
+      flip InParensCExpr Nothing $
+        OrAExpr
+          (strictComparisonCond order (tableColumn @"slotNo" Schema.createTxOut) slotNoParam)
+          ( flip InParensCExpr Nothing $
+              AndAExpr
+                (tableColumn @"slotNo" Schema.createTxOut `equals` slotNoParam)
+                ( flip InParensCExpr Nothing $
+                    OrAExpr
+                      (strictComparisonCond order (tableColumn @"txId" Schema.createTxOut) txIdParam)
+                      ( flip InParensCExpr Nothing $
+                          AndAExpr
+                            (tableColumn @"txId" Schema.createTxOut `equals` txIdParam)
+                            (laxComparisonCond order (tableColumn @"txIx" Schema.createTxOut) txIxParam)
+                      )
+                )
+          )
+
+-- | Adds additional checks to a condition as required by the contract filter.
+filterCondition :: ContractFilter -> Maybe AExpr -> StatementBuilder (Maybe AExpr)
+filterCondition ContractFilter{..} otherChecks
+  | Set.null tags = pure otherChecks
+  | otherwise = do
+      tagExists <- tagExistsCond tags
+      pure $ Just $ maybe tagExists (`AndAExpr` tagExists) otherChecks
+
+tagExistsCond :: Set MarloweMetadataTag -> StatementBuilder AExpr
+tagExistsCond tags = do
+  tagsParam <- param $ Vector.fromList $ getMarloweMetadataTag <$> Set.toList tags
+  let selectClause =
+        NormalSimpleSelect
+          targeting
+          Nothing
+          (Just $ pure fromClause)
+          (Just whereClause)
+          Nothing
+          Nothing
+          Nothing
+      targeting = NormalTargeting $ TargetElRow returnTypes (IAexprConst 1) :. TargetListNil
+      returnTypes = TargetTypesCons (ColumnType SqlInt4 NotNull) TargetTypesNil
+      tagTable =
+        FuncTableRef
+          False
+          ( FuncExprFuncTable
+              ( ApplicationFuncExprWindowless $
+                  FuncApplication "UNNEST" $
+                    Just $
+                      NormalFuncApplicationParams Nothing (pure $ toFuncArgExpr tagsParam) Nothing
+              )
+              False
+          )
+          (Just $ AliasFuncAliasClause $ AliasClause True "tags" $ Just $ pure "tag")
+
+      fromClause = Schema.contractTxOutTag `naturalJoin` tagTable
+      whereClause =
+        AndAExpr
+          (tableColumn @"txId" Schema.contractTxOutTag `equals` tableColumn @"txId" Schema.createTxOut)
+          (tableColumn @"txIx" Schema.contractTxOutTag `equals` tableColumn @"txIx" Schema.createTxOut)
+  pure $
+    CExprAExpr $
+      ExistsCExpr $
+        NoParensSelectWithParens $
+          SelectNoParens Nothing (Left selectClause) Nothing Nothing Nothing
