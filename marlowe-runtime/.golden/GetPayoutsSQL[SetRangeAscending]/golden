@@ -1,0 +1,2 @@
+Total count statement: SELECT count(*) FROM marlowe.payoutTxOut NATURAL JOIN marlowe.applyTx WHERE TRUE
+Payouts statement: SELECT withdrawalTxIn.txId, applyTx.createTxId, applyTx.createTxIx, payoutTxOut.txId, payoutTxOut.txIx, payoutTxOut.rolesCurrency, payoutTxOut.role FROM marlowe.payoutTxOut NATURAL JOIN marlowe.applyTx LEFT JOIN marlowe.withdrawalTxIn ON payoutTxOut.txId = withdrawalTxIn.payoutTxId AND payoutTxOut.txIx = withdrawalTxIn.payoutTxIx ORDER BY applyTx.slotNo, payoutTxOut.txId, payoutTxOut.txIx OFFSET $1 FETCH NEXT $2 ROWS ONLY
