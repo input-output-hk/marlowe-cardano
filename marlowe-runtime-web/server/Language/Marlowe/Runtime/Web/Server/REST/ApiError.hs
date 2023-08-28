@@ -155,7 +155,7 @@ instance ToDTO (CreateError 'V1) where
     CreateLoadMarloweContextFailed (PayoutScriptNotPublished _) -> ApiError "Internal error" "PayoutScriptNotPublished" Null 500
     CreateLoadMarloweContextFailed (ExtractCreationError _) -> ApiError "Internal error" "ExtractCreationError" Null 500
     CreateLoadMarloweContextFailed (ExtractMarloweTransactionError _) -> ApiError "Internal error" "ExtractMarloweTransactionError" Null 500
-    CreateBuildupFailed (MintingUtxoSelectionFailed utxos) -> ApiError "Minting UTxO selection failed" "MintingUtxoSelectionFailed" (toJSON utxos) 400
+    CreateBuildupFailed MintingUtxoSelectionFailed -> ApiError "Minting UTxO selection failed" "MintingUtxoSelectionFailed" Null 400
     CreateBuildupFailed (AddressDecodingFailed _) -> ApiError "Internal error" "AddressDecodingFailed" Null 500
     CreateBuildupFailed (MintingScriptDecodingFailed _) -> ApiError "Internal error" "MintingScriptDecodingFailed" Null 500
     CreateToCardanoError -> ApiError "Internal error" "CreateToCardanoError" Null 400
@@ -170,7 +170,7 @@ instance ToDTO (ApplyInputsError 'V1) where
     ApplyInputsEraUnsupported era -> ApiError ("Current network era not supported: " <> show era) "WithdrawEraUnsupported" Null 503
     ApplyInputsConstraintError (MintingUtxoNotFound _) -> ApiError "Minting UTxO not found" "MintingUtxoNotFound" Null 500
     ApplyInputsConstraintError (RoleTokenNotFound _) -> ApiError "Role token not found" "RoleTokenNotFound" Null 403
-    ApplyInputsConstraintError ToCardanoError -> ApiError "Internal error" "ToCardnoError" Null 500
+    ApplyInputsConstraintError ToCardanoError -> ApiError "Internal error" "ToCardanoError" Null 500
     ApplyInputsConstraintError MissingMarloweInput -> ApiError "Internal error" "MissingMarloweInput" Null 500
     ApplyInputsConstraintError (PayoutInputNotFound _) -> ApiError "Internal error" "PayoutInputNotFound" Null 500
     ApplyInputsConstraintError (CalculateMinUtxoFailed _) -> ApiError "Internal error" "CalculateMinUtxoFailed" Null 500

@@ -156,7 +156,7 @@ instance (ArbitraryMarloweVersion v) => Arbitrary (ConstraintError v) where
 instance Arbitrary CreateBuildupError where
   arbitrary =
     oneof
-      [ MintingUtxoSelectionFailed <$> arbitrary
+      [ pure MintingUtxoSelectionFailed
       , AddressDecodingFailed <$> arbitrary
       , MintingScriptDecodingFailed <$> arbitrary
       ]
