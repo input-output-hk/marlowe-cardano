@@ -45,7 +45,7 @@ import Test.Hspec
 import Test.Integration.Marlowe.Local (MarloweRuntime, withLocalMarloweRuntime)
 
 spec :: Spec
-spec = focus $ describe "Withdraw" $ aroundAll setup do
+spec = describe "Withdraw" $ aroundAll setup do
   it "Fails on empty payouts" noPayoutsTest
   it "Fails on non-payout script outputs" nonPayoutTest
   it "Fails on non-script outputs" nonScriptPayoutTest
