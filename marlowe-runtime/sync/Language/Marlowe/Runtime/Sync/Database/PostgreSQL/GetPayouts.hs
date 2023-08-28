@@ -35,10 +35,14 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   TxOutRef (..),
  )
 import Language.Marlowe.Runtime.Core.Api (ContractId (..))
-import Language.Marlowe.Runtime.Schema (equals, leftJoinOn, naturalJoin, withCTEs)
+import Language.Marlowe.Runtime.Schema (equals, innerJoinOn, leftJoinOn, naturalJoin, withCTEs)
 import qualified Language.Marlowe.Runtime.Schema as Schema
 import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetWithdrawal (decodePayoutHeader)
-import PostgresqlSyntax.Ast (AscDesc (..), MathOp (..), SymbolicExprBinOp (..))
+import PostgresqlSyntax.Ast (
+  AscDesc (..),
+  MathOp (..),
+  SymbolicExprBinOp (..),
+ )
 import Prelude hiding (init)
 
 -- | Fetch a page of payouts for a given filter and range.
@@ -243,17 +247,17 @@ tables alwaysJoinWithdrawals PayoutFilter{..} = do
   (mRoleTokensCTE, joinRoleTokens) <- roleTokensTables roleTokens
   pure
     ( withCTEs False $ catMaybes [mContractIdsCTE, mRoleTokensCTE]
-    , joinRoleTokens $ joinContractIds $ baseTables alwaysJoinWithdrawals PayoutFilter{..}
+    , baseTables alwaysJoinWithdrawals PayoutFilter{..} (joinRoleTokens . joinContractIds)
     )
 
 -- | The joined tables from the marlowe schema used in the FROM clause for a given filter.
-baseTables :: Bool -> PayoutFilter -> TableRef
-baseTables alwaysJoinWithdrawals PayoutFilter{..}
-  | shouldJoinWithdrawals =
-      naturalJoin Schema.payoutTxOut $
-        leftJoinOn payoutWithdrawalJoinCond Schema.applyTx withdrawalTxInTable
-  | otherwise = Schema.payoutTxOut `naturalJoin` Schema.applyTx
+baseTables :: Bool -> PayoutFilter -> (TableRef -> TableRef) -> TableRef
+baseTables alwaysJoinWithdrawals PayoutFilter{..} insertCTEJoins
+  | isWithdrawn == Just True = innerJoinOn payoutWithdrawalJoinCond tablesWithoutWithdrawals withdrawalTxInTable
+  | shouldJoinWithdrawals = leftJoinOn payoutWithdrawalJoinCond tablesWithoutWithdrawals withdrawalTxInTable
+  | otherwise = tablesWithoutWithdrawals
   where
+    tablesWithoutWithdrawals = insertCTEJoins $ Schema.payoutTxOut `naturalJoin` Schema.applyTx
     shouldJoinWithdrawals = alwaysJoinWithdrawals || isJust isWithdrawn
 
 -- | The CTE and a modification to the FROM clause for the filtered contract IDs.
@@ -337,7 +341,7 @@ delimiterComparisonCond order DelimiterRow{..} = do
                   (strictComparisonCond order (tableColumn @"txId" Schema.payoutTxOut) txIdParam)
                   ( flip InParensCExpr Nothing $
                       AndAExpr
-                        (tableColumn @"txId" Schema.payoutTxOut `equals` txIxParam)
+                        (tableColumn @"txId" Schema.payoutTxOut `equals` txIdParam)
                         (laxComparisonCond order (tableColumn @"txIx" Schema.payoutTxOut) txIxParam)
                   )
             )
@@ -355,8 +359,8 @@ laxComparisonCond Ascending a = SymbolicBinOpAExpr a (MathSymbolicExprBinOp Grea
 filterCondition :: PayoutFilter -> Maybe AExpr -> Maybe AExpr
 filterCondition PayoutFilter{..} = case isWithdrawn of
   Nothing -> id
-  Just False -> fmap $ (`AndAExpr` payoutNotWithdrawnCond) . flip InParensCExpr Nothing
-  Just True -> fmap $ (`AndAExpr` payoutIsWithdrawnCond) . flip InParensCExpr Nothing
+  Just False -> Just . maybe payoutNotWithdrawnCond ((`AndAExpr` payoutNotWithdrawnCond) . flip InParensCExpr Nothing)
+  Just True -> Just . maybe payoutIsWithdrawnCond ((`AndAExpr` payoutIsWithdrawnCond) . flip InParensCExpr Nothing)
 
 -- |
 --  ==== SQL
@@ -375,7 +379,14 @@ payoutNotWithdrawnCond :: AExpr
 payoutNotWithdrawnCond = IsnullAExpr $ tableColumn @"txId" withdrawalTxInTable
 
 countAll :: TargetElRow '[ '(SqlInt4, NotNull)]
-countAll = TargetElRow (TargetTypesCons singColumnType TargetTypesNil) AsteriskTargetEl
+countAll =
+  TargetElRow (TargetTypesCons singColumnType TargetTypesNil) $
+    ApplicationFuncExpr
+      ( FuncApplication "count" $ Just StarFuncApplicationParams
+      )
+      Nothing
+      Nothing
+      Nothing
 
 unnestParams :: NonEmpty Param -> TableRef
 unnestParams params =

@@ -125,6 +125,9 @@ withCTEs recursive (x : xs) = Just $ WithClause recursive $ x :| xs
 naturalJoin :: (IsTableRef a, IsTableRef b) => a -> b -> TableRef
 naturalJoin = joinTable $ NaturalJoinMeth Nothing
 
+innerJoinOn :: (IsAExpr expr, IsTableRef a, IsTableRef b) => expr -> a -> b -> TableRef
+innerJoinOn expr = joinTable $ QualJoinMeth (Just InnerJoinType) $ OnJoinQual expr
+
 leftJoinOn :: (IsAExpr expr, IsTableRef a, IsTableRef b) => expr -> a -> b -> TableRef
 leftJoinOn expr = joinTable $ QualJoinMeth (Just $ LeftJoinType False) $ OnJoinQual expr
 

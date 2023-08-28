@@ -2127,4 +2127,4 @@ instance IsIndexElemDef Fconst where toIndexElemDef = toIndexElemDef . toAExpr
 instance IsIndexElemDef Bool where toIndexElemDef = toIndexElemDef . toAExpr
 
 instance IsString Ident where
-  fromString = QuotedIdent . fromString
+  fromString = UnquotedIdent . fromString
