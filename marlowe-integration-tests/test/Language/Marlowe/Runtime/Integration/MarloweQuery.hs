@@ -22,6 +22,7 @@ import Language.Marlowe.Protocol.Query.Client (
   MarloweQueryClient,
   getContractHeaders,
   getContractState,
+  getPayouts,
   getTransaction,
   getTransactions,
   getWithdrawal,
@@ -29,7 +30,7 @@ import Language.Marlowe.Protocol.Query.Client (
  )
 import Language.Marlowe.Protocol.Query.Types
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, PolicyId, TxId, TxOutRef (..))
+import Language.Marlowe.Runtime.ChainSync.Api (AssetId (..), BlockHeader, PolicyId, TxId, TxOutRef (..))
 import Language.Marlowe.Runtime.Client (runMarloweQueryClient)
 import Language.Marlowe.Runtime.Core.Api (
   ContractId (..),
@@ -53,16 +54,18 @@ import Test.Hspec
 import Test.Integration.Marlowe (MarloweRuntime, withLocalMarloweRuntime)
 
 spec :: Spec
-spec = describe "MarloweQuery" $ aroundAll setup do
+spec = focus $ describe "MarloweQuery" $ aroundAll setup do
   describe "GetHeaders" $ paginatedQuerySpec GetHeaders runMarloweQueryIntegrationTest
   getContractStateSpec
   getTransactionsSpec
   getTransactionSpec
   describe "GetWithdrawals" $ paginatedQuerySpec GetWithdrawals runMarloweQueryIntegrationTest
   getWithdrawalSpec
+  describe "GetPayouts" $ paginatedQuerySpec GetPayouts runMarloweQueryIntegrationTest
 
 data GetHeaders = GetHeaders
 data GetWithdrawals = GetWithdrawals
+data GetPayouts = GetPayouts
 
 instance PaginatedQuery GetHeaders where
   type Filter GetHeaders = ContractFilter
@@ -168,6 +171,68 @@ instance PaginatedQuery GetWithdrawals where
       }
   enumerateFilters _ = WithdrawalFilterSym <$> Set.toList (Set.powerSet $ Set.fromList $ allRefs GetHeaders)
   runQuery _ = getWithdrawals
+
+instance PaginatedQuery GetPayouts where
+  type Filter GetPayouts = PayoutFilter
+  type Ref GetPayouts = TxOutRef
+  type Item GetPayouts = PayoutHeader
+  data RefSym GetPayouts
+    = Payout1
+    | Payout2
+    | Payout3
+    deriving (Eq, Ord, Show, Enum, Bounded)
+  data FilterSym GetPayouts = PayoutFilterSym
+    { isWithdrawnSym :: Maybe Bool
+    , roleTokensSym :: Set (RefSym GetHeaders)
+    , contractIdsSym :: Set (RefSym GetHeaders)
+    }
+    deriving (Eq, Ord, Show)
+  applyFilter _ PayoutFilterSym{..} ref =
+    (Set.null roleTokensSym || Set.member (payoutContract ref) roleTokensSym)
+      && (Set.null contractIdsSym || Set.member (payoutContract ref) contractIdsSym)
+      && case isWithdrawnSym of
+        Nothing -> True
+        Just True -> ref == Payout1 || ref == Payout2
+        Just False -> ref == Payout3
+  toRef p testData = \case
+    Unknown -> TxOutRef "0000000000000000000000000000000000000000000000000000000000000000" 1
+    Known payout -> case toItem p testData payout of PayoutHeader{..} -> payoutId
+  toItem _ MarloweQueryTestData{..} = \case
+    Payout1 -> standardContractPayout contract1Step4 $ Just $ fst contract1Step5
+    Payout2 -> standardContractPayout contract2Step4 $ Just $ fst contract2Step5
+    Payout3 -> standardContractPayout contract3Step4 Nothing
+  toFilter _ MarloweQueryTestData{..} PayoutFilterSym{..} =
+    PayoutFilter
+      { isWithdrawn = isWithdrawnSym
+      , roleTokens = flip Set.map roleTokensSym \case
+          Contract1 -> AssetId (standardContractRoleCurrency contract1) "Party A"
+          Contract2 -> AssetId (standardContractRoleCurrency contract2) "Party A"
+          Contract3 -> AssetId (standardContractRoleCurrency contract3) "Party A"
+          Contract4 -> AssetId (standardContractRoleCurrency contract4) "Party A"
+      , contractIds = flip Set.map contractIdsSym \case
+          Contract1 -> standardContractId contract1
+          Contract2 -> standardContractId contract2
+          Contract3 -> standardContractId contract3
+          Contract4 -> standardContractId contract4
+      }
+  enumerateFilters _ = do
+    isWithdrawnSym <- [Nothing, Just True, Just False]
+    roleTokensSym1 <- allRefs GetHeaders
+    roleTokensSym2 <- allRefs GetHeaders
+    guard $ roleTokensSym2 >= roleTokensSym1
+    contractIdsSym1 <- allRefs GetHeaders
+    contractIdsSym2 <- allRefs GetHeaders
+    guard $ contractIdsSym2 >= contractIdsSym1
+    let roleTokensSym = Set.fromList [roleTokensSym1, roleTokensSym2]
+    let contractIdsSym = Set.fromList [contractIdsSym1, contractIdsSym2]
+    pure PayoutFilterSym{..}
+  runQuery _ = getPayouts
+
+payoutContract :: RefSym GetPayouts -> RefSym GetHeaders
+payoutContract = \case
+  Payout1 -> Contract1
+  Payout2 -> Contract2
+  Payout3 -> Contract3
 
 standardContractRoleCurrency :: StandardContractInit 'V1 -> PolicyId
 standardContractRoleCurrency StandardContractInit{..} = case contractCreated of

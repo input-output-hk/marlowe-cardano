@@ -62,25 +62,12 @@ getPayouts pFilter range@Range{..} = runMaybeT do
   mDelimiter <- traverse (MaybeT . T.statement () . delimiterStatement pFilter) rangeStart
   lift do
     totalCount <- T.statement () $ totalCountStatement pFilter
-    items <- T.statement () $ payoutsStatement pFilter range mDelimiter
-    let nextRange =
-          Range . Just . payoutId
-            <$> findAt rangeLimit items
-            <*> pure 1
-            <*> pure rangeLimit
-            <*> pure rangeDirection
-
+    itemsWithNext <- T.statement () $ payoutsStatement pFilter range mDelimiter
+    let nextRange = case drop rangeLimit itemsWithNext of
+          [] -> Nothing
+          PayoutHeader{..} : _ -> Just Range{rangeStart = Just payoutId, rangeOffset = 0, ..}
+        items = take rangeLimit itemsWithNext
     pure Page{..}
-
-findAt :: Int -> [a] -> Maybe a
-findAt ix
-  | ix < 0 = const Nothing
-  | otherwise = go 0
-  where
-    go _ [] = Nothing
-    go i (x : xs)
-      | i == ix = Just x
-      | otherwise = go (succ i) xs
 
 -- * Statements
 
@@ -139,7 +126,7 @@ payoutsStatement pFilter Range{..} mDelimiter = buildStatement decodePayoutHeade
   whereClause <- filterCondition pFilter <$> traverse (delimiterComparisonCond rangeDirection) mDelimiter
   -- Allocate limit and offset params
   offsetParam <- param $ fromIntegral @_ @Int32 rangeOffset
-  limitParam <- param $ fromIntegral @_ @Int32 rangeLimit
+  limitParam <- param $ fromIntegral @_ @Int32 (rangeLimit + 1)
   let selectClause =
         NormalSimpleSelect
           ( NormalTargeting $

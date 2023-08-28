@@ -118,10 +118,10 @@ spec = it "Basic e2e scenario" $ withLocalMarloweRuntime $ runIntegrationTest do
                               payoutTxOutRef <- expectJust "Failed to extract payout from deposit" case Map.toList payouts of
                                 [(txOutRef, _)] -> Just txOutRef
                                 _ -> Nothing
-                              let withdrawTxId = fromCardanoTxId $ getTxId withdrawTxBody
+                              let withdrawTxId' = fromCardanoTxId $ getTxId withdrawTxBody
                               marloweSyncRequestNextExpectRollForward
                                 withdrawBlock
-                                [RedeemPayout $ RedeemStep payoutTxOutRef withdrawTxId $ AssetId rolesCurrency "Party A"]
+                                [RedeemPayout $ RedeemStep payoutTxOutRef withdrawTxId' $ AssetId rolesCurrency "Party A"]
                                 do
                                   -- 29. Request next (marlowe sync)
                                   -- 30. Expect wait

@@ -3,7 +3,7 @@
 
 module Language.Marlowe.Runtime.Integration.StandardContract where
 
-import Cardano.Api (BabbageEra)
+import Cardano.Api (BabbageEra, getTxId)
 import Cardano.Api.Shelley (
   ReferenceTxInsScriptsInlineDatumsSupportedInEra (ReferenceTxInsScriptsInlineDatumsInBabbageEra),
  )
@@ -17,7 +17,9 @@ import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Extended.V1 (ada)
 import Language.Marlowe.Protocol.Load.Client (pushContract)
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader)
+import Language.Marlowe.Protocol.Query.Types (PayoutHeader (..))
+import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, TxId)
 import Language.Marlowe.Runtime.Client (createContract, runMarloweLoadClient)
 import Language.Marlowe.Runtime.Core.Api (
   ContractId,
@@ -26,6 +28,7 @@ import Language.Marlowe.Runtime.Core.Api (
   MarloweTransactionMetadata (..),
   MarloweVersion (..),
   MarloweVersionTag (..),
+  Payout (..),
   TransactionOutput (..),
   emptyMarloweTransactionMetadata,
  )
@@ -65,6 +68,20 @@ standardContractHeader StandardContractInit{..} = contractCreatedToContractHeade
 
 standardContractId :: StandardContractInit v -> ContractId
 standardContractId StandardContractInit{contractCreated = ContractCreatedInEra{..}} = contractId
+
+standardContractPayout :: StandardContractClosed 'V1 -> Maybe (WithdrawTxInEra BabbageEra 'V1) -> PayoutHeader
+standardContractPayout StandardContractClosed{returnDeposited = InputsAppliedInEra{..}} mWithdraw =
+  PayoutHeader
+    { contractId
+    , payoutId
+    , withdrawalId = withdrawTxId <$> mWithdraw
+    , role = datum
+    }
+  where
+    (payoutId, Payout{..}) = head . Map.toList $ payouts output
+
+withdrawTxId :: WithdrawTxInEra BabbageEra 'V1 -> TxId
+withdrawTxId WithdrawTxInEra{..} = fromCardanoTxId $ getTxId txBody
 
 data StandardContractFundsDeposited v = StandardContractFundsDeposited
   { chooseGimmeTheMoney :: Integration (StandardContractChoiceMade v)
