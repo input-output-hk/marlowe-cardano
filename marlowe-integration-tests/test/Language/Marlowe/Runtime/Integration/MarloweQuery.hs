@@ -54,7 +54,7 @@ import Test.Hspec
 import Test.Integration.Marlowe (MarloweRuntime, withLocalMarloweRuntime)
 
 spec :: Spec
-spec = focus $ describe "MarloweQuery" $ aroundAll setup do
+spec = describe "MarloweQuery" $ aroundAll setup do
   describe "GetHeaders" $ paginatedQuerySpec GetHeaders runMarloweQueryIntegrationTest
   getContractStateSpec
   getTransactionsSpec
