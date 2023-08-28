@@ -28,7 +28,7 @@ import Control.Concurrent.Component.Run (AppM (..))
 import Control.Monad.Event.Class
 import Control.Monad.IO.Unlift (liftIO, withRunInIO)
 import Control.Monad.Reader (ReaderT (ReaderT), runReaderT)
-import Data.Aeson ((.=))
+import Data.Aeson (Value (..), (.=))
 import Data.Aeson.Types (object)
 import Data.String.Conversions (cs)
 import Language.Marlowe.Protocol.Client (MarloweRuntimeClient (..))
@@ -114,20 +114,26 @@ customFormatters =
     }
 
 customBodyParserErrorFormatter :: ErrorFormatter
-customBodyParserErrorFormatter tr req err =
-  let value =
+customBodyParserErrorFormatter typeRep req message =
+  let errorCode = "RequestBodyParseError"
+      details = show typeRep
+      value =
         object
-          [ "combinator" .= show tr
-          , "message" .= ("Request body parse error" :: String)
-          , "error" .= err
+          [ "errorCode" .= errorCode
+          , "message" .= message
+          , "details" .= String (cs details)
           ]
-      accH = getAcceptHeader req
-   in case handleAcceptH (Proxy :: Proxy '[JSON]) accH value of
-        Nothing -> err400{errBody = cs err}
-        Just (ctypeH, body) ->
+      acceptHeader = getAcceptHeader req
+   in case handleAcceptH (Proxy :: Proxy '[JSON]) acceptHeader value of
+        Nothing ->
+          err400
+            { errBody =
+                cs $ errorCode <> ": " <> message <> " (" <> details <> ")"
+            }
+        Just (contentTypeHeader, body) ->
           err400
             { errBody = body
-            , errHeaders = [("Content-Type", cs ctypeH)]
+            , errHeaders = [("Content-Type", cs contentTypeHeader)]
             }
 
 serveServerM
