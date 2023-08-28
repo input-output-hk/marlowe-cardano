@@ -43,13 +43,18 @@ import Hasql.DynamicSyntax.Ast
 import PostgresqlSyntax.Ast (AliasClause (..), Ident)
 import Unsafe.Coerce (unsafeCoerce)
 
+-- | A table in a schema, consisting of a name, an optional schema name, and a list of columns.
 data Table cols = Table
   { tableName :: !Ident
+  -- ^ The name of the table.
   , tableSchema :: !(Maybe Ident)
+  -- ^ The name of the schema the table belongs to.
   , tableColumns :: Columns cols
+  -- ^ The columns in the table.
   }
   deriving (Show, Eq, Ord)
 
+-- | For a statically known type-level list of columns, produce a table with a given name and optional schema name.
 singTable :: (SingColumns cols) => Ident -> Maybe Ident -> Table cols
 singTable tableName tableSchema = Table tableName tableSchema $ singColumns tableName
 
@@ -64,14 +69,18 @@ instance IsTargetElRow (Table (col ': cols)) where
         Just $
           pure AllIndirectionEl
 
+-- | Create a @Targeting@ that selects all columns of a table (SQL: *)
 wildcard :: Table (col ': cols) -> Targeting '[TableRow (col ': cols)]
 wildcard Table{..} =
   NormalTargeting $
     TargetElRow (tableRows tableColumns) AsteriskTargetEl
       :. TargetListNil
 
+-- | A heterogeneous list of columns.
 data Columns cols where
+  -- | Empty column list.
   ColumnsNil :: Columns '[]
+  -- | Cons-cell column list.
   ColumnsCons :: !(Column col) -> Columns cols -> Columns (col ': cols)
 
 class SingColumns cols where singColumns :: Ident -> Columns cols
@@ -85,12 +94,17 @@ deriving instance Ord (Columns cols)
 
 type ColumnK = (Symbol, Type, Type)
 
+-- | A column with statically known name, type, and nullability.
 data Column col where
   Column
     :: !Ident
+    -- ^ The name of the table (used for producing qualified names).
     -> !(ColumnName name)
+    -- ^ The name of the column.
     -> !(SqlType type_)
+    -- ^ The type of the column.
     -> !(Nullability nullability)
+    -- ^ The nullability of the column.
     -> Column '(name, type_, nullability)
 
 deriving instance Show (Column col)
@@ -128,6 +142,7 @@ class SingColumn col where singColumn :: Ident -> Column col
 instance (KnownSymbol name, SingColumnType t nullability) => SingColumn '(name, t, nullability) where
   singColumn tableName = Column tableName singColumnName singSqlType singNullability
 
+-- | A column name identifier carrying its value at the type level as a @Symbol@.
 data ColumnName name where
   UnsafeColumnName :: (KnownSymbol name) => !Ident -> ColumnName name
 
@@ -145,6 +160,8 @@ singColumnName = UnsafeColumnName $ fromString $ symbolVal $ Proxy @name
 columnNameVal :: ColumnName name -> Ident
 columnNameVal (UnsafeColumnName ident) = ident
 
+-- | Create a common table expression from a table schema and a statement to populate it. Allows optionally specifying a
+-- materialization directive.
 cte' :: Maybe Bool -> Table cols -> PreparableStmt '[TableRow cols] -> CommonTableExpr
 cte' materialized Table{..} =
   CommonTableExpr
@@ -155,13 +172,16 @@ cte' materialized Table{..} =
     )
     materialized
 
+-- | Enumerate the names of the columns.
 tableColumnNames :: Columns cols -> [Ident]
 tableColumnNames ColumnsNil = []
 tableColumnNames (ColumnsCons (Column _ name _ _) cols) = columnNameVal name : tableColumnNames cols
 
+-- | Create a common table expression from a table schema and a statement to populate it.
 cte :: Table cols -> PreparableStmt '[TableRow cols] -> CommonTableExpr
 cte = cte' Nothing
 
+-- | Create a materialized common table expression from a table schema and a statement to populate it.
 materializedCte :: Table cols -> PreparableStmt '[TableRow cols] -> CommonTableExpr
 materializedCte = cte' $ Just True
 
@@ -182,9 +202,13 @@ tableRelationExpr Table{..} =
 -- | Produces the table ref "schemaName.tableName AS alias" and a new table for resolving columns.
 tableRefAlias :: Table cols -> Ident -> (Table cols, TableRef)
 tableRefAlias table alias =
-  ( table{tableName = alias, tableSchema = Nothing}
+  ( table{tableName = alias, tableSchema = Nothing, tableColumns = renameColumnTable alias $ tableColumns table}
   , RelationExprTableRef (tableRelationExpr table) (Just $ AliasClause True alias Nothing) Nothing
   )
+
+renameColumnTable :: Ident -> Columns cols -> Columns cols
+renameColumnTable _ ColumnsNil = ColumnsNil
+renameColumnTable name (ColumnsCons (Column _ cName t n) cols) = ColumnsCons (Column name cName t n) cols
 
 type family GetColumn (name :: Symbol) (cols :: [ColumnK]) :: ColumnK where
   GetColumn name '[] = TypeError ('Text "No such column: " ':<>: 'ShowType name)
@@ -203,9 +227,11 @@ instance {-# OVERLAPPING #-} HasColumn name ('(name, t, n) ': cols) where
 instance {-# OVERLAPPING #-} (HasColumn name cols) => HasColumn name (col ': cols) where
   getColumn name (ColumnsCons _ cols) = unsafeCoerce $ getColumn name cols
 
+-- | Get a column from a table by its name.
 tableColumn :: forall name cols. (KnownSymbol name, HasColumn name cols) => Table cols -> Column (GetColumn name cols)
 tableColumn Table{..} = getColumn (singColumnName @name) tableColumns
 
+-- | Get the types of the columns in a table.
 tableRows :: Columns cols -> TargetTypes (TableRow cols)
 tableRows ColumnsNil = TargetTypesNil
 tableRows (ColumnsCons (Column _ _ t nullability) cols) = TargetTypesCons (ColumnType t nullability) $ tableRows cols
@@ -221,6 +247,7 @@ type family AllNull (cols :: [ColumnK]) :: [ColumnK] where
   AllNull '[] = '[]
   AllNull ('(name, t, _) ': cols) = ('(name, t, Null) ': AllNull cols)
 
+-- | Make a copy of a table with all null columns (useful for outer joins).
 allNull :: Table cols -> Table (AllNull cols)
 allNull Table{..} = Table{tableColumns = allNullColumns tableColumns, ..}
 

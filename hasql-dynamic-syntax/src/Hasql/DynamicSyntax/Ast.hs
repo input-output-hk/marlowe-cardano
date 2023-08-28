@@ -70,14 +70,22 @@ import PostgresqlSyntax.Ast (
   Xconst,
  )
 
+-- | A kind-level type flagging a column as nullable.
 data Null
+
+-- | A kind-level type flagging a column as not nullable.
 data NotNull
 
+-- | A singleton GADT that carries type-level nullability information.
 data Nullability a where
+  -- | Indicates that a column can be null
   Null :: Nullability Null
+  -- | Indicates that a column cannot be null
   NotNull :: Nullability NotNull
 
+-- | A typeclass used to build statically known @Nullability@ values from type information.
 class SingNullability a where singNullability :: Nullability a
+
 instance SingNullability Null where singNullability = Null
 instance SingNullability NotNull where singNullability = NotNull
 
@@ -107,6 +115,7 @@ data SqlJson
 data SqlJsonb
 data SqlArray t
 
+-- | A singleton GADT that carries type-level column type information.
 data SqlType t where
   SqlBool :: SqlType SqlBool
   SqlInt2 :: SqlType SqlInt2
@@ -130,7 +139,9 @@ data SqlType t where
   SqlJsonb :: SqlType SqlJsonb
   SqlArray :: !(ColumnType t) -> SqlType (SqlArray (ColumnType t))
 
+-- | A typeclass used to build statically known @SqlType@ values from type information.
 class SingSqlType a where singSqlType :: SqlType a
+
 instance SingSqlType SqlBool where singSqlType = SqlBool
 instance SingSqlType SqlInt2 where singSqlType = SqlInt2
 instance SingSqlType SqlInt4 where singSqlType = SqlInt4
@@ -158,11 +169,14 @@ deriving instance Show (SqlType t)
 deriving instance Eq (SqlType t)
 deriving instance Ord (SqlType t)
 
+-- | A singleton GADT that carries type-level column type and nullability information.
 data ColumnType t where
   ColumnType :: !(SqlType t) -> !(Nullability nullable) -> ColumnType '(t, nullable)
 
+-- | A constraint used to build statically known @ColumnType@ values from type information.
 type SingColumnType t nullability = (SingSqlType t, SingNullability nullability)
 
+-- | Build the @ColumnType@ singleton for statically-known type and nullability values.
 singColumnType :: (SingColumnType t nullability) => ColumnType '(t, nullability)
 singColumnType = ColumnType singSqlType singNullability
 
@@ -170,6 +184,8 @@ deriving instance Show (ColumnType t)
 deriving instance Eq (ColumnType t)
 deriving instance Ord (ColumnType t)
 
+-- | Represents the rows that a single target element would produce. E.g. column targets produce one row and wildcard
+-- (*) targets produce multiple.
 data TargetTypes row where
   TargetTypesNil :: TargetTypes '[]
   TargetTypesCons :: ColumnType t -> TargetTypes row -> TargetTypes (t ': row)
@@ -178,6 +194,7 @@ deriving instance Show (TargetTypes row)
 deriving instance Eq (TargetTypes row)
 deriving instance Ord (TargetTypes row)
 
+-- | Represents the nested list of rows that a target list produce.
 data TargetTypesList rows where
   TargetTypesListNil :: TargetTypesList '[]
   TargetTypesListCons :: TargetTypes (r ': row) -> TargetTypesList rows -> TargetTypesList ((r ': row) ': rows)
@@ -186,6 +203,7 @@ deriving instance Show (TargetTypesList rows)
 deriving instance Eq (TargetTypesList rows)
 deriving instance Ord (TargetTypesList rows)
 
+-- | Relates the known arguments of @SqlType@ to a corresponding Haskell value type.
 type family SqlToHask (t :: Type) :: Type where
   SqlToHask SqlBool = Bool
   SqlToHask SqlInt2 = Int16
@@ -209,13 +227,10 @@ type family SqlToHask (t :: Type) :: Type where
   SqlToHask SqlJsonb = Value
   SqlToHask (SqlArray (ColumnType t)) = Vector (ColumnToHask t)
 
+-- | Relates the type and nullability info carried by a @ColumnType` to a Haskell value type.
 type family ColumnToHask (t :: (Type, Type)) :: Type where
   ColumnToHask '(t, Null) = Maybe (SqlToHask t)
   ColumnToHask '(t, NotNull) = (SqlToHask t)
-
-type family (++) (as :: [k]) (as' :: [k]) :: [k] where
-  '[] ++ as' = as'
-  (a ': as) ++ as' = a ': (as ++ as')
 
 -- * Statement
 
@@ -229,7 +244,7 @@ type family (++) (as :: [k]) (as' :: [k]) :: [k] where
 --   |  DeleteStmt
 --   |  CallStmt
 -- @
-data PreparableStmt rows
+data PreparableStmt (rows :: [[(Type, Type)]])
   = SelectPreparableStmt (SelectStmt rows)
   | InsertPreparableStmt (InsertStmt rows)
   | UpdatePreparableStmt (UpdateStmt rows)

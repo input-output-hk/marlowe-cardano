@@ -119,27 +119,19 @@ getBooksByAuthor isAscending author =
   buildStatement Book Decoders.rowList do
     authorParam <- param author
     pure $
-      SelectPreparableStmt $
-        Left $
-          SelectNoParens
-            Nothing
-            ( Left $
-                NormalSimpleSelect
-                  ( NormalTargeting $
-                      tableColumn @"author" bookTable
-                        :. tableColumn @"title" bookTable
-                        :. TargetListNil
-                  )
-                  Nothing
-                  (Just $ pure $ toTableRef bookTable)
-                  Nothing
-                  Nothing
-                  Nothing
-                  Nothing
-            )
-            Nothing
-            Nothing
-            Nothing
+      simpleSelectPreparableStmt $
+        NormalSimpleSelect -- SELECT
+          ( NormalTargeting $
+              tableColumn @"author" bookTable
+                :. tableColumn @"title" bookTable
+                :. TargetListNil
+          )
+          Nothing -- INTO
+          (Just $ pure $ toTableRef bookTable) -- FROM
+          Nothing -- WHERE
+          Nothing -- GROUP BY
+          Nothing -- HAVING
+          Nothing -- WINDOW
 ```
 
 Here, the relative benefits and drawbacks of the three approaches are

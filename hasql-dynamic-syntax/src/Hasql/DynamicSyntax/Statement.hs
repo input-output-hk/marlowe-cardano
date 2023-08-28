@@ -33,18 +33,24 @@ import Hasql.Statement (Statement (..))
 import qualified PostgresqlSyntax.Ast as P
 import qualified PostgresqlSyntax.Rendering as Render
 
+-- | Allocate a parameter value with an explicit encoder.
 encodeParam :: Encoders.NullableOrNot Encoders.Value param -> param -> StatementBuilder Param
 encodeParam encoder p = StatementBuilder $ rws \_ paramCount ->
   (Param $ Internal.Param $ paramCount + 1, paramCount + 1, p >$ Encoders.param encoder)
 
+-- | Allocate a parameter value with an implicit encoder.
 param :: (DefaultParamEncoder param) => param -> StatementBuilder Param
 param = encodeParam defaultParam
 
+-- | Build a hasql @Statement@ from a @StatementBuilder@
 buildStatement
   :: (HasTargetListResultHandler rows r)
   => TargetListResultHandler rows r
+  -- ^ A function to map the result row fields into a data structure.
   -> (Decoders.Row r -> Decoders.Result a)
+  -- ^ How to decode all results given a decoder for a single result (e.g. a single row, a Maybe row, a list of rows, etc...)
   -> StatementBuilder (PreparableStmt rows)
+  -- ^ The statement builder expression to build.
   -> Statement () a
 buildStatement handler toResult stmt =
   Statement sql params (toResult $ handleTargetResultList handler <$> compileListDecoders rows) (paramCount > 0)
@@ -52,14 +58,61 @@ buildStatement handler toResult stmt =
     ((stmt', rows), paramCount, params) = runRWS (runStatementBuilder $ buildPreparableStmt <$> stmt) () 0
     sql = Render.toByteString $ Render.preparableStmt stmt'
 
+-- | Useful for debugging. Print the preparable SQL statement for a statement builder expression.
 renderStatement :: StatementBuilder (PreparableStmt row) -> Text
 renderStatement stmt = sql
   where
     ((stmt', _), _, _) = runRWS (runStatementBuilder $ buildPreparableStmt <$> stmt) () 0
     sql = Render.toText $ Render.preparableStmt stmt'
 
+-- | A monadic context for allocating query parameters and building preparable statements.
 newtype StatementBuilder a = StatementBuilder {runStatementBuilder :: RWS () (Params ()) Int a}
   deriving newtype (Functor, Applicative, Monad)
+
+-- | A typeclass with an associated type family for computing the handler function for a set of query target result rows.
+class HasTargetListResultHandler rows a where
+  -- | The type of handler for this list of result rows.
+  type TargetListResultHandler rows a :: Type
+
+  -- | Execute the handler by applying a heterogeneous list of result rows to it.
+  handleTargetResultList :: TargetListResultHandler rows a -> TargetListResult rows -> a
+
+-- | Handle an empty list of rows by returning the result.
+instance HasTargetListResultHandler '[] a where
+  type TargetListResultHandler '[] a = a
+  handleTargetResultList a _ = a
+
+-- | Handle a cons-cell of result rows by applying the head result row, then running the handler for the result of the
+-- result rows.
+instance
+  ( HasTargetResultHandler row (TargetListResultHandler rows a)
+  , HasTargetListResultHandler rows a
+  )
+  => HasTargetListResultHandler (row ': rows) a
+  where
+  type TargetListResultHandler (row ': rows) a = TargetResultHandler row (TargetListResultHandler rows a)
+  handleTargetResultList handler (ListResultCons row rows) =
+    handleTargetResultList (handleTargetResult handler row) rows
+
+-- | A typeclass with an associated type family for computing the handler function for a single query target result row.
+class HasTargetResultHandler row a where
+  -- | The type of handler for this result row.
+  type TargetResultHandler row a :: Type
+
+  -- | Execute the handler by applying a heterogeneous list to it.
+  handleTargetResult :: TargetResultHandler row a -> TargetResult row -> a
+
+-- | Handle an row by returning the result.
+instance HasTargetResultHandler '[] a where
+  type TargetResultHandler '[] a = a
+  handleTargetResult a _ = a
+
+-- | Handle a cons-cell row by applying the head row field, then running the handler for the result of the row.
+instance (HasTargetResultHandler row a) => HasTargetResultHandler (t ': row) a where
+  type TargetResultHandler (t ': row) a = ColumnToHask t -> TargetResultHandler row a
+  handleTargetResult f (ResultCons t row) = handleTargetResult (f t) row
+
+-- * Internal
 
 buildPreparableStmt :: PreparableStmt row -> (P.PreparableStmt, TargetListDecoders row)
 buildPreparableStmt = \case
@@ -880,33 +933,3 @@ compileListDecoders (ListDecodersCons row decoders) = ListResultCons <$> compile
 compileDecoders :: TargetDecoders row -> Decoders.Row (TargetResult row)
 compileDecoders DecodersNil = pure ResultNil
 compileDecoders (DecodersCons row decoders) = ResultCons <$> row <*> compileDecoders decoders
-
-class HasTargetListResultHandler rows a where
-  type TargetListResultHandler rows a :: Type
-  handleTargetResultList :: TargetListResultHandler rows a -> TargetListResult rows -> a
-
-instance HasTargetListResultHandler '[] a where
-  type TargetListResultHandler '[] a = a
-  handleTargetResultList a _ = a
-
-instance
-  ( HasTargetResultHandler row (TargetListResultHandler rows a)
-  , HasTargetListResultHandler rows a
-  )
-  => HasTargetListResultHandler (row ': rows) a
-  where
-  type TargetListResultHandler (row ': rows) a = TargetResultHandler row (TargetListResultHandler rows a)
-  handleTargetResultList handler (ListResultCons row rows) =
-    handleTargetResultList (handleTargetResult handler row) rows
-
-class HasTargetResultHandler row a where
-  type TargetResultHandler row a :: Type
-  handleTargetResult :: TargetResultHandler row a -> TargetResult row -> a
-
-instance HasTargetResultHandler '[] a where
-  type TargetResultHandler '[] a = a
-  handleTargetResult a _ = a
-
-instance (HasTargetResultHandler row a) => HasTargetResultHandler (t ': row) a where
-  type TargetResultHandler (t ': row) a = ColumnToHask t -> TargetResultHandler row a
-  handleTargetResult f (ResultCons t row) = handleTargetResult (f t) row
