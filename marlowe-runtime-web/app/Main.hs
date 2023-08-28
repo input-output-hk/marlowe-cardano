@@ -8,6 +8,7 @@ import Colog.Message (Message)
 import Control.Arrow ((&&&))
 import Control.Concurrent.Component (runComponent_)
 import Control.Concurrent.Component.Run (runAppMTraced)
+import Control.Exception (Exception (fromException), SomeException)
 import Control.Monad.Reader (ask)
 import Control.Monad.Trans.Marlowe (MarloweT (..))
 import Data.Function (on)
@@ -23,7 +24,14 @@ import Network.HTTP.Types
 import Network.Protocol.Driver.Trace (TcpClientSelector, renderTcpClientSelectorOTel, sockAddrToAttributes)
 import Network.Socket (PortNumber)
 import Network.Wai
-import Network.Wai.Handler.Warp (run)
+import Network.Wai.Handler.Warp (
+  InvalidRequest (..),
+  defaultOnExceptionResponse,
+  defaultSettings,
+  runSettings,
+  setOnExceptionResponse,
+  setPort,
+ )
 import Observe.Event (injectSelector)
 import Observe.Event.Render.OpenTelemetry (OTelRendered (..), RenderSelectorOTel)
 import OpenTelemetry.Trace
@@ -45,7 +53,7 @@ main = do
         ServerDependencies
           { openAPIEnabled
           , accessControlAllowOriginAll
-          , runApplication = run $ fromIntegral port
+          , runApplication = runSettings (setPort (fromIntegral port) $ setOnExceptionResponse onExceptionResponse defaultSettings)
           , connector
           }
     runComponent_ server dependencies
@@ -55,6 +63,17 @@ main = do
         { libraryName = "marlowe-web-server"
         , libraryVersion = fromString $ showVersion version
         }
+
+    onExceptionResponse :: SomeException -> Response
+    onExceptionResponse e
+      | Just PayloadTooLarge <- fromException e = defaultOnExceptionResponse e
+      | Just RequestHeaderFieldsTooLarge <- fromException e = defaultOnExceptionResponse e
+      | Just (_ :: InvalidRequest) <- fromException e = defaultOnExceptionResponse e
+      | otherwise =
+          responseLBS
+            internalServerError500
+            [(hContentType, "text/plain; charset=utf-8")]
+            ("Something went wrong / " <> (fromString $ show e))
 
 concurrentLogger :: (MonadUnliftIO m) => IO (LogAction m Message)
 concurrentLogger = do
