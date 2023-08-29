@@ -61,6 +61,29 @@ type ContractTxOutColumns =
 contractTxOut :: Table ContractTxOutColumns
 contractTxOut = marloweTable "contractTxOut"
 
+type ContractTxOutPartyAddressColumns =
+  '[ '("address", SqlBytea, NotNull)
+   , '("txId", SqlBytea, NotNull)
+   , '("txIx", SqlInt2, NotNull)
+   , '("createTxId", SqlBytea, NotNull)
+   , '("createTxIx", SqlInt2, NotNull)
+   ]
+
+contractTxOutPartyAddress :: Table ContractTxOutPartyAddressColumns
+contractTxOutPartyAddress = marloweTable "contractTxOutPartyAddress"
+
+type ContractTxOutPartyRoleColumns =
+  '[ '("rolesCurrency", SqlBytea, NotNull)
+   , '("role", SqlBytea, NotNull)
+   , '("txId", SqlBytea, NotNull)
+   , '("txIx", SqlInt2, NotNull)
+   , '("createTxId", SqlBytea, NotNull)
+   , '("createTxIx", SqlInt2, NotNull)
+   ]
+
+contractTxOutPartyRole :: Table ContractTxOutPartyRoleColumns
+contractTxOutPartyRole = marloweTable "contractTxOutPartyRole"
+
 type ContractTxOutTagColumns =
   '[ '("tag", SqlText, NotNull)
    , '("txId", SqlBytea, NotNull)

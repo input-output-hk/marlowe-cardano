@@ -10,3 +10,4 @@ fixPayouts [schema] 2023-02-03T20:02:36Z Jamie Bertram <jamie.bertram@iohk.io> #
 indexRoleCurrency [schema] 2023-02-28T21:16:41Z Jamie Bertram <jamie.bertram@iohk.io> # Fixes adds index to role currency columns.
 tags [schema] 2023-03-02T18:33:26Z Jamie Bertram <jamie.bertram@iohk.io> # Adds contract tags table.
 tag-text [tags] 2023-07-11T12:37:05Z Jamie Bertram <jamie.bertram@iohk.io> # Changes tags from varchar(64) to text.
+parties [schema] 2023-08-29T15:49:56Z Jamie Bertram <jamie.bertram@iohk.io> # Adds party indexes.
