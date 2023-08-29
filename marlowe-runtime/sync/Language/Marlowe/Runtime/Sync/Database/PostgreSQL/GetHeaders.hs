@@ -44,10 +44,9 @@ import Language.Marlowe.Runtime.Core.Api (
   emptyMarloweTransactionMetadata,
  )
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader (..))
-import Language.Marlowe.Runtime.Schema (equals, naturalJoin)
+import Language.Marlowe.Runtime.Schema (countAll, equals, existsCond, naturalJoin, unnestParams)
 import qualified Language.Marlowe.Runtime.Schema as Schema
 import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetPayouts (
-  countAll,
   laxComparisonCond,
   rangeSortBy,
   strictComparisonCond,
@@ -250,32 +249,13 @@ headersTables ContractFilter{..}
 rolesTable :: Set.Set PolicyId -> StatementBuilder TableRef
 rolesTable roleCurrencies = do
   roleCurrenciesParam <- param $ Vector.fromList $ unPolicyId <$> Set.toList roleCurrencies
-  let unnestApplication =
-        FuncApplication "UNNEST" $
-          Just $
-            NormalFuncApplicationParams Nothing (pure $ toFuncArgExpr roleCurrenciesParam) Nothing
-      unnestReturnTypes =
-        TargetTypesCons
-          (ColumnType (SqlArray (ColumnType SqlBytea NotNull)) NotNull)
-          TargetTypesNil
-      selectClause =
-        NormalSimpleSelect
-          ( NormalTargeting $
-              TargetElRow unnestReturnTypes (ApplicationFuncExpr unnestApplication Nothing Nothing Nothing)
-                :. TargetListNil
-          )
-          Nothing
-          Nothing
-          Nothing
-          Nothing
-          Nothing
-          Nothing
   pure $
-    SelectTableRef False (NoParensSelectWithParens $ SelectNoParens Nothing (Left selectClause) Nothing Nothing Nothing) $
+    unnestParams (pure roleCurrenciesParam) $
       Just $
-        AliasClause True "roles" $
-          Just $
-            pure "rolesCurrency"
+        AliasFuncAliasClause $
+          AliasClause True "roles" $
+            Just $
+              pure "rolesCurrency"
 
 -- * Conditions
 
@@ -320,29 +300,13 @@ filterCondition ContractFilter{..} otherChecks
 tagExistsCond :: Set MarloweMetadataTag -> StatementBuilder AExpr
 tagExistsCond tags = do
   tagsParam <- param $ Vector.fromList $ getMarloweMetadataTag <$> Set.toList tags
-  let selectClause =
-        NormalSimpleSelect
-          targeting
-          Nothing
-          (Just $ pure fromClause)
-          (Just whereClause)
-          Nothing
-          Nothing
-          Nothing
-      targeting = NormalTargeting $ TargetElRow returnTypes (IAexprConst 1) :. TargetListNil
-      returnTypes = TargetTypesCons (ColumnType SqlInt4 NotNull) TargetTypesNil
-      tagTable =
-        FuncTableRef
-          False
-          ( FuncExprFuncTable
-              ( ApplicationFuncExprWindowless $
-                  FuncApplication "UNNEST" $
-                    Just $
-                      NormalFuncApplicationParams Nothing (pure $ toFuncArgExpr tagsParam) Nothing
-              )
-              False
-          )
-          (Just $ AliasFuncAliasClause $ AliasClause True "tags" $ Just $ pure "tag")
+  let tagTable =
+        unnestParams (pure tagsParam) $
+          Just $
+            AliasFuncAliasClause $
+              AliasClause True "tags" $
+                Just $
+                  pure "tag"
 
       fromClause = Schema.contractTxOutTag `naturalJoin` tagTable
       whereClause =
@@ -351,6 +315,4 @@ tagExistsCond tags = do
           (tableColumn @"txIx" Schema.contractTxOutTag `equals` tableColumn @"txIx" Schema.createTxOut)
   pure $
     CExprAExpr $
-      ExistsCExpr $
-        NoParensSelectWithParens $
-          SelectNoParens Nothing (Left selectClause) Nothing Nothing Nothing
+      existsCond Nothing (Just $ pure fromClause) (Just whereClause) Nothing Nothing Nothing
