@@ -14,7 +14,7 @@ import Cardano.Api.Shelley (
   SimpleScriptOrReferenceInput (SReferenceScript),
  )
 import Control.Applicative (Alternative)
-import Control.Arrow ((***))
+import Control.Arrow (Arrow ((&&&), (***)))
 import Control.Error (note)
 import Control.Monad (guard)
 import Data.Bifunctor (first)
@@ -32,6 +32,7 @@ import Data.Monoid (First (..), getFirst)
 import Data.Ratio ((%))
 import Data.SOP.Strict (K (..), NP (Nil, (:*)))
 import qualified Data.Set as Set
+import qualified Data.Text as T
 import Data.Traversable (for)
 import Data.Word (Word32)
 import GHC.Word (Word64)
@@ -48,7 +49,12 @@ import Gen.Cardano.Api.Typed (
 import Language.Marlowe (MarloweData (..), MarloweParams (..), txInputs)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.Cardano.Api
-import Language.Marlowe.Runtime.ChainSync.Api (fromCardanoPaymentKeyHash, fromCardanoScriptHash, unTransactionMetadata)
+import Language.Marlowe.Runtime.ChainSync.Api (
+  fromCardanoPaymentKeyHash,
+  fromCardanoScriptHash,
+  renderTxOutRef,
+  unTransactionMetadata,
+ )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import qualified Language.Marlowe.Runtime.ChainSync.Gen ()
 import Language.Marlowe.Runtime.Core.Api (
@@ -56,7 +62,6 @@ import Language.Marlowe.Runtime.Core.Api (
   Inputs,
   MarloweVersion (..),
   MarloweVersionTag (..),
-  Payout (..),
   TransactionScriptOutput (..),
   encodeMarloweTransactionMetadata,
   toChainDatum,
@@ -89,22 +94,25 @@ spec = do
   describe "solveInitialTxBodyContent" do
     prop "satisfies the constraints" \(SomeTxConstraints marloweVersion constraints) -> do
       protocol <- hedgehog genProtocolParameters
-      marloweContext <- genMarloweContext marloweVersion constraints
+      scriptCtx <- genScriptContext marloweVersion constraints
       walletContext <- genWalletContext marloweVersion constraints
-      let (marloweContextStr, walletContextStr) = case marloweVersion of MarloweV1 -> (show marloweContext, show walletContext)
-          marloweUtxo = case scriptOutput marloweContext of
-            Nothing -> mempty
-            Just TransactionScriptOutput{..} ->
+      let (scriptContextStr, walletContextStr) = case marloweVersion of MarloweV1 -> (show scriptCtx, show walletContext)
+          marloweUtxo = case scriptCtx of
+            Left MarloweContext{scriptOutput = Just TransactionScriptOutput{..}} ->
               Chain.UTxOs $
                 Map.singleton utxo $
                   Chain.TransactionOutput address assets Nothing (Just $ toChainDatum marloweVersion datum)
-          payoutToTransactionOutput Payout{..} = Chain.TransactionOutput address assets Nothing (Just $ toChainPayoutDatum marloweVersion datum)
-          payoutUtxos = Chain.UTxOs $ payoutToTransactionOutput <$> payoutOutputs marloweContext
+            _ -> mempty
+          payoutUtxos = Chain.UTxOs case scriptCtx of
+            Left _ -> mempty
+            Right PayoutContext{..} -> payoutOutputs
           referenceScriptUtxoToUtxo ReferenceScriptUtxo{..} = (txOutRef, txOut)
           referenceUtxos =
             Chain.UTxOs $
               Map.fromList $
-                referenceScriptUtxoToUtxo <$> [marloweScriptUTxO marloweContext, payoutScriptUTxO marloweContext]
+                referenceScriptUtxoToUtxo <$> case scriptCtx of
+                  Left MarloweContext{..} -> [marloweScriptUTxO, payoutScriptUTxO]
+                  Right PayoutContext{..} -> Map.elems payoutScriptOutputs
           utxosFromMarloweContext = marloweUtxo <> payoutUtxos <> referenceUtxos
           utxos = utxosFromMarloweContext <> availableUtxos walletContext
           result =
@@ -112,15 +120,15 @@ spec = do
               ReferenceTxInsScriptsInlineDatumsInBabbageEra
               protocol
               marloweVersion
-              marloweContext
+              scriptCtx
               walletContext
               constraints
-          mViolations = violations marloweVersion marloweContext utxos constraints <$> result
+          mViolations = violations marloweVersion scriptCtx utxos constraints <$> result
           theProperty :: Property
           theProperty = case marloweVersion of
             MarloweV1 -> Right [] === mViolations
       pure $
-        counterexample marloweContextStr $
+        counterexample scriptContextStr $
           counterexample walletContextStr $
             counterexample (show utxos) $
               either (const theProperty) (flip counterexample theProperty . show) result
@@ -163,8 +171,12 @@ spec = do
 
       let actual =
             getValueAtAddress marloweAddressChain . txOuts
-              <$> adjustTxForMinUtxo ReferenceTxInsScriptsInlineDatumsInBabbageEra protocolTestnet marloweAddressChain txBodyContent
-          expected :: Either (ConstraintError 'V1) (Maybe (TxOutValue BabbageEra)) =
+              <$> adjustTxForMinUtxo
+                ReferenceTxInsScriptsInlineDatumsInBabbageEra
+                protocolTestnet
+                (Just marloweAddressChain)
+                txBodyContent
+          expected :: Either ConstraintError (Maybe (TxOutValue BabbageEra)) =
             Right $ getValueAtAddress marloweAddressChain $ txOuts txBodyContent
 
       pure $ actual `shouldBe` expected
@@ -196,13 +208,13 @@ spec = do
 
       txBodyContent <- hedgehog $ genTxBodyContent BabbageEra
 
-      pure $ case adjustTxForMinUtxo ReferenceTxInsScriptsInlineDatumsInBabbageEra protocolTestnet marloweAddress txBodyContent of
+      pure $ case adjustTxForMinUtxo ReferenceTxInsScriptsInlineDatumsInBabbageEra protocolTestnet (Just marloweAddress) txBodyContent of
         Right newTxBodyContent -> do
           let errors = mapMaybe valueMeetsMinimumReq $ txOuts newTxBodyContent
           if null errors
             then pure ()
             else expectationFailure $ unlines $ "Minimum UTxO requirements not met:" : errors
-        Left (msgFromAdjustment :: ConstraintError 'V1) -> expectationFailure $ show msgFromAdjustment
+        Left (msgFromAdjustment :: ConstraintError) -> expectationFailure $ show msgFromAdjustment
 
     prop "all outputs are at least half an ADA" do
       marloweScriptHash <- hedgehog genScriptHash
@@ -223,13 +235,13 @@ spec = do
 
       txBodyContent <- hedgehog $ genTxBodyContent BabbageEra
 
-      pure $ case adjustTxForMinUtxo ReferenceTxInsScriptsInlineDatumsInBabbageEra protocolTestnet marloweAddress txBodyContent of
+      pure $ case adjustTxForMinUtxo ReferenceTxInsScriptsInlineDatumsInBabbageEra protocolTestnet (Just marloweAddress) txBodyContent of
         Right newTxBodyContent -> do
           let errors = mapMaybe valueIsAtLeastHalfAnAda $ txOuts newTxBodyContent
           if null errors
             then pure ()
             else expectationFailure $ unlines $ "Minimum UTxO requirements not met:" : errors
-        Left (msgFromAdjustment :: ConstraintError 'V1) -> expectationFailure $ show msgFromAdjustment
+        Left (msgFromAdjustment :: ConstraintError) -> expectationFailure $ show msgFromAdjustment
 
   describe "selectCoins" do
     prop "sufficient collateral is selected if possible" \(SomeTxConstraints marloweVersion constraints) -> do
@@ -242,7 +254,7 @@ spec = do
       -- - Looking for a pure ADA utxo that's 2x the fee (protocol maximum fee)
       -- - If it's selecting collat that has a native token, that's failure, not supposed to do that
 
-      marloweContext <- genSimpleMarloweContext marloweVersion constraints
+      marloweContext <- genSimpleScriptContext marloweVersion constraints
 
       (executesPlutusScript, txBodyContent) <-
         frequency
@@ -482,7 +494,7 @@ spec = do
           else noCollateralUnlessPlutus
 
     prop "selectCoins should increase the number of outputs by either 0 or exactly 1" \(SomeTxConstraints marloweVersion constraints) -> do
-      marloweContext <- genSimpleMarloweContext marloweVersion constraints
+      scriptCtx <- genSimpleScriptContext marloweVersion constraints
       walletContext <- genWalletWithNuisance marloweVersion constraints 1_000_000_000
       txBodyContentBefore <- genBodyContentWith500AdaOutput
 
@@ -505,7 +517,7 @@ spec = do
                 ReferenceTxInsScriptsInlineDatumsInBabbageEra
                 protocolTestnet
                 marloweVersion
-                marloweContext
+                scriptCtx
                 walletContext
                 txBodyContentBefore
 
@@ -519,7 +531,7 @@ spec = do
         Left selFailedMsg -> counterexample ("selection failed: " <> selFailedMsg) False
 
     prop "selectCoins creates a balanceable tx" \(SomeTxConstraints marloweVersion constraints) -> do
-      marloweContext <- genSimpleMarloweContext marloweVersion constraints
+      scriptCtx <- genSimpleScriptContext marloweVersion constraints
       walletContext <- genWalletWithNuisance marloweVersion constraints 1_000_000_000
       txBodyContentBefore <- genBodyContentWith500AdaOutput
 
@@ -598,7 +610,7 @@ spec = do
                 ReferenceTxInsScriptsInlineDatumsInBabbageEra
                 protocolTestnet
                 marloweVersion
-                marloweContext
+                scriptCtx
                 walletContext
                 txBodyContentBefore
 
@@ -635,7 +647,7 @@ spec = do
       inValue <- hedgehog genValueForTxOut
       case findMinUtxo ReferenceTxInsScriptsInlineDatumsInBabbageEra protocolTestnet (inAddress, inDatum, inValue) of
         Right outValue -> pure $ valueToLovelace outValue `shouldSatisfy` isJust
-        Left message -> pure . expectationFailure $ show (message :: ConstraintError 'V1)
+        Left message -> pure . expectationFailure $ show (message :: ConstraintError)
     prop "minUTxO matches Cardano API" do
       inAddress <- arbitrary
       inDatum <- oneof [pure Nothing, Just <$> hedgehog genScriptData]
@@ -660,7 +672,7 @@ spec = do
                 )
                 protocolTestnet
           outValue <-
-            first (\message -> show (message :: ConstraintError 'V1)) $
+            first (\message -> show (message :: ConstraintError)) $
               findMinUtxo
                 ReferenceTxInsScriptsInlineDatumsInBabbageEra
                 protocolTestnet
@@ -674,13 +686,13 @@ spec = do
       inValue <- hedgehog genValueForTxOut
       case ensureMinUtxo ReferenceTxInsScriptsInlineDatumsInBabbageEra protocolTestnet (inAddress, inValue) of
         Right (_, outValue) -> pure $ noLovelace outValue `shouldBe` noLovelace inValue
-        Left message -> pure . expectationFailure $ show (message :: ConstraintError 'V1)
+        Left message -> pure . expectationFailure $ show (message :: ConstraintError)
     prop "address is unchanged" do
       inAddress <- arbitrary
       inValue <- hedgehog genValueForTxOut
       case ensureMinUtxo ReferenceTxInsScriptsInlineDatumsInBabbageEra protocolTestnet (inAddress, inValue) of
         Right (outAddress, _) -> pure $ outAddress `shouldBe` inAddress
-        Left message -> pure . expectationFailure $ show (message :: ConstraintError 'V1)
+        Left message -> pure . expectationFailure $ show (message :: ConstraintError)
     prop "adjusted lovelace is greater of minUTxO and original lovelace" do
       inAddress <- arbitrary
       -- Tiny lovelace values violate ledger rules and occupy too few bytes for a meaningful test.
@@ -699,13 +711,13 @@ spec = do
                 (TxOut inAddress' (TxOutValue MultiAssetInBabbageEra inValue) TxOutDatumNone ReferenceScriptNone)
                 protocolTestnet
           (_, outValue) <-
-            first (\message -> show (message :: ConstraintError 'V1)) $
+            first (\message -> show (message :: ConstraintError)) $
               ensureMinUtxo ReferenceTxInsScriptsInlineDatumsInBabbageEra protocolTestnet (inAddress, inValue)
           pure $ selectLovelace outValue `shouldBe` maximum [selectLovelace inValue, selectLovelace expected]
 
   describe "balanceTx" do
     prop "tx should balance for non-Plutus transactions where the wallet has sufficient funds" \(SomeTxConstraints marloweVersion constraints) -> do
-      marloweContext <- genSimpleMarloweContext marloweVersion constraints
+      scriptCtx <- genSimpleScriptContext marloweVersion constraints
 
       -- We MUST dictate the distribution of wallet context assets, default
       -- generation only tests with empty wallets!
@@ -817,7 +829,7 @@ spec = do
         eraHistory
         protocolTestnet
         marloweVersion
-        marloweContext
+        scriptCtx
         walletContext
         txBodyContent of
         Right _ -> label "balancing succeeded" True
@@ -906,16 +918,23 @@ txOutToValue :: TxOut CtxTx BabbageEra -> Value
 txOutToValue (TxOut _ value _ _) = txOutValueToValue value
 
 -- A simple Marlowe context with no assets to spend
-genSimpleMarloweContext :: MarloweVersion v -> TxConstraints BabbageEra v -> Gen (MarloweContext w)
-genSimpleMarloweContext marloweVersion constraints = do
+genSimpleScriptContext
+  :: MarloweVersion v -> TxConstraints BabbageEra v -> Gen (Either (MarloweContext w) PayoutContext)
+genSimpleScriptContext marloweVersion constraints = do
   -- Let the generator make us one..
-  mctx <- genMarloweContext marloweVersion constraints
+  ctx <- genScriptContext marloweVersion constraints
   -- ..and hack these values to be empty/nothing
-  pure $
-    mctx
-      { scriptOutput = Nothing
-      , payoutOutputs = Map.empty
-      }
+  pure case ctx of
+    Left ctx' ->
+      Left
+        ctx'
+          { scriptOutput = Nothing
+          }
+    Right ctx' ->
+      Right
+        ctx'
+          { payoutOutputs = mempty
+          }
 
 -- Convenience function to build a chain Assets with the specified amount of only ADA
 mkAdaOnlyAssets :: Integer -> Chain.Assets
@@ -973,22 +992,34 @@ emptyTxBodyContent =
 
 violations
   :: MarloweVersion v
-  -> MarloweContext v
+  -> Either (MarloweContext v) PayoutContext
   -> Chain.UTxOs
   -> TxConstraints BabbageEra v
   -> TxBodyContent BuildTx BabbageEra
   -> [String]
-violations marloweVersion marloweContext utxos constraints txBodyContent =
+violations marloweVersion scriptCtx utxos constraints txBodyContent =
   fold
     [ ("mustMintRoleToken: " <>) <$> mustMintRoleTokenViolations marloweVersion constraints txBodyContent
     , ("mustSpendRoleToken: " <>) <$> mustSpendRoleTokenViolations marloweVersion utxos constraints txBodyContent
     , ("mustPayToAddress: " <>) <$> mustPayToAddressViolations marloweVersion constraints txBodyContent
-    , ("mustSendMarloweOutput: " <>)
-        <$> mustSendMarloweOutputViolations marloweVersion marloweContext constraints txBodyContent
-    , ("mustPayToRole: " <>) <$> mustPayToRoleViolations marloweVersion marloweContext constraints txBodyContent
-    , ("mustConsumeMarloweOutput: " <>)
-        <$> mustConsumeMarloweOutputViolations marloweVersion marloweContext constraints txBodyContent
-    , ("mustConsumePayouts: " <>) <$> mustConsumePayoutsViolations marloweVersion marloweContext constraints txBodyContent
+    , case scriptCtx of
+        Left marloweContext ->
+          ("mustSendMarloweOutput: " <>)
+            <$> mustSendMarloweOutputViolations marloweVersion marloweContext constraints txBodyContent
+        _ -> []
+    , case scriptCtx of
+        Left marloweContext ->
+          ("mustPayToRole: " <>) <$> mustPayToRoleViolations marloweVersion marloweContext constraints txBodyContent
+        _ -> []
+    , case scriptCtx of
+        Left marloweContext ->
+          ("mustConsumeMarloweOutput: " <>)
+            <$> mustConsumeMarloweOutputViolations marloweVersion marloweContext constraints txBodyContent
+        _ -> []
+    , case scriptCtx of
+        Right payoutContext ->
+          ("mustConsumePayout: " <>) <$> mustConsumePayoutViolations marloweVersion payoutContext constraints txBodyContent
+        _ -> []
     , ("requiresSignature: " <>) <$> requiresSignatureViolations marloweVersion utxos constraints txBodyContent
     , ("requiresMetadata: " <>) <$> requiresMetadataViolations marloweVersion constraints txBodyContent
     ]
@@ -1178,25 +1209,32 @@ mustConsumeMarloweOutputViolations MarloweV1 MarloweContext{..} TxConstraints{..
             "Tx validity range does not match constraints"
         ]
 
-mustConsumePayoutsViolations
+mustConsumePayoutViolations
   :: MarloweVersion v
-  -> MarloweContext v
+  -> PayoutContext
   -> TxConstraints BabbageEra v
   -> TxBodyContent BuildTx BabbageEra
   -> [String]
-mustConsumePayoutsViolations MarloweV1 MarloweContext{..} TxConstraints{..} TxBodyContent{..} = do
-  roleToken <- Set.toList payoutInputConstraints
-  (("roleToken" <> show roleToken <> ": ") <>) <$> do
-    let isMatch (_, witness) = case witness of
-          BuildTxWith (ScriptWitness _ (PlutusScriptWitness _ _ _ (ScriptDatumForTxIn d) _ _)) ->
-            d == toCardanoScriptData (toChainPayoutDatum MarloweV1 roleToken)
+mustConsumePayoutViolations MarloweV1 PayoutContext{..} TxConstraints{..} TxBodyContent{..} = do
+  payout <- Set.toList payoutInputConstraints
+  (("payout " <> T.unpack (renderTxOutRef payout) <> ": ") <>) <$> do
+    let isMatch (txIn, _) = fromCardanoTxIn txIn == payout
+        matchingInput = find isMatch txIns
+        isReferenceScript = \case
+          PReferenceScript _ _ -> True
           _ -> False
-        matchingInputs = fromCardanoTxIn . fst <$> filter isMatch txIns
-        isPayoutUtxo utxo = Map.member utxo payoutOutputs
-    fold
-      [ check (not $ null matchingInputs) "No matching inputs found"
-      , check (all isPayoutUtxo matchingInputs) "Not all matching inputs come from the payout address"
-      ]
+    case matchingInput of
+      Nothing -> ["No matching inputs found"]
+      Just (_, BuildTxWith (ScriptWitness _ (PlutusScriptWitness _ _ s (ScriptDatumForTxIn d) _ _))) ->
+        case Map.lookup payout payoutOutputs of
+          Nothing -> ["Not found in context"]
+          Just Chain.TransactionOutput{datum = Just expectedDatum} ->
+            fold
+              [ check (isReferenceScript s) $ "Non-reference script: " <> show s
+              , check (fromCardanoScriptData d == expectedDatum) $ "Non-reference script: " <> show s
+              ]
+          _ -> ["Payout has no datum!"]
+      Just (_, wit) -> ["Non-plutus-script witness: " <> show wit]
 
 requiresSignatureViolations
   :: MarloweVersion v
@@ -1243,7 +1281,8 @@ instance Show SomeTxConstraints where
 instance Arbitrary SomeTxConstraints where
   arbitrary =
     oneof
-      [ SomeTxConstraints MarloweV1 <$> genV1Constraints
+      [ SomeTxConstraints MarloweV1 <$> genV1MarloweConstraints
+      , SomeTxConstraints MarloweV1 <$> genV1PayoutConstraints
       ]
   shrink (SomeTxConstraints marloweVersion constraints) =
     case marloweVersion of
@@ -1292,10 +1331,10 @@ shrinkMarloweOutputConstraints = \case
       , [MarloweOutput assets datum' | datum' <- shrink datum]
       ]
 
-genV1Constraints :: Gen (TxConstraints BabbageEra 'V1)
-genV1Constraints = sized \n ->
+genV1MarloweConstraints :: Gen (TxConstraints BabbageEra 'V1)
+genV1MarloweConstraints = sized \n ->
   frequency
-    [ (n, resize (n `div` 2) $ (<>) <$> genV1Constraints <*> genV1Constraints)
+    [ (n, resize (n `div` 2) $ (<>) <$> genV1MarloweConstraints <*> genV1MarloweConstraints)
     , (1, pure mempty)
     , (1, mustMintRoleToken <$> arbitrary <*> genMintScriptWitness <*> genRoleToken <*> arbitrary)
     , (1, mustSpendRoleToken <$> genRoleToken)
@@ -1303,7 +1342,18 @@ genV1Constraints = sized \n ->
     , (1, mustSendMarloweOutput <$> arbitrary <*> genDatum)
     , (1, mustPayToRole <$> arbitrary <*> genRoleToken)
     , (1, uncurry mustConsumeMarloweOutput <$> genValidityInterval <*> genInputs)
-    , (1, mustConsumePayouts <$> genRoleToken)
+    , (1, requiresSignature <$> arbitrary)
+    , (1, requiresMetadata <$> arbitrary)
+    ]
+
+genV1PayoutConstraints :: Gen (TxConstraints BabbageEra 'V1)
+genV1PayoutConstraints = sized \n ->
+  frequency
+    [ (n, resize (n `div` 2) $ (<>) <$> genV1PayoutConstraints <*> genV1PayoutConstraints)
+    , (1, pure mempty)
+    , (1, mustSpendRoleToken <$> genRoleToken)
+    , (1, mustPayToAddress <$> arbitrary <*> arbitrary)
+    , (1, mustConsumePayout <$> arbitrary)
     , (1, requiresSignature <$> arbitrary)
     , (1, requiresMetadata <$> arbitrary)
     ]
@@ -1378,25 +1428,38 @@ genRole =
     , "applicant"
     ]
 
-genMarloweContext :: MarloweVersion v -> TxConstraints BabbageEra v -> Gen (MarloweContext v)
-genMarloweContext MarloweV1 constraints = do
-  marloweScriptHash <- hedgehog genScriptHash
-  payoutScriptHash <- hedgehog genScriptHash
-  let scriptAddress hash =
-        fromCardanoAddressAny $
-          AddressShelley $
-            makeShelleyAddress Mainnet (PaymentCredentialByScript hash) NoStakeAddress
-      marloweAddress = scriptAddress marloweScriptHash
-      payoutAddress = scriptAddress payoutScriptHash
-  MarloweContext
-    <$> genScriptOutput marloweAddress constraints
-    <*> genPayoutOutputs payoutAddress constraints
-    <*> pure marloweAddress
-    <*> pure payoutAddress
-    <*> genReferenceScriptUtxo marloweAddress
-    <*> genReferenceScriptUtxo payoutAddress
-    <*> pure (fromCardanoScriptHash marloweScriptHash)
-    <*> pure (fromCardanoScriptHash payoutScriptHash)
+genScriptContext :: MarloweVersion v -> TxConstraints BabbageEra v -> Gen (Either (MarloweContext v) PayoutContext)
+genScriptContext MarloweV1 constraints
+  | Set.null (payoutInputConstraints constraints) =
+      Left <$> do
+        marloweScriptHash <- hedgehog genScriptHash
+        payoutScriptHash <- hedgehog genScriptHash
+        let scriptAddress hash =
+              fromCardanoAddressAny $
+                AddressShelley $
+                  makeShelleyAddress Mainnet (PaymentCredentialByScript hash) NoStakeAddress
+            marloweAddress = scriptAddress marloweScriptHash
+            payoutAddress = scriptAddress payoutScriptHash
+        MarloweContext
+          <$> genScriptOutput marloweAddress constraints
+          <*> pure marloweAddress
+          <*> pure payoutAddress
+          <*> genReferenceScriptUtxo marloweAddress
+          <*> genReferenceScriptUtxo payoutAddress
+          <*> pure (fromCardanoScriptHash marloweScriptHash)
+          <*> pure (fromCardanoScriptHash payoutScriptHash)
+  | otherwise =
+      Right <$> do
+        scriptHashes <- listOf1 $ hedgehog genScriptHash
+        let scriptAddress hash =
+              fromCardanoAddressAny $
+                AddressShelley $
+                  makeShelleyAddress Mainnet (PaymentCredentialByScript hash) NoStakeAddress
+            scriptAddresses = (fromCardanoScriptHash &&& scriptAddress) <$> scriptHashes
+        payoutScriptOutputs <- Map.fromList <$> for scriptAddresses \a -> (fst a,) <$> genReferenceScriptUtxo (snd a)
+        PayoutContext
+          <$> genPayoutOutputs (snd <$> scriptAddresses) constraints
+          <*> pure payoutScriptOutputs
 
 genScriptOutput :: Chain.Address -> TxConstraints BabbageEra 'V1 -> Gen (Maybe (TransactionScriptOutput 'V1))
 genScriptOutput address TxConstraints{..} = case marloweInputConstraints of
@@ -1407,31 +1470,27 @@ genScriptOutput address TxConstraints{..} = case marloweInputConstraints of
       ]
   MarloweInput{} -> Just <$> (TransactionScriptOutput address <$> arbitrary <*> arbitrary <*> genDatum)
 
-genPayoutOutputs :: Chain.Address -> TxConstraints BabbageEra 'V1 -> Gen (Map Chain.TxOutRef (Payout 'V1))
-genPayoutOutputs address TxConstraints{..} = (<>) <$> required <*> extra
+genPayoutOutputs :: [Chain.Address] -> TxConstraints BabbageEra 'V1 -> Gen (Map Chain.TxOutRef Chain.TransactionOutput)
+genPayoutOutputs genAddress TxConstraints{..} = (<>) <$> required <*> arbitrary
   where
-    required = Map.fromList <$> traverse (genPayout address) (Set.toList payoutInputConstraints)
-    extra = Map.fromList <$> listOf (genPayout address =<< genRoleToken)
-
-genPayout :: Chain.Address -> Chain.AssetId -> Gen (Chain.TxOutRef, Payout 'V1)
-genPayout address datum = do
-  assets <- arbitrary
-  (,Payout{..}) <$> arbitrary
+    required =
+      Map.fromList <$> for (Set.toList payoutInputConstraints) \payout ->
+        (payout,) <$> genTransactionOutput (elements genAddress) (Just . toChainPayoutDatum MarloweV1 <$> genRoleToken)
 
 genReferenceScriptUtxo :: Chain.Address -> Gen ReferenceScriptUtxo
 genReferenceScriptUtxo address =
   ReferenceScriptUtxo
     <$> arbitrary
-    <*> genTransactionOutput (pure address)
+    <*> genTransactionOutput (pure address) (pure Nothing)
     <*> hedgehog (genPlutusScript PlutusScriptV2)
 
-genTransactionOutput :: Gen Chain.Address -> Gen Chain.TransactionOutput
-genTransactionOutput address =
+genTransactionOutput :: Gen Chain.Address -> Gen (Maybe Chain.Datum) -> Gen Chain.TransactionOutput
+genTransactionOutput address genTxOutDatum =
   Chain.TransactionOutput
     <$> address
     <*> arbitrary
     <*> pure Nothing
-    <*> pure Nothing
+    <*> genTxOutDatum
 
 genWalletContext :: MarloweVersion v -> TxConstraints BabbageEra v -> Gen WalletContext
 genWalletContext MarloweV1 constraints =
@@ -1445,17 +1504,17 @@ genWalletUtxos TxConstraints{..} = (<>) <$> required <*> extra
   where
     required = case roleTokenConstraints of
       RoleTokenConstraintsNone -> pure mempty
-      MintRoleTokens txOutRef _ _ -> Chain.UTxOs . Map.singleton txOutRef <$> genTransactionOutput arbitrary
+      MintRoleTokens txOutRef _ _ -> Chain.UTxOs . Map.singleton txOutRef <$> genTransactionOutput arbitrary (pure Nothing)
       SpendRoleTokens roleTokens ->
         fold <$> for (Set.toList roleTokens) \roleToken -> do
           txOutRef <- arbitrary
-          txOut <- genTransactionOutput arbitrary
+          txOut <- genTransactionOutput arbitrary (pure Nothing)
           let roleTokenAssets = Chain.Assets 0 $ Chain.Tokens $ Map.singleton roleToken 1
           pure $ Chain.UTxOs $ Map.singleton txOutRef $ txOut{Chain.assets = Chain.assets txOut <> roleTokenAssets}
     extra =
       fold <$> listOf do
         txOutRef <- arbitrary
-        txOut <- genTransactionOutput arbitrary
+        txOut <- genTransactionOutput arbitrary (pure Nothing)
         pure $ Chain.UTxOs $ Map.singleton txOutRef txOut
 
 toCardanoAssetId :: Chain.AssetId -> AssetId

@@ -13,13 +13,14 @@ import Data.Binary (Binary (..), getWord8, putWord8)
 import Data.Function (on)
 import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
+import Data.Monoid (Any (..))
 import Data.Set (Set)
 import Data.Time (UTCTime)
 import Data.Type.Equality (testEquality, type (:~:) (Refl))
 import Data.Version (Version)
 import GHC.Generics (Generic)
 import GHC.Show (showSpace)
-import Language.Marlowe.Runtime.ChainSync.Api (AssetId, BlockHeader, ChainPoint, PolicyId, TokenName, TxId, TxOutRef)
+import Language.Marlowe.Runtime.ChainSync.Api (AssetId, BlockHeader, ChainPoint, PolicyId, TxId, TxOutRef)
 import Language.Marlowe.Runtime.Core.Api (
   ContractId,
   MarloweMetadataTag,
@@ -71,7 +72,7 @@ instance Monoid ContractFilter where
       }
 
 data PayoutFilter = PayoutFilter
-  { unclaimed :: Bool
+  { isWithdrawn :: Maybe Bool
   , contractIds :: Set ContractId
   , roleTokens :: Set AssetId
   }
@@ -81,7 +82,7 @@ data PayoutFilter = PayoutFilter
 instance Semigroup PayoutFilter where
   a <> b =
     PayoutFilter
-      { unclaimed = on (||) unclaimed a b
+      { isWithdrawn = getAny <$> on (<>) (fmap Any . isWithdrawn) a b
       , contractIds = on (<>) contractIds a b
       , roleTokens = on (<>) roleTokens a b
       }
@@ -89,7 +90,7 @@ instance Semigroup PayoutFilter where
 instance Monoid PayoutFilter where
   mempty =
     PayoutFilter
-      { unclaimed = False
+      { isWithdrawn = Nothing
       , contractIds = mempty
       , roleTokens = mempty
       }
@@ -115,7 +116,7 @@ data MarloweSyncRequest a where
   ReqTransactions :: ContractId -> MarloweSyncRequest (Maybe SomeTransactions)
   ReqWithdrawal :: TxId -> MarloweSyncRequest (Maybe Withdrawal)
   ReqWithdrawals :: WithdrawalFilter -> Range TxId -> MarloweSyncRequest (Maybe (Page TxId Withdrawal))
-  ReqPayouts :: PayoutFilter -> Range TxOutRef -> MarloweSyncRequest (Maybe (Page TxOutRef PayoutRef))
+  ReqPayouts :: PayoutFilter -> Range TxOutRef -> MarloweSyncRequest (Maybe (Page TxOutRef PayoutHeader))
   ReqPayout :: TxOutRef -> MarloweSyncRequest (Maybe SomePayoutState)
 
 deriving instance Show (MarloweSyncRequest a)
@@ -130,7 +131,7 @@ instance Request MarloweSyncRequest where
     TagTransactions :: Tag MarloweSyncRequest (Maybe SomeTransactions)
     TagWithdrawal :: Tag MarloweSyncRequest (Maybe Withdrawal)
     TagWithdrawals :: Tag MarloweSyncRequest (Maybe (Page TxId Withdrawal))
-    TagPayouts :: Tag MarloweSyncRequest (Maybe (Page TxOutRef PayoutRef))
+    TagPayouts :: Tag MarloweSyncRequest (Maybe (Page TxOutRef PayoutHeader))
     TagPayout :: Tag MarloweSyncRequest (Maybe SomePayoutState)
   tagFromReq = \case
     ReqStatus -> TagStatus
@@ -523,11 +524,11 @@ deriving instance ToJSON (ContractState 'V1)
 deriving instance Variations (ContractState 'V1)
 deriving instance Binary (ContractState 'V1)
 
-data PayoutRef = PayoutRef
+data PayoutHeader = PayoutHeader
   { contractId :: ContractId
-  , payout :: TxOutRef
-  , rolesCurrency :: PolicyId
-  , role :: TokenName
+  , payoutId :: TxOutRef
+  , withdrawalId :: Maybe TxId
+  , role :: AssetId
   }
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (ToJSON, Binary, Variations)
@@ -535,8 +536,8 @@ data PayoutRef = PayoutRef
 data PayoutState v = PayoutState
   { contractId :: ContractId
   , payoutId :: TxOutRef
-  , payout :: Payout v
   , withdrawalId :: Maybe TxId
+  , payout :: Payout v
   }
   deriving (Generic)
 
@@ -548,7 +549,7 @@ deriving instance Binary (PayoutState 'V1)
 
 data Withdrawal = Withdrawal
   { block :: BlockHeader
-  , withdrawnPayouts :: Map TxOutRef PayoutRef
+  , withdrawnPayouts :: Map TxOutRef PayoutHeader
   , withdrawalTx :: TxId
   }
   deriving stock (Eq, Ord, Show, Generic)

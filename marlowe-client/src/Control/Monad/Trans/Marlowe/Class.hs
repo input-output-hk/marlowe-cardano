@@ -14,6 +14,7 @@ import Control.Monad.Trans.Reader (ReaderT (..))
 import Control.Monad.Trans.Resource.Internal (ResourceT (..))
 import Data.Coerce (coerce)
 import Data.Foldable (asum)
+import Data.Set (Set)
 import Data.Time (UTCTime)
 import Language.Marlowe.Protocol.Client (MarloweRuntimeClient (..), hoistMarloweRuntimeClient)
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient)
@@ -23,7 +24,14 @@ import Language.Marlowe.Protocol.Sync.Client (MarloweSyncClient)
 import Language.Marlowe.Protocol.Transfer.Client (
   MarloweTransferClient,
  )
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, DatumHash, Lovelace, StakeCredential, TokenName, TxId)
+import Language.Marlowe.Runtime.ChainSync.Api (
+  BlockHeader,
+  DatumHash,
+  Lovelace,
+  StakeCredential,
+  TxId,
+  TxOutRef,
+ )
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Core.Api (
   Contract,
@@ -209,7 +217,7 @@ createContract
   -- ^ Min Lovelace which should be used for the contract output.
   -> Either (Contract v) DatumHash
   -- ^ The contract to run, or the hash of the contract to look up in the store.
-  -> m (Either (CreateError v) (ContractCreated v))
+  -> m (Either CreateError (ContractCreated v))
 createContract mStakeCredential version wallet roleTokens metadata lovelace contract =
   runMarloweTxClient $
     liftCommand $
@@ -241,7 +249,7 @@ applyInputs'
   -- is computed from the contract.
   -> Inputs v
   -- ^ The inputs to apply.
-  -> m (Either (ApplyInputsError v) (InputsApplied v))
+  -> m (Either ApplyInputsError (InputsApplied v))
 applyInputs' version wallet contractId metadata invalidBefore invalidHereafter inputs =
   runMarloweTxClient $
     liftCommand $
@@ -267,7 +275,7 @@ applyInputs
   -- ^ Optional metadata to attach to the transaction
   -> Inputs v
   -- ^ The inputs to apply.
-  -> m (Either (ApplyInputsError v) (InputsApplied v))
+  -> m (Either ApplyInputsError (InputsApplied v))
 applyInputs version wallet contractId metadata =
   applyInputs' version wallet contractId metadata Nothing Nothing
 
@@ -278,13 +286,11 @@ withdraw
   -- ^ The Marlowe version to use
   -> WalletAddresses
   -- ^ The wallet addresses to use when constructing the transaction
-  -> ContractId
-  -- ^ The ID of the contract to apply the inputs to.
-  -> TokenName
-  -- ^ The names of the roles whose assets to withdraw.
-  -> m (Either (WithdrawError v) (WithdrawTx v))
-withdraw version wallet contractId role =
-  runMarloweTxClient $ liftCommand $ Withdraw version wallet contractId role
+  -> Set TxOutRef
+  -- ^ The IDs of the payouts to withdraw.
+  -> m (Either WithdrawError (WithdrawTx v))
+withdraw version wallet payouts =
+  runMarloweTxClient $ liftCommand $ Withdraw version wallet payouts
 
 -- | Submit a signed transaction via the Marlowe Runtime. Waits for completion
 -- with exponential back-off in the polling.

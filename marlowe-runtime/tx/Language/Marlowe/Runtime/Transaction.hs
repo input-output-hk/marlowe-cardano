@@ -31,8 +31,8 @@ import Language.Marlowe.Runtime.Core.Api (MarloweVersion (..), renderContractId)
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts, ReferenceScriptUtxo (..))
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Language.Marlowe.Runtime.Transaction.Chain
-import Language.Marlowe.Runtime.Transaction.Constraints (MarloweContext (..), WalletContext (..))
-import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext, LoadWalletContext)
+import Language.Marlowe.Runtime.Transaction.Constraints (MarloweContext (..), PayoutContext (..), WalletContext (..))
+import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext, LoadPayoutContext, LoadWalletContext)
 import qualified Language.Marlowe.Runtime.Transaction.Query as Q
 import Language.Marlowe.Runtime.Transaction.Server
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob)
@@ -48,6 +48,7 @@ data TransactionDependencies m = TransactionDependencies
   { chainSyncConnector :: Connector RuntimeChainSeekClient m
   , mkSubmitJob :: forall era. ScriptDataSupportedInEra era -> Tx era -> STM (SubmitJob m)
   , loadWalletContext :: LoadWalletContext m
+  , loadPayoutContext :: LoadPayoutContext m
   , loadMarloweContext :: LoadMarloweContext m
   , chainSyncQueryConnector :: Connector (QueryClient ChainSyncQuery) m
   , contractQueryConnector :: Connector (QueryClient ContractRequest) m
@@ -144,6 +145,29 @@ renderLoadWalletContextSelectorOTel = \case
               ]
       }
 
+renderLoadPayoutContextSelectorOTel :: RenderSelectorOTel Q.LoadPayoutContextSelector
+renderLoadPayoutContextSelectorOTel = \case
+  Q.LoadPayoutContext ->
+    OTelRendered
+      { eventName = "marlowe_tx/load_wallet_context"
+      , eventKind = Client
+      , renderField = \case
+          Q.ForPayouts payouts -> [("marlowe.tx.payouts", toAttribute $ renderTxOutRef <$> Set.toList payouts)]
+          Q.PayoutContextLoaded PayoutContext{..} ->
+            catMaybes
+              [ Just
+                  ( "marlowe.contract_payout_utxo"
+                  , toAttribute $
+                      fmap renderTxOutRef $
+                        Map.keys payoutOutputs
+                  )
+              , Just
+                  ( "marlowe.payout_reference_script_outputs"
+                  , toAttribute $ renderTxOutRef . txOutRef <$> Map.elems payoutScriptOutputs
+                  )
+              ]
+      }
+
 renderLoadMarloweContextSelectorOTel :: RenderSelectorOTel Q.LoadMarloweContextSelector
 renderLoadMarloweContextSelectorOTel = \case
   Q.LoadMarloweContext ->
@@ -188,12 +212,6 @@ renderLoadMarloweContextSelectorOTel = \case
       , renderField = \MarloweContext{..} ->
           catMaybes
             [ ("marlowe.contract_utxo",) . fromString . show <$> scriptOutput
-            , Just
-                ( "marlowe.contract_payout_utxo"
-                , toAttribute $
-                    fmap renderTxOutRef $
-                      Map.keys payoutOutputs
-                )
             , ("marlowe.marlowe_script_address",) . toAttribute <$> toBech32 marloweAddress
             , ("marlowe.payout_script_address",) . toAttribute <$> toBech32 payoutAddress
             , Just case marloweScriptUTxO of

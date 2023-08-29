@@ -39,7 +39,7 @@ handle config request =
             ListHeaders{..} -> Right . Headers <$> allHeaders reqFilter
             Get{..} -> fmap (uncurry Info) <$> getContract reqContractId
             Create{..} ->
-              second (uncurry mkBody)
+              second (uncurry $ mkBody . Just)
                 <$> buildCreation
                   MarloweV1
                   reqContract
@@ -50,7 +50,7 @@ handle config request =
                   reqChange
                   reqCollateral
             Apply{..} ->
-              second (uncurry mkBody)
+              second (uncurry $ mkBody . Just)
                 <$> buildApplication
                   MarloweV1
                   reqContractId
@@ -61,7 +61,7 @@ handle config request =
                   reqAddresses
                   reqChange
                   reqCollateral
-            Withdraw{..} -> second (uncurry mkBody) <$> buildWithdrawal MarloweV1 reqContractId reqRole reqAddresses reqChange reqCollateral
+            Withdraw{..} -> second (mkBody Nothing) <$> buildWithdrawal MarloweV1 reqPayouts reqAddresses reqChange reqCollateral
             Sign{reqTxEra = ReferenceTxInsScriptsInlineDatumsInBabbageEra, ..} ->
               pure . Right . uncurry (Tx ReferenceTxInsScriptsInlineDatumsInBabbageEra) $
                 sign reqTxBody reqPaymentKeys reqPaymentExtendedKeys

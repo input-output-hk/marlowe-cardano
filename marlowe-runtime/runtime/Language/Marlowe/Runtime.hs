@@ -55,8 +55,10 @@ import qualified Language.Marlowe.Runtime.Transaction as MarloweTx
 import qualified Language.Marlowe.Runtime.Transaction as Tx
 import Language.Marlowe.Runtime.Transaction.Query (
   LoadMarloweContextSelector,
+  LoadPayoutContextSelector,
   LoadWalletContextSelector,
   loadMarloweContext,
+  loadPayoutContext,
   loadWalletContext,
  )
 import Language.Marlowe.Runtime.Transaction.Server (TransactionServerSelector)
@@ -120,6 +122,7 @@ marloweRuntime
      , Inject TransactionServerSelector s
      , Inject LoadWalletContextSelector s
      , Inject LoadMarloweContextSelector s
+     , Inject LoadPayoutContextSelector s
      , WithLog env Message m
      )
   => Component m (MarloweRuntimeDependencies r n m) (MarloweRuntime m)
@@ -192,6 +195,7 @@ marloweRuntime = proc MarloweRuntimeDependencies{..} -> do
           { mkSubmitJob = mkSubmitJob SubmitJobDependencies{..}
           , loadWalletContext = loadWalletContext $ runConnector chainSyncQueryConnector . request . GetUTxOs
           , loadMarloweContext = loadMarloweContext getScripts networkId chainSyncConnector chainSyncQueryConnector
+          , loadPayoutContext = loadPayoutContext getScripts networkId $ runConnector chainSyncQueryConnector . request . GetUTxOs
           , analysisTimeout = 15 -- seconds
           , ..
           }

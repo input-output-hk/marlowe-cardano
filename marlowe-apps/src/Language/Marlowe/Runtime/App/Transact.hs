@@ -18,6 +18,8 @@ module Language.Marlowe.Runtime.App.Transact (
   runWithEvents,
   transact,
   transactWithEvents,
+  transact',
+  transactWithEvents',
 ) where
 
 import Control.Concurrent (threadDelay)
@@ -66,9 +68,9 @@ runWithEvents
   -> App ContractId
 runWithEvents backend config address key contract inputs minUtxo =
   do
-    let transact' = transactWithEvents backend config key
-    contractId <- transact' $ Create contract mempty minUtxo mempty mempty address mempty
-    mapM_ (\input -> transact' $ Apply contractId input Nothing Nothing mempty mempty address mempty) inputs
+    let transact'' = transactWithEvents' backend config key
+    contractId <- transact'' $ Create contract mempty minUtxo mempty mempty address mempty
+    mapM_ (\input -> transact'' $ Apply contractId input Nothing Nothing mempty mempty address mempty) inputs
     pure contractId
 
 create
@@ -89,7 +91,7 @@ createWithEvents
   -> Lovelace
   -> App ContractId
 createWithEvents backend config address key contract minUtxo =
-  transactWithEvents backend config key $
+  transactWithEvents' backend config key $
     Create contract mempty minUtxo mempty mempty address mempty
 
 apply
@@ -110,22 +112,39 @@ applyWithEvents
   -> [Input]
   -> App ContractId
 applyWithEvents backend config address key contractId input =
-  transactWithEvents backend config key $
+  transactWithEvents' backend config key $
     Apply contractId input Nothing Nothing mempty mempty address mempty
+
+transact'
+  :: Config
+  -> C.SigningKey C.PaymentExtendedKey
+  -> MarloweRequest 'V1
+  -> App ContractId
+transact' = transactWithEvents' unitEventBackend
 
 transact
   :: Config
   -> C.SigningKey C.PaymentExtendedKey
   -> MarloweRequest 'V1
-  -> App ContractId
+  -> App (Maybe ContractId)
 transact = transactWithEvents unitEventBackend
+
+transactWithEvents'
+  :: EventBackend App r DynamicEventSelector
+  -> Config
+  -> C.SigningKey C.PaymentExtendedKey
+  -> MarloweRequest 'V1
+  -> App ContractId
+transactWithEvents' backend config key request = do
+  mContractId <- transactWithEvents backend config key request
+  maybe (fail "Contract ID expected") pure mContractId
 
 transactWithEvents
   :: EventBackend App r DynamicEventSelector
   -> Config
   -> C.SigningKey C.PaymentExtendedKey
   -> MarloweRequest 'V1
-  -> App ContractId
+  -> App (Maybe ContractId)
 transactWithEvents backend config@Config{buildSeconds, confirmSeconds, retryLimit, retrySeconds} key request =
   let show' = LBS8.unpack . A.encode
       unexpected response = throwError $ "Unexpected response: " <> show' response

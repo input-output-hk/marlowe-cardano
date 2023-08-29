@@ -18,7 +18,7 @@ spec:
       - name: DB_NAME
         value: chainsync_{{ . }}
       - name: DB_HOST
-        value: {{ $.Values.databaseName }}.{{ $.Values.namespace }}:5432
+        value: {{ $.Values.databaseHost }}:5432
       - name: DB_USER
         valueFrom:
           secretKeyRef:

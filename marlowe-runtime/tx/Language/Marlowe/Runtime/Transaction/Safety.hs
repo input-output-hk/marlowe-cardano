@@ -255,7 +255,7 @@ checkTransaction protocolParameters era version@MarloweV1 marloweContext@Marlowe
       . either
         (pure . TransactionValidationError transaction . show)
         (const $ TransactionWarning transaction <$> V1.txOutWarnings txOutput)
-      $ solveConstraints' era version marloweContext' walletContext constraints
+      $ solveConstraints' era version (Left marloweContext') walletContext constraints
 
 -- | Create a wallet context that will satisfy the given constraints.
 walletForConstraints

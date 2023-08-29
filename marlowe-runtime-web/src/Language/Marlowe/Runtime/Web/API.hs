@@ -356,16 +356,16 @@ instance HasNamedLink WithdrawalHeader API "withdrawal" where
 type GetPayoutsAPI =
   QueryParams "contractId" TxOutRef
     :> QueryParams "roleToken" AssetId
-    :> QueryFlag "unclaimed"
+    :> QueryParam "status" PayoutStatus
     :> PaginatedGet '["payoutId"] GetPayoutsResponse
 
-type GetPayoutsResponse = WithLink "payout" PayoutRef
+type GetPayoutsResponse = WithLink "payout" PayoutHeader
 
-instance HasNamedLink PayoutRef API "payout" where
+instance HasNamedLink PayoutHeader API "payout" where
   type
-    Endpoint PayoutRef API "payout" =
+    Endpoint PayoutHeader API "payout" =
       "payouts" :> Capture "payoutId" TxOutRef :> GetPayoutAPI
-  namedLink _ _ mkLink PayoutRef{..} = Just $ mkLink payout
+  namedLink _ _ mkLink PayoutHeader{..} = Just $ mkLink payoutId
 
 type GetPayoutAPI = Get '[JSON] GetPayoutResponse
 
@@ -385,7 +385,7 @@ instance HasNamedLink PayoutState API "transaction" where
         :> "transactions"
         :> Capture "transactionId" TxId
         :> GetTransactionAPI
-  namedLink _ _ mkLink PayoutState{..} = Just $ mkLink contractId $ txId payout
+  namedLink _ _ mkLink PayoutState{..} = Just $ mkLink contractId $ txId payoutId
 
 instance HasNamedLink PayoutState API "withdrawal" where
   type

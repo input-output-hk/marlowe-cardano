@@ -15,7 +15,7 @@ import Language.Marlowe.Protocol.Query.Types (
   ContractFilter,
   Page,
   PayoutFilter,
-  PayoutRef,
+  PayoutHeader,
   Range,
   SomeContractState,
   SomePayoutState,
@@ -45,7 +45,7 @@ data DatabaseSelector f where
   GetTransactions :: DatabaseSelector (QueryField ContractId (Maybe SomeTransactions))
   GetWithdrawal :: DatabaseSelector (QueryField TxId (Maybe Withdrawal))
   GetWithdrawals :: DatabaseSelector (QueryField GetWithdrawalsArguments (Maybe (Page TxId Withdrawal)))
-  GetPayouts :: DatabaseSelector (QueryField GetPayoutsArguments (Maybe (Page TxOutRef PayoutRef)))
+  GetPayouts :: DatabaseSelector (QueryField GetPayoutsArguments (Maybe (Page TxOutRef PayoutHeader)))
   GetPayout :: DatabaseSelector (QueryField TxOutRef (Maybe SomePayoutState))
 
 data GetPayoutsArguments = GetPayoutsArguments
@@ -216,7 +216,7 @@ data DatabaseQueries m = DatabaseQueries
   , getTransactions :: ContractId -> m (Maybe SomeTransactions)
   , getWithdrawal :: TxId -> m (Maybe Withdrawal)
   , getWithdrawals :: WithdrawalFilter -> Range TxId -> m (Maybe (Page TxId Withdrawal))
-  , getPayouts :: PayoutFilter -> Range TxOutRef -> m (Maybe (Page TxOutRef PayoutRef))
+  , getPayouts :: PayoutFilter -> Range TxOutRef -> m (Maybe (Page TxOutRef PayoutHeader))
   , getPayout :: TxOutRef -> m (Maybe SomePayoutState)
   }
 

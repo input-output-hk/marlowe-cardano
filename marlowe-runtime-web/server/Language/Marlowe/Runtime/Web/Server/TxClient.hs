@@ -33,10 +33,11 @@ import Control.Monad.Event.Class
 import Control.Monad.IO.Unlift (MonadUnliftIO, liftIO, withRunInIO)
 import Data.Foldable (for_)
 import qualified Data.Map as Map
+import Data.Set (Set)
 import Data.Time (UTCTime)
 import Language.Marlowe.Protocol.Client (MarloweRuntimeClient (..))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
-import Language.Marlowe.Runtime.ChainSync.Api (DatumHash, Lovelace, StakeCredential, TokenName, TxId)
+import Language.Marlowe.Runtime.ChainSync.Api (DatumHash, Lovelace, StakeCredential, TxId, TxOutRef)
 import Language.Marlowe.Runtime.Core.Api (
   Contract,
   ContractId,
@@ -78,7 +79,7 @@ type CreateContract m =
   -> MarloweTransactionMetadata
   -> Lovelace
   -> Either (Contract v) DatumHash
-  -> m (Either (CreateError v) (ContractCreated v))
+  -> m (Either CreateError (ContractCreated v))
 
 type ApplyInputs m =
   forall v
@@ -89,15 +90,14 @@ type ApplyInputs m =
   -> Maybe UTCTime
   -> Maybe UTCTime
   -> Inputs v
-  -> m (Either (ApplyInputsError v) (InputsApplied v))
+  -> m (Either ApplyInputsError (InputsApplied v))
 
 type Withdraw m =
   forall v
    . MarloweVersion v
   -> WalletAddresses
-  -> ContractId
-  -> TokenName
-  -> m (Either (WithdrawError v) (WithdrawTx v))
+  -> Set TxOutRef
+  -> m (Either WithdrawError (WithdrawTx v))
 
 data TempTxStatus = Unsigned | Submitted
 
@@ -238,12 +238,8 @@ txClient = component "web-tx-client" \TxClientDependencies{..} -> do
                 modifyTVar tempTransactions $
                   Map.alter (Just . maybe (Map.singleton txId tempTx) (Map.insert txId tempTx)) contractId
             pure response
-        , withdraw = \version addresses contractId role -> do
-            response <-
-              runConnector connector $
-                RunTxClient $
-                  liftCommand $
-                    Withdraw version addresses contractId role
+        , withdraw = \version addresses payouts -> do
+            response <- runConnector connector $ RunTxClient $ liftCommand $ Withdraw version addresses payouts
             liftIO $ for_ response \(WithdrawTx era withdrawal@WithdrawTxInEra{txBody}) ->
               atomically $
                 modifyTVar tempWithdrawals $

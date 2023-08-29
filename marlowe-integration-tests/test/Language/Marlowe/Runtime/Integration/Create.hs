@@ -90,7 +90,7 @@ expectSuccess action = \case
   (a, Right b) -> action (a, b)
 
 runCreateCase
-  :: CreateCase -> ActionWith (TestData, Either (CreateError 'V1) (ContractCreated 'V1)) -> ActionWith TestData
+  :: CreateCase -> ActionWith (TestData, Either CreateError (ContractCreated 'V1)) -> ActionWith TestData
 runCreateCase createCase action testData = flip runIntegrationTest (runtime testData) do
   result <- runMarloweTxClient $ liftCommand $ mkCreateCommand testData createCase
   liftIO $ action (testData, result)
@@ -332,7 +332,7 @@ minLovelaceSpec = \case
   MinLovelaceSufficient -> Just $ pure ()
   MinLovelaceInsufficient -> Nothing
 
-mkCreateCommand :: TestData -> CreateCase -> MarloweTxCommand Void (CreateError 'V1) (ContractCreated 'V1)
+mkCreateCommand :: TestData -> CreateCase -> MarloweTxCommand Void CreateError (ContractCreated 'V1)
 mkCreateCommand testData (CreateCase stakeCredential wallet (roleTokens, metadata) minLovelace) =
   Create
     (mkStakeCredential testData stakeCredential)

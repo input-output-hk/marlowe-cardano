@@ -4,8 +4,9 @@ import Data.Functor (void)
 import qualified Data.Set as Set
 import Language.Marlowe.Runtime.Integration.Common
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses (..))
+import Language.Marlowe.Runtime.Web (PayoutHeader (..), PayoutStatus (..))
 import qualified Language.Marlowe.Runtime.Web as Web
-import Language.Marlowe.Runtime.Web.Client (postWithdrawal)
+import Language.Marlowe.Runtime.Web.Client (Page (..), getPayouts, postWithdrawal)
 import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO (toDTO))
 import Language.Marlowe.Runtime.Web.StandardContract (
   StandardContractChoiceMade (..),
@@ -28,7 +29,7 @@ spec = describe "POST /contracts/{contractId}/withdrawal" do
       let WalletAddresses{..} = addresses partyAWallet
       let webChangeAddress = toDTO changeAddress
       let webExtraAddresses = Set.map toDTO extraAddresses
-      let webCollataralUtxos = Set.map toDTO collateralUtxos
+      let webCollateralUtxos = Set.map toDTO collateralUtxos
 
       StandardContractInit{contractCreated, makeInitialDeposit} <- createStandardContract partyAWallet partyBWallet
       StandardContractFundsDeposited{chooseGimmeTheMoney} <- makeInitialDeposit
@@ -37,15 +38,10 @@ spec = describe "POST /contracts/{contractId}/withdrawal" do
       StandardContractClosed{} <- makeReturnDeposit
       contractId <- case contractCreated of
         Web.CreateTxEnvelope{contractId} -> pure contractId
+      Page{..} <- getPayouts (Just $ Set.singleton contractId) Nothing (Just Available) Nothing
+      let payouts = Set.fromList $ payoutId <$> items
       void $
-        postWithdrawal
-          webChangeAddress
-          (Just webExtraAddresses)
-          (Just webCollataralUtxos)
-          Web.PostWithdrawalsRequest
-            { role = "Party A"
-            , contractId
-            }
+        postWithdrawal webChangeAddress (Just webExtraAddresses) (Just webCollateralUtxos) Web.PostWithdrawalsRequest{..}
 
     case result of
       Left _ -> fail $ "Expected 200 response code - got " <> show result

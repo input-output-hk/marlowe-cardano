@@ -55,7 +55,7 @@ data ApplyCommand = V1ApplyCommand
   }
 
 data ApplyCommandError v
-  = ApplyFailed (ApplyInputsError v)
+  = ApplyFailed ApplyInputsError
   | InputsWithContinuationsUnsupported (ContractInputs v)
   | InputsDecodingFailed (Maybe Yaml.ParseException)
   | TransactionFileWriteFailed (C.FileError ())

@@ -897,48 +897,51 @@ getUTxOs =
             txOutRefs' = (V.fromList *** V.fromList) . unzip . fmap txOutRefTuple . Set.toList $ txOutRefs
         HT.statement txOutRefs' $
           [foldStatement|
-        SELECT txOut.txId :: bytea
-             , txOut.txIx :: smallint
-             , txOut.address :: bytea
-             , txOut.lovelace :: bigint
-             , txOut.datumHash :: bytea?
-             , txOut.datumBytes :: bytea?
-             , asset.policyId :: bytea?
-             , asset.name :: bytea?
-             , assetOut.quantity :: bigint?
-          FROM chain.txOut         AS txOut
-          LEFT JOIN chain.txIn     AS txIn     ON txIn.txOutId = txOut.txId AND txIn.txOutIx = txOut.txIx
-          LEFT JOIN chain.assetOut AS assetOut ON assetOut.txOutId = txOut.txId AND assetOut.txOutIx = txOut.txIx
-          LEFT JOIN chain.asset    AS asset    ON asset.id = assetOut.assetId
-         WHERE (txOut.txId, txOut.txTx) = ANY(unnest ($1 :: bytea[], $2 :: smallint[]))
-           AND txIn.txInId IS NULL
-         ORDER BY txIx
-      |]
+            WITH txOuts (txId, txIx) AS
+              ( SELECT * FROM UNNEST($1 :: bytea[], $2 :: smallint[])
+              )
+            SELECT txOut.txId :: bytea
+                , txOut.txIx :: smallint
+                , txOut.address :: bytea
+                , txOut.lovelace :: bigint
+                , txOut.datumHash :: bytea?
+                , txOut.datumBytes :: bytea?
+                , asset.policyId :: bytea?
+                , asset.name :: bytea?
+                , assetOut.quantity :: bigint?
+              FROM chain.txOut         AS txOut
+              NATURAL JOIN txOuts
+              LEFT JOIN chain.txIn     AS txIn     ON txIn.txOutId = txOut.txId AND txIn.txOutIx = txOut.txIx
+              LEFT JOIN chain.assetOut AS assetOut ON assetOut.txOutId = txOut.txId AND assetOut.txOutIx = txOut.txIx
+              LEFT JOIN chain.asset    AS asset    ON asset.id = assetOut.assetId
+            WHERE txIn.txInId IS NULL
+            ORDER BY txIx
+          |]
             (Fold foldRow mempty id)
       GetUTxOsAtAddresses addresses -> do
         let addresses' = V.fromList $ fmap unAddress . Set.toList $ addresses
         HT.statement addresses' $
           [foldStatement|
-        WITH addresses (address) AS
-          ( SELECT * FROM UNNEST($1 :: bytea[])
-          )
-        SELECT txOut.txId :: bytea
-             , txOut.txIx :: smallint
-             , txOut.address :: bytea
-             , txOut.lovelace :: bigint
-             , txOut.datumHash :: bytea?
-             , txOut.datumBytes :: bytea?
-             , asset.policyId :: bytea?
-             , asset.name :: bytea?
-             , assetOut.quantity :: bigint?
-          FROM chain.txOut         AS txOut
-          JOIN addresses           AS addr     ON addr.address = txOut.address AND CAST(MD5(addr.address) AS uuid) = CAST(MD5(txOut.address) AS uuid)
-          LEFT JOIN chain.txIn     AS txIn     ON txIn.txOutId = txOut.txId AND txIn.txOutIx = txOut.txIx
-          LEFT JOIN chain.assetOut AS assetOut ON assetOut.txOutId = txOut.txId AND assetOut.txOutIx = txOut.txIx
-          LEFT JOIN chain.asset    AS asset    ON asset.id = assetOut.assetId
-         WHERE txIn.txInId IS NULL
-         ORDER BY txIx
-      |]
+            WITH addresses (address) AS
+              ( SELECT * FROM UNNEST($1 :: bytea[])
+              )
+            SELECT txOut.txId :: bytea
+                , txOut.txIx :: smallint
+                , txOut.address :: bytea
+                , txOut.lovelace :: bigint
+                , txOut.datumHash :: bytea?
+                , txOut.datumBytes :: bytea?
+                , asset.policyId :: bytea?
+                , asset.name :: bytea?
+                , assetOut.quantity :: bigint?
+              FROM chain.txOut         AS txOut
+              JOIN addresses           AS addr     ON addr.address = txOut.address AND CAST(MD5(addr.address) AS uuid) = CAST(MD5(txOut.address) AS uuid)
+              LEFT JOIN chain.txIn     AS txIn     ON txIn.txOutId = txOut.txId AND txIn.txOutIx = txOut.txIx
+              LEFT JOIN chain.assetOut AS assetOut ON assetOut.txOutId = txOut.txId AND assetOut.txOutIx = txOut.txIx
+              LEFT JOIN chain.asset    AS asset    ON asset.id = assetOut.assetId
+            WHERE txIn.txInId IS NULL
+            ORDER BY txIx
+          |]
             (Fold foldRow mempty id)
   where
     foldRow acc (txId, txIx, address, lovelace, datumHash, datumBytes, policyId, tokenName, quantity) =

@@ -12,7 +12,6 @@ module Language.Marlowe.Runtime.Web.Server.REST.ApiError where
 import Control.Monad.Except (MonadError (throwError))
 import Data.Aeson (ToJSON (toJSON), Value (Null), encode, object, (.=))
 import Data.Maybe (fromMaybe)
-import Language.Marlowe.Runtime.Core.Api (MarloweVersionTag (..))
 import Language.Marlowe.Runtime.Transaction.Api (
   ApplyInputsConstraintsBuildupError (..),
   ApplyInputsError (..),
@@ -111,43 +110,32 @@ rangeNotSatisfiable msg errorCode = toServerError . ApiError msg (fromMaybe "Ran
 rangeNotSatisfiable' :: String -> ServerError
 rangeNotSatisfiable' msg = rangeNotSatisfiable msg Nothing
 
-instance HasDTO (WithdrawError 'V1) where
-  type DTO (WithdrawError 'V1) = ApiError
+instance HasDTO WithdrawError where
+  type DTO WithdrawError = ApiError
 
-instance ToDTO (WithdrawError 'V1) where
+instance ToDTO WithdrawError where
   toDTO = \case
     WithdrawEraUnsupported era -> ApiError ("Current network era not supported: " <> show era) "WithdrawEraUnsupported" Null 503
-    WithdrawConstraintError (MintingUtxoNotFound _) -> ApiError "Minting UTxO not found" "MintingUtxoNotFound" Null 500
-    WithdrawConstraintError (RoleTokenNotFound _) -> ApiError "Role token not found" "RoleTokenNotFound" Null 403
-    WithdrawConstraintError ToCardanoError -> ApiError "Internal error" "ToCardanoError" Null 500
-    WithdrawConstraintError MissingMarloweInput -> ApiError "Internal error" "MissingMarloweInput" Null 500
-    WithdrawConstraintError (PayoutInputNotFound _) -> ApiError "Internal error" "PayoutInputNotFound" Null 500
-    WithdrawConstraintError (CalculateMinUtxoFailed _) -> ApiError "Internal error" "CalculateMinUtxoFailed" Null 500
-    WithdrawConstraintError (CoinSelectionFailed msg) -> ApiError ("Coin selection failed: " <> msg) "CoinSelectionFailed" Null 400
-    WithdrawConstraintError (BalancingError _) -> ApiError "Internal error" "BalancingError" Null 500
-    WithdrawLoadMarloweContextFailed LoadMarloweContextErrorNotFound -> ApiError "Marlowe contract not found" "MarloweContractNotFound" Null 404
-    WithdrawLoadMarloweContextFailed (LoadMarloweContextErrorVersionMismatch _) -> ApiError "Marlowe contract version mismatch" "MarloweContractVersionMismatch" Null 400
-    WithdrawLoadMarloweContextFailed LoadMarloweContextToCardanoError -> ApiError "Internal error" "LoadMarloweContextToCardanoError" Null 500
-    WithdrawLoadMarloweContextFailed (MarloweScriptNotPublished _) -> ApiError "Internal error" "MarloweScriptNotPublished" Null 500
-    WithdrawLoadMarloweContextFailed (PayoutScriptNotPublished _) -> ApiError "Internal error" "PayoutScriptNotPublished" Null 500
-    WithdrawLoadMarloweContextFailed (ExtractCreationError _) -> ApiError "Internal error" "ExtractCreationError" Null 500
-    WithdrawLoadMarloweContextFailed (ExtractMarloweTransactionError _) -> ApiError "Internal error" "ExtractMarloweTransactionError" Null 500
-    UnableToFindPayoutForAGivenRole _ -> ApiError "No payouts available for given role" "UnableToFindPayoutForAGivenRole" Null 409
+    WithdrawConstraintError err -> ApiError (show err) "ConstraintError" Null case err of
+      MintingUtxoNotFound _ -> 400
+      RoleTokenNotFound _ -> 400
+      PayoutNotFound _ -> 400
+      CoinSelectionFailed _ -> 400
+      _ -> 500
+    EmptyPayouts -> ApiError "Empty payouts" "EmptyPayouts" Null 400
 
-instance HasDTO (CreateError 'V1) where
-  type DTO (CreateError 'V1) = ApiError
+instance HasDTO CreateError where
+  type DTO CreateError = ApiError
 
-instance ToDTO (CreateError 'V1) where
+instance ToDTO CreateError where
   toDTO = \case
     CreateEraUnsupported era -> ApiError ("Current network era not supported: " <> show era) "WithdrawEraUnsupported" Null 503
-    CreateConstraintError (MintingUtxoNotFound _) -> ApiError "Minting UTxO not found" "MintingUtxoNotFound" Null 500
-    CreateConstraintError (RoleTokenNotFound _) -> ApiError "Role token not found" "RoleTokenNotFound" Null 403
-    CreateConstraintError ToCardanoError -> ApiError "Internal error" "ToCardanoError" Null 500
-    CreateConstraintError MissingMarloweInput -> ApiError "Internal error" "MissingMarloweInput" Null 500
-    CreateConstraintError (PayoutInputNotFound _) -> ApiError "Internal error" "PayoutInputNotFound" Null 500
-    CreateConstraintError (CalculateMinUtxoFailed _) -> ApiError "Internal error" "CalculateMinUtxoFailed" Null 500
-    CreateConstraintError (CoinSelectionFailed msg) -> ApiError ("Coin selection failed: " <> msg) "CoinSelectionFailed" Null 400
-    CreateConstraintError (BalancingError _) -> ApiError "Internal error" "BalancingError" Null 500
+    CreateConstraintError err -> ApiError (show err) "ConstraintError" Null case err of
+      MintingUtxoNotFound _ -> 400
+      RoleTokenNotFound _ -> 400
+      PayoutNotFound _ -> 400
+      CoinSelectionFailed _ -> 400
+      _ -> 500
     CreateLoadMarloweContextFailed LoadMarloweContextErrorNotFound -> ApiError "Marlowe contract not found" "MarloweContractNotFound" Null 404
     CreateLoadMarloweContextFailed (LoadMarloweContextErrorVersionMismatch _) -> ApiError "Marlowe contract version mismatch" "MarloweContractVersionMismatch" Null 400
     CreateLoadMarloweContextFailed LoadMarloweContextToCardanoError -> ApiError "Internal error" "LoadMarloweContextToCardanoError" Null 500
@@ -162,20 +150,18 @@ instance ToDTO (CreateError 'V1) where
     CreateSafetyAnalysisError _ -> ApiError "Safety analysis failed" "InternalError" Null 400
     CreateContractNotFound -> ApiError "Contract not found" "Not found" Null 404
 
-instance HasDTO (ApplyInputsError 'V1) where
-  type DTO (ApplyInputsError 'V1) = ApiError
+instance HasDTO ApplyInputsError where
+  type DTO ApplyInputsError = ApiError
 
-instance ToDTO (ApplyInputsError 'V1) where
+instance ToDTO ApplyInputsError where
   toDTO = \case
     ApplyInputsEraUnsupported era -> ApiError ("Current network era not supported: " <> show era) "WithdrawEraUnsupported" Null 503
-    ApplyInputsConstraintError (MintingUtxoNotFound _) -> ApiError "Minting UTxO not found" "MintingUtxoNotFound" Null 500
-    ApplyInputsConstraintError (RoleTokenNotFound _) -> ApiError "Role token not found" "RoleTokenNotFound" Null 403
-    ApplyInputsConstraintError ToCardanoError -> ApiError "Internal error" "ToCardanoError" Null 500
-    ApplyInputsConstraintError MissingMarloweInput -> ApiError "Internal error" "MissingMarloweInput" Null 500
-    ApplyInputsConstraintError (PayoutInputNotFound _) -> ApiError "Internal error" "PayoutInputNotFound" Null 500
-    ApplyInputsConstraintError (CalculateMinUtxoFailed _) -> ApiError "Internal error" "CalculateMinUtxoFailed" Null 500
-    ApplyInputsConstraintError (CoinSelectionFailed msg) -> ApiError ("Coin selection failed: " <> msg) "CoinSelectionFailed" Null 400
-    ApplyInputsConstraintError (BalancingError _) -> ApiError "Internal error" "BalancingError" Null 500
+    ApplyInputsConstraintError err -> ApiError (show err) "ConstraintError" Null case err of
+      MintingUtxoNotFound _ -> 400
+      RoleTokenNotFound _ -> 400
+      PayoutNotFound _ -> 400
+      CoinSelectionFailed _ -> 400
+      _ -> 500
     ScriptOutputNotFound -> ApiError "Script output not found" "ScriptOutputNotFound" Null 400
     ApplyInputsLoadMarloweContextFailed LoadMarloweContextErrorNotFound -> ApiError "Marlowe contract not found" "MarloweContractNotFound" Null 404
     ApplyInputsLoadMarloweContextFailed (LoadMarloweContextErrorVersionMismatch _) -> ApiError "Marlowe contract version mismatch" "MarloweContractVersionMismatch" Null 400
