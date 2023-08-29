@@ -16,6 +16,7 @@ module Language.Marlowe.CLI.IO (
   decodeFileStrict,
   getProtocolVersion,
   maybeWriteJson,
+  maybeWriteYaml,
   maybeWriteTextEnvelope,
   queryInEra,
   readMaybeMetadata,
@@ -60,7 +61,7 @@ import Control.Monad.Except (MonadError, MonadIO, liftEither, liftIO)
 import Data.Aeson (FromJSON (..), ToJSON)
 import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.Bifunctor (first)
-import Data.Yaml (decodeFileEither)
+import Data.Yaml as Yaml (decodeFileEither, encode, encodeFile)
 import Language.Marlowe.CLI.Types (
   CliEnv,
   CliError (..),
@@ -79,6 +80,7 @@ import System.Environment (lookupEnv)
 import Text.Read (readMaybe)
 
 import Control.Monad.Reader (MonadReader)
+import Data.ByteString.Char8 qualified as BS8 (putStrLn)
 import Data.ByteString.Lazy qualified as LBS (writeFile)
 import Data.ByteString.Lazy.Char8 qualified as LBS8 (putStrLn)
 import Language.Marlowe.CLI.Cardano.Api (toPlutusProtocolVersion)
@@ -129,7 +131,7 @@ decodeFileStrict
   -- ^ Action to decode the file.
 decodeFileStrict filePath =
   do
-    result <- liftIO $ decodeFileEither filePath
+    result <- liftIO $ Yaml.decodeFileEither filePath
     liftEither $ first (CliError . show) result
 
 -- | Decode, in an error mondad, a JSON file containing built-in data.
@@ -201,6 +203,16 @@ maybeWriteJson
   -> m ()
 maybeWriteJson Nothing = liftIO . LBS8.putStrLn . encodePretty
 maybeWriteJson (Just outputFile) = liftIO . LBS.writeFile outputFile . encodePretty
+
+-- | Optional write a JSON file, otherwise write to standard output.
+maybeWriteYaml
+  :: (MonadIO m)
+  => (ToJSON a)
+  => Maybe FilePath
+  -> a
+  -> m ()
+maybeWriteYaml Nothing = liftIO . BS8.putStrLn . Yaml.encode
+maybeWriteYaml (Just outputFile) = liftIO . Yaml.encodeFile outputFile
 
 -- | Read optional metadata.
 readMaybeMetadata

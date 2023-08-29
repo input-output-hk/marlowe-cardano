@@ -74,6 +74,7 @@ library
     Language.Marlowe.CLI.Data.Foldable
     Language.Marlowe.CLI.Examples
     Language.Marlowe.CLI.Export
+    Language.Marlowe.CLI.Format
     Language.Marlowe.CLI.IO
     Language.Marlowe.CLI.Merkle
     Language.Marlowe.CLI.Orphans
@@ -107,10 +108,12 @@ library
     , errors
     , extra
     , marlowe-cardano
+    , megaparsec
     , memory
     , mtl
     , ouroboros-consensus
     , ouroboros-network
+    , parser-combinators
     , plutus-core
     , plutus-ledger
     , plutus-ledger-ada
@@ -221,6 +224,7 @@ library command
   exposed-modules:
     Language.Marlowe.CLI.Command
     Language.Marlowe.CLI.Command.Contract
+    Language.Marlowe.CLI.Command.Format
     Language.Marlowe.CLI.Command.Input
     Language.Marlowe.CLI.Command.Parse
     Language.Marlowe.CLI.Command.Role
@@ -238,6 +242,7 @@ library command
     , cardano-api
     , cardano-slotting
     , containers
+    , filepath
     , marlowe-actus
     , marlowe-cardano
     , marlowe-cli:{marlowe-cli, cli-test}
@@ -278,7 +283,10 @@ test-suite marlowe-cli-test
   hs-source-dirs: tests
   type:           exitcode-stdio-1.0
   main-is:        Spec.hs
-  other-modules:  Spec.Analysis
+  other-modules:
+    Spec.Analysis
+    Spec.Format
+
   build-depends:
     , aeson
     , base >=4.9 && <5
@@ -286,9 +294,13 @@ test-suite marlowe-cli-test
     , containers
     , marlowe-cardano
     , marlowe-cli
+    , marlowe-test
+    , megaparsec
     , mtl
     , plutus-ledger-api
     , plutus-ledger-slot
     , plutus-tx
     , tasty
     , tasty-hunit
+    , tasty-quickcheck
+    , text
