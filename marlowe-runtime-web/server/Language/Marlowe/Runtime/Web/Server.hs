@@ -28,6 +28,9 @@ import Control.Concurrent.Component.Run (AppM (..))
 import Control.Monad.Event.Class
 import Control.Monad.IO.Unlift (liftIO, withRunInIO)
 import Control.Monad.Reader (ReaderT (ReaderT), runReaderT)
+import Data.Aeson (Value (..), (.=))
+import Data.Aeson.Types (object)
+import Data.String.Conversions (cs)
 import Language.Marlowe.Protocol.Client (MarloweRuntimeClient (..))
 import Language.Marlowe.Protocol.Query.Client (getStatus)
 import Language.Marlowe.Protocol.Types (MarloweRuntime)
@@ -77,6 +80,7 @@ import Observe.Event (reference)
 import Observe.Event.Backend (Event (addField))
 import Observe.Event.Explicit (injectSelector)
 import Servant hiding (Server, respond)
+import Servant.API.ContentTypes (handleAcceptH)
 import Servant.Pipes ()
 
 data ServeRequest f where
@@ -103,16 +107,45 @@ apiWithOpenApi = Proxy
 serverWithOpenAPI :: ServerT APIWithOpenAPI ServerM
 serverWithOpenAPI = OpenAPI.server :<|> REST.server
 
+customFormatters :: ErrorFormatters
+customFormatters =
+  defaultErrorFormatters
+    { bodyParserErrorFormatter = customBodyParserErrorFormatter
+    }
+
+customBodyParserErrorFormatter :: ErrorFormatter
+customBodyParserErrorFormatter typeRep req message =
+  let errorCode = "RequestBodyParseError"
+      details = show typeRep
+      value =
+        object
+          [ "errorCode" .= errorCode
+          , "message" .= message
+          , "details" .= String (cs details)
+          ]
+      acceptHeader = getAcceptHeader req
+   in case handleAcceptH (Proxy :: Proxy '[JSON]) acceptHeader value of
+        Nothing ->
+          err400
+            { errBody =
+                cs $ errorCode <> ": " <> message <> " (" <> details <> ")"
+            }
+        Just (contentTypeHeader, body) ->
+          err400
+            { errBody = body
+            , errHeaders = [("Content-Type", cs contentTypeHeader)]
+            }
+
 serveServerM
-  :: (HasServer api '[IO RuntimeStatus])
+  :: (HasServer api '[IO RuntimeStatus, ErrorFormatters])
   => IO RuntimeStatus
   -> Proxy api
   -> AppEnv
   -> ServerT api ServerM
   -> Application
 serveServerM status api env =
-  serveWithContext api (status :. EmptyContext)
-    . hoistServerWithContext api (Proxy @'[IO RuntimeStatus]) (flip runReaderT env . runServerM)
+  serveWithContext api (status :. customFormatters :. EmptyContext)
+    . hoistServerWithContext api (Proxy @'[IO RuntimeStatus, ErrorFormatters]) (flip runReaderT env . runServerM)
 
 corsMiddleware :: Bool -> WAI.Middleware
 corsMiddleware accessControlAllowOriginAll =
