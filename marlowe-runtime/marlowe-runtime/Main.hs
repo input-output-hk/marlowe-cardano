@@ -67,6 +67,7 @@ import Language.Marlowe.Runtime.Contract.Store.File (
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion (..))
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
 import qualified Language.Marlowe.Runtime.Indexer.Database.PostgreSQL as IndexerPostgreSQL
+import qualified Language.Marlowe.Runtime.Indexer.Party as Party
 import qualified Language.Marlowe.Runtime.Sync.Database as Sync
 import qualified Language.Marlowe.Runtime.Sync.Database.PostgreSQL as SyncPostgres
 import Logging (RootSelector (..), renderRootSelectorOTel)
@@ -81,7 +82,7 @@ import Paths_marlowe_runtime (version)
 import System.Environment (lookupEnv)
 import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
 import Text.Read (readMaybe)
-import UnliftIO (liftIO, throwIO)
+import UnliftIO (MonadUnliftIO (..), liftIO, throwIO)
 
 main :: IO ()
 main = do
@@ -169,6 +170,10 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
               , submitConfirmationBlocks
               , networkId
               , runtimeVersion = version
+              , indexParties = withRunInIO \runInIO ->
+                  either throwIO pure =<< Pool.use pool do
+                    connection <- ask
+                    liftIO $ runInIO $ Party.indexParties connection
               }
 
       tcpServer "marlowe-runtime"

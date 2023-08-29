@@ -23,7 +23,7 @@ CREATE TABLE marlowe.contractTxOutPartyRole
   , txIx SMALLINT NOT NULL
   , createTxId BYTEA NOT NULL
   , createTxIx SMALLINT NOT NULL
-  , PRIMARY KEY (rolesCurrency, role, address, txId, txIx)
+  , PRIMARY KEY (rolesCurrency, role, txId, txIx)
   , FOREIGN KEY (txId, txIx) REFERENCES marlowe.contractTxOut ON DELETE CASCADE
   , FOREIGN KEY (createTxId, createTxIx) REFERENCES marlowe.createTxOut (txId, txIx) ON DELETE CASCADE
   );

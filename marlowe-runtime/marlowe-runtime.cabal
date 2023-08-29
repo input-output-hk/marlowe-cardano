@@ -170,6 +170,7 @@ library indexer
     Language.Marlowe.Runtime.Indexer.Database.PostgreSQL.CommitRollback
     Language.Marlowe.Runtime.Indexer.Database.PostgreSQL.GetIntersectionPoints
     Language.Marlowe.Runtime.Indexer.Database.PostgreSQL.GetMarloweUTxO
+    Language.Marlowe.Runtime.Indexer.Party
     Language.Marlowe.Runtime.Indexer.Store
     Language.Marlowe.Runtime.Indexer.Types
 

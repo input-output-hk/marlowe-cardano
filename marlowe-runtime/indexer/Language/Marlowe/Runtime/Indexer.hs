@@ -41,6 +41,7 @@ data MarloweIndexerDependencies m = MarloweIndexerDependencies
   , pollingInterval :: NominalDiffTime
   , marloweScriptHashes :: NESet ScriptHash
   , payoutScriptHashes :: NESet ScriptHash
+  , indexParties :: m ()
   }
 
 marloweIndexer
