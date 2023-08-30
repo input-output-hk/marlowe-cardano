@@ -20,7 +20,7 @@ import Data.Type.Equality (testEquality, type (:~:) (Refl))
 import Data.Version (Version)
 import GHC.Generics (Generic)
 import GHC.Show (showSpace)
-import Language.Marlowe.Runtime.ChainSync.Api (AssetId, BlockHeader, ChainPoint, PolicyId, TxId, TxOutRef)
+import Language.Marlowe.Runtime.ChainSync.Api (Address, AssetId, BlockHeader, ChainPoint, PolicyId, TxId, TxOutRef)
 import Language.Marlowe.Runtime.Core.Api (
   ContractId,
   MarloweMetadataTag,
@@ -53,6 +53,8 @@ newtype WithdrawalFilter = WithdrawalFilter
 data ContractFilter = ContractFilter
   { tags :: Set MarloweMetadataTag
   , roleCurrencies :: Set PolicyId
+  , partyRoles :: Set AssetId
+  , partyAddresses :: Set Address
   }
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (ToJSON, FromJSON, Binary, Variations)
@@ -62,6 +64,8 @@ instance Semigroup ContractFilter where
     ContractFilter
       { tags = on (<>) tags a b
       , roleCurrencies = on (<>) (\ContractFilter{..} -> roleCurrencies) a b
+      , partyRoles = on (<>) partyRoles a b
+      , partyAddresses = on (<>) partyAddresses a b
       }
 
 instance Monoid ContractFilter where
@@ -69,6 +73,8 @@ instance Monoid ContractFilter where
     ContractFilter
       { tags = mempty
       , roleCurrencies = mempty
+      , partyRoles = mempty
+      , partyAddresses = mempty
       }
 
 data PayoutFilter = PayoutFilter

@@ -12,26 +12,29 @@ import Data.Binary (get)
 import Data.Binary.Get (runGet)
 import Data.ByteString (ByteString)
 import Data.ByteString.Lazy (fromStrict)
+import Data.Coerce (coerce)
 import Data.Int (Int16, Int32, Int64)
 import qualified Data.List.NonEmpty as NE
-import Data.Maybe (fromJust)
+import Data.Maybe (catMaybes, fromJust)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Vector as Vector
 import qualified Hasql.Decoders as Decoders
 import Hasql.DynamicSyntax.Ast
-import Hasql.DynamicSyntax.Schema (tableColumn)
+import Hasql.DynamicSyntax.Schema (Table (..), cte, tableColumn, wildcard)
 import Hasql.DynamicSyntax.Statement (StatementBuilder, buildStatement, param)
 import Hasql.Statement (Statement)
 import qualified Hasql.Transaction as T
 import Language.Marlowe.Protocol.Query.Types
 import Language.Marlowe.Runtime.ChainSync.Api (
   Address (..),
+  AssetId (..),
   BlockHeader (..),
   BlockHeaderHash (..),
   Credential (..),
   PolicyId (..),
   ScriptHash (..),
+  TokenName (..),
   TxId (..),
   TxOutRef (..),
   paymentCredential,
@@ -44,7 +47,7 @@ import Language.Marlowe.Runtime.Core.Api (
   emptyMarloweTransactionMetadata,
  )
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader (..))
-import Language.Marlowe.Runtime.Schema (countAll, equals, existsCond, naturalJoin, unnestParams)
+import Language.Marlowe.Runtime.Schema (countAll, equals, existsCond, naturalJoin, unnestParams, withCTEs)
 import qualified Language.Marlowe.Runtime.Schema as Schema
 import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetPayouts (
   laxComparisonCond,
@@ -138,7 +141,7 @@ data DelimiterRow = DelimiterRow
 delimiterStatement :: ContractFilter -> ContractId -> Statement () (Maybe DelimiterRow)
 delimiterStatement cFilter (ContractId TxOutRef{..}) = buildStatement DelimiterRow Decoders.rowMaybe do
   -- Allocate the tables.
-  fromClause <- delimiterTables cFilter
+  (withClause, fromClause) <- delimiterTables cFilter
   -- Allocate parameters for the delimiter.
   txIdParam <- param $ unTxId txId
   txIxParam <- param @Int16 $ fromIntegral txIx
@@ -157,13 +160,13 @@ delimiterStatement cFilter (ContractId TxOutRef{..}) = buildStatement DelimiterR
           Nothing
           Nothing
           Nothing
-  pure $ SelectPreparableStmt $ Left $ SelectNoParens Nothing (Left selectClause) Nothing Nothing Nothing
+  pure $ SelectPreparableStmt $ Left $ SelectNoParens withClause (Left selectClause) Nothing Nothing Nothing
 
 -- | A select statement which looks for the delimiter specified by the given contractId.
 totalCountStatement :: ContractFilter -> Statement () Int
 totalCountStatement cFilter = buildStatement fromIntegral Decoders.singleRow do
   -- Allocate the tables.
-  fromClause <- delimiterTables cFilter
+  (withClause, fromClause) <- delimiterTables cFilter
   whereClause <- filterCondition cFilter Nothing
   let selectClause =
         NormalSimpleSelect
@@ -174,12 +177,12 @@ totalCountStatement cFilter = buildStatement fromIntegral Decoders.singleRow do
           Nothing
           Nothing
           Nothing
-  pure $ SelectPreparableStmt $ Left $ SelectNoParens Nothing (Left selectClause) Nothing Nothing Nothing
+  pure $ SelectPreparableStmt $ Left $ SelectNoParens withClause (Left selectClause) Nothing Nothing Nothing
 
 headersStatement :: ContractFilter -> Range ContractId -> Maybe DelimiterRow -> Statement () [ContractHeader]
 headersStatement cFilter Range{..} mDelimiter = buildStatement decodeContractHeader Decoders.rowList do
   -- Allocate the tables.
-  fromClause <- headersTables cFilter
+  (withClause, fromClause) <- headersTables cFilter
   -- Allocate the where clause
   whereClause <- filterCondition cFilter =<< traverse (delimiterComparisonCond rangeDirection) mDelimiter
   -- Allocate limit and offset params
@@ -217,34 +220,111 @@ headersStatement cFilter Range{..} mDelimiter = buildStatement decodeContractHea
   pure $
     SelectPreparableStmt $
       Left $
-        SelectNoParens Nothing (Left selectClause) (Just sortClause) (Just selectLimit) Nothing
+        SelectNoParens withClause (Left selectClause) (Just sortClause) (Just selectLimit) Nothing
 
 -- * Tables
 
-delimiterTables :: ContractFilter -> StatementBuilder TableRef
-delimiterTables ContractFilter{..}
-  | Set.null roleCurrencies = pure $ toTableRef Schema.createTxOut
-  | otherwise = do
-      rolesTableRef <- rolesTable roleCurrencies
-      pure $
-        Schema.createTxOut
-          `naturalJoin` Schema.contractTxOut
-          `naturalJoin` rolesTableRef
+-- | The columns of the partyAddresses CTE
+type PartyAddressesColumns =
+  '[ '("address", SqlBytea, NotNull)
+   ]
 
-headersTables :: ContractFilter -> StatementBuilder TableRef
-headersTables ContractFilter{..}
-  | Set.null roleCurrencies =
-      pure $
-        Schema.createTxOut
-          `naturalJoin` Schema.contractTxOut
-          `naturalJoin` Schema.txOut
+-- | The columns of the partyRoles CTE
+type PartyRolesColumns =
+  '[ '("rolesCurrency", SqlBytea, NotNull)
+   , '("role", SqlBytea, NotNull)
+   ]
+
+-- | The partyAddresses CTE table
+partyAddressesTable :: Table PartyAddressesColumns
+partyAddressesTable = Schema.tempTable "partyAddresses"
+
+-- | The partyRoles CTE table
+partyRolesTable :: Table PartyRolesColumns
+partyRolesTable = Schema.tempTable "partyRoles"
+
+-- |
+--  ==== SQL
+--  @
+--  partyAddresses (address)
+--     ( SELECT * FROM UNNEST ($1)
+--     )
+--  @
+partyAddressesCTE :: Set Address -> StatementBuilder (Maybe CommonTableExpr)
+partyAddressesCTE addresses
+  | Set.null addresses = pure Nothing
   | otherwise = do
-      rolesTableRef <- rolesTable roleCurrencies
+      addressesParam <- param $ Vector.fromList $ coerce @_ @[ByteString] $ Set.toList addresses
       pure $
-        Schema.createTxOut
-          `naturalJoin` Schema.contractTxOut
-          `naturalJoin` Schema.txOut
-          `naturalJoin` rolesTableRef
+        Just $
+          cte partyAddressesTable . simpleSelectPreparableStmt $
+            NormalSimpleSelect
+              (wildcard partyAddressesTable)
+              Nothing
+              (Just $ pure $ unnestParams (pure addressesParam) Nothing)
+              Nothing
+              Nothing
+              Nothing
+              Nothing
+
+-- |
+--  ==== SQL
+--  @
+--  partyRoles (rolesCurrency, role)
+--     ( SELECT * FROM UNNEST ($1, $2)
+--     )
+--  @
+partyRolesCTE :: Set AssetId -> StatementBuilder (Maybe CommonTableExpr)
+partyRolesCTE roles
+  | Set.null roles = pure Nothing
+  | otherwise = do
+      let rolesVector = Vector.fromList $ Set.toList roles
+      policyIdsParam <- param $ unPolicyId . policyId <$> rolesVector
+      tokenNameParam <- param $ unTokenName . tokenName <$> rolesVector
+      pure $
+        Just $
+          cte partyRolesTable . simpleSelectPreparableStmt $
+            NormalSimpleSelect
+              (wildcard partyRolesTable)
+              Nothing
+              (Just $ pure $ unnestParams (NE.fromList [policyIdsParam, tokenNameParam]) Nothing)
+              Nothing
+              Nothing
+              Nothing
+              Nothing
+
+delimiterTables :: ContractFilter -> StatementBuilder (Maybe WithClause, TableRef)
+delimiterTables ContractFilter{..} = do
+  mPartyAddressesCTE <- partyAddressesCTE partyAddresses
+  mPartyRolesCTE <- partyRolesCTE partyRoles
+  (withCTEs False $ catMaybes [mPartyAddressesCTE, mPartyRolesCTE],)
+    <$> if Set.null roleCurrencies
+      then pure $ toTableRef Schema.createTxOut
+      else do
+        rolesTableRef <- rolesTable roleCurrencies
+        pure $
+          Schema.createTxOut
+            `naturalJoin` Schema.contractTxOut
+            `naturalJoin` rolesTableRef
+
+headersTables :: ContractFilter -> StatementBuilder (Maybe WithClause, TableRef)
+headersTables ContractFilter{..} = do
+  mPartyAddressesCTE <- partyAddressesCTE partyAddresses
+  mPartyRolesCTE <- partyRolesCTE partyRoles
+  (withCTEs False $ catMaybes [mPartyAddressesCTE, mPartyRolesCTE],)
+    <$> if Set.null roleCurrencies
+      then
+        pure $
+          Schema.createTxOut
+            `naturalJoin` Schema.contractTxOut
+            `naturalJoin` Schema.txOut
+      else do
+        rolesTableRef <- rolesTable roleCurrencies
+        pure $
+          Schema.createTxOut
+            `naturalJoin` Schema.contractTxOut
+            `naturalJoin` Schema.txOut
+            `naturalJoin` rolesTableRef
 
 rolesTable :: Set.Set PolicyId -> StatementBuilder TableRef
 rolesTable roleCurrencies = do
@@ -291,28 +371,64 @@ delimiterComparisonCond order DelimiterRow{..} = do
 
 -- | Adds additional checks to a condition as required by the contract filter.
 filterCondition :: ContractFilter -> Maybe AExpr -> StatementBuilder (Maybe AExpr)
-filterCondition ContractFilter{..} otherChecks
-  | Set.null tags = pure otherChecks
-  | otherwise = do
-      tagExists <- tagExistsCond tags
-      pure $ Just $ maybe tagExists (`AndAExpr` tagExists) otherChecks
-
-tagExistsCond :: Set MarloweMetadataTag -> StatementBuilder AExpr
-tagExistsCond tags = do
-  tagsParam <- param $ Vector.fromList $ getMarloweMetadataTag <$> Set.toList tags
-  let tagTable =
-        unnestParams (pure tagsParam) $
-          Just $
-            AliasFuncAliasClause $
-              AliasClause True "tags" $
-                Just $
-                  pure "tag"
-
-      fromClause = Schema.contractTxOutTag `naturalJoin` tagTable
-      whereClause =
-        AndAExpr
-          (tableColumn @"txId" Schema.contractTxOutTag `equals` tableColumn @"txId" Schema.createTxOut)
-          (tableColumn @"txIx" Schema.contractTxOutTag `equals` tableColumn @"txIx" Schema.createTxOut)
+filterCondition ContractFilter{..} otherChecks = do
+  tagExists <- tagExistsCond tags
   pure $
-    CExprAExpr $
-      existsCond Nothing (Just $ pure fromClause) (Just whereClause) Nothing Nothing Nothing
+    otherChecks
+      `andMaybe` tagExists
+      `andMaybe` (addressPartyExists partyAddresses `orMaybe` rolePartyExists partyRoles)
+
+andMaybe :: Maybe AExpr -> Maybe AExpr -> Maybe AExpr
+andMaybe Nothing b = b
+andMaybe a Nothing = a
+andMaybe (Just a) (Just b) = Just $ a `AndAExpr` b
+
+orMaybe :: Maybe AExpr -> Maybe AExpr -> Maybe AExpr
+orMaybe Nothing b = b
+orMaybe a Nothing = a
+orMaybe (Just a) (Just b) = Just $ a `OrAExpr` b
+
+tagExistsCond :: Set MarloweMetadataTag -> StatementBuilder (Maybe AExpr)
+tagExistsCond tags
+  | Set.null tags = pure Nothing
+  | otherwise =
+      Just <$> do
+        tagsParam <- param $ Vector.fromList $ getMarloweMetadataTag <$> Set.toList tags
+        let tagTable =
+              unnestParams (pure tagsParam) $
+                Just $
+                  AliasFuncAliasClause $
+                    AliasClause True "tags" $
+                      Just $
+                        pure "tag"
+
+            fromClause = Schema.contractTxOutTag `naturalJoin` tagTable
+            whereClause =
+              AndAExpr
+                (tableColumn @"txId" Schema.contractTxOutTag `equals` tableColumn @"txId" Schema.createTxOut)
+                (tableColumn @"txIx" Schema.contractTxOutTag `equals` tableColumn @"txIx" Schema.createTxOut)
+        pure $
+          CExprAExpr $
+            existsCond Nothing (Just $ pure fromClause) (Just whereClause) Nothing Nothing Nothing
+
+rolePartyExists :: Set AssetId -> Maybe AExpr
+rolePartyExists roles
+  | Set.null roles = Nothing
+  | otherwise = do
+      let fromClause = Schema.contractTxOutPartyRole `naturalJoin` partyRolesTable
+          whereClause =
+            AndAExpr
+              (tableColumn @"txId" Schema.createTxOut `equals` tableColumn @"createTxId" Schema.contractTxOutPartyRole)
+              (tableColumn @"txIx" Schema.createTxOut `equals` tableColumn @"createTxIx" Schema.contractTxOutPartyRole)
+      pure $ CExprAExpr $ existsCond Nothing (Just $ pure fromClause) (Just whereClause) Nothing Nothing Nothing
+
+addressPartyExists :: Set Address -> Maybe AExpr
+addressPartyExists addresses
+  | Set.null addresses = Nothing
+  | otherwise = do
+      let fromClause = Schema.contractTxOutPartyAddress `naturalJoin` partyAddressesTable
+          whereClause =
+            AndAExpr
+              (tableColumn @"txId" Schema.createTxOut `equals` tableColumn @"createTxId" Schema.contractTxOutPartyAddress)
+              (tableColumn @"txIx" Schema.createTxOut `equals` tableColumn @"createTxIx" Schema.contractTxOutPartyAddress)
+      pure $ CExprAExpr $ existsCond Nothing (Just $ pure fromClause) (Just whereClause) Nothing Nothing Nothing
