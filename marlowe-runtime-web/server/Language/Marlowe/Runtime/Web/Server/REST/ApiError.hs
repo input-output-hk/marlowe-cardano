@@ -147,7 +147,7 @@ instance ToDTO CreateError where
     CreateBuildupFailed (AddressDecodingFailed _) -> ApiError "Internal error" "AddressDecodingFailed" Null 500
     CreateBuildupFailed (MintingScriptDecodingFailed _) -> ApiError "Internal error" "MintingScriptDecodingFailed" Null 500
     CreateToCardanoError -> ApiError "Internal error" "CreateToCardanoError" Null 400
-    CreateSafetyAnalysisError _ -> ApiError "Safety analysis failed" "InternalError" Null 400
+    CreateSafetyAnalysisError _ -> ApiError "Safety analysis failed" "SafetyAnalysisFailed" Null 400
     CreateContractNotFound -> ApiError "Contract not found" "Not found" Null 404
 
 instance HasDTO ApplyInputsError where
