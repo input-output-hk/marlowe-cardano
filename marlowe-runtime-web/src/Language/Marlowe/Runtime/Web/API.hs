@@ -162,6 +162,8 @@ type PayoutsAPI =
 type GetContractsAPI =
   QueryParams "roleCurrency" PolicyId
     :> QueryParams "tag" Text
+    :> QueryParams "partyAddress" Address
+    :> QueryParams "partyRole" AssetId
     :> PaginatedGet '["contractId"] GetContractsResponse
 
 type GetContractsResponse = WithLink "transactions" (WithLink "contract" ContractHeader)
