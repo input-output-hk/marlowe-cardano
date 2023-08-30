@@ -699,25 +699,6 @@ unzip13 =
     )
     ([], [], [], [], [], [], [], [], [], [], [], [], [])
 
-unzip10
-  :: [(a, b, c, d, e, f, g, h, i, j)] -> ([a], [b], [c], [d], [e], [f], [g], [h], [i], [j])
-unzip10 =
-  foldr
-    ( \(a, b, c, d, e, f, g, h, i, j) (as, bs, cs, ds, es, fs, gs, hs, is, js) ->
-        ( a : as
-        , b : bs
-        , c : cs
-        , d : ds
-        , e : es
-        , f : fs
-        , g : gs
-        , h : hs
-        , i : is
-        , j : js
-        )
-    )
-    ([], [], [], [], [], [], [], [], [], [])
-
 unzip8 :: [(a, b, c, d, e, f, g, h)] -> ([a], [b], [c], [d], [e], [f], [g], [h])
 unzip8 =
   foldr
