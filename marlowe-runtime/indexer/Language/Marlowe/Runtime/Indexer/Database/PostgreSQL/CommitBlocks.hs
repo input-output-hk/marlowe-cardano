@@ -274,13 +274,14 @@ transactionScriptOutputToRows contractId blockHeader@BlockHeader{..} payoutValid
     , unScriptHash payoutValidatorHash
     , toStrict $ runPut $ put $ toDatum marloweContract
     , toStrict $ runPut $ put $ toDatum marloweState
-    , fromBuiltin $ unCurrencySymbol $ rolesCurrency marloweParams
-    , ContractTxOutParty TxOutRef{..} contractId (unScriptHash payoutValidatorHash)
+    , roleTokenMintingPolicyId
+    , ContractTxOutParty TxOutRef{..} contractId roleTokenMintingPolicyId
         <$> Set.toList (extractAll marloweContract)
     )
   , assetsToTxOutAssetRows blockHeader txId' txIx' assets
   )
   where
+    roleTokenMintingPolicyId = fromBuiltin $ unCurrencySymbol $ rolesCurrency marloweParams
     MarloweData{..} = datum
     txId' = unTxId txId
     txIx' = fromIntegral txIx

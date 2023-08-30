@@ -727,6 +727,7 @@ test-suite marlowe-runtime-test
     Language.Marlowe.Protocol.TransferSpec
     Language.Marlowe.Runtime.Core.MetadataSpec
     Language.Marlowe.Runtime.Core.ScriptRegistrySpec
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetHeadersSpec
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetPayoutsSpec
     Language.Marlowe.Runtime.Transaction.ApiSpec
     Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec

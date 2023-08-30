@@ -351,23 +351,21 @@ delimiterComparisonCond order DelimiterRow{..} = do
   txIdParam <- param delimiterTxId
   txIxParam <- param delimiterTxIx
   pure $
-    CExprAExpr $
-      flip InParensCExpr Nothing $
-        OrAExpr
-          (strictComparisonCond order (tableColumn @"slotNo" Schema.createTxOut) slotNoParam)
-          ( flip InParensCExpr Nothing $
-              AndAExpr
-                (tableColumn @"slotNo" Schema.createTxOut `equals` slotNoParam)
-                ( flip InParensCExpr Nothing $
-                    OrAExpr
-                      (strictComparisonCond order (tableColumn @"txId" Schema.createTxOut) txIdParam)
-                      ( flip InParensCExpr Nothing $
-                          AndAExpr
-                            (tableColumn @"txId" Schema.createTxOut `equals` txIdParam)
-                            (laxComparisonCond order (tableColumn @"txIx" Schema.createTxOut) txIxParam)
-                      )
-                )
-          )
+    OrAExpr
+      (strictComparisonCond order (tableColumn @"slotNo" Schema.createTxOut) slotNoParam)
+      ( parenthesize $
+          AndAExpr
+            (tableColumn @"slotNo" Schema.createTxOut `equals` slotNoParam)
+            ( parenthesize $
+                OrAExpr
+                  (strictComparisonCond order (tableColumn @"txId" Schema.createTxOut) txIdParam)
+                  ( parenthesize $
+                      AndAExpr
+                        (tableColumn @"txId" Schema.createTxOut `equals` txIdParam)
+                        (laxComparisonCond order (tableColumn @"txIx" Schema.createTxOut) txIxParam)
+                  )
+            )
+      )
 
 -- | Adds additional checks to a condition as required by the contract filter.
 filterCondition :: ContractFilter -> Maybe AExpr -> StatementBuilder (Maybe AExpr)
@@ -381,12 +379,15 @@ filterCondition ContractFilter{..} otherChecks = do
 andMaybe :: Maybe AExpr -> Maybe AExpr -> Maybe AExpr
 andMaybe Nothing b = b
 andMaybe a Nothing = a
-andMaybe (Just a) (Just b) = Just $ a `AndAExpr` b
+andMaybe (Just a) (Just b) = Just $ parenthesize a `AndAExpr` parenthesize b
+
+parenthesize :: (IsAExpr a) => a -> AExpr
+parenthesize a = CExprAExpr $ InParensCExpr a Nothing
 
 orMaybe :: Maybe AExpr -> Maybe AExpr -> Maybe AExpr
 orMaybe Nothing b = b
 orMaybe a Nothing = a
-orMaybe (Just a) (Just b) = Just $ a `OrAExpr` b
+orMaybe (Just a) (Just b) = Just $ parenthesize a `OrAExpr` parenthesize b
 
 tagExistsCond :: Set MarloweMetadataTag -> StatementBuilder (Maybe AExpr)
 tagExistsCond tags

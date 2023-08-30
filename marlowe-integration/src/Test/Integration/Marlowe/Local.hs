@@ -526,6 +526,7 @@ testContainer = proc TestContainerDependencies{..} -> do
             pollingInterval = 0.01
             confirmationTimeout = 60
             runtimeVersion = Version [0] []
+            indexParties = pure ()
          in MarloweRuntimeDependencies{..}
 
   tcpServer "marlowe-runtime"

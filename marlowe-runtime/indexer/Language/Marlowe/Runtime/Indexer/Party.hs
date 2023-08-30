@@ -76,7 +76,6 @@ loadContracts fromSlot =
           )
         SELECT MIN(block.slotNo) :: bigint?
         FROM marlowe.block, maxIndexedBlock
-        NATURAL JOIN marlowe.contractTxOut
         WHERE block.slotNo > maxIndexedBlock.slotNo
       |]
     statement =
