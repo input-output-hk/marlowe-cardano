@@ -100,7 +100,6 @@ import Language.Marlowe.CLI.Types (
 import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract (..), Input, State (..), Token (Token))
 import Language.Marlowe.Scripts (marloweValidator, rolePayoutValidator)
-import Ledger.Typed.Scripts ()
 import Plutus.Script.Utils.Scripts (datumHash)
 import Plutus.V2.Ledger.Api (BuiltinData, CostModelParams, Datum (..), Redeemer (..))
 import PlutusTx (builtinDataToData, toBuiltinData)

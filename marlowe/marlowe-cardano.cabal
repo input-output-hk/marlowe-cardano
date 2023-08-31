@@ -126,7 +126,6 @@ library plutus-scripts
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
     , marlowe-cardano ==0.1.2.0
-    , plutus-ledger ^>=1.2
     , plutus-ledger-api ==1.0.0.1
     , plutus-script-utils ==1.2.0.0
     , plutus-tx ==1.0.0.0

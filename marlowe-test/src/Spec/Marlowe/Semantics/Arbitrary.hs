@@ -91,7 +91,6 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   getAction,
  )
 import Language.Marlowe.Core.V1.Semantics.Types.Address (testnet)
-import Plutus.Script.Utils.Scripts (dataHash)
 import Plutus.V2.Ledger.Api (
   Credential (..),
   CurrencySymbol (..),
@@ -105,7 +104,7 @@ import Plutus.V2.Ledger.Api (
   adaSymbol,
   adaToken,
   toBuiltin,
-  toBuiltinData,
+  toData,
  )
 import PlutusTx.Builtins (BuiltinByteString, appendByteString, lengthOfByteString, sliceByteString)
 import Spec.Marlowe.Semantics.Golden (GoldenTransaction, goldenContracts, goldenTransactions)
@@ -127,6 +126,8 @@ import Test.QuickCheck (
 
 import Data.Functor ((<&>))
 
+import Cardano.Api (SerialiseAsRawBytes (serialiseToRawBytes), hashScriptData)
+import Cardano.Api.Shelley (fromPlutusData)
 import Control.Monad.Writer (runWriter)
 import qualified Plutus.V2.Ledger.Api as Ledger (Address (..))
 import qualified PlutusTx.AssocMap as AM (Map, delete, empty, fromList, keys, toList)
@@ -1093,7 +1094,7 @@ instance Arbitrary Input where
   shrink (MerkleizedInput i b c) =
     [NormalInput i]
       <> [MerkleizedInput i' b c | i' <- shrink i]
-      <> [MerkleizedInput i (dataHash $ toBuiltinData c) c' | c' <- shrink c]
+      <> [MerkleizedInput i (toBuiltin $ serialiseToRawBytes $ hashScriptData $ fromPlutusData $ toData c) c' | c' <- shrink c]
 
 instance SemiArbitrary Input where
   semiArbitrary context =
@@ -1104,7 +1105,8 @@ instance SemiArbitrary Input where
         , do
             input <- semiArbitrary context
             contract <- semiArbitrary context
-            pure $ MerkleizedInput input (dataHash $ toBuiltinData contract) contract
+            pure $
+              MerkleizedInput input (toBuiltin $ serialiseToRawBytes $ hashScriptData $ fromPlutusData $ toData contract) contract
         )
       ]
 
@@ -1146,7 +1148,10 @@ arbitraryValidStep state@State{..} contract@(When cases timeout _) =
         is <-
           frequency
             [ (9, pure [NormalInput i])
-            , (1, pure [MerkleizedInput i (dataHash $ toBuiltinData contract) contract])
+            ,
+              ( 1
+              , pure [MerkleizedInput i (toBuiltin $ serialiseToRawBytes $ hashScriptData $ fromPlutusData $ toData contract) contract]
+              )
             ]
         pure $ TransactionInput times is
 arbitraryValidStep State{minTime} contract =

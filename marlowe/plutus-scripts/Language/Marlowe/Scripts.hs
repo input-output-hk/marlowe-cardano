@@ -49,9 +49,13 @@ import Data.ByteString.Short qualified as SBS
 import Language.Marlowe.Core.V1.Semantics as Semantics
 import Language.Marlowe.Core.V1.Semantics.Types as Semantics
 import Language.Marlowe.Scripts.Types
-import Ledger.Typed.Scripts (unsafeMkTypedValidator)
+import Plutus.Script.Utils.Scripts (Language (..))
+import Plutus.Script.Utils.Scripts qualified as Untyped
+import Plutus.Script.Utils.Typed (TypedValidator (..), Versioned (..))
 import Plutus.Script.Utils.Typed qualified as Scripts
-import Plutus.Script.Utils.V2.Typed.Scripts (mkTypedValidator)
+import Plutus.Script.Utils.V1.Typed.Scripts qualified as PV1
+import Plutus.Script.Utils.V1.Typed.Scripts qualified as PV2
+import Plutus.Script.Utils.V2.Typed.Scripts (Validator, mkTypedValidator)
 import Plutus.Script.Utils.V2.Typed.Scripts qualified as Scripts
 import Plutus.V1.Ledger.Address qualified as Address (scriptHashAddress)
 import Plutus.V1.Ledger.Value qualified as Val
@@ -62,6 +66,7 @@ import Plutus.V2.Ledger.Api (
   Extended (..),
   Interval (..),
   LowerBound (..),
+  MintingPolicy,
   POSIXTime (..),
   POSIXTimeRange,
   ScriptContext (ScriptContext, scriptContextPurpose, scriptContextTxInfo),
@@ -490,3 +495,20 @@ alternateMarloweValidator =
 -- | Hash of the alaternative Marlowe semantics validator.
 alternateMarloweValidatorHash :: ValidatorHash
 alternateMarloweValidatorHash = Scripts.validatorHash alternateMarloweValidator
+
+mkForwardingMintingPolicy :: Versioned Validator -> Versioned MintingPolicy
+mkForwardingMintingPolicy vl@(Versioned _ PlutusV1) = Versioned (PV1.mkForwardingMintingPolicy (Untyped.validatorHash vl)) PlutusV1
+mkForwardingMintingPolicy vl@(Versioned _ PlutusV2) = Versioned (PV2.mkForwardingMintingPolicy (Untyped.validatorHash vl)) PlutusV2
+
+-- | Make a 'TypedValidator' (with no type constraints) from an untyped 'Validator' script.
+unsafeMkTypedValidator :: Versioned Validator -> TypedValidator Scripts.Any
+unsafeMkTypedValidator vl =
+  TypedValidator
+    { tvValidator = vl
+    , tvValidatorHash = vh
+    , tvForwardingMPS = mps
+    , tvForwardingMPSHash = Untyped.mintingPolicyHash mps
+    }
+  where
+    vh = Untyped.validatorHash vl
+    mps = mkForwardingMintingPolicy vl

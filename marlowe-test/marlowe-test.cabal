@@ -143,13 +143,13 @@ library
     , aeson >=2 && <3
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
+    , cardano-api ==1.35.4
     , containers ^>=0.6.5
     , directory ^>=1.3
     , filepath ^>=1.4
     , marlowe-cardano ==0.1.2.0
     , mtl >=2.2 && <3
     , plutus-ledger-api ==1.0.0.1
-    , plutus-script-utils ==1.2.0.0
     , plutus-tx ==1.0.0.0
     , QuickCheck >=2.14 && <3
     , tasty-quickcheck ^>=0.10
@@ -211,7 +211,6 @@ test-suite marlowe-test
     , marlowe-spec-test ==0.1.0.0
     , marlowe-test
     , mtl >=2.2 && <3
-    , plutus-ledger ^>=1.2
     , plutus-ledger-api ==1.0.0.1
     , plutus-script-utils ==1.2.0.0
     , plutus-tx ==1.0.0.0

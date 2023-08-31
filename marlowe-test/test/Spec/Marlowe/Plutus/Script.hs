@@ -35,7 +35,6 @@ import Data.Maybe (fromJust)
 import Data.These (These (..))
 import Language.Marlowe.Core.V1.Semantics (MarloweData)
 import Language.Marlowe.Scripts (marloweValidator, marloweValidatorHash, rolePayoutValidator, rolePayoutValidatorHash)
-import Ledger.Typed.Scripts (validatorScript)
 import Paths_marlowe_cardano (getDataDir)
 import Plutus.ApiCommon (
   EvaluationContext,
@@ -71,6 +70,7 @@ import System.IO.Unsafe (unsafePerformIO)
 import qualified Data.ByteString.Lazy as LBS (toStrict, writeFile)
 import qualified Data.ByteString.Short as SBS (ShortByteString, toShort)
 import qualified Data.Map.Strict as M (fromList)
+import Plutus.Script.Utils.Typed (validatorScript)
 
 {-# NOINLINE unsafeDumpBenchmark #-}
 -- Dump data files for benchmarking Plutus execution cost.
