@@ -77,7 +77,7 @@ import Language.Marlowe.Core.V1.Semantics.Types.Address (
   serialiseAddressBech32,
   testnet,
  )
-import Language.Marlowe.Scripts (MarloweTxInput (..))
+import Language.Marlowe.Scripts.Types (MarloweTxInput (..))
 import Numeric.Natural (Natural)
 import Plutus.V2.Ledger.Api (
   Credential (PubKeyCredential),

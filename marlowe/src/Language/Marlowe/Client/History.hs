@@ -8,7 +8,7 @@ module Language.Marlowe.Client.History where
 
 import GHC.Generics (Generic)
 import Language.Marlowe.Core.V1.Semantics (MarloweData, TransactionInput)
-import Language.Marlowe.Scripts (TypedMarloweValidator, TypedRolePayoutValidator)
+import Language.Marlowe.Scripts.Types (TypedMarloweValidator, TypedRolePayoutValidator)
 import Plutus.Script.Utils.V1.Typed.Scripts (TypedScriptTxOut, TypedScriptTxOutRef)
 import qualified Plutus.V1.Ledger.Value as Val
 import Plutus.V2.Ledger.Api (TxId (..), TxOutRef (..))

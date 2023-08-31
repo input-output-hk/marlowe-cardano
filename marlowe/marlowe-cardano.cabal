@@ -1,4 +1,4 @@
-cabal-version:   2.2
+cabal-version:   3.0
 name:            marlowe-cardano
 version:         0.1.2.0
 license:         Apache-2.0
@@ -62,15 +62,10 @@ common lang
 library
   import:          lang
   hs-source-dirs:  src
-
-  if !(impl(ghcjs) || os(ghcjs))
-    build-depends: plutus-tx-plugin ==1.0.0.0
-
   build-depends:
     , aeson >=2 && <3
     , base >=4.9 && <5
     , base16-aeson ==0.1.0.0
-    , base16-bytestring >=1 && <2
     , bech32 >=1.1 && <2
     , bytestring >=0.10.12 && <0.12
     , containers ^>=0.6.5
@@ -80,14 +75,12 @@ library
     , multiplate ==0.0.3
     , newtype-generics ^>=0.6.2
     , ordered-containers ^>=0.2
-    , plutus-ledger ^>=1.2
     , plutus-ledger-api ==1.0.0.1
     , plutus-script-utils ==1.2.0.0
     , plutus-tx ==1.0.0.0
     , range ==0.3.0.2
     , sbv ^>=9.2
     , scientific ^>=0.3.7
-    , serialise ^>=0.2.6
     , template-haskell >=2.16 && <3
     , text >=1.2.4 && <2
     , time >=1.9.3 && <2
@@ -121,10 +114,33 @@ library
     Language.Marlowe.FindInputs
     Language.Marlowe.ParserUtil
     Language.Marlowe.Pretty
-    Language.Marlowe.Scripts
+    Language.Marlowe.Scripts.Types
     Language.Marlowe.Util
     Paths_marlowe_cardano
-    Plutus.Debug
+
+library plutus-scripts
+  import:          lang
+  hs-source-dirs:  plutus-scripts
+  visibility:      public
+
+  -- -- Needed to suppress the erroneous warning about plutus-tx-plugin not being
+  -- -- needed.
+  -- ghc-options:     -Wno-unused-packages
+
+  if !(impl(ghcjs) || os(ghcjs))
+    build-depends: plutus-tx-plugin ==1.0.0.0
+
+  build-depends:
+    , base >=4.9 && <5
+    , bytestring >=0.10.12 && <0.12
+    , marlowe-cardano ==0.1.2.0
+    , plutus-ledger ^>=1.2
+    , plutus-ledger-api ==1.0.0.1
+    , plutus-script-utils ==1.2.0.0
+    , plutus-tx ==1.0.0.0
+    , serialise ^>=0.2.6
+
+  exposed-modules: Language.Marlowe.Scripts
 
   if flag(trace-plutus)
     cpp-options: -DTRACE_PLUTUS
@@ -149,7 +165,7 @@ executable marlowe-validators
     , containers
     , directory
     , filepath
-    , marlowe-cardano
+    , marlowe-cardano:{marlowe-cardano, plutus-scripts}
     , mtl
     , plutus-core
     , plutus-ledger-api

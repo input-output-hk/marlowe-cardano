@@ -66,6 +66,10 @@ package cryptonite
 package locli
   tests: True
 
+package marlowe-cardano
+  tests: True
+  ghc-options: -Werror
+
 package marlowe-object
   tests: True
   ghc-options: -Werror

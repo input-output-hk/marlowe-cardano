@@ -8,25 +8,13 @@
 --
 -----------------------------------------------------------------------------
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DefaultSignatures #-}
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DerivingVia #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ImportQualifiedPost #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# OPTIONS_GHC -fno-ignore-interface-pragmas #-}
@@ -40,12 +28,7 @@
 
 -- | Marlowe validators.
 module Language.Marlowe.Scripts (
-  -- * Types
-  MarloweInput,
-  MarloweTxInput (..),
-
   -- * Semantics Validator
-  TypedMarloweValidator,
   alternateMarloweValidator,
   alternateMarloweValidatorHash,
   marloweValidator,
@@ -55,22 +38,17 @@ module Language.Marlowe.Scripts (
   mkMarloweValidator,
 
   -- * Payout Validator
-  TypedRolePayoutValidator,
   rolePayoutValidator,
   rolePayoutValidatorBytes,
   rolePayoutValidatorHash,
-
-  -- * Utilities
-  marloweTxInputsFromInputs,
 ) where
 
 import Codec.Serialise (serialise)
 import Data.ByteString.Lazy qualified as LBS
 import Data.ByteString.Short qualified as SBS
-import GHC.Generics (Generic)
 import Language.Marlowe.Core.V1.Semantics as Semantics
 import Language.Marlowe.Core.V1.Semantics.Types as Semantics
-import Language.Marlowe.Pretty (Pretty (..))
+import Language.Marlowe.Scripts.Types
 import Ledger.Typed.Scripts (unsafeMkTypedValidator)
 import Plutus.Script.Utils.Typed qualified as Scripts
 import Plutus.Script.Utils.V2.Typed.Scripts (mkTypedValidator)
@@ -99,7 +77,6 @@ import Plutus.V2.Ledger.Api (
 import Plutus.V2.Ledger.Api qualified as Ledger (Address (Address))
 import Plutus.V2.Ledger.Contexts (findDatum, findDatumHash, txSignedBy, valueSpent)
 import Plutus.V2.Ledger.Tx (OutputDatum (OutputDatumHash), TxOut (TxOut, txOutAddress, txOutDatum, txOutValue))
-import PlutusTx (makeIsDataIndexed, makeLift)
 import PlutusTx qualified
 import PlutusTx.AssocMap qualified as AssocMap
 import PlutusTx.Plugin ()
@@ -124,34 +101,6 @@ traceIfFalse :: BuiltinString -> a -> a
 traceIfFalse _ = id
 
 #endif
-
--- | Input to a Marlowe transaction.
-type MarloweInput = [MarloweTxInput]
-
--- | Tag for the Marlowe semantics validator.
-data TypedMarloweValidator
-
--- Datum and redeemer types for the Marlowe semantics validator.
--- [Marlowe-Cardano Specification: "Constraint 1. Typed validation".]
-instance Scripts.ValidatorTypes TypedMarloweValidator where
-  type RedeemerType TypedMarloweValidator = MarloweInput
-  type DatumType TypedMarloweValidator = MarloweData
-
--- | Tag for the Marlowe payout validator.
-data TypedRolePayoutValidator
-
--- Datum and redeemer types for the Marlowe payout validator.
--- [Marlowe-Cardano Specification: "Constraint 16. Typed validation".]
-instance Scripts.ValidatorTypes TypedRolePayoutValidator where
-  type RedeemerType TypedRolePayoutValidator = ()
-  type DatumType TypedRolePayoutValidator = (CurrencySymbol, TokenName)
-
--- | A single input applied in the Marlowe semantics validator.
-data MarloweTxInput
-  = Input InputContent
-  | MerkleizedTxInput InputContent BuiltinByteString
-  deriving stock (Haskell.Show, Haskell.Eq, Generic)
-  deriving anyclass (Pretty)
 
 -- | The Marlowe payout validator.
 rolePayoutValidator :: Scripts.TypedValidator TypedRolePayoutValidator
@@ -541,16 +490,3 @@ alternateMarloweValidator =
 -- | Hash of the alaternative Marlowe semantics validator.
 alternateMarloweValidatorHash :: ValidatorHash
 alternateMarloweValidatorHash = Scripts.validatorHash alternateMarloweValidator
-
--- | Convert semantics input to transaction input.
-marloweTxInputFromInput :: Input -> MarloweTxInput
-marloweTxInputFromInput (NormalInput i) = Input i
-marloweTxInputFromInput (MerkleizedInput i h _) = MerkleizedTxInput i h
-
--- | Convert semantics inputs to transaction inputs.
-marloweTxInputsFromInputs :: [Input] -> [MarloweTxInput]
-marloweTxInputsFromInputs = fmap marloweTxInputFromInput
-
--- Lifting data types to Plutus Core
-makeLift ''MarloweTxInput
-makeIsDataIndexed ''MarloweTxInput [('Input, 0), ('MerkleizedTxInput, 1)]

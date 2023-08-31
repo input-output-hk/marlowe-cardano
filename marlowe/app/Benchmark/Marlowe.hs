@@ -29,7 +29,7 @@ import Data.Bifunctor (first)
 import Data.List (isSuffixOf)
 import Data.Text (Text)
 import Language.Marlowe.Core.V1.Semantics (MarloweData)
-import Language.Marlowe.Scripts (MarloweInput)
+import Language.Marlowe.Scripts.Types (MarloweInput)
 import Paths_marlowe_cardano (getDataDir)
 import Plutus.V2.Ledger.Api (
   Data (Constr, I),

@@ -60,7 +60,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   getInputContent,
  )
 import Language.Marlowe.FindInputs (getAllInputs)
-import Language.Marlowe.Scripts (marloweTxInputsFromInputs)
+import Language.Marlowe.Scripts.Types (marloweTxInputsFromInputs)
 
 import qualified Data.ByteString.Short as SBS (ShortByteString)
 import qualified Plutus.ApiCommon as P (LedgerPlutusVersion (PlutusV2), evaluateScriptCounting)
