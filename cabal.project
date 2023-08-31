@@ -70,6 +70,10 @@ package marlowe-cardano
   tests: True
   ghc-options: -Werror
 
+package marlowe-test
+  tests: True
+  ghc-options: -Werror
+
 package marlowe-object
   tests: True
   ghc-options: -Werror

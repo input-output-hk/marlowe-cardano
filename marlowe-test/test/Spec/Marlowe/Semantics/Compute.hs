@@ -32,6 +32,7 @@ import Data.Default (Default (..))
 import Data.Function (on)
 import Data.List (sort)
 import Data.Tuple (swap)
+import Language.Marlowe.Core.V1.Merkle (MerkleizedContract (MerkleizedContract), deepMerkleize, merkleizeInputs)
 import Language.Marlowe.Core.V1.Semantics (
   Payment (..),
   TransactionError (TEAmbiguousTimeIntervalError, TEApplyNoMatchError, TEIntervalError, TEUselessTransaction),
@@ -84,7 +85,6 @@ import Spec.Marlowe.Semantics.Arbitrary (
   whenContractWeights,
  )
 import Spec.Marlowe.Semantics.AssocMap (assocMapEq, assocMapInsert, assocMapLookup)
-import Spec.Marlowe.Semantics.Merkle (deepMerkleize, merkleizeInputs)
 import Spec.Marlowe.Semantics.Orphans ()
 import System.IO.Unsafe (unsafePerformIO)
 import Test.Tasty (TestTree, testGroup)
@@ -107,6 +107,7 @@ import Test.Tasty.QuickCheck (
   vectorOf,
  )
 
+import Control.Monad.Writer (runWriter)
 import qualified PlutusTx.AssocMap as AM
 
 -- | Record of choices.
@@ -151,10 +152,10 @@ instance SemiArbitrary MarloweContext where
       contract <- semiArbitrary context
       input <- semiArbitrary context
       isMerkleized <- frequency [(9, pure False), (1, pure True)]
-      let (contract', continuations) = deepMerkleize contract
+      let (contract', continuations) = runWriter $ deepMerkleize contract
           (mcContract, mcInput) =
-            case (isMerkleized, merkleizeInputs continuations mcState contract' input) of
-              (True, Just input') -> (contract', input')
+            case (isMerkleized, merkleizeInputs @String (MerkleizedContract contract' continuations) mcState input) of
+              (True, Right input') -> (contract', input')
               _ -> (contract, input)
           mcOutput = computeTransaction mcInput mcState mcContract
       pure MarloweContext{..}
@@ -852,10 +853,10 @@ uselessNoInput =
         timeout <- (+ minTimeout) <$> arbitraryNonnegativeInteger
         When cases (POSIXTime timeout) <$> semiArbitrary ctx
       isMerkleized <- frequency [(9, pure False), (1, pure True)]
-      let (contract', continuations) = deepMerkleize contract
+      let (contract', continuations) = runWriter $ deepMerkleize contract
           (mcContract, mcInput) =
-            case (isMerkleized, merkleizeInputs continuations mcState contract' input) of
-              (True, Just input') -> (contract', input')
+            case (isMerkleized, merkleizeInputs @String (MerkleizedContract contract' continuations) mcState input) of
+              (True, Right input') -> (contract', input')
               _ -> (contract, input)
           mcOutput = computeTransaction mcInput mcState mcContract
       pure MarloweContext{..}

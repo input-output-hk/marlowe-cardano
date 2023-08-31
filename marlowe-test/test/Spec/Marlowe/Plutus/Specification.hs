@@ -1,12 +1,3 @@
------------------------------------------------------------------------------
---
--- Module      :  $Headers
--- License     :  Apache 2.0
---
--- Stability   :  Experimental
--- Portability :  Portable
---
------------------------------------------------------------------------------
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -14,6 +5,12 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | Tests of Marlowe's Plutus implementation against its on-chain specification.
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
 module Spec.Marlowe.Plutus.Specification (
   -- * Testing
   tests,
@@ -43,7 +40,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   Payee (Party),
   State (accounts),
  )
-import Language.Marlowe.Scripts (MarloweInput)
+import Language.Marlowe.Scripts.Types (MarloweInput)
 import Plutus.Script.Utils.Scripts (datumHash)
 import Plutus.V1.Ledger.Address (toPubKeyHash)
 import Plutus.V1.Ledger.Value (flattenValue, valueOf)

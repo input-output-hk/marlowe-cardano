@@ -56,6 +56,7 @@ import Data.ByteString (pack)
 import Data.Function (on)
 import Data.List (nub, nubBy)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError (..), Transaction (..))
+import Language.Marlowe.Core.V1.Merkle (MerkleizedContract (..), merkleizeInputs, shallowMerkleize)
 import Language.Marlowe.Core.V1.Semantics (
   Payment (..),
   TransactionError (..),
@@ -108,7 +109,6 @@ import Plutus.V2.Ledger.Api (
  )
 import PlutusTx.Builtins (BuiltinByteString, appendByteString, lengthOfByteString, sliceByteString)
 import Spec.Marlowe.Semantics.Golden (GoldenTransaction, goldenContracts, goldenTransactions)
-import Spec.Marlowe.Semantics.Merkle (merkleizeInputs, shallowMerkleize)
 import Test.QuickCheck (
   Arbitrary (..),
   Gen,
@@ -127,6 +127,7 @@ import Test.QuickCheck (
 
 import Data.Functor ((<&>))
 
+import Control.Monad.Writer (runWriter)
 import qualified Plutus.V2.Ledger.Api as Ledger (Address (..))
 import qualified PlutusTx.AssocMap as AM (Map, delete, empty, fromList, keys, toList)
 import qualified PlutusTx.Eq as P (Eq)
@@ -1207,11 +1208,11 @@ arbitraryGoldenTransaction :: Bool -> Gen GoldenTransaction
 arbitraryGoldenTransaction allowMerkleization =
   do
     let perhapsMerkleize gt@(state, contract, input, _) =
-          let (contract', continuations) = shallowMerkleize contract
-              input' = merkleizeInputs continuations state contract' input
+          let (mcContract, mcContinuations) = runWriter $ shallowMerkleize contract
+              input' = merkleizeInputs @String MerkleizedContract{..} state input
            in case input' of
-                Nothing -> pure gt
-                Just input'' -> frequency [(9, pure gt), (1, pure (state, contract', input'', computeTransaction input'' state contract'))]
+                Left _ -> pure gt
+                Right input'' -> frequency [(9, pure gt), (1, pure (state, mcContract, input'', computeTransaction input'' state mcContract))]
     equalContractWeights <- frequency [(1, pure True), (5, pure False)]
     (if allowMerkleization then perhapsMerkleize else pure)
       =<< if equalContractWeights

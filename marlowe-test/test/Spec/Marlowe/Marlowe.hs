@@ -1,12 +1,3 @@
------------------------------------------------------------------------------
---
--- Module      :  $Headers
--- License     :  Apache 2.0
---
--- Stability   :  Experimental
--- Portability :  Portable
---
------------------------------------------------------------------------------
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DoAndIfThenElse #-}
@@ -17,6 +8,12 @@
 {-# OPTIONS_GHC -fno-warn-deprecations #-}
 
 -- | Marlowe tests.
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
 module Spec.Marlowe.Marlowe (
   -- * Testing
   prop_noFalsePositives,
@@ -224,19 +221,24 @@ valuesFormAbelianGroup = property $ do
   let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
   forAll gen $ \(a, b, c) ->
     -- associativity of addition
-    eval (AddValue (AddValue a b) c) === eval (AddValue a (AddValue b c))
+    eval (AddValue (AddValue a b) c)
+      === eval (AddValue a (AddValue b c))
       .&&.
       -- commutativity of addition
-      eval (AddValue a b) === eval (AddValue b a)
+      eval (AddValue a b)
+        === eval (AddValue b a)
       .&&.
       -- additive identity
-      eval (AddValue a (Constant 0)) === eval a
+      eval (AddValue a (Constant 0))
+        === eval a
       .&&.
       -- additive inverse
-      eval (AddValue a (NegValue a)) === 0
+      eval (AddValue a (NegValue a))
+        === 0
       .&&.
       -- substraction works
-      eval (SubValue (AddValue a b) b) === eval a
+      eval (SubValue (AddValue a b) b)
+        === eval a
 
 -- | Test rounding of `DivValue`.
 divisionRoundingTest :: Property
@@ -256,8 +258,10 @@ divZeroTest :: Property
 divZeroTest = property $ do
   let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
   forAll valueGen $ \a ->
-    eval (DivValue (Constant 0) a) === 0
-      .&&. eval (DivValue a (Constant 0)) === 0
+    eval (DivValue (Constant 0) a)
+      === 0
+      .&&. eval (DivValue a (Constant 0))
+        === 0
 
 -- | Test `MulValue` with a zero numerator.
 mulTest :: Property

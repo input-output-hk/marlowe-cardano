@@ -1,15 +1,10 @@
------------------------------------------------------------------------------
+-- | Tests of Marlowe's Plutus implementation.
 --
 -- Module      :  $Headers
 -- License     :  Apache 2.0
 --
 -- Stability   :  Experimental
 -- Portability :  Portable
---
-
------------------------------------------------------------------------------
-
--- | Tests of Marlowe's Plutus implementation.
 module Spec.Marlowe.Plutus (
   -- * Testing
   tests,

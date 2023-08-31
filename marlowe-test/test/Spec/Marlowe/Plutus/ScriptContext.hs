@@ -1,16 +1,13 @@
------------------------------------------------------------------------------
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE TupleSections #-}
+
+-- | Test the `Plutus.V1.Ledger.Contexts.ScriptContext` functions used by the Marlowe validators.
 --
 -- Module      :  $Headers
 -- License     :  Apache 2.0
 --
 -- Stability   :  Experimental
 -- Portability :  Portable
---
------------------------------------------------------------------------------
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE TupleSections #-}
-
--- | Test the `Plutus.V1.Ledger.Contexts.ScriptContext` functions used by the Marlowe validators.
 module Spec.Marlowe.Plutus.ScriptContext (
   -- * Testing
   tests,
