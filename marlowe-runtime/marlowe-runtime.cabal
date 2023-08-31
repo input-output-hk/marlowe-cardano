@@ -749,7 +749,7 @@ test-suite marlowe-runtime-test
     , hspec
     , hspec-golden ^>=0.2
     , http-media ^>=0.8
-    , marlowe-cardano ==0.1.2.0
+    , marlowe-cardano:{marlowe-cardano, plutus-scripts} ==0.1.2.0
     , marlowe-chain-sync:{marlowe-chain-sync, gen, plutus-compat} ==0.0.4
     , marlowe-object:gen
     , marlowe-protocols ==0.2.0.0

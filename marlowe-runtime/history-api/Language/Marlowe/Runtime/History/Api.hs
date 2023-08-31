@@ -27,7 +27,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (ScriptHash, TxError, TxId, TxOutR
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts (..), getMarloweVersion)
-import qualified Language.Marlowe.Scripts as V1
+import qualified Language.Marlowe.Scripts.Types as V1
 import Network.Protocol.Codec.Spec (Variations (..))
 import Ouroboros.Consensus.BlockchainTime (SystemStart, fromRelativeTime)
 import Ouroboros.Consensus.HardFork.History (interpretQuery, slotToWallclock)

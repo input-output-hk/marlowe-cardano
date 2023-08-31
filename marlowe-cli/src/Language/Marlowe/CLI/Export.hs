@@ -1,12 +1,3 @@
------------------------------------------------------------------------------
---
--- Module      :  $Headers
--- License     :  Apache 2.0
---
--- Stability   :  Experimental
--- Portability :  Portable
---
------------------------------------------------------------------------------
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
@@ -16,6 +7,12 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | Export information for Marlowe contracts and roles.
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
 module Language.Marlowe.CLI.Export (
   buildAddress,
   buildValidatorInfo,
@@ -102,7 +99,7 @@ import Language.Marlowe.CLI.Types (
  )
 import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract (..), Input, State (..), Token (Token))
-import Language.Marlowe.Scripts (marloweTxInputsFromInputs, marloweValidator, rolePayoutValidator)
+import Language.Marlowe.Scripts (marloweValidator, rolePayoutValidator)
 import Ledger.Typed.Scripts ()
 import Plutus.Script.Utils.Scripts (datumHash)
 import Plutus.V2.Ledger.Api (BuiltinData, CostModelParams, Datum (..), Redeemer (..))
@@ -126,6 +123,7 @@ import Language.Marlowe.CLI.Cardano.Api.PlutusScript (
  )
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript qualified as PlutusScript
 import Language.Marlowe.CLI.Plutus.Script.Utils (TypedValidator' (TypedValidatorV2))
+import Language.Marlowe.Scripts.Types (marloweTxInputsFromInputs)
 import Plutus.ApiCommon (ProtocolVersion)
 
 -- | Build comprehensive information about a Marlowe contract and transaction.

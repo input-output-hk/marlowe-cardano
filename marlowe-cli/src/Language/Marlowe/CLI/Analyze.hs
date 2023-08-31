@@ -90,7 +90,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   getInputContent,
  )
 import Language.Marlowe.Core.V1.Semantics.Types.Address (mainnet)
-import Language.Marlowe.Scripts (marloweTxInputsFromInputs)
+import Language.Marlowe.Scripts.Types (marloweTxInputsFromInputs)
 
 import Cardano.Api qualified as Api
 import Cardano.Api.Shelley qualified as Api

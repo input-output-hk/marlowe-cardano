@@ -70,7 +70,7 @@ import Language.Marlowe.Runtime.Core.Api (
 import qualified Language.Marlowe.Runtime.Core.Gen ()
 import Language.Marlowe.Runtime.Core.ScriptRegistry (ReferenceScriptUtxo (..))
 import Language.Marlowe.Runtime.Transaction.Constraints
-import qualified Language.Marlowe.Scripts as V1
+import qualified Language.Marlowe.Scripts.Types as V1
 import Ouroboros.Consensus.BlockchainTime (RelativeTime (..), mkSlotLength)
 import Ouroboros.Consensus.HardFork.History (
   Bound (..),

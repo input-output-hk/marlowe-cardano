@@ -107,7 +107,7 @@ library
     , directory
     , errors
     , extra
-    , marlowe-cardano
+    , marlowe-cardano:{marlowe-cardano, plutus-scripts}
     , megaparsec
     , memory
     , mtl

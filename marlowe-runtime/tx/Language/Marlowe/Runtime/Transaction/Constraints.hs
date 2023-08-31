@@ -99,7 +99,7 @@ import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.Core.ScriptRegistry (ReferenceScriptUtxo (..))
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
 import Language.Marlowe.Runtime.Transaction.Api (ConstraintError (..))
-import qualified Language.Marlowe.Scripts as V1
+import qualified Language.Marlowe.Scripts.Types as V1
 import Ouroboros.Consensus.BlockchainTime (SystemStart)
 
 -- | Describes a set of Marlowe-specific conditions that a transaction must satisfy.

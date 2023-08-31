@@ -116,7 +116,7 @@ import Language.Marlowe.CLI.Transaction (querySlotConfig)
 import Language.Marlowe.CLI.Types (CliEnv, CliError (..))
 import Language.Marlowe.Client (marloweParams)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract (..), Input (..), TimeInterval)
-import Language.Marlowe.Scripts (MarloweInput, MarloweTxInput (..), marloweValidatorHash, rolePayoutValidatorHash)
+import Language.Marlowe.Scripts (marloweValidatorHash, rolePayoutValidatorHash)
 import Ledger.Address (toPlutusAddress)
 import Ledger.Tx.CardanoAPI (fromCardanoPolicyId, toCardanoScriptHash)
 import Plutus.Script.Utils.Scripts (dataHash)
@@ -155,6 +155,7 @@ import Data.ByteString qualified as BS (hPutStr)
 import Data.ByteString.Lazy.Char8 qualified as LBS8 (hPutStrLn)
 import Data.Map.Strict qualified as M (elems, filter, null, toList)
 import Data.Set qualified as S (singleton, toList)
+import Language.Marlowe.Scripts.Types (MarloweInput, MarloweTxInput (..))
 
 -- | Record the point on the chain.
 type Recorder =
