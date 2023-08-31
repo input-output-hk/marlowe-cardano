@@ -105,7 +105,7 @@ data Assets = Assets
 
 newtype Tokens = Tokens {unTokens :: Map PolicyId (Map Text Integer)}
   deriving (Eq, Show, Ord, Generic)
-  deriving anyclass (ToJSON, FromJSON, ToSchema)
+  deriving newtype (ToJSON, FromJSON, ToSchema)
 
 newtype ContractSourceId = ContractSourceId {unContractSourceId :: ByteString}
   deriving (Eq, Ord, Generic)
@@ -246,9 +246,9 @@ instance ToParamSchema AssetId where
       & pattern ?~ "^[a-fA-F0-9]*\\..*$"
 
 instance FromHttpApiData AssetId where
-  parseUrlPiece piece = case splitOn "." piece of
-    [policyId, tokenName] -> AssetId <$> parseUrlPiece policyId <*> parseUrlPiece tokenName
-    _ -> Left "Expected ^[a-fA-F0-9]*\\..*$"
+  parseUrlPiece piece = case T.breakOn "." piece of
+    (_, "") -> Left "Expected ^[a-fA-F0-9]*(\\.).*$"
+    (policyId, tokenNameStartingWitPeriodCharacter) -> AssetId <$> parseUrlPiece policyId <*> parseUrlPiece (T.drop 1 tokenNameStartingWitPeriodCharacter)
 
 instance ToHttpApiData AssetId where
   toUrlPiece AssetId{..} = toUrlPiece policyId <> "." <> toUrlPiece assetName
