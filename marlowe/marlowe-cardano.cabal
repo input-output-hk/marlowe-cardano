@@ -122,14 +122,6 @@ library plutus-scripts
   import:          lang
   hs-source-dirs:  plutus-scripts
   visibility:      public
-
-  -- -- Needed to suppress the erroneous warning about plutus-tx-plugin not being
-  -- -- needed.
-  -- ghc-options:     -Wno-unused-packages
-
-  if !(impl(ghcjs) || os(ghcjs))
-    build-depends: plutus-tx-plugin ==1.0.0.0
-
   build-depends:
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
@@ -138,6 +130,7 @@ library plutus-scripts
     , plutus-ledger-api ==1.0.0.1
     , plutus-script-utils ==1.2.0.0
     , plutus-tx ==1.0.0.0
+    , plutus-tx-plugin ==1.0.0.0
     , serialise ^>=0.2.6
 
   exposed-modules: Language.Marlowe.Scripts
