@@ -13,11 +13,9 @@
 module Language.Marlowe.CLI.Test.TestCase where
 
 import Cardano.Api (Lovelace)
-import GHC.Generics (Generic)
-import Ledger.Orphans ()
-
 import Contrib.Cardano.Api (lovelaceFromInt, lovelaceToInt)
 import Data.Maybe (isNothing)
+import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Test.CLI.Types (CLIOperation (..), MarloweValidators (..))
 import Language.Marlowe.CLI.Test.Runtime.Types (RuntimeOperation (..))
 import Language.Marlowe.CLI.Test.Types (

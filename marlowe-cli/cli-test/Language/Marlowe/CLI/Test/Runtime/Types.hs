@@ -115,7 +115,6 @@ import Language.Marlowe.Core.V1.Semantics.Types qualified as M
 import Language.Marlowe.Protocol.Client qualified as Marlowe.Protocol
 import Language.Marlowe.Runtime.ChainSync.Api qualified as ChainSync
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweMetadataTag (MarloweMetadataTag))
-import Ledger.Orphans ()
 import Network.Protocol.Connection qualified as Network.Protocol
 import Plutus.V1.Ledger.SlotConfig (SlotConfig)
 

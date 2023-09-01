@@ -169,7 +169,6 @@ import Language.Marlowe.CLI.Orphans ()
 import Language.Marlowe.Core.V1.Merkle (Continuations)
 import Language.Marlowe.Core.V1.Semantics (Payment)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input, State)
-import Ledger.Orphans ()
 import Plutus.V1.Ledger.Api (CurrencySymbol, Datum, DatumHash, ExBudget, Redeemer)
 import Plutus.V1.Ledger.Api qualified as P
 import Plutus.V1.Ledger.SlotConfig (SlotConfig, posixTimeToEnclosingSlot, slotToBeginPOSIXTime)

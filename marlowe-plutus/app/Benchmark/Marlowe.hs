@@ -30,7 +30,7 @@ import Data.List (isSuffixOf)
 import Data.Text (Text)
 import Language.Marlowe.Core.V1.Semantics (MarloweData)
 import Language.Marlowe.Scripts.Types (MarloweInput)
-import Paths_marlowe_cardano (getDataDir)
+import Paths_marlowe_plutus (getDataDir)
 import Plutus.V2.Ledger.Api (
   Data (Constr, I),
   EvaluationContext,

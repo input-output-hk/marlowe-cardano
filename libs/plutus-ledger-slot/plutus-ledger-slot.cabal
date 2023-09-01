@@ -49,7 +49,6 @@ library
   --------------------------
   build-depends:
     , plutus-core >=1.0.0
-    , plutus-ledger
     , plutus-ledger-api >=1.0.0
     , plutus-tx >=1.0.0
 

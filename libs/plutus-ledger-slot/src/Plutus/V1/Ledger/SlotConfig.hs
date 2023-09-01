@@ -23,14 +23,11 @@ module Plutus.V1.Ledger.SlotConfig (
   utcTimeToPOSIXTime,
 ) where
 
-import Codec.Serialise (Serialise)
 import Control.DeepSeq (NFData)
-import Data.Aeson (FromJSON, ToJSON)
 import Data.Default (Default (def))
 import Data.Time.Clock qualified as Time
 import Data.Time.Clock.POSIX qualified as Time
 import GHC.Generics (Generic)
-import Ledger.Orphans ()
 import Plutus.V1.Ledger.Interval (
   Extended (..),
   Interval (Interval),
@@ -56,7 +53,7 @@ data SlotConfig = SlotConfig
   -- ^ Beginning of slot 0 (in milliseconds)
   }
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (ToJSON, FromJSON, Serialise, NFData)
+  deriving anyclass (NFData)
 
 makeLift ''SlotConfig
 
@@ -77,7 +74,6 @@ data SlotConversionError = SlotOutOfRange
   , horizon :: (Slot, POSIXTime)
   }
   deriving stock (Eq, Show, Generic)
-  deriving anyclass (ToJSON, FromJSON)
 
 instance Pretty SlotConversionError where
   pretty SlotOutOfRange{requestedSlot, horizon} =

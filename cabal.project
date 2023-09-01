@@ -36,6 +36,7 @@ packages:
   marlowe-integration
   marlowe-integration-tests
   marlowe-object
+  marlowe-plutus
   marlowe-protocols
   marlowe-runtime
   marlowe-runtime-cli
@@ -157,8 +158,6 @@ package ouroboros-consensus-protocol
 package ouroboros-network
   optimization: False
 package plutus-core
-  optimization: False
-package plutus-ledger
   optimization: False
 package plutus-ledger-api
   optimization: False

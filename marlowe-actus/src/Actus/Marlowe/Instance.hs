@@ -23,7 +23,7 @@ import GHC.Real (Ratio (..))
 import qualified Language.Marlowe.Core.V1.Semantics as Core
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Core
 import Language.Marlowe.Extended.V1
-import qualified Ledger
+import qualified Plutus.V1.Ledger.Api as PV1
 import qualified PlutusTx.Builtins as Builtins
 
 {-# INLINEABLE division #-}
@@ -111,14 +111,14 @@ division lhs rhs = fromMaybe (error "Value cannot be evaluted") $
 evalVal :: Value -> Maybe Integer
 evalVal d = toCore d <&> Core.evalValue env state
   where
-    env = Core.Environment{Core.timeInterval = (Ledger.POSIXTime 0, Ledger.POSIXTime 0)}
-    state = Core.emptyState $ Ledger.POSIXTime 0
+    env = Core.Environment{Core.timeInterval = (PV1.POSIXTime 0, PV1.POSIXTime 0)}
+    state = Core.emptyState $ PV1.POSIXTime 0
 
 evalObs :: Observation -> Maybe Bool
 evalObs d = toCore d <&> Core.evalObservation env state
   where
-    env = Core.Environment{Core.timeInterval = (Ledger.POSIXTime 0, Ledger.POSIXTime 0)}
-    state = Core.emptyState $ Ledger.POSIXTime 0
+    env = Core.Environment{Core.timeInterval = (PV1.POSIXTime 0, PV1.POSIXTime 0)}
+    state = Core.emptyState $ PV1.POSIXTime 0
 
 -- | Reduce the contract representation in size, the semantics of the
 -- contract are not changed. TODO: formal verification

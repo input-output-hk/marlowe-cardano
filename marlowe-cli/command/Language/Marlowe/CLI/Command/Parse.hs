@@ -95,9 +95,8 @@ import Language.Marlowe.CLI.Types (
  )
 import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId (..), Input (..), InputContent (..), Party (..), Token (..))
 import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddressBech32)
-import Ledger (POSIXTime (..))
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken)
-import Plutus.V1.Ledger.Api (BuiltinByteString, CurrencySymbol (..), TokenName (..), toBuiltin)
+import Plutus.V1.Ledger.Api (BuiltinByteString, CurrencySymbol (..), POSIXTime (..), TokenName (..), toBuiltin)
 import Plutus.V1.Ledger.Slot (Slot (..))
 import Servant.Client (BaseUrl, parseBaseUrl)
 import Text.Read (readEither)
@@ -438,7 +437,7 @@ parseRole =
         [name, address] -> do
           address' <- readAddressEither address
           pure (readTokenName name, address')
-        _ -> Left "Invalid role assigment."
+        _ -> Left "Invalid role assignment."
 
 -- | Parse an address query.
 parseOutputQuery :: O.Parser (Maybe (OutputQuery era (OutputQueryResult era)))

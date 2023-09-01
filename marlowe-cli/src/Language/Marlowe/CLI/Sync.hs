@@ -43,9 +43,13 @@ module Language.Marlowe.CLI.Sync (
 
   -- * Utils
   classifyOutputs,
+  toPlutusAddress,
 ) where
 
 import Cardano.Api (
+  AddressInEra (..),
+  AddressTypeInEra (..),
+  AsType (..),
   Block (..),
   BlockHeader (..),
   BlockInMode (..),
@@ -58,9 +62,13 @@ import Cardano.Api (
   LocalChainSyncClient (..),
   LocalNodeClientProtocols (..),
   LocalNodeConnectInfo (..),
+  PaymentCredential (..),
   PolicyId,
+  ScriptHash,
+  SerialiseAsRawBytes (..),
   ShelleyBasedEra (..),
   SlotNo (..),
+  StakeAddressReference (..),
   Tx,
   TxBody (..),
   TxBodyContent (..),
@@ -85,10 +93,14 @@ import Cardano.Api (
  )
 import Cardano.Api.ChainSync.Client (ChainSyncClient (..), ClientStIdle (..), ClientStIntersect (..), ClientStNext (..))
 import Cardano.Api.Shelley (
+  Address (..),
   ShelleyLedgerEra,
+  StakeCredential (..),
   TxBody (ShelleyTxBody),
   TxBodyScriptData (..),
   fromAlonzoData,
+  fromShelleyPaymentCredential,
+  fromShelleyStakeReference,
   toPlutusData,
  )
 import Cardano.Ledger.Alonzo.TxWitness (RdmrPtr (..), Redeemers (..), TxDats (..))
@@ -117,8 +129,6 @@ import Language.Marlowe.CLI.Types (CliEnv, CliError (..))
 import Language.Marlowe.Client (marloweParams)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract (..), Input (..), TimeInterval)
 import Language.Marlowe.Scripts (marloweValidatorHash, rolePayoutValidatorHash)
-import Ledger.Address (toPlutusAddress)
-import Ledger.Tx.CardanoAPI (fromCardanoPolicyId, toCardanoScriptHash)
 import Plutus.Script.Utils.Scripts (dataHash)
 import Plutus.V1.Ledger.Api (
   BuiltinByteString,
@@ -147,6 +157,8 @@ import System.IO (
   stdout,
  )
 
+import Cardano.Api.Byron (Address (..))
+import Cardano.Chain.Common (addrToBase58)
 import Cardano.Ledger.Era (Era)
 import Control.Monad.Reader (MonadReader)
 import Data.Aeson qualified as A (Value)
@@ -156,6 +168,7 @@ import Data.ByteString.Lazy.Char8 qualified as LBS8 (hPutStrLn)
 import Data.Map.Strict qualified as M (elems, filter, null, toList)
 import Data.Set qualified as S (singleton, toList)
 import Language.Marlowe.Scripts.Types (MarloweInput, MarloweTxInput (..))
+import Plutus.V1.Ledger.Api qualified as PV1
 
 -- | Record the point on the chain.
 type Recorder =
@@ -675,6 +688,45 @@ classifyOutput moTxIn (TxOut address value datum _) = case datum of
     moAddress = toPlutusAddress address
     moValue = txOutValueToValue value
 
+toPlutusAddress :: AddressInEra era -> PV1.Address
+toPlutusAddress address = PV1.Address (cardanoAddressCredential address) (cardanoStakingCredential address)
+
+cardanoAddressCredential :: AddressInEra era -> PV1.Credential
+cardanoAddressCredential (AddressInEra ByronAddressInAnyEra (ByronAddress address)) =
+  PV1.PubKeyCredential $
+    PV1.PubKeyHash $
+      PV1.toBuiltin $
+        addrToBase58 address
+cardanoAddressCredential (AddressInEra _ (ShelleyAddress _ paymentCredential _)) =
+  case fromShelleyPaymentCredential paymentCredential of
+    PaymentCredentialByKey paymentKeyHash ->
+      PV1.PubKeyCredential $
+        PV1.PubKeyHash $
+          PV1.toBuiltin $
+            serialiseToRawBytes paymentKeyHash
+    PaymentCredentialByScript scriptHash ->
+      PV1.ScriptCredential $ scriptToValidatorHash scriptHash
+
+cardanoStakingCredential :: AddressInEra era -> Maybe PV1.StakingCredential
+cardanoStakingCredential (AddressInEra ByronAddressInAnyEra _) = Nothing
+cardanoStakingCredential (AddressInEra _ (ShelleyAddress _ _ stakeAddressReference)) =
+  case fromShelleyStakeReference stakeAddressReference of
+    NoStakeAddress -> Nothing
+    (StakeAddressByValue stakeCredential) ->
+      Just (PV1.StakingHash $ fromCardanoStakeCredential stakeCredential)
+    StakeAddressByPointer{} -> Nothing -- Not supported
+  where
+    fromCardanoStakeCredential :: StakeCredential -> PV1.Credential
+    fromCardanoStakeCredential (StakeCredentialByKey stakeKeyHash) =
+      PV1.PubKeyCredential $
+        PV1.PubKeyHash $
+          PV1.toBuiltin $
+            serialiseToRawBytes stakeKeyHash
+    fromCardanoStakeCredential (StakeCredentialByScript scriptHash) = PV1.ScriptCredential (scriptToValidatorHash scriptHash)
+
+scriptToValidatorHash :: ScriptHash -> PV1.ValidatorHash
+scriptToValidatorHash = PV1.ValidatorHash . PV1.toBuiltin . serialiseToRawBytes
+
 -- | Extract metadata from a transaction.
 extractMetadata
   :: TxMetadataInEra era
@@ -722,12 +774,19 @@ makeParameters meBlock meTxId meMetadata policy =
   runAnomaly $
     do
       let anomaly = liftAnomaly meBlock meTxId
-          MintingPolicyHash currencyHash = fromCardanoPolicyId policy
+          MintingPolicyHash currencyHash = PV1.MintingPolicyHash $ PV1.toBuiltin (serialiseToRawBytes policy)
+
           meParams = marloweParams $ CurrencySymbol currencyHash
 
       meApplicationAddress <- anomaly $ ApplicationCredential <$> toCardanoScriptHash marloweValidatorHash
       mePayoutAddress <- anomaly $ PayoutCredential <$> toCardanoScriptHash rolePayoutValidatorHash
       pure Parameters{..}
+
+toCardanoScriptHash :: PV1.ValidatorHash -> Either String ScriptHash
+toCardanoScriptHash (PV1.ValidatorHash bs) =
+  maybe (Left "toCardanoScriptHash") pure $
+    deserialiseFromRawBytes AsScriptHash $
+      PV1.fromBuiltin bs
 
 -- | Extract policy IDs from minting.
 extractMints

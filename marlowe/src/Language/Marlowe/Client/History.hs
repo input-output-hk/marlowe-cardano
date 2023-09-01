@@ -50,12 +50,6 @@ data History
       }
   deriving stock (Eq, Generic, Show)
 
--- FIXME:
--- Ideally we want to drop all orphans but
--- we are going to move this module to `marlowe-scripts`
--- which can depend on `plutus-ledger` as a shortcut.
--- deriving anyclass (ToJSON, FromJSON)
-
 nextEntry :: History -> Maybe History
 nextEntry Created{historyNext = n} = n
 nextEntry InputApplied{historyNext = n} = n
