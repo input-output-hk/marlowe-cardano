@@ -5,7 +5,7 @@
 
 let
 
-  staticPkgs = inputs.self.packages.marlowe-apps-exe-marlowe-finder.project.projectCross.musl64.hsPkgs;
+  staticPkgs = inputs'.self.packages.marlowe-apps-exe-marlowe-finder.project.projectCross.musl64.hsPkgs;
 
 in
 {
