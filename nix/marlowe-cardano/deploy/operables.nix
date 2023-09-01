@@ -1,8 +1,8 @@
-{ inputs, pkgs }:
+{ inputs', pkgs, l, ... }:
+
 let
-  inherit (inputs) self std;
+  inherit (inputs') self std;
   inherit (pkgs)
-    lib
     jq
     sqitchPg
     postgresql
@@ -14,15 +14,15 @@ let
     z3
     ;
 
-  marlowe-chain-indexer = self.packages.marlowe-chain-sync-exe-marlowe-chain-indexer-ghc8107;
-  marlowe-chain-sync = self.packages.marlowe-chain-sync-exe-marlowe-chain-sync-ghc8107;
-  marlowe-contract = self.packages.marlowe-runtime-exe-marlowe-contract-ghc8107;
-  marlowe-runtime = self.packages.marlowe-runtime-exe-marlowe-runtime-ghc8107;
-  marlowe-tx = self.packages.marlowe-runtime-exe-marlowe-tx-ghc8107;
-  marlowe-proxy = self.packages.marlowe-runtime-exe-marlowe-proxy-ghc8107;
-  marlowe-indexer = self.packages.marlowe-runtime-exe-marlowe-indexer-ghc8107;
-  marlowe-web-server = self.packages.marlowe-runtime-web-exe-marlowe-web-server-ghc8107;
-  marlowe-sync = self.packages.marlowe-runtime-exe-marlowe-sync-ghc8107;
+  marlowe-chain-indexer = self.packages.marlowe-chain-indexer;
+  marlowe-chain-sync = self.packages.marlowe-chain-sync;
+  marlowe-contract = self.packages.marlowe-contract;
+  marlowe-runtime = self.packages.marlowe-runtime;
+  marlowe-tx = self.packages.marlowe-tx;
+  marlowe-proxy = self.packages.marlowe-proxy;
+  marlowe-indexer = self.packages.marlowe-indexer;
+  marlowe-web-server = self.packages.marlowe-web-server;
+  marlowe-sync = self.packages.marlowe-sync;
 
   # Ensure this path only changes when sqitch.plan file is updated, or DDL
   # files are updated.
@@ -32,8 +32,8 @@ let
     filter = path: type:
       path == "${self}/marlowe-chain-sync"
         || path == "${self}/marlowe-chain-sync/sqitch.plan"
-        || lib.hasPrefix "${self}/marlowe-chain-sync/deploy" path
-        || lib.hasPrefix "${self}/marlowe-chain-sync/revert" path;
+        || l.hasPrefix "${self}/marlowe-chain-sync/deploy" path
+        || l.hasPrefix "${self}/marlowe-chain-sync/revert" path;
   }) + "/marlowe-chain-sync";
 
   # Ensure this path only changes when sqitch.plan file is updated, or DDL
@@ -45,8 +45,8 @@ let
       path == "${self}/marlowe-runtime"
         || path == "${self}/marlowe-runtime/marlowe-indexer"
         || path == "${self}/marlowe-runtime/marlowe-indexer/sqitch.plan"
-        || lib.hasPrefix "${self}/marlowe-runtime/marlowe-indexer/deploy" path
-        || lib.hasPrefix "${self}/marlowe-runtime/marlowe-indexer/revert" path;
+        || l.hasPrefix "${self}/marlowe-runtime/marlowe-indexer/deploy" path
+        || l.hasPrefix "${self}/marlowe-runtime/marlowe-indexer/revert" path;
   }) + "/marlowe-runtime/marlowe-indexer";
 
   database-uri = "postgresql://$DB_USER:$DB_PASS@$DB_HOST/$DB_NAME";
@@ -54,7 +54,7 @@ let
   wait-for-socket = writeShellScriptBin "wait-for-socket" ''
     set -eEuo pipefail
 
-    export PATH="${lib.makeBinPath [ coreutils socat ]}"
+    export PATH="${l.makeBinPath [ coreutils socat ]}"
 
     sock_path="$1"
     delay_iterations="''${2:-8}"
@@ -76,7 +76,7 @@ let
   wait-for-tcp = writeShellScriptBin "wait-for-tcp" ''
     set -eEuo pipefail
 
-    export PATH="${lib.makeBinPath [ coreutils netcat ]}"
+    export PATH="${l.makeBinPath [ coreutils netcat ]}"
 
     ip="$1"
     port="$2"

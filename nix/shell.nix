@@ -1,11 +1,11 @@
 # This file is part of the IOGX template and is documented at the link below:
 # https://www.github.com/input-output-hk/iogx#34-nixshellnix
 
-{ inputs, inputs', pkgs, project }:
+{ nix, inputs, inputs', pkgs, project, l, ... }:
 
 let
 
-  scripts = import ./marlowe-cardano/scripts.nix { inherit inputs pkgs project; };
+  scripts = nix.marlowe-cardano.scripts;
 
   isLinux = pkgs.stdenv.hostPlatform.isLinux;
 
@@ -16,9 +16,9 @@ in
 
 
   packages = [
-    inputs.cardano-world.cardano.packages.cardano-address
-    inputs.cardano-world.cardano.packages.cardano-node
-    inputs.cardano-world.cardano.packages.cardano-cli
+    inputs'.cardano-world.cardano.packages.cardano-address
+    inputs'.cardano-world.cardano.packages.cardano-node
+    inputs'.cardano-world.cardano.packages.cardano-cli
 
     pkgs.z3
     pkgs.sqitchPg
@@ -62,5 +62,5 @@ in
   };
 
 
-  enterShell = pkgs.lib.optionalString isLinux "refresh-compose";
+  enterShell = l.optionalString isLinux "refresh-compose";
 }

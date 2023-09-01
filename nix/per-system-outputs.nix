@@ -1,19 +1,19 @@
 # This file is part of the IOGX template and is documented at the link below:
 # https://www.github.com/input-output-hk/iogx#35-nixper-system-outputsnix
 
-{ inputs, inputs', pkgs, projects }:
+{ nix, inputs, inputs', pkgs, projects, l, system, ... }:
+
 let
 
-  staticPkgs = inputs.self.packages.marlowe-apps-exe-marlowe-finder-ghc8107.project.projectCross.musl64.hsPkgs;
+  staticPkgs = inputs'.self.packages.marlowe-apps-exe-marlowe-finder.project.projectCross.musl64.hsPkgs;
 
 in
 {
-  operables = import ./marlowe-cardano/deploy/operables.nix
-    { inherit inputs pkgs; };
+  operables = nix.marlowe-cardano.deploy.operables;
 
-  oci-images = pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux (
-    import ./marlowe-cardano/deploy/oci-images.nix { inherit inputs pkgs; }
-  );
+  oci-images =
+    l.optionalAttrs pkgs.stdenv.hostPlatform.isLinux
+      nix.marlowe-cardano.deploy.oci-images;
 
   static = pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux
     (
@@ -22,14 +22,11 @@ in
       staticPkgs.marlowe-runtime-cli.components.exes
     );
 
-  nomadTasks = import ./marlowe-cardano/deploy/nomadTasks.nix
-    { inherit inputs; };
+  nomadTasks = nix.marlowe-cardano.deploy.nomadTasks;
 
 
-  networks = import ./marlowe-cardano/networks.nix
-    { inherit inputs pkgs; };
+  networks = nix.marlowe-cardano.networks;
 
 
-  packages.marlowe-integration-tests = import ./marlowe-cardano/integration-tests.nix
-    { inherit inputs pkgs projects; };
+  packages.integration-tests = nix.marlowe-cardano.integration-tests { inherit projects; };
 }
