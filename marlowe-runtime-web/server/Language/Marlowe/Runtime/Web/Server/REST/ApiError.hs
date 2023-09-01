@@ -125,7 +125,7 @@ instance HasDTO CreateError where
 
 instance ToDTO CreateError where
   toDTO = \case
-    CreateEraUnsupported era -> ApiError ("Current network era not supported: " <> show era) "WithdrawEraUnsupported" Null 503
+    CreateEraUnsupported era -> ApiError ("Current network era not supported: " <> show era) "CreateEraUnsupported" Null 503
     CreateConstraintError err -> apiError' err statusCodeConstraintError
     CreateLoadMarloweContextFailed err -> apiError' err statusCodeLoadMarloweContextError
     CreateBuildupFailed err -> apiError err case err of
@@ -141,7 +141,7 @@ instance HasDTO ApplyInputsError where
 
 instance ToDTO ApplyInputsError where
   toDTO = \case
-    ApplyInputsEraUnsupported era -> ApiError ("Current network era not supported: " <> show era) "WithdrawEraUnsupported" Null 503
+    ApplyInputsEraUnsupported era -> ApiError ("Current network era not supported: " <> show era) "ApplyInputsEraUnsupported" Null 503
     ApplyInputsConstraintError err -> apiError' err statusCodeConstraintError
     ApplyInputsLoadMarloweContextFailed err -> apiError' err statusCodeLoadMarloweContextError
     ApplyInputsConstraintsBuildupFailed err -> apiError err 400
@@ -178,10 +178,10 @@ statusCodeLoadMarloweContextError = \case
   ExtractCreationError _ -> 500
   ExtractMarloweTransactionError _ -> 500
 
-apiError :: (Show a, HasConstructor (Rep a), Generic a) => a -> Int -> ApiError
-apiError err = ApiError (show err) (constructorToString err) Null
+apiError :: (Show a, HasConstructor (Rep a), Generic a, ToJSON a) => a -> Int -> ApiError
+apiError err = ApiError (show err) (constructorToString err) (toJSON err)
 
-apiError' :: (Show a, HasConstructor (Rep a), Generic a) => a -> (a -> Int) -> ApiError
+apiError' :: (Show a, HasConstructor (Rep a), Generic a, ToJSON a) => a -> (a -> Int) -> ApiError
 apiError' err f = let statusCode = f err in apiError err statusCode
 
 constructorToString :: (HasConstructor (Rep a)) => (Generic a) => a -> String
