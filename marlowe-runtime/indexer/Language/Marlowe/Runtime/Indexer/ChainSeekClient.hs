@@ -50,6 +50,7 @@ data ChainSeekClientDependencies m = ChainSeekClientDependencies
   -- ^ The set of known marlowe script hashes.
   , payoutScriptHashes :: NESet ScriptHash
   -- ^ The set of known payout script hashes.
+  , indexParties :: m ()
   }
 
 -- | A change to the chain with respect to Marlowe contracts
@@ -125,6 +126,7 @@ chainSeekClient = component "indexer-chain-seek-client" \ChainSeekClientDependen
             payoutScriptHashes
             chainSyncQueryConnector
             connectedVar
+            indexParties
     , (readTVar connectedVar, readTQueue eventQueue)
     )
   where
@@ -137,9 +139,11 @@ chainSeekClient = component "indexer-chain-seek-client" \ChainSeekClientDependen
       -> NESet ScriptHash
       -> Connector (QueryClient ChainSyncQuery) m
       -> TVar Bool
+      -> m ()
       -> RuntimeChainSeekClient m ()
-    client emit DatabaseQueries{..} pollingInterval marloweScriptHashes payoutScriptHashes chainSyncQueryConnector connectedVar =
+    client emit DatabaseQueries{..} pollingInterval marloweScriptHashes payoutScriptHashes chainSyncQueryConnector connectedVar indexParties =
       ChainSeekClient $ runConnector chainSyncQueryConnector do
+        lift indexParties
         atomically $ writeTVar connectedVar True
         systemStart <- request GetSystemStart
         -- Get the intersection points - the most recent block headers stored locally.

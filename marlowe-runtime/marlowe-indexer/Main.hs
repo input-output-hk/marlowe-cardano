@@ -27,6 +27,7 @@ import Language.Marlowe.Runtime.Core.Api (MarloweVersion (..))
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
 import Language.Marlowe.Runtime.Indexer (MarloweIndexerDependencies (..), marloweIndexer)
 import qualified Language.Marlowe.Runtime.Indexer.Database.PostgreSQL as PostgreSQL
+import qualified Language.Marlowe.Runtime.Indexer.Party as Party
 import Logging (RootSelector (..), renderRootSelectorOTel)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
 import Network.Protocol.Connection (Connector, runConnector)
@@ -54,7 +55,7 @@ import Options.Applicative (
   value,
  )
 import Paths_marlowe_runtime (version)
-import UnliftIO (throwIO)
+import UnliftIO (MonadUnliftIO (..), throwIO)
 
 main :: IO ()
 main = run =<< getOptions
@@ -89,6 +90,10 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
               , pollingInterval = 1
               , marloweScriptHashes = NESet.map ScriptRegistry.marloweScript scripts
               , payoutScriptHashes = NESet.map ScriptRegistry.payoutScript scripts
+              , indexParties = withRunInIO \runInIO ->
+                  either throwIO pure =<< Pool.use pool do
+                    connection <- ask
+                    liftIO $ runInIO $ Party.indexParties connection
               }
       probeServer -< ProbeServerDependencies{port = fromIntegral httpPort, ..}
   where

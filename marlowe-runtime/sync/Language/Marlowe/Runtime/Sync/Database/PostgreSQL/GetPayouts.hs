@@ -8,7 +8,6 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import Data.ByteString (ByteString)
 import Data.Int (Int16, Int32, Int64)
-import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NE
 import Data.Maybe (catMaybes, isJust)
 import Data.Set (Set)
@@ -35,7 +34,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   TxOutRef (..),
  )
 import Language.Marlowe.Runtime.Core.Api (ContractId (..))
-import Language.Marlowe.Runtime.Schema (equals, innerJoinOn, leftJoinOn, naturalJoin, withCTEs)
+import Language.Marlowe.Runtime.Schema (countAll, equals, innerJoinOn, leftJoinOn, naturalJoin, unnestParams, withCTEs)
 import qualified Language.Marlowe.Runtime.Schema as Schema
 import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetWithdrawal (decodePayoutHeader)
 import PostgresqlSyntax.Ast (
@@ -192,7 +191,7 @@ contractIdsCTE idsParam ixsParam =
     NormalSimpleSelect
       (wildcard contractIdsTable)
       Nothing
-      (Just $ pure $ unnestParams $ NE.fromList [idsParam, ixsParam])
+      (Just $ pure $ unnestParams (NE.fromList [idsParam, ixsParam]) Nothing)
       Nothing
       Nothing
       Nothing
@@ -221,7 +220,7 @@ roleTokensCTE policiesParam namesParam =
     NormalSimpleSelect
       (wildcard roleTokensTable)
       Nothing
-      (Just $ pure $ unnestParams $ NE.fromList [policiesParam, namesParam])
+      (Just $ pure $ unnestParams (NE.fromList [policiesParam, namesParam]) Nothing)
       Nothing
       Nothing
       Nothing
@@ -364,27 +363,3 @@ payoutIsWithdrawnCond = NotnullAExpr $ tableColumn @"txId" withdrawalTxInTable
 --  @
 payoutNotWithdrawnCond :: AExpr
 payoutNotWithdrawnCond = IsnullAExpr $ tableColumn @"txId" withdrawalTxInTable
-
-countAll :: TargetElRow '[ '(SqlInt4, NotNull)]
-countAll =
-  TargetElRow (TargetTypesCons singColumnType TargetTypesNil) $
-    ApplicationFuncExpr
-      ( FuncApplication "count" $ Just StarFuncApplicationParams
-      )
-      Nothing
-      Nothing
-      Nothing
-
-unnestParams :: NonEmpty Param -> TableRef
-unnestParams params =
-  FuncTableRef
-    False
-    ( FuncExprFuncTable
-        ( ApplicationFuncExprWindowless $
-            FuncApplication "UNNEST" $
-              Just $
-                NormalFuncApplicationParams Nothing (paramFuncArgExpr <$> params) Nothing
-        )
-        False
-    )
-    Nothing

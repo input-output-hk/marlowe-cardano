@@ -120,14 +120,20 @@ extractStatus response =
 getContractsStatus
   :: Maybe (Set PolicyId)
   -> Maybe (Set Text)
+  -> Maybe (Set Address)
+  -> Maybe (Set AssetId)
   -> Maybe (Range "contractId" TxOutRef)
   -> ClientM (RuntimeStatus, Page "contractId" ContractHeader)
-getContractsStatus roleCurrencies tags range = do
+getContractsStatus roleCurrencies tags partyAddresses partyRoles range = do
   let contractsClient :<|> _ = client
   let getContracts' :<|> _ = contractsClient
   response <-
-    getContracts' (foldMap Set.toList roleCurrencies) (foldMap Set.toList tags) $
-      putRange <$> range
+    getContracts'
+      (foldMap Set.toList roleCurrencies)
+      (foldMap Set.toList tags)
+      (foldMap Set.toList partyAddresses)
+      (foldMap Set.toList partyRoles)
+      (putRange <$> range)
   totalCount <- reqHeaderValue $ lookupResponseHeader @"Total-Count" response
   nextRanges <- headerValue $ lookupResponseHeader @"Next-Range" response
   let ListObject items = getResponse response
@@ -144,9 +150,11 @@ getContractsStatus roleCurrencies tags range = do
 getContracts
   :: Maybe (Set PolicyId)
   -> Maybe (Set Text)
+  -> Maybe (Set Address)
+  -> Maybe (Set AssetId)
   -> Maybe (Range "contractId" TxOutRef)
   -> ClientM (Page "contractId" ContractHeader)
-getContracts = (fmap . fmap . fmap) snd . getContractsStatus
+getContracts = (fmap . fmap . fmap . fmap . fmap) snd . getContractsStatus
 
 postContractStatus
   :: Maybe StakeAddress

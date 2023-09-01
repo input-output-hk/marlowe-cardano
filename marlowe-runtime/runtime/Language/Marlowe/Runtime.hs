@@ -104,6 +104,7 @@ data MarloweRuntimeDependencies r n m = MarloweRuntimeDependencies
   , submitConfirmationBlocks :: BlockNo
   , networkId :: NetworkId
   , runtimeVersion :: Version
+  , indexParties :: m ()
   }
 
 data MarloweRuntime m = MarloweRuntime

@@ -126,14 +126,18 @@ postCreateTxResponse req stakeAddressDTO changeAddressDTO mAddresses mCollateral
 get
   :: [PolicyId]
   -> [Text]
+  -> [Address]
+  -> [AssetId]
   -> Maybe (Ranges '["contractId"] GetContractsResponse)
   -> ServerM (PaginatedResponse '["contractId"] GetContractsResponse)
-get roleCurrencies' tags' ranges = do
+get roleCurrencies' tags' partyAddresses' partyRoles' ranges = do
   let range :: Range "contractId" TxOutRef
       range = fromMaybe (getDefaultRange (Proxy @ContractHeader)) $ extractRange =<< ranges
   range' <- maybe (throwError $ rangeNotSatisfiable' "Invalid range value") pure $ fromPaginationRange range
   roleCurrencies <- Set.fromList <$> fromDTOThrow (badRequest' "Invalid role currency") roleCurrencies'
   let tags = Set.fromList $ MarloweMetadataTag <$> tags'
+  partyAddresses <- Set.fromList <$> fromDTOThrow (badRequest' "Invalid address") partyAddresses'
+  partyRoles <- Set.fromList <$> fromDTOThrow (badRequest' "Invalid role token") partyRoles'
   loadContractHeaders ContractFilter{..} range' >>= \case
     Nothing -> throwError $ rangeNotSatisfiable' "Initial contract ID not found"
     Just Page{..} -> do

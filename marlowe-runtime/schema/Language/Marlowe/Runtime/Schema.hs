@@ -61,6 +61,29 @@ type ContractTxOutColumns =
 contractTxOut :: Table ContractTxOutColumns
 contractTxOut = marloweTable "contractTxOut"
 
+type ContractTxOutPartyAddressColumns =
+  '[ '("address", SqlBytea, NotNull)
+   , '("txId", SqlBytea, NotNull)
+   , '("txIx", SqlInt2, NotNull)
+   , '("createTxId", SqlBytea, NotNull)
+   , '("createTxIx", SqlInt2, NotNull)
+   ]
+
+contractTxOutPartyAddress :: Table ContractTxOutPartyAddressColumns
+contractTxOutPartyAddress = marloweTable "contractTxOutPartyAddress"
+
+type ContractTxOutPartyRoleColumns =
+  '[ '("rolesCurrency", SqlBytea, NotNull)
+   , '("role", SqlBytea, NotNull)
+   , '("txId", SqlBytea, NotNull)
+   , '("txIx", SqlInt2, NotNull)
+   , '("createTxId", SqlBytea, NotNull)
+   , '("createTxIx", SqlInt2, NotNull)
+   ]
+
+contractTxOutPartyRole :: Table ContractTxOutPartyRoleColumns
+contractTxOutPartyRole = marloweTable "contractTxOutPartyRole"
+
 type ContractTxOutTagColumns =
   '[ '("tag", SqlText, NotNull)
    , '("txId", SqlBytea, NotNull)
@@ -149,3 +172,43 @@ leftJoinOn expr = joinTable $ QualJoinMeth (Just $ LeftJoinType False) $ OnJoinQ
 
 equals :: (IsAExpr a, IsAExpr b) => a -> b -> AExpr
 equals l = SymbolicBinOpAExpr l (MathSymbolicExprBinOp EqualsMathOp)
+
+unnestParams :: NonEmpty Param -> Maybe FuncAliasClause -> TableRef
+unnestParams params =
+  FuncTableRef
+    False
+    ( FuncExprFuncTable
+        ( ApplicationFuncExprWindowless $
+            FuncApplication "UNNEST" $
+              Just $
+                NormalFuncApplicationParams Nothing (paramFuncArgExpr <$> params) Nothing
+        )
+        False
+    )
+
+countAll :: TargetElRow '[ '(SqlInt4, NotNull)]
+countAll =
+  TargetElRow singTargetTypes $
+    ApplicationFuncExpr
+      ( FuncApplication "count" $ Just StarFuncApplicationParams
+      )
+      Nothing
+      Nothing
+      Nothing
+
+existsCond
+  :: Maybe IntoClause
+  -> Maybe FromClause
+  -> Maybe AExpr
+  -> Maybe GroupClause
+  -> Maybe AExpr
+  -> Maybe WindowClause
+  -> CExpr
+existsCond into from where_ group having window =
+  ExistsCExpr $
+    NoParensSelectWithParens $
+      SelectNoParens Nothing (Left selectClause) Nothing Nothing Nothing
+  where
+    selectClause = NormalSimpleSelect targeting into from where_ group having window
+    targeting = NormalTargeting $ TargetElRow returnTypes (IAexprConst 1) :. TargetListNil
+    returnTypes = TargetTypesCons (ColumnType SqlInt4 NotNull) TargetTypesNil

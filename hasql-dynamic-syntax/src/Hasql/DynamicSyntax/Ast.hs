@@ -190,6 +190,14 @@ data TargetTypes row where
   TargetTypesNil :: TargetTypes '[]
   TargetTypesCons :: ColumnType t -> TargetTypes row -> TargetTypes (t ': row)
 
+class SingTargetTypes row where singTargetTypes :: TargetTypes row
+instance SingTargetTypes '[] where singTargetTypes = TargetTypesNil
+instance
+  (SingColumnType t nullability, SingTargetTypes row)
+  => SingTargetTypes ('(t, nullability) ': row)
+  where
+  singTargetTypes = TargetTypesCons singColumnType singTargetTypes
+
 deriving instance Show (TargetTypes row)
 deriving instance Eq (TargetTypes row)
 deriving instance Ord (TargetTypes row)

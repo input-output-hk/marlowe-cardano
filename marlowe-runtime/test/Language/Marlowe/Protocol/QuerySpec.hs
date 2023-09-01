@@ -170,7 +170,7 @@ instance Arbitrary Order where
   arbitrary = elements [Ascending, Descending]
 
 instance Arbitrary ContractFilter where
-  arbitrary = ContractFilter <$> arbitrary <*> arbitrary
+  arbitrary = ContractFilter <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink
 
 instance Arbitrary WithdrawalFilter where

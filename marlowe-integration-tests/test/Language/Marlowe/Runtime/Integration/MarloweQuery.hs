@@ -10,8 +10,9 @@ import Control.Monad (guard)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader.Class
 import Data.Bifunctor (bimap)
-import Data.Foldable (Foldable (fold), for_)
+import Data.Foldable (Foldable (fold), foldl', for_)
 import Data.Functor (void)
+import Data.List (nub)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust, isNothing)
@@ -30,7 +31,7 @@ import Language.Marlowe.Protocol.Query.Client (
  )
 import Language.Marlowe.Protocol.Query.Types
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
-import Language.Marlowe.Runtime.ChainSync.Api (AssetId (..), BlockHeader, PolicyId, TxId, TxOutRef (..))
+import Language.Marlowe.Runtime.ChainSync.Api (Address, AssetId (..), BlockHeader, PolicyId, TxId, TxOutRef (..))
 import Language.Marlowe.Runtime.Client (runMarloweQueryClient)
 import Language.Marlowe.Runtime.Core.Api (
   ContractId (..),
@@ -48,6 +49,7 @@ import Language.Marlowe.Runtime.Integration.StandardContract
 import Language.Marlowe.Runtime.Transaction.Api (
   ContractCreatedInEra (..),
   InputsAppliedInEra (..),
+  WalletAddresses (..),
   WithdrawTxInEra (..),
  )
 import Test.Hspec
@@ -80,11 +82,20 @@ instance PaginatedQuery GetHeaders where
   data FilterSym GetHeaders = ContractFilterSym
     { tagsSym :: Set TestTag
     , roleCurrenciesSym :: Set (RefSym GetHeaders)
+    , partyAddressesSym :: Set PartyAddress
+    , partyRolesSym :: Set (RefSym GetHeaders)
     }
     deriving (Eq, Ord, Show)
   applyFilter _ ContractFilterSym{..} ref =
     (Set.null tagsSym || not (Set.null $ Set.intersection tagsSym $ tagsForContract ref))
       && (Set.null roleCurrenciesSym || Set.member ref roleCurrenciesSym)
+      && case (Set.null partyAddressesSym, Set.null partyRolesSym) of
+        (True, True) -> True
+        (False, True) -> not (Set.null $ Set.intersection (partyAddressesForContract ref) partyAddressesSym)
+        (True, False) -> Set.member ref partyRolesSym
+        (False, False) ->
+          not (Set.null $ Set.intersection (partyAddressesForContract ref) partyAddressesSym)
+            || Set.member ref partyRolesSym
   toRef _ MarloweQueryTestData{..} = \case
     Unknown -> ContractId $ TxOutRef "0000000000000000000000000000000000000000000000000000000000000000" 1
     Known Contract1 -> standardContractId contract1
@@ -96,7 +107,7 @@ instance PaginatedQuery GetHeaders where
     Contract2 -> standardContractHeader contract2
     Contract3 -> standardContractHeader contract3
     Contract4 -> standardContractHeader contract4
-  toFilter _ MarloweQueryTestData{..} ContractFilterSym{..} =
+  toFilter _ testData@MarloweQueryTestData{..} ContractFilterSym{..} =
     ContractFilter
       { tags = testTagsToTags tagsSym
       , roleCurrencies = flip Set.map roleCurrenciesSym \case
@@ -104,12 +115,78 @@ instance PaginatedQuery GetHeaders where
           Contract2 -> standardContractRoleCurrency contract2
           Contract3 -> standardContractRoleCurrency contract3
           Contract4 -> standardContractRoleCurrency contract4
+      , partyAddresses = partyAddressesToAddresses testData partyAddressesSym
+      , partyRoles =
+          flip Set.map partyRolesSym $
+            flip AssetId "Party A" . \case
+              Contract1 -> standardContractRoleCurrency contract1
+              Contract2 -> standardContractRoleCurrency contract2
+              Contract3 -> standardContractRoleCurrency contract3
+              Contract4 -> standardContractRoleCurrency contract4
       }
-  enumerateFilters q = do
-    tagsSym <- Set.toList $ Set.powerSet $ Set.fromList [minBound .. maxBound]
-    roleCurrenciesSym <- Set.toList $ Set.powerSet $ Set.fromList $ allRefs q
-    pure ContractFilterSym{..}
+  enumerateFilters q =
+    nub $
+      defaultContractFilter
+        : fold
+          [ do
+              tagsSym <- Set.toList $ Set.powerSet $ Set.fromList [minBound .. maxBound]
+              filterVariations defaultContractFilter{tagsSym}
+          , do
+              roleCurrenciesSym <- Set.toList $ Set.powerSet $ Set.fromList $ allRefs q
+              filterVariations defaultContractFilter{roleCurrenciesSym}
+          , do
+              partyAddressesSym <- Set.toList $ Set.powerSet $ Set.fromList [minBound .. maxBound]
+              filterVariations defaultContractFilter{partyAddressesSym}
+          , do
+              partyRolesSym <- Set.toList $ Set.powerSet $ Set.fromList $ allRefs q
+              filterVariations defaultContractFilter{partyRolesSym}
+          ]
   runQuery _ = getContractHeaders
+
+defaultContractFilter :: FilterSym GetHeaders
+defaultContractFilter =
+  ContractFilterSym
+    { tagsSym = mempty
+    , roleCurrenciesSym = mempty
+    , partyAddressesSym = mempty
+    , partyRolesSym = mempty
+    }
+
+data ContractFilterVariation
+  = SpecifyTag
+  | SpecifyRoleCurrency
+  | SpecifyPartyAddress
+  | SpecifyPartyRole
+  deriving (Eq, Ord, Show, Enum, Bounded)
+
+filterVariations :: FilterSym GetHeaders -> [FilterSym GetHeaders]
+filterVariations filterSym = do
+  variations <- Set.toList $ Set.powerSet $ Set.fromList $ filter (variationApplies filterSym) [minBound .. maxBound]
+  pure $ applyVariations variations filterSym
+
+variationApplies :: FilterSym GetHeaders -> ContractFilterVariation -> Bool
+variationApplies ContractFilterSym{..} = \case
+  SpecifyTag -> Set.null tagsSym
+  SpecifyRoleCurrency -> Set.null roleCurrenciesSym
+  SpecifyPartyAddress -> Set.null partyAddressesSym
+  SpecifyPartyRole -> Set.null partyRolesSym
+
+applyVariations :: Set ContractFilterVariation -> FilterSym GetHeaders -> FilterSym GetHeaders
+applyVariations = flip $ foldl' applyVariation
+
+applyVariation :: FilterSym GetHeaders -> ContractFilterVariation -> FilterSym GetHeaders
+applyVariation filterSym = \case
+  SpecifyTag -> filterSym{tagsSym = Set.singleton Tag1}
+  SpecifyRoleCurrency -> filterSym{roleCurrenciesSym = Set.singleton Contract1}
+  SpecifyPartyAddress -> filterSym{partyAddressesSym = Set.singleton Wallet1}
+  SpecifyPartyRole -> filterSym{partyRolesSym = Set.singleton Contract1}
+
+partyAddressesForContract :: RefSym GetHeaders -> Set PartyAddress
+partyAddressesForContract = \case
+  Contract1 -> Set.singleton Wallet2
+  Contract2 -> Set.singleton Wallet1
+  Contract3 -> Set.singleton Wallet2
+  Contract4 -> mempty -- wallet 1 is not a *visible* party address of contract 4 due to merkleization.
 
 instance PaginatedQuery GetWithdrawals where
   type Filter GetWithdrawals = WithdrawalFilter
@@ -238,8 +315,19 @@ standardContractRoleCurrency :: StandardContractInit 'V1 -> PolicyId
 standardContractRoleCurrency StandardContractInit{..} = case contractCreated of
   ContractCreatedInEra{..} -> rolesCurrency
 
+data PartyAddress = Wallet1 | Wallet2
+  deriving (Eq, Ord, Show, Enum, Bounded)
+
 data TestTag = Tag1 | Tag2
   deriving (Eq, Ord, Show, Enum, Bounded)
+
+partyAddressesToAddresses :: MarloweQueryTestData -> Set PartyAddress -> Set Address
+partyAddressesToAddresses = Set.map . partyAddressToAddress
+
+partyAddressToAddress :: MarloweQueryTestData -> PartyAddress -> Address
+partyAddressToAddress MarloweQueryTestData{..} = \case
+  Wallet1 -> changeAddress $ addresses wallet1
+  Wallet2 -> changeAddress $ addresses wallet2
 
 testTagsToTags :: Set TestTag -> Set MarloweMetadataTag
 testTagsToTags = Set.map testTagToTag
@@ -328,13 +416,13 @@ setup runSpec = withLocalMarloweRuntime $ runIntegrationTest do
   contract1 <- createStandardContractWithTags (testTagsToTags $ tagsForContract Contract1) wallet1 wallet2
   contract1Step1 <- makeInitialDeposit contract1
   contract1Step2 <- chooseGimmeTheMoney contract1Step1
-  contract2 <- createStandardContractWithTags (testTagsToTags $ tagsForContract Contract2) wallet1 wallet2
+  contract2 <- createStandardContractWithTags (testTagsToTags $ tagsForContract Contract2) wallet2 wallet1
   contract1Step3 <- sendNotify contract1Step2
   contract1Step4 <- makeReturnDeposit contract1Step3
   contract1Step5 <- withdrawPartyAFunds contract1Step4
   contract2Step1 <- makeInitialDeposit contract2
   contract3 <- createStandardContractWithTags (testTagsToTags $ tagsForContract Contract3) wallet1 wallet2
-  contract4 <- createStandardContractWithTags (testTagsToTags $ tagsForContract Contract4) wallet1 wallet2
+  contract4 <- createStandardContractWithTags (testTagsToTags $ tagsForContract Contract4) wallet2 wallet1
   contract2Step2 <- chooseGimmeTheMoney contract2Step1
   contract2Step3 <- sendNotify contract2Step2
   contract2Step4 <- makeReturnDeposit contract2Step3
