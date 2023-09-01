@@ -9,6 +9,11 @@
     std.url = "github:divnix/std";
     std.inputs.n2c.follows = "n2c";
     iogx.url = "github:input-output-hk/iogx";
+    iogx.inputs.CHaP.follows = "CHaP";
+    CHaP = {
+      url = "github:input-output-hk/cardano-haskell-packages?ref=repo";
+      flake = false;
+    };
     # Use upstream when https://github.com/nlewo/nix2container/pull/82 is merged
     n2c.url = "github:shlevy/nix2container/no-Size-on-dir";
     marlowe-plutus.url = "github:input-output-hk/marlowe-plutus";
