@@ -61,10 +61,10 @@ import Language.Marlowe.Core.V1.Semantics.Types (
  )
 import Language.Marlowe.FindInputs (getAllInputs)
 import Language.Marlowe.Scripts.Types (marloweTxInputsFromInputs)
+import Language.Marlowe.Util (dataHash)
 
 import qualified Data.ByteString.Short as SBS (ShortByteString)
 import qualified Plutus.ApiCommon as P (LedgerPlutusVersion (PlutusV2), evaluateScriptCounting)
-import qualified Plutus.Script.Utils.Scripts as P (datumHash)
 import qualified Plutus.V2.Ledger.Api as P hiding (evaluateScriptCounting)
 import qualified PlutusTx.AssocMap as AM
 
@@ -100,7 +100,7 @@ executeTransaction evaluationContext semanticsValidator semanticsAddress payoutA
         Error e -> throwError . fromString $ show e
     let oneLovelace = P.singleton P.adaSymbol P.adaToken 1
         inDatum = P.Datum $ P.toBuiltinData MarloweData{..}
-        inDatumHash = P.datumHash inDatum
+        inDatumHash = P.DatumHash $ dataHash inDatum
         inValue = totalBalance $ accounts marloweState
         inScriptTxRef = P.TxOutRef "0000000000000000000000000000000000000000000000000000000000000000" 0
         inScriptTx = P.TxInInfo inScriptTxRef $ P.TxOut semanticsAddress inValue (P.OutputDatumHash inDatumHash) Nothing
@@ -108,7 +108,7 @@ executeTransaction evaluationContext semanticsValidator semanticsAddress payoutA
           if txOutContract == Close
             then mempty
             else pure . P.Datum . P.toBuiltinData $ MarloweData marloweParams txOutState txOutContract
-        outDatumHash = P.datumHash <$> outDatum
+        outDatumHash = P.DatumHash . dataHash <$> outDatum
         outValue = totalBalance $ accounts txOutState
         outScriptTx = flip (P.TxOut semanticsAddress outValue) Nothing . P.OutputDatumHash <$> outDatumHash
         redeemer = P.Redeemer . P.toBuiltinData $ marloweTxInputsFromInputs txInputs
@@ -119,7 +119,7 @@ executeTransaction evaluationContext semanticsValidator semanticsAddress payoutA
             P.TxOut
               payoutAddress
               (P.singleton currency name amount)
-              (P.OutputDatumHash . P.datumHash . P.Datum $ P.toBuiltinData (rolesCurrency, role))
+              (P.OutputDatumHash . P.DatumHash . dataHash . P.Datum $ P.toBuiltinData (rolesCurrency, role))
               Nothing
         makePayment _ = mempty
         makePaymentDatum (Payment _ (Party (Role role)) _ _) =
@@ -151,7 +151,7 @@ executeTransaction evaluationContext semanticsValidator semanticsAddress payoutA
             | input <- txInputs
             ]
         outMerkle =
-          [ P.TxOut creatorAddress oneLovelace (P.OutputDatumHash $ P.datumHash datum) Nothing
+          [ P.TxOut creatorAddress oneLovelace (P.OutputDatumHash $ P.DatumHash $ dataHash datum) Nothing
           | datum <- merkleDatums
           ]
         inFunds =
@@ -185,7 +185,7 @@ executeTransaction evaluationContext semanticsValidator semanticsAddress payoutA
               P.Address (P.PubKeyCredential pkh) _ -> pure pkh
               _ -> mempty
         txInfoRedeemers = AM.singleton scriptContextPurpose redeemer
-        txInfoData = AM.fromList $ ((,) =<< P.datumHash) <$> inDatum : outDatum <> outPaymentDatums <> merkleDatums
+        txInfoData = AM.fromList $ ((,) =<< P.DatumHash . dataHash) <$> inDatum : outDatum <> outPaymentDatums <> merkleDatums
         txInfoId = "2222222222222222222222222222222222222222222222222222222222222222"
         scriptContextTxInfo = P.TxInfo{..}
         scriptContextPurpose = P.Spending inScriptTxRef

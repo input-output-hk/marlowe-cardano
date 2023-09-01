@@ -73,7 +73,7 @@ import Language.Marlowe.Core.V1.Semantics.Types.Address (
   serialiseAddress,
   serialiseAddressBech32,
  )
-import Language.Marlowe.Scripts (alternateMarloweValidator, marloweValidator)
+import Language.Marlowe.Scripts (marloweValidatorBytes)
 import Language.Marlowe.Util (ada, extractNonMerkleizedContractRoles)
 import Plutus.V2.Ledger.Api (POSIXTime (POSIXTime))
 import Spec.Marlowe.Common (alicePk, amount, contractGen, pangramContract, shrinkContract, valueGen)
@@ -99,14 +99,11 @@ import Test.Tasty.QuickCheck (Property, testProperty)
 import Cardano.Api (SerialiseAsRawBytes (deserialiseFromRawBytes))
 import qualified Cardano.Api as C
 import Cardano.Api.Shelley (StakeCredential (..))
-import qualified Codec.Serialise as Serialise
-import qualified Data.ByteString.Lazy as LB
 import qualified Data.ByteString.Short as SBS
 import qualified Data.Set as Set
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Language.Marlowe as M
-import qualified Plutus.Script.Utils.Typed as Scripts
 import qualified Plutus.V1.Ledger.Api as PV1
 import qualified Plutus.V1.Ledger.Credential as Credential
 import qualified PlutusTx.AssocMap as AssocMap
@@ -128,8 +125,7 @@ tests =
     , testCase "Input serializes into valid JSON" inputSerialization
     , testGroup
         "Validator size is reasonable"
-        [ testCase "Typed validator size" alternateMarloweValidatorSize
-        , testCase "Untyped validator size" marloweValidatorSize
+        [ testCase "Untyped validator size" marloweValidatorSize
         ]
     , testCase "Mul analysis" mulAnalysisTest
     , testCase "Div analysis" divAnalysisTest
@@ -155,28 +151,17 @@ tests =
         ]
     ]
 
-maxAlternateMarloweValidatorSize :: Int
 maxMarloweValidatorSize :: Int
 #ifdef TRACE_PLUTUS
-maxAlternateMarloweValidatorSize = 15361
 maxMarloweValidatorSize = 12840
 #else
-maxAlternateMarloweValidatorSize = 14821
 maxMarloweValidatorSize = 12296
 #endif
-
--- | Test that the typed validator is not too large.
-alternateMarloweValidatorSize :: IO ()
-alternateMarloweValidatorSize = do
-  let validator = Scripts.validatorScript alternateMarloweValidator
-  let vsize = SBS.length . SBS.toShort . LB.toStrict $ Serialise.serialise validator
-  assertBool ("alternateMarloweValidator is too large " <> show vsize) (vsize <= maxAlternateMarloweValidatorSize)
 
 -- | Test that the untyped validator is not too large.
 marloweValidatorSize :: IO ()
 marloweValidatorSize = do
-  let validator = Scripts.validatorScript marloweValidator
-  let vsize = SBS.length . SBS.toShort . LB.toStrict $ Serialise.serialise validator
+  let vsize = SBS.length marloweValidatorBytes
   assertBool ("marloweValidator is too large " <> show vsize) (vsize <= maxMarloweValidatorSize)
 
 -- | Test `extractNonMerkleizedContractRoles`.

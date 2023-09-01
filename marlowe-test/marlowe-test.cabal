@@ -213,7 +213,6 @@ test-suite marlowe-test
     , marlowe-test
     , mtl >=2.2 && <3
     , plutus-ledger-api ==1.0.0.1
-    , plutus-script-utils ==1.2.0.0
     , plutus-tx ==1.0.0.0
     , QuickCheck >=2.14 && <3
     , quickcheck-instances ^>=0.3.29

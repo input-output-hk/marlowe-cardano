@@ -120,7 +120,6 @@ library
     , plutus-ledger-ada
     , plutus-ledger-api
     , plutus-ledger-slot
-    , plutus-script-utils
     , plutus-tx
     , prettyprinter
     , scientific

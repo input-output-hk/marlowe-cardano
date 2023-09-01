@@ -129,7 +129,6 @@ import Language.Marlowe.CLI.Types (CliEnv, CliError (..))
 import Language.Marlowe.Client (marloweParams)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract (..), Input (..), TimeInterval)
 import Language.Marlowe.Scripts (marloweValidatorHash, rolePayoutValidatorHash)
-import Plutus.Script.Utils.Scripts (dataHash)
 import Plutus.V1.Ledger.Api (
   BuiltinByteString,
   CurrencySymbol (..),
@@ -168,6 +167,7 @@ import Data.ByteString.Lazy.Char8 qualified as LBS8 (hPutStrLn)
 import Data.Map.Strict qualified as M (elems, filter, null, toList)
 import Data.Set qualified as S (singleton, toList)
 import Language.Marlowe.Scripts.Types (MarloweInput, MarloweTxInput (..))
+import Language.Marlowe.Util (dataHash)
 import Plutus.V1.Ledger.Api qualified as PV1
 
 -- | Record the point on the chain.

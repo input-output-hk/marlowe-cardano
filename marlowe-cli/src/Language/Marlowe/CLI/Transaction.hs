@@ -92,6 +92,7 @@ import Cardano.Api (
   PaymentCredential (PaymentCredentialByScript),
   PaymentKey,
   PlutusScript,
+  PlutusScriptV2,
   PlutusScriptVersion (..),
   PolicyId (..),
   Quantity (..),
@@ -175,6 +176,7 @@ import Cardano.Api (
 import Cardano.Api qualified as C
 import Cardano.Api.Shelley (
   ExecutionUnitPrices (..),
+  PlutusScript (..),
   ProtocolParameters (..),
   ReferenceScript (ReferenceScript, ReferenceScriptNone),
   SimpleScriptOrReferenceInput (SScript),
@@ -292,7 +294,7 @@ import Language.Marlowe.CLI.Types (
   withShelleyBasedEra,
  )
 import Language.Marlowe.CLI.Types qualified as PayToScript (PayToScript (value))
-import Language.Marlowe.Scripts (marloweValidator, rolePayoutValidator)
+import Language.Marlowe.Scripts (marloweValidatorBytes, rolePayoutValidatorBytes)
 import Ouroboros.Consensus.HardFork.History (interpreterToEpochInfo)
 import Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult (..))
 import Plutus.V1.Ledger.Api (Datum (..), POSIXTime (..), Redeemer (..), TokenName (..), fromBuiltin, toData)
@@ -984,8 +986,8 @@ buildPublishingImpl
   -> PrintStats
   -> m (TxBody era, PublishMarloweScripts MarlowePlutusVersion era)
 buildPublishingImpl connection signingKey expires changeAddress publishingStrategy coinSelectionStrategy (PrintStats printStats) = do
-  pm <- buildPublishScript connection (fromV2TypedValidator marloweValidator) publishingStrategy
-  pp <- buildPublishScript connection (fromV2TypedValidator rolePayoutValidator) publishingStrategy
+  pm <- buildPublishScript connection (PlutusScriptSerialised marloweValidatorBytes) publishingStrategy
+  pp <- buildPublishScript connection (PlutusScriptSerialised rolePayoutValidatorBytes) publishingStrategy
 
   let buildPublishScriptTxOut PublishScript{psMinAda, psPublisher, psReferenceValidator} = do
         referenceScript <- buildReferenceScript $ viScript psReferenceValidator
@@ -1163,8 +1165,8 @@ findMarloweScriptsRefs
   -> PrintStats
   -> m (Maybe (MarloweScriptsRefs MarlowePlutusVersion era))
 findMarloweScriptsRefs connection publishingStrategy printStats = do
-  let marloweHash = hashScript (PS.toScript $ fromV2TypedValidator marloweValidator)
-      payoutHash = hashScript (PS.toScript $ fromV2TypedValidator rolePayoutValidator)
+  let marloweHash = hashScript (PS.toScript $ PlutusScriptSerialised @PlutusScriptV2 marloweValidatorBytes)
+      payoutHash = hashScript (PS.toScript $ PlutusScriptSerialised @PlutusScriptV2 rolePayoutValidatorBytes)
 
   runMaybeT do
     m <- MaybeT $ findScriptRef connection marloweHash publishingStrategy marlowePlutusVersion printStats

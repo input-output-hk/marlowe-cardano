@@ -5,6 +5,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 
 -- | Export information for Marlowe contracts and roles.
 --
@@ -61,17 +62,19 @@ import Cardano.Api (
   NetworkId,
   PaymentCredential (..),
   PlutusScriptV2,
-  PlutusScriptVersion,
+  PlutusScriptVersion (..),
   Script (PlutusScript),
   ScriptDataJsonSchema (..),
   ScriptDataSupportedInEra (..),
+  SerialiseAsRawBytes (..),
   StakeAddressReference (..),
   hashScript,
+  hashScriptData,
   makeShelleyAddressInEra,
   scriptDataToJson,
   serialiseAddress,
  )
-import Cardano.Api.Shelley (fromPlutusData)
+import Cardano.Api.Shelley (PlutusScript (..), fromPlutusData)
 import Control.Monad (when)
 import Control.Monad.Except (MonadError, MonadIO, liftEither, liftIO)
 import Data.Aeson (encode)
@@ -99,8 +102,7 @@ import Language.Marlowe.CLI.Types (
  )
 import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract (..), Input, State (..), Token (Token))
-import Language.Marlowe.Scripts (marloweValidator, rolePayoutValidator)
-import Plutus.Script.Utils.Scripts (datumHash)
+import Language.Marlowe.Scripts (marloweValidatorBytes, rolePayoutValidatorBytes)
 import Plutus.V2.Ledger.Api (BuiltinData, CostModelParams, Datum (..), Redeemer (..))
 import PlutusTx (builtinDataToData, toBuiltinData)
 import System.IO (hPutStrLn, stderr)
@@ -115,15 +117,11 @@ import Codec.Serialise (serialise)
 import Control.Monad.Reader (MonadReader)
 import Data.ByteString.Short qualified as SBS
 import Language.Marlowe.CLI.Cardano.Api qualified as C
-import Language.Marlowe.CLI.Cardano.Api.PlutusScript (
-  IsPlutusScriptLanguage (plutusScriptVersion),
-  fromTypedValidator,
-  fromV2TypedValidator,
- )
+import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript qualified as PlutusScript
-import Language.Marlowe.CLI.Plutus.Script.Utils (TypedValidator' (TypedValidatorV2))
 import Language.Marlowe.Scripts.Types (marloweTxInputsFromInputs)
 import Plutus.ApiCommon (ProtocolVersion)
+import Plutus.V1.Ledger.Api (DatumHash (..), toBuiltin, toData)
 
 -- | Build comprehensive information about a Marlowe contract and transaction.
 buildMarlowe
@@ -147,7 +145,7 @@ buildMarlowe
 buildMarlowe marloweParams era protocolVersion costModel network stake contract state inputs =
   do
     miValidatorInfo <-
-      validatorInfo' (fromV2TypedValidator marloweValidator) Nothing era protocolVersion costModel network stake
+      validatorInfo' (PlutusScriptSerialised marloweValidatorBytes) Nothing era protocolVersion costModel network stake
     let miDatumInfo = buildMarloweDatum marloweParams contract state
         miRedeemerInfo = buildRedeemer inputs
     pure MarloweInfo{..}
@@ -270,9 +268,8 @@ printMarlowe marloweParams era protocolVersion costModel network stake contract 
 
 -- | Compute the address of a validator.
 buildAddress
-  :: forall era lang t
-   . (IsPlutusScriptLanguage lang)
-  => TypedValidator' lang t
+  :: forall era
+   . SBS.ShortByteString
   -- ^ The validator.
   -> ScriptDataSupportedInEra era
   -> NetworkId
@@ -281,8 +278,8 @@ buildAddress
   -- ^ The stake address.
   -> AddressInEra era
   -- ^ The script address.
-buildAddress anyValidator era network stake =
-  let viScript = PlutusScript (plutusScriptVersion :: PlutusScriptVersion lang) (PlutusScript.fromTypedValidator anyValidator)
+buildAddress script era network stake =
+  let viScript = PlutusScript PlutusScriptV2 (PlutusScriptSerialised script)
    in withShelleyBasedEra era $
         makeShelleyAddressInEra
           network
@@ -298,15 +295,14 @@ buildMarloweAddress
   -- ^ The stake address.
   -> AddressInEra era
   -- ^ The script address.
-buildMarloweAddress = buildAddress (TypedValidatorV2 marloweValidator)
+buildMarloweAddress = buildAddress marloweValidatorBytes
 
 -- | Print the address of a validator.
 exportAddress
-  :: forall era lang m t
+  :: forall era m
    . (MonadIO m)
   => (MonadReader (CliEnv era) m)
-  => (IsPlutusScriptLanguage lang)
-  => TypedValidator' lang t
+  => SBS.ShortByteString
   -- ^ The validator.
   -> NetworkId
   -- ^ The network ID.
@@ -328,7 +324,7 @@ exportMarloweAddress
   -- ^ The stake address.
   -> m ()
   -- ^ Action to print the script address.
-exportMarloweAddress = exportAddress (TypedValidatorV2 marloweValidator)
+exportMarloweAddress = exportAddress marloweValidatorBytes
 
 buildValidatorInfo
   :: (MonadReader (CliEnv era) m, MonadIO m, MonadError CliError m, IsPlutusScriptLanguage lang)
@@ -347,9 +343,9 @@ buildValidatorInfo connection plutusScript txIn stake = do
 
 -- | Export to a file the validator information.
 exportValidatorImpl
-  :: (MonadError CliError m, MonadReader (CliEnv era) m, IsPlutusScriptLanguage lang)
+  :: (MonadError CliError m, MonadReader (CliEnv era) m)
   => (MonadIO m)
-  => TypedValidator' lang t
+  => SBS.ShortByteString
   -> ProtocolVersion
   -> CostModelParams
   -- ^ The cost model parameters.
@@ -368,7 +364,7 @@ exportValidatorImpl
 exportValidatorImpl validator protocolVersion costModel network stake outputFile printHash printStats =
   do
     era <- askEra
-    let plutusScript = fromTypedValidator validator
+    let plutusScript = PlutusScriptSerialised @PlutusScriptV2 validator
     ValidatorInfo{..} <- validatorInfo' plutusScript Nothing era protocolVersion costModel network stake
     maybeWriteTextEnvelope outputFile $ PlutusScript.toScript plutusScript
     doWithCardanoEra $
@@ -403,7 +399,7 @@ marloweValidatorInfo
   -- ^ The stake address.
   -> Either CliError (ValidatorInfo PlutusScriptV2 era)
   -- ^ The validator information, or an error message.
-marloweValidatorInfo = validatorInfo' (fromV2TypedValidator marloweValidator) Nothing
+marloweValidatorInfo = validatorInfo' (PlutusScriptSerialised marloweValidatorBytes) Nothing
 
 -- | Export to a file the validator information about a Marlowe contract.
 exportMarloweValidator
@@ -424,7 +420,7 @@ exportMarloweValidator
   -- ^ Whether to print statistics about the validator.
   -> m ()
   -- ^ Action to export the validator information to a file.
-exportMarloweValidator = exportValidatorImpl (TypedValidatorV2 marloweValidator)
+exportMarloweValidator = exportValidatorImpl marloweValidatorBytes
 
 -- | Build the datum information about a Marlowe transaction.
 buildDatumImpl
@@ -439,7 +435,7 @@ buildDatumImpl datum =
         scriptDataToJson ScriptDataJsonDetailedSchema
           . fromPlutusData
           $ PlutusTx.builtinDataToData datum
-      diHash = datumHash diDatum
+      diHash = DatumHash . toBuiltin . serialiseToRawBytes . hashScriptData . fromPlutusData $ toData diDatum
       diSize = SBS.length diBytes
    in DatumInfo{..}
 
@@ -577,7 +573,7 @@ buildRoleAddress
   -- ^ The stake address.
   -> AddressInEra era
   -- ^ The script address.
-buildRoleAddress = buildAddress (TypedValidatorV2 rolePayoutValidator)
+buildRoleAddress = buildAddress rolePayoutValidatorBytes
 
 -- | Print the role address of a Marlowe contract.
 exportRoleAddress
@@ -588,7 +584,7 @@ exportRoleAddress
   -- ^ The stake address.
   -> m ()
   -- ^ Action to print the script address.
-exportRoleAddress = exportAddress (TypedValidatorV2 rolePayoutValidator)
+exportRoleAddress = exportAddress rolePayoutValidatorBytes
 
 -- | Current Marlowe validator information.
 roleValidatorInfo
@@ -603,7 +599,7 @@ roleValidatorInfo
   -- ^ The stake address.
   -> Either CliError (ValidatorInfo PlutusScriptV2 era)
   -- ^ The validator information, or an error message.
-roleValidatorInfo = validatorInfo' (fromV2TypedValidator rolePayoutValidator) Nothing
+roleValidatorInfo = validatorInfo' (PlutusScriptSerialised rolePayoutValidatorBytes) Nothing
 
 -- | Export to a file the role validator information about a Marlowe contract.
 exportRoleValidator
@@ -625,7 +621,7 @@ exportRoleValidator
   -- ^ Whether to print statistics about the validator.
   -> m ()
   -- ^ Action to export the validator information to a file.
-exportRoleValidator = exportValidatorImpl (TypedValidatorV2 rolePayoutValidator)
+exportRoleValidator = exportValidatorImpl rolePayoutValidatorBytes
 
 -- | Build the role datum information about a Marlowe transaction.
 buildRoleDatum

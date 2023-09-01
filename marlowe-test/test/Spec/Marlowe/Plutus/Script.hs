@@ -34,7 +34,12 @@ import Data.Bifunctor (Bifunctor (first))
 import Data.Maybe (fromJust)
 import Data.These (These (..))
 import Language.Marlowe.Core.V1.Semantics (MarloweData)
-import Language.Marlowe.Scripts (marloweValidator, marloweValidatorHash, rolePayoutValidator, rolePayoutValidatorHash)
+import Language.Marlowe.Scripts (
+  marloweValidatorBytes,
+  marloweValidatorHash,
+  rolePayoutValidatorBytes,
+  rolePayoutValidatorHash,
+ )
 import Paths_marlowe_cardano (getDataDir)
 import Plutus.ApiCommon (
   EvaluationContext,
@@ -45,32 +50,27 @@ import Plutus.ApiCommon (
   evaluateScriptCounting,
   mkEvaluationContext,
  )
-import Plutus.Script.Utils.Scripts (datumHash)
 import Plutus.V1.Ledger.Address (scriptHashAddress)
 import Plutus.V2.Ledger.Api (
   Address,
   CostModelParams,
   Data (..),
-  Datum (Datum),
-  DatumHash,
+  DatumHash (..),
   ExBudget (..),
   ExCPU (..),
   ExMemory (..),
   ScriptContext (..),
-  ToData (toBuiltinData),
   TokenName,
   TxInfo (..),
-  Validator (getValidator),
   ValidatorHash,
   fromData,
  )
 import System.FilePath ((<.>), (</>))
 import System.IO.Unsafe (unsafePerformIO)
 
-import qualified Data.ByteString.Lazy as LBS (toStrict, writeFile)
-import qualified Data.ByteString.Short as SBS (ShortByteString, toShort)
+import qualified Data.ByteString.Lazy as LBS (writeFile)
 import qualified Data.Map.Strict as M (fromList)
-import Plutus.Script.Utils.Typed (validatorScript)
+import Language.Marlowe.Util (dataHash)
 
 {-# NOINLINE unsafeDumpBenchmark #-}
 -- Dump data files for benchmarking Plutus execution cost.
@@ -132,7 +132,7 @@ evaluateSemantics
 evaluateSemantics datum redeemer context =
   case evaluationContext of
     Left message -> This message
-    Right ec -> case evaluateScriptCounting PlutusV2 (ProtocolVersion 8 0) Verbose ec serialiseSemanticsValidator [datum, redeemer, context] of
+    Right ec -> case evaluateScriptCounting PlutusV2 (ProtocolVersion 8 0) Verbose ec marloweValidatorBytes [datum, redeemer, context] of
       (logOutput, Right ex@ExBudget{..}) ->
         ( if dumpBenchmarks
             then unsafeDumpBenchmark "semantics" datum redeemer context ex
@@ -156,7 +156,7 @@ evaluatePayout
 evaluatePayout datum redeemer context =
   case evaluationContext of
     Left message -> This message
-    Right ec -> case evaluateScriptCounting PlutusV2 (ProtocolVersion 8 0) Verbose ec serialisePayoutValidator [datum, redeemer, context] of
+    Right ec -> case evaluateScriptCounting PlutusV2 (ProtocolVersion 8 0) Verbose ec rolePayoutValidatorBytes [datum, redeemer, context] of
       (logOutput, Right ex) ->
         ( if dumpBenchmarks
             then unsafeDumpBenchmark "rolepayout" datum redeemer context ex
@@ -165,16 +165,6 @@ evaluatePayout datum redeemer context =
           $ That logOutput
       (logOutput, Left message) -> These (show message) logOutput
 
--- | Serialize the Marlowe semantics validator.
-serialiseSemanticsValidator :: SBS.ShortByteString
-serialiseSemanticsValidator =
-  SBS.toShort
-    . LBS.toStrict
-    . serialise
-    . getValidator
-    . validatorScript
-    $ marloweValidator
-
 -- | Compute the address of the Marlowe semantics validator.
 semanticsAddress :: Address
 semanticsAddress = scriptHashAddress semanticsScriptHash
@@ -182,16 +172,6 @@ semanticsAddress = scriptHashAddress semanticsScriptHash
 -- | Compute the hash of the Marlowe semantics validator.
 semanticsScriptHash :: ValidatorHash
 semanticsScriptHash = marloweValidatorHash
-
--- | Serialize the Marlowe payout validator.
-serialisePayoutValidator :: SBS.ShortByteString
-serialisePayoutValidator =
-  SBS.toShort
-    . LBS.toStrict
-    . serialise
-    . getValidator
-    . validatorScript
-    $ rolePayoutValidator
 
 -- | Compute the address of the Marlowe payout validator.
 payoutAddress :: Address
@@ -205,13 +185,13 @@ payoutScriptHash = rolePayoutValidatorHash
 hashMarloweData
   :: MarloweData
   -> DatumHash
-hashMarloweData = datumHash . Datum . toBuiltinData
+hashMarloweData = DatumHash . dataHash
 
 -- | Compute the hash of a role token.
 hashRole
   :: TokenName
   -> DatumHash
-hashRole = datumHash . Datum . toBuiltinData
+hashRole = DatumHash . dataHash
 
 -- | Build an evaluation context.
 evaluationContext :: Either String EvaluationContext

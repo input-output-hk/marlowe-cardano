@@ -57,7 +57,6 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   getInputContent,
  )
 import Language.Marlowe.Scripts.Types (MarloweInput, MarloweTxInput (..))
-import Plutus.Script.Utils.Scripts (datumHash)
 import Plutus.V1.Ledger.Value (gt)
 import Plutus.V2.Ledger.Api (
   Address (Address),
@@ -112,6 +111,7 @@ import Test.Tasty.QuickCheck (Arbitrary (..), Gen, frequency, listOf, suchThat)
 
 import Control.Monad.Writer (runWriter)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M (Party (Address))
+import Language.Marlowe.Util (dataHash)
 import qualified Plutus.V1.Ledger.Value as V (adaSymbol, adaToken, singleton)
 import qualified PlutusTx.AssocMap as AM (fromList, toList)
 import Test.QuickCheck (shuffle)
@@ -178,7 +178,7 @@ makeScriptInput =
   do
     inValue <- inputState `uses` totalValue
     inDatum <- use datum
-    let inDatumHash = datumHash inDatum
+    let inDatumHash = DatumHash $ dataHash inDatum
     (,pure (inDatumHash, inDatum))
       . flip TxInInfo (TxOut semanticsAddress inValue (OutputDatumHash inDatumHash) Nothing)
       <$> lift arbitrary
@@ -230,7 +230,7 @@ makeScriptOutput =
     outState <- output `uses` txOutState
     outContract <- output `uses` txOutContract
     let outDatum = Datum . toBuiltinData $ MarloweData params outState outContract
-        outDatumHash = datumHash outDatum
+        outDatumHash = DatumHash $ dataHash outDatum
     pure $
       unzip
         [ ( TxOut semanticsAddress (totalValue outState) (OutputDatumHash outDatumHash) Nothing
@@ -259,7 +259,7 @@ makePayment _ payment@(Payment _ (Party (M.Address _ address)) _ _) =
 makePayment currencySymbol payment@(Payment _ (Party (Role role')) _ _) =
   do
     let roleDatum = Datum $ toBuiltinData (currencySymbol, role')
-        roleDatumHash = datumHash roleDatum
+        roleDatumHash = DatumHash $ dataHash roleDatum
     pure
       ( pure $ TxOut payoutAddress (paymentMoney payment) (OutputDatumHash roleDatumHash) Nothing
       , pure (roleDatumHash, roleDatum)
@@ -396,7 +396,7 @@ makePayoutIn =
   do
     txInInfoOutRef <- lift arbitrary
     inDatum <- ((Datum . toBuiltinData) .) . (,) <$> marloweParamsPayout `uses` rolesCurrency <*> use role
-    let inDatumHash = datumHash inDatum
+    let inDatumHash = DatumHash $ dataHash inDatum
     txInInfoResolved <- TxOut payoutAddress <$> use amount <*> pure (OutputDatumHash inDatumHash) <*> pure Nothing
     pure (TxInInfo{..}, (inDatumHash, inDatum))
 

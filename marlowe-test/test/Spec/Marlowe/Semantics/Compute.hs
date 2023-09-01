@@ -67,8 +67,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   getInputContent,
  )
 import Language.Marlowe.FindInputs (getAllInputs)
-import Plutus.Script.Utils.Scripts (datumHash)
-import Plutus.V2.Ledger.Api (CurrencySymbol, Datum (..), DatumHash (..), POSIXTime (..), TokenName, toBuiltinData)
+import Plutus.V2.Ledger.Api (CurrencySymbol, POSIXTime (..), TokenName, toBuiltinData)
 import Spec.Marlowe.Semantics.Arbitrary (
   Context,
   SemiArbitrary (semiArbitrary),
@@ -108,6 +107,7 @@ import Test.Tasty.QuickCheck (
  )
 
 import Control.Monad.Writer (runWriter)
+import Language.Marlowe.Util (dataHash)
 import qualified PlutusTx.AssocMap as AM
 
 -- | Record of choices.
@@ -300,7 +300,7 @@ simpleMerkleization =
     let interval = (POSIXTime intervalStart, POSIXTime intervalEnd)
     timeout <- (intervalEnd +) <$> arbitraryPositiveInteger
     contract <- When [] (POSIXTime timeout) <$> semiArbitrary context
-    let DatumHash hash = datumHash . Datum $ toBuiltinData contract
+    let hash = dataHash $ toBuiltinData contract
         mcInput = TransactionInput interval [MerkleizedInput INotify hash contract]
     mcContract <- When [MerkleizedCase (Notify TrueObs) hash] (POSIXTime timeout) <$> semiArbitrary context
     let mcOutput = computeTransaction mcInput mcState mcContract

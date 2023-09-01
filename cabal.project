@@ -49,7 +49,6 @@ packages:
   libs/plutus-ledger-aeson
   libs/plutus-ledger-ada
   libs/plutus-ledger-slot
-  libs/plutus-script-utils
 
 tests: True
 

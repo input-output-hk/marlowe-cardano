@@ -61,9 +61,12 @@ library
   build-depends:
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
+    , cardano-crypto-class
+    , flat
+    , lens
     , marlowe-cardano ==0.1.2.0
+    , plutus-core
     , plutus-ledger-api ==1.0.0.1
-    , plutus-script-utils ==1.2.0.0
     , plutus-tx ==1.0.0.0
     , plutus-tx-plugin ==1.0.0.0
     , serialise ^>=0.2.6

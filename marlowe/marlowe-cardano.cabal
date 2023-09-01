@@ -68,6 +68,7 @@ library
     , base16-aeson ==0.1.0.0
     , bech32 >=1.1 && <2
     , bytestring >=0.10.12 && <0.12
+    , cardano-api ==1.35.4
     , containers ^>=0.6.5
     , deriving-aeson ^>=0.2.9
     , ilist ==0.4.0.1
@@ -76,7 +77,6 @@ library
     , newtype-generics ^>=0.6.2
     , ordered-containers ^>=0.2
     , plutus-ledger-api ==1.0.0.1
-    , plutus-script-utils ==1.2.0.0
     , plutus-tx ==1.0.0.0
     , range ==0.3.0.2
     , sbv ^>=9.2
@@ -94,7 +94,6 @@ library
     Language.Marlowe.Analysis.Safety.Transaction
     Language.Marlowe.Analysis.Safety.Types
     Language.Marlowe.Client
-    Language.Marlowe.Client.History
     Language.Marlowe.Core.V1.Merkle
     Language.Marlowe.Core.V1.Next
     Language.Marlowe.Core.V1.Next.Applicables

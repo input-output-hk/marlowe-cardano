@@ -41,7 +41,6 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   State (accounts),
  )
 import Language.Marlowe.Scripts.Types (MarloweInput)
-import Plutus.Script.Utils.Scripts (datumHash)
 import Plutus.V1.Ledger.Address (toPubKeyHash)
 import Plutus.V1.Ledger.Value (flattenValue, valueOf)
 import Plutus.V2.Ledger.Api (
@@ -120,6 +119,7 @@ import Test.Tasty.QuickCheck (
 
 import qualified Language.Marlowe.Core.V1.Semantics as M (MarloweData (marloweParams))
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M (Party (Address), State (..))
+import Language.Marlowe.Util (dataHash)
 import qualified PlutusTx.AssocMap as AM (Map, fromList, insert, keys, null, toList)
 import qualified Test.Tasty.QuickCheck as Q (shuffle)
 
@@ -372,7 +372,7 @@ checkDoubleInput referencePaths =
         do
           -- Create a random datum.
           inDatum <- lift arbitrary
-          let inDatumHash = datumHash inDatum
+          let inDatumHash = DatumHash $ dataHash inDatum
           -- Create a random input to the script.
           inScript <-
             TxInInfo
@@ -533,7 +533,7 @@ checkDatumOutput referencePaths perturb =
           -- Find the existing Marlowe data output.
           marloweData <- MarloweData <$> use marloweParams <*> output `uses` txOutState <*> output `uses` txOutContract
           -- Compute its hash.
-          let outDatumHash = datumHash . Datum $ toBuiltinData marloweData
+          let outDatumHash = DatumHash $ dataHash marloweData
           -- Modify the original datum.
           outDatum' <- fmap (Datum . toBuiltinData) . lift $ perturb marloweData
           -- Let
@@ -589,7 +589,7 @@ checkContractOutput referencePaths =
   checkDatumOutput referencePaths $
     \marloweData ->
       do
-        -- Replace the output ccontact with a random one.
+        -- Replace the output contract with a random one.
         let old = marloweContract marloweData
         new <- arbitrary `suchThat` (/= old)
         pure $ marloweData{marloweContract = new}
@@ -604,7 +604,7 @@ hasMerkleizedInput =
 -- | Check than an invalid merkleization is rejected.
 checkMerkleization :: [ReferencePath] -> Bool -> Property
 checkMerkleization referencePaths valid =
-  let -- Merkleizedd the contract and its input.
+  let -- Merkleized the contract and its input.
       modifyBefore = merkleize
       -- Extract the merkle hash, if any.
       merkleHash (NormalInput _) = mempty
