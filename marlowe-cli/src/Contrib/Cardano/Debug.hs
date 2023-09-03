@@ -5,6 +5,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | A local copy of the cardano-cli `Contrib.Cardano.CLI.Run.Friendly`
@@ -51,10 +52,10 @@ import GHC.Real (numerator)
 yamlConfig :: Yaml.Config
 yamlConfig = Yaml.defConfig & setConfCompare compare
 
-friendlyTxBS :: (IsCardanoEra era) => CardanoEra era -> Tx era -> BSC.ByteString
+friendlyTxBS :: CardanoEra era -> Tx era -> BSC.ByteString
 friendlyTxBS era = Yaml.encodePretty yamlConfig . object . friendlyTx era
 
-friendlyTx :: (IsCardanoEra era) => CardanoEra era -> Tx era -> [Aeson.Pair]
+friendlyTx :: CardanoEra era -> Tx era -> [Aeson.Pair]
 friendlyTx era (Tx body witnesses) =
   ("witnesses" .= map friendlyKeyWitness witnesses) : friendlyTxBody era body
 
@@ -68,13 +69,12 @@ friendlyKeyWitness =
       ShelleyKeyWitness _era (Shelley.WitVKey key signature) ->
         ["key" .= textShow key, "signature" .= textShow signature]
 
-friendlyTxBodyBS
-  :: (IsCardanoEra era) => CardanoEra era -> TxBody era -> BSC.ByteString
+friendlyTxBodyBS :: CardanoEra era -> TxBody era -> BSC.ByteString
 friendlyTxBodyBS era =
   Yaml.encodePretty yamlConfig . object . friendlyTxBody era
 
 friendlyTxBody
-  :: (IsCardanoEra era) => CardanoEra era -> TxBody era -> [Aeson.Pair]
+  :: CardanoEra era -> TxBody era -> [Aeson.Pair]
 friendlyTxBody
   era
   ( TxBody
@@ -101,13 +101,22 @@ friendlyTxBody
     , "inputs" .= friendlyInputs txIns
     , "metadata" .= friendlyMetadata txMetadata
     , "mint" .= friendlyMintValue txMintValue
-    , "outputs" .= map friendlyTxOut txOuts
+    , "outputs" .= map (withCardanoEra era friendlyTxOut) txOuts
     , "required signers (payment key hashes needed for scripts)"
         .= friendlyExtraKeyWits txExtraKeyWits
     , "update proposal" .= friendlyUpdateProposal txUpdateProposal
     , "validity range" .= friendlyValidityRange era txValidityRange
     , "withdrawals" .= friendlyWithdrawals txWithdrawals
     ]
+
+withCardanoEra :: forall era a. CardanoEra era -> ((IsCardanoEra era) => a) -> a
+withCardanoEra = \case
+  ByronEra -> id
+  ShelleyEra -> id
+  AllegraEra -> id
+  MaryEra -> id
+  AlonzoEra -> id
+  BabbageEra -> id
 
 friendlyExtraKeyWits :: TxExtraKeyWitnesses era -> Aeson.Value
 friendlyExtraKeyWits = \case
@@ -164,7 +173,13 @@ friendlyStakeAddress (StakeAddress net cred) =
   , friendlyStakeCredential $ fromShelleyStakeCredential cred
   ]
 
-friendlyTxOut :: (IsCardanoEra era) => TxOut CtxTx era -> Aeson.Value
+--  data ByronEra
+--  data ShelleyEra
+--  data AllegraEra
+--  data MaryEra
+--  data AlonzoEra
+
+friendlyTxOut :: forall era. (IsCardanoEra era) => TxOut CtxTx era -> Aeson.Value
 friendlyTxOut (TxOut addr amount mdatum script) =
   object $
     case addr of

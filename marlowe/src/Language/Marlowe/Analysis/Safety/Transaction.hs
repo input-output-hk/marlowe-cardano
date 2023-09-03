@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  $Headers
@@ -8,19 +9,29 @@
 --
 -----------------------------------------------------------------------------
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE StrictData #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- | Safety analysis for Plutus transactions in Marlowe contracts.
 module Language.Marlowe.Analysis.Safety.Transaction (
   -- * Plutus Transactions
+  calcMarloweTxExBudget,
   executeTransaction,
   findTransactions,
   findTransactions',
   foldTransactionsM,
+  inputsRequiredRoles,
+  LockedRoles (..),
+  MarloweExBudget (..),
+  TxInSpec (..),
+  TxOutSpec (..),
+  UseReferenceInput (..),
+  ValidatorEvalContext (..),
 ) where
 
 import Control.Monad.Except (MonadError (throwError), MonadIO (..), foldM, liftEither, liftIO)
@@ -50,7 +61,6 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   Case (Case),
   ChoiceId (ChoiceId),
   Contract (..),
-  Input (MerkleizedInput),
   InputContent (IChoice, IDeposit),
   Party (Address, Role),
   Payee (Party),
@@ -63,10 +73,23 @@ import Language.Marlowe.FindInputs (getAllInputs)
 import Language.Marlowe.Scripts.Types (marloweTxInputsFromInputs)
 import Language.Marlowe.Util (dataHash)
 
+import Control.Monad (guard)
+import Control.Monad.State (MonadState (get), evalStateT)
+import Control.Monad.State.Class (MonadState (put))
+import Control.Monad.Trans.Maybe (MaybeT (..))
 import qualified Data.ByteString.Short as SBS (ShortByteString)
+import Data.Functor ((<&>))
+import qualified Data.List as L
+import qualified Data.Map.Strict as M
+import Data.Maybe (catMaybes)
+import Data.Traversable (for)
+import Language.Marlowe (Input (..))
 import qualified Plutus.ApiCommon as P (LedgerPlutusVersion (PlutusV2), evaluateScriptCounting)
 import qualified Plutus.V2.Ledger.Api as P hiding (evaluateScriptCounting)
 import qualified PlutusTx.AssocMap as AM
+import qualified PlutusTx.Builtins as P
+import qualified PlutusTx.Builtins.Class as P
+import Text.Printf (printf)
 
 -- | Execute a Marlowe transaction.
 executeTransaction
@@ -185,7 +208,7 @@ executeTransaction evaluationContext semanticsValidator semanticsAddress payoutA
               P.Address (P.PubKeyCredential pkh) _ -> pure pkh
               _ -> mempty
         txInfoRedeemers = AM.singleton scriptContextPurpose redeemer
-        txInfoData = AM.fromList $ ((,) =<< P.DatumHash . dataHash) <$> inDatum : outDatum <> outPaymentDatums <> merkleDatums
+        txInfoData = AM.fromList $ ((,) =<< P.DatumHash . dataHash) <$> nub (inDatum : outDatum <> outPaymentDatums <> merkleDatums)
         txInfoId = "2222222222222222222222222222222222222222222222222222222222222222"
         scriptContextTxInfo = P.TxInfo{..}
         scriptContextPurpose = P.Spending inScriptTxRef
@@ -193,6 +216,326 @@ executeTransaction evaluationContext semanticsValidator semanticsAddress payoutA
     case evaluateSemantics evaluationContext semanticsValidator (P.toData inDatum) (P.toData redeemer) (P.toData scriptContext) of
       (_, Right budget) -> pure budget
       (msg, Left err) -> throwError . fromString $ "Plutus execution failed: " <> show err <> " with log " <> show msg <> "."
+
+newtype UseReferenceInput = UseReferenceInput Bool
+  deriving (Eq, Show)
+
+newtype LockedRoles = LockedRoles [P.TokenName]
+  deriving (Eq, Show)
+
+data MarloweExBudget = MarloweExBudget
+  { mvbSemanticsValidator :: Maybe P.ExBudget
+  -- ^ The execution cost of the semantics validator.
+  , mvbOpenRoleValidator :: [P.ExBudget]
+  -- ^ The execution cost of the open role validator and the remaining locked role tokens.
+  }
+  deriving (Eq, Show)
+
+inputsRequiredRoles :: [Input] -> [P.TokenName]
+inputsRequiredRoles = foldMap (findRole . getInputContent)
+  where
+    findRole :: InputContent -> [P.TokenName]
+    findRole (IDeposit _ (Role role) _ _) = pure role
+    findRole (IChoice (ChoiceId _ (Role role)) _) = pure role
+    findRole _ = mempty
+
+-- | Execute a Marlowe transaction.
+calcMarloweTxExBudget
+  :: (IsString e)
+  => (MonadError e m)
+  => P.EvaluationContext
+  -- ^ The Plutus evaluation context.
+  -> (SBS.ShortByteString, P.Address, UseReferenceInput)
+  -- ^ The semantics validator and its address.
+  -> (SBS.ShortByteString, P.Address, UseReferenceInput, LockedRoles)
+  -- ^ The open role validator and its address.
+  -> P.Address
+  -- ^ The payout validator address.
+  -> MarloweParams
+  -- ^ The parameters for the Marlowe contract instance.
+  -> Transaction
+  -- ^ The transaction to be executed.
+  -> m MarloweExBudget
+calcMarloweTxExBudget
+  evaluationContext
+  (semanticsValidator, semanticsAddress, semanticsUseReferenceInput)
+  (openRoleValidator, openRoleAddress, openRoleUseReferenceInput, LockedRoles openRoleLockedTokens)
+  payoutAddress
+  marloweParams@MarloweParams{..}
+  (Transaction marloweState marloweContract TransactionInput{..} output) = flip evalStateT initSequence $ do
+    creatorAddress <- freshAddress
+    -- We only attend to details that make affect the *execution cost* of the script context,
+    -- so the corresponding transaction does not actually need to be valid.
+    (txOutState, txOutContract, txOutPayments) <-
+      case output of
+        TransactionOutput{..} -> pure (txOutState, txOutContract, txOutPayments)
+        Error e -> throwError . fromString $ show e
+    let semanticsName = ValidatorName "MarloweSemantics"
+        oneLovelace = P.singleton P.adaSymbol P.adaToken 1
+        inMarlowe = do
+          let tiAddress = semanticsAddress
+              tiDatum = Just $ P.Datum $ P.toBuiltinData MarloweData{..}
+              tiValue = totalBalance $ accounts marloweState
+              redeemer = P.Redeemer . P.toBuiltinData $ marloweTxInputsFromInputs txInputs
+              tiScriptEvaluationContext =
+                Just
+                  (semanticsName, semanticsValidator, redeemer, semanticsUseReferenceInput)
+          TxInSpec{..}
+
+        possibleOutMarlowe = do
+          datum <-
+            if txOutContract == Close
+              then Nothing
+              else pure . P.Datum . P.toBuiltinData $ MarloweData marloweParams txOutState txOutContract
+          let value = totalBalance $ accounts txOutState
+          pure $ TxOutSpec semanticsAddress value (Just datum)
+
+        makePayment (Payment _ (Party (Address _ address)) (Token currency name) amount) =
+          pure $ TxOutSpec address (P.singleton currency name amount) Nothing
+        makePayment (Payment _ (Party (Role role)) (Token currency name) amount) =
+          pure $
+            TxOutSpec payoutAddress (P.singleton currency name amount) (Just $ P.Datum $ P.toBuiltinData (rolesCurrency, role))
+        makePayment _ = mempty
+        outPayments = foldMap makePayment txOutPayments
+
+        requiredRoles = inputsRequiredRoles txInputs
+        (requiredUnlockedRoles, requiredLockedRoles) = L.partition (`elem` openRoleLockedTokens) requiredRoles
+
+        roleNFT = flip (P.singleton rolesCurrency) 1
+        inRoles = do
+          let tiAddress = openRoleAddress
+              tiDatum = Just $ P.Datum $ P.toBuiltinData P.emptyByteString
+              redeemer = P.Redeemer . P.toBuiltinData $ P.emptyByteString
+              ctx idx =
+                Just
+                  (ValidatorName ("OpenRole-" <> show idx), openRoleValidator, redeemer, openRoleUseReferenceInput)
+          [TxInSpec creatorAddress (roleNFT role <> oneLovelace) Nothing Nothing | role <- requiredUnlockedRoles]
+            <> [ TxInSpec{tiValue = tiValue, tiScriptEvaluationContext = ctx idx, ..}
+               | (role, idx) <- zip requiredLockedRoles [(1 :: Int) ..]
+               , let tiValue = roleNFT role <> oneLovelace
+               ]
+        outRoles = [TxOutSpec creatorAddress (roleNFT role) Nothing | role <- requiredRoles]
+
+        merkleDatums =
+          concat
+            [ case input of
+              MerkleizedInput _ _ contract -> pure . P.Datum $ P.toBuiltinData contract
+              NormalInput{} -> mempty
+            | input <- txInputs
+            ]
+        outMerkles =
+          [ TxOutSpec creatorAddress oneLovelace (Just datum)
+          | datum <- merkleDatums
+          ]
+
+    resultMap <-
+      calcValidatorsExBudget
+        evaluationContext
+        creatorAddress
+        (inMarlowe : inRoles)
+        (foldMap pure possibleOutMarlowe <> outRoles <> outPayments <> outMerkles)
+        txInterval
+        []
+        (ConsolidateTxOuts True)
+        (ProvideFunding True)
+
+    case (M.lookup semanticsName resultMap, M.elems $ M.delete semanticsName resultMap) of
+      (Just semanticsExBudget, openRoleBudgets) ->
+        pure $
+          MarloweExBudget
+            { mvbSemanticsValidator = Just semanticsExBudget
+            , mvbOpenRoleValidator = openRoleBudgets
+            }
+      _ -> throwError "Marlowe semantics validator failed to return execution cost"
+
+data TxInSpec = TxInSpec
+  { tiAddress :: P.Address
+  , tiValue :: P.Value
+  , tiDatum :: Maybe P.Datum
+  , tiScriptEvaluationContext :: Maybe (ValidatorName, SBS.ShortByteString, P.Redeemer, UseReferenceInput)
+  }
+
+data TxOutSpec = TxOutSpec
+  { toAddress :: P.Address
+  , toValue :: P.Value
+  , toDatum :: Maybe P.Datum
+  }
+
+-- | Used for detailed reporting
+newtype ValidatorName = ValidatorName String
+  deriving (Eq, Ord, Show, IsString)
+
+-- | Whether to merge together outputs with the same address.
+newtype ConsolidateTxOuts = ConsolidateTxOuts Bool
+
+-- | Whether to attach some funding txin and change output.
+newtype ProvideFunding = ProvideFunding Bool
+
+-- | Simple context for generating fresh addresses and txids.
+newtype Sequence = Sequence Int
+
+initSequence :: Sequence
+initSequence = Sequence 0
+
+freshInt :: (MonadState Sequence m) => m Int
+freshInt = do
+  Sequence i <- get
+  put $ Sequence $ i + 1
+  pure i
+
+freshPubKeyHash :: (MonadState Sequence m) => m P.PubKeyHash
+freshPubKeyHash = do
+  i <- freshInt
+  pure $ P.PubKeyHash $ P.stringToBuiltinByteString $ printf "%056d" i
+
+freshAddress :: (MonadState Sequence m) => m P.Address
+freshAddress = do
+  i <- freshPubKeyHash
+  j <- freshPubKeyHash
+  pure $ P.Address (P.PubKeyCredential i) $ Just $ P.StakingHash $ P.PubKeyCredential j
+
+freshTxId :: (MonadState Sequence m) => m P.TxId
+freshTxId = do
+  i <- freshInt
+  pure $ P.TxId $ P.stringToBuiltinByteString $ printf "%064d" i
+
+freshTxOutRef :: (MonadState Sequence m) => m P.TxOutRef
+freshTxOutRef = do
+  txId <- freshTxId
+  pure $ P.TxOutRef txId 0
+
+data ValidatorEvalContext = ValidatorEvalContext
+  { vecValidator :: SBS.ShortByteString
+  , vecInDatum :: P.Datum
+  , vecRedeemer :: P.Redeemer
+  , vecTxOutRef :: P.TxOutRef
+  -- ^ The reference is needed to set the spending script purpose correctly.
+  }
+
+calcValidatorExBudget
+  :: (IsString e)
+  => (MonadError e m)
+  => P.EvaluationContext
+  -- ^ The Plutus evaluation context.
+  -> P.ScriptContext
+  -- ^ The Plutus script context.
+  -> ValidatorEvalContext
+  -- ^ The validator to evaluate.
+  -> m P.ExBudget
+  -- ^ The execution cost.
+calcValidatorExBudget evaluationContext scriptContext (ValidatorEvalContext validator datum redeemer txOutRef) = do
+  let scriptPurpose = P.Spending txOutRef
+      scriptContext' = scriptContext{P.scriptContextPurpose = scriptPurpose}
+  case evaluateSemantics evaluationContext validator (P.toData datum) (P.toData redeemer) (P.toData scriptContext') of
+    (_, Right budget) -> pure budget
+    (msg, Left err) -> throwError . fromString $ "Plutus execution failed: " <> show err <> " with log " <> show msg <> "."
+
+calcValidatorsExBudget
+  :: (IsString e)
+  => (MonadError e m)
+  => (MonadState Sequence m)
+  => P.EvaluationContext
+  -- ^ The Plutus evaluation context.
+  -> P.Address
+  -- ^ The address of the creator of the transaction.
+  -> [TxInSpec]
+  -- ^ Inputs to the transaction. They possibly contain named spending validators which we want to evaluate.
+  -> [TxOutSpec]
+  -- ^ Scripts which we want to evaluate
+  -> (P.POSIXTime, P.POSIXTime)
+  -- ^ The validity interval of the transaction.
+  -> [P.PubKeyHash]
+  -- ^ Extra signatories to the transaction.
+  -> ConsolidateTxOuts
+  -- ^ Whether to merge together outputs with the same address.
+  -> ProvideFunding
+  -- ^ Whether to attach some funding txin and change output.
+  -> m (M.Map ValidatorName P.ExBudget)
+  -- ^ Action to execute the transaction and to return the new state and contract along with the execution cost.
+calcValidatorsExBudget evaluationContext creatorAddress txInSpecs txOutSpecs (invalidBefore, invalidHereafter) extraSignatories (ConsolidateTxOuts consolidate) (ProvideFunding provideFunding) = do
+  let oneLovelace = P.singleton P.adaSymbol P.adaToken 1
+      txInfoOutputs = do
+        let extraTxOuts = [P.TxOut creatorAddress oneLovelace P.NoOutputDatum Nothing | provideFunding]
+            parts' = do
+              let parts = txOutSpecs <&> \(TxOutSpec address value datum) -> ((address, datum), value)
+              if consolidate
+                then M.toList $ M.fromListWith (<>) parts
+                else parts
+            parts'' =
+              parts' <&> \((address, datum), value) -> do
+                let datum' = case datum of
+                      Nothing -> P.NoOutputDatum
+                      Just d -> P.OutputDatumHash $ P.datumHash d
+                P.TxOut address value datum' Nothing
+        extraTxOuts <> parts''
+
+  (txInfoInputs, validatorsEvalContext) <- do
+    extraTxIns <-
+      if provideFunding
+        then do
+          fundTxOutRef <- freshTxOutRef
+          let fundTxIn = P.TxInInfo fundTxOutRef (P.TxOut creatorAddress oneLovelace P.NoOutputDatum Nothing)
+          pure [fundTxIn]
+        else pure []
+    (txIns, validatorsEvalContext) <- do
+      unzip <$> for txInSpecs \(TxInSpec address value possibleDatum possibleScriptEvalContext) -> do
+        txOutRef <- freshTxOutRef
+        let datum' = case possibleDatum of
+              Nothing -> P.Datum $ P.toBuiltinData P.emptyByteString
+              Just d -> d
+            txIn = P.TxInInfo txOutRef (P.TxOut address value (P.OutputDatumHash $ P.datumHash datum') Nothing)
+            possibleValidatorContext = do
+              (name, validator, redeemer, _) <- possibleScriptEvalContext
+              let validatorEvalContext = ValidatorEvalContext validator datum' redeemer txOutRef
+              pure (name, validatorEvalContext)
+        pure (txIn, possibleValidatorContext)
+    pure (extraTxIns <> txIns, M.fromList $ catMaybes validatorsEvalContext)
+
+  txInfoReferenceInputs <-
+    catMaybes <$> for txInSpecs \(TxInSpec addr _ _ possibleScriptEvalContext) -> runMaybeT $ do
+      (_, _, _, UseReferenceInput useReferenceInput) <- MaybeT $ pure possibleScriptEvalContext
+      guard useReferenceInput
+      let toValidatorHash :: P.Address -> Maybe P.ValidatorHash
+          toValidatorHash (P.Address (P.ScriptCredential k) _) = Just k
+          toValidatorHash _ = Nothing
+          toScriptHash (P.ValidatorHash vh) = P.ScriptHash vh
+      MaybeT $ for (toScriptHash <$> toValidatorHash addr) \validatorHash -> do
+        referenceTxOutRef <- freshTxOutRef
+        pure $ P.TxInInfo referenceTxOutRef (P.TxOut creatorAddress oneLovelace P.NoOutputDatum (Just validatorHash))
+
+  txInfoId <- freshTxId
+  let txInfoRedeemers =
+        AM.fromList $
+          M.elems validatorsEvalContext <&> \(ValidatorEvalContext _ _ redeemer txOutRef) -> do
+            let purpose = P.Spending txOutRef
+            (purpose, redeemer)
+
+      txInfoValidRange =
+        P.Interval
+          (P.LowerBound (P.Finite invalidBefore) True)
+          (P.UpperBound (P.Finite invalidHereafter) True)
+      txInfoFee = oneLovelace
+      txInfoMint = mempty
+      txInfoDCert = mempty
+      txInfoWdrl = AM.empty
+      txInfoSignatories =
+        extraSignatories
+          <> case creatorAddress of
+            P.Address (P.PubKeyCredential pkh) _ -> pure pkh
+            _ -> mempty
+      txInfoData = do
+        let inDatums = catMaybes $ txInSpecs <&> \(TxInSpec _ _ datum _) -> datum
+            outDatums = catMaybes $ txOutSpecs <&> \(TxOutSpec _ _ datum) -> datum
+        AM.fromList $ ((,) =<< P.datumHash) <$> (nub $ inDatums <> outDatums)
+
+  scriptPurposePlaceholder <- P.Spending <$> freshTxOutRef
+  let scriptContextTxInfo = P.TxInfo{..}
+      scriptContext = P.ScriptContext{scriptContextPurpose = scriptPurposePlaceholder, ..}
+
+  pairs <- for (M.toList validatorsEvalContext) \(name, validatorEvalContext) -> do
+    exBudget <- calcValidatorExBudget evaluationContext scriptContext validatorEvalContext
+    pure (name, exBudget)
+  pure $ M.fromList pairs
 
 -- | Visit transactions along all execution paths of a a contract.
 foldTransactionsM

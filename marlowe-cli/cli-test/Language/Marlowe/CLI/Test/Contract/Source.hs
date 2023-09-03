@@ -32,8 +32,6 @@ import Language.Marlowe.CLI.Test.Operation.Aeson qualified as Operation
 import Language.Marlowe.CLI.Test.Wallet.Interpret (
   assetIdToToken,
   assetToPlutusValue,
-  findWallet,
-  findWalletByUniqueToken,
   getSingletonCurrency,
   getWallet,
   getWalletByUniqueToken,

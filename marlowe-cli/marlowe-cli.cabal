@@ -61,8 +61,12 @@ library
   hs-source-dirs:  src
   exposed-modules:
     Contrib.Cardano.Debug
+    Contrib.Cardano.TxBody
+    Contrib.Cardano.UTxO
     Contrib.Control.Concurrent
     Contrib.Data.Foldable
+    Contrib.Data.Time.Units
+    Contrib.Data.Time.Units.Aeson
     Language.Marlowe.Cardano
     Language.Marlowe.Cardano.Thread
     Language.Marlowe.CLI.Analyze
@@ -115,6 +119,7 @@ library
     , marlowe-scripts
     , memory
     , mtl
+    , one-line-aeson-text
     , ouroboros-consensus
     , ouroboros-network
     , parser-combinators
@@ -126,6 +131,7 @@ library
     , prettyprinter
     , scientific
     , serialise
+    , stm
     , text
     , time
     , time-units
@@ -146,7 +152,6 @@ library cli-test
     Contrib.Data.List
     Contrib.Data.List.Random
     Contrib.Data.Time.Clock
-    Contrib.Data.Time.Units.Aeson
     Contrib.Monad.Loops
     Contrib.UnliftIO.Async.Pool
     Contrib.UnliftIO.Control.Concurrent
@@ -161,6 +166,8 @@ library cli-test
     Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON
     Language.Marlowe.CLI.Test.Contract.Source
     Language.Marlowe.CLI.Test.ExecutionMode
+    Language.Marlowe.CLI.Test.ExecutionMode.ExecutionMode
+    Language.Marlowe.CLI.Test.ExecutionMode.TrackedUTxOs
     Language.Marlowe.CLI.Test.Interpret
     Language.Marlowe.CLI.Test.InterpreterError
     Language.Marlowe.CLI.Test.Log

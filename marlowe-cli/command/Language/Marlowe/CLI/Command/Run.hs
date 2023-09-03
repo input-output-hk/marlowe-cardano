@@ -62,6 +62,7 @@ import Language.Marlowe.CLI.Types (
   CliError,
   PrintStats (PrintStats),
   PublishingStrategy,
+  QueryExecutionContext (..),
   SigningKeyFile,
   TxBodyFile,
  )
@@ -280,7 +281,7 @@ runRunCommand command =
     case command of
       Initialize{..} -> do
         slotConfig <- querySlotConfig connection
-        protocolVersion <- getProtocolVersion connection
+        protocolVersion <- getProtocolVersion (QueryNode connection)
         initializeTransaction
           connection
           marloweParams'

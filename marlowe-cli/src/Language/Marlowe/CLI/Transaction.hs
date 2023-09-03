@@ -18,7 +18,6 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE ViewPatterns #-}
 
 -- | Submitting Marlowe transactions.
 module Language.Marlowe.CLI.Transaction (
@@ -43,6 +42,7 @@ module Language.Marlowe.CLI.Transaction (
 
   -- * Submitting
   submit,
+  submitBody,
 
   -- * Quering
   findMarloweScriptsRefs,
@@ -62,8 +62,6 @@ module Language.Marlowe.CLI.Transaction (
   queryUtxos,
   selectUtxos,
   selectUtxosImpl,
-  submitBody,
-  submitBody',
 
   -- * Balancing
   ensureMinUtxo,
@@ -107,7 +105,6 @@ import Cardano.Api (
   ScriptWitness (..),
   ScriptWitnessInCtx (..),
   ShelleyBasedEra (..),
-  ShelleyWitnessSigningKey (..),
   SimpleScript (..),
   SimpleScriptV2,
   SimpleScriptVersion (..),
@@ -124,10 +121,8 @@ import Cardano.Api (
   TxFee (..),
   TxId,
   TxIn (..),
-  TxInMode (..),
   TxInsCollateral (..),
   TxInsReference (TxInsReferenceNone),
-  TxIx (..),
   TxMetadataInEra (..),
   TxMetadataJsonSchema (TxMetadataJsonNoSchema),
   TxMintValue (..),
@@ -163,8 +158,6 @@ import Cardano.Api (
   serialiseToCBOR,
   serialiseToRawBytesHex,
   shelleyBasedEra,
-  signShelleyTransaction,
-  submitTxToNodeLocal,
   toScriptInAnyLang,
   txOutValueToValue,
   valueFromList,
@@ -190,12 +183,13 @@ import Cardano.Api.Shelley qualified as C
 import Cardano.Ledger.Alonzo.Scripts (ExUnits (..))
 import Cardano.Ledger.Alonzo.TxWitness (Redeemers (..))
 import Cardano.Slotting.EpochInfo.API (epochInfoRange, epochInfoSlotToUTCTime, hoistEpochInfo)
-import Contrib.Control.Concurrent (threadDelay)
-import Contrib.Data.Foldable (foldMapFlipped, foldlMFlipped, tillFirstMatch)
+import Contrib.Cardano.Debug qualified as C.Debug
+import Contrib.Cardano.UTxO qualified as U
+import Contrib.Data.Foldable (foldMapFlipped, tillFirstMatch)
 import Control.Arrow ((***))
-import Control.Error (MaybeT (MaybeT, runMaybeT), hoistMaybe, note)
-import Control.Monad (forM, forM_, unless, void, when)
-import Control.Monad.Except (MonadError (catchError), MonadIO, liftEither, liftIO, runExcept, throwError)
+import Control.Error (MaybeT (MaybeT, runMaybeT), hoistMaybe, mapMaybe, note)
+import Control.Monad (forM, unless, void, when)
+import Control.Monad.Except (MonadError, MonadIO, liftEither, liftIO, runExcept, throwError)
 import Control.Monad.Reader (MonadReader)
 import Control.Monad.Trans (lift)
 import Data.Aeson (ToJSON (toJSON))
@@ -203,32 +197,32 @@ import Data.Aeson qualified as A (Value (Null, Object), object)
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Aeson.Key
 import Data.Aeson.KeyMap qualified as KeyMap
+import Data.Aeson.OneLine qualified as A
 import Data.ByteString qualified as BS (length)
 import Data.ByteString.Char8 qualified as BS8 (unpack)
 import Data.Fixed (div')
 import Data.Foldable (Foldable (fold), for_)
 import Data.Function (on)
-import Data.Functor (($>), (<&>))
+import Data.Functor ((<&>))
 import Data.List (delete, minimumBy, partition)
 import Data.List.Extra (notNull)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.List.NonEmpty qualified as NonEmpty
 import Data.Map.Append qualified as AM
-import Data.Map.Strict qualified as M (elems, fromList, keysSet, lookup, singleton, toList)
+import Data.Map.Strict qualified as M (elems, fromList, lookup, singleton, toList)
 import Data.Map.Strict qualified as Map
-import Data.Maybe (catMaybes, fromMaybe, isNothing, maybeToList)
+import Data.Maybe (catMaybes, fromMaybe, isNothing, listToMaybe, maybeToList)
 import Data.Ratio ((%))
 import Data.Set qualified as S (empty, fromList, singleton)
 import Data.Text qualified as T
 import Data.Time.Clock (nominalDiffTimeToSeconds)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
-import Data.Time.Units (Second, TimeUnit (toMicroseconds))
+import Data.Time.Units (Second)
 import Data.Traversable (for)
 import Data.Tuple.Extra (uncurry3)
 import GHC.Natural (Natural)
 import Language.Marlowe.CLI.Cardano.Api (
   adjustMinimumUTxO,
-  toPlutusProtocolVersion,
   toReferenceTxInsScriptsInlineDatumsSupportedInEra,
   txOutValueValue,
  )
@@ -239,14 +233,22 @@ import Language.Marlowe.CLI.Export (buildValidatorInfo)
 import Language.Marlowe.CLI.IO (
   decodeFileBuiltinData,
   decodeFileStrict,
-  getDefaultCostModel,
+  getEraHistory,
+  getPV2CostModelParams,
+  getProtocolParams,
+  getProtocolVersion,
+  getSystemStart,
   liftCli,
   liftCliIO,
   liftCliMaybe,
   maybeWriteJson,
+  queryByAddress,
   queryInEra,
+  queryUTxOs,
   readMaybeMetadata,
   readSigningKey,
+  submitTxBody,
+  submitTxBody',
  )
 import Language.Marlowe.CLI.Types (
   AnUTxO (AnUTxO),
@@ -262,26 +264,29 @@ import Language.Marlowe.CLI.Types (
   PayFromScript (..),
   PayToScript (..),
   PrintStats (PrintStats),
-  PublishMarloweScripts (PublishMarloweScripts),
-  PublishScript (..),
   PublishingStrategy (..),
+  QueryExecutionContext (..),
   SigningKeyFile,
   SomePaymentSigningKey,
-  SubmitMode (DoSubmit, DontSubmit),
+  SubmitMode (DoSubmit),
   TokensRecipient (..),
   TxBodyFile (TxBodyFile),
+  TxBuildupContext (..),
   ValidatorInfo (ValidatorInfo, viHash, viScript),
   askEra,
   asksEra,
   defaultCoinSelectionStrategy,
   doWithCardanoEra,
-  submitModeFromTimeout,
+  mkNodeTxBuildup,
+  queryContextNetworkId,
   toAddressAny',
   toAsType,
+  toCardanoEra,
   toCollateralSupportedInEra,
   toEraInMode,
   toExtraKeyWitnessesSupportedInEra,
   toMultiAssetSupportedInEra,
+  toQueryContext,
   toSimpleScriptV2LanguageInEra,
   toTxFeesExplicitInEra,
   toTxMetadataSupportedInEra,
@@ -297,11 +302,10 @@ import Language.Marlowe.CLI.Types qualified as PayToScript (PayToScript (value))
 import Language.Marlowe.Scripts (marloweValidatorBytes, rolePayoutValidatorBytes, marloweValidator, rolePayoutValidator)
 import Language.Marlowe.Scripts.OpenRole (openRoleValidator)
 import Ouroboros.Consensus.HardFork.History (interpreterToEpochInfo)
-import Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult (..))
 import Plutus.V1.Ledger.Api (Datum (..), POSIXTime (..), Redeemer (..), TokenName (..), fromBuiltin, toData)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
 import Plutus.V2.Ledger.Api (fromData)
-import System.IO (hPrint, hPutStrLn, stderr)
+import System.IO (hPutStrLn, stderr)
 
 -- | Build a non-Marlowe transaction.
 buildSimple
@@ -309,7 +313,7 @@ buildSimple
    . (MonadError CliError m)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
-  => LocalNodeConnectInfo CardanoMode
+  => TxBuildupContext era
   -- ^ The connection info for the local node.
   -> [SigningKeyFile]
   -- ^ The files for required signing keys.
@@ -323,22 +327,21 @@ buildSimple
   -- ^ The file containing JSON metadata, if any.
   -> TxBodyFile
   -- ^ The output file for the transaction body.
-  -> Maybe Second
-  -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
   -> Bool
   -- ^ Whether to print statistics about the transaction.
   -> Bool
   -- ^ Assertion that the transaction is invalid.
   -> m TxId
   -- ^ Action to build the transaction body.
-buildSimple connection signingKeyFiles inputs outputs changeAddress metadataFile (TxBodyFile bodyFile) timeout printStats invalid =
+buildSimple txBuildupCtx signingKeyFiles inputs outputs changeAddress metadataFile (TxBodyFile bodyFile) printStats invalid =
   do
     metadata <- readMaybeMetadata metadataFile
     signingKeys <- mapM readSigningKey signingKeyFiles
     outputs' <- mapM (uncurry3 makeTxOut') outputs
+    let queryCtx = toQueryContext txBuildupCtx
     body <-
       buildBody
-        connection
+        queryCtx
         ([] :: [PayFromScript C.PlutusScriptV1])
         Nothing
         []
@@ -353,12 +356,7 @@ buildSimple connection signingKeyFiles inputs outputs changeAddress metadataFile
         printStats
         invalid
     doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
-    forM_ timeout $
-      if invalid
-        then const $ throwError "Refusing to submit an invalid transaction: collateral would be lost."
-        else submitBody connection body signingKeys
-    pure $
-      getTxId body
+    submitBody txBuildupCtx body signingKeys invalid
 
 -- | Build a non-Marlowe transaction that cleans an address.
 buildClean
@@ -411,7 +409,7 @@ buildClean connection signingKeyFiles lovelace changeAddress range mintValue met
 
     body <-
       buildBody
-        connection
+        (QueryNode connection)
         ([] :: [PayFromScript C.PlutusScriptV1])
         Nothing
         []
@@ -426,10 +424,8 @@ buildClean connection signingKeyFiles lovelace changeAddress range mintValue met
         False
         False
     doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
-    forM_ timeout $
-      submitBody connection body signingKeys
-    pure $
-      getTxId body
+    let txBuildupCtx = mkNodeTxBuildup connection timeout
+    submitTxBody txBuildupCtx body signingKeys
 
 -- | Build a non-Marlowe transaction that fills and address from a faucet.
 buildFaucet
@@ -456,13 +452,12 @@ buildFaucet connection possibleValue destAddresses fundAddress fundSigningKeyFil
     fundSigningKey <- readSigningKey fundSigningKeyFile
     body <-
       buildFaucetImpl
-        connection
+        (mkNodeTxBuildup connection timeout)
         (singleton <$> possibleValue)
         destAddresses
         fundAddress
         fundSigningKey
         defaultCoinSelectionStrategy
-        (submitModeFromTimeout timeout)
     pure $
       getTxId body
 
@@ -471,8 +466,8 @@ buildFaucetImpl
   :: (MonadError CliError m)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
-  => LocalNodeConnectInfo CardanoMode
-  -- ^ The connection info for the local node.
+  => TxBuildupContext era
+  -- ^ The connection info for the local node or pure context for tx buildup.
   -> Maybe [Value]
   -- ^ The list of values to be sent to the funded addresses as separate outputs.
   -> [AddressInEra era]
@@ -482,27 +477,28 @@ buildFaucetImpl
   -> SomePaymentSigningKey
   -- ^ The required signing key.
   -> CoinSelectionStrategy
-  -> SubmitMode
-  -- ^ A possible number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
+  -- ^ Instruction which utxos to preserve.
   -> m (TxBody era)
   -- ^ Action to build the transaction body.
-buildFaucetImpl connection possibleValues destAddresses fundAddress fundSigningKey coinSelectionStrategy submitMode =
+buildFaucetImpl txBuildupCtx possibleValues destAddresses fundAddress fundSigningKey coinSelectionStrategy =
   do
+    let queryCtx = toQueryContext txBuildupCtx
+    utxos <- queryByAddress queryCtx fundAddress
+    let utxosList = U.toList utxos
     (inputs, outputs', changeAddress) <- case (possibleValues, destAddresses) of
       (Nothing, [destAddress]) -> do
-        C.UTxO (Map.toList -> utxos) <- queryUtxos connection fundAddress
-        let total = foldMap (txOutValueValue . snd) utxos
+        let total = foldMap (txOutValueValue . snd) utxosList
             nonAda = total <> negateValue (C.lovelaceToValue . C.selectLovelace $ total)
 
         outputs <-
           if nonAda /= mempty
             then do
               era <- askEra
-              protocol <- queryInEra connection QueryProtocolParameters
+              protocol <- getProtocolParams queryCtx
               txOut <- makeBalancedTxOut era protocol destAddress Nothing nonAda ReferenceScriptNone
               pure [txOut]
             else pure []
-        pure (map fst utxos, outputs, destAddress)
+        pure (map fst utxosList, outputs, destAddress)
       (Nothing, _) -> do
         throwError "Total value transfer is only supported to a single destination."
       (Just values, _) -> do
@@ -512,7 +508,7 @@ buildFaucetImpl connection possibleValues destAddresses fundAddress fundSigningK
 
         (_, i, o) <-
           selectCoins
-            connection
+            queryCtx
             mempty
             outputs
             Nothing
@@ -521,9 +517,13 @@ buildFaucetImpl connection possibleValues destAddresses fundAddress fundSigningK
             Nothing
         pure (i, o, fundAddress)
 
+    liftIO $ hPutStrLn stderr "buildFaucetImpl: "
+    liftIO $ hPutStrLn stderr $ "Inputs: " <> show inputs
+    liftIO $ hPutStrLn stderr $ "utxos: " <> show utxos
+
     body <-
       buildBody
-        connection
+        queryCtx
         ([] :: [PayFromScript C.PlutusScriptV1])
         Nothing
         []
@@ -537,9 +537,7 @@ buildFaucetImpl connection possibleValues destAddresses fundAddress fundSigningK
         TxMetadataNone
         False
         False
-    case submitMode of
-      DoSubmit timeout -> void $ submitBody connection body [fundSigningKey] timeout
-      DontSubmit -> pure ()
+    void $ submitTxBody txBuildupCtx body [fundSigningKey]
     pure body
 
 -- | Build a non-Marlowe transaction that fills and address from a faucet.
@@ -592,7 +590,7 @@ buildFaucet' connection value addresses (TxBodyFile bodyFile) timeout =
           : [(fundedAddress, Nothing, value) | fundedAddress <- addresses]
     body <-
       buildBody
-        connection
+        (QueryNode connection)
         ([] :: [PayFromScript C.PlutusScriptV1])
         Nothing
         inputs
@@ -607,10 +605,8 @@ buildFaucet' connection value addresses (TxBodyFile bodyFile) timeout =
         False
         False
     withCardanoEra era $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
-    forM_ timeout $
-      submitBody connection body []
-    pure $
-      getTxId body
+    let txBuildupCtx = mkNodeTxBuildup connection timeout
+    submitTxBody txBuildupCtx body []
 
 -- | Build and submit a non-Marlowe transaction that mints tokens
 -- | using files as a data exchange medium.
@@ -654,21 +650,17 @@ buildMinting connection signingKeyFile mintingAction metadataFile expires change
     Left _ -> do
       throwError "Token provider set is empty."
     Right tokenDistribution -> do
--- MERGING
--- <<<<<<< HEAD
       -- Simplified version of the token distribution, where all tokens are minted at once.
-      pure $ Mint currencyIssuer $ tokenDistribution <&> \(name, amount, addr) -> (addr, Nothing, [(name, amount)])
--- =======
---       pure $
---         Mint currencyIssuer $
---           tokenDistribution <&> \(name, amount, addr) -> (name, amount, RegularAddressRecipient addr, Nothing)
--- >>>>>>> 27b967b02 (Fully integarte open roles into the testing DSL with full e2e scenario.)
+      pure $
+        Mint currencyIssuer $
+          tokenDistribution <&> \(name, amount, addr) ->
+            (RegularAddressRecipient addr, Nothing, [(name, amount)])
   metadataJson <- sequence $ decodeFileStrict <$> metadataFile
   metadata <- forM metadataJson \case
     A.Object metadataProps -> pure metadataProps
     _ -> throwError "Metadata should file should contain a json object"
-  let submitMode = submitModeFromTimeout timeout
-  (body, policy) <- buildMintingImpl connection mintingAction' metadata expires submitMode (PrintStats True)
+  let txBuildupCtx = mkNodeTxBuildup connection timeout
+  (body, policy) <- buildMintingImpl txBuildupCtx mintingAction' metadata expires (PrintStats True)
   doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
   liftIO . putStrLn $ read . show . unPolicyId $ policy
 
@@ -680,7 +672,7 @@ buildMintingImpl
   :: (MonadError CliError m)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
-  => LocalNodeConnectInfo CardanoMode
+  => TxBuildupContext era
   -- ^ The connection info for the local node.
   -> MintingAction era
   -- ^ The token names, amount and a possible receipient addresses.
@@ -688,15 +680,15 @@ buildMintingImpl
   -- ^ The CIP-25 metadata for the minting, with keys for each token name.
   -> Maybe SlotNo
   -- ^ The slot number after which minting is no longer possible.
-  -> SubmitMode
-  -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
   -> PrintStats
+  -- ^ Whether to print stats about the transaction.
   -> m (TxBody era, PolicyId)
   -- ^ Action to build the transaction body.
-buildMintingImpl connection mintingAction metadataProps expires submitMode (PrintStats printStats) =
+buildMintingImpl txBuildupCtx mintingAction metadataProps expires (PrintStats printStats) =
   do
+    let queryCtx = toQueryContext txBuildupCtx
     era <- askEra
-    protocol <- queryInEra connection QueryProtocolParameters
+    protocol <- getProtocolParams queryCtx
     let CurrencyIssuer changeAddress signingKey = maIssuer mintingAction
         verification =
           verificationKeyHash $
@@ -716,13 +708,7 @@ buildMintingImpl connection mintingAction metadataProps expires submitMode (Prin
                 (recipient, value, minAda)
 
         -- TODO: use sensible coin selection here. Currently coin selection fails in the context of minting.
-        utxos <-
-          fmap (M.toList . unUTxO)
-            . queryInEra connection
-            . QueryUTxO
-            . QueryUTxOByAddress
-            . S.singleton
-            $ toAddressAny' changeAddress
+        utxos <- fmap (M.toList . unUTxO) $ queryByAddress queryCtx changeAddress
 
         assetsOutputs <- fmap catMaybes $ for utxos \(_, TxOut addr txOutValue _ _) -> do
           let value = C.txOutValueToValue txOutValue
@@ -751,11 +737,10 @@ buildMintingImpl connection mintingAction metadataProps expires submitMode (Prin
 
         allUtxos <-
           fmap (M.toList . unUTxO)
-            . queryInEra connection
-            . QueryUTxO
-            . QueryUTxOByAddress
-            . S.fromList
-            . fmap toAddressAny'
+            $ queryUTxOs queryCtx
+            $ QueryUTxOByAddress
+              . S.fromList
+              . fmap toAddressAny'
             $ addresses
 
         (inputs', tokensValueList, changes) <- fmap (unzip3 . catMaybes) $ for allUtxos \(txIn, TxOut addr txOutValue _ refScript) -> do
@@ -815,7 +800,7 @@ buildMintingImpl connection mintingAction metadataProps expires submitMode (Prin
 
     (bodyContent, body) <-
       buildBodyWithContent
-        connection
+        queryCtx
         ([] :: [PayFromScript C.PlutusScriptV1])
         Nothing
         []
@@ -831,12 +816,7 @@ buildMintingImpl connection mintingAction metadataProps expires submitMode (Prin
         False
         Nothing
 
-    body' <- case submitMode of
-      DontSubmit -> pure body
-      DoSubmit t -> do
-        -- We attempt to increase fees by arbitrary amount on submission failure.
-        submitBody' connection body bodyContent changeAddress signingKeys t $> body
-
+    (_, body') <- submitTxBody' txBuildupCtx body bodyContent changeAddress signingKeys
     pure (body', policy)
 
 -- | Create a minting script.
@@ -903,7 +883,7 @@ buildIncoming connection scriptAddress signingKeyFiles outputDatumFile outputVal
     outputs' <- mapM (uncurry3 makeTxOut') outputs
     body <-
       buildBody
-        connection
+        (QueryNode connection)
         ([] :: [PayFromScript C.PlutusScriptV1])
         (Just $ buildPayToScript scriptAddress outputValue outputDatum)
         []
@@ -918,12 +898,8 @@ buildIncoming connection scriptAddress signingKeyFiles outputDatumFile outputVal
         printStats
         invalid
     doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
-    forM_ timeout $
-      if invalid
-        then const $ throwError "Refusing to submit an invalid transaction: collateral would be lost."
-        else submitBody connection body signingKeys
-    pure $
-      getTxId body
+    let txBuildupCtx = mkNodeTxBuildup connection timeout
+    submitBody txBuildupCtx body signingKeys invalid
 
 buildReferenceScript
   :: forall era lang m
@@ -956,23 +932,30 @@ publisherAddress scriptHash publishingStrategy era network = case publishingStra
     let paymentCredentials = permanentPublisher scriptHash
     withShelleyBasedEra era $ makeShelleyAddressInEra network paymentCredentials stake
 
-buildPublishScript
+-- | Information required to publish a script
+type ScriptPublishingInfo lang era =
+  ( Lovelace
+  , AddressInEra era
+  , ValidatorInfo lang era
+  )
+
+buildScriptPublishingInfo
   :: forall lang era m
    . (MonadIO m)
   => (MonadError CliError m)
   => (C.IsShelleyBasedEra era)
   => (MonadReader (CliEnv era) m)
   => (IsPlutusScriptLanguage lang)
-  => LocalNodeConnectInfo CardanoMode
+  => QueryExecutionContext era
   -> PlutusScript lang
   -> PublishingStrategy era
-  -> m (PublishScript lang era)
-buildPublishScript connection plutusScript publishingStrategy = do
+  -> m (ScriptPublishingInfo lang era)
+buildScriptPublishingInfo queryCtx plutusScript publishingStrategy = do
   era <- askEra
-  protocol <- queryInEra connection QueryProtocolParameters
-  costModel <- getDefaultCostModel
-  let protocolVersion = toPlutusProtocolVersion $ protocolParamProtocolVersion protocol
-      networkId = localNodeNetworkId connection
+  protocol <- getProtocolParams queryCtx
+  protocolVersion <- getProtocolVersion queryCtx
+  costModel <- getPV2CostModelParams queryCtx
+  let networkId = queryContextNetworkId queryCtx
       scriptHash = hashScript . PS.toScript $ plutusScript
       publisher = publisherAddress scriptHash publishingStrategy era networkId
 
@@ -981,7 +964,7 @@ buildPublishScript connection plutusScript publishingStrategy = do
   referenceScript <- buildReferenceScript plutusScript
 
   (minAda, _) <- liftCli $ adjustMinimumUTxO era protocol publisher Nothing mempty referenceScript
-  pure $ PublishScript minAda publisher referenceScriptInfo
+  pure (minAda, publisher, referenceScriptInfo)
 
 buildPublishingImpl
   :: forall lang era m
@@ -990,8 +973,8 @@ buildPublishingImpl
   => (MonadReader (CliEnv era) m)
   => (C.IsShelleyBasedEra era)
   => (IsPlutusScriptLanguage lang)
-  => LocalNodeConnectInfo CardanoMode
-  -- ^ The connection info for the local node.
+  => TxBuildupContext era
+  -- ^ The connection info for the local node or pure tx buildup context.
   -> SomePaymentSigningKey
   -- ^ The file for required signing key.
   -> Maybe SlotNo
@@ -1001,108 +984,143 @@ buildPublishingImpl
   -> PublishingStrategy era
   -> CoinSelectionStrategy
   -> PrintStats
-  -> m ([TxBody era], PublishMarloweScripts lang era)
-buildPublishingImpl connection signingKey expires changeAddress publishingStrategy coinSelectionStrategy (PrintStats printStats) = case plutusScriptVersion @lang of
+  -> m ([TxBody era], MarloweScriptsRefs lang era)
+buildPublishingImpl buildupCtx signingKey expires changeAddress publishingStrategy coinSelectionStrategy (PrintStats printStats) = case plutusScriptVersion @lang of
   PlutusScriptV1 -> throwError "Plutus Script V1 not supported"
   PlutusScriptV2 -> do
-    pm <- buildPublishScript @lang connection (fromV2TypedValidator marloweValidator) publishingStrategy
-    pp <- buildPublishScript @lang connection (fromV2TypedValidator rolePayoutValidator) publishingStrategy
-    po <- buildPublishScript @lang connection (fromV2Validator openRoleValidator) publishingStrategy
+    let queryCtx = toQueryContext buildupCtx
+    pm <- buildScriptPublishingInfo @lang queryCtx (fromV2TypedValidator marloweValidator) publishingStrategy
+    pp <- buildScriptPublishingInfo @lang queryCtx (fromV2TypedValidator rolePayoutValidator) publishingStrategy
+    po <- buildScriptPublishingInfo @lang queryCtx (fromV2Validator openRoleValidator) publishingStrategy
 
-    let buildPublishScriptTxOut PublishScript{psMinAda, psPublisher, psReferenceValidator} = do
-          referenceScript <- buildReferenceScript $ viScript psReferenceValidator
-          makeTxOut psPublisher Nothing (lovelaceToValue psMinAda) referenceScript
+    let buildPublishedScriptTxOut (minAda, publisher, referenceValidator) = do
+          referenceScript <- buildReferenceScript $ viScript referenceValidator
+          makeTxOut publisher Nothing (lovelaceToValue minAda) referenceScript
 
-    initialUTxOs <-
-      queryInEra connection
-        . QueryUTxO
-        . QueryUTxOByAddress
-        . S.singleton
-        $ toAddressAny' changeAddress
+    initialUTxOs <- queryByAddress queryCtx changeAddress
 
-    let initial :: (UTxO era, [TxBody era])
-        initial = (initialUTxOs, [])
+    let publish utxos publishScripts = do
+          outputs <- for publishScripts buildPublishedScriptTxOut
+          (_, inputs, outputs') <-
+            selectCoins
+              queryCtx
+              mempty
+              outputs
+              Nothing
+              changeAddress
+              coinSelectionStrategy
+              (Just utxos)
 
-    -- TODO: we should publish only scripts which are not present already on the chain for a given address/strategy
-    txBodies <- fmap (reverse . snd) $ foldlMFlipped initial [[pm, pp], [po]] \(utxos, txBodies) publishScripts -> do
-      outputs <- for publishScripts buildPublishScriptTxOut
-      (_, inputs, outputs') <-
-        selectCoins
-          connection
-          mempty
-          outputs
-          Nothing
-          changeAddress
-          coinSelectionStrategy
-          (Just utxos)
+          (txBodyContent, txBody) <-
+            buildBodyWithContent
+              queryCtx
+              ([] :: [PayFromScript lang])
+              Nothing
+              []
+              inputs
+              outputs'
+              Nothing
+              changeAddress
+              ((0,) <$> expires)
+              [hashSigningKey signingKey]
+              TxMintNone
+              TxMetadataNone
+              printStats
+              False
+              (Just utxos)
 
-      (txBodyContent, txBody) <-
-        buildBodyWithContent
-          connection
-          ([] :: [PayFromScript lang])
-          Nothing
-          []
-          inputs
-          outputs'
-          Nothing
-          changeAddress
-          ((0,) <$> expires)
-          [hashSigningKey signingKey]
-          TxMintNone
-          TxMetadataNone
-          printStats
-          False
-          (Just utxos)
+          -- We track utxo set which we operate on so we can construct
+          -- the next transaction.
+          let TxBodyContent{txIns, txInsCollateral, txOuts} = txBodyContent
+              txIns' = do
+                let collateralTxIns = case txInsCollateral of
+                      TxInsCollateralNone -> []
+                      TxInsCollateral _ txInsCollateral' -> txInsCollateral'
+                collateralTxIns <> (fst <$> txIns)
+              txId = C.getTxId txBody
+              newUtxos = Map.fromList $ foldMapFlipped (zip [0 ..] txOuts) \(idx, txOut@(C.TxOut addr _ _ _)) ->
+                [(C.TxIn txId (C.TxIx idx), C.toCtxUTxOTxOut txOut) | addr == changeAddress]
+              utxos' = unUTxO utxos `Map.withoutKeys` S.fromList txIns' <> newUtxos
+          pure (UTxO utxos', txBody)
 
-      let TxBodyContent{txIns, txInsCollateral, txOuts} = txBodyContent
-          txIns' = do
-            let collateralTxIns = case txInsCollateral of
-                  TxInsCollateralNone -> []
-                  TxInsCollateral _ txInsCollateral' -> txInsCollateral'
-            collateralTxIns <> (fst <$> txIns)
-          txId = C.getTxId txBody
-          newUtxos = Map.fromList $ foldMapFlipped (zip [0 ..] txOuts) \(idx, txOut@(C.TxOut addr _ _ _)) ->
-            [(C.TxIn txId (C.TxIx idx), C.toCtxUTxOTxOut txOut) | addr == changeAddress]
-          utxos' = unUTxO utxos `Map.withoutKeys` S.fromList txIns' <> newUtxos
-      pure (UTxO utxos', txBody : txBodies)
+    (utxos', txBody1) <- publish initialUTxOs [pm, pp]
+    (_, txBody2) <- publish utxos' [po]
 
-    let serialiseAddress = T.unpack . C.serialiseAddress
+    let findReferenceScriptOutput txBody plutusV2Script = do
+          let txId = C.getTxId txBody
+              C.TxBody C.TxBodyContent{txOuts} = txBody
+              script =
+                C.ScriptInAnyLang
+                  (C.PlutusScriptLanguage C.PlutusScriptV2)
+                  (C.PlutusScript C.PlutusScriptV2 plutusV2Script)
+
+              match (ix, txOut@(C.TxOut _ _ _ referenceScript)) = case referenceScript of
+                C.ReferenceScript _ txOutScript ->
+                  if script == txOutScript
+                    then Just (ix, txOut)
+                    else Nothing
+                _ -> Nothing
+
+          (ix, txOut) <-
+            liftEither $ note "Unable to find published script" $ listToMaybe $ mapMaybe match $ zip [0 ..] txOuts
+          let txOut' = C.toCtxUTxOTxOut txOut
+          pure (AnUTxO (C.TxIn txId (C.TxIx ix), txOut'))
+
+    marlowRef <- do
+      let (_, _, referenceScriptInfo) = pm
+          ValidatorInfo{viScript} = referenceScriptInfo
+      anUTxO <- findReferenceScriptOutput txBody1 viScript
+      pure (anUTxO, referenceScriptInfo)
+
+    rolePayoutRef <- do
+      let (_, _, referenceScriptInfo) = pp
+          ValidatorInfo{viScript} = referenceScriptInfo
+      anUTxO <- findReferenceScriptOutput txBody1 viScript
+      pure (anUTxO, referenceScriptInfo)
+
+    openRoleRef <- do
+      let (_, _, referenceScriptInfo) = po
+          ValidatorInfo{viScript} = referenceScriptInfo
+      anUTxO <- findReferenceScriptOutput txBody2 viScript
+      pure (anUTxO, referenceScriptInfo)
+
+    let txBodies = [txBody1, txBody2]
+        serialiseAddress (_, addr, _) = T.unpack . C.serialiseAddress $ addr
+        showScriptHash (_, _, ValidatorInfo{viHash}) = show viHash
+        showMinAda (ma, _, _) = show ma
+        showTxIn (AnUTxO (txIn, _), _) = show txIn
 
     when printStats $ liftIO do
       hPutStrLn stderr ""
       hPutStrLn stderr $
-        "Marlowe script published at address: " <> serialiseAddress (psPublisher pm)
+        "Marlowe script published at address: " <> serialiseAddress pm
+      hPutStrLn stderr ""
+      hPutStrLn stderr $ "Marlowe script hash: " <> showScriptHash pm
       hPutStrLn stderr ""
       hPutStrLn stderr $
-        "Marlowe script hash: "
-          <> show (viHash (psReferenceValidator pm))
+        "Marlowe ref script UTxO min ADA: " <> showMinAda pm
       hPutStrLn stderr ""
-      hPutStrLn stderr $
-        "Marlowe ref script UTxO min ADA: " <> show (psMinAda pm)
+      hPutStrLn stderr $ "Marlowe ref script UTxO: " <> showTxIn marlowRef
 
       hPutStrLn stderr ""
       hPutStrLn stderr $
-        "Payout script published at address: " <> serialiseAddress (psPublisher pp)
+        "Payout script published at address: " <> serialiseAddress pp
       hPutStrLn stderr ""
-      hPutStrLn stderr $
-        "Payout script hash: "
-          <> show (viHash (psReferenceValidator pp))
+      hPutStrLn stderr $ "Payout script hash: " <> showScriptHash pp
       hPutStrLn stderr ""
-      hPutStrLn stderr $
-        "Payout ref script UTxO min ADA: " <> show (psMinAda pp)
+      hPutStrLn stderr $ "Payout ref script UTxO min ADA: " <> showMinAda pp
+      hPutStrLn stderr ""
+      hPutStrLn stderr $ "Payout ref script UTxO: " <> showTxIn rolePayoutRef
 
       hPutStrLn stderr ""
-      hPutStrLn stderr $
-        "Open role script published at address: " <> serialiseAddress (psPublisher po)
+      hPutStrLn stderr $ "Open role script published at address: " <> serialiseAddress po
       hPutStrLn stderr ""
-      hPutStrLn stderr $
-        "Open role script hash: "
-          <> show (viHash (psReferenceValidator po))
+      hPutStrLn stderr $ "Open role script hash: " <> showScriptHash po
       hPutStrLn stderr ""
-      hPutStrLn stderr $
-        "Open role ref script UTxO min ADA: " <> show (psMinAda po)
-
-    pure (txBodies, PublishMarloweScripts pm pp po)
+      hPutStrLn stderr $ "Open role ref script UTxO min ADA: " <> showMinAda po
+      hPutStrLn stderr ""
+      hPutStrLn stderr $ "Open role ref script UTxO: " <> showTxIn openRoleRef
+    pure (txBodies, MarloweScriptsRefs marlowRef rolePayoutRef openRoleRef)
 
 -- CLI command handler.
 buildPublishing
@@ -1130,7 +1148,7 @@ buildPublishing connection signingKeyFile expires changeAddress strategy (TxBody
   (txBodies, _) <-
     buildPublishingImpl
       @MarlowePlutusVersion
-      connection
+      (mkNodeTxBuildup connection timeout)
       signingKey
       expires
       changeAddress
@@ -1140,10 +1158,9 @@ buildPublishing connection signingKeyFile expires changeAddress strategy (TxBody
 
   for_ txBodies \txBody ->
     doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing txBody
-
-  for_ timeout \timeout' ->
-    for txBodies \txBody ->
-      void $ submitBody connection txBody [signingKey] timeout'
+  let txBuildupCtx = mkNodeTxBuildup connection timeout
+  for_ txBodies \txBody ->
+    void $ submitTxBody txBuildupCtx txBody [signingKey]
 
 publishImpl
   :: forall lang era m
@@ -1152,7 +1169,7 @@ publishImpl
   => (MonadReader (CliEnv era) m)
   => (C.IsShelleyBasedEra era)
   => (IsPlutusScriptLanguage lang)
-  => LocalNodeConnectInfo CardanoMode
+  => TxBuildupContext era
   -- ^ The connection info for the local node.
   -> SomePaymentSigningKey
   -- ^ The file for required signing key.
@@ -1162,26 +1179,25 @@ publishImpl
   -- ^ The change address.
   -> PublishingStrategy era
   -> CoinSelectionStrategy
-  -> Second
   -> PrintStats
   -> m ([TxBody era], MarloweScriptsRefs lang era)
-publishImpl connection signingKey expires changeAddress publishingStrategy coinSelectionStrategy timeout printStats = do
+publishImpl txBuildupCtx signingKey expires changeAddress publishingStrategy coinSelectionStrategy printStats = do
   (txBodies, _) <-
     buildPublishingImpl
       @lang
-      connection
+      txBuildupCtx
       signingKey
       expires
       changeAddress
       publishingStrategy
       coinSelectionStrategy
       printStats
-
   for_ txBodies \txBody ->
-    submitBody connection txBody [signingKey] timeout
+    submitTxBody txBuildupCtx txBody [signingKey]
 
-  refs <-
-    findMarloweScriptsRefs connection publishingStrategy printStats >>= \case
+  refs <- do
+    let queryCtx = toQueryContext txBuildupCtx
+    findMarloweScriptsRefs queryCtx publishingStrategy printStats >>= \case
       Nothing -> throwError . CliError $ "Unable to find just published scripts by tx:" <> show (map getTxId txBodies)
       Just m -> pure m
   pure (txBodies, refs)
@@ -1193,15 +1209,16 @@ findScriptRef
   => (C.IsShelleyBasedEra era)
   => (MonadIO m)
   => (MonadError CliError m)
-  => LocalNodeConnectInfo CardanoMode
+  => QueryExecutionContext era
+  -- ^ Either already selected UTxO or connection info for the local node.
   -> ScriptHash
   -> PublishingStrategy era
   -> PrintStats
   -> m (Maybe (AnUTxO era, ValidatorInfo lang era))
-findScriptRef connection scriptHash publishingStrategy (PrintStats printStats) = do
+findScriptRef queryCtx scriptHash publishingStrategy (PrintStats printStats) = do
   era <- askEra
-  let network = localNodeNetworkId connection
-      publisher = publisherAddress scriptHash publishingStrategy era network
+  let networkId = queryContextNetworkId queryCtx
+      publisher = publisherAddress scriptHash publishingStrategy era networkId
 
   when printStats $ liftIO do
     hPutStrLn stderr ""
@@ -1213,9 +1230,9 @@ findScriptRef connection scriptHash publishingStrategy (PrintStats printStats) =
         <> show scriptHash
 
   runMaybeT do
-    (u@(AnUTxO (txIn, _)), script) <-
-      MaybeT $ selectUtxosImpl connection publisher (FindReferenceScript (plutusScriptVersion @lang) scriptHash)
-    i <- lift $ buildValidatorInfo connection script (Just txIn) NoStakeAddress
+    let query = FindReferenceScript (plutusScriptVersion @lang) scriptHash
+    (u@(AnUTxO (txIn, _)), script) <- MaybeT $ selectUtxosImpl queryCtx publisher query
+    i <- lift $ buildValidatorInfo queryCtx script (Just txIn) NoStakeAddress
     pure (u, i)
 
 findMarloweScriptsRefs
@@ -1225,11 +1242,12 @@ findMarloweScriptsRefs
   => (MonadError CliError m)
   => (C.IsShelleyBasedEra era)
   => (IsPlutusScriptLanguage lang)
-  => LocalNodeConnectInfo CardanoMode
+  => QueryExecutionContext era
+  -- ^ Either already selected UTxOs or connection info to select UTxOs.
   -> PublishingStrategy era
   -> PrintStats
   -> m (Maybe (MarloweScriptsRefs lang era))
-findMarloweScriptsRefs connection publishingStrategy printStats = case plutusScriptVersion @lang of
+findMarloweScriptsRefs queryCtx publishingStrategy printStats = case plutusScriptVersion @lang of
   PlutusScriptV1 -> do
     throwError . CliError $ "Plutus script version 1 is not supported"
   PlutusScriptV2 -> do
@@ -1237,9 +1255,9 @@ findMarloweScriptsRefs connection publishingStrategy printStats = case plutusScr
         payoutHash = hashScript (PS.toScript $ fromV2TypedValidator rolePayoutValidator)
         openRoleHash = hashScript (PS.toScript $ fromV2TypedValidator openRoleValidator)
     runMaybeT do
-      m <- MaybeT $ findScriptRef @lang connection marloweHash publishingStrategy printStats
-      p <- MaybeT $ findScriptRef @lang connection payoutHash publishingStrategy printStats
-      o <- MaybeT $ findScriptRef @lang connection openRoleHash publishingStrategy printStats
+      m <- MaybeT $ findScriptRef @lang queryCtx marloweHash publishingStrategy printStats
+      p <- MaybeT $ findScriptRef @lang queryCtx payoutHash publishingStrategy printStats
+      o <- MaybeT $ findScriptRef @lang queryCtx openRoleHash publishingStrategy printStats
       pure $ MarloweScriptsRefs m p o
 
 -- | CLI Command handler.
@@ -1248,12 +1266,12 @@ findPublished
   => (MonadReader (CliEnv era) m)
   => (MonadIO m)
   => (MonadError CliError m)
-  => LocalNodeConnectInfo CardanoMode
+  => QueryExecutionContext era
   -> Maybe (PublishingStrategy era)
   -> m ()
-findPublished connection publishingStrategy = do
+findPublished queryCtx publishingStrategy = do
   let publishingStrategy' = fromMaybe (PublishPermanently NoStakeAddress) publishingStrategy
-  findMarloweScriptsRefs @C.PlutusScriptV2 connection publishingStrategy' (PrintStats True) >>= \case
+  findMarloweScriptsRefs @C.PlutusScriptV2 queryCtx publishingStrategy' (PrintStats True) >>= \case
     Just (MarloweScriptsRefs (mu, mi) (ru, ri) (ou, oi)) -> do
       let refJSON (AnUTxO (i, _)) ValidatorInfo{viHash} =
             A.object
@@ -1328,7 +1346,7 @@ buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFi
     outputs' <- mapM (uncurry3 makeTxOut') outputs
     body <-
       buildBody
-        connection
+        (QueryNode connection)
         [buildPayFromScript (C.PScript validator) inputDatum redeemer txIn]
         (Just $ buildPayToScript scriptAddress outputValue outputDatum)
         []
@@ -1343,12 +1361,8 @@ buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFi
         printStats
         invalid
     doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
-    forM_ timeout $
-      if invalid
-        then const $ throwError "Refusing to submit an invalid transaction: collateral would be lost."
-        else submitBody connection body signingKeys
-    pure $
-      getTxId body
+    let txBuildupCtx = mkNodeTxBuildup connection timeout
+    submitBody txBuildupCtx body signingKeys invalid
 
 -- | TODO: Add support for constant validator.
 -- | Build a transaction spending from a Marlowe contract.
@@ -1402,7 +1416,7 @@ buildOutgoing connection validatorFile redeemerFile inputDatumFile signingKeyFil
     outputs' <- mapM (uncurry3 makeTxOut') outputs
     body <-
       buildBody
-        connection
+        (QueryNode connection)
         [buildPayFromScript (C.PScript validator) inputDatum redeemer txIn]
         Nothing
         []
@@ -1417,11 +1431,8 @@ buildOutgoing connection validatorFile redeemerFile inputDatumFile signingKeyFil
         printStats
         invalid
     doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
-    forM_ timeout $
-      if invalid
-        then const $ throwError "Refusing to submit an invalid transaction: collateral would be lost."
-        else submitBody connection body signingKeys
-    pure $ getTxId body
+    let txBuildupCtx = mkNodeTxBuildup connection timeout
+    submitBody txBuildupCtx body signingKeys invalid
 
 -- | Collect information on paying from a script.
 buildPayFromScript
@@ -1471,7 +1482,7 @@ buildBody
   => (IsPlutusScriptLanguage lang)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
-  => LocalNodeConnectInfo CardanoMode
+  => QueryExecutionContext era
   -- ^ The connection info for the local node.
   -> [PayFromScript lang]
   -- ^ Payment information from the script, if any.
@@ -1501,10 +1512,10 @@ buildBody
   -- ^ Assertion that the transaction is invalid.
   -> m (TxBody era)
   -- ^ The action to build the transaction body.
-buildBody connection payFromScript payToScript extraInputs inputs outputs collateral changeAddress slotRange extraSigners mintValue metadata printStats invalid =
+buildBody queryCtx payFromScript payToScript extraInputs inputs outputs collateral changeAddress slotRange extraSigners mintValue metadata printStats invalid =
   snd
     <$> buildBodyWithContent
-      connection
+      queryCtx
       payFromScript
       payToScript
       extraInputs
@@ -1527,7 +1538,7 @@ buildBodyWithContent
   => (IsPlutusScriptLanguage lang)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
-  => LocalNodeConnectInfo CardanoMode
+  => QueryExecutionContext era
   -- ^ The connection info for the local node.
   -> [PayFromScript lang]
   -- ^ Payment information from the script, if any.
@@ -1556,13 +1567,14 @@ buildBodyWithContent
   -> Bool
   -- ^ Assertion that the transaction is invalid.
   -> Maybe (UTxO era)
+  -- ^ The UTxO to use for the transaction.
   -> m (TxBodyContent C.BuildTx era, TxBody era)
   -- ^ The action to build the transaction body together with context.
-buildBodyWithContent connection payFromScript payToScript extraInputs inputs outputs collateral changeAddress slotRange extraSigners mintValue metadata printStats invalid possibleUTxOs =
+buildBodyWithContent queryCtx payFromScript payToScript extraInputs inputs outputs collateral changeAddress slotRange extraSigners mintValue metadata printStats invalid possibleUTxOs =
   do
-    start <- queryAny connection QuerySystemStart
-    history <- queryAny connection $ QueryEraHistory CardanoModeIsMultiEra
-    protocol <- queryInEra connection QueryProtocolParameters
+    start <- getSystemStart queryCtx
+    history <- getEraHistory queryCtx
+    protocol <- getProtocolParams queryCtx
     era <- askEra
     (scriptTxIn, txInsReferences) <-
       unzip <$> for payFromScript \s -> liftCli do
@@ -1612,12 +1624,9 @@ buildBodyWithContent connection payFromScript payToScript extraInputs inputs out
     -- This UTxO set is used for change calcuation.
     utxos <- case possibleUTxOs of
       Just utxos -> pure utxos
-      Nothing ->
-        queryInEra connection
-          . QueryUTxO
-          . QueryUTxOByTxIn
-          . S.fromList
-          $ allTxIns
+      Nothing -> do
+        let q = QueryUTxOByTxIn . S.fromList $ allTxIns
+        queryUTxOs queryCtx q
 
     let eraInMode = toEraInMode era
 
@@ -1666,7 +1675,6 @@ buildBodyWithContent connection payFromScript payToScript extraInputs inputs out
         initialChange = totalIn <> totalMint <> C.negateValue totalOut
 
     (txBodyContent, BalancedTxBody txBody _ lovelace) <- balancingLoop 10 initialChange
-
     when printStats
       . liftIO
       $ do
@@ -1676,6 +1684,8 @@ buildBodyWithContent connection payFromScript payToScript extraInputs inputs out
             maxSize = fromIntegral $ protocolParamMaxTxSize protocol
             fractionSize = 100 * size `div` maxSize
         hPutStrLn stderr $ "Size: " <> show size <> " / " <> show maxSize <> " = " <> show fractionSize <> "%"
+        let era' = toCardanoEra era
+        hPutStrLn stderr $ T.unpack $ A.renderValue $ A.object $ C.Debug.friendlyTxBody era' txBody
         let ExUnits memory steps = findExUnits txBody
             maxExecutionUnits = protocolParamMaxTxExUnits protocol
             fractionMemory = 100 * memory `div` maybe 0 executionMemory maxExecutionUnits
@@ -1732,127 +1742,32 @@ submit connection (TxBodyFile bodyFile) signingKeyFiles timeout =
     era <- askEra
     body <- doWithCardanoEra $ liftCliIO $ readFileTextEnvelope (AsTxBody $ toAsType era) bodyFile
     signings <- mapM readSigningKey signingKeyFiles
-    submitBody connection body signings timeout
+    let txBuildupCtx = mkNodeTxBuildup connection (Just timeout)
+    submitTxBody txBuildupCtx body signings
 
--- | Sign and submit a transaction.
+-- Internal helper which throw when we try to submit invalid transaction.
 submitBody
-  :: (TimeUnit a)
-  => (MonadError CliError m)
+  :: (MonadError CliError m)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
-  => LocalNodeConnectInfo CardanoMode
+  => TxBuildupContext era
   -- ^ The connection info for the local node.
   -> TxBody era
   -- ^ The transaction body.
   -> [SomePaymentSigningKey]
   -- ^ The signing keys.
-  -> a
-  -- ^ The time interval to wait for the transaction to be confirmed.
-  -> m TxId
+  -> Bool
+  -- ^ Assertion that the transaction is invalid.
+  -> m C.TxId
   -- ^ The action to submit the transaction.
-submitBody connection body signings timeout =
-  do
-    era <- askEra
-    let tx =
-          withShelleyBasedEra era $
-            signShelleyTransaction body $
-              either WitnessPaymentKey WitnessPaymentExtendedKey
-                <$> signings
-    result <-
-      liftIO
-        . submitTxToNodeLocal connection
-        . TxInMode tx
-        $ toEraInMode era
-    case result of
-      SubmitSuccess -> do
-        let txId = getTxId body
-        when (toMicroseconds timeout > 0) $
-          waitForUtxos connection timeout [TxIn txId $ TxIx 0]
-        pure txId
-      SubmitFail reason -> do
-        liftIO $ hPutStrLn stderr "Submission of the transaction failed:"
-        liftIO $ hPrint stderr body
-        throwError . CliError $ show reason
-
--- A vesrion of submit which performs an attempt to extra fee balancing on failure
--- (we experienced failures on the cardano-node for already balanced transactions).
-submitBody'
-  :: (TimeUnit a)
-  => (MonadError CliError m)
-  => (MonadIO m)
-  => (MonadReader (CliEnv era) m)
-  => LocalNodeConnectInfo CardanoMode
-  -- ^ The connection info for the local node.
-  -> TxBody era
-  -- ^ The transaction body.
-  -> C.TxBodyContent C.BuildTx era
-  -> AddressInEra era
-  -- ^ The change address.
-  -> [SomePaymentSigningKey]
-  -- ^ The signing keys.
-  -> a
-  -- ^ The time interval to wait for the transaction to be confirmed.
-  -> m (TxId, TxBody era)
-  -- ^ The action to submit the transaction.
-submitBody' connection body bodyContent changeAddress signingKeys timeout = do
-  era <- askEra
-  ((,body) <$> submitBody connection body signingKeys timeout) `catchError` \err -> do
-    liftIO $ hPutStrLn stderr "Adjusting the fees and resubmitting failing transaction."
-    liftIO $ hPrint stderr err
-    let feeBalancingMargin = C.Lovelace 20000
-        C.TxBodyContent{..} = bodyContent
-        -- Find change UTxO and subtract the fee margin.
-        step (TxOut addr value datum refScript) (False, outs)
-          | addr == changeAddress && (fromMaybe 0 . C.valueToLovelace $ C.txOutValueToValue value) > feeBalancingMargin = do
-              let value' = txOutValueToValue value <> C.negateValue (C.lovelaceToValue feeBalancingMargin)
-                  out' = TxOut addr (TxOutValue (toMultiAssetSupportedInEra era) value') datum refScript
-              (True, out' : outs)
-        step out (flag, outs) = (flag, out : outs)
-
-        (adjusted, txOuts') = foldr step (False, []) txOuts
-    -- Increase the transaction fee by the chosen margin.
-    txFee' <- case (adjusted, txFee) of
-      (True, TxFeeExplicit feesInEra value) -> pure $ TxFeeExplicit feesInEra (value + feeBalancingMargin)
-      _ -> throwError . CliError $ "Unable to adjust the change during resubmission attempt."
-
-    withCardanoEra era $ case C.makeTransactionBody (C.TxBodyContent{..}{txOuts = txOuts', txFee = txFee'}) of
-      Left err' -> throwError . CliError $ "Failure during reconstruction of the failing tx body: " <> show err'
-      Right body' -> do
-        txId <- submitBody connection body' signingKeys timeout
-        pure (txId, body')
-
--- | Wait for transactions to be confirmed as UTxOs.
-waitForUtxos
-  :: (TimeUnit a)
-  => (MonadError CliError m)
-  => (MonadIO m)
-  => (MonadReader (CliEnv era) m)
-  => LocalNodeConnectInfo CardanoMode
-  -- ^ The connection info for the local node.
-  -> a
-  -- ^ The time interval to wait for the transaction to be confirmed.
-  -> [TxIn]
-  -- ^ The transactions to wait for.
-  -> m ()
-  -- ^ Action to wait for the transaction confirmations.
-waitForUtxos connection timeout txIns = do
-  let timeoutMicroseconds = toMicroseconds timeout
-      pause = 5 :: Second
-      pauseMicroseconds = toMicroseconds pause
-      txIns' = S.fromList txIns
-      go 0 = throwError "Timeout waiting for transaction to be confirmed."
-      go n = do
-        liftIO . threadDelay $ pause
-        utxos <- do
-          queryInEra connection
-            . QueryUTxO
-            . QueryUTxOByTxIn
-            $ txIns'
-        if M.keysSet (unUTxO utxos) == txIns'
-          then do
-            pure ()
-          else go (n - 1 :: Int)
-  go . ceiling $ (fromIntegral timeoutMicroseconds / fromIntegral pauseMicroseconds :: Double)
+submitBody txBuildupCtx txBody signings invalid = do
+  let possiblyThrow = when invalid do
+        throwError "Refusing to submit an invalid transaction: collateral would be lost."
+  case txBuildupCtx of
+    (NodeTxBuildup _ (DoSubmit _)) -> possiblyThrow
+    (PureTxBuildup _ _) -> possiblyThrow
+    _ -> pure ()
+  submitTxBody txBuildupCtx txBody signings
 
 -- | TxIn for transaction body.
 type TxInEra era = (TxIn, BuildTxWith BuildTx (Witness WitCtxTxIn era))
@@ -1966,20 +1881,6 @@ makeBalancedTxOut era protocol address datum value referenceScript = do
   (_, value') <- liftCli $ adjustMinimumUTxO era protocol address datum value referenceScript
   makeTxOut address datum value' referenceScript
 
--- | Query a node.
-queryAny
-  :: (MonadError CliError m)
-  => (MonadIO m)
-  => LocalNodeConnectInfo CardanoMode
-  -- ^ The connection info for the local node.
-  -> QueryInMode CardanoMode a
-  -- ^ The query.
-  -> m a
-  -- ^ Action for running the query.
-queryAny connection =
-  liftCliIO
-    . queryNodeLocalState connection Nothing
-
 -- | Find the UTxOs at an address.
 queryUtxos
   :: (MonadError CliError m)
@@ -2013,6 +1914,11 @@ filterUtxos = do
       filterByValue \v -> let l = selectLovelace v in lovelaceToValue l == v && amountCheck l
     AssetOnly asset -> do
       filterByValue \v -> length (valueToList v) == 2 && selectAsset v asset >= 1
+    PolicyIdOnly policyId -> do
+      filterByValue \v -> do
+        let C.ValueNestedRep v' = C.valueToNestedRep v
+            policyIds = [pId | C.ValueNestedBundle pId _ <- v']
+        policyIds == [policyId]
     FindReferenceScript pv scriptHash -> do
       let hashScriptInAnyLang (C.ScriptInAnyLang _ script) = C.hashScript script
       \(UTxO candidates) -> tillFirstMatch (M.toList candidates) \case
@@ -2030,33 +1936,33 @@ selectUtxosImpl
   :: (MonadError CliError m)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
-  => LocalNodeConnectInfo CardanoMode
-  -- ^ The connection info for the local node.
+  => QueryExecutionContext era
+  -- ^ The connection info qualified for the local node.
   -> AddressInEra era
   -- ^ The address.
   -> OutputQuery era result
   -- ^ Filter for the results.
   -> m result
-selectUtxosImpl connection address query =
-  filterUtxos query <$> queryUtxos connection address
+selectUtxosImpl queryCtx address query =
+  filterUtxos query <$> queryByAddress queryCtx address
 
 -- | Select a UTxOs at an address.
 selectUtxos
   :: (MonadError CliError m)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
-  => LocalNodeConnectInfo CardanoMode
+  => QueryExecutionContext era
   -- ^ The connection info for the local node.
   -> AddressInEra era
   -- ^ The address.
   -> Maybe (OutputQuery era (OutputQueryResult era))
   -- ^ Filter for the results.
   -> m ()
-selectUtxos connection address query =
+selectUtxos queryCtx address query =
   do
     matching <- case query of
-      Nothing -> queryUtxos connection address
-      Just query' -> oqrMatching <$> selectUtxosImpl connection address query'
+      Nothing -> queryByAddress queryCtx address
+      Just query' -> oqrMatching <$> selectUtxosImpl queryCtx address query'
     liftIO
       . mapM_ (print . fst)
       . M.toList
@@ -2186,7 +2092,7 @@ selectCoins
    . (MonadError CliError m)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
-  => LocalNodeConnectInfo CardanoMode
+  => QueryExecutionContext era
   -- ^ The connection info for the local node.
   -> Value
   -- ^ The value of the input from the script, if any.
@@ -2199,11 +2105,10 @@ selectCoins
   -> CoinSelectionStrategy
   -- ^ Indicate which `UTxO`'s to ignore.
   -> Maybe (UTxO era)
-  -- ^ A possible whole selection set of `UTxO`'s.
-  -- If provided we still apply the `CoinSelectionStrategy` over this set.
+  -- ^ The UTxO to use for the transaction.
   -> m (TxIn, [TxIn], [TxOut CtxTx era])
   -- ^ Action select the collateral, inputs, and outputs.
-selectCoins connection inputs outputs pay changeAddress CoinSelectionStrategy{..} possibleUTxOs =
+selectCoins queryCtx inputs outputs pay changeAddress CoinSelectionStrategy{..} possibleUTxOs =
   do
     let isInlineDatum C.TxOutDatumInline{} = True
         isInlineDatum _ = False
@@ -2216,16 +2121,11 @@ selectCoins connection inputs outputs pay changeAddress CoinSelectionStrategy{..
     -- Find the UTxOs that we have to work with.
     utxos <- fmap (filter include . M.toList . unUTxO) $ case possibleUTxOs of
       Just utxos -> pure utxos
-      Nothing ->
-        queryInEra connection
-          . QueryUTxO
-          . QueryUTxOByAddress
-          . S.singleton
-          $ toAddressAny' changeAddress
+      Nothing -> queryByAddress queryCtx changeAddress
 
     -- Fetch the protocol parameters
     protocol <-
-      queryInEra connection QueryProtocolParameters
+      getProtocolParams queryCtx
         :: m ProtocolParameters
     -- We want to consume as few UTxOs as possible, in order to keep the script context smaller.
     let -- Extract the value of a UTxO.
@@ -2362,5 +2262,3 @@ selectCoins connection inputs outputs pay changeAddress CoinSelectionStrategy{..
       , fst <$> selection
       , outputs <> output
       )
-
--- FIXME: There are pathological failures that could happen if there are very many native tokens.

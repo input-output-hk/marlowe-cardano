@@ -31,7 +31,7 @@ import Data.Aeson qualified as Aeson
 import Data.List qualified as List
 import Data.Map (Map)
 import GHC.Generics (Generic)
-import Language.Marlowe.CLI.Types (MarlowePlutusVersion, MarloweScriptsRefs, PrintStats)
+import Language.Marlowe.CLI.Types (MarlowePlutusVersion, MarloweScriptsRefs, PrintStats, TxBuildupContext)
 import Ledger.Orphans ()
 import Plutus.ApiCommon (ProtocolVersion)
 import Plutus.V1.Ledger.Api (CostModelParams)
@@ -51,22 +51,33 @@ import Data.ByteString.Lazy qualified as BSL
 import Data.Functor ((<&>))
 import Data.Map.Strict qualified as Map
 import Data.Traversable (for)
-import Language.Marlowe.CLI.Test.CLI.Types (CLIContracts (CLIContracts), CLIOperation)
+import Language.Marlowe.CLI.Test.CLI.Types (CLIContracts (CLIContracts), CLIOperation, HasInterpretEnv (..))
 import Language.Marlowe.CLI.Test.CLI.Types qualified as CLI
 import Language.Marlowe.CLI.Test.Contract.ContractNickname (ContractNickname (ContractNickname))
-import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode)
+import Language.Marlowe.CLI.Test.ExecutionMode (HasInterpretEnv (..), UseExecutionMode)
+import Language.Marlowe.CLI.Test.ExecutionMode qualified as ExecutionMode
 import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError, ieMessage)
 import Language.Marlowe.CLI.Test.Log (Logs)
 import Language.Marlowe.CLI.Test.Log qualified as Log
 import Language.Marlowe.CLI.Test.Operation.Aeson (
   ConstructorName (ConstructorName),
-  preprocessInputJSON,
+  preprocessConstructorJSON,
   rewriteToSingleFieldConstructor,
  )
 import Language.Marlowe.CLI.Test.Operation.Aeson qualified as Operation
 import Language.Marlowe.CLI.Test.Runtime.Types (RuntimeMonitorInput, RuntimeMonitorState, RuntimeOperation)
 import Language.Marlowe.CLI.Test.Runtime.Types qualified as Runtime
-import Language.Marlowe.CLI.Test.Wallet.Types as Wallet
+import Language.Marlowe.CLI.Test.Wallet.Types (
+  Currencies (Currencies, unCurrencies),
+  Currency (..),
+  HasInterpretEnv (..),
+  SomeTxBody,
+  Wallet (..),
+  allWalletsMap,
+  overSomeTxBody',
+  txBodyFee,
+ )
+import Language.Marlowe.CLI.Test.Wallet.Types qualified as Wallet
 import Language.Marlowe.Protocol.Client qualified as Marlowe.Protocol
 import Network.Protocol.Connection qualified as Network.Protocol
 import Network.Socket (PortNumber)
@@ -101,7 +112,7 @@ data TestSuite era a = TestSuite
   -- ^ The file containing the faucet's signing key.
   , tsFaucetAddress :: AddressInEra era
   -- ^ The faucet address.
-  , tsExecutionMode :: ExecutionMode
+  , tsUseExecutionMode :: UseExecutionMode
   , tsTests :: [a]
   -- ^ Input for the tests.
   , tsRuntime :: RuntimeConfig
@@ -109,7 +120,8 @@ data TestSuite era a = TestSuite
   , tsReportingStrategy :: Maybe ReportingStrategy
   , tsMaxRetries :: Int
   }
-  deriving stock (Eq, Generic, Show)
+
+--  deriving stock (Eq, Generic, Show)
 
 newtype TestName = TestName String
   deriving stock (Eq, Ord, Generic, Show)
@@ -156,7 +168,7 @@ data TestResult lang era
 data TestOperation
   = CLIOperation CLIOperation
   | RuntimeOperation RuntimeOperation
-  | WalletOperation WalletOperation
+  | WalletOperation Wallet.WalletOperation
   | Fail String
   | Sleep A.Second
   | Comment String
@@ -196,7 +208,7 @@ walletConstructors =
 
 instance FromJSON TestOperation where
   parseJSON json = do
-    let rewriteSubOperation = preprocessInputJSON \constructorName _ -> case constructorName of
+    let rewriteSubOperation = preprocessConstructorJSON \constructorName _ -> case constructorName of
           ConstructorName cn | cn `List.elem` cliConstructors -> Just $ A.object [("tag", A.String "CLIOperation"), ("contents", json)]
           ConstructorName cn | cn `List.elem` runtimeConstructors -> Just $ A.object [("tag", A.String "RuntimeOperation"), ("contents", json)]
           ConstructorName cn | cn `List.elem` walletConstructors -> Just $ A.object [("tag", A.String "WalletOperation"), ("contents", json)]
@@ -236,12 +248,12 @@ data InterpretState lang era = InterpretState
     _isCLIContracts :: CLIContracts lang era
   , _isKnownContracts :: Map ContractNickname Runtime.ContractInfo
   , _isPublishedScripts :: Maybe (MarloweScriptsRefs lang era)
-  , _isCurrencies :: Currencies
-  , _isWallets :: Wallets era
+  , _isCurrencies :: Wallet.Currencies
+  , _isWallets :: Wallet.Wallets era
   , _isLogs :: Logs
   }
 
-mkInterpretState :: Wallets era -> InterpretState lang era
+mkInterpretState :: Wallet.Wallets era -> InterpretState lang era
 mkInterpretState wallets =
   InterpretState
     { _isCLIContracts = CLIContracts mempty
@@ -255,13 +267,13 @@ mkInterpretState wallets =
 data InterpretEnv lang era = InterpretEnv
   { _ieRuntimeMonitor :: Maybe (RuntimeMonitorInput, RuntimeMonitorState)
   , _ieRuntimeClientConnector :: Maybe (Network.Protocol.Connector Marlowe.Protocol.MarloweRuntimeClient IO)
-  , _ieExecutionMode :: ExecutionMode
   , _ieConnection :: LocalNodeConnectInfo CardanoMode
   , _ieEra :: ScriptDataSupportedInEra era
   , _iePrintStats :: PrintStats
   , _ieSlotConfig :: SlotConfig
   , _ieCostModelParams :: CostModelParams
   , _ieProtocolVersion :: ProtocolVersion
+  , _ieTxBuildupContext :: TxBuildupContext era
   }
 
 type InterpretMonad m lang era =
@@ -278,10 +290,9 @@ instance Log.HasLogStore (InterpretState lang era) where
   logStoreL = isLogs
 
 instance Wallet.HasInterpretEnv (InterpretEnv lang era) era where
-  connectionL = ieConnection
   eraL = ieEra
   printStatsL = iePrintStats
-  executionModeL = ieExecutionMode
+  txBuildupContextL = ieTxBuildupContext
 
 instance Wallet.HasInterpretState (InterpretState lang era) era where
   walletsL = isWallets
@@ -291,10 +302,10 @@ instance CLI.HasInterpretEnv (InterpretEnv lang era) lang era where
   connectionL = ieConnection
   eraL = ieEra
   printStatsL = iePrintStats
-  executionModeL = ieExecutionMode
   slotConfigL = ieSlotConfig
   costModelParamsL = ieCostModelParams
   protocolVersionL = ieProtocolVersion
+  txBuildupContextL = ieTxBuildupContext
 
 instance CLI.HasInterpretState (InterpretState lang era) lang era where
   walletsL = isWallets
@@ -311,10 +322,14 @@ instance Runtime.HasInterpretEnv (InterpretEnv lang era) era where
   runtimeMonitorStateT = ieRuntimeMonitor <<< _Just <<< _2
   runtimeMonitorInputT = ieRuntimeMonitor <<< _Just <<< _1
   runtimeClientConnectorT = ieRuntimeClientConnector . _Just
-  executionModeL = ieExecutionMode
   connectionT = ieConnection
   slotConfigL = ieSlotConfig
   eraL = ieEra
+  txBuildupContextL = ieTxBuildupContext
+
+instance ExecutionMode.HasInterpretEnv (InterpretEnv lang era) era where
+  eraL = ieEra
+  txBuildupContextL = ieTxBuildupContext
 
 -- txId = overSomeTxBody (const C.getTxId)
 someTxBodyToJSON :: SomeTxBody -> A.Value
@@ -376,7 +391,7 @@ interpretStateToJSONPairs InterpretState{..} = do
   pure
     [ "wallets" .= do
         let step n wallet = [(n, walletToJSON wallet)]
-        Map.foldMapWithKey step $ getAllWallets _isWallets
+        Map.foldMapWithKey step $ allWalletsMap _isWallets
     , "currencies" .= do
         let step n curr = [(n, currencyToJSON curr)]
         Map.foldMapWithKey step $ unCurrencies _isCurrencies

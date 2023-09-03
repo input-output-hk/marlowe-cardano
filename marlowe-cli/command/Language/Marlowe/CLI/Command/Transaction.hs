@@ -60,8 +60,10 @@ import Language.Marlowe.CLI.Types (
   CliError,
   PrintStats (PrintStats),
   PublishingStrategy,
+  QueryExecutionContext (QueryNode),
   SigningKeyFile,
   TxBodyFile (TxBodyFile),
+  mkNodeTxBuildup,
  )
 
 import Cardano.Api qualified as Api (Value)
@@ -274,14 +276,13 @@ runTransactionCommand command =
     case command of
       BuildTransact{..} ->
         buildSimple
-          connection
+          (mkNodeTxBuildup connection submitTimeout)
           signingKeyFiles
           inputs
           outputs'
           change
           metadataFile
           bodyFile
-          submitTimeout
           printStats
           invalid
           >>= printTxId
@@ -363,7 +364,7 @@ runTransactionCommand command =
           (PrintStats True)
       FindPublished{..} ->
         findPublished
-          connection
+          (QueryNode connection)
           strategy
 
 -- | Parser for transaction-related commands.

@@ -81,22 +81,24 @@ import Control.Monad.Except (MonadError, MonadIO, liftEither, liftIO)
 import Data.Aeson (encode)
 import Language.Marlowe.CLI.IO (
   decodeFileStrict,
-  getDefaultCostModel,
+  getPV2CostModelParams,
+  getProtocolParams,
   maybeWriteJson,
   maybeWriteTextEnvelope,
-  queryInEra,
  )
 import Language.Marlowe.CLI.Types (
   CliEnv,
   CliError (..),
   DatumInfo (..),
   MarloweInfo (..),
+  QueryExecutionContext (..),
   RedeemerInfo (..),
   ValidatorInfo (..),
   askEra,
   asksEra,
   doWithCardanoEra,
   doWithShelleyBasedEra,
+  queryContextNetworkId,
   validatorInfo',
   withCardanoEra,
   withShelleyBasedEra,
@@ -336,17 +338,17 @@ exportMarloweAddress = exportAddress marloweValidatorBytes
 
 buildValidatorInfo
   :: (MonadReader (CliEnv era) m, MonadIO m, MonadError CliError m, IsPlutusScriptLanguage lang)
-  => CS.LocalNodeConnectInfo CS.CardanoMode
+  => QueryExecutionContext era
   -> CS.PlutusScript lang
   -> Maybe C.TxIn
   -> StakeAddressReference
   -> m (ValidatorInfo lang era)
-buildValidatorInfo connection plutusScript txIn stake = do
+buildValidatorInfo queryCtx plutusScript txIn stake = do
   era <- askEra
-  protocol <- queryInEra connection C.QueryProtocolParameters
-  costModel <- getDefaultCostModel
-  let networkId = C.localNodeNetworkId connection
-      protocolVersion = C.toPlutusProtocolVersion $ CS.protocolParamProtocolVersion protocol
+  protocolParams <- getProtocolParams queryCtx
+  costModel <- getPV2CostModelParams queryCtx
+  let networkId = queryContextNetworkId queryCtx
+      protocolVersion = C.toPlutusProtocolVersion $ CS.protocolParamProtocolVersion protocolParams
   validatorInfo' plutusScript txIn era protocolVersion costModel networkId stake
 
 -- | Export to a file the validator information.

@@ -45,9 +45,8 @@ import Data.Traversable (for)
 import Language.Marlowe.CLI.Cardano.Api (withShelleyBasedEra)
 import Language.Marlowe.CLI.Test.Contract (ContractNickname (ContractNickname), Source (InlineContract, UseTemplate))
 import Language.Marlowe.CLI.Test.Contract.Source (useTemplate)
-import Language.Marlowe.CLI.Test.ExecutionMode (skipInSimluationMode)
 import Language.Marlowe.CLI.Test.InterpreterError (runtimeOperationFailed', testExecutionFailed', timeoutReached')
-import Language.Marlowe.CLI.Test.Log (Label, logStoreLabeledMsg, throwLabeledError)
+import Language.Marlowe.CLI.Test.Log (Label, logLabeledMsg, logStoreLabeledMsg, throwLabeledError)
 import Language.Marlowe.CLI.Test.Runtime.Types (
   ContractInfo (ContractInfo, _ciContinuations, _ciContract, _ciContractId, _ciMarloweThread, _ciRoleCurrency),
   DoMerkleize (ClientSide, RuntimeSide),
@@ -62,12 +61,14 @@ import Language.Marlowe.CLI.Test.Runtime.Types (
   currentMarloweData,
   defaultOperationTimeout,
   executionModeL,
+  eraL,
   knownContractsL,
   rcMarloweThread,
   runtimeClientConnectorT,
   runtimeMonitorInputT,
   runtimeMonitorStateT,
   slotConfigL,
+  txBuildupContextL,
   unMarloweTags,
   _rtiTxId,
  )
@@ -87,7 +88,11 @@ import Language.Marlowe.CLI.Test.Wallet.Types (
   WalletNickname,
   faucetNickname,
  )
-import Language.Marlowe.CLI.Types (somePaymentsigningKeyToTxWitness, toSlotRoundedPlutusPOSIXTime)
+import Language.Marlowe.CLI.Types (
+  TxBuildupContext (..),
+  somePaymentsigningKeyToTxWitness,
+  toSlotRoundedPlutusPOSIXTime,
+ )
 import Language.Marlowe.Cardano.Thread (
   anyMarloweThreadCreated,
   anyMarloweThreadRedeemed,
@@ -396,7 +401,7 @@ interpret ro@RuntimeWithdraw{..} = do
         Just timeout -> do
           runtimeAwaitTxsConfirmed ro roContractNickname (A.toSecond timeout)
 interpret ro@RuntimeAwaitClosed{..} = do
-  view executionModeL >>= skipInSimluationMode ro do
+  view txBuildupContextL >>= skipInSimluationMode ro do
     (contractNickname, _) <- getContractInfo roContractNickname
     startMonitoring contractNickname
     rms <- getMonitorState
@@ -432,7 +437,7 @@ interpret ro@RuntimeCreateContract{..} = do
               throwLabeledError ro $ testExecutionFailed' "Contract with a given nickname already exist."
             pure nickname
 
-  view executionModeL >>= skipInSimluationMode ro do
+  view txBuildupContextL >>= skipInSimluationMode ro do
     Wallet{_waAddress, _waSigningKey} <- maybe getFaucet getWallet roSubmitter
     connector <- getConnector
     -- Verify that the role currency actually exists
@@ -555,7 +560,7 @@ interpret ro@RuntimeCreateContract{..} = do
       Left (Just err) ->
         throwLabeledError ro $ runtimeOperationFailed' $ "Failed to create contract: " <> show err
 interpret ro@RuntimeApplyInputs{..} = do
-  view executionModeL >>= skipInSimluationMode ro do
+  view txBuildupContextL >>= skipInSimluationMode ro do
     Wallet{_waAddress, _waSigningKey} <- maybe getFaucet getWallet roSubmitter
     connector <- getConnector
     inputs <- for roInputs decodeInputJSON
@@ -641,3 +646,15 @@ interpret ro@RuntimeApplyInputs{..} = do
               throwLabeledError ro $ runtimeOperationFailed' $ "Failed to submit contract: " <> show err
       Left err ->
         throwLabeledError ro $ runtimeOperationFailed' $ "Failed to apply input: " <> show err
+
+skipInSimluationMode
+  :: forall era l m
+   . (Label l)
+  => (MonadIO m)
+  => l
+  -> m ()
+  -> TxBuildupContext era
+  -> m ()
+skipInSimluationMode label action = \case
+  NodeTxBuildup _ _ -> logLabeledMsg label "Skipping in simulation mode."
+  PureTxBuildup{} -> action

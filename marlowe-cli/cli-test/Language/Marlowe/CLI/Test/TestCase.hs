@@ -41,7 +41,7 @@ operationFaucetBudget (TxCostsUpperBounds _ publishingMinAda) = lovelaceFromInt 
 
     operationBudget' (WalletOperation (CreateWallet _ possibleValues)) = sum . maybe [] (map lovelaceToInt) $ possibleValues
     operationBudget' (WalletOperation (Fund nicknames values)) = (sum . map lovelaceToInt $ values) * length nicknames
-    operationBudget' (WalletOperation (Mint _ issuer _ tokenDistribution minLovelace)) =
+    operationBudget' (WalletOperation (Mint _ issuer _ tokenDistribution minLovelace _)) =
       if faucetOperation issuer
         then lovelaceToInt minLovelace * length tokenDistribution
         else 0

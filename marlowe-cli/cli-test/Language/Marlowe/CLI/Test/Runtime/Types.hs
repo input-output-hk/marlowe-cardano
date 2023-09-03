@@ -49,7 +49,7 @@ module Language.Marlowe.CLI.Test.Runtime.Types (
   currentMarloweData,
   defaultOperationTimeout,
   eraL,
-  executionModeL,
+  txBuildupContextL,
   knownContractsL,
   rcMarloweThread,
   runtimeClientConnectorT,
@@ -87,7 +87,6 @@ import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Test.Contract (ContractNickname)
 import Language.Marlowe.CLI.Test.Contract qualified as Contract
 import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON
-import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode)
 import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError)
 import Language.Marlowe.CLI.Test.Log qualified as Log
 import Language.Marlowe.CLI.Test.Operation.Aeson (
@@ -101,7 +100,7 @@ import Language.Marlowe.CLI.Test.Operation.Aeson (
 import Language.Marlowe.CLI.Test.Operation.Aeson qualified as Operation
 import Language.Marlowe.CLI.Test.Wallet.Types (Currencies, CurrencyNickname, WalletNickname, Wallets)
 import Language.Marlowe.CLI.Test.Wallet.Types qualified as Wallet
-import Language.Marlowe.CLI.Types (SomeTimeout)
+import Language.Marlowe.CLI.Types (SomeTimeout, TxBuildupContext)
 import Language.Marlowe.Cardano.Thread (
   AnyMarloweThread,
   MarloweThread,
@@ -331,11 +330,14 @@ class HasInterpretEnv env era | env -> era where
   runtimeMonitorInputT :: Traversal' env RuntimeMonitorInput
   runtimeClientConnectorT :: Traversal' env (Network.Protocol.Connector Marlowe.Protocol.MarloweRuntimeClient IO)
 
-  -- runtimeClientConnectorT :: Traversal' env (Network.Protocol.SomeClientConnector Marlowe.Protocol.MarloweRuntimeClient IO)
-  executionModeL :: Lens' env ExecutionMode
   connectionT :: Traversal' env (LocalNodeConnectInfo CardanoMode)
   eraL :: Lens' env (ScriptDataSupportedInEra era)
   slotConfigL :: Lens' env SlotConfig
+
+  --
+  -- Reevaluate if we have any use case for "simulation mode" here.
+  -- We are not really applying inputs etc.
+  txBuildupContextL :: Lens' env (TxBuildupContext era)
 
 type InterpretMonad env st m era =
   ( MonadState st m

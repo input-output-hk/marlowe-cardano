@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  $Headers
@@ -8,20 +9,32 @@
 --
 -----------------------------------------------------------------------------
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
 
 -- | Input/output functions for the Marlowe CLI tool.
 module Language.Marlowe.CLI.IO (
   -- * IO
   decodeFileBuiltinData,
   decodeFileStrict,
+  getEraHistory,
+  getProtocolParams,
   getProtocolVersion,
+  getPV2CostModelParams,
+  getSystemStart,
   maybeWriteJson,
   maybeWriteYaml,
   maybeWriteTextEnvelope,
   queryInEra,
+  queryUTxOs,
+  queryByAddress,
   readMaybeMetadata,
   readSigningKey,
   readVerificationKey,
+  submitTxBody,
+  submitTxBody',
 
   -- * Environment
   getDefaultCostModel,
@@ -37,56 +50,86 @@ module Language.Marlowe.CLI.IO (
 import Cardano.Api (
   AsType (..),
   CardanoMode,
+  ConsensusModeIsMultiEra (..),
   FromSomeType (..),
   HasTextEnvelope,
   LocalNodeConnectInfo,
   NetworkId (..),
   NetworkMagic (..),
   QueryInEra (QueryInShelleyBasedEra),
-  QueryInMode (QueryInEra),
+  QueryInMode (..),
   QueryInShelleyBasedEra (QueryProtocolParameters),
   ScriptDataJsonSchema (..),
+  ShelleyWitnessSigningKey (..),
   TxMetadataInEra (..),
   TxMetadataJsonSchema (..),
+  getTxId,
   metadataFromJson,
   queryNodeLocalState,
   readFileTextEnvelopeAnyOf,
   scriptDataFromJson,
   serialiseToTextEnvelope,
+  signShelleyTransaction,
+  submitTxToNodeLocal,
   writeFileTextEnvelope,
  )
 import Cardano.Api.Shelley (ProtocolParameters (protocolParamProtocolVersion), toPlutusData)
-import Control.Monad ((<=<))
-import Control.Monad.Except (MonadError, MonadIO, liftEither, liftIO)
+import Cardano.Ledger.Alonzo.Scripts (ExUnits (..))
+import Control.Monad.Except (MonadError (..), MonadIO, liftEither, liftIO)
 import Data.Aeson (FromJSON (..), ToJSON)
 import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.Bifunctor (first)
 import Data.Yaml as Yaml (decodeFileEither, encode, encodeFile)
+import Data.ByteString qualified as BS (length)
 import Language.Marlowe.CLI.Types (
   CliEnv,
   CliError (..),
+  ExecutionLimitsExceeded (..),
+  NodeStateInfo (..),
+  QueryExecutionContext (..),
   SigningKeyFile (unSigningKeyFile),
   SomePaymentSigningKey,
   SomePaymentVerificationKey,
+  SubmitMode (..),
+  TxBuildupContext (..),
   askEra,
   asksEra,
+  toAddressAny',
   toEraInMode,
+  toMultiAssetSupportedInEra,
   toShelleyBasedEra,
   toTxMetadataSupportedInEra,
+  withCardanoEra,
  )
 import Plutus.V1.Ledger.Api (BuiltinData)
 import PlutusTx (dataToBuiltinData)
 import System.Environment (lookupEnv)
 import Text.Read (readMaybe)
 
+import Cardano.Api.Shelley qualified as C
+import Contrib.Cardano.TxBody qualified as T
+import Contrib.Cardano.UTxO qualified as U
+import Contrib.Control.Concurrent (threadDelay)
+import Control.Concurrent.STM (atomically, readTVar, readTVarIO, writeTVar)
+import Control.Error (note)
+import Control.Monad (when, (<=<))
 import Control.Monad.Reader (MonadReader)
 import Data.ByteString.Char8 qualified as BS8 (putStrLn)
 import Data.ByteString.Lazy qualified as LBS (writeFile)
 import Data.ByteString.Lazy.Char8 qualified as LBS8 (putStrLn)
-import Language.Marlowe.CLI.Cardano.Api (toPlutusProtocolVersion)
+import Data.Functor ((<&>))
+import Data.Map.Strict qualified as Map
+import Data.Set qualified as Set
+import Data.Time.Units (Second, TimeUnit, toMicroseconds)
+import GHC.Natural (naturalFromInteger)
+import Language.Marlowe.CLI.Cardano.Api (toPlutusProtocolVersion, withShelleyBasedEra)
+import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult (..))
 import Plutus.ApiCommon (ProtocolVersion)
+import Plutus.V1.Ledger.Api qualified as P
 import Plutus.V2.Ledger.Api (CostModelParams)
 import PlutusCore.Evaluation.Machine.ExBudgetingDefaults (defaultCostModelParams)
+import System.Directory.Internal.Prelude (fromMaybe)
+import System.IO (hPrint, hPutStrLn, stderr)
 
 -- | Lift an 'Either' result into the CLI.
 liftCli
@@ -253,6 +296,8 @@ getDefaultCostModel :: (MonadError CliError m) => m CostModelParams
 getDefaultCostModel = liftCliMaybe "Missing default cost model." defaultCostModelParams
 
 -- | Query a node in an era.
+-- TODO: At the end we would like to make this private and proxy everything through
+-- `QueryExecutionContext` parametrized functions.
 queryInEra
   :: (MonadError CliError m)
   => (MonadIO m)
@@ -272,12 +317,284 @@ queryInEra connection q = do
           QueryInShelleyBasedEra (toShelleyBasedEra era) q
   liftCli res
 
+queryUTxOs
+  :: (MonadError CliError m)
+  => (MonadIO m)
+  => (MonadReader (CliEnv era) m)
+  => QueryExecutionContext era
+  -- ^ The query context.
+  -> C.QueryUTxOFilter
+  -- ^ The query.
+  -> m (C.UTxO era)
+  -- ^ Action for running the query.
+queryUTxOs (PureQueryContext utxosVar _) queryFilterFilter = do
+  utxos <- liftIO $ readTVarIO utxosVar
+  case queryFilterFilter of
+    C.QueryUTxOByAddress addresses -> do
+      let utxosList = U.toList utxos
+          filterStep (_, C.TxOut address _ _ _) =
+            Set.member (toAddressAny' address) addresses
+      pure $ U.fromList $ filter filterStep utxosList
+    C.QueryUTxOWhole -> pure utxos
+    C.QueryUTxOByTxIn txins -> do
+      let utxosList = U.toList utxos
+          filterStep (txin, _) = Set.member txin txins
+      pure $ U.fromList $ filter filterStep utxosList
+queryUTxOs (QueryNode connection) queryFilterFilter = queryInEra connection $ C.QueryUTxO queryFilterFilter
+
+queryByAddress
+  :: (MonadError CliError m)
+  => (MonadIO m)
+  => (MonadReader (CliEnv era) m)
+  => QueryExecutionContext era
+  -> C.AddressInEra era
+  -- ^ Address to query.
+  -> m (C.UTxO era)
+  -- ^ Action for running the query.
+queryByAddress queryCtx = queryUTxOs queryCtx . C.QueryUTxOByAddress . Set.singleton . toAddressAny'
+
+getProtocolParams
+  :: (MonadError CliError m)
+  => (MonadIO m)
+  => (MonadReader (CliEnv era) m)
+  => QueryExecutionContext era
+  -> m C.ProtocolParameters
+getProtocolParams (QueryNode connection) = queryInEra connection QueryProtocolParameters
+getProtocolParams (PureQueryContext _ NodeStateInfo{nsiProtocolParameters}) = pure nsiProtocolParameters
+
+queryAny :: (MonadError CliError m, MonadIO m) => LocalNodeConnectInfo mode -> QueryInMode mode a -> m a
+queryAny connection = liftCliIO . queryNodeLocalState connection Nothing
+
+getSystemStart
+  :: (MonadError CliError m)
+  => (MonadIO m)
+  => QueryExecutionContext era
+  -> m C.SystemStart
+getSystemStart (QueryNode connection) = queryAny connection QuerySystemStart
+getSystemStart (PureQueryContext _ NodeStateInfo{nsiSystemStart}) = pure nsiSystemStart
+
+getEraHistory
+  :: (MonadError CliError m)
+  => (MonadIO m)
+  => QueryExecutionContext era
+  -> m (C.EraHistory C.CardanoMode)
+getEraHistory (QueryNode connection) = queryAny connection $ QueryEraHistory CardanoModeIsMultiEra
+getEraHistory (PureQueryContext _ NodeStateInfo{nsiEraHistory}) = pure nsiEraHistory
+
 getProtocolVersion
   :: (MonadError CliError m)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
-  => LocalNodeConnectInfo CardanoMode
+  => QueryExecutionContext era
   -> m ProtocolVersion
-getProtocolVersion connection = do
-  protocol <- queryInEra connection QueryProtocolParameters
+getProtocolVersion queryCtx = do
+  protocol <- getProtocolParams queryCtx
   pure $ toPlutusProtocolVersion $ protocolParamProtocolVersion protocol
+
+getPV2CostModelParams
+  :: (MonadError CliError m)
+  => (MonadIO m)
+  => (MonadReader (CliEnv era) m)
+  => QueryExecutionContext era
+  -> m P.CostModelParams
+getPV2CostModelParams queryCtx = do
+  protocolParams <- getProtocolParams queryCtx
+  let pv2 = C.AnyPlutusScriptVersion C.PlutusScriptV2
+  C.CostModel costModel <- do
+    let costModels = C.protocolParamCostModels protocolParams
+    liftCli $ note ("Missing PV2 cost model" :: String) $ Map.lookup pv2 costModels
+
+  defaultCostModel <- getDefaultCostModel
+  -- Let's compare keys - if they differ then throw an error:
+  let defaultModelKeys = Set.fromList $ Map.keys defaultCostModel
+      modelKeys = Set.fromList $ Map.keys costModel
+  when (defaultModelKeys /= modelKeys) $
+    liftCli $
+      Left $
+        "Provided cost model keys differ from default cost model keys - non common keys are: "
+          <> show (Set.toList $ Set.difference (Set.union defaultModelKeys modelKeys) (Set.intersection defaultModelKeys modelKeys))
+  -- Let's warn if the provided cost model is different (at this point it is value difference):
+  -- when (defaultCostModel /= costModel) $ liftIO do
+  --   hPutStrLn stderr
+  --     $ "Provided cost model values differs from default cost model:"
+  --     <> "\nDefault cost model: " <> show defaultCostModel
+  --     <> "\nProvided cost model: " <> show costModel
+  pure costModel
+
+-- | Wait for transactions to be confirmed as UTxOs.
+waitForUtxos
+  :: (TimeUnit a)
+  => (MonadError CliError m)
+  => (MonadIO m)
+  => (MonadReader (CliEnv era) m)
+  => LocalNodeConnectInfo CardanoMode
+  -- ^ The connection info for the local node.
+  -> a
+  -- ^ The time interval to wait for the transaction to be confirmed.
+  -> [C.TxIn]
+  -- ^ The transactions to wait for.
+  -> m ()
+  -- ^ Action to wait for the transaction confirmations.
+waitForUtxos connection timeout txIns = do
+  let timeoutMicroseconds = toMicroseconds timeout
+      pause = 5 :: Second
+      pauseMicroseconds = toMicroseconds pause
+      txIns' = Set.fromList txIns
+      go 0 = throwError "Timeout waiting for transaction to be confirmed."
+      go n = do
+        liftIO . threadDelay $ pause
+        utxos <- do
+          queryInEra connection
+            . C.QueryUTxO
+            . C.QueryUTxOByTxIn
+            $ txIns'
+        if Map.keysSet (C.unUTxO utxos) == txIns'
+          then do
+            pure ()
+          else go (n - 1 :: Int)
+  go . ceiling $ (fromIntegral timeoutMicroseconds / fromIntegral pauseMicroseconds :: Double)
+
+checkTxLimits
+  :: C.ScriptDataSupportedInEra era
+  -- ^ The era to serialise the transaction in.
+  -> C.ProtocolParameters
+  -- ^ The protocol params to check against.
+  -> C.TxBody era
+  -- ^ The transaction body.
+  -> Maybe ExecutionLimitsExceeded
+  -- ^ The error if the transaction exceeds the limits.
+checkTxLimits era pp txBody = do
+  let size = naturalFromInteger $ toInteger $ BS.length $ withCardanoEra era $ C.serialiseToCBOR txBody
+      maxSize = C.protocolParamMaxTxSize pp
+      fractionSize = 100 * size `div` maxSize
+
+      ExUnits memory steps = T.exUnits txBody
+
+      maxExecutionUnits = C.protocolParamMaxTxExUnits pp
+      fractionMemory = 100 * memory `div` maybe 0 C.executionMemory maxExecutionUnits
+      fractionSteps = 100 * steps `div` maybe 0 C.executionSteps maxExecutionUnits
+  if fractionSize >= 100 || fractionMemory >= 100 || fractionSteps >= 100
+    then Just $ ExecutionLimitsExceeded fractionMemory fractionSteps fractionSize
+    else Nothing
+
+-- | Sign and submit a transaction.
+submitTxBody
+  :: (MonadError CliError m)
+  => (MonadIO m)
+  => (MonadReader (CliEnv era) m)
+  => TxBuildupContext era
+  -- ^ The connection info for the local node.
+  -> C.TxBody era
+  -- ^ The transaction body.
+  -> [SomePaymentSigningKey]
+  -- ^ The signing keys.
+  -> m C.TxId
+  -- ^ The action to submit the transaction.
+submitTxBody txBuildupContext txBody signings =
+  do
+    era <- askEra
+    let tx =
+          withShelleyBasedEra era $
+            signShelleyTransaction txBody $
+              either WitnessPaymentKey WitnessPaymentExtendedKey
+                <$> signings
+        txId = getTxId txBody
+    case txBuildupContext of
+      (NodeTxBuildup _ DontSubmit) -> pure txId
+      (NodeTxBuildup connection (DoSubmit timeout)) -> do
+        result <-
+          liftIO
+            . submitTxToNodeLocal connection
+            . C.TxInMode tx
+            $ toEraInMode era
+        case result of
+          SubmitSuccess -> do
+            when (toMicroseconds timeout > 0) $
+              waitForUtxos connection timeout [C.TxIn txId $ C.TxIx 0]
+            pure txId
+          SubmitFail reason -> do
+            liftIO $ hPutStrLn stderr "Submission of the transaction failed:"
+            liftIO $ hPrint stderr txBody
+            throwError . CliError $ show reason
+      (PureTxBuildup utxosVar NodeStateInfo{nsiProtocolParameters}) -> do
+        case checkTxLimits era nsiProtocolParameters txBody of
+          Just exceeded -> do
+            throwError . CliError $ show exceeded
+          Nothing -> pure ()
+        let C.TxBody txBodyContent = txBody
+
+            txIns = map fst . C.txIns $ txBodyContent
+            txInsRef = case C.txInsReference txBodyContent of
+              C.TxInsReferenceNone -> []
+              C.TxInsReference _ ins -> ins
+            txOuts = map C.toCtxUTxOTxOut . C.txOuts $ txBodyContent
+            newUTxOs = zip [0 ..] txOuts <&> \(txIx, txOut) -> (C.TxIn txId (C.TxIx txIx), txOut)
+        liftIO $ hPutStrLn stderr "Submitting transaction to pure context.."
+        liftIO $ hPutStrLn stderr $ "txIns: " <> show txIns
+        liftIO $ hPutStrLn stderr $ "txInsRef: " <> show txInsRef
+        res <- liftIO $ atomically do
+          utxos <- readTVar utxosVar
+          let utxosMap = C.unUTxO utxos
+          if any (flip Map.notMember utxosMap) (txIns ++ txInsRef)
+            then
+              pure $
+                Left $
+                  "UTxO missing:"
+                    <> show (filter (flip Map.notMember utxosMap) (txIns ++ txInsRef))
+                    <> " . All UTxOs: "
+                    <> show (Map.keys utxosMap)
+            else do
+              let utxosList = U.toList utxos
+                  utxosList' =
+                    newUTxOs
+                      <> filter (\(txIn, _) -> txIn `notElem` txIns) utxosList
+                  utxos' = U.fromList utxosList'
+              writeTVar utxosVar utxos'
+              pure $ Right txId
+        liftCli res
+
+-- A version of submit which performs an attempt to extra fee balancing on failure
+-- (we experienced failures on the cardano-node for already balanced transactions).
+-- TODO: Refactor this function so it doesn't require the TxBodyContent to be passed in.
+submitTxBody'
+  :: (MonadError CliError m)
+  => (MonadIO m)
+  => (MonadReader (CliEnv era) m)
+  => TxBuildupContext era
+  -- ^ The connection info for the local node.
+  -> C.TxBody era
+  -- ^ The transaction body.
+  -> C.TxBodyContent C.BuildTx era
+  -- ^ The same transaction body content - used to rebuild the transaction with adjusted fees.
+  -> C.AddressInEra era
+  -- ^ The change address.
+  -> [SomePaymentSigningKey]
+  -- ^ The signing keys.
+  -> m (C.TxId, C.TxBody era)
+  -- ^ The action to submit the transaction.
+submitTxBody' txBuildupCtx body bodyContent changeAddress signingKeys = do
+  era <- askEra
+  ((,body) <$> submitTxBody txBuildupCtx body signingKeys) `catchError` \err -> do
+    liftIO $ hPutStrLn stderr "Adjusting the fees and resubmitting failing transaction."
+    liftIO $ hPrint stderr err
+    let feeBalancingMargin = C.Lovelace 20000
+        C.TxBodyContent{..} = bodyContent
+        -- Find change UTxO and subtract the fee margin.
+        step (C.TxOut addr value datum refScript) (False, outs)
+          | addr == changeAddress && (fromMaybe 0 . C.valueToLovelace $ C.txOutValueToValue value) > feeBalancingMargin = do
+              let value' = C.txOutValueToValue value <> C.negateValue (C.lovelaceToValue feeBalancingMargin)
+                  out' = C.TxOut addr (C.TxOutValue (toMultiAssetSupportedInEra era) value') datum refScript
+              (True, out' : outs)
+        step out (flag, outs) = (flag, out : outs)
+
+        (adjusted, txOuts') = foldr step (False, []) txOuts
+    -- Increase the transaction fee by the chosen margin.
+    txFee' <- case (adjusted, txFee) of
+      (True, C.TxFeeExplicit feesInEra value) -> pure $ C.TxFeeExplicit feesInEra (value + feeBalancingMargin)
+      _ -> throwError . CliError $ "Unable to adjust the change during resubmission attempt."
+
+    withCardanoEra era $ case C.makeTransactionBody (C.TxBodyContent{..}{C.txOuts = txOuts', C.txFee = txFee'}) of
+      Left err' -> throwError . CliError $ "Failure during reconstruction of the failing tx body: " <> show err'
+      Right body' -> do
+        txId <- submitTxBody txBuildupCtx body' signingKeys
+        pure (txId, body')

@@ -111,10 +111,13 @@ import Language.Marlowe.CLI.Export (
  )
 import Language.Marlowe.CLI.IO (
   decodeFileStrict,
+  getProtocolParams,
   liftCli,
   liftCliIO,
   maybeWriteJson,
+  queryByAddress,
   queryInEra,
+  queryUTxOs,
   readMaybeMetadata,
   readSigningKey,
  )
@@ -143,19 +146,21 @@ import Language.Marlowe.CLI.Types (
   PayFromScript (..),
   PrintStats (PrintStats),
   PublishingStrategy,
+  QueryExecutionContext (..),
   RedeemerInfo (..),
   SigningKeyFile (..),
   SomeMarloweTransaction (..),
   SomePaymentSigningKey,
-  SubmitMode (DoSubmit, DontSubmit),
   TxBodyFile (TxBodyFile, unTxBodyFile),
+  TxBuildupContext (..),
   ValidatorInfo (..),
   askEra,
   defaultCoinSelectionStrategy,
   doWithCardanoEra,
+  mkNodeTxBuildup,
   mrOpenRoleValidator,
-  submitModeFromTimeout,
   toAddressAny',
+  toQueryContext,
   toShelleyAddress,
   txIn,
   validatorInfoScriptOrReference,
@@ -302,7 +307,7 @@ initializeTransaction connection marloweParams slotConfig protocolVersion costMo
       Nothing -> pure Nothing
       Just publishingStrategy' ->
         withShelleyBasedEra era $
-          findMarloweScriptsRefs connection publishingStrategy' (PrintStats printStats)
+          findMarloweScriptsRefs (QueryNode connection) publishingStrategy' (PrintStats printStats)
     contract <- decodeFileStrict contractFile
     state <- decodeFileStrict stateFile
     marloweTransaction <-
@@ -406,6 +411,7 @@ initializeTransactionUsingScriptRefsImpl
   -> SlotConfig
   -- ^ The POSIXTime-to-slot configuration.
   -> MarloweScriptsRefs lang era
+  -- ^ The reference scripts.
   -> StakeAddressReference
   -- ^ The stake address.
   -> Contract
@@ -640,7 +646,7 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
 
           (body :: TxBody era) <-
             runTransactionImpl
-              connection
+              (mkNodeTxBuildup connection timeout)
               marloweInBundle'
               marloweOut''
               inputs
@@ -648,7 +654,6 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
               changeAddress
               signingKeys
               metadata
-              timeout
               printStats
               invalid
           doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
@@ -667,7 +672,7 @@ runTransactionImpl
   => (IsPlutusScriptLanguage lang)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
-  => LocalNodeConnectInfo CardanoMode
+  => TxBuildupContext era
   -- ^ The connection info for the local node.
   -> Maybe (MarloweTransaction lang era, TxIn, TxIn)
   -- ^ The Marlowe initial state and initial contract, along with the script eUTxO being spent and the collateral, unless the transaction opens the contract.
@@ -683,17 +688,16 @@ runTransactionImpl
   -- ^ Required signing keys.
   -> TxMetadataInEra era
   -- ^ Tx metadata.
-  -> Maybe Second
-  -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
   -> Bool
   -- ^ Whether to print statistics about the transaction.
   -> Bool
   -- ^ Assertion that the transaction is invalid.
   -> m (TxBody era)
   -- ^ Action to build the transaction body.
-runTransactionImpl connection marloweInBundle marloweOut' inputs outputs changeAddress signingKeys metadata timeout printStats invalid =
+runTransactionImpl txBuildupCtx marloweInBundle marloweOut' inputs outputs changeAddress signingKeys metadata printStats invalid =
   do
-    protocol <- queryInEra connection QueryProtocolParameters
+    let queryCtx = toQueryContext txBuildupCtx
+    protocol <- getProtocolParams queryCtx
     era <- askEra @era
     let marloweParams = MC.marloweParams $ mtRolesCurrency marloweOut'
         go :: MarloweTransaction lang era -> m (TxBody era)
@@ -774,7 +778,7 @@ runTransactionImpl connection marloweInBundle marloweOut' inputs outputs changeA
           outputs' <- for (payments <> outputs <> datumOutputs) (uncurry3 makeTxOut')
           body <-
             buildBody
-              connection
+              queryCtx
               spend
               continue
               []
@@ -788,10 +792,7 @@ runTransactionImpl connection marloweInBundle marloweOut' inputs outputs changeA
               metadata
               printStats
               invalid
-          forM_ timeout $
-            if invalid
-              then const $ throwError "Refusing to submit an invalid transaction: collateral would be lost."
-              else submitBody connection body signingKeys
+          void $ submitBody txBuildupCtx body signingKeys invalid
           pure body
     go marloweOut'
 
@@ -858,7 +859,7 @@ withdrawFunds connection marloweOutFile roleName collateral inputs outputs chang
     outputs' <- mapM (uncurry3 makeTxOut') $ withdrawal : outputs
     body <-
       buildBody
-        connection
+        (QueryNode connection)
         spend
         Nothing
         []
@@ -873,12 +874,8 @@ withdrawFunds connection marloweOutFile roleName collateral inputs outputs chang
         printStats
         invalid
     doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
-    forM_ timeout $
-      if invalid
-        then const $ throwError "Refusing to submit an invalid transaction: collateral would be lost."
-        else submitBody connection body signingKeys
-    pure $
-      getTxId body
+    let txBuildupCtx = mkNodeTxBuildup connection timeout
+    submitBody txBuildupCtx body signingKeys invalid
 
 -- | Run a Marlowe transaction using FS, without selecting inputs or outputs.
 autoRunTransaction
@@ -914,9 +911,7 @@ autoRunTransaction connection marloweInBundle marloweOutFile changeAddress signi
     SomeMarloweTransaction _ era' marloweOut' <- decodeFileStrict marloweOutFile
     era <- askEra @era
     signingKeys <- mapM readSigningKey signingKeyFiles
-    let submitMode = submitModeFromTimeout timeout
-
-        go :: forall lang. (IsPlutusScriptLanguage lang) => (C.IsCardanoEra era) => MarloweTransaction lang era -> m TxId
+    let go :: forall lang. (IsPlutusScriptLanguage lang) => (C.IsCardanoEra era) => MarloweTransaction lang era -> m TxId
         go marloweOut'' = do
           marloweInBundle' <- case marloweInBundle of
             Nothing -> pure Nothing
@@ -926,14 +921,13 @@ autoRunTransaction connection marloweInBundle marloweOutFile changeAddress signi
 
           (body :: TxBody era) <-
             autoRunTransactionImpl
-              connection
+              (mkNodeTxBuildup connection timeout)
               marloweInBundle'
               marloweOut''
               []
               changeAddress
               signingKeys
               metadata
-              submitMode
               printStats
               invalid
           -- Write the transaction file.
@@ -953,7 +947,7 @@ autoRunTransactionImpl
   => (IsPlutusScriptLanguage lang)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
-  => LocalNodeConnectInfo CardanoMode
+  => TxBuildupContext era
   -- ^ The connection info for the local node.
   -> Maybe (MarloweTransaction lang era, TxIn)
   -- ^ The JSON file with the Marlowe initial state and initial contract, unless the transaction opens the contract.
@@ -965,18 +959,16 @@ autoRunTransactionImpl
   -> [SomePaymentSigningKey]
   -> TxMetadataInEra era
   -- ^ The file containing JSON metadata, if any.
-  -> SubmitMode
-  -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
   -> Bool
   -- ^ Whether to print statistics about the transaction.
   -> Bool
   -- ^ Assertion that the transaction is invalid.
   -> m (TxBody era)
   -- ^ Action to build the transaction body.
-autoRunTransactionImpl connection marloweInBundle marloweOut' extraSpend changeAddress signingKeys metadata submitMode printStats invalid =
+autoRunTransactionImpl txBuildupCtx marloweInBundle marloweOut' extraSpend changeAddress signingKeys metadata printStats invalid =
   do
-    -- Fetch the protocol parameters.
-    protocol <- queryInEra connection QueryProtocolParameters
+    let queryCtx = toQueryContext txBuildupCtx
+    protocol <- getProtocolParams queryCtx
     -- Read the Marlowe transaction information for the output.
     -- Fetch the era.
     era <- askEra @era
@@ -992,7 +984,6 @@ autoRunTransactionImpl connection marloweInBundle marloweOut' extraSpend changeA
               -- This is a non-creation transaction.
               Just (marloweIn, spend) -> do
                 -- Find the results of the previous transaction.
-                -- SomeMarloweTransaction _ _ marloweIn  <- decodeFileStrict marloweInFile
                 let -- Fetch the validator.
                     validatorInfo = mtValidator marloweIn
                     validator = validatorInfoScriptOrReference validatorInfo
@@ -1077,8 +1068,7 @@ autoRunTransactionImpl connection marloweInBundle marloweOut' extraSpend changeA
           incoming <- do
             let txIns = S.fromList $ spend <&> \PayFromScript{txIn} -> txIn
             fmap (mconcat . fmap incomingValue . M.toList . unUTxO)
-              . queryInEra connection
-              . QueryUTxO
+              . queryUTxOs queryCtx
               . QueryUTxOByTxIn
               $ txIns
 
@@ -1098,7 +1088,7 @@ autoRunTransactionImpl connection marloweInBundle marloweOut' extraSpend changeA
           -- Select the coins.
           (collateral, extraInputs, revisedOutputs) <-
             selectCoins
-              connection
+              queryCtx
               incoming
               txOuts
               continue
@@ -1108,7 +1098,7 @@ autoRunTransactionImpl connection marloweInBundle marloweOut' extraSpend changeA
           -- Build the transaction body.
           body <-
             buildBody
-              connection
+              queryCtx
               spend
               continue
               []
@@ -1122,14 +1112,8 @@ autoRunTransactionImpl connection marloweInBundle marloweOut' extraSpend changeA
               metadata
               printStats
               invalid
-          -- Optionally submit the transaction, waiting for a timeout.
-          case submitMode of
-            DontSubmit -> pure ()
-            DoSubmit timeout ->
-              if invalid
-                then throwError "Refusing to submit an invalid transaction: collateral would be lost."
-                else void $ submitBody connection body signingKeys timeout
-          -- Return the transaction identifier.
+          void $ submitBody txBuildupCtx body signingKeys invalid
+          -- Return the transaction body.
           pure body
     go marloweOut'
 
@@ -1213,10 +1197,9 @@ autoWithdrawFunds connection marloweOutFile roleName changeAddress signingKeyFil
               rolePayoutValidator = mtRoleValidator marloweOut'
 
           -- Write the transaction file.
-          let submitMode = submitModeFromTimeout timeout
           (txBody :: TxBody era) <-
             autoWithdrawFundsImpl
-              connection
+              (mkNodeTxBuildup connection timeout)
               token
               rolePayoutValidator
               Nothing
@@ -1224,7 +1207,6 @@ autoWithdrawFunds connection marloweOutFile roleName changeAddress signingKeyFil
               signingKeys
               Nothing
               metadata
-              submitMode
               printStats
               invalid
 
@@ -1246,7 +1228,7 @@ autoWithdrawFundsImpl
   => (MonadReader (CliEnv era) m)
   => (MonadIO m)
   => (IsPlutusScriptLanguage lang)
-  => LocalNodeConnectInfo CardanoMode
+  => TxBuildupContext era
   -- ^ The connection info for the local node.
   -> Token
   -- ^ The role token.
@@ -1262,18 +1244,17 @@ autoWithdrawFundsImpl
   -- ^ Filtering option so transactoin limits can be imposed.
   -> TxMetadataInEra era
   -- ^ The file containing JSON metadata, if any.
-  -> SubmitMode
-  -- ^ Number of seconds to wait for the transaction to be confirmed, if it is to be confirmed.
   -> PrintStats
   -- ^ Whether to print statistics about the transaction.
   -> Bool
   -- ^ Assertion that the transaction is invalid.
   -> m (TxBody era)
   -- ^ Action to build the transaction body.
-autoWithdrawFundsImpl connection token validatorInfo range changeAddress signingKeys possibleFilter metadata submitMode (PrintStats printStats) invalid =
+autoWithdrawFundsImpl txBuildupCtx token validatorInfo range changeAddress signingKeys possibleFilter metadata (PrintStats printStats) invalid =
   do
+    let queryCtx = toQueryContext txBuildupCtx
     -- Fetch the protocol parameters.
-    protocol <- queryInEra connection QueryProtocolParameters
+    protocol <- getProtocolParams queryCtx
     let Token rolesCurrency roleName = token
         filterPayoutUtxos = fromMaybe id possibleFilter
         -- Build the datum corresponding to the role name.
@@ -1295,11 +1276,7 @@ autoWithdrawFundsImpl connection token validatorInfo range changeAddress signing
     -- Find the role token.
     allPayouts <-
       fmap (map AnUTxO . filter (checkRole . snd) . M.toList . unUTxO)
-        . queryInEra connection
-        . QueryUTxO
-        . QueryUTxOByAddress
-        . S.singleton
-        . toAddressAny'
+        . queryByAddress queryCtx
         $ roleAddress
     -- Set the value of one role token.
     role <- liftCli $ toCardanoValue $ singleton rolesCurrency roleName 1
@@ -1315,7 +1292,7 @@ autoWithdrawFundsImpl connection token validatorInfo range changeAddress signing
     -- Select the coins.
     (collateral, extraInputs, revisedOutputs) <-
       selectCoins
-        connection
+        queryCtx
         withdrawn
         [output]
         Nothing
@@ -1325,7 +1302,7 @@ autoWithdrawFundsImpl connection token validatorInfo range changeAddress signing
     -- Build the transaction body.
     body <-
       buildBody
-        connection
+        queryCtx
         spend
         Nothing
         []
@@ -1339,14 +1316,8 @@ autoWithdrawFundsImpl connection token validatorInfo range changeAddress signing
         metadata
         printStats
         invalid
-    -- Optionally submit the transaction, waiting for a timeout.
-    case submitMode of
-      DontSubmit -> pure ()
-      DoSubmit timeout ->
-        if invalid
-          then throwError "Refusing to submit an invalid transaction: collateral would be lost."
-          else void $ submitBody connection body signingKeys timeout
-    -- Return the transaction identifier.
+    void $ submitBody txBuildupCtx body signingKeys invalid
+    -- Return the transaction body.
     pure body
 
 toCardanoValue :: Value -> Either String C.Value
