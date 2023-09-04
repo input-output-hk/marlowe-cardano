@@ -58,11 +58,3 @@ jobs:
           MARLOWE_RT_TEST_DB_HOST: localhost
           MARLOWE_RT_TEST_CLEANUP_DATABASE: "False"
           MARLOWE_RT_TEST_SUBMIT_CONFIRMATION_BLOCKS: 0
-      - name: Upload failed test directories as artifacts
-        if: ${{ failure() }}
-        uses: actions/upload-artifact@v3
-        with:
-          name: workspaces
-          path: |
-            /tmp/workspaces
-            !/tmp/workspaces/**/*.socket
