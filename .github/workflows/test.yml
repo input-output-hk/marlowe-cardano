@@ -8,26 +8,6 @@ on:
       - main
   workflow_call:
 jobs:
-<<<<<<< HEAD
-=======
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout the code
-        uses: actions/checkout@v3
-      - name: Install Nix
-        uses: cachix/install-nix-action@v21
-        with:
-          nix_path: nixpkgs=channel:nixos-2305
-          install_url: https://releases.nixos.org/nix/nix-2.16.0/install
-          extra_nix_config: |
-            trusted-public-keys = ${{ env.TRUSTED_PUBLIC_KEYS }}
-            substituters = ${{ env.SUBSTITUTERS }}
-            experimental-features = nix-command flakes
-      - name: Clean Build on Ubuntu
-        run: |
-          nix develop --show-trace --command bash -c "cabal clean && cabal update && cabal build all"
->>>>>>> 002ac03d9 (Attempt to fix workflow)
   integration:
     needs: build
     runs-on: ubuntu-latest
@@ -55,16 +35,12 @@ jobs:
             trusted-public-keys = ${{ env.TRUSTED_PUBLIC_KEYS }}
             substituters = ${{ env.SUBSTITUTERS }}
             experimental-features = nix-command flakes
-<<<<<<< HEAD
       - name: Setup Cachix
         uses: cachix/cachix-action@v12
         with:
           name: ${{ env.CACHE_NAME }}
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
       - name: Evaluate test derivation
-=======
-      - name: Run tests
->>>>>>> 002ac03d9 (Attempt to fix workflow)
         run: |
           nix build --dry-run --json .#integration-tests > test-store-path.json
       - name: Cache test results
@@ -88,13 +64,19 @@ jobs:
           MARLOWE_RT_TEST_CLEANUP_DATABASE: "False"
           MARLOWE_RT_TEST_SUBMIT_CONFIRMATION_BLOCKS: 0
 <<<<<<< HEAD
+<<<<<<< HEAD
       - if: ${{ failure() && steps.cache-results.outputs.cache-hit != 'true' }}
         name: Upload failed test directories as artifacts
+=======
+      - name: Upload failed test directories as artifacts
+        if: ${{ failure() }}
+>>>>>>> 5e75f0316 (WIP)
         uses: actions/upload-artifact@v3
         with:
           name: workspaces
           path: |
             /tmp/workspaces
+<<<<<<< HEAD
             !/tmp/workspaces/**/*.socket
       - if: ${{ steps.cache-results.outputs.cache-hit == 'true' }}
         name: Display cached test results
@@ -104,3 +86,6 @@ jobs:
           exit $(cat ~/integration-tests.status)
 =======
 >>>>>>> 002ac03d9 (Attempt to fix workflow)
+=======
+            !/tmp/workspaces/**/*.socket
+>>>>>>> 5e75f0316 (WIP)
