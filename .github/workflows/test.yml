@@ -29,6 +29,7 @@ jobs:
         run: |
           nix develop --show-trace --command bash -c "cabal clean && cabal update && cabal build all"
   integration:
+    needs: build
     runs-on: ubuntu-latest
     services:
       postgres:
