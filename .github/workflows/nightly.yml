@@ -62,7 +62,7 @@ jobs:
 
       - name: Run Marlowe Finder on Preprod
         run: |
-          nix run .#marlowe-apps-exe-marlowe-finder-ghc8107 -- \
+          nix run .#marlowe-finder -- \
             --marlowe-runtime-host marlowe-runtime-preprod.scdev.aws.iohkdev.io \
             --end-at-tip
 
@@ -106,7 +106,7 @@ jobs:
 
       - name: Run Marlowe Scaling on Preview
         run: |
-          nix run .#marlowe-apps-exe-marlowe-scaling-ghc8107 -- \
+          nix run .#marlowe-scaling -- \
             --marlowe-runtime-host marlowe-runtime-preview.scdev.aws.iohkdev.io \
             2 \
             "$(cat test-wallets/test.0.addr)=test-wallets/test.0.skey" \
