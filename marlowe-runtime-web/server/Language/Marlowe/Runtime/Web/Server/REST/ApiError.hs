@@ -4,6 +4,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -12,8 +13,8 @@ module Language.Marlowe.Runtime.Web.Server.REST.ApiError where
 import Control.Monad.Except (MonadError (throwError))
 import Data.Aeson (ToJSON (toJSON), Value (Null), encode, object, (.=))
 import Data.Maybe (fromMaybe)
+import GHC.Generics (C1, Constructor (..), D1, Generic (..), M1 (..), type (:+:) (..))
 import Language.Marlowe.Runtime.Transaction.Api (
-  ApplyInputsConstraintsBuildupError (..),
   ApplyInputsError (..),
   ConstraintError (..),
   CreateBuildupError (..),
@@ -116,12 +117,7 @@ instance HasDTO WithdrawError where
 instance ToDTO WithdrawError where
   toDTO = \case
     WithdrawEraUnsupported era -> ApiError ("Current network era not supported: " <> show era) "WithdrawEraUnsupported" Null 503
-    WithdrawConstraintError err -> ApiError (show err) "ConstraintError" Null case err of
-      MintingUtxoNotFound _ -> 400
-      RoleTokenNotFound _ -> 400
-      PayoutNotFound _ -> 400
-      CoinSelectionFailed _ -> 400
-      _ -> 500
+    WithdrawConstraintError err -> apiError' err statusCodeConstraintError
     EmptyPayouts -> ApiError "Empty payouts" "EmptyPayouts" Null 400
 
 instance HasDTO CreateError where
@@ -129,25 +125,15 @@ instance HasDTO CreateError where
 
 instance ToDTO CreateError where
   toDTO = \case
-    CreateEraUnsupported era -> ApiError ("Current network era not supported: " <> show era) "WithdrawEraUnsupported" Null 503
-    CreateConstraintError err -> ApiError (show err) "ConstraintError" Null case err of
-      MintingUtxoNotFound _ -> 400
-      RoleTokenNotFound _ -> 400
-      PayoutNotFound _ -> 400
-      CoinSelectionFailed _ -> 400
-      _ -> 500
-    CreateLoadMarloweContextFailed LoadMarloweContextErrorNotFound -> ApiError "Marlowe contract not found" "MarloweContractNotFound" Null 404
-    CreateLoadMarloweContextFailed (LoadMarloweContextErrorVersionMismatch _) -> ApiError "Marlowe contract version mismatch" "MarloweContractVersionMismatch" Null 400
-    CreateLoadMarloweContextFailed LoadMarloweContextToCardanoError -> ApiError "Internal error" "LoadMarloweContextToCardanoError" Null 500
-    CreateLoadMarloweContextFailed (MarloweScriptNotPublished _) -> ApiError "Internal error" "MarloweScriptNotPublished" Null 500
-    CreateLoadMarloweContextFailed (PayoutScriptNotPublished _) -> ApiError "Internal error" "PayoutScriptNotPublished" Null 500
-    CreateLoadMarloweContextFailed (ExtractCreationError _) -> ApiError "Internal error" "ExtractCreationError" Null 500
-    CreateLoadMarloweContextFailed (ExtractMarloweTransactionError _) -> ApiError "Internal error" "ExtractMarloweTransactionError" Null 500
-    CreateBuildupFailed MintingUtxoSelectionFailed -> ApiError "Minting UTxO selection failed" "MintingUtxoSelectionFailed" Null 400
-    CreateBuildupFailed (AddressDecodingFailed _) -> ApiError "Internal error" "AddressDecodingFailed" Null 500
-    CreateBuildupFailed (MintingScriptDecodingFailed _) -> ApiError "Internal error" "MintingScriptDecodingFailed" Null 500
+    CreateEraUnsupported era -> ApiError ("Current network era not supported: " <> show era) "CreateEraUnsupported" Null 503
+    CreateConstraintError err -> apiError' err statusCodeConstraintError
+    CreateLoadMarloweContextFailed err -> apiError' err statusCodeLoadMarloweContextError
+    CreateBuildupFailed err -> apiError err case err of
+      MintingUtxoSelectionFailed -> 400
+      AddressDecodingFailed _ -> 500
+      MintingScriptDecodingFailed _ -> 500
     CreateToCardanoError -> ApiError "Internal error" "CreateToCardanoError" Null 400
-    CreateSafetyAnalysisError _ -> ApiError "Safety analysis failed" "InternalError" Null 400
+    CreateSafetyAnalysisError _ -> ApiError "Safety analysis failed" "SafetyAnalysisFailed" Null 400
     CreateContractNotFound -> ApiError "Contract not found" "Not found" Null 404
 
 instance HasDTO ApplyInputsError where
@@ -155,23 +141,61 @@ instance HasDTO ApplyInputsError where
 
 instance ToDTO ApplyInputsError where
   toDTO = \case
-    ApplyInputsEraUnsupported era -> ApiError ("Current network era not supported: " <> show era) "WithdrawEraUnsupported" Null 503
-    ApplyInputsConstraintError err -> ApiError (show err) "ConstraintError" Null case err of
-      MintingUtxoNotFound _ -> 400
-      RoleTokenNotFound _ -> 400
-      PayoutNotFound _ -> 400
-      CoinSelectionFailed _ -> 400
-      _ -> 500
+    ApplyInputsEraUnsupported era -> ApiError ("Current network era not supported: " <> show era) "ApplyInputsEraUnsupported" Null 503
+    ApplyInputsConstraintError err -> apiError' err statusCodeConstraintError
+    ApplyInputsLoadMarloweContextFailed err -> apiError' err statusCodeLoadMarloweContextError
+    ApplyInputsConstraintsBuildupFailed err -> apiError err 400
     ScriptOutputNotFound -> ApiError "Script output not found" "ScriptOutputNotFound" Null 400
-    ApplyInputsLoadMarloweContextFailed LoadMarloweContextErrorNotFound -> ApiError "Marlowe contract not found" "MarloweContractNotFound" Null 404
-    ApplyInputsLoadMarloweContextFailed (LoadMarloweContextErrorVersionMismatch _) -> ApiError "Marlowe contract version mismatch" "MarloweContractVersionMismatch" Null 400
-    ApplyInputsLoadMarloweContextFailed LoadMarloweContextToCardanoError -> ApiError "Internal error" "LoadMarloweContextToCardanoError" Null 500
-    ApplyInputsLoadMarloweContextFailed (MarloweScriptNotPublished _) -> ApiError "Internal error" "MarloweScriptNotPublished" Null 500
-    ApplyInputsLoadMarloweContextFailed (PayoutScriptNotPublished _) -> ApiError "Internal error" "PayoutScriptNotPublished" Null 500
-    ApplyInputsLoadMarloweContextFailed (ExtractCreationError _) -> ApiError "Internal error" "ExtractCreationError" Null 500
-    ApplyInputsLoadMarloweContextFailed (ExtractMarloweTransactionError _) -> ApiError "Internal error" "ExtractMarloweTransactionError" Null 500
-    ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed err) -> ApiError ("Marlowe compute transaction failed: " <> err) "MarloweComputeTransactionFailed" Null 400
-    ApplyInputsConstraintsBuildupFailed UnableToDetermineTransactionTimeout -> ApiError "Unable to determine transaction timeout" "UnableToDetermineTransactionTimeout" Null 400
     SlotConversionFailed _ -> ApiError "Slot conversion failed" "SlotConversionFailed" Null 400
     TipAtGenesis -> ApiError "Internal error" "TipAtGenesis" Null 500
     ValidityLowerBoundTooHigh _ _ -> ApiError "Validity lower bound too high" "ValidityLowerBoundTooHigh" Null 400
+
+statusCodeConstraintError :: ConstraintError -> Int
+statusCodeConstraintError = \case
+  MintingUtxoNotFound _ -> 400
+  RoleTokenNotFound _ -> 400
+  PayoutNotFound _ -> 400
+  CoinSelectionFailed _ -> 400
+  ToCardanoError -> 500
+  MissingMarloweInput -> 500
+  InvalidPayoutDatum _ _ -> 500
+  InvalidPayoutScriptAddress _ _ -> 500
+  CalculateMinUtxoFailed _ -> 500
+  BalancingError _ -> 500
+  MarloweInputInWithdraw -> 500
+  MarloweOutputInWithdraw -> 500
+  PayoutOutputInWithdraw -> 500
+  PayoutInputInCreateOrApply -> 500
+  UnknownPayoutScript _ -> 500
+
+statusCodeLoadMarloweContextError :: LoadMarloweContextError -> Int
+statusCodeLoadMarloweContextError = \case
+  LoadMarloweContextErrorNotFound -> 404
+  LoadMarloweContextErrorVersionMismatch _ -> 400
+  LoadMarloweContextToCardanoError -> 500
+  MarloweScriptNotPublished _ -> 500
+  PayoutScriptNotPublished _ -> 500
+  ExtractCreationError _ -> 500
+  ExtractMarloweTransactionError _ -> 500
+
+apiError :: (Show a, HasConstructor (Rep a), Generic a, ToJSON a) => a -> Int -> ApiError
+apiError err = ApiError (show err) (constructorToString err) (toJSON err)
+
+apiError' :: (Show a, HasConstructor (Rep a), Generic a, ToJSON a) => a -> (a -> Int) -> ApiError
+apiError' err f = let statusCode = f err in apiError err statusCode
+
+constructorToString :: (HasConstructor (Rep a)) => (Generic a) => a -> String
+constructorToString = constructorName . from
+
+class HasConstructor (f :: * -> *) where
+  constructorName :: f x -> String
+
+instance (HasConstructor f) => HasConstructor (D1 c f) where
+  constructorName (M1 x) = constructorName x
+
+instance (HasConstructor x, HasConstructor y) => HasConstructor (x :+: y) where
+  constructorName (L1 l) = constructorName l
+  constructorName (R1 r) = constructorName r
+
+instance (Constructor c) => HasConstructor (C1 c f) where
+  constructorName x = conName x
