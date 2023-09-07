@@ -88,7 +88,8 @@ runCLI version =
     commandParser <- mkCommandParser networkId socketPath version
     hSetBuffering stdout LineBuffering
     hSetBuffering stderr LineBuffering
-    SomeCommand era command <- O.execParser commandParser
+    SomeCommand era command <-
+      O.customExecParser O.defaultPrefs{O.prefShowHelpOnEmpty = True} commandParser
     result <- runExceptT $ withShelleyBasedEra era $ runCommand era command
     case result of
       Right () -> return ()
