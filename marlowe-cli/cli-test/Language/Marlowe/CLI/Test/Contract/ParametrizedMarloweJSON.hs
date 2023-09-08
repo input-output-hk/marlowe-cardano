@@ -209,7 +209,10 @@ rewriteParametrizedMarloweJSON
   -> ParametrizedMarloweJSON
   -> Either (ParametrizedMarloweJSONDecodeError era) ParametrizedMarloweJSON
 rewriteParametrizedMarloweJSON network wallets currencies n json = do
-  json' <- first RewritePartyFailure $ rewritePartyRefs network wallets (rewriteUnlessSyntax json)
+  json' <-
+    first RewritePartyFailure $
+      rewritePartyRefs network wallets $
+        rewriteUnlessSyntax json
   json'' <- first InvalidAsset $ rewriteCurrencyRefs currencies json'
   rewriteTimeouts n json''
 

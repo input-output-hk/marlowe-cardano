@@ -14,9 +14,6 @@ module Language.Marlowe.CLI.Test.ExecutionMode (
   module Language.Marlowe.CLI.Test.ExecutionMode.ExecutionMode,
   queryUTxOs,
   queryByAddress,
-  -- , getNetworkId
-  -- , runTxSubmitterFn
-  -- , TxSubmitterFn(..)
   HasInterpretEnv (..),
   InterpretMonad,
 )
@@ -67,73 +64,3 @@ queryByAddress
   -> m (C.UTxO era)
   -- ^ Action for running the query.
 queryByAddress = queryUTxOs . C.QueryUTxOByAddress . Set.singleton . CT.toAddressAny'
-
--- We want to wrap execution of every tx creation and submission in our execution context
--- when we are running in a simulation mode.
--- data TxSubmitterFn t m era = TxSubmitterFn
---   [C.AddressInEra era]
---   ( TxBuildupContext era
---     -> CT.SubmitMode
---     -> Maybe (C.UTxO era)
---     -> m (t (C.TxBody era))
---   )
---
----- Given a function which expects a possible
--- runTxSubmitterFn
---  :: Traversable t
---  => InterpretMonad env m era
---  => TxSubmitterFn t m era
---  -> m (t (C.TxBody era))
--- runTxSubmitterFn (TxSubmitterFn utxoProviders txSubmitterFn) = do
---  ConnectionWrapper connection <- view connectionL
---  view txBuildupContextL >>= \case
---    SimulationMode utxosVar -> do
---      let
---        utxoProviders' = map CT.toAddressAny' utxoProviders
---      submitterUTxOs <- queryUTxOs (C.QueryUTxOByAddress $ Set.fromList utxoProviders')
---      liftIO $ hPutStrLn stderr $ "Submitter utxos: " <> show (map fst $ U.toList submitterUTxOs)
---      txBodies <- txSubmitterFn connection CT.DontSubmit (Just submitterUTxOs)
---      submissionResult <- liftIO $ runExceptT $ for txBodies \txBody -> do
---        let
---          txId = C.getTxId txBody
---          C.TxBody txBodyContent = txBody
---
---          txIns = map fst . C.txIns $ txBodyContent
---          txInsRef = case C.txInsReference txBodyContent of
---            C.TxInsReferenceNone -> []
---            C.TxInsReference _ ins -> ins
---          txOuts = map C.toCtxUTxOTxOut . C.txOuts $ txBodyContent
---
---          newUTxOs = zip [0..] txOuts <&> \(txIx, txOut) -> (C.TxIn txId (C.TxIx txIx), txOut)
---
---        liftIO $ hPutStrLn stderr $ "NEW UTxOs" <> show newUTxOs
---        liftIO $ hPutStrLn stderr $ "txIns" <> show txIns
---        liftIO $ hPutStrLn stderr $ "txInsRef" <> show txInsRef
---        ExceptT $ S.atomically do
---          utxos <- S.readTVar utxosVar
---          let
---            utxosMap = C.unUTxO utxos
---          if any (flip Map.notMember utxosMap) (txIns ++ txInsRef)
---            then pure $ Left $ "UTxO missing:" <> show (filter (flip Map.notMember utxosMap) (txIns ++ txInsRef)) <> ". All UTxOs: " <> show (Map.keys utxosMap)
---            else do
---              let
---                utxosList = U.toList utxos
---                utxosList' =
---                  newUTxOs <>
---                    filter (\(txIn, _) -> txIn `notElem` txIns) utxosList
---                utxos' = U.fromList utxosList'
---              S.writeTVar utxosVar utxos'
---              pure $ Right ()
---      void $ liftEither $ first (\msg -> SimulationOperationFailed msg []) submissionResult
---      pure txBodies
---    OnChainMode t -> do
---      txSubmitterFn connection (CT.DoSubmit t) Nothing
---
--- getNetworkId
---   :: InterpretMonad env m era
---   => m C.NetworkId
--- getNetworkId = do
---   ConnectionWrapper connection <- view connectionL
---   let
---     C.LocalNodeConnectInfo{localNodeNetworkId} = connection
---   pure localNodeNetworkId

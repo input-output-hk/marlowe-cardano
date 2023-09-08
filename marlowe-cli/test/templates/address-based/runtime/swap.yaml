@@ -73,6 +73,10 @@ operations:
           token_name: APartyTokenName
         into_account:
           address: AParty
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800
 
 - RuntimeApplyInputs:
     submitter: BParty
@@ -86,6 +90,10 @@ operations:
           token_name: BPartyTokenName
         into_account:
           address: BParty
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800
 
 - CheckBalance:
     wallet: BParty

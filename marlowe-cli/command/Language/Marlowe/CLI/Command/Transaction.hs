@@ -30,6 +30,7 @@ import Cardano.Api (
   NetworkId (..),
   SlotNo,
   TxIn,
+  TxOutDatum (TxOutDatumNone),
  )
 import Control.Monad.Except (MonadError, MonadIO, liftIO)
 import Data.Maybe (fromMaybe)
@@ -271,7 +272,7 @@ runTransactionCommand command =
             , localNodeSocketPath = socketPath command
             }
         printTxId = liftIO . putStrLn . ("TxId " <>) . show
-        padTxOut (address, value) = (address, Nothing, value)
+        padTxOut (address, value) = (address, TxOutDatumNone, value)
         outputs' = padTxOut <$> outputs command
     case command of
       BuildTransact{..} ->

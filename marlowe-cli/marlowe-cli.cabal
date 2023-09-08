@@ -171,7 +171,9 @@ library cli-test
     Language.Marlowe.CLI.Test.Interpret
     Language.Marlowe.CLI.Test.InterpreterError
     Language.Marlowe.CLI.Test.Log
+    Language.Marlowe.CLI.Test.Log.Label
     Language.Marlowe.CLI.Test.Operation.Aeson
+    Language.Marlowe.CLI.Test.Report
     Language.Marlowe.CLI.Test.Runner
     Language.Marlowe.CLI.Test.Runtime.Interpret
     Language.Marlowe.CLI.Test.Runtime.Monitor

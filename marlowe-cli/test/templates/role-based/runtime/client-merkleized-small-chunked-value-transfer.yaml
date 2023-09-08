@@ -110,6 +110,10 @@ operations:
           token_name: Token03
         into_account:
           address: Organizer
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800
 
 - RuntimeApplyInputs:
     submitter: Organizer
@@ -131,12 +135,12 @@ operations:
 - RuntimeApplyInputs:
     submitter: Organizer
     awaitConfirmed: 120
+    inputs:
+      - "input_notify"
     invalidBefore:
       relative: -60
     invalidHereafter:
       relative: +1800
-    inputs:
-      - "input_notify"
 
 - RuntimeApplyInputs:
     submitter: Organizer

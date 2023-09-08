@@ -52,15 +52,14 @@ import Control.Lens (assign, coerced, modifying, use, view)
 import Control.Monad (foldM, when)
 import Control.Monad.Error.Class (MonadError (throwError))
 import Control.Lens (assign, coerced, modifying, use, view)
-import Data.Foldable (fold)
+import Data.Foldable (fold, for_)
 import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
 import Data.Map.Strict qualified as Map
 import Data.Traversable (for)
 import Language.Marlowe.CLI.Test.Wallet.Types (
   Currency (..),
   CurrencyNickname,
-  SomeTxBody (..),
-  Wallet (Wallet, _waAddress, _waBalanceCheckBaseline, _waSigningKey, _waSubmittedTransactions),
+  Wallet (Wallet, _waAddress, _waSigningKey),
   WalletNickname (WalletNickname),
   faucetNickname,
  )
@@ -121,16 +120,16 @@ import Language.Marlowe.CLI.Test.Contract.Source (Source (InlineContract, UseTem
 import Language.Marlowe.CLI.Test.InterpreterError (rethrowCliError, testExecutionFailed')
 import Language.Marlowe.CLI.Test.Log (logStoreLabeledMsg, logStoreMsgWith, throwLabeledError)
 import Language.Marlowe.CLI.Test.Wallet.Interpret (
+  addPublishingCosts,
+  addWalletTransaction,
   decodeContractJSON,
   decodeInputJSON,
   fetchWalletValue,
   findWalletByUniqueToken,
   getCurrency,
-  getFaucet,
   getSingletonCurrency,
   getWallet,
   getWalletByAddress,
-  updateWallet,
  )
 import Language.Marlowe.CLI.Test.Wallet.Types (
   Currency (Currency, ccCurrencySymbol),
@@ -163,14 +162,6 @@ import Ledger.Tx.CardanoAPI (toCardanoAssetName)
 import Plutus.V2.Ledger.Api qualified as P
 import PlutusTx.AssocMap qualified as AM
 import PlutusTx.Builtins qualified as P
-
--- import Language.Marlowe.CLI.IO (getPV2CostModelParams, liftCli)
--- import Data.Bifunctor (Bifunctor(first))
--- import Control.Monad.Except (runExcept)
--- import qualified Language.Marlowe as V1
--- import Language.Marlowe.Analysis.Safety.Transaction (UseReferenceInput(..), LockedRoles (..), calcMarloweTxExBudget)
--- import Control.Monad.Trans.Except (except)
--- import Ledger.Address (toPlutusAddress)
 
 -- | Build the initial Marlowe state.
 initialMarloweState :: AccountId -> Integer -> State
@@ -207,34 +198,6 @@ findCLIContractInfo Nothing = do
 toOneLineJSON :: forall a. (A.ToJSON a) => a -> String
 toOneLineJSON = Text.unpack . A.renderValue . A.toJSON
 
--- FIXME: paluh
--- findLockedOpendRoles :: C.PolicyId -> m [C.AssetName]
--- findLockedOpendRoles policyId openRoleAddress = do
---   runCli era "[AutoRun]" (selectUtxosImpl connection openRoleAddress (PolicyIdOnly policyId)) >>= \case
---     OutputQueryResult{oqrMatching = fromUTxO -> (AnUTxO (_, txOut) : _)} -> do
---       -- Okey so Cardano.Api (C) gives these:
---       -- data TxOut ctx era = TxOut (AddressInEra    era)
---       --                            (TxOutValue      era)
---       --                            (TxOutDatum ctx  era)
---       --                            (ReferenceScript era)
---       --
---       --  data TxOutValue era where
---       --       TxOutAdaOnly :: OnlyAdaSupportedInEra era -> Lovelace -> TxOutValue era
---       --       TxOutValue   :: MultiAssetSupportedInEra era -> Value -> TxOutValue era
---       --
---       -- data ValueNestedBundle = ValueNestedBundleAda Quantity
---       --                        | ValueNestedBundle PolicyId (Map AssetName Quantity)
---       --
---       -- valueToNestedRep :: Value -> ValueNestedRep
---       --
---       -- Let's extract [AssetName] from txOut:
---       --
---       let
---         C.TxOut _ (C.TxOutValue _ value) _ _ = txOut
---         C.ValueNestedRep v = C.valueToNestedRep value
---       pure [ an | C.ValueNestedBundle _ map <- v, an <- Map.keys map ]
---       pure ()
-
 autoRunTransaction
   :: forall era env lang m st
    . (IsShelleyBasedEra era)
@@ -247,8 +210,9 @@ autoRunTransaction
   -> Bool
   -> m (C.TxBody era, Maybe C.TxIn)
 autoRunTransaction currency defaultSubmitter prev curr@MarloweTransaction{..} invalid = do
-  let log' = logStoreLabeledMsg ("autoRunTransaction" :: String)
-      logWith = logStoreMsgWith ("autoRunTransaction" :: String)
+  let label = "autoRunTransaction" :: String
+      log' = logStoreLabeledMsg label
+      logWith = logStoreMsgWith label
 
       getInputContentParty = \case
         M.IDeposit _ party _ _ -> Just party
@@ -282,7 +246,7 @@ autoRunTransaction currency defaultSubmitter prev curr@MarloweTransaction{..} in
 
   txBuildupCtx <- view txBuildupContextL
   era <- view eraL
-  (submitterNickname, Wallet address _ skey _ _, possiblePayFromOpenRole) <-
+  (submitterNickname, Wallet address _ skey _ _ _, possiblePayFromOpenRole) <-
     foldM step Nothing mtInputs >>= \case
       Nothing -> do
         wallet <- getWallet defaultSubmitter
@@ -339,10 +303,11 @@ autoRunTransaction currency defaultSubmitter prev curr@MarloweTransaction{..} in
               pure (wn, w, Nothing)
         Nothing -> throwError $ testExecutionFailed' "[autoRunTransaction] Contract requires a role currency which was not specified."
 
+  log' $ "Possible pay from open role: " <> show possiblePayFromOpenRole
   log' $ "Submitter: " <> case submitterNickname of WalletNickname n -> n
 
   txBody <-
-    runCli era "[AutoRun] " $
+    runCli era label $
       autoRunTransactionImpl
         txBuildupCtx
         prev
@@ -358,9 +323,7 @@ autoRunTransaction currency defaultSubmitter prev curr@MarloweTransaction{..} in
       mTxId = C.getTxId txBody
 
   log' $ "TxId:" <> show mTxId
-
-  updateWallet submitterNickname \submitter@Wallet{..} ->
-    submitter{_waSubmittedTransactions = SomeTxBody era txBody : _waSubmittedTransactions}
+  addWalletTransaction submitterNickname label "" txBody
 
   let meOuts = classifyOutputs mTxId txOuts
   case filter isMarloweOut meOuts of
@@ -380,11 +343,13 @@ publishCurrentValidators
   -> Maybe WalletNickname
   -> m (MarloweScriptsRefs lang era)
 publishCurrentValidators publishPermanently possiblePublisher = do
-  Wallet{_waAddress, _waSigningKey} <- maybe getFaucet getWallet possiblePublisher
-  let publishingStrategy = case publishPermanently of
+  let walletNickname = fromMaybe faucetNickname possiblePublisher
+
+  Wallet{_waAddress, _waSigningKey} <- getWallet walletNickname
+  let label = "publishCurrentValidators" :: String
+      publishingStrategy = case publishPermanently of
         Just True -> PublishPermanently NoStakeAddress
         _ -> PublishAtAddress _waAddress
-  -- connection <- view connectionL
   printStats <- view printStatsL
   era <- view eraL
   txBuildupCtx <- view txBuildupContextL
@@ -417,9 +382,11 @@ publishCurrentValidators publishPermanently possiblePublisher = do
             publishingStrategy
             (CoinSelectionStrategy False False [])
             (PrintStats True)
+      let publisherWalletNickname = fromMaybe faucetNickname possiblePublisher
 
-      updateWallet (fromMaybe faucetNickname possiblePublisher) \w@Wallet{_waSubmittedTransactions} ->
-        w{_waSubmittedTransactions = map (SomeTxBody era) txBodies <> _waSubmittedTransactions}
+      for_ txBodies \txBody ->
+        addWalletTransaction publisherWalletNickname label "" txBody
+      addPublishingCosts walletNickname refs
       pure refs
 
 interpret
@@ -591,6 +558,7 @@ interpret AutoRun{..} = do
   thread' <- foldM step _ciThread plan
   let marloweContract' = marloweContract{_ciThread = thread'}
   modifying (contractsL . coerced) $ Map.insert contractNickname marloweContract'
+
 -- Nothing ->
 --   -- Should not happen.
 --   throwLabeledError co $ testExecutionFailed' "Scripts were not published during this test scenario."
@@ -761,9 +729,8 @@ interpret co@Withdraw{..} = do
         pure [txBody]
       else pure []
 
-  era <- view eraL
-  updateWallet coWalletNickname \w@Wallet{_waSubmittedTransactions} ->
-    w{_waSubmittedTransactions = map (SomeTxBody era) txBodies <> _waSubmittedTransactions}
+  for_ txBodies \txBody ->
+    addWalletTransaction coWalletNickname co "" txBody
 
   let newWithdrawals = foldMapFlipped roles \role ->
         Map.singleton role (C.getTxId . overAnyMarloweThread getCLIMarloweThreadTxBody $ marloweThread)

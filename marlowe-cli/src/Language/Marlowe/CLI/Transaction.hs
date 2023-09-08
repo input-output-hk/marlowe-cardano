@@ -145,7 +145,6 @@ import Cardano.Api (
   getTxId,
   getVerificationKey,
   hashScript,
-  hashScriptData,
   lovelaceToValue,
   makeShelleyAddressInEra,
   makeTransactionBodyAutoBalance,
@@ -224,6 +223,7 @@ import GHC.Natural (Natural)
 import Language.Marlowe.CLI.Cardano.Api (
   adjustMinimumUTxO,
   toReferenceTxInsScriptsInlineDatumsSupportedInEra,
+  toTxOutDatumInTx,
   txOutValueValue,
  )
 import Language.Marlowe.CLI.Cardano.Api qualified as MCA
@@ -304,7 +304,9 @@ import Language.Marlowe.Scripts.OpenRole (openRoleValidator)
 import Ouroboros.Consensus.HardFork.History (interpreterToEpochInfo)
 import Plutus.V1.Ledger.Api (Datum (..), POSIXTime (..), Redeemer (..), TokenName (..), fromBuiltin, toData)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
-import Plutus.V2.Ledger.Api (fromData)
+
+-- FIXME:paluh - reference
+-- import Plutus.V2.Ledger.Api (fromData, OutputDatum(..))
 import System.IO (hPutStrLn, stderr)
 
 -- | Build a non-Marlowe transaction.
@@ -319,7 +321,7 @@ buildSimple
   -- ^ The files for required signing keys.
   -> [TxIn]
   -- ^ The transaction inputs.
-  -> [(AddressInEra era, Maybe Datum, Value)]
+  -> [(AddressInEra era, TxOutDatum CtxTx era, Value)]
   -- ^ The transaction outputs.
   -> AddressInEra era
   -- ^ The change address.
@@ -402,7 +404,7 @@ buildClean connection signingKeyFiles lovelace changeAddress range mintValue met
         total = mconcat $ extractValue . snd <$> utxos
     outputs <-
       sequence
-        [ makeTxOut changeAddress Nothing (value <> lovelaceToValue lovelace) ReferenceScriptNone
+        [ makeTxOut changeAddress C.TxOutDatumNone (value <> lovelaceToValue lovelace) ReferenceScriptNone
         | value <- valueFromList . pure <$> valueToList (total <> minting)
         , isNothing $ valueToLovelace value
         ]
@@ -495,7 +497,7 @@ buildFaucetImpl txBuildupCtx possibleValues destAddresses fundAddress fundSignin
             then do
               era <- askEra
               protocol <- getProtocolParams queryCtx
-              txOut <- makeBalancedTxOut era protocol destAddress Nothing nonAda ReferenceScriptNone
+              txOut <- makeBalancedTxOut era protocol destAddress C.TxOutDatumNone nonAda ReferenceScriptNone
               pure [txOut]
             else pure []
         pure (map fst utxosList, outputs, destAddress)
@@ -504,7 +506,7 @@ buildFaucetImpl txBuildupCtx possibleValues destAddresses fundAddress fundSignin
       (Just values, _) -> do
         outputs <-
           sequence $
-            [makeTxOut destAddress Nothing value ReferenceScriptNone | value <- values, destAddress <- destAddresses]
+            [makeTxOut destAddress C.TxOutDatumNone value ReferenceScriptNone | value <- values, destAddress <- destAddresses]
 
         (_, i, o) <-
           selectCoins
@@ -586,8 +588,8 @@ buildFaucet' connection value addresses (TxBodyFile bodyFile) timeout =
         value' = mconcat $ replicate (length addresses) value
     outputs <-
       mapM (uncurry3 makeTxOut') $
-        (changeAddress, Nothing, total <> negateValue value' <> negateValue lovelace)
-          : [(fundedAddress, Nothing, value) | fundedAddress <- addresses]
+        (changeAddress, C.TxOutDatumNone, total <> negateValue value' <> negateValue lovelace)
+          : [(fundedAddress, C.TxOutDatumNone, value) | fundedAddress <- addresses]
     body <-
       buildBody
         (QueryNode connection)
@@ -714,14 +716,14 @@ buildMintingImpl txBuildupCtx mintingAction metadataProps expires (PrintStats pr
           let value = C.txOutValueToValue txOutValue
               assetsValue = nonAdaValue value
           if assetsValue /= mempty
-            then Just <$> makeBalancedTxOut era protocol addr Nothing assetsValue ReferenceScriptNone
+            then Just <$> makeBalancedTxOut era protocol addr C.TxOutDatumNone assetsValue ReferenceScriptNone
             else pure Nothing
 
         outputs' <- fmap NonEmpty.toList $ for tokenDistribution' \(recipient, mintedValue, minAda) -> do
           let (address, possibleDatum) = case recipient of
-                RegularAddressRecipient addr -> (addr, Nothing :: (Maybe Datum))
-                ScriptAddressRecipient addr scriptData -> do
-                  (addr, fromData . C.toPlutusData $ scriptData)
+                RegularAddressRecipient addr -> (addr, C.TxOutDatumNone)
+                ScriptAddressRecipient addr txOutDatum -> do
+                  (addr, txOutDatum)
 
           case minAda of
             Just minAda' -> do
@@ -773,7 +775,7 @@ buildMintingImpl txBuildupCtx mintingAction metadataProps expires (PrintStats pr
           value <- hoistMaybe (toAddressAny' addr `M.lookup` changesMap)
           MaybeT $
             if value /= mempty
-              then Just <$> makeBalancedTxOut era protocol addr Nothing value ReferenceScriptNone
+              then Just <$> makeBalancedTxOut era protocol addr C.TxOutDatumNone value ReferenceScriptNone
               else pure Nothing
         when (tokensValue == mempty) $ do
           throwError . CliError $ "Unable to find currency " <> show policy <> " tokens."
@@ -859,7 +861,7 @@ buildIncoming
   -- ^ The value to be paid to the script.
   -> [TxIn]
   -- ^ The transaction inputs.
-  -> [(AddressInEra era, Maybe Datum, Value)]
+  -> [(AddressInEra era, C.TxOutDatum C.CtxTx era, Value)]
   -- ^ The transaction outputs.
   -> AddressInEra era
   -- ^ The change address.
@@ -877,6 +879,7 @@ buildIncoming
   -- ^ Action to build the transaction body.
 buildIncoming connection scriptAddress signingKeyFiles outputDatumFile outputValue inputs outputs changeAddress metadataFile (TxBodyFile bodyFile) timeout printStats invalid =
   do
+    era <- askEra
     metadata <- readMaybeMetadata metadataFile
     outputDatum <- Datum <$> decodeFileBuiltinData outputDatumFile
     signingKeys <- mapM readSigningKey signingKeyFiles
@@ -885,7 +888,7 @@ buildIncoming connection scriptAddress signingKeyFiles outputDatumFile outputVal
       buildBody
         (QueryNode connection)
         ([] :: [PayFromScript C.PlutusScriptV1])
-        (Just $ buildPayToScript scriptAddress outputValue outputDatum)
+        (Just $ buildPayToScript era scriptAddress outputValue outputDatum)
         []
         inputs
         outputs'
@@ -963,7 +966,7 @@ buildScriptPublishingInfo queryCtx plutusScript publishingStrategy = do
   referenceScriptInfo <- validatorInfo' plutusScript Nothing era protocolVersion costModel networkId NoStakeAddress
   referenceScript <- buildReferenceScript plutusScript
 
-  (minAda, _) <- liftCli $ adjustMinimumUTxO era protocol publisher Nothing mempty referenceScript
+  (minAda, _) <- liftCli $ adjustMinimumUTxO era protocol publisher C.TxOutDatumNone mempty referenceScript
   pure (minAda, publisher, referenceScriptInfo)
 
 buildPublishingImpl
@@ -995,7 +998,7 @@ buildPublishingImpl buildupCtx signingKey expires changeAddress publishingStrate
 
     let buildPublishedScriptTxOut (minAda, publisher, referenceValidator) = do
           referenceScript <- buildReferenceScript $ viScript referenceValidator
-          makeTxOut publisher Nothing (lovelaceToValue minAda) referenceScript
+          makeTxOut publisher C.TxOutDatumNone (lovelaceToValue minAda) referenceScript
 
     initialUTxOs <- queryByAddress queryCtx changeAddress
 
@@ -1313,7 +1316,7 @@ buildContinuing
   -- ^ The value to be paid to the script.
   -> [TxIn]
   -- ^ The transaction inputs.
-  -> [(AddressInEra era, Maybe Datum, Value)]
+  -> [(AddressInEra era, C.TxOutDatum C.CtxTx era, Value)]
   -- ^ The transaction outputs.
   -> TxIn
   -- ^ The collateral.
@@ -1344,11 +1347,12 @@ buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFi
     outputDatum <- Datum <$> decodeFileBuiltinData outputDatumFile
     signingKeys <- mapM readSigningKey signingKeyFiles
     outputs' <- mapM (uncurry3 makeTxOut') outputs
+    era <- askEra
     body <-
       buildBody
         (QueryNode connection)
         [buildPayFromScript (C.PScript validator) inputDatum redeemer txIn]
-        (Just $ buildPayToScript scriptAddress outputValue outputDatum)
+        (Just $ buildPayToScript era scriptAddress outputValue outputDatum)
         []
         inputs
         outputs'
@@ -1384,7 +1388,7 @@ buildOutgoing
   -- ^ The script eUTxO to be spent.
   -> [TxIn]
   -- ^ The transaction inputs.
-  -> [(AddressInEra era, Maybe Datum, Value)]
+  -> [(AddressInEra era, C.TxOutDatum C.CtxTx era, Value)]
   -- ^ The transaction outputs.
   -> TxIn
   -- ^ The collateral.
@@ -1448,9 +1452,9 @@ buildPayFromScript
   -- ^ Payment information.
 buildPayFromScript script datum redeemer txIn = PayFromScript{..}
 
--- | Collect information on paying to a script.
 buildPayToScript
-  :: AddressInEra era
+  :: ScriptDataSupportedInEra era
+  -> AddressInEra era
   -- ^ The script address.
   -> Value
   -- ^ The value to be paid.
@@ -1458,9 +1462,8 @@ buildPayToScript
   -- ^ The datum.
   -> PayToScript era
   -- ^ The payment information.
-buildPayToScript address value datum =
-  let datumOut = fromPlutusData . toData $ datum
-      datumHash = hashScriptData datumOut
+buildPayToScript era address value plutusDatum =
+  let datumOut = toTxOutDatumInTx era plutusDatum
    in PayToScript{..}
 
 -- | Hash a signing key.
@@ -1792,8 +1795,6 @@ scriptWitness era PayFromScript{..} = do
         (fromPlutusData $ toData redeemer)
         (ExecutionUnits 0 0)
 
--- pure $ BuildTxWith $ KeyWitness KeyWitnessForSpending
-
 -- | Compute the transaction input for paying from a script.
 redeemScript
   :: forall era lang m
@@ -1823,7 +1824,7 @@ payScript era PayToScript{..} =
   [ TxOut
       address
       (TxOutValue (toMultiAssetSupportedInEra era) value)
-      (TxOutDatumInTx era datumOut)
+      datumOut
       ReferenceScriptNone
   ]
 
@@ -1840,7 +1841,7 @@ makeTxOut
   :: (MonadReader (CliEnv era) m)
   => AddressInEra era
   -- ^ The output address.
-  -> Maybe Datum
+  -> TxOutDatum CtxTx era
   -- ^ The datum, if any.
   -> Value
   -- ^ The output value.
@@ -1851,7 +1852,7 @@ makeTxOut address datum value referenceScript = asksEra \era ->
   TxOut
     address
     (TxOutValue (toMultiAssetSupportedInEra era) value)
-    (maybe TxOutDatumNone (TxOutDatumInTx era . fromPlutusData . toData) datum)
+    datum
     referenceScript
 
 -- | Compute transaction output for building a transaction.
@@ -1859,7 +1860,7 @@ makeTxOut'
   :: (MonadReader (CliEnv era) m)
   => AddressInEra era
   -- ^ The output address.
-  -> Maybe Datum
+  -> TxOutDatum CtxTx era
   -- ^ The datum, if any.
   -> Value
   -- ^ The output value.
@@ -1873,7 +1874,7 @@ makeBalancedTxOut
   => ScriptDataSupportedInEra era
   -> ProtocolParameters
   -> AddressInEra era
-  -> Maybe Datum
+  -> TxOutDatum CtxTx era
   -> Value
   -> ReferenceScript era
   -> m (TxOut CtxTx era)
@@ -2063,8 +2064,8 @@ ensureMinUtxo
    . (MonadError CliError m)
   => (MonadReader (CliEnv era) m)
   => ProtocolParameters
-  -> (AddressInEra era, Maybe Datum, Value)
-  -> m (AddressInEra era, Maybe Datum, Value)
+  -> (AddressInEra era, C.TxOutDatum C.CtxTx era, Value)
+  -> m (AddressInEra era, C.TxOutDatum C.CtxTx era, Value)
 ensureMinUtxo protocol (address, datum, value) =
   do
     era <- askEra
@@ -2075,7 +2076,7 @@ ensureMinUtxo protocol (address, datum, value) =
           TxOut
             address
             (TxOutValue (toMultiAssetSupportedInEra era) value')
-            (maybe TxOutDatumNone (TxOutDatumInTx era . fromPlutusData . toData) datum)
+            datum
             ReferenceScriptNone
     case calculateMinimumUTxO (withShelleyBasedEra era shelleyBasedEra) trial protocol of
       Right value'' ->
@@ -2254,7 +2255,7 @@ selectCoins queryCtx inputs outputs pay changeAddress CoinSelectionStrategy{..} 
       if change == mempty
         then pure []
         else do
-          (a, d, v) <- ensureMinUtxo protocol (changeAddress, Nothing, change)
+          (a, d, v) <- ensureMinUtxo protocol (changeAddress, C.TxOutDatumNone, change)
           (: []) <$> makeTxOut' a d v
     -- Return the coin selection.
     pure

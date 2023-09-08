@@ -16,6 +16,7 @@
 # FAUCET_SKEY_FILE - private key file for the faucet.
 # FAUCET_VKEY - faucet address.
 #
+#
 cabal run marlowe-cli -- \
   --babbage-era test \
   --testnet-magic 1 \
@@ -27,30 +28,42 @@ cabal run marlowe-cli -- \
   --chain-seek-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
   --chain-seek-cmd-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
   --write-to-json-file report.json \
-  --max-retries 2 \
+  --max-retries 3 \
   --stream-json \
-  ./test/inline/role-based/cli/open-role-based-deposit.yaml \
-  ./test/operations/publish.yaml \
-  ./test/operations/mint-to-open-role-script.yaml \
+  --simulation-mode \
   ./test/inline/role-based/cli/contract-for-differences-with-oracle.yaml \
   ./test/inline/role-based/cli/contract-for-differences.yaml \
   ./test/inline/role-based/cli/coupon-bond-guaranteed.yaml \
   ./test/inline/role-based/cli/escrow-with-collateral.yaml \
   ./test/inline/role-based/cli/escrow.yaml \
+  ./test/inline/role-based/cli/open-escrow-with-collateral.yaml \
+  ./test/inline/role-based/cli/open-role-based-deposit.yaml \
+  ./test/inline/role-based/cli/open-swap-for-ada.yaml \
   ./test/inline/role-based/cli/swap-of-ada-for-ada.yaml \
-  ./test/inline/role-based/cli/zero-coupon-bond-delayed-timeout.yaml \
   ./test/inline/role-based/cli/zero-coupon-bond-immediate-timeout.yaml \
   ./test/inline/role-based/cli/zero-coupon-bond-too-late.yaml \
   ./test/inline/role-based/cli/zero-coupon-bond.yaml \
+  ./test/on-chain-limits/accounts-map-size.yaml \
+  ./test/on-chain-limits/deposits-chain-with-open-roles-and-merkleization.yaml \
+  ./test/on-chain-limits/deposits-chain-with-open-roles.yaml \
+  ./test/on-chain-limits/deposits-chain-with-roles.yaml \
+  ./test/on-chain-limits/deposits-chain.yaml \
+  ./test/on-chain-limits/payouts-chain.yaml \
   ./test/operations/burn-distributed.yaml \
   ./test/operations/burn-multi-asset.yaml \
   ./test/operations/burn.yaml \
   ./test/operations/mint-distributed.yaml \
+  ./test/operations/mint-multiple.yaml \
+  ./test/operations/mint-to-open-role-script.yaml \
   ./test/operations/mint.yaml \
+  ./test/operations/open-role-release-fails-without-thread-token.yaml \
+  ./test/operations/publish.yaml \
   ./test/operations/return-funds.yaml \
+  ./test/operations/runtime-with-client-side-merkleization.yaml \
   ./test/operations/runtime.yaml \
   ./test/templates/address-based/cli/covered-call.yaml \
   ./test/templates/address-based/cli/escrow.yaml \
+  ./test/templates/address-based/cli/raffle.yaml \
   ./test/templates/address-based/cli/swap.yaml \
   ./test/templates/address-based/cli/trivial.yaml \
   ./test/templates/address-based/cli/zero-coupon-bond.yaml \
@@ -63,8 +76,14 @@ cabal run marlowe-cli -- \
   ./test/templates/role-based/cli/escrow.yaml \
   ./test/templates/role-based/cli/swap.yaml \
   ./test/templates/role-based/cli/zero-coupon-bond.yaml \
+  ./test/templates/role-based/runtime/chunked-value-transfer.yaml \
+  ./test/templates/role-based/runtime/client-merkleized-chunked-value-transfer.yaml \
+  ./test/templates/role-based/runtime/client-merkleized-small-chunked-value-transfer.yaml \
   ./test/templates/role-based/runtime/covered-call.yaml \
   ./test/templates/role-based/runtime/escrow.yaml \
   ./test/templates/role-based/runtime/swap.yaml \
   ./test/templates/role-based/runtime/zero-coupon-bond.yaml \
 
+
+# ./marlowe-cli/test/inline/role-based/cli/zero-coupon-bond-delayed-timeout.yaml \
+#  ./marlowe-cli/test/inline/address-based/runtime/merkleized-suspended-payouts.yaml \

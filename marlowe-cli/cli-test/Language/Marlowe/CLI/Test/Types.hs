@@ -21,7 +21,7 @@
 module Language.Marlowe.CLI.Test.Types where
 
 import Cardano.Api (AddressInEra, CardanoMode, IsCardanoEra, LocalNodeConnectInfo, NetworkId, ScriptDataSupportedInEra)
-import Control.Lens (makeLenses, (^.), _1, _2, _Just)
+import Control.Lens (makeLenses, view, (^.), _1, _2, _Just)
 import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Reader (MonadReader)
@@ -31,7 +31,7 @@ import Data.Aeson qualified as Aeson
 import Data.List qualified as List
 import Data.Map (Map)
 import GHC.Generics (Generic)
-import Language.Marlowe.CLI.Types (MarlowePlutusVersion, MarloweScriptsRefs, PrintStats, TxBuildupContext)
+import Language.Marlowe.CLI.Types (MarlowePlutusVersion, MarloweScriptsRefs, PrintStats, TxBuildupContext, toQueryContext)
 import Ledger.Orphans ()
 import Plutus.ApiCommon (ProtocolVersion)
 import Plutus.V1.Ledger.Api (CostModelParams)
@@ -41,6 +41,7 @@ import Cardano.Api qualified as C
 import Contrib.Data.Foldable (foldMapM)
 import Contrib.Data.Time.Units.Aeson qualified as A
 import Control.Category ((<<<))
+import Control.Lens.Getter qualified as Getter
 import Control.Monad.State.Class (MonadState)
 import Data.Aeson.Encode.Pretty qualified as A
 import Data.Aeson.Key qualified as A.Key
@@ -57,7 +58,7 @@ import Language.Marlowe.CLI.Test.Contract.ContractNickname (ContractNickname (Co
 import Language.Marlowe.CLI.Test.ExecutionMode (HasInterpretEnv (..), UseExecutionMode)
 import Language.Marlowe.CLI.Test.ExecutionMode qualified as ExecutionMode
 import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError, ieMessage)
-import Language.Marlowe.CLI.Test.Log (Logs)
+import Language.Marlowe.CLI.Test.Log (HasInterpretEnv (..), Logs)
 import Language.Marlowe.CLI.Test.Log qualified as Log
 import Language.Marlowe.CLI.Test.Operation.Aeson (
   ConstructorName (ConstructorName),
@@ -160,6 +161,7 @@ data FailureReport lang era = FailureReport
 
 data TestResult lang era
   = TestSucceeded (InterpretState lang era)
+  | TestSkipped String
   | TestFailed
       { result :: FailureReport lang era
       , retries :: [FailureReport lang era]
@@ -174,6 +176,14 @@ data TestOperation
   | Comment String
   | ShouldFail TestOperation
   deriving stock (Eq, Generic, Show)
+
+isRuntimeOperation :: TestOperation -> Bool
+isRuntimeOperation = \case
+  RuntimeOperation _ -> True
+  _ -> False
+
+involvesRuntime :: TestCase -> Bool
+involvesRuntime = any isRuntimeOperation . operations
 
 -- | FIXME: Constructor names could be generically derived from the types.
 cliConstructors :: [String]
@@ -274,6 +284,7 @@ data InterpretEnv lang era = InterpretEnv
   , _ieCostModelParams :: CostModelParams
   , _ieProtocolVersion :: ProtocolVersion
   , _ieTxBuildupContext :: TxBuildupContext era
+  , _ieReportDir :: FilePath
   }
 
 type InterpretMonad m lang era =
@@ -286,7 +297,12 @@ type InterpretMonad m lang era =
 makeLenses 'InterpretEnv
 makeLenses 'InterpretState
 
-instance Log.HasLogStore (InterpretState lang era) where
+instance Log.HasInterpretEnv (InterpretEnv lang era) era where
+  eraL = ieEra
+  queryCtxL = Getter.to $ toQueryContext . view ieTxBuildupContext
+  reportDirL = ieReportDir
+
+instance Log.HasInterpretState (InterpretState lang era) where
   logStoreL = isLogs
 
 instance Wallet.HasInterpretEnv (InterpretEnv lang era) era where
@@ -421,9 +437,12 @@ failureReportToJSON testFile (TestName name) failure@FailureReport{_frInterpretS
       , "result" A..= ("failed" :: String)
       , "error" .= err
       , "retries" .= fmap _frErr retries
-      , "logs" .= logs
+      , "logs" .= logsToJSON logs
       ]
         <> statePairs
+
+logsToJSON :: Logs -> [A.Value]
+logsToJSON logs = logs <&> \(l, msg, info) -> A.object ["label" .= l, "message" .= msg, "info" .= A.object info]
 
 testResultToJSON
   :: (IsCardanoEra era)
@@ -433,15 +452,24 @@ testResultToJSON
   -> TestResult lang era
   -> m Aeson.Value
 testResultToJSON testFile testName@(TestName name) = \case
-  TestSucceeded interpretState -> do
-    statePairs <- interpretStateToJSONPairs interpretState
+  TestSucceeded i@InterpretState{_isLogs} -> do
+    statePairs <- interpretStateToJSONPairs i
     pure $
       A.object $
         [ "testName" A..= name
         , "testSource" A..= testFile
         , "result" A..= ("passed" :: String)
+        , "logs" A..= logsToJSON _isLogs
         ]
           <> statePairs
+  TestSkipped msg ->
+    pure $
+      A.object
+        [ "testName" A..= name
+        , "testSource" A..= testFile
+        , "result" A..= ("skipped" :: String)
+        , "reason" A..= msg
+        ]
   TestFailed err retries -> failureReportToJSON testFile testName err retries
 
 newtype FaucetsNumber = FaucetsNumber Int

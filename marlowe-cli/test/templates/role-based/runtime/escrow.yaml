@@ -57,6 +57,10 @@ operations:
           relative: 30000
 
 - RuntimeApplyInputs:
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800
     submitter: Buyer
     awaitConfirmed: 120
     inputs:
@@ -70,6 +74,10 @@ operations:
           role_token: SellerRoleToken
 
 - RuntimeApplyInputs:
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800
     submitter: Buyer
     awaitConfirmed: 120
     inputs:

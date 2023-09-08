@@ -61,6 +61,7 @@ import Plutus.V1.Ledger.Address (scriptHashAddress)
 import Plutus.V1.Ledger.Scripts (mkValidatorScript)
 import Plutus.V1.Ledger.Value (adaSymbol, getValue, valueOf)
 import Plutus.V2.Ledger.Api (
+  Datum (..),
   Redeemer (..),
   ScriptPurpose (Spending),
   SerializedScript,
@@ -71,6 +72,7 @@ import Plutus.V2.Ledger.Api (
   getValidator,
  )
 import Plutus.V2.Ledger.Api qualified as PV2
+import Plutus.V2.Ledger.Tx (OutputDatum (..))
 import PlutusTx qualified
 import PlutusTx.AssocMap qualified as AssocMap
 import PlutusTx.Prelude as PlutusTxPrelude hiding (traceError, traceIfFalse)
@@ -170,7 +172,8 @@ instance Eq SubTxInfo where
    "1" - Marlowe input not found.
    "2" - Invalid own value - we expect only the role token(s) and min ADA.
    "3" - Invalid Marlowe redeemer.
-   "4" - Missing thread token.
+   "4" - Invalid datum.
+   "5" - Missing thread token.
 -}
 mkOpenRoleValidator
   :: ValidatorHash
@@ -190,35 +193,29 @@ mkOpenRoleValidator
     { scriptContextTxInfo = SubTxInfo{txInfoInputs, txInfoRedeemers}
     , scriptContextPurpose = Spending txOutRef
     } = do
-    let threadTokenName :: V1.TokenName
-        threadTokenName = V1.TokenName emptyByteString
-
-        marloweValidatorAddress = scriptHashAddress marloweValidatorHash
+    let marloweValidatorAddress = scriptHashAddress marloweValidatorHash
         -- Single pass over the inputs to find the Marlowe input and the own input.
         -- \* We need both inputs to analyze the `Value` content (role token and complementary thread token).
         -- \* Additionally we need `marloweTxOutRef` to have access to the Marlowe redeemer.
         -- Currently Marlowe validator checks if there is only one Marlowe input so we don't have to.
-        (ownInput, marloweInput) = do
-          let go (Just o) (Just m) _ = (o, m)
-              go _ _ [] = traceError "1" -- Marlowe input not found.
-              go possibleOwn possibleMarlowe (txInput@TxInInfo{txInInfoOutRef, txInInfoResolved} : txInputs) = do
-                -- Check if the input is own input.
-                if txInInfoOutRef == txOutRef
-                  then go (Just txInput) possibleMarlowe txInputs
-                  else -- Check if the input is the Marlowe input.
 
-                    if txOutAddress txInInfoResolved == marloweValidatorAddress
-                      then go possibleOwn (Just txInput) txInputs
-                      else go possibleOwn possibleMarlowe txInputs
-          go Nothing Nothing txInfoInputs
+        -- Performance:
+        -- In the case of three inputs `find` seems to be faster than custom single pass over the list.
+        -- Inlined pattern matching over `Maybe` in both cases also seems to be faster than separate helper function.
+        ownInput = case find (\TxInInfo{txInInfoOutRef} -> txInInfoOutRef == txOutRef) txInfoInputs of
+          Just input -> input
+          Nothing -> traceError "1" -- Marlowe input not found.
+        marloweInput = case find (\TxInInfo{txInInfoResolved} -> txOutAddress txInInfoResolved == marloweValidatorAddress) txInfoInputs of
+          Just input -> input
+          Nothing -> traceError "1" -- Marlowe input not found.
+        TxInInfo{txInInfoResolved = TxOut{txOutValue = ownValue, txOutDatum = ownDatum}} = ownInput
 
         -- Extract role token information from the own input `Value`.
         (currencySymbol, roleName) = do
-          let valuesList = AssocMap.toList $ getValue $ txOutValue $ txInInfoResolved ownInput
-
-          -- Should I use this `find (currencySymbol /= adaSymbol)`?
+          let valuesList = AssocMap.toList $ getValue ownValue
 
           -- Value should contain only min. ADA and a specific role token(s).
+          -- Performance: `find` performs here clearly worse.
           case valuesList of
             [(possibleAdaSymbol, _), (currencySymbol, AssocMap.toList -> [(roleName, _)])]
               | possibleAdaSymbol PlutusTxPrelude.== adaSymbol -> (currencySymbol, roleName)
@@ -238,13 +235,19 @@ mkOpenRoleValidator
                 _ -> traceError "3"
               _ -> traceError "3"
 
+        threadTokenName :: V1.TokenName
+        threadTokenName = case ownDatum of
+          OutputDatum (Datum datum) -> case fromBuiltinData datum of
+            Just name -> name
+            _ -> traceError "4" -- Invalid datum.
+          _ -> traceError "4" -- Invalid datum.
+
         -- Check the Marlowe input `Value` for the thread token.
         threadTokenOk = do
           let marloweValue = txOutValue $ txInInfoResolved marloweInput
-          traceIfFalse "4" (valueOf marloweValue currencySymbol threadTokenName > 0)
-
-    (marloweRedeemerOk && threadTokenOk) || True
-mkOpenRoleValidator _ _ _ _ = True
+          traceIfFalse "5" (valueOf marloweValue currencySymbol threadTokenName > 0)
+    marloweRedeemerOk && threadTokenOk
+mkOpenRoleValidator _ _ _ _ = False
 
 -- Copied from marlowe-cardano. This is pretty standard way to minimize size of the typed validator:
 --  * Wrap validator function so it accepts raw `BuiltinData`.

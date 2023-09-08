@@ -1,0 +1,38 @@
+testName: Single party minting of multiple currencies (by different slot)
+
+operations:
+
+- CheckBalance:
+    wallet: Faucet
+    balance: []
+
+- Comment: Minting few tokens with expiration slot undefined
+
+- Mint:
+    nickname: Currency-1
+    minLovelace: 2000000
+    tokenDistribution:
+      - [Faucet, Token-1, 1]
+      - [Faucet, Token-2, 2]
+      - [Faucet, Token-3, 3]
+
+- Comment: Minting few other tokens with expiration slot
+
+- Mint:
+    nickname: Currency-2
+    mintingExpirationSlot: 10219351600
+    minLovelace: 2000000
+    tokenDistribution:
+      - [Faucet, Token-1, 1]
+      - [Faucet, Token-2, 2]
+      - [Faucet, Token-3, 3]
+
+- CheckBalance:
+    wallet: Faucet
+    balance:
+      - [Currency-1, Token-1, 1]
+      - [Currency-1, Token-2, 2]
+      - [Currency-1, Token-3, 3]
+      - [Currency-2, Token-1, 1]
+      - [Currency-2, Token-2, 2]
+      - [Currency-2, Token-3, 3]

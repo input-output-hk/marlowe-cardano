@@ -1,0 +1,67 @@
+testName: Test role token shouldn't be released from a open role script when we lack the thread token
+
+operations:
+
+- CheckBalance:
+    wallet: Faucet
+    balance:
+      - [ADA, 0]
+
+- Mint:
+    issuer: Faucet
+    nickname: RoleTokenCurrency
+    minLovelace: 2000000
+    tokenDistribution:
+      - [{ script: OpenRole }, Depositor, 1]
+
+- Initialize:
+    minLovelace: 2000000
+    roleCurrency: RoleTokenCurrency
+    marloweValidators:
+      publishCurrent:
+        permanently: true
+    submitter: Faucet
+    source:
+      when:
+        - case:
+            party:
+              role_token: Depositor
+            deposits: 2000000
+            of_token:
+              currency_symbol: ''
+              token_name: ''
+            into_account:
+              role_token: Depositor
+          then:
+            when:
+              - case:
+                  notify_if: true
+                then: close
+            timeout:
+              relative: +3600
+            timeout_continuation: close
+      timeout:
+        relative: +3600
+      timeout_continuation: close
+
+- AutoRun
+
+- Comment: The actual deposit which releases the role token should fail - there is no thread token locked into the contract
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: Depositor
+        that_deposits: 2000000
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          role_token: Depositor
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- ShouldFail: AutoRun
+

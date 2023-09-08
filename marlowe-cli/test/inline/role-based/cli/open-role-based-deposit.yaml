@@ -28,7 +28,7 @@ operations:
     minLovelace: 2000000
     roleCurrency: RoleTokenCurrency
     marloweValidators:
-      referenceCurrent:
+      publishCurrent:
         permanently: true
     submitter: Faucet
     source:

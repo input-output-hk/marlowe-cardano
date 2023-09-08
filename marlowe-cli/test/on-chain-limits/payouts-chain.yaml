@@ -1,0 +1,303 @@
+testName: Test payout chain when we are really close to the account limit
+
+operations:
+
+# We keep publishing before minting to avoid balancing error in publishing coin selection
+- Publish:
+    publishPermanently: true
+
+# We don't actually need the tokens - we  are going to fail
+- ExternalCurrency:
+    currencySymbol: 774d4f5daedfb7734cc60b5f05a9c66647534d862ed2831e8bb486f9
+    currencyNickname: RoleTokens
+
+- Initialize:
+    nickname: "Succeeding 'close'"
+    minLovelace: 2000000
+    merkleize: false
+    marloweValidators:
+      publishCurrent:
+        permanently: true
+    roleCurrency: RoleTokens
+    submitter: Faucet
+    source:
+      timeout:
+        relative: +3600
+      timeout_continuation: close
+      unless:
+        party:
+          address: Faucet
+        deposits: 10
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          address: Faucet
+      then:
+        timeout:
+          relative: +3600
+        timeout_continuation: close
+        unless:
+          notify_if: true
+        then:
+          pay: 1
+          token:
+            currency_symbol: ''
+            token_name: ''
+          from_account:
+            address: Faucet
+          to:
+            account:
+              role_token: Role01
+          then:
+            pay: 1
+            token:
+              currency_symbol: ''
+              token_name: ''
+            from_account:
+              address: Faucet
+            to:
+              account:
+                role_token: Role02
+            then:
+              pay: 1
+              token:
+                currency_symbol: ''
+                token_name: ''
+              from_account:
+                address: Faucet
+              to:
+                account:
+                  role_token: Role03
+              then:
+                pay: 1
+                token:
+                  currency_symbol: ''
+                  token_name: ''
+                from_account:
+                  address: Faucet
+                to:
+                  account:
+                    role_token: Role04
+                then:
+                  pay: 1
+                  token:
+                    currency_symbol: ''
+                    token_name: ''
+                  from_account:
+                    address: Faucet
+                  to:
+                    account:
+                      role_token: Role05
+                  then:
+                    pay: 1
+                    token:
+                      currency_symbol: ''
+                      token_name: ''
+                    from_account:
+                      address: Faucet
+                    to:
+                      account:
+                        role_token: Role06
+                    then:
+                      pay: 1
+                      token:
+                        currency_symbol: ''
+                        token_name: ''
+                      from_account:
+                        address: Faucet
+                      to:
+                        account:
+                          role_token: Role07
+                      then:
+                        timeout:
+                          relative: +3600
+                        timeout_continuation: close
+                        unless:
+                          notify_if: true
+                        then: close
+
+- Prepare:
+    contractNickname: "Succeeding 'close'"
+    inputs:
+      - input_from_party:
+          address: Faucet
+        that_deposits: 10
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          address: Faucet
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun:
+    contractNickname: "Succeeding 'close'"
+
+- Comment: Eight payouts (including min ADA payout) are enough to exceed the memory limit
+
+- Prepare:
+    contractNickname: "Succeeding 'close'"
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun:
+    contractNickname: "Succeeding 'close'"
+
+- Initialize:
+    minLovelace: 2000000
+    merkleize: false
+    nickname: "Failing 'close'"
+    marloweValidators:
+      publishCurrent:
+        permanently: true
+    roleCurrency: RoleTokens
+    submitter: Faucet
+    source:
+      timeout:
+        relative: +3600
+      timeout_continuation: close
+      unless:
+        party:
+          address: Faucet
+        deposits: 10
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          address: Faucet
+      then:
+        timeout:
+          relative: +3600
+        timeout_continuation: close
+        unless:
+          notify_if: true
+        then:
+          pay: 1
+          token:
+            currency_symbol: ''
+            token_name: ''
+          from_account:
+            address: Faucet
+          to:
+            account:
+              role_token: Role01
+          then:
+            pay: 1
+            token:
+              currency_symbol: ''
+              token_name: ''
+            from_account:
+              address: Faucet
+            to:
+              account:
+                role_token: Role02
+            then:
+              pay: 1
+              token:
+                currency_symbol: ''
+                token_name: ''
+              from_account:
+                address: Faucet
+              to:
+                account:
+                  role_token: Role03
+              then:
+                pay: 1
+                token:
+                  currency_symbol: ''
+                  token_name: ''
+                from_account:
+                  address: Faucet
+                to:
+                  account:
+                    role_token: Role04
+                then:
+                  pay: 1
+                  token:
+                    currency_symbol: ''
+                    token_name: ''
+                  from_account:
+                    address: Faucet
+                  to:
+                    account:
+                      role_token: Role05
+                  then:
+                    pay: 1
+                    token:
+                      currency_symbol: ''
+                      token_name: ''
+                    from_account:
+                      address: Faucet
+                    to:
+                      account:
+                        role_token: Role06
+                    then:
+                      pay: 1
+                      token:
+                        currency_symbol: ''
+                        token_name: ''
+                      from_account:
+                        address: Faucet
+                      to:
+                        account:
+                          role_token: Role07
+                      then:
+                        pay: 1
+                        token:
+                          currency_symbol: ''
+                          token_name: ''
+                        from_account:
+                          address: Faucet
+                        to:
+                          account:
+                            role_token: Role08
+                        then:
+                          timeout:
+                            relative: +3600
+                          timeout_continuation: close
+                          unless:
+                            notify_if: true
+                          then: close
+
+- Prepare:
+    contractNickname: "Failing 'close'"
+    inputs:
+      - input_from_party:
+          address: Faucet
+        that_deposits: 10
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          address: Faucet
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun:
+    contractNickname: "Failing 'close'"
+
+- Comment: Nine closing payouts (including min ADA payout) are enough to exceed the memory limit.
+
+- Prepare:
+    contractNickname: "Failing 'close'"
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- ShouldFail:
+    AutoRun:
+      contractNickname: "Failing 'close'"
+
+

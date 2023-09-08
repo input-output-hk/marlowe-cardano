@@ -50,6 +50,10 @@ operations:
           token_name: ""
         into_account:
           address: Seller
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800
 
 - RuntimeApplyInputs:
     submitter: Buyer
@@ -60,6 +64,10 @@ operations:
           choice_owner:
             address: Buyer
         input_that_chooses_num: 0
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800
 
 - CheckBalance:
     wallet: Buyer

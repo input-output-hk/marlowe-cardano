@@ -276,7 +276,7 @@ runRunCommand command =
         marloweParams' = maybe defaultMarloweParams marloweParams $ rolesCurrency command
         stake' = fromMaybe NoStakeAddress $ stake command
         printTxId = liftIO . putStrLn . ("TxId " <>) . show
-        padTxOut (address, value) = (address, Nothing, value)
+        padTxOut (address, value) = (address, C.TxOutDatumNone, value)
         outputs' = padTxOut <$> outputs command
     case command of
       Initialize{..} -> do

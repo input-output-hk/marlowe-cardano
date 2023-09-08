@@ -40,14 +40,13 @@ import Cardano.Api.Shelley (
 
 -- import           Cardano.CLI.Helpers (textShow)
 import Cardano.Ledger.Shelley.API qualified as Shelley
+import Data.Aeson qualified as A
 import Data.Char (isAlphaNum, isAscii)
 import Data.Function ((&))
 import Data.Functor ((<&>))
 import Data.Maybe (catMaybes, isJust)
 import Data.Ratio (denominator)
 import GHC.Real (numerator)
-
--- textShow = T.unpack . show
 
 yamlConfig :: Yaml.Config
 yamlConfig = Yaml.defConfig & setConfCompare compare
@@ -211,7 +210,9 @@ friendlyTxOut (TxOut addr amount mdatum script) =
       Aeson.String $ serialiseToRawBytesHexText h
     renderDatum (TxOutDatumInTx _ sData) =
       scriptDataToJson ScriptDataJsonDetailedSchema sData
-    renderDatum (TxOutDatumInline _ _) = error "TODO: Babbage"
+    renderDatum (TxOutDatumInline _ sData) =
+      A.object
+        [("inline", scriptDataToJson ScriptDataJsonDetailedSchema sData)]
 
 -- datum ShelleyBasedEraBabbage = panic "TODO: Babbage"
 

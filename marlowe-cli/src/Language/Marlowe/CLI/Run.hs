@@ -97,7 +97,7 @@ import Data.Set qualified as S (fromList, singleton)
 import Data.Time.Units (Second)
 import Data.Traversable (for)
 import Data.Tuple.Extra (uncurry3)
-import Language.Marlowe.CLI.Cardano.Api (adjustMinimumUTxO)
+import Language.Marlowe.CLI.Cardano.Api (adjustMinimumUTxO, toTxOutDatumInTx)
 import Language.Marlowe.CLI.Cardano.Api.Address (toShelleyStakeReference)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage (plutusScriptVersion))
 import Language.Marlowe.CLI.Export (
@@ -612,7 +612,7 @@ runTransaction
   -- ^ The JSON file with the Marlowe inputs, final state, and final contract.
   -> [TxIn]
   -- ^ The transaction inputs.
-  -> [(AddressInEra era, Maybe Datum, Api.Value)]
+  -> [(AddressInEra era, C.TxOutDatum C.CtxTx era, Api.Value)]
   -- ^ The transaction outputs.
   -> AddressInEra era
   -- ^ The change address.
@@ -680,7 +680,7 @@ runTransactionImpl
   -- ^ The JSON file with the Marlowe inputs, final state, and final contract.
   -> [TxIn]
   -- ^ The transaction inputs.
-  -> [(AddressInEra era, Maybe Datum, Api.Value)]
+  -> [(AddressInEra era, C.TxOutDatum C.CtxTx era, Api.Value)]
   -- ^ The transaction outputs.
   -> AddressInEra era
   -- ^ The change address.
@@ -723,7 +723,7 @@ runTransactionImpl txBuildupCtx marloweInBundle marloweOut' inputs outputs chang
                               ( -- Send the ancillary datum to the change address.
                                 changeAddress
                               , -- Astonishing that this eUTxO can be spent without script or redeemer!
-                                Just . Datum $ toBuiltinData continuation
+                                toTxOutDatumInTx era . Datum $ toBuiltinData continuation
                               , -- FIXME: Replace with protocol-dependent min-Ada.
                                 lovelaceToValue 1_500_000
                               )
@@ -733,7 +733,6 @@ runTransactionImpl txBuildupCtx marloweInBundle marloweOut' inputs outputs chang
                   throwError "MarloweParams value is not preserved in continuation"
                 pure ([spend'], Just collateral, merkles)
           let scriptAddress = viAddress $ mtValidator marloweOut
-
               outputDatum = diDatum $ buildMarloweDatum marloweParams (mtContract marloweOut) (mtState marloweOut)
           outputValue <-
             mconcat
@@ -745,10 +744,10 @@ runTransactionImpl txBuildupCtx marloweInBundle marloweOut' inputs outputs chang
                 do
                   guard (outputValue /= mempty)
                   pure $
-                    buildPayToScript scriptAddress outputValue outputDatum
+                    buildPayToScript era scriptAddress outputValue outputDatum
 
               roleAddress = viAddress $ mtRoleValidator marloweOut
-          (payments :: [(AddressInEra era, Maybe Datum, Api.Value)]) <-
+          (payments :: [(AddressInEra era, C.TxOutDatum C.CtxTx era, Api.Value)]) <-
             catMaybes
               <$> sequence
                 [ case payee of
@@ -757,13 +756,13 @@ runTransactionImpl txBuildupCtx marloweInBundle marloweOut' inputs outputs chang
                     money' <-
                       liftCli $
                         toCardanoValue money
-                    (_, money'') <- liftCli $ adjustMinimumUTxO era protocol address' Nothing money' ReferenceScriptNone
-                    pure $ Just (address', Nothing, money'')
+                    (_, money'') <- liftCli $ adjustMinimumUTxO era protocol address' C.TxOutDatumNone money' ReferenceScriptNone
+                    pure $ Just (address', C.TxOutDatumNone, money'')
                   Party (Role role) -> do
                     money' <-
                       liftCli $
                         toCardanoValue money
-                    let datum = Just . diDatum $ buildRoleDatum (Token (rolesCurrency marloweParams) role)
+                    let datum = toTxOutDatumInTx era $ diDatum $ buildRoleDatum (Token (rolesCurrency marloweParams) role)
                     (_, money'') <- liftCli $ adjustMinimumUTxO era protocol roleAddress datum money' ReferenceScriptNone
                     pure $ Just (roleAddress, datum, money'')
                   Account _ -> pure Nothing
@@ -810,7 +809,7 @@ withdrawFunds
   -- ^ The collateral.
   -> [TxIn]
   -- ^ The transaction inputs.
-  -> [(AddressInEra era, Maybe Datum, Api.Value)]
+  -> [(AddressInEra era, C.TxOutDatum C.CtxTx era, Api.Value)]
   -- ^ The transaction outputs.
   -> AddressInEra era
   -- ^ The change address.
@@ -855,7 +854,7 @@ withdrawFunds connection marloweOutFile roleName collateral inputs outputs chang
         . toAddressAny'
         $ roleAddress
     let spend = buildPayFromScript roleScript roleDatum roleRedeemer . fst <$> utxos
-        withdrawal = (changeAddress, Nothing, mconcat [txOutValueToValue value | (_, TxOut _ value _ _) <- utxos])
+        withdrawal = (changeAddress, C.TxOutDatumNone, mconcat [txOutValueToValue value | (_, TxOut _ value _ _) <- utxos])
     outputs' <- mapM (uncurry3 makeTxOut') $ withdrawal : outputs
     body <-
       buildBody
@@ -1003,7 +1002,7 @@ autoRunTransactionImpl txBuildupCtx marloweInBundle marloweOut' extraSpend chang
                               ( -- Send the ancillary datum to the change address.
                                 changeAddress
                               , -- Astonishing that this eUTxO can be spent without script or redeemer!
-                                Just . Datum $ toBuiltinData continuation
+                                toTxOutDatumInTx era . Datum $ toBuiltinData continuation
                               , -- FIXME: Replace with protocol-dependent min-Ada.
                                 lovelaceToValue 1_500_000
                               )
@@ -1027,7 +1026,7 @@ autoRunTransactionImpl txBuildupCtx marloweInBundle marloweOut' extraSpend chang
                 do
                   guard (outputValue /= mempty)
                   pure $
-                    buildPayToScript scriptAddress outputValue outputDatum
+                    buildPayToScript era scriptAddress outputValue outputDatum
 
               -- Compute the role-payout address.
               roleAddress = viAddress $ mtRoleValidator marloweOut
@@ -1039,10 +1038,10 @@ autoRunTransactionImpl txBuildupCtx marloweInBundle marloweOut' extraSpend chang
                   Party (Address network address) -> do
                     address' <- withShelleyBasedEra era $ marloweAddressToCardanoAddress network address
                     money' <- liftCli $ toCardanoValue money
-                    Just <$> ensureMinUtxo protocol (address', Nothing, money')
+                    Just <$> ensureMinUtxo protocol (address', C.TxOutDatumNone, money')
                   Party (Role role) -> do
                     money' <- liftCli $ toCardanoValue money
-                    let datum = Just . diDatum $ buildRoleDatum (Token rolesCurrency role)
+                    let datum = toTxOutDatumInTx era . diDatum $ buildRoleDatum (Token rolesCurrency role)
                     Just <$> ensureMinUtxo protocol (roleAddress, datum, money')
                   Account _ -> pure Nothing
                 | (payee, money) <-
@@ -1077,7 +1076,7 @@ autoRunTransactionImpl txBuildupCtx marloweInBundle marloweOut' extraSpend chang
             sequence
               [ do
                 value <- liftCli . toCardanoValue $ singleton (mtRolesCurrency marloweOut) role 1
-                ensureMinUtxo protocol (changeAddress, Nothing, value)
+                ensureMinUtxo protocol (changeAddress, C.TxOutDatumNone, value)
               | role <- roles $ mtInputs marloweOut
               ]
           txOuts <-
@@ -1287,7 +1286,7 @@ autoWithdrawFundsImpl txBuildupCtx token validatorInfo range changeAddress signi
         -- The output value should include the spending from the script and the role token.
         withdrawn = mconcat [txOutValueToValue value | AnUTxO (_, TxOut _ value _ _) <- utxos]
     -- Ensure that the output meets the min-Ada requirement.
-    output <- ensureMinUtxo protocol (changeAddress, Nothing, withdrawn <> role) >>= uncurry3 makeTxOut'
+    output <- ensureMinUtxo protocol (changeAddress, C.TxOutDatumNone, withdrawn <> role) >>= uncurry3 makeTxOut'
 
     -- Select the coins.
     (collateral, extraInputs, revisedOutputs) <-

@@ -55,7 +55,7 @@ import Control.Monad.Error.Class (throwError)
 import Control.Monad.Except (MonadError, MonadIO, runExceptT)
 import Control.Monad.Extra (whenM)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Reader (MonadReader, ReaderT (runReaderT), withReaderT)
+import Control.Monad.Reader (MonadReader, ReaderT (runReaderT), asks, withReaderT)
 import Control.Monad.Trans.Class (lift)
 import Data.Aeson (FromJSON, ToJSON, (.=))
 import Data.Aeson qualified as A
@@ -68,6 +68,7 @@ import Data.Functor ((<&>))
 import Data.IORef (IORef, newIORef, readIORef)
 import Data.List.Extra qualified as List
 import Data.Map.Strict qualified as Map
+import Data.Maybe (isJust)
 import Data.Set qualified as S (singleton)
 import Data.Text qualified as Text
 import Data.Time.Units (Second)
@@ -108,7 +109,8 @@ import Language.Marlowe.CLI.Test.Types (
   TestCase (..),
   TestName (TestName),
   TestOperation (WalletOperation),
-  TestResult (TestFailed, TestSucceeded),
+  TestResult (..),
+  involvesRuntime,
   mkInterpretState,
   plutusValueToJSON,
   someTxBodyToJSON,
@@ -133,7 +135,7 @@ import Language.Marlowe.CLI.Types (
   CliError (..),
   PrintStats,
   SomePaymentSigningKey,
-  TxBuildupContext,
+  TxBuildupContext (..),
  )
 import Language.Marlowe.CLI.Types qualified as T
 import Language.Marlowe.Protocol.Client qualified as Marlowe.Protocol
@@ -205,6 +207,7 @@ data Env lang era resource = Env
   , _envCostModelParams :: P.CostModelParams
   , _envMaxRetries :: Int
   , _envTxBuildupContext :: TxBuildupContext era
+  , _envReportDir :: FilePath
   }
 
 makeLenses 'Env
@@ -215,6 +218,9 @@ instance ExecutionMode.HasInterpretEnv (Env lang era resource) era where
 
 setEnvResource :: Env lang era resource -> resource' -> Env lang era resource'
 setEnvResource Env{..} resource = Env{_envResource = resource, ..}
+
+hasRuntimeConfigured :: Env lang era resource -> Bool
+hasRuntimeConfigured env = isJust $ view envRuntimeConfig env
 
 -- We use `ReaderT` directly because we want to use `withReaderT` to hide or replace the resource:
 
@@ -274,6 +280,7 @@ toTestWallet faucet@TestRunnerFaucet{..} conversion = do
           , _waSigningKey = _trSigningKey
           , _waSubmittedTransactions = mempty
           , _waExternal = False
+          , _waPublishingCosts = mempty
           }
       IncludeAllTransactions -> do
         let actualBalance' =
@@ -293,6 +300,7 @@ toTestWallet faucet@TestRunnerFaucet{..} conversion = do
           , _waSubmittedTransactions =
               _trSubmittedTransactions <> _trFundedTransactions
           , _waExternal = False
+          , _waPublishingCosts = mempty
           }
 
 updateFaucet
@@ -411,6 +419,7 @@ setupTestInterpretEnv = do
   txBuildupContext <- view envTxBuildupContext
   printStats <- view envPrintStats
   possibleRuntimeConfig <- view envRuntimeConfig
+  reportDir <- view envReportDir
   runtimeSetup <-
     for
       possibleRuntimeConfig
@@ -456,6 +465,7 @@ setupTestInterpretEnv = do
                   runtimeSetup
                 pure (runtimeMonitorContracts, runtimeMonitorInput)
           , _ieRuntimeClientConnector = fst <$> runtimeSetup
+          , _ieReportDir = reportDir
           }
   pure $
     (env,)
@@ -508,6 +518,7 @@ interpretTest testOperations (PrevResult possiblePrevResult) = do
         case either id id <$> possiblePrevResult of
           Just TestSucceeded{} -> []
           Just (TestFailed failure retries) -> failure : retries
+          Just (TestSkipped _) -> []
           Nothing -> []
       testFailed failure = TestFailed failure prevFailures
   state <- liftIO $ readIORef stateRef
@@ -635,28 +646,41 @@ runTest
   => (IsShelleyBasedEra era)
   => (FilePath, TestCase)
   -> TestRunnerM lang era ()
-runTest (testFile, TestCase{testName, operations = testOperations}) = do
+runTest (testFile, testCase@TestCase{testName, operations = testOperations}) = do
   liftIO $ hPutStrLn stderr ""
   liftIO $ hPutStrLn stderr $ "***** Test " <> coerce testName <> " *****"
   maxRetries <- view envMaxRetries
+  rConfigured <- asks hasRuntimeConfigured
+  simulationMode <- do
+    txBuildupContext <- view envTxBuildupContext
+    case txBuildupContext of
+      PureTxBuildup{} -> pure True
+      _ -> pure False
   result <-
-    either id id
-      <$> retryTillRight
-        (MaxRetries maxRetries)
-        \_ prevResult ->
-          unmaskedReleaseBracket'
-            acquireTestInterpretContext
-            releaseTestInterpretContext
-            \(stateRef, _) -> do
-              testRunIdRef <- view (envResource . trcRunId)
-              testRunId <-
-                atomically $ do
-                  testRunId <- readTVar testRunIdRef
-                  writeTVar testRunIdRef (succ testRunId)
-                  pure testRunId
-              withReaderEnvResource
-                (testRunId, stateRef)
-                (interpretTest testOperations prevResult)
+    if involvesRuntime testCase && (not rConfigured || simulationMode)
+      then
+        pure
+          if simulationMode
+            then TestSkipped $ "In simulation mode. Skipping runntime test " <> coerce testName
+            else TestSkipped $ "Runtime is not configured for the test " <> coerce testName
+      else
+        either id id
+          <$> retryTillRight
+            (MaxRetries maxRetries)
+            \_ prevResult ->
+              unmaskedReleaseBracket'
+                acquireTestInterpretContext
+                releaseTestInterpretContext
+                \(stateRef, _) -> do
+                  testRunIdRef <- view (envResource . trcRunId)
+                  testRunId <-
+                    atomically $ do
+                      testRunId <- readTVar testRunIdRef
+                      writeTVar testRunIdRef (succ testRunId)
+                      pure testRunId
+                  withReaderEnvResource
+                    (testRunId, stateRef)
+                    (interpretTest testOperations prevResult)
   resultsRef <- view (envResource . trcResults)
   atomically $ modifyTVar' resultsRef (Map.insert (testFile, testName) result)
   whenM
@@ -671,6 +695,7 @@ runTest (testFile, TestCase{testName, operations = testOperations}) = do
   case result of
     TestSucceeded{} -> printResultMsg "SUCCEEDED"
     TestFailed{} -> printResultMsg "FAILED"
+    TestSkipped{} -> printResultMsg "SKIPPED"
 
 -- Internally we pass a reference to a master faucet through `bracket`
 -- so we can record all the txs.

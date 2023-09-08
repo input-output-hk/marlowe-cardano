@@ -56,6 +56,10 @@ operations:
 
 # Transaction 2. Lender Deposits the Loan Amount
 - RuntimeApplyInputs:
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800
     submitter: Lender
     awaitConfirmed: 120
     inputs:
@@ -94,6 +98,10 @@ operations:
 
 # Transaction 3. Borrower Repays the Loan's Principal and Interest"
 - RuntimeApplyInputs:
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800
     submitter: Borrower
     awaitConfirmed: 120
     inputs:

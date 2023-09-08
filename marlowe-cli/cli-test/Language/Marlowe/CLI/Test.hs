@@ -200,6 +200,7 @@ import Plutus.V1.Ledger.Value qualified as PV
 import PlutusCore (defaultCostModelParams)
 import System.Exit (exitFailure, exitSuccess)
 import System.IO (hPrint, hPutStrLn)
+import System.IO.Temp (createTempDirectory)
 
 -- | Run tests of a Marlowe contract.
 runTestSuite
@@ -265,6 +266,8 @@ runTestSuite era TestSuite{..} = do
   protocolParameters <- queryInEra connection C.QueryProtocolParameters
   slotConfig <- querySlotConfig connection
   costModel <- getDefaultCostModel
+  -- FIXME: This should be configurable.
+  reportDir <- liftIO $ createTempDirectory "/tmp" "marlowe-cli-test-report"
 
   let env :: TestSuiteRunnerEnv MarlowePlutusVersion era
       env =
@@ -280,6 +283,7 @@ runTestSuite era TestSuite{..} = do
           , _envPrintStats = printStats
           , _envStreamJSON = True
           , _envMaxRetries = tsMaxRetries
+          , _envReportDir = reportDir
           }
 
   testSuiteResult <- liftIO $ flip runReaderT env $ runTests tests tsConcurrentRunners

@@ -347,7 +347,7 @@ type InterpretMonad env st m era =
   , Wallet.InterpretMonad env st m era
   , MonadError InterpreterError m
   , MonadIO m
-  , Log.HasLogStore st
+  , Log.InterpretMonad env st m era
   )
 
 makeLenses 'RuntimeContractInfo

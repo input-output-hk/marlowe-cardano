@@ -14,12 +14,14 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE StrictData #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -34,10 +36,12 @@ module Language.Marlowe.CLI.Types (
   MarlowePlutusVersion,
   MarloweTransaction (..),
   NodeStateInfo (..),
+  Percent (..),
   RedeemerInfo (..),
   SomeMarloweTransaction (..),
   SomeTimeout (..),
   SubmitMode (..),
+  TxResourceUsage (..),
   ValidatorInfo (..),
 
   -- * eUTxOs
@@ -133,7 +137,6 @@ import Cardano.Api (
   CollateralSupportedInEra (..),
   EraInMode (..),
   HasTypeProxy (proxyToAsType),
-  Hash,
   IsCardanoEra,
   IsScriptLanguage,
   IsShelleyBasedEra,
@@ -143,7 +146,6 @@ import Cardano.Api (
   PlutusScript,
   PlutusScriptVersion,
   Script (PlutusScript),
-  ScriptData,
   ScriptDataSupportedInEra (..),
   ScriptLanguageInEra (..),
   ShelleyBasedEra (..),
@@ -672,10 +674,8 @@ data PayToScript era = PayToScript
   -- ^ The script address.
   , value :: Api.Value
   -- ^ The value to be paid.
-  , datumOut :: ScriptData
-  -- ^ The datum.
-  , datumHash :: Hash ScriptData
-  -- ^ The datum hash.
+  , datumOut :: C.TxOutDatum C.CtxTx era
+  -- ^ The output datum if any.
   }
   deriving (Eq, Generic, Show)
 
@@ -809,7 +809,7 @@ data TokensRecipient era
   | ScriptAddressRecipient
       (AddressInEra era)
       -- ^ The value to be paid.
-      ScriptData
+      (C.TxOutDatum C.CtxTx era)
       -- ^ The datum.
 
 data MintingAction era
@@ -866,9 +866,32 @@ toQueryContext :: TxBuildupContext era -> QueryExecutionContext era
 toQueryContext (NodeTxBuildup nodeInfo _) = QueryNode nodeInfo
 toQueryContext (PureTxBuildup utxo nodeInfo) = PureQueryContext utxo nodeInfo
 
-data ExecutionLimitsExceeded = ExecutionLimitsExceeded
-  { elMemoryPercent :: Natural
-  , elStepsPercent :: Natural
-  , elSizePercent :: Natural
+newtype Percent = Percent {unPercent :: Natural}
+  deriving stock (Eq, Generic, Show)
+  deriving newtype (FromJSON, ToJSON)
+
+data TxResourceUsage = TxResourceUsage
+  { elMemory :: (Natural, Percent)
+  , elSteps :: (Natural, Percent)
+  , elSize :: (Natural, Percent)
   }
+  deriving stock (Eq, Show, Generic)
+
+instance ToJSON TxResourceUsage where
+  toJSON TxResourceUsage{elMemory, elSteps, elSize} =
+    Aeson.object
+      [ "memory" .= elMemory
+      , "steps" .= elSteps
+      , "size" .= elSize
+      ]
+
+instance FromJSON TxResourceUsage where
+  parseJSON =
+    Aeson.withObject "TxResourceUsage" $ \o ->
+      TxResourceUsage
+        <$> o .: "memory"
+        <*> o .: "steps"
+        <*> o .: "size"
+
+newtype ExecutionLimitsExceeded = ExecutionLimitsExceeded {unExecutionLimitsExceeded :: TxResourceUsage}
   deriving stock (Eq, Show, Generic)

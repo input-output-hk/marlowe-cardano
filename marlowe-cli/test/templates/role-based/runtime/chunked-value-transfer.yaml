@@ -87,6 +87,10 @@ operations:
           token_name: Token02
         into_account:
           address: Organizer
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800
 
 - RuntimeApplyInputs:
     submitter: Organizer
@@ -112,6 +116,10 @@ operations:
           token_name: Token04
         into_account:
           address: Organizer
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800
 
 - RuntimeApplyInputs:
     submitter: Organizer
@@ -129,6 +137,10 @@ operations:
           token_name: Token05
         into_account:
           address: Organizer
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800
 
 - RuntimeApplyInputs:
     submitter: Organizer
@@ -139,6 +151,10 @@ operations:
       relative: +1800
     inputs:
       - "input_notify"
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800
 
 - RuntimeApplyInputs:
     submitter: Organizer
@@ -149,6 +165,10 @@ operations:
       relative: +1800
     inputs:
       - "input_notify"
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800
 
 - RuntimeApplyInputs:
     submitter: Organizer
@@ -159,6 +179,10 @@ operations:
       relative: +1800
     inputs:
       - "input_notify"
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800
 
 - RuntimeWithdraw:
     wallets:

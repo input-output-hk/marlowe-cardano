@@ -75,6 +75,8 @@ import Plutus.V1.Ledger.Value qualified as P
 import Text.Read (readMaybe)
 
 import Control.Lens.Getter (Getter)
+import Data.Aeson.Key qualified as K
+import Data.Aeson.KeyMap qualified as KM
 import Data.ByteString.Base16.Aeson (EncodeBase16)
 import Data.Text (Text)
 import Language.Marlowe.CLI.Test.ExecutionMode qualified as EM
@@ -108,6 +110,9 @@ data Wallet era = Wallet
   , _waSubmittedTransactions :: [SomeTxBody]
   -- ^ We keep track of all the transactions so we can
   -- discard fees from the balance check calculation.
+  , _waPublishingCosts :: P.Value
+  -- ^ We keep track of script publishing costs so we can
+  -- discard them from the balance check calculation.
   , _waExternal :: Bool
   -- ^ We allow loading of external wallets from the file system.
   -- We keep track of them so we don't move funds out of these wallet
@@ -118,14 +123,14 @@ data Wallet era = Wallet
 makeLenses ''Wallet
 
 emptyWallet :: AddressInEra era -> SomePaymentSigningKey -> Wallet era
-emptyWallet address signignKey = Wallet address mempty signignKey mempty False -- mempty
+emptyWallet address signignKey = Wallet address mempty signignKey mempty mempty False -- mempty
 
 newtype IsExternalWallet = IsExternalWallet {unExternalWallet :: Bool}
 
 fromUTxO :: AddressInEra era -> SomePaymentSigningKey -> UTxO era -> IsExternalWallet -> Wallet era
 fromUTxO address signignKey (UTxO utxo) (IsExternalWallet isExternalWallet) = do
   let total = foldMap (toPlutusValue . txOutValueValue) (Map.elems utxo)
-  Wallet address total signignKey mempty isExternalWallet
+  Wallet address total signignKey mempty mempty isExternalWallet
 
 -- | In many contexts this defaults to the `RoleName` but at some
 -- | point we want to also support multiple marlowe contracts scenarios
@@ -310,6 +315,15 @@ instance FromJSON AssetsBalance where
           assetId <- parseJSON $ A.Array $ V.fromList [assetNameJSON, tokenNameJSON]
           balance <- parseJSON balanceJSON
           pure $ assetsSingleton assetId balance
+        A.Object (KM.toList -> [(assetNameJSON, A.Array (V.toList -> tokenAmountPairsJSON))]) -> do
+          let assetId = K.toString assetNameJSON
+          m <- fmap Map.fromList $ for tokenAmountPairsJSON $ \case
+            A.Array (V.toList -> [tokenNameJSON, amountJSON]) -> do
+              tokenName <- parseTokenNameJSON tokenNameJSON
+              amount <- parseJSON amountJSON
+              pure (AssetId (CurrencyNickname assetId) tokenName, amount)
+            _ -> fail "Expecting a token amount pair."
+          pure $ AssetsBalance m
         _ -> fail "Expecting an assets map encoding."
 
 instance ToJSON AssetsBalance where
@@ -599,7 +613,7 @@ type InterpretMonad env st m era =
   , EM.HasInterpretEnv env era
   , MonadError InterpreterError m
   , MonadIO m
-  , Log.HasLogStore st
+  , Log.InterpretMonad env st m era
   )
 
 adaToken :: M.Token

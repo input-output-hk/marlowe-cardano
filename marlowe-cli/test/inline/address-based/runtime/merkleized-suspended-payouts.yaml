@@ -81,10 +81,10 @@ operations:
     inputs:
       - "input_notify"
 
-# - RuntimeApplyInputs:
-#     awaitConfirmed: 120
-#     inputs:
-#       - "input_notify"
+- RuntimeApplyInputs:
+    awaitConfirmed: 120
+    inputs:
+      - "input_notify"
 
 - CheckBalance:
     wallet: Recipient

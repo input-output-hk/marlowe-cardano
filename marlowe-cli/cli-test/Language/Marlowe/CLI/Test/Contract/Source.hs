@@ -19,11 +19,11 @@ import Data.Aeson (FromJSON (..), ToJSON (..), (.=))
 import Data.Aeson qualified as A
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty qualified as NonEmptyList
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
-import Language.Marlowe (Token (..))
 import Language.Marlowe.CLI.IO (liftCliMaybe)
 import Language.Marlowe.CLI.Run (marloweAddressFromCardanoAddress)
 import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (ParametrizedMarloweJSON)
@@ -213,7 +213,7 @@ data UseTemplate
       , utOracle :: PartyRef
       , utChunkSize :: Raffle.ChunkSize
       , utParties :: NonEmpty PartyRef
-      , utprizeNFTPerRound :: NonEmpty Token
+      , utprizeNFTPerRound :: [AssetId]
       , utDepositDeadline :: SomeTimeout
       , utSelectDeadline :: SomeTimeout
       , utPayoutDeadline :: SomeTimeout
@@ -385,13 +385,18 @@ useTemplate currency = \case
     oracle <- buildParty currency utOracle
     parties <- traverse (buildParty currency) utParties
 
+    possiblePrizeNFTPerRound <- traverse assetIdToToken utprizeNFTPerRound
+    prizeNFTPerRound <- case NonEmptyList.nonEmpty possiblePrizeNFTPerRound of
+      Nothing -> throwError $ testExecutionFailed' "Price NFT per round must be specified"
+      Just nfts -> pure nfts
+
     pure $
       raffle
         (Raffle.Sponsor sponsor)
         (Raffle.Oracle oracle)
         utChunkSize
         parties
-        utprizeNFTPerRound
+        prizeNFTPerRound
         depositDeadline'
         selectDeadline'
         payoutDeadline'

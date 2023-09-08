@@ -1,0 +1,187 @@
+testName: The limit of deposits to a single (address based) account of distinct tokens using roles
+
+operations:
+
+- CreateWallet:
+    nickname: RoleTokenMinter
+    utxo: 15000000
+
+- Publish:
+    publishPermanently: true
+
+- Mint:
+    issuer: RoleTokenMinter
+    nickname: RoleTokens
+    minLovelace: 1500000
+    tokenDistribution:
+      - recipient: Faucet
+        tokens:
+        - [Role01, 1]
+        - [Role02, 1]
+        - [Role03, 1]
+        - [Role04, 1]
+        - [Role05, 1]
+        - [Role06, 1]
+        - ['', 1]
+
+- Mint:
+    issuer: Faucet
+    nickname: NFTs
+    minLovelace: 4000000
+    tokenDistribution:
+      - recipient: Faucet
+        tokens:
+          - [Token01, 1]
+          - [Token02, 1]
+          - [Token03, 1]
+          - [Token04, 1]
+          - [Token05, 1]
+          - [Token06, 1]
+
+- Initialize:
+    minLovelace: 2000000
+    roleCurrency: RoleTokens
+    marloweValidators:
+      publishCurrent:
+        permanently: true
+    submitter: Faucet
+    source:
+      timeout: +1h
+      timeout_continuation: close
+      unless:
+        party:
+          address: Faucet
+        deposits: 1
+        of_token: [RoleTokens, '']
+        into_account:
+          address: Faucet
+      then:
+        timeout: +1h
+        timeout_continuation: close
+        unless:
+          party:
+            role_token: Role01
+          deposits: 1
+          of_token: [NFTs, Token01]
+          into_account:
+            address: Faucet
+        then:
+          timeout: +1h
+          timeout_continuation: close
+          unless:
+            party:
+              role_token: Role02
+            deposits: 1
+            of_token: [NFTs, Token02]
+            into_account:
+              address: Faucet
+          then:
+            timeout: +1h
+            timeout_continuation: close
+            unless:
+              party:
+                role_token: Role03
+              deposits: 1
+              of_token: [NFTs, Token03]
+              into_account:
+                address: Faucet
+            then:
+              timeout: +1h
+              timeout_continuation: close
+              unless:
+                party:
+                  role_token: Role04
+                deposits: 1
+                of_token: [NFTs, Token04]
+                into_account:
+                  address: Faucet
+              then:
+                timeout: +1h
+                timeout_continuation: close
+                unless:
+                  party:
+                    role_token: Role05
+                  deposits: 1
+                  of_token: [NFTs, Token05]
+                  into_account:
+                    address: Faucet
+                then:
+                  timeout: +1h
+                  timeout_continuation: close
+                  unless:
+                    party:
+                      role_token: Role06
+                    deposits: 1
+                    of_token: [NFTs, Token06]
+                    into_account:
+                      address: Faucet
+                  then: close
+
+- Comment: Manually deposit thread token to the script.
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          address: Faucet
+        that_deposits: 1
+        of_token: [RoleTokens, '']
+        into_account:
+          address: Faucet
+    minimumTime: -15s
+    maximumTime: +2m
+
+- AutoRun
+
+- Comment: Now deposit all the NFT's on by one
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: Role01
+        that_deposits: 1
+        of_token: [NFTs, Token01]
+        into_account:
+          address: Faucet
+    minimumTime: -15s
+    maximumTime: +2m
+
+- AutoRun
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: Role02
+        that_deposits: 1
+        of_token: [NFTs, Token02]
+        into_account:
+          address: Faucet
+    minimumTime: -15s
+    maximumTime: +2m
+
+- AutoRun
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: Role03
+        that_deposits: 1
+        of_token: [NFTs, Token03]
+        into_account:
+          address: Faucet
+    minimumTime: -15s
+    maximumTime: +2m
+
+- AutoRun
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: Role04
+        that_deposits: 1
+        of_token: [NFTs, Token04]
+        into_account:
+          address: Faucet
+    minimumTime: -15s
+    maximumTime: +2m
+
+- ShouldFail: AutoRun

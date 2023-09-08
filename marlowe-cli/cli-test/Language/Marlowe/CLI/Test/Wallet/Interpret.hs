@@ -72,8 +72,9 @@ import Language.Marlowe.CLI.Transaction (
   buildMintingImpl,
  )
 import Language.Marlowe.CLI.Types (
-  AnUTxO,
+  AnUTxO (unAnUTxO),
   CurrencyIssuer (CurrencyIssuer),
+  MarloweScriptsRefs (..),
   PayFromScript,
   SigningKeyFile (..),
   TokensRecipient (..),
@@ -109,6 +110,7 @@ import Data.Map.Strict (Map)
 import Data.Maybe (catMaybes, fromMaybe, isJust)
 import Data.Text qualified as Text
 import Data.Tuple.Extra (uncurry3)
+import Language.Marlowe.CLI.Cardano.Api (toReferenceTxInsScriptsInlineDatumsSupportedInEra, toTxOutDatumInline)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (fromV2Validator)
 import Language.Marlowe.CLI.Cardano.Api.Value qualified as CV
 <<<<<<< HEAD
@@ -126,12 +128,14 @@ import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (
  )
 import Language.Marlowe.CLI.Test.ExecutionMode (queryByAddress, queryUTxOs)
 import Language.Marlowe.CLI.Test.ExecutionMode qualified as EM
-import Language.Marlowe.CLI.Test.InterpreterError (assertionFailed', testExecutionFailed')
-import Language.Marlowe.CLI.Test.Log (Label, logStoreLabeledMsg, throwLabeledError)
+import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError (..), assertionFailed', testExecutionFailed')
+import Language.Marlowe.CLI.Test.Log (Label, logStoreLabeledMsg, logTxBody, throwLabeledError)
+import Language.Marlowe.CLI.Test.Report qualified as Report
 import Language.Marlowe.CLI.Types qualified as CT
 import Language.Marlowe.Cardano (marloweNetworkFromCaradnoNetworkId)
 import Language.Marlowe.Scripts.OpenRole (openRoleValidator)
 import Ledger.Tx.CardanoAPI (fromCardanoPolicyId, toCardanoPolicyId)
+import Ledger.Tx.CardanoAPI qualified as P
 import Plutus.V1.Ledger.Value (valueOf)
 import Plutus.V1.Ledger.Value qualified as PV
 import Plutus.V2.Ledger.Api (MintingPolicyHash (..))
@@ -176,6 +180,40 @@ updateWallets f = do
   wallets <- use walletsL
   let wallets' = mapWallets f wallets
   walletsL .= wallets'
+
+addWalletTransaction
+  :: (InterpretMonad env st m era)
+  => (Label l)
+  => (C.IsCardanoEra era)
+  => WalletNickname
+  -> l
+  -> String
+  -> C.TxBody era
+  -> m ()
+addWalletTransaction nickname label msg txBody = do
+  era <- view eraL
+  wallets <- use walletsL
+  logTxBody label msg txBody (Report.rewriteAddress wallets)
+  updateWallet nickname $ \wallet ->
+    wallet
+      { _waSubmittedTransactions = SomeTxBody era txBody : _waSubmittedTransactions wallet
+      }
+
+addPublishingCosts
+  :: (InterpretMonad env st m era)
+  => WalletNickname
+  -> MarloweScriptsRefs lang era
+  -> m ()
+addPublishingCosts nickname marloweScriptsRefs = do
+  let MarloweScriptsRefs{mrMarloweValidator, mrRolePayoutValidator, mrOpenRoleValidator} = marloweScriptsRefs
+      total =
+        fold $
+          P.fromCardanoValue . C.txOutValueToValue . CV.txOutValue . snd . unAnUTxO . fst
+            <$> [mrMarloweValidator, mrRolePayoutValidator, mrOpenRoleValidator]
+  updateWallet nickname $ \wallet ->
+    wallet
+      { T._waPublishingCosts = T._waPublishingCosts wallet <> total
+      }
 
 getAllWallets
   :: (InterpretMonad env st m era)
@@ -468,16 +506,18 @@ interpret so@CheckBalance{..} = do
   utxos <- fetchWalletUTxOs wallet :: m [AnUTxO era]
   let onChainTotal = CV.toPlutusValue $ foldMap CT.anUTxOValue utxos
       fees = walletTxFees wallet
+      administrativeCosts = lovelaceToPlutusValue fees <> _waPublishingCosts
 
   logStoreLabeledMsg so $ "Checking balance of a wallet: " <> show case woWalletNickname of WalletNickname n -> n
   logStoreLabeledMsg so $ "Number of already submitted transactions: " <> show (length _waSubmittedTransactions)
   logStoreLabeledMsg so $ "Balance check baseline: " <> show _waBalanceCheckBaseline
+  logStoreLabeledMsg so $ "Publishing costs: " <> show _waPublishingCosts
   logStoreLabeledMsg so $
     "Total transaction fees amount: " <> do
       let C.Lovelace amount = fees
       show ((fromInteger amount / 1_000_000) :: F.Micro) <> " ADA"
 
-  actualBalance <- plutusValueToAssets $ onChainTotal <> lovelaceToPlutusValue fees <> inv _waBalanceCheckBaseline
+  actualBalance <- plutusValueToAssets $ onChainTotal <> administrativeCosts <> inv _waBalanceCheckBaseline
   let AssetsBalance expectedBalance = woBalance
 
   -- Iterate over assets in the wallet and check if we meet the expected balance.
@@ -581,13 +621,18 @@ interpret so@BurnAll{..} = do
                   foldMap (uncurry3 P.singleton) . filter check . P.flattenValue $ _waBalanceCheckBaseline
             wallet{_waBalanceCheckBaseline = balanceCheckBaseline'}
 
-          updateWallet issuer \w@Wallet{_waSubmittedTransactions} ->
-            w{_waSubmittedTransactions = SomeTxBody era burningTx : _waSubmittedTransactions}
+          addWalletTransaction issuer so "" burningTx
     Nothing -> logStoreLabeledMsg so $ "Currency " <> show currencyNickname <> " was minted externally, skipping."
 interpret wo@Fund{..} =
   fundWallets wo woWalletNicknames woUTxOs
 interpret wo@Mint{..} = do
   era <- view eraL
+
+  scriptReferenceEra <-
+    liftEither $
+      note
+        (TestExecutionFailed "Unable to convert era to script reference era" [])
+        (toReferenceTxInsScriptsInlineDatumsSupportedInEra era)
 
   let issuerNickname = fromMaybe faucetNickname woIssuer
 
@@ -607,7 +652,7 @@ interpret wo@Mint{..} = do
       $ "Currency with the same nickname but different issuer or minting slot already exists. "
         <> " You can remint some tokens but you have to use the same issuer and minting slot."
 
-  Wallet issuerAddress _ issuerSigningKey _ _ <- getWallet issuerNickname
+  Wallet issuerAddress _ issuerSigningKey _ _ _ <- getWallet issuerNickname
   tokenDistribution <- forM woTokenDistribution \(TokenAssignment recipient tokens) -> do
     destAddress <- case recipient of
       AddressRecipient bech32 -> do
@@ -615,10 +660,10 @@ interpret wo@Mint{..} = do
           Left err -> throwError $ testExecutionFailed' $ "Failed to parse address: " <> show err
           Right addr -> pure $ RegularAddressRecipient $ C.shelleyAddressInEra addr
       WalletRecipient walletNickname -> do
-        Wallet addr _ _ _ _ <- getWallet walletNickname
+        Wallet addr _ _ _ _ _ <- getWallet walletNickname
         pure $ RegularAddressRecipient addr
       ScriptRecipient OpenRoleScript -> do
-        let datum = CAS.fromPlutusData . P.toData $ P.emptyByteString
+        let datum = toTxOutDatumInline scriptReferenceEra $ P.Datum . P.toBuiltinData $ P.emptyByteString
         addr <- openRoleValidatorAddress
         pure $ ScriptAddressRecipient addr datum
     pure (destAddress, Just woMinLovelace, tokens)
@@ -639,21 +684,17 @@ interpret wo@Mint{..} = do
         mintingAction
         woMetadata
         woMintingExpirationSlot
-        -- Nothing
         printStats
 
   logStoreLabeledMsg wo $ "This currency symbol is " <> show policy
   let currencySymbol = PV.mpsSymbol . fromCardanoPolicyId $ policy
       currency = Currency currencySymbol (Just issuerNickname) woMintingExpirationSlot policy
 
-  updateWallet issuerNickname \issuer@Wallet{..} ->
-    issuer
-      { _waSubmittedTransactions = SomeTxBody era mintingTx : _waSubmittedTransactions
-      }
+  addWalletTransaction issuerNickname wo "" mintingTx
   modifying currenciesL \(Currencies currencies') ->
     Currencies $ Map.insert woCurrencyNickname currency currencies'
 interpret SplitWallet{..} = do
-  Wallet address _ skey _ _ :: Wallet era <- getWallet woWalletNickname
+  Wallet address _ skey _ _ _ :: Wallet era <- getWallet woWalletNickname
   let values = [C.lovelaceToValue v | v <- woUTxOs]
   void $ buildFaucet ("[createCollaterals] " :: String) [address] values address skey
 interpret wo@ReturnFunds{} = do
@@ -699,8 +740,7 @@ interpret wo@ReturnFunds{} = do
               False
               Nothing
           submitTxBody' txBuildupCtx body bodyContent changeAddress signingKeys
-      updateWallet faucetNickname \issuer@Wallet{_waSubmittedTransactions} ->
-        issuer{_waSubmittedTransactions = SomeTxBody era tx : _waSubmittedTransactions}
+      addWalletTransaction faucetNickname wo "" tx
 interpret ExternalCurrency{..} = do
   (currencySymbol, policyId) <- case (woCurrencySymbol, woPolicyId) of
     (Just _, Just _) -> throwError $ testExecutionFailed' "You can't specify both currency symbol and policy id."
@@ -777,13 +817,13 @@ fundWallets
 fundWallets label walletNicknames utxos = do
   let values = [C.lovelaceToValue v | v <- utxos]
 
-  (Wallet faucetAddress _ faucetSigningKey _ _ :: Wallet era) <- getFaucet
+  (Wallet faucetAddress _ faucetSigningKey _ _ _ :: Wallet era) <- getFaucet
   addresses <- for walletNicknames \walletNickname -> do
-    (Wallet address _ _ _ _) <- getWallet walletNickname
+    (Wallet address _ _ _ _ _) <- getWallet walletNickname
     pure address
   era <- view eraL
   txBody <- buildFaucet label addresses values faucetAddress faucetSigningKey
-  updateFaucet \faucet@(Wallet _ _ _ faucetTransactions _) ->
+  updateFaucet \faucet@(Wallet _ _ _ faucetTransactions _ _) ->
     faucet{_waSubmittedTransactions = SomeTxBody era txBody : faucetTransactions}
 
 buildFaucet

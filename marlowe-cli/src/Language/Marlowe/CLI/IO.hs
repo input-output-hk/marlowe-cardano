@@ -1,4 +1,5 @@
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE DerivingStrategies #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  $Headers
@@ -13,6 +14,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE ViewPatterns #-}
 
 -- | Input/output functions for the Marlowe CLI tool.
 module Language.Marlowe.CLI.IO (
@@ -35,6 +37,9 @@ module Language.Marlowe.CLI.IO (
   readVerificationKey,
   submitTxBody,
   submitTxBody',
+
+  -- * Tx helpers
+  txResourceUsage,
 
   -- * Environment
   getDefaultCostModel,
@@ -86,12 +91,14 @@ import Language.Marlowe.CLI.Types (
   CliError (..),
   ExecutionLimitsExceeded (..),
   NodeStateInfo (..),
+  Percent (..),
   QueryExecutionContext (..),
   SigningKeyFile (unSigningKeyFile),
   SomePaymentSigningKey,
   SomePaymentVerificationKey,
   SubmitMode (..),
   TxBuildupContext (..),
+  TxResourceUsage (..),
   askEra,
   asksEra,
   toAddressAny',
@@ -454,6 +461,27 @@ waitForUtxos connection timeout txIns = do
           else go (n - 1 :: Int)
   go . ceiling $ (fromIntegral timeoutMicroseconds / fromIntegral pauseMicroseconds :: Double)
 
+txResourceUsage
+  :: C.ScriptDataSupportedInEra era
+  -> C.ProtocolParameters
+  -> C.TxBody era
+  -> TxResourceUsage
+txResourceUsage era pp txBody =
+  let size = naturalFromInteger $ toInteger $ BS.length $ withCardanoEra era $ C.serialiseToCBOR txBody
+      maxSize = C.protocolParamMaxTxSize pp
+      fractionSize = 100 * size `div` maxSize
+
+      ExUnits memory steps = T.exUnits txBody
+
+      maxExecutionUnits = C.protocolParamMaxTxExUnits pp
+      fractionMemory = 100 * memory `div` maybe 0 C.executionMemory maxExecutionUnits
+      fractionSteps = 100 * steps `div` maybe 0 C.executionSteps maxExecutionUnits
+   in TxResourceUsage
+        { elMemory = (memory, Percent fractionMemory)
+        , elSteps = (steps, Percent fractionSteps)
+        , elSize = (size, Percent fractionSize)
+        }
+
 checkTxLimits
   :: C.ScriptDataSupportedInEra era
   -- ^ The era to serialise the transaction in.
@@ -464,17 +492,16 @@ checkTxLimits
   -> Maybe ExecutionLimitsExceeded
   -- ^ The error if the transaction exceeds the limits.
 checkTxLimits era pp txBody = do
-  let size = naturalFromInteger $ toInteger $ BS.length $ withCardanoEra era $ C.serialiseToCBOR txBody
-      maxSize = C.protocolParamMaxTxSize pp
-      fractionSize = 100 * size `div` maxSize
-
-      ExUnits memory steps = T.exUnits txBody
-
-      maxExecutionUnits = C.protocolParamMaxTxExUnits pp
-      fractionMemory = 100 * memory `div` maybe 0 C.executionMemory maxExecutionUnits
-      fractionSteps = 100 * steps `div` maybe 0 C.executionSteps maxExecutionUnits
-  if fractionSize >= 100 || fractionMemory >= 100 || fractionSteps >= 100
-    then Just $ ExecutionLimitsExceeded fractionMemory fractionSteps fractionSize
+  let -- we are not able to define this helper in the same `let` block belowe :-)
+      unPercent' = unPercent . snd
+  let usage = txResourceUsage era pp txBody
+      TxResourceUsage
+        { elMemory = unPercent' -> elMemoryPercent
+        , elSteps = unPercent' -> elStepsPercent
+        , elSize = unPercent' -> elSizePercent
+        } = usage
+  if elMemoryPercent >= 100 || elStepsPercent >= 100 || elSizePercent >= 100
+    then Just $ ExecutionLimitsExceeded usage
     else Nothing
 
 -- | Sign and submit a transaction.
