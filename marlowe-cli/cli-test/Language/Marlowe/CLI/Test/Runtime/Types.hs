@@ -334,9 +334,6 @@ class HasInterpretEnv env era | env -> era where
   eraL :: Lens' env (ScriptDataSupportedInEra era)
   slotConfigL :: Lens' env SlotConfig
 
-  --
-  -- Reevaluate if we have any use case for "simulation mode" here.
-  -- We are not really applying inputs etc.
   txBuildupContextL :: Lens' env (TxBuildupContext era)
 
 type InterpretMonad env st m era =

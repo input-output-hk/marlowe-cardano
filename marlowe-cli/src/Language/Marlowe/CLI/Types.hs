@@ -183,7 +183,6 @@ import Plutus.V1.Ledger.Api (CurrencySymbol, Datum, DatumHash, ExBudget, Redeeme
 import Plutus.V1.Ledger.Api qualified as P
 import Plutus.V1.Ledger.SlotConfig (SlotConfig, posixTimeToEnclosingSlot, slotToBeginPOSIXTime)
 
-import Cardano.Api qualified as Api (Value)
 import Cardano.Api qualified as C
 import Cardano.Api.Byron qualified as CB
 import Cardano.Api.Shelley qualified as C
@@ -672,7 +671,7 @@ data PayFromScript lang = PayFromScript
 data PayToScript era = PayToScript
   { address :: AddressInEra era
   -- ^ The script address.
-  , value :: Api.Value
+  , value :: C.Value
   -- ^ The value to be paid.
   , datumOut :: C.TxOutDatum C.CtxTx era
   -- ^ The output datum if any.

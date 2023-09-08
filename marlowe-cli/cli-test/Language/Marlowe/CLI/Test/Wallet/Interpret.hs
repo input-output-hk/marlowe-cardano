@@ -45,6 +45,7 @@ import Language.Marlowe.CLI.Test.Wallet.Types (
   InterpretMonad,
   IsExternalWallet (..),
   SomeTxBody (..),
+  ThreadTokenName (..),
   TokenAssignment (TokenAssignment),
   TokenRecipient (..),
   TokenRecipientScript (..),
@@ -141,7 +142,7 @@ import Plutus.V1.Ledger.Value qualified as PV
 import Plutus.V2.Ledger.Api (MintingPolicyHash (..))
 import Plutus.V2.Ledger.Api qualified as P
 import PlutusTx.AssocMap qualified as AssocMap
-import PlutusTx.Builtins qualified as P
+import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 import PlutusTx.Monoid (Group (inv))
 import System.IO.Temp (emptySystemTempFile, emptyTempFile)
 
@@ -662,8 +663,8 @@ interpret wo@Mint{..} = do
       WalletRecipient walletNickname -> do
         Wallet addr _ _ _ _ _ <- getWallet walletNickname
         pure $ RegularAddressRecipient addr
-      ScriptRecipient OpenRoleScript -> do
-        let datum = toTxOutDatumInline scriptReferenceEra $ P.Datum . P.toBuiltinData $ P.emptyByteString
+      ScriptRecipient (OpenRoleScript (ThreadTokenName bs)) -> do
+        let datum = toTxOutDatumInline scriptReferenceEra $ P.Datum . P.toBuiltinData . stringToBuiltinByteString $ bs
         addr <- openRoleValidatorAddress
         pure $ ScriptAddressRecipient addr datum
     pure (destAddress, Just woMinLovelace, tokens)

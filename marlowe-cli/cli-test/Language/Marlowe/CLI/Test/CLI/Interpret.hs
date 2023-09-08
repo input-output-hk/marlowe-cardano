@@ -65,6 +65,7 @@ import Language.Marlowe.CLI.Test.Wallet.Types (
  )
 import Ledger.Orphans ()
 
+import Cardano.Api.Shelley qualified as CS
 import Contrib.Control.Monad.Except (note)
 import Contrib.Data.Foldable (anyFlipped, foldMapFlipped, foldMapMFlipped)
 import Contrib.Data.List.Random (combinationWithRepetitions)
@@ -279,9 +280,18 @@ autoRunTransaction currency defaultSubmitter prev curr@MarloweTransaction{..} in
                       roleTokenAssetId = C.AssetId policyId roleAssetName
                       queryCtx = toQueryContext txBuildupCtx
                   runCli era "[AutoRun]" (selectUtxosImpl queryCtx openRoleAddress (AssetOnly roleTokenAssetId)) >>= \case
-                    OutputQueryResult{oqrMatching = fromUTxO -> (AnUTxO (txIn, _) : _)} -> do
-                      let scriptOrReference = validatorInfoScriptOrReference openRoleValidatorInfo
-                          datum = P.Datum $ P.toBuiltinData P.emptyByteString
+                    OutputQueryResult{oqrMatching = fromUTxO -> (AnUTxO (txIn, txOut) : _)} -> do
+                      let C.TxOut _ _ txOutDatum _ = txOut
+                      scriptData <- case txOutDatum of
+                        C.TxOutDatumInline _ sc -> pure sc
+                        _ -> throwError $ testExecutionFailed' "[autoRunTransaction] Unexpected datum type in the open role script output."
+                      (datum :: P.Datum) <-
+                        liftEither $
+                          note (testExecutionFailed' "[autoRunTransaction] Datum is not a token name.") $
+                            P.fromData . CS.toPlutusData $
+                              scriptData
+                      let -- datum = P.Datum $ P.toBuiltinData P.emptyByteString
+                          scriptOrReference = validatorInfoScriptOrReference openRoleValidatorInfo
                           redeemer = P.Redeemer $ P.toBuiltinData P.emptyByteString
                           payFromOpenRole :: PayFromScript lang
                           payFromOpenRole = buildPayFromScript scriptOrReference datum redeemer txIn
@@ -558,102 +568,6 @@ interpret AutoRun{..} = do
   thread' <- foldM step _ciThread plan
   let marloweContract' = marloweContract{_ciThread = thread'}
   modifying (contractsL . coerced) $ Map.insert contractNickname marloweContract'
-
--- Nothing ->
---   -- Should not happen.
---   throwLabeledError co $ testExecutionFailed' "Scripts were not published during this test scenario."
--- Just marloweScriptRefs -> do
---   era <- view eraL
---   connection <- view connectionL
---   costModelParams <- runCli era (label co) $ getPV2CostModelParams connection
---   evaluationContext <- except $ first (CliError . show) . runExcept $ P.mkEvaluationContext costModelParams
-
---   let
---     MarloweScriptsRefs {..} = marloweScriptRefs
---     (_, ValidatorInfo { viBytes = marloweValidatorBytes, viAddress = marloweValidatorAddress }) = mrMarloweValidator
---     (_, ValidatorInfo { viAddress = rolePayoutValidatorAddress }) = mrRolePayoutValidator
---     (_, ValidatorInfo { viBytes = openRoleValidatorBytes, viAddress = openRoleValidatorAddress }) = mrOpenRoleValidator
-
---     -- lockedRoles =
-
---     marloweValidatorInfo = (marloweValidatorBytes, toPlutusAddress marloweValidatorAddress, UseReferenceInput True)
---     step mt@MarloweTransaction {..} (costs, stillLockedRoles) = do
---       let
---         openRoleValidatorInfo =
---           ( openRoleValidatorBytes
---           , toPlutusAddress openRoleValidatorAddress
---           , UseReferenceInput True
---           , LockedRoles stillLockedRoles
---           )
---         marloweParams = V1.MarloweParams mtRolesCurrency
-
---         -- data MarloweTransaction lang era = MarloweTransaction
---         --   { mtValidator :: ValidatorInfo lang era
---         --   -- ^ The Marlowe validator.
---         --   , mtRoleValidator :: ValidatorInfo lang era
---         --   -- ^ The roles validator.
---         --   , mtOpenRoleValidator :: ValidatorInfo lang era
---         --   -- ^ The open roles validator.
---         --   , mtRolesCurrency :: CurrencySymbol
---         --   -- ^ The roles currency.
---         --   , mtState :: State
---         --   -- ^ The Marlowe state after the transaction.
---         --   , mtContract :: Contract
---         --   -- ^ The Marlowe contract after the transaction.
---         --   , mtContinuations :: Continuations
---         --   -- ^ The merkleized continuations for the contract.
---         --   , mtRange :: Maybe (SlotNo, SlotNo)
---         --   -- ^ The slot range for the transaction, if any.
---         --   , mtInputs :: [Input]
---         --   -- ^ The inputs to the transaction.
---         --   , mtPayments :: [Payment]
---         --   -- ^ The payments from the transaction.
---         --   , mtSlotConfig :: SlotConfig
---         --   -- ^ The POSIXTime-to-Slot configuration.
---         --   }
---         --   deriving (Eq, Generic, Show)
-
---         -- data Transaction = Transaction
---         --   { txState :: State
---         --   , txContract :: Contract
---         --   , txInput :: TransactionInput
---         --   , txOutput :: TransactionOutput
---         --   }
---         -- data TransactionInput = TransactionInput
---         --   { txInterval :: TimeInterval
---         --   , txInputs :: [Input]
---         --   }
---         -- data TransactionOutput
---         --   = TransactionOutput
---         --       { txOutWarnings :: [TransactionWarning]
---         --       , txOutPayments :: [Payment]
---         --       , txOutState :: State
---         --       , txOutContract :: Contract
---         --       }
---         --   | Error TransactionError
-
---         transaction = Safety.Transaction
---           { txState = mtState
---           , txContract = mtContract
---           , txInput = mtInput
---           , txOutput = mtOutput
---           }
-
---         txCost = liftCli $ calcMarloweTxExBudget
---           evaluationContext
---           marloweValidatorInfo
---           openRoleValidatorInfo
---           (toPlutusAddress rolePayoutValidatorAddress)
---           marloweParams
---           mt
-
---         requiredRoles = inputsRequiredRoles mtInputs
---         stillLockedRoles' = [r | r <- stillLockedRoles, r `notElem` requiredRoles]
---         costInfo = (mt, txCost)
---       (costs : costInfo, stillLockedRoles')
---     -- foldM step _ciThread plan
---   pure ()
-
 interpret co@Withdraw{..} = do
   (contractNickname, marloweContract@CLIContractInfo{..}) <- findCLIContractInfo coContractNickname
 

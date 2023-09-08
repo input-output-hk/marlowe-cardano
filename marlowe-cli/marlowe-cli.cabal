@@ -167,7 +167,6 @@ library cli-test
     Language.Marlowe.CLI.Test.Contract.Source
     Language.Marlowe.CLI.Test.ExecutionMode
     Language.Marlowe.CLI.Test.ExecutionMode.ExecutionMode
-    Language.Marlowe.CLI.Test.ExecutionMode.TrackedUTxOs
     Language.Marlowe.CLI.Test.Interpret
     Language.Marlowe.CLI.Test.InterpreterError
     Language.Marlowe.CLI.Test.Log

@@ -34,7 +34,13 @@ import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Reader.Class (MonadReader)
 import Control.Monad.State.Class (MonadState)
-import Data.Aeson (FromJSON (..), ToJSON (..), ToJSONKey)
+import Data.Aeson (
+  FromJSON (..),
+  ToJSON (..),
+  ToJSONKey,
+  (.:),
+  (.:?),
+ )
 import Data.Aeson qualified as A
 import Data.Aeson qualified as Aeson
 import Data.Aeson.KeyMap qualified as KeyMap
@@ -78,6 +84,8 @@ import Control.Lens.Getter (Getter)
 import Data.Aeson.Key qualified as K
 import Data.Aeson.KeyMap qualified as KM
 import Data.ByteString.Base16.Aeson (EncodeBase16)
+import Data.List qualified as List
+import Data.Maybe (fromMaybe, isJust)
 import Data.Text (Text)
 import Language.Marlowe.CLI.Test.ExecutionMode qualified as EM
 import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddressBech32)
@@ -354,8 +362,23 @@ instance ToJSON AssetsBalance where
         toJSON
           [toJSON currencyNickname, toJSON tokenName, toJSON [toJSON minValue, toJSON maxValue]]
 
-data TokenRecipientScript = OpenRoleScript
+newtype ThreadTokenName = ThreadTokenName String
   deriving stock (Eq, Generic, Show)
+  deriving newtype (FromJSON, ToJSON)
+
+newtype TokenRecipientScript
+  = OpenRoleScript ThreadTokenName
+  deriving stock (Eq, Generic, Show)
+
+instance FromJSON TokenRecipientScript where
+  parseJSON json@(A.Object obj) = do
+    script <- obj .: "script"
+    case script of
+      (T.toLower -> "openrole") -> do
+        possibleThreadTokenName <- obj .:? "threadTokenName"
+        pure $ OpenRoleScript $ fromMaybe (ThreadTokenName "") possibleThreadTokenName
+      _ -> fail $ "Expecting a token recipient script: " <> T.unpack (A.renderValue json)
+  parseJSON _ = fail "Expecting a token recipient script"
 
 -- Either a wallet or a script
 data TokenRecipient
@@ -373,7 +396,7 @@ instance FromJSON TokenRecipient where
     walletNicknameJSON@(A.String txt) -> case deserialiseAddressBech32 txt of
       Just _ -> pure $ AddressRecipient txt
       Nothing -> WalletRecipient <$> parseJSON walletNicknameJSON
-    A.Object (KeyMap.toList -> [("script", A.String (T.toLower -> "openrole"))]) -> pure $ ScriptRecipient OpenRoleScript
+    json@(A.Object props) | (isJust $ List.find ((==) "script" . fst) (KeyMap.toList props)) -> ScriptRecipient <$> parseJSON json
     A.Object (KeyMap.toList -> [("wallet", walletNicknameJSON)]) -> WalletRecipient <$> parseJSON walletNicknameJSON
     A.Object (KeyMap.toList -> [("address", addressJSON)]) -> AddressRecipient <$> parseJSON addressJSON
     json -> fail $ "Expecting a `TokenRecipient` string or object: " <> T.unpack (A.renderValue json)
@@ -382,7 +405,8 @@ instance ToJSON TokenRecipient where
   toJSON = \case
     WalletRecipient walletNickname -> toJSON walletNickname
     AddressRecipient address -> toJSON address
-    ScriptRecipient OpenRoleScript -> A.object [("script", "OpenRole")]
+    ScriptRecipient (OpenRoleScript possibleName) ->
+      A.object [("script", "OpenRole"), ("threadTokenName", toJSON possibleName)]
 
 data TokenAssignment = TokenAssignment
   { taTokenRecipient :: TokenRecipient

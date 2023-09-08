@@ -57,6 +57,8 @@ cabal run marlowe-cli -- \
   ./test/operations/mint-to-open-role-script.yaml \
   ./test/operations/mint.yaml \
   ./test/operations/open-role-release-fails-without-thread-token.yaml \
+  ./test/operations/open-role-release-fails-without-thread-token.yaml \
+  ./test/operations/open-role-uses-thread-token-name-to-release-the-token.yaml \
   ./test/operations/publish.yaml \
   ./test/operations/return-funds.yaml \
   ./test/operations/runtime-with-client-side-merkleization.yaml \
@@ -83,7 +85,6 @@ cabal run marlowe-cli -- \
   ./test/templates/role-based/runtime/escrow.yaml \
   ./test/templates/role-based/runtime/swap.yaml \
   ./test/templates/role-based/runtime/zero-coupon-bond.yaml \
-
 
 # ./marlowe-cli/test/inline/role-based/cli/zero-coupon-bond-delayed-timeout.yaml \
 #  ./marlowe-cli/test/inline/address-based/runtime/merkleized-suspended-payouts.yaml \

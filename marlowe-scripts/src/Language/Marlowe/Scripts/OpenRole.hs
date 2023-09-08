@@ -61,7 +61,6 @@ import Plutus.V1.Ledger.Address (scriptHashAddress)
 import Plutus.V1.Ledger.Scripts (mkValidatorScript)
 import Plutus.V1.Ledger.Value (adaSymbol, getValue, valueOf)
 import Plutus.V2.Ledger.Api (
-  Datum (..),
   Redeemer (..),
   ScriptPurpose (Spending),
   SerializedScript,
@@ -72,7 +71,6 @@ import Plutus.V2.Ledger.Api (
   getValidator,
  )
 import Plutus.V2.Ledger.Api qualified as PV2
-import Plutus.V2.Ledger.Tx (OutputDatum (..))
 import PlutusTx qualified
 import PlutusTx.AssocMap qualified as AssocMap
 import PlutusTx.Prelude as PlutusTxPrelude hiding (traceError, traceIfFalse)
@@ -153,9 +151,10 @@ instance Eq SubTxInfo where
 {- Open Role validator - it releases role token(s) (you can put more coins of the same role token to it) based on a few conditions:
 
    1. Value should contain only min. ada and a specific role token(s).
-   2. Transaction should spend Marlowe output which contains corresponding to thread token (the same currency symbol as
-   role).
+   2. Transaction should spend Marlowe output which contains corresponding thread token (the same currency symbol as
+   role and token name as defined in the inlined datum).
    3. The first Marlowe input in the redeemer to the Marlowe should be `IDeposit` with the same role party as the role token.
+   (We can extend this in the future to list of inputs: notifies and choices for the role and deposit for the role).
 
    We *won't* perform the following checks:
    1. Checking the thread token in the Marlowe account map would only possibly mislead the user - we are not able to fully
@@ -178,8 +177,8 @@ instance Eq SubTxInfo where
 mkOpenRoleValidator
   :: ValidatorHash
   -- ^ The hash of the corresponding Marlowe validator.
-  -> BuiltinData
-  -- ^ We ignore datum - no need for decoding
+  -> V1.TokenName
+  -- ^ Datum should be a thread token name.
   -> BuiltinData
   -- ^ We ignore redeemer - no need for decoding
   -> SubScriptContext
@@ -187,7 +186,7 @@ mkOpenRoleValidator
   -> Bool
 mkOpenRoleValidator
   marloweValidatorHash
-  _
+  threadTokenName
   _
   SubScriptContext
     { scriptContextTxInfo = SubTxInfo{txInfoInputs, txInfoRedeemers}
@@ -208,7 +207,7 @@ mkOpenRoleValidator
         marloweInput = case find (\TxInInfo{txInInfoResolved} -> txOutAddress txInInfoResolved == marloweValidatorAddress) txInfoInputs of
           Just input -> input
           Nothing -> traceError "1" -- Marlowe input not found.
-        TxInInfo{txInInfoResolved = TxOut{txOutValue = ownValue, txOutDatum = ownDatum}} = ownInput
+        TxInInfo{txInInfoResolved = TxOut{txOutValue = ownValue}} = ownInput
 
         -- Extract role token information from the own input `Value`.
         (currencySymbol, roleName) = do
@@ -235,13 +234,6 @@ mkOpenRoleValidator
                 _ -> traceError "3"
               _ -> traceError "3"
 
-        threadTokenName :: V1.TokenName
-        threadTokenName = case ownDatum of
-          OutputDatum (Datum datum) -> case fromBuiltinData datum of
-            Just name -> name
-            _ -> traceError "4" -- Invalid datum.
-          _ -> traceError "4" -- Invalid datum.
-
         -- Check the Marlowe input `Value` for the thread token.
         threadTokenOk = do
           let marloweValue = txOutValue $ txInInfoResolved marloweInput
@@ -257,7 +249,7 @@ mkOpenRoleValidator _ _ _ _ = False
 openRoleValidator :: PV2.Validator
 openRoleValidator = do
   let mkUntypedOpenRoleValidator :: ValidatorHash -> BuiltinData -> BuiltinData -> BuiltinData -> ()
-      mkUntypedOpenRoleValidator mvh d r p = PlutusTxPrelude.check $ mkOpenRoleValidator mvh d r (PV2.unsafeFromBuiltinData p)
+      mkUntypedOpenRoleValidator mvh d r p = PlutusTxPrelude.check $ mkOpenRoleValidator mvh (PV2.unsafeFromBuiltinData d) r (PV2.unsafeFromBuiltinData p)
   mkValidatorScript
     $ $$(PlutusTx.compile [||mkUntypedOpenRoleValidator||])
     `PlutusTx.applyCode` PlutusTx.liftCode V1.Scripts.marloweValidatorHash

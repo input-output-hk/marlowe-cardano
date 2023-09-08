@@ -1059,7 +1059,7 @@ autoRunTransactionImpl txBuildupCtx marloweInBundle marloweOut' extraSpend chang
                   IDeposit _ (Role role) _ _ -> role : roles inputs
                   IChoice (ChoiceId _ (Role role)) _ -> role : roles inputs
                   _ -> roles inputs
-              -- Extract the value coming from a UTxO.
+              -- Extract the value comming from an UTxO.
               incomingValue (txIn', TxOut _ value _ _)
                 | txIn' `elem` fmap txIn spend = txOutValueToValue value
                 | otherwise = mempty
