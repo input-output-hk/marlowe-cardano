@@ -234,8 +234,8 @@ tests referencePaths =
               -- APPROVED CHANGES TO MARLOWE'S SEMANTICS VALIDATOR. THIS HASH
               -- HAS IMPLICATIONS FOR VERSIONING, AUDIT, AND CONTRACT DISCOVERY.
               ( if checkPlutusLog
-                  then "c6db3a4f2e08ce10cd34aa1cd06f97730f5d55e0fcc20e3cb5149ea4"
-                  else "2ed2631dbb277c84334453c5c437b86325d371f0835a28b910a91a6e"
+                  then "7ff54a5e50dee4adf28bc2f5dbaa22791ee44a6ef622ace834dc2d9b"
+                  else "d85fa9bc2bdfd97d5ebdbc5e3fc66f7476213c40c21b73b41257f09d"
               )
         ]
     , testGroup
@@ -268,7 +268,7 @@ tests referencePaths =
               -- DO NOT ALTER THE FOLLOWING VALUE UNLESS YOU ARE COMMITTING
               -- APPROVED CHANGES TO MARLOWE'S ROLE VALIDATOR. THIS HASH HAS
               -- IMPLICATIONS FOR VERSIONING, AUDIT, AND CONTRACT DISCOVERY.
-              "e165610232235bbbbeff5b998b233daae42979dec92a6722d9cda989"
+              "10ec7e02d25f5836b3e1098e0d4d8389e71d7a97a57aa737adc1d1fa"
         ]
     ]
 
