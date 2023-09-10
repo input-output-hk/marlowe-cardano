@@ -28,9 +28,9 @@ flag defer-plugin-errors
   manual:      True
 
 library
-  import:             lang
-  hs-source-dirs:     src
-  default-language:   Haskell2010
+  import:           lang
+  hs-source-dirs:   src
+  default-language: Haskell2010
   exposed-modules:
     Plutus.V1.Ledger.Aeson
     PlutusCore.Data.Aeson
@@ -40,9 +40,9 @@ library
   -- Other IOG dependencies
   --------------------------
   build-depends:
-    , plutus-core >=1.0.0
-    , plutus-ledger-api >=1.0.0
-    , plutus-tx >=1.0.0
+    , plutus-core ^>=1.7
+    , plutus-ledger-api ^>=1.7
+    , plutus-tx ^>=1.7
 
   ------------------------
   -- Non-IOG dependencies
@@ -62,10 +62,7 @@ library
     , tagged
     , text
 
-  ghc-options:        -fprint-potential-instances
-  reexported-modules:
-    Plutus.V1.Ledger.Time as Ledger.Time,
-    Plutus.V1.Ledger.Value as Ledger.Value,
+  ghc-options:      -fprint-potential-instances
 
   if flag(defer-plugin-errors)
     ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors

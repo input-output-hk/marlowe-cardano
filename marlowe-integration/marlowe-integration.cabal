@@ -57,7 +57,7 @@ library
     , async-components
     , base >=4.9 && <5
     , bytestring
-    , cardano-api
+    , cardano-api ^>=8.8
     , cardano-crypto-wrapper
     , cardano-integration
     , cardano-ledger-byron
@@ -124,7 +124,7 @@ executable marlowe-integration-example
   build-depends:
     , aeson
     , base >=4.9 && <5
-    , cardano-api
+    , cardano-api ^>=8.8
     , marlowe-cardano
     , marlowe-chain-sync
     , marlowe-integration

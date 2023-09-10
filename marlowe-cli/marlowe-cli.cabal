@@ -97,10 +97,10 @@ library
     , base16-bytestring
     , bech32
     , bytestring
-    , cardano-api
+    , cardano-api ^>=8.8
     , cardano-crypto-class
     , cardano-ledger-alonzo
-    , cardano-ledger-byron ==0.1.0.0
+    , cardano-ledger-byron ==1.0.0.2
     , cardano-ledger-core
     , cardano-ledger-shelley
     , cardano-slotting
@@ -123,7 +123,7 @@ library
     , parser-combinators
     , plutus-core
     , plutus-ledger-ada
-    , plutus-ledger-api
+    , plutus-ledger-api ^>=1.7
     , plutus-ledger-slot
     , plutus-tx
     , prettyprinter
@@ -188,7 +188,7 @@ library cli-test
     , base >=4.9 && <5
     , base16-aeson ==0.1.0.0
     , bytestring
-    , cardano-api
+    , cardano-api ^>=8.8
     , containers
     , data-default
     , data-has
@@ -212,7 +212,7 @@ library cli-test
     , one-line-aeson-text
     , plutus-core
     , plutus-ledger-ada
-    , plutus-ledger-api
+    , plutus-ledger-api ^>=1.7
     , plutus-ledger-slot
     , plutus-tx
     , random
@@ -260,7 +260,7 @@ library command
     , optparse-applicative
     , ouroboros-network
     , plutus-ledger-ada
-    , plutus-ledger-api
+    , plutus-ledger-api ^>=1.7
     , plutus-ledger-slot
     , plutus-tx
     , regex-posix
@@ -278,7 +278,6 @@ executable marlowe-cli
   autogen-modules: Paths_marlowe_cli
   build-depends:
     , base >=4.9 && <5
-    , cardano-config
     , marlowe-cli:command
     , text
 
@@ -303,7 +302,7 @@ test-suite marlowe-cli-test
     , marlowe-test
     , megaparsec
     , mtl
-    , plutus-ledger-api
+    , plutus-ledger-api ^>=1.7
     , plutus-ledger-slot
     , plutus-tx
     , tasty

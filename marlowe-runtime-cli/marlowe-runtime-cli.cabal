@@ -75,7 +75,7 @@ executable marlowe-runtime-cli
     , base >=4.9 && <5
     , base16
     , bytestring
-    , cardano-api
+    , cardano-api ^>=8.8
     , containers
     , errors
     , marlowe-cardano

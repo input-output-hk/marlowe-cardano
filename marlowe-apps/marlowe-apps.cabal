@@ -30,7 +30,7 @@ library
     , async
     , base >=4.9 && <5
     , bytestring
-    , cardano-api
+    , cardano-api ^>=8.8
     , containers
     , data-default
     , eventuo11y >=0.9 && <0.11
@@ -89,7 +89,7 @@ executable marlowe-scaling
   build-depends:
     , async
     , base >=4.9 && <5
-    , cardano-api
+    , cardano-api ^>=8.8
     , eventuo11y >=0.9 && <0.11
     , eventuo11y-dsl ^>=0.2
     , eventuo11y-json ^>=0.3
@@ -99,7 +99,7 @@ executable marlowe-scaling
     , marlowe-runtime
     , mtl
     , optparse-applicative
-    , plutus-ledger-api
+    , plutus-ledger-api ^>=1.7
     , random
     , text
     , time
@@ -128,7 +128,7 @@ executable marlowe-oracle
     , base >=4.9 && <5
     , base16-aeson
     , bytestring
-    , cardano-api
+    , cardano-api ^>=8.8
     , eventuo11y >=0.9 && <0.11
     , eventuo11y-dsl ^>=0.2
     , eventuo11y-json ^>=0.3
@@ -140,7 +140,7 @@ executable marlowe-oracle
     , marlowe-runtime
     , mtl
     , optparse-applicative
-    , plutus-ledger-api
+    , plutus-ledger-api ^>=1.7
     , process
     , servant
     , servant-client
@@ -181,7 +181,7 @@ executable signing-service
   build-depends:
     , aeson
     , base >=4.9 && <5
-    , cardano-api
+    , cardano-api ^>=8.8
     , marlowe-apps
     , marlowe-chain-sync
     , servant-server
@@ -211,7 +211,7 @@ executable marlowe-streamer
     , marlowe-chain-sync
     , marlowe-runtime:{marlowe-runtime, history-api}
     , optparse-applicative
-    , plutus-ledger-api
+    , plutus-ledger-api ^>=1.7
     , plutus-tx
     , text
     , time-units
