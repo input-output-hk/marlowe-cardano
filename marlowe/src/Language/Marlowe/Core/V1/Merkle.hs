@@ -54,9 +54,9 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   State,
   TimeInterval,
  )
-import Plutus.V1.Ledger.Api (DatumHash (..), toBuiltin, toData)
+import PlutusLedgerApi.V1 (DatumHash (..), toBuiltin, toData)
 
-import Cardano.Api (SerialiseAsRawBytes (..), hashScriptData)
+import Cardano.Api (SerialiseAsRawBytes (..), hashScriptDataBytes, unsafeHashableScriptData)
 import Cardano.Api.Shelley (fromPlutusData)
 import qualified Data.Map.Strict as M (Map, lookup, singleton)
 
@@ -118,7 +118,8 @@ merkleize f (When cases timeout contract) = When <$> mapM merkleizeCase cases <*
     merkleizeCase (Case action continuation) =
       do
         continuation' <- f continuation
-        let mh = toBuiltin $ serialiseToRawBytes $ hashScriptData $ fromPlutusData $ toData continuation'
+        let mh =
+              toBuiltin $ serialiseToRawBytes $ hashScriptDataBytes $ unsafeHashableScriptData $ fromPlutusData $ toData continuation'
         tell $ DatumHash mh `M.singleton` continuation'
         pure $ MerkleizedCase action mh
     merkleizeCase mc = pure mc

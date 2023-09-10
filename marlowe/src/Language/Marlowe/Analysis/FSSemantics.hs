@@ -20,7 +20,7 @@ import Data.Set (Set)
 import qualified Data.Set as S
 import Language.Marlowe.Core.V1.Semantics
 import Language.Marlowe.Core.V1.Semantics.Types
-import Plutus.V2.Ledger.Api (POSIXTime (POSIXTime, getPOSIXTime))
+import PlutusLedgerApi.V2 (POSIXTime (POSIXTime, getPOSIXTime))
 import qualified PlutusTx.AssocMap as AssocMap
 import qualified PlutusTx.Prelude as P
 import qualified PlutusTx.Ratio as P

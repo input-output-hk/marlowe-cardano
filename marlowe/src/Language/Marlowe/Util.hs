@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Marlowe.Util (
@@ -14,7 +13,7 @@ module Language.Marlowe.Util (
   dataHash,
 ) where
 
-import Cardano.Api (SerialiseAsRawBytes (..), hashScriptData)
+import Cardano.Api (SerialiseAsRawBytes (..), hashScriptDataBytes, unsafeHashableScriptData)
 import Cardano.Api.Shelley (fromPlutusData)
 import Data.List (foldl')
 import Data.Map.Strict (Map)
@@ -26,8 +25,8 @@ import qualified Data.Text as T (pack)
 import Language.Marlowe.Core.V1.Semantics
 import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddressBech32)
-import qualified Plutus.V1.Ledger.Value as Val
-import Plutus.V2.Ledger.Api (ToData, adaSymbol, adaToken, toBuiltin, toData)
+import qualified PlutusLedgerApi.V1.Value as Val
+import PlutusLedgerApi.V2 (ToData, adaSymbol, adaToken, toBuiltin, toData)
 import qualified PlutusTx
 import qualified PlutusTx.Prelude as P
 
@@ -139,4 +138,4 @@ merkleizedCase action continuation =
    in MerkleizedCase action hash
 
 dataHash :: (ToData a) => a -> P.BuiltinByteString
-dataHash = toBuiltin . serialiseToRawBytes . hashScriptData . fromPlutusData . toData
+dataHash = toBuiltin . serialiseToRawBytes . hashScriptDataBytes . unsafeHashableScriptData . fromPlutusData . toData

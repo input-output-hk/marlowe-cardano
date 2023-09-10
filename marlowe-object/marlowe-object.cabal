@@ -88,7 +88,7 @@ library gen
   build-depends:
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
-    , cardano-api:gen ^>=8.8
+    , cardano-api-gen ^>=8.1
     , hedgehog-quickcheck ^>=0.1
     , lens >=5.2 && <6
     , marlowe-object ==0.1.0.0

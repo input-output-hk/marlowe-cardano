@@ -29,7 +29,7 @@ import Language.Marlowe.Core.V1.Semantics (TransactionInput, TransactionOutput)
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, ChoiceId, Contract, State, Token, ValueId)
 import Language.Marlowe.Core.V1.Semantics.Types.Address (Network)
 import Numeric.Natural (Natural)
-import Plutus.V2.Ledger.Api (
+import PlutusLedgerApi.V2 (
   Credential (..),
   CurrencySymbol (..),
   DatumHash (..),
@@ -42,7 +42,7 @@ import Plutus.V2.Ledger.Api (
 
 import qualified Data.Text.Encoding as T (decodeUtf8, encodeUtf8)
 import qualified Language.Marlowe.Core.V1.Semantics as V1 (TransactionWarning)
-import qualified Plutus.V2.Ledger.Api as Ledger (Address (..))
+import qualified PlutusLedgerApi.V2 as Ledger (Address (..))
 
 -- | Information on the safety of a Marlowe contract and state.
 data SafetyReport = SafetyReport

@@ -19,15 +19,15 @@ import Data.Maybe (mapMaybe)
 import Language.Marlowe.Core.V1.Merkle (Continuations)
 import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Core.V1.Semantics.Types.Address (Network)
-import Plutus.V1.Ledger.Api (BuiltinByteString)
+import PlutusLedgerApi.V1 (BuiltinByteString)
 
 import qualified Data.Functor.Constant as F (Constant (..))
 import qualified Data.Map.Strict as M (foldr)
 import qualified Data.Set as S (Set, empty, fromList, map, singleton, toList, union)
-import qualified Plutus.V2.Ledger.Api as Ledger (Address)
+import qualified PlutusLedgerApi.V2 as Ledger (Address)
 import qualified PlutusTx.AssocMap as AM (keys)
 
--- | A mutltiplate for a Marlowe contract.
+-- | A multiplate for a Marlowe contract.
 data MarlowePlate f = MarlowePlate
   { contractPlate :: Contract -> f Contract
   , casePlate :: Case Contract -> f (Case Contract)
@@ -41,7 +41,7 @@ instance Multiplate MarlowePlate where
     let buildContract Close = pure Close
         buildContract (Pay a p t v c) = Pay a p t <$> valuePlate child v <*> contractPlate child c
         buildContract (If o c c') = If <$> observationPlate child o <*> contractPlate child c <*> contractPlate child c'
-        buildContract (When cs t c) = When <$> sequenceA (casePlate child <$> cs) <*> pure t <*> contractPlate child c
+        buildContract (When cs t c) = When <$> traverse (casePlate child) cs <*> pure t <*> contractPlate child c
         buildContract (Let i v c) = Let i <$> valuePlate child v <*> contractPlate child c
         buildContract (Assert o c) = Assert <$> observationPlate child o <*> contractPlate child c
         buildCase (Case a c) = Case <$> actionPlate child a <*> contractPlate child c

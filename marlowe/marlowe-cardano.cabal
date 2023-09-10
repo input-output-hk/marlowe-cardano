@@ -78,7 +78,6 @@ library
     , range ==0.3.0.2
     , sbv ^>=9.2
     , scientific ^>=0.3.7
-    , template-haskell >=2.16 && <3
     , text ^>=2.0
     , time >=1.9.3 && <2
     , transformers ^>=0.5.6

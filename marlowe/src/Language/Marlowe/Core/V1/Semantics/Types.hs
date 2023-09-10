@@ -98,9 +98,9 @@ import Deriving.Aeson
 import Language.Marlowe.Core.V1.Semantics.Types.Address
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
 import Language.Marlowe.Pretty (Pretty (..))
-import qualified Plutus.V1.Ledger.Value as Val
-import Plutus.V2.Ledger.Api (CurrencySymbol (unCurrencySymbol), POSIXTime (..), TokenName (unTokenName))
-import qualified Plutus.V2.Ledger.Api as Ledger (Address (..))
+import qualified PlutusLedgerApi.V1.Value as Val
+import PlutusLedgerApi.V2 (CurrencySymbol (unCurrencySymbol), POSIXTime (..), TokenName (unTokenName))
+import qualified PlutusLedgerApi.V2 as Ledger (Address (..))
 import PlutusTx (makeIsDataIndexed)
 import PlutusTx.AssocMap (Map)
 import qualified PlutusTx.AssocMap as Map
@@ -253,10 +253,10 @@ data Payee
   deriving anyclass (Pretty)
 
 -- | A case is a branch of a when clause, guarded by an action.
---   The continuation of the contrack may be merkleized or not.
+--   The continuation of the contract may be merkleized or not.
 --
 --   Plutus doesn't support mutually recursive data types yet.
---   datatype Case is mutually recurvive with @Contract@
+--   datatype Case is mutually recursive with @Contract@
 data Case a
   = Case Action a
   | MerkleizedCase Action BuiltinByteString
@@ -459,7 +459,7 @@ emptyState sn =
     , minTime = sn
     }
 
--- | Check if a 'num' is withint a list of inclusive bounds.
+-- | Check if a 'num' is within a list of inclusive bounds.
 inBounds :: ChosenNum -> [Bound] -> Bool
 inBounds num = any (\(Bound l u) -> num >= l && num <= u)
 
@@ -499,10 +499,7 @@ fromJSONAssocMap v = Map.fromList <$> parseJSON v
 
 instance FromJSON Party where
   parseJSON = withObject "Party" $ \v ->
-    ( maybe (parseFail "Address") (return . uncurry Address)
-        =<< deserialiseAddressBech32
-        <$> v .: "address"
-    )
+    (maybe (parseFail "Address") (return . uncurry Address) . deserialiseAddressBech32 =<< (v .: "address"))
       <|> (Role . Val.tokenName . Text.encodeUtf8 <$> (v .: "role_token"))
 
 instance ToJSON Party where
@@ -1086,7 +1083,7 @@ makeIsDataIndexed
 makeLift ''State
 makeIsDataIndexed ''State [('State, 0)]
 makeLift ''Environment
-makeLift ''Input
-makeIsDataIndexed ''Input [('NormalInput, 0), ('MerkleizedInput, 1)]
 makeLift ''InputContent
 makeIsDataIndexed ''InputContent [('IDeposit, 0), ('IChoice, 1), ('INotify, 2)]
+makeLift ''Input
+makeIsDataIndexed ''Input [('NormalInput, 0), ('MerkleizedInput, 1)]

@@ -37,7 +37,7 @@ import Language.Marlowe.Core.V1.Next.Applicables (ApplicableInputs, mkApplicable
 import qualified Language.Marlowe.Core.V1.Next.Applicables as Applicables
 import Language.Marlowe.Core.V1.Next.CanReduce (CanReduce, tryReduce)
 import Language.Marlowe.Core.V1.Semantics (fixInterval)
-import Plutus.V2.Ledger.Api (POSIXTime (..))
+import PlutusLedgerApi.V2 (POSIXTime (..))
 
 data Next = Next {canReduce :: CanReduce, applicables :: ApplicableInputs}
   deriving stock (Show, Eq, Ord, Generic)

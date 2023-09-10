@@ -27,7 +27,7 @@ import GHC.Generics (
   (:*:) ((:*:)),
   (:+:) (L1, R1),
  )
-import Plutus.V2.Ledger.Api (CurrencySymbol (..), POSIXTime (POSIXTime), PubKeyHash (PubKeyHash), TokenName (..))
+import PlutusLedgerApi.V2 (CurrencySymbol (..), POSIXTime (POSIXTime), PubKeyHash (PubKeyHash), TokenName (..))
 import qualified PlutusTx.Prelude as P
 import Text.PrettyPrint.Leijen (
   Doc,

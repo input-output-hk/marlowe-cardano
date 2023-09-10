@@ -117,7 +117,8 @@ library gen
   build-depends:
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
-    , cardano-api:{cardano-api, gen} ^>=8.8
+    , cardano-api ^>=8.8
+    , cardano-api-gen ^>=8.1
     , hedgehog-quickcheck ^>=0.1
     , http-media ^>=0.8
     , marlowe-cardano ==0.1.2.0
@@ -740,7 +741,8 @@ test-suite marlowe-runtime-test
     , aeson >=2 && <3
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
-    , cardano-api:{cardano-api, gen} ^>=8.8
+    , cardano-api ^>=8.8
+    , cardano-api-gen ^>=8.1
     , cardano-slotting
     , containers ^>=0.6.5
     , errors >=2.3 && <3

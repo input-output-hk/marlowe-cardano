@@ -197,7 +197,8 @@ library gen
   build-depends:
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
-    , cardano-api:{cardano-api, gen} ^>=8.8
+    , cardano-api ^>=8.8
+    , cardano-api-gen ^>=8.1
     , hedgehog-quickcheck ^>=0.1
     , marlowe-chain-sync ==0.0.4
     , marlowe-protocols ==0.2.0.0
