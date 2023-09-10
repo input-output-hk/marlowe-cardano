@@ -225,6 +225,9 @@ test-suite marlowe-test
     , these >=1.1 && <2
     , type-iso ==1.0.1.0
 
+  if flag(trace-plutus)
+    cpp-options: -DTRACE_PLUTUS
+
 executable marlowe-spec-client
   import:         lang
   hs-source-dirs: spec-client
