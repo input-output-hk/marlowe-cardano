@@ -153,9 +153,9 @@ tests =
 
 maxMarloweValidatorSize :: Int
 #ifdef TRACE_PLUTUS
-maxMarloweValidatorSize = 12840
+maxMarloweValidatorSize = 12737
 #else
-maxMarloweValidatorSize = 12296
+maxMarloweValidatorSize = 12194
 #endif
 
 -- | Test that the untyped validator is not too large.
