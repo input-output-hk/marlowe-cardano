@@ -21,11 +21,6 @@ extra-doc-files:
   CHANGELOG.md
   README.md
 
-data-dir:        benchmarks
-data-files:
-  rolepayout/*.benchmark
-  semantics/*.benchmark
-
 source-repository head
   type:     git
   location: https://github.com/input-output-hk/marlowe-cardano
