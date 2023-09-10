@@ -10,8 +10,13 @@
     std.inputs.n2c.follows = "n2c";
     iogx.url = "github:input-output-hk/iogx";
     iogx.inputs.CHaP.follows = "CHaP";
+    iogx.inputs.hackage.follows = "hackage";
     CHaP = {
       url = "github:input-output-hk/cardano-haskell-packages?ref=repo";
+      flake = false;
+    };
+    hackage = {
+      url = "github:input-output-hk/hackage.nix";
       flake = false;
     };
     # Use upstream when https://github.com/nlewo/nix2container/pull/82 is merged
