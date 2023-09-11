@@ -97,10 +97,10 @@ library
     , base16-bytestring
     , bech32
     , bytestring
-    , cardano-api ^>=8.8
+    , cardano-api ^>=8.2
     , cardano-crypto-class
     , cardano-ledger-alonzo
-    , cardano-ledger-byron ==1.0.0.2
+    , cardano-ledger-byron ^>=1.0
     , cardano-ledger-core
     , cardano-ledger-shelley
     , cardano-slotting
@@ -188,7 +188,7 @@ library cli-test
     , base >=4.9 && <5
     , base16-aeson ==0.1.0.0
     , bytestring
-    , cardano-api ^>=8.8
+    , cardano-api ^>=8.2
     , containers
     , data-default
     , data-has
