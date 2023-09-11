@@ -99,7 +99,7 @@ executable marlowe-scaling
     , marlowe-runtime
     , mtl
     , optparse-applicative
-    , plutus-ledger-api ^>=1.7
+    , plutus-ledger-api ^>=1.5
     , random
     , text
     , time
@@ -140,7 +140,7 @@ executable marlowe-oracle
     , marlowe-runtime
     , mtl
     , optparse-applicative
-    , plutus-ledger-api ^>=1.7
+    , plutus-ledger-api ^>=1.5
     , process
     , servant
     , servant-client
@@ -211,7 +211,7 @@ executable marlowe-streamer
     , marlowe-chain-sync
     , marlowe-runtime:{marlowe-runtime, history-api}
     , optparse-applicative
-    , plutus-ledger-api ^>=1.7
+    , plutus-ledger-api ^>=1.5
     , plutus-tx
     , text
     , time-units

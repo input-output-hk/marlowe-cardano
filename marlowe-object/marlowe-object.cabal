@@ -73,7 +73,7 @@ library
     , marlowe-protocols ==0.2.0.0
     , mtl >=2.2 && <3
     , pipes ^>=4.3.16
-    , plutus-ledger-api ^>=1.7
+    , plutus-ledger-api ^>=1.5
     , text ^>=2.0
     , time >=1.9 && <2
     , transformers ^>=0.5.6

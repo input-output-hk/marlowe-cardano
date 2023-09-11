@@ -149,8 +149,8 @@ library
     , filepath ^>=1.4
     , marlowe-cardano ==0.1.2.0
     , mtl >=2.2 && <3
-    , plutus-ledger-api ^>=1.7
-    , plutus-tx ^>=1.7
+    , plutus-ledger-api ^>=1.5
+    , plutus-tx ^>=1.5
     , QuickCheck >=2.14 && <3
     , tasty-quickcheck ^>=0.10
 
@@ -209,8 +209,8 @@ test-suite marlowe-test
     , marlowe-spec-test ==0.1.0.0
     , marlowe-test
     , mtl >=2.2 && <3
-    , plutus-ledger-api ^>=1.7
-    , plutus-tx ^>=1.7
+    , plutus-ledger-api ^>=1.5
+    , plutus-tx ^>=1.5
     , QuickCheck >=2.14 && <3
     , quickcheck-instances ^>=0.3.29
     , sbv >=8.4

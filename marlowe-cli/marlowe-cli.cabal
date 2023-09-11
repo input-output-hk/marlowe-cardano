@@ -123,7 +123,7 @@ library
     , parser-combinators
     , plutus-core
     , plutus-ledger-ada
-    , plutus-ledger-api ^>=1.7
+    , plutus-ledger-api ^>=1.5
     , plutus-ledger-slot
     , plutus-tx
     , prettyprinter
@@ -212,7 +212,7 @@ library cli-test
     , one-line-aeson-text
     , plutus-core
     , plutus-ledger-ada
-    , plutus-ledger-api ^>=1.7
+    , plutus-ledger-api ^>=1.5
     , plutus-ledger-slot
     , plutus-tx
     , random
@@ -260,7 +260,7 @@ library command
     , optparse-applicative
     , ouroboros-network
     , plutus-ledger-ada
-    , plutus-ledger-api ^>=1.7
+    , plutus-ledger-api ^>=1.5
     , plutus-ledger-slot
     , plutus-tx
     , regex-posix
@@ -302,7 +302,7 @@ test-suite marlowe-cli-test
     , marlowe-test
     , megaparsec
     , mtl
-    , plutus-ledger-api ^>=1.7
+    , plutus-ledger-api ^>=1.5
     , plutus-ledger-slot
     , plutus-tx
     , tasty

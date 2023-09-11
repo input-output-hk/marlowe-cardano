@@ -37,7 +37,7 @@ library
     , base
     , marlowe-cardano
     , mtl
-    , plutus-ledger-api ^>=1.7
+    , plutus-ledger-api ^>=1.5
     , plutus-tx
     , time
     , validation

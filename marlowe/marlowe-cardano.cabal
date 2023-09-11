@@ -73,8 +73,8 @@ library
     , multiplate ==0.0.3
     , newtype-generics ^>=0.6.2
     , ordered-containers ^>=0.2
-    , plutus-ledger-api ^>=1.7
-    , plutus-tx ^>=1.7
+    , plutus-ledger-api ^>=1.5
+    , plutus-tx ^>=1.5
     , range ==0.3.0.2
     , sbv ^>=9.2
     , scientific ^>=0.3.7
