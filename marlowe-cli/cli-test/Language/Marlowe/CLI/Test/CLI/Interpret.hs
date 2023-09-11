@@ -82,6 +82,10 @@ import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
 import Data.List.NonEmpty qualified as List.NonEmpty
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe, isJust, mapMaybe)
+import Data.Function (on)
+import Data.List qualified as List
+import Data.List.NonEmpty qualified as List.NonEmpty
+import Data.Maybe (fromMaybe, isJust, mapMaybe, maybeToList)
 import Data.Text qualified as Text
 import Data.Traversable (for)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage)
@@ -224,19 +228,8 @@ autoRunTransaction currency defaultSubmitter prev curr@MarloweTransaction{..} in
         M.NormalInput inputContent -> getInputContentParty inputContent
         M.MerkleizedInput inputContent _ _ -> getInputContentParty inputContent
 
-      step :: Maybe M.Party -> M.Input -> m (Maybe M.Party)
-      step Nothing input = pure $ getInputParty input
-      step reqParty input = case getInputParty input of
-        Nothing -> pure reqParty
-        reqParty'
-          | reqParty /= reqParty' ->
-              throwError $
-                testExecutionFailed' $
-                  "[autoRunTransaction] can handle only inputs which can be executed by a single party: "
-                    <> show reqParty
-                    <> " /= "
-                    <> show reqParty'
-        _ -> pure reqParty
+      parties = List.nub $ List.sort $ foldMapFlipped mtInputs \input ->
+        maybeToList $ getInputParty input
 
   logWith
     "Applying marlowe inputs: "
@@ -247,16 +240,14 @@ autoRunTransaction currency defaultSubmitter prev curr@MarloweTransaction{..} in
 
   txBuildupCtx <- view txBuildupContextL
   era <- view eraL
-  (submitterNickname, Wallet address _ skey _ _ _, possiblePayFromOpenRole) <-
-    foldM step Nothing mtInputs >>= \case
-      Nothing -> do
-        wallet <- getWallet defaultSubmitter
-        pure (defaultSubmitter, wallet, Nothing)
-      Just (M.Address network address) -> do
+  (submitterNickname, Wallet address _ skey _ _ _, possiblePayFromOpenRoles) <- do
+    (wallets, paysFromOpenRole) <- foldMapMFlipped parties \case
+      (M.Address network address) -> do
         addr <- rethrowCliError (marloweAddressToCardanoAddress network address)
         (wn, w) <- getWalletByAddress addr
-        pure (wn, w, Nothing)
-      Just (M.Role rn) -> case currency of
+        pure ([(wn, w)], [])
+      (M.Role rn) -> case currency of
+        Nothing -> throwError $ testExecutionFailed' "[autoRunTransaction] Contract requires a role currency which was not specified."
         Just cn ->
           findWalletByUniqueToken cn rn >>= \case
             --  We have not found owner of the token. It seems that it should belong to open role validator.
@@ -264,6 +255,8 @@ autoRunTransaction currency defaultSubmitter prev curr@MarloweTransaction{..} in
             --    * search for utxo under open role script which contains role token
             --    * if found, use it as an extra input
             --    * extract reference input to the open role script from the context and pass it up
+            Right (wn, w) -> do
+              pure ([(wn, w)], [])
             Left err -> do
               Currency{ccPolicyId = policyId, ccCurrencySymbol = currencySymbol} <- getCurrency cn
               use publishedScriptsL >>= \case
@@ -290,14 +283,12 @@ autoRunTransaction currency defaultSubmitter prev curr@MarloweTransaction{..} in
                           note (testExecutionFailed' "[autoRunTransaction] Datum is not a token name.") $
                             P.fromData . CS.toPlutusData $
                               scriptData
-                      let -- datum = P.Datum $ P.toBuiltinData P.emptyByteString
-                          scriptOrReference = validatorInfoScriptOrReference openRoleValidatorInfo
+                      let scriptOrReference = validatorInfoScriptOrReference openRoleValidatorInfo
                           redeemer = P.Redeemer $ P.toBuiltinData P.emptyByteString
                           payFromOpenRole :: PayFromScript lang
                           payFromOpenRole = buildPayFromScript scriptOrReference datum redeemer txIn
 
-                      wallet <- getWallet defaultSubmitter
-                      pure (defaultSubmitter, wallet, Just payFromOpenRole)
+                      pure ([], [payFromOpenRole])
                     _ -> do
                       let bech32 = Text.pack . show . C.serialiseAddress $ openRoleAddress
                       throwError $
@@ -309,11 +300,17 @@ autoRunTransaction currency defaultSubmitter prev curr@MarloweTransaction{..} in
                             <> show roleTokenAssetId
                             <> " or currency symbol: "
                             <> show currencySymbol
-            Right (wn, w) -> do
-              pure (wn, w, Nothing)
-        Nothing -> throwError $ testExecutionFailed' "[autoRunTransaction] Contract requires a role currency which was not specified."
+    let compareNicknames = compare `on` fst
+        theSameNickname (n1, _) (n2, _) = n1 == n2
+        wallets' = List.nubBy theSameNickname . List.sortBy compareNicknames $ wallets
+    case wallets' of
+      [] -> do
+        wallet <- getWallet defaultSubmitter
+        pure (defaultSubmitter, wallet, paysFromOpenRole)
+      [(wn, w)] -> pure (wn, w, paysFromOpenRole)
+      _ -> throwError $ testExecutionFailed' "[autoRunTransaction] Multiple wallets found for parties."
 
-  log' $ "Possible pay from open role: " <> show possiblePayFromOpenRole
+  log' $ "Possible pay from open role: " <> show possiblePayFromOpenRoles
   log' $ "Submitter: " <> case submitterNickname of WalletNickname n -> n
 
   txBody <-
@@ -322,7 +319,7 @@ autoRunTransaction currency defaultSubmitter prev curr@MarloweTransaction{..} in
         txBuildupCtx
         prev
         curr
-        (Foldable.toList possiblePayFromOpenRole)
+        possiblePayFromOpenRoles
         address
         [skey]
         C.TxMetadataNone

@@ -17,7 +17,7 @@
 # FAUCET_VKEY - faucet address.
 #
 #
-cabal run marlowe-cli -- \
+cabal run exe:marlowe-cli -- \
   --babbage-era test \
   --testnet-magic 1 \
   --concurrent-runners 8 \
@@ -28,16 +28,14 @@ cabal run marlowe-cli -- \
   --chain-seek-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
   --chain-seek-cmd-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
   --write-to-json-file report.json \
-  --max-retries 3 \
+  --max-retries 1 \
   --stream-json \
-  --simulation-mode \
   ./test/inline/role-based/cli/contract-for-differences-with-oracle.yaml \
   ./test/inline/role-based/cli/contract-for-differences.yaml \
   ./test/inline/role-based/cli/coupon-bond-guaranteed.yaml \
   ./test/inline/role-based/cli/escrow-with-collateral.yaml \
   ./test/inline/role-based/cli/escrow.yaml \
   ./test/inline/role-based/cli/open-escrow-with-collateral.yaml \
-  ./test/inline/role-based/cli/open-role-based-deposit.yaml \
   ./test/inline/role-based/cli/open-swap-for-ada.yaml \
   ./test/inline/role-based/cli/swap-of-ada-for-ada.yaml \
   ./test/inline/role-based/cli/zero-coupon-bond-immediate-timeout.yaml \
@@ -56,7 +54,12 @@ cabal run marlowe-cli -- \
   ./test/operations/mint-multiple.yaml \
   ./test/operations/mint-to-open-role-script.yaml \
   ./test/operations/mint.yaml \
+  ./test/operations/open-role-based-choice.yaml \
+  ./test/operations/open-role-based-choice.yaml \
   ./test/operations/open-role-release-fails-without-thread-token.yaml \
+  ./test/operations/open-role-based-deposit-mixed-with-other-inputs.yaml \
+  ./test/operations/open-role-based-deposit.yaml \
+  ./test/operations/open-role-multi-token-release.yaml \
   ./test/operations/open-role-release-fails-without-thread-token.yaml \
   ./test/operations/open-role-uses-thread-token-name-to-release-the-token.yaml \
   ./test/operations/publish.yaml \

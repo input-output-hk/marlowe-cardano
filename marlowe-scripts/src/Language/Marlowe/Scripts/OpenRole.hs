@@ -153,22 +153,14 @@ instance Eq SubTxInfo where
    1. Value should contain only min. ada and a specific role token(s).
    2. Transaction should spend Marlowe output which contains corresponding thread token (the same currency symbol as
    role and token name as defined in the inlined datum).
-   3. The first Marlowe input in the redeemer to the Marlowe should be `IDeposit` with the same role party as the role token.
-   (We can extend this in the future to list of inputs: notifies and choices for the role and deposit for the role).
+   3. The list of Marlowe inputs should contain at least one action either `IDeposit` or `IChoice` dedicated for the same role
+   party as the locked role token.
 
-   We *won't* perform the following checks:
-   1. Checking the thread token in the Marlowe account map would only possibly mislead the user - we are not able to fully
-   validate if the thread token won't leak or didn't leak already ;-)
-
-   2. Check if Marlowe uses the same currency symbol as thread token. This consistency check between currency
-   symbol and thread token has to be performed off-chain by the coordination layer.
-
-   3. We don't do any additional double spending checks. It seems that two open role validators for the same role
-   are be allowed to run and we prevent for two different roles release by performing role vs Marlowe input check.
+   In the current version we assume that thread token has the same currency as the role token which can be actually undesired.
 
    Error codes:
 
-   "1" - Marlowe input not found.
+   "1" - Own input (never happen) or Marlowe input not found.
    "2" - Invalid own value - we expect only the role token(s) and min ADA.
    "3" - Invalid Marlowe redeemer.
    "4" - Invalid datum.
@@ -193,17 +185,12 @@ mkOpenRoleValidator
     , scriptContextPurpose = Spending txOutRef
     } = do
     let marloweValidatorAddress = scriptHashAddress marloweValidatorHash
-        -- Single pass over the inputs to find the Marlowe input and the own input.
-        -- \* We need both inputs to analyze the `Value` content (role token and complementary thread token).
-        -- \* Additionally we need `marloweTxOutRef` to have access to the Marlowe redeemer.
-        -- Currently Marlowe validator checks if there is only one Marlowe input so we don't have to.
-
         -- Performance:
         -- In the case of three inputs `find` seems to be faster than custom single pass over the list.
         -- Inlined pattern matching over `Maybe` in both cases also seems to be faster than separate helper function.
         ownInput = case find (\TxInInfo{txInInfoOutRef} -> txInInfoOutRef == txOutRef) txInfoInputs of
           Just input -> input
-          Nothing -> traceError "1" -- Marlowe input not found.
+          Nothing -> traceError "1" -- Own input not found.
         marloweInput = case find (\TxInInfo{txInInfoResolved} -> txOutAddress txInInfoResolved == marloweValidatorAddress) txInfoInputs of
           Just input -> input
           Nothing -> traceError "1" -- Marlowe input not found.
@@ -212,8 +199,8 @@ mkOpenRoleValidator
         -- Extract role token information from the own input `Value`.
         (currencySymbol, roleName) = do
           let valuesList = AssocMap.toList $ getValue ownValue
-
-          -- Value should contain only min. ADA and a specific role token(s).
+          -- Value should contain only min. ADA and a specific role token(s) (we can have few coins of the same role
+          -- token - they are all released).
           -- Performance: `find` performs here clearly worse.
           case valuesList of
             [(possibleAdaSymbol, _), (currencySymbol, AssocMap.toList -> [(roleName, _)])]
@@ -221,18 +208,27 @@ mkOpenRoleValidator
             [(currencySymbol, AssocMap.toList -> [(roleName, _)]), _] -> (currencySymbol, roleName)
             _ -> traceError "2" -- Invalid value - we expect only the role token(s).
 
-        -- Check if the Marlowe redeemer is `IDeposit` with correct role name.
+        -- In order to release the role token we have to encounter an action which uses/unlocks the role.
+        -- All the other actions will be checked by Marlowe validator itself.
         marloweRedeemerOk = do
           let TxInInfo{txInInfoOutRef = marloweTxOutRef} = marloweInput
-          case AssocMap.lookup (Spending marloweTxOutRef) txInfoRedeemers of
-            Nothing -> traceError "3" -- Invalid Marlowe redeemer
-            -- Let's decode lazely only the first input.
-            Just (Redeemer bytes) -> case fromBuiltinData bytes of
-              Just (firstInputBytes : _) -> case fromBuiltinData firstInputBytes of
-                Just (V1.Scripts.MerkleizedTxInput (V1.IDeposit _ (V1.Role role) _ _) _) -> traceIfFalse "3" (role PlutusTxPrelude.== roleName)
-                Just (V1.Scripts.Input (V1.IDeposit _ (V1.Role role) _ _)) -> traceIfFalse "3" (role PlutusTxPrelude.== roleName)
-                _ -> traceError "3"
-              _ -> traceError "3"
+              {-# INLINEABLE inputContentUsesRole #-}
+              inputContentUsesRole (V1.IDeposit _ (V1.Role role) _ _) = role PlutusTxPrelude.== roleName
+              inputContentUsesRole (V1.IChoice (V1.ChoiceId _ (V1.Role role)) _) = role PlutusTxPrelude.== roleName
+              inputContentUsesRole _ = False
+
+              {-# INLINEABLE inputUsesRole #-}
+              inputUsesRole (V1.Scripts.MerkleizedTxInput inputContent _) = inputContentUsesRole inputContent
+              inputUsesRole (V1.Scripts.Input inputContent) = inputContentUsesRole inputContent
+
+              inputs :: V1.Scripts.MarloweInput
+              inputs = case AssocMap.lookup (Spending marloweTxOutRef) txInfoRedeemers of
+                Nothing -> traceError "3" -- Invalid Marlowe redeemer
+                -- Let's decode lazely only the first input.
+                Just (Redeemer bytes) -> case fromBuiltinData bytes of
+                  Just inputs -> inputs
+                  _ -> traceError "3" -- Invalid Marlowe redeemer
+          isJust $ find inputUsesRole inputs
 
         -- Check the Marlowe input `Value` for the thread token.
         threadTokenOk = do

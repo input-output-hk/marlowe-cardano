@@ -60,8 +60,6 @@ import Language.Marlowe.CLI.Test.Runtime.Types (
   connectionT,
   currentMarloweData,
   defaultOperationTimeout,
-  executionModeL,
-  eraL,
   knownContractsL,
   rcMarloweThread,
   runtimeClientConnectorT,
