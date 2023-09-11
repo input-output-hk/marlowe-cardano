@@ -15,7 +15,6 @@ import Data.Aeson qualified as A
 import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError, fromCliError)
 import Language.Marlowe.CLI.Test.Log (Label (label))
 import Language.Marlowe.CLI.Types (CliEnv (CliEnv), CliError (CliError))
-import Ledger.Orphans ()
 
 -- This helper is present in the newer version of mtl
 withError :: (MonadError e m) => (e -> e) -> m a -> m a

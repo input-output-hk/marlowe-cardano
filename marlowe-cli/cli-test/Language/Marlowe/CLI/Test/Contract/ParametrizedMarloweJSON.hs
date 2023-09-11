@@ -34,6 +34,7 @@ import Data.Time (NominalDiffTime)
 import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
 import GHC.Generics (Generic)
 import Language.Marlowe qualified as Marlowe
+import Language.Marlowe.CLI.Sync (toPlutusAddress)
 import Language.Marlowe.CLI.Test.Wallet.Types (
   Currencies (Currencies),
   Currency (Currency, ccCurrencySymbol),
@@ -46,7 +47,6 @@ import Language.Marlowe.CLI.Test.Wallet.Types (
 import Language.Marlowe.CLI.Types (CliError (CliError))
 import Language.Marlowe.Cardano (marloweNetworkFromLocalNodeConnectInfo)
 import Language.Marlowe.Core.V1.Semantics.Types.Address qualified as Marlowe
-import Ledger.Address (toPlutusAddress)
 import Plutus.V1.Ledger.Value qualified as PV
 
 -- | Either a JSON of the Input or a JSON of the Contract which

@@ -1,12 +1,3 @@
------------------------------------------------------------------------------
---
--- Module      :  $Headers
--- License     :  Apache 2.0
---
--- Stability   :  Experimental
--- Portability :  Portable
---
------------------------------------------------------------------------------
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DoAndIfThenElse #-}
@@ -17,6 +8,12 @@
 {-# OPTIONS_GHC -fno-warn-deprecations #-}
 
 -- | Marlowe tests.
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
 module Spec.Marlowe.Marlowe (
   -- * Testing
   prop_noFalsePositives,
@@ -76,7 +73,7 @@ import Language.Marlowe.Core.V1.Semantics.Types.Address (
   serialiseAddress,
   serialiseAddressBech32,
  )
-import Language.Marlowe.Scripts (alternateMarloweValidator, marloweValidator)
+import Language.Marlowe.Scripts (marloweValidatorBytes)
 import Language.Marlowe.Util (ada, extractNonMerkleizedContractRoles)
 import Plutus.V2.Ledger.Api (POSIXTime (POSIXTime))
 import Spec.Marlowe.Common (alicePk, amount, contractGen, pangramContract, shrinkContract, valueGen)
@@ -99,16 +96,16 @@ import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (assertBool, assertFailure, testCase, (@=?))
 import Test.Tasty.QuickCheck (Property, testProperty)
 
+import Cardano.Api (SerialiseAsRawBytes (deserialiseFromRawBytes))
 import qualified Cardano.Api as C
-import qualified Codec.Serialise as Serialise
-import qualified Data.ByteString.Lazy as LB
+import Cardano.Api.Shelley (StakeCredential (..))
 import qualified Data.ByteString.Short as SBS
 import qualified Data.Set as Set
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Language.Marlowe as M
-import qualified Ledger.Tx.CardanoAPI as C
-import qualified Ledger.Typed.Scripts as Scripts
+import qualified Plutus.V1.Ledger.Api as PV1
+import qualified Plutus.V1.Ledger.Credential as Credential
 import qualified PlutusTx.AssocMap as AssocMap
 import qualified PlutusTx.Prelude as P
 import qualified PlutusTx.Ratio as P
@@ -128,8 +125,7 @@ tests =
     , testCase "Input serializes into valid JSON" inputSerialization
     , testGroup
         "Validator size is reasonable"
-        [ testCase "Typed validator size" alternateMarloweValidatorSize
-        , testCase "Untyped validator size" marloweValidatorSize
+        [ testCase "Untyped validator size" marloweValidatorSize
         ]
     , testCase "Mul analysis" mulAnalysisTest
     , testCase "Div analysis" divAnalysisTest
@@ -155,28 +151,17 @@ tests =
         ]
     ]
 
-maxAlternateMarloweValidatorSize :: Int
 maxMarloweValidatorSize :: Int
 #ifdef TRACE_PLUTUS
-maxAlternateMarloweValidatorSize = 15361
-maxMarloweValidatorSize = 12840
+maxMarloweValidatorSize = 12737
 #else
-maxAlternateMarloweValidatorSize = 14821
-maxMarloweValidatorSize = 12296
+maxMarloweValidatorSize = 12194
 #endif
-
--- | Test that the typed validator is not too large.
-alternateMarloweValidatorSize :: IO ()
-alternateMarloweValidatorSize = do
-  let validator = Scripts.validatorScript alternateMarloweValidator
-  let vsize = SBS.length . SBS.toShort . LB.toStrict $ Serialise.serialise validator
-  assertBool ("alternateMarloweValidator is too large " <> show vsize) (vsize <= maxAlternateMarloweValidatorSize)
 
 -- | Test that the untyped validator is not too large.
 marloweValidatorSize :: IO ()
 marloweValidatorSize = do
-  let validator = Scripts.validatorScript marloweValidator
-  let vsize = SBS.length . SBS.toShort . LB.toStrict $ Serialise.serialise validator
+  let vsize = SBS.length marloweValidatorBytes
   assertBool ("marloweValidator is too large " <> show vsize) (vsize <= maxMarloweValidatorSize)
 
 -- | Test `extractNonMerkleizedContractRoles`.
@@ -224,19 +209,24 @@ valuesFormAbelianGroup = property $ do
   let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
   forAll gen $ \(a, b, c) ->
     -- associativity of addition
-    eval (AddValue (AddValue a b) c) === eval (AddValue a (AddValue b c))
+    eval (AddValue (AddValue a b) c)
+      === eval (AddValue a (AddValue b c))
       .&&.
       -- commutativity of addition
-      eval (AddValue a b) === eval (AddValue b a)
+      eval (AddValue a b)
+        === eval (AddValue b a)
       .&&.
       -- additive identity
-      eval (AddValue a (Constant 0)) === eval a
+      eval (AddValue a (Constant 0))
+        === eval a
       .&&.
       -- additive inverse
-      eval (AddValue a (NegValue a)) === 0
+      eval (AddValue a (NegValue a))
+        === 0
       .&&.
       -- substraction works
-      eval (SubValue (AddValue a b) b) === eval a
+      eval (SubValue (AddValue a b) b)
+        === eval a
 
 -- | Test rounding of `DivValue`.
 divisionRoundingTest :: Property
@@ -256,8 +246,10 @@ divZeroTest :: Property
 divZeroTest = property $ do
   let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
   forAll valueGen $ \a ->
-    eval (DivValue (Constant 0) a) === 0
-      .&&. eval (DivValue a (Constant 0)) === 0
+    eval (DivValue (Constant 0) a)
+      === 0
+      .&&. eval (DivValue a (Constant 0))
+        === 0
 
 -- | Test `MulValue` with a zero numerator.
 mulTest :: Property
@@ -464,8 +456,41 @@ addressSerialiseCardanoApi =
       let encoded = serialiseAddressBech32 network address
           encoded' =
             C.serialiseAddress
-              <$> C.toCardanoAddressInEra (if network == mainnet then C.Mainnet else C.Testnet (C.NetworkMagic 2)) address
-       in Right encoded === encoded'
+              <$> toCardanoAddressInEra (if network == mainnet then C.Mainnet else C.Testnet (C.NetworkMagic 2)) address
+       in Just encoded === encoded'
+
+toCardanoAddressInEra :: C.NetworkId -> PV1.Address -> Maybe (C.AddressInEra C.BabbageEra)
+toCardanoAddressInEra networkId (PV1.Address addressCredential addressStakingCredential) =
+  C.AddressInEra (C.ShelleyAddressInEra C.ShelleyBasedEraBabbage)
+    <$> ( C.makeShelleyAddress networkId
+            <$> toCardanoPaymentCredential addressCredential
+            <*> toCardanoStakeAddressReference addressStakingCredential
+        )
+
+toCardanoPaymentCredential :: Credential.Credential -> Maybe C.PaymentCredential
+toCardanoPaymentCredential (Credential.PubKeyCredential pubKeyHash) = C.PaymentCredentialByKey <$> toCardanoPaymentKeyHash pubKeyHash
+toCardanoPaymentCredential (Credential.ScriptCredential validatorHash) = C.PaymentCredentialByScript <$> toCardanoScriptHash validatorHash
+
+toCardanoScriptHash :: PV1.ValidatorHash -> Maybe C.ScriptHash
+toCardanoScriptHash (PV1.ValidatorHash bs) = deserialiseFromRawBytes C.AsScriptHash $ PV1.fromBuiltin bs
+
+toCardanoPaymentKeyHash :: PV1.PubKeyHash -> Maybe (C.Hash C.PaymentKey)
+toCardanoPaymentKeyHash (PV1.PubKeyHash bs) =
+  let bsx = PV1.fromBuiltin bs
+   in deserialiseFromRawBytes (C.AsHash C.AsPaymentKey) bsx
+
+toCardanoStakeAddressReference :: Maybe Credential.StakingCredential -> Maybe C.StakeAddressReference
+toCardanoStakeAddressReference Nothing = pure C.NoStakeAddress
+toCardanoStakeAddressReference (Just (Credential.StakingHash credential)) =
+  C.StakeAddressByValue <$> toCardanoStakeCredential credential
+toCardanoStakeAddressReference (Just Credential.StakingPtr{}) = Nothing
+
+toCardanoStakeCredential :: Credential.Credential -> Maybe C.StakeCredential
+toCardanoStakeCredential (Credential.PubKeyCredential pubKeyHash) = StakeCredentialByKey <$> toCardanoStakeKeyHash pubKeyHash
+toCardanoStakeCredential (Credential.ScriptCredential validatorHash) = StakeCredentialByScript <$> toCardanoScriptHash validatorHash
+
+toCardanoStakeKeyHash :: PV1.PubKeyHash -> Maybe (C.Hash C.StakeKey)
+toCardanoStakeKeyHash (PV1.PubKeyHash bs) = deserialiseFromRawBytes (C.AsHash C.AsStakeKey) (PV1.fromBuiltin bs)
 
 -- | Serialise an address to bytes and then deserialize.
 addressSerialiseDeserialiseBytes :: Property

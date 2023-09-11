@@ -1,24 +1,21 @@
 {-# LANGUAGE BlockArguments #-}
------------------------------------------------------------------------------
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeApplications #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
+-- | Generate random data for Plutus tests.
 --
 -- Module      :  $Headers
 -- License     :  Apache 2.0
 --
 -- Stability   :  Experimental
 -- Portability :  Portable
---
------------------------------------------------------------------------------
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TypeApplications #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
-
--- | Generate random data for Plutus tests.
 module Spec.Marlowe.Plutus.Arbitrary (
 
 ) where
 
 import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams (..))
-import Language.Marlowe.Scripts (MarloweTxInput (..))
+import Language.Marlowe.Scripts.Types (MarloweTxInput (..))
 import Plutus.V2.Ledger.Api (
   BuiltinData (..),
   Data (..),

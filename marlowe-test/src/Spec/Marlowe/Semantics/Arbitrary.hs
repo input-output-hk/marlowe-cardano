@@ -56,6 +56,7 @@ import Data.ByteString (pack)
 import Data.Function (on)
 import Data.List (nub, nubBy)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError (..), Transaction (..))
+import Language.Marlowe.Core.V1.Merkle (MerkleizedContract (..), merkleizeInputs, shallowMerkleize)
 import Language.Marlowe.Core.V1.Semantics (
   Payment (..),
   TransactionError (..),
@@ -90,7 +91,6 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   getAction,
  )
 import Language.Marlowe.Core.V1.Semantics.Types.Address (testnet)
-import Plutus.Script.Utils.Scripts (dataHash)
 import Plutus.V2.Ledger.Api (
   Credential (..),
   CurrencySymbol (..),
@@ -104,11 +104,10 @@ import Plutus.V2.Ledger.Api (
   adaSymbol,
   adaToken,
   toBuiltin,
-  toBuiltinData,
+  toData,
  )
 import PlutusTx.Builtins (BuiltinByteString, appendByteString, lengthOfByteString, sliceByteString)
 import Spec.Marlowe.Semantics.Golden (GoldenTransaction, goldenContracts, goldenTransactions)
-import Spec.Marlowe.Semantics.Merkle (merkleizeInputs, shallowMerkleize)
 import Test.QuickCheck (
   Arbitrary (..),
   Gen,
@@ -127,6 +126,9 @@ import Test.QuickCheck (
 
 import Data.Functor ((<&>))
 
+import Cardano.Api (SerialiseAsRawBytes (serialiseToRawBytes), hashScriptData)
+import Cardano.Api.Shelley (fromPlutusData)
+import Control.Monad.Writer (runWriter)
 import qualified Plutus.V2.Ledger.Api as Ledger (Address (..))
 import qualified PlutusTx.AssocMap as AM (Map, delete, empty, fromList, keys, toList)
 import qualified PlutusTx.Eq as P (Eq)
@@ -1092,7 +1094,7 @@ instance Arbitrary Input where
   shrink (MerkleizedInput i b c) =
     [NormalInput i]
       <> [MerkleizedInput i' b c | i' <- shrink i]
-      <> [MerkleizedInput i (dataHash $ toBuiltinData c) c' | c' <- shrink c]
+      <> [MerkleizedInput i (toBuiltin $ serialiseToRawBytes $ hashScriptData $ fromPlutusData $ toData c) c' | c' <- shrink c]
 
 instance SemiArbitrary Input where
   semiArbitrary context =
@@ -1103,7 +1105,8 @@ instance SemiArbitrary Input where
         , do
             input <- semiArbitrary context
             contract <- semiArbitrary context
-            pure $ MerkleizedInput input (dataHash $ toBuiltinData contract) contract
+            pure $
+              MerkleizedInput input (toBuiltin $ serialiseToRawBytes $ hashScriptData $ fromPlutusData $ toData contract) contract
         )
       ]
 
@@ -1145,7 +1148,10 @@ arbitraryValidStep state@State{..} contract@(When cases timeout _) =
         is <-
           frequency
             [ (9, pure [NormalInput i])
-            , (1, pure [MerkleizedInput i (dataHash $ toBuiltinData contract) contract])
+            ,
+              ( 1
+              , pure [MerkleizedInput i (toBuiltin $ serialiseToRawBytes $ hashScriptData $ fromPlutusData $ toData contract) contract]
+              )
             ]
         pure $ TransactionInput times is
 arbitraryValidStep State{minTime} contract =
@@ -1207,11 +1213,11 @@ arbitraryGoldenTransaction :: Bool -> Gen GoldenTransaction
 arbitraryGoldenTransaction allowMerkleization =
   do
     let perhapsMerkleize gt@(state, contract, input, _) =
-          let (contract', continuations) = shallowMerkleize contract
-              input' = merkleizeInputs continuations state contract' input
+          let (mcContract, mcContinuations) = runWriter $ shallowMerkleize contract
+              input' = merkleizeInputs @String MerkleizedContract{..} state input
            in case input' of
-                Nothing -> pure gt
-                Just input'' -> frequency [(9, pure gt), (1, pure (state, contract', input'', computeTransaction input'' state contract'))]
+                Left _ -> pure gt
+                Right input'' -> frequency [(9, pure gt), (1, pure (state, mcContract, input'', computeTransaction input'' state mcContract))]
     equalContractWeights <- frequency [(1, pure True), (5, pure False)]
     (if allowMerkleization then perhapsMerkleize else pure)
       =<< if equalContractWeights

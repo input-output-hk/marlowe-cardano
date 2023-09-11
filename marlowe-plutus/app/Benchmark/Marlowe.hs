@@ -7,222 +7,204 @@
 -- Portability :  Portable
 --
 -----------------------------------------------------------------------------
-{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
--- | Script execution functions for Marlowe testing.
-module Spec.Marlowe.Plutus.Script (
-  -- * Evaluation
-  evaluatePayout,
-  evaluateSemantics,
-
-  -- * Addresses
-  payoutAddress,
-  semanticsAddress,
-
-  -- * Hashes
-  hashMarloweData,
-  hashRole,
-  payoutScriptHash,
-  semanticsScriptHash,
-
-  -- * Parameters
-  costModel,
+-- | Benchmarking support for Marlowe's validators.
+module Benchmark.Marlowe (
+  -- * Benchmarking
+  evaluationContext,
+  executeBenchmark,
+  printBenchmark,
+  printResult,
+  readBenchmark,
+  readBenchmarks,
+  tabulateResults,
 ) where
 
-import Codec.Serialise (serialise)
+import Benchmark.Marlowe.Types (Benchmark (..))
+import Codec.Serialise (deserialise)
 import Control.Monad.Except (runExcept)
-import Data.Bifunctor (Bifunctor (first))
-import Data.Maybe (fromJust)
-import Data.These (These (..))
+import Data.Bifunctor (first)
+import Data.List (isSuffixOf)
+import Data.Text (Text)
 import Language.Marlowe.Core.V1.Semantics (MarloweData)
-import Language.Marlowe.Scripts (marloweValidator, marloweValidatorHash, rolePayoutValidator, rolePayoutValidatorHash)
-import Ledger.Typed.Scripts (validatorScript)
-import Paths_marlowe_cardano (getDataDir)
-import Plutus.ApiCommon (
+import Language.Marlowe.Scripts.Types (MarloweInput)
+import Paths_marlowe_plutus (getDataDir)
+import Plutus.V2.Ledger.Api (
+  Data (Constr, I),
   EvaluationContext,
-  LedgerPlutusVersion (PlutusV2),
+  EvaluationError,
+  ExBudget (ExBudget, exBudgetCPU, exBudgetMemory),
+  ExCPU (ExCPU),
+  ExMemory (ExMemory),
   LogOutput,
-  ProtocolVersion (ProtocolVersion),
+  ProtocolVersion (..),
+  ScriptContext (scriptContextTxInfo),
+  SerializedScript,
+  TxInfo (txInfoId),
+  ValidatorHash (..),
   VerboseMode (Verbose),
   evaluateScriptCounting,
-  mkEvaluationContext,
- )
-import Plutus.Script.Utils.Scripts (datumHash)
-import Plutus.V1.Ledger.Address (scriptHashAddress)
-import Plutus.V2.Ledger.Api (
-  Address,
-  CostModelParams,
-  Data (..),
-  Datum (Datum),
-  DatumHash,
-  ExBudget (..),
-  ExCPU (..),
-  ExMemory (..),
-  ScriptContext (..),
-  ToData (toBuiltinData),
-  TokenName,
-  TxInfo (..),
-  Validator (getValidator),
-  ValidatorHash,
   fromData,
+  mkEvaluationContext,
+  toData,
  )
-import System.FilePath ((<.>), (</>))
-import System.IO.Unsafe (unsafePerformIO)
+import System.Directory (listDirectory)
+import System.FilePath ((</>))
 
-import qualified Data.ByteString.Lazy as LBS (toStrict, writeFile)
-import qualified Data.ByteString.Short as SBS (ShortByteString, toShort)
-import qualified Data.Map.Strict as M (fromList)
+import qualified Data.ByteString.Lazy as LBS (readFile)
+import qualified Data.Map.Strict as M (Map, fromList)
 
-{-# NOINLINE unsafeDumpBenchmark #-}
--- Dump data files for benchmarking Plutus execution cost.
-unsafeDumpBenchmark
+-- | Read all of the benchmarking cases for a particular validator.
+readBenchmarks
   :: FilePath
-  -- ^ Name of folder the benchmarks.
-  -> Data
-  -- ^ The datum.
-  -> Data
-  -- ^ The redeemer.
-  -> Data
-  -- ^ The script context.
-  -> ExBudget
-  -- ^ The Plutus execution cost.
-  -> a
-  -- ^ A value.
-  -> a
-  -- ^ The same value.
-unsafeDumpBenchmark folder datum redeemer context ExBudget{..} x =
-  unsafePerformIO $ -- ☹
-    do
-      let i = txInfoId . scriptContextTxInfo . fromJust $ fromData context
-          ExCPU cpu = exBudgetCPU
-          ExMemory memory = exBudgetMemory
-          result =
-            Constr
-              0
-              [ datum
-              , redeemer
-              , context
-              , I $ toInteger cpu
-              , I $ toInteger memory
-              ]
-          payload = serialise result
-      folder' <- (</> folder) <$> getDataDir
-      LBS.writeFile
-        (folder' </> show i <.> "benchmark")
-        payload
-      pure x
+  -> IO (Either String [Benchmark])
+readBenchmarks subfolder =
+  do
+    folder <- (</> subfolder) <$> getDataDir
+    files <- filter (isSuffixOf ".benchmark") . fmap (folder </>) <$> listDirectory folder
+    sequence <$> mapM readBenchmark files
 
--- | Dump benchmarking files.
-dumpBenchmarks :: Bool
-dumpBenchmarks = False
+-- | Read a benchmarking file.
+readBenchmark
+  :: FilePath
+  -> IO (Either String Benchmark)
+readBenchmark filename =
+  do
+    payload <- LBS.readFile filename
+    pure $
+      case deserialise payload of
+        Constr 0 [bDatum, bRedeemer, scriptContext, I cpu, I memory] ->
+          do
+            bScriptContext <- maybe (Left "Failed deserializing script context") pure $ fromData scriptContext
+            let bReferenceCost = Just $ ExBudget (fromInteger cpu) (fromInteger memory)
+            pure Benchmark{..}
+        _ -> Left "Failed deserializing benchmark file."
 
--- | Check the Plutus execution budget.
-enforceBudget :: Bool
-enforceBudget = False
+-- | Print a benchmarking case.
+printBenchmark
+  :: Benchmark
+  -> IO ()
+printBenchmark Benchmark{..} =
+  do
+    putStrLn ""
+    print (fromData bDatum :: Maybe MarloweData)
+    putStrLn ""
+    print (fromData bRedeemer :: Maybe MarloweInput)
+    putStrLn ""
+    print bScriptContext
+    putStrLn ""
+    print bReferenceCost
 
--- | Run the Plutus evaluator on the Marlowe semantics validator.
-evaluateSemantics
-  :: Data
-  -- ^ The datum.
-  -> Data
-  -- ^ The redeemer.
-  -> Data
-  -- ^ The script context.
-  -> These String LogOutput
-  -- ^ The result.
-evaluateSemantics datum redeemer context =
+-- | Run and print the results of benchmarking.
+printResult
+  :: SerializedScript
+  -- ^ The serialised validator.
+  -> Benchmark
+  -- ^ The benchmarking case.
+  -> IO ()
+  -- ^ The action to run and print the results.
+printResult validator benchmark =
+  case executeBenchmark validator benchmark of
+    Right (_, Right budget) -> putStrLn ("actual = " <> show budget <> " vs expected = " <> show (bReferenceCost benchmark))
+    Right (logs, Left msg) -> print (msg, logs)
+    Left msg -> print msg
+
+-- | Run multiple benchmarks and organize their results in a table.
+tabulateResults
+  :: String
+  -- ^ The name of the validator.
+  -> ValidatorHash
+  -- ^ The hash of the validator script.
+  -> SerializedScript
+  -- ^ The serialisation of the validator script.
+  -> [Benchmark]
+  -- ^ The benchmarking results.
+  -> [[String]]
+  -- ^ A table of results, with a header in the first line.
+tabulateResults name hash validator benchmarks =
+  let na = "NA"
+      unExCPU (ExCPU n) = n
+      unExMemory (ExMemory n) = n
+   in ["Validator", "Script", "TxId", "Measured CPU", "Measured Memory", "Reference CPU", "Reference Memory", "Message"]
+        : [ [name, show hash, show txId]
+            <> case executeBenchmark validator benchmark of
+              Right (_, Right budget) -> [show . unExCPU $ exBudgetCPU budget, show . unExMemory $ exBudgetMemory budget, cpuRef, memoryRef, mempty]
+              Right (logs, Left msg) -> [na, na, cpuRef, memoryRef, show (logs, msg)]
+              Left msg -> [na, na, cpuRef, memoryRef, show msg]
+          | benchmark@Benchmark{..} <- benchmarks
+          , let txId = txInfoId $ scriptContextTxInfo bScriptContext
+                cpuRef = maybe na (show . unExCPU . exBudgetCPU) bReferenceCost
+                memoryRef = maybe na (show . unExMemory . exBudgetMemory) bReferenceCost
+          ]
+
+{-
+-- | Write flat UPLC files for benchmarks.
+writeFlatUPLCs
+  :: (FilePath -> Benchmark -> IO ())
+  -> [Benchmark]
+  -> FilePath
+  -> IO ()
+writeFlatUPLCs writer benchmarks folder =
+  sequence_
+    [
+      writer (folder </> show txId <> "-uplc" <.> "flat") benchmark
+    |
+      benchmark@Benchmark{..} <- benchmarks
+    , let txId = txInfoId $ scriptContextTxInfo bScriptContext
+    ]
+
+-- | Write a flat UPLC file for a benchmark.
+writeFlatUPLC
+  :: CompiledCode a
+  -> FilePath
+  -> Benchmark
+  -> IO ()
+writeFlatUPLC validator filename Benchmark{..} =
+  let
+    unsafeFromRight (Right x) = x
+    unsafeFromRight _         = error "unsafeFromRight failed"
+    wrap = Program () (Version 1 0 0)
+    datum = wrap $ mkConstant () bDatum :: UplcProg ()
+    redeemer = wrap $ mkConstant () bRedeemer :: UplcProg ()
+    context = wrap $ mkConstant () $ toData bScriptContext :: UplcProg ()
+    prog = fromNamedDeBruijnUPLC $ getPlc validator
+    applied =
+      foldl1 (unsafeFromRight .* applyProgram)
+        $ void prog : [datum, redeemer, context]
+  in
+    writeProgram (FileOutput filename) (Flat NamedDeBruijn) Readable applied
+-}
+
+-- | Run a benchmark case.
+executeBenchmark
+  :: SerializedScript
+  -- ^ The serialised validator.
+  -> Benchmark
+  -- ^ The benchmarking case.
+  -> Either String (LogOutput, Either EvaluationError ExBudget)
+  -- ^ An error or the cost.
+executeBenchmark serialisedValidator Benchmark{..} =
   case evaluationContext of
-    Left message -> This message
-    Right ec -> case evaluateScriptCounting PlutusV2 (ProtocolVersion 8 0) Verbose ec serialiseSemanticsValidator [datum, redeemer, context] of
-      (logOutput, Right ex@ExBudget{..}) ->
-        ( if dumpBenchmarks
-            then unsafeDumpBenchmark "semantics" datum redeemer context ex
-            else id
-        )
-          $ if enforceBudget && (exBudgetCPU > 10_000_000_000 || exBudgetMemory > 14_000_000)
-            then These ("Exceeded Plutus budget: " <> show ex) logOutput
-            else That logOutput
-      (logOutput, Left message) -> These (show message) logOutput
+    Left message -> Left message
+    Right ec ->
+      Right $
+        evaluateScriptCounting
+          (ProtocolVersion 8 0)
+          Verbose
+          ec
+          serialisedValidator
+          [bDatum, bRedeemer, toData bScriptContext]
 
--- | Run the Plutus evaluator on the Marlowe payout validator.
-evaluatePayout
-  :: Data
-  -- ^ The datum.
-  -> Data
-  -- ^ The redeemer.
-  -> Data
-  -- ^ The script context.
-  -> These String LogOutput
-  -- ^ The result.
-evaluatePayout datum redeemer context =
-  case evaluationContext of
-    Left message -> This message
-    Right ec -> case evaluateScriptCounting PlutusV2 (ProtocolVersion 8 0) Verbose ec serialisePayoutValidator [datum, redeemer, context] of
-      (logOutput, Right ex) ->
-        ( if dumpBenchmarks
-            then unsafeDumpBenchmark "rolepayout" datum redeemer context ex
-            else id
-        )
-          $ That logOutput
-      (logOutput, Left message) -> These (show message) logOutput
-
--- | Serialize the Marlowe semantics validator.
-serialiseSemanticsValidator :: SBS.ShortByteString
-serialiseSemanticsValidator =
-  SBS.toShort
-    . LBS.toStrict
-    . serialise
-    . getValidator
-    . validatorScript
-    $ marloweValidator
-
--- | Compute the address of the Marlowe semantics validator.
-semanticsAddress :: Address
-semanticsAddress = scriptHashAddress semanticsScriptHash
-
--- | Compute the hash of the Marlowe semantics validator.
-semanticsScriptHash :: ValidatorHash
-semanticsScriptHash = marloweValidatorHash
-
--- | Serialize the Marlowe payout validator.
-serialisePayoutValidator :: SBS.ShortByteString
-serialisePayoutValidator =
-  SBS.toShort
-    . LBS.toStrict
-    . serialise
-    . getValidator
-    . validatorScript
-    $ rolePayoutValidator
-
--- | Compute the address of the Marlowe payout validator.
-payoutAddress :: Address
-payoutAddress = scriptHashAddress payoutScriptHash
-
--- | Compute the hash of the Marlowe payout validator.
-payoutScriptHash :: ValidatorHash
-payoutScriptHash = rolePayoutValidatorHash
-
--- | Compute the hash of Marlowe datum.
-hashMarloweData
-  :: MarloweData
-  -> DatumHash
-hashMarloweData = datumHash . Datum . toBuiltinData
-
--- | Compute the hash of a role token.
-hashRole
-  :: TokenName
-  -> DatumHash
-hashRole = datumHash . Datum . toBuiltinData
-
--- | Build an evaluation context.
+-- | The execution context for benchmarking.
 evaluationContext :: Either String EvaluationContext
-evaluationContext = first show . runExcept $ mkEvaluationContext costModel
+evaluationContext =
+  first show . runExcept $ mkEvaluationContext testCostModel
 
--- | A default cost model for Plutus.
-costModel :: CostModelParams
-costModel =
+-- | Cost model, hardwired for testing and fair benchmarking.
+testCostModel :: M.Map Text Integer
+testCostModel =
   M.fromList
     [ ("addInteger-cpu-arguments-intercept", 205665)
     , ("addInteger-cpu-arguments-slope", 812)
@@ -393,8 +375,8 @@ costModel =
     , ("unMapData-memory-arguments", 32)
     , ("verifyEcdsaSecp256k1Signature-cpu-arguments", 35892428)
     , ("verifyEcdsaSecp256k1Signature-memory-arguments", 10)
-    , ("verifyEd25519Signature-cpu-arguments-intercept", 57996947)
-    , ("verifyEd25519Signature-cpu-arguments-slope", 18975)
+    , ("verifyEd25519Signature-cpu-arguments-intercept", 9462713)
+    , ("verifyEd25519Signature-cpu-arguments-slope", 1021)
     , ("verifyEd25519Signature-memory-arguments", 10)
     , ("verifySchnorrSecp256k1Signature-cpu-arguments-intercept", 38887044)
     , ("verifySchnorrSecp256k1Signature-cpu-arguments-slope", 32947)

@@ -97,6 +97,7 @@ library
     , cardano-api
     , cardano-crypto-class
     , cardano-ledger-alonzo
+    , cardano-ledger-byron ==0.1.0.0
     , cardano-ledger-core
     , cardano-ledger-shelley
     , cardano-slotting
@@ -108,6 +109,7 @@ library
     , errors
     , extra
     , marlowe-cardano
+    , marlowe-plutus
     , megaparsec
     , memory
     , mtl
@@ -115,13 +117,12 @@ library
     , ouroboros-network
     , parser-combinators
     , plutus-core
-    , plutus-ledger
     , plutus-ledger-ada
     , plutus-ledger-api
     , plutus-ledger-slot
-    , plutus-script-utils
     , plutus-tx
     , prettyprinter
+    , scientific
     , serialise
     , text
     , time
@@ -203,7 +204,6 @@ library cli-test
     , network
     , one-line-aeson-text
     , plutus-core
-    , plutus-ledger
     , plutus-ledger-ada
     , plutus-ledger-api
     , plutus-ledger-slot
@@ -252,7 +252,6 @@ library command
     , network
     , optparse-applicative
     , ouroboros-network
-    , plutus-ledger
     , plutus-ledger-ada
     , plutus-ledger-api
     , plutus-ledger-slot

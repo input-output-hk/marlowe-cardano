@@ -11,8 +11,11 @@ module Language.Marlowe.Util (
   getAccountsDiff,
   isEmptyAccountsDiff,
   merkleizedCase,
+  dataHash,
 ) where
 
+import Cardano.Api (SerialiseAsRawBytes (..), hashScriptData)
+import Cardano.Api.Shelley (fromPlutusData)
 import Data.List (foldl')
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -23,9 +26,8 @@ import qualified Data.Text as T (pack)
 import Language.Marlowe.Core.V1.Semantics
 import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddressBech32)
-import Plutus.Script.Utils.Scripts (dataHash)
 import qualified Plutus.V1.Ledger.Value as Val
-import Plutus.V2.Ledger.Api (adaSymbol, adaToken)
+import Plutus.V2.Ledger.Api (ToData, adaSymbol, adaToken, toBuiltin, toData)
 import qualified PlutusTx
 import qualified PlutusTx.Prelude as P
 
@@ -135,3 +137,6 @@ merkleizedCase :: Action -> Contract -> Case Contract
 merkleizedCase action continuation =
   let hash = dataHash (PlutusTx.toBuiltinData continuation)
    in MerkleizedCase action hash
+
+dataHash :: (ToData a) => a -> P.BuiltinByteString
+dataHash = toBuiltin . serialiseToRawBytes . hashScriptData . fromPlutusData . toData

@@ -1,15 +1,10 @@
------------------------------------------------------------------------------
+-- | Compare the `PlutusTx.AssocMap` to Isabelle's `MList`.
 --
 -- Module      :  $Headers
 -- License     :  Apache 2.0
 --
 -- Stability   :  Experimental
 -- Portability :  Portable
---
-
------------------------------------------------------------------------------
-
--- | Compare the `PlutusTx.AssocMap` to Isabelle's `MList`.
 module Spec.Marlowe.Plutus.MList (
   -- * Testing
   tests,

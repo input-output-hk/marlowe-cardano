@@ -82,10 +82,10 @@ import Language.Marlowe.CLI.Types (
   defaultCoinSelectionStrategy,
  )
 import Language.Marlowe.Core.V1.Semantics.Types qualified as M
-import Ledger.Orphans ()
 import Plutus.V1.Ledger.Api (CurrencySymbol, TokenName)
 import Plutus.V1.Ledger.Value qualified as P
 
+import Cardano.Api.Byron (SerialiseAsRawBytes (..))
 import Contrib.Control.Monad.Except (note)
 import Contrib.Data.Foldable (foldMapFlipped, ifoldMapMFlipped)
 import Control.Monad (forM, unless, void, when)
@@ -103,6 +103,8 @@ import Data.Text qualified as Text
 import Data.Tuple.Extra (uncurry3)
 import Language.Marlowe.CLI.Cardano.Api.Value qualified as CV
 import Language.Marlowe.CLI.IO (queryInEra, readSigningKey)
+import Language.Marlowe.CLI.Run (toCardanoPolicyId)
+import Language.Marlowe.CLI.Sync (toPlutusAddress)
 import Language.Marlowe.CLI.Test.CLI.Monad (runCli, runLabeledCli)
 import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (
   ParametrizedMarloweJSON,
@@ -115,7 +117,6 @@ import Language.Marlowe.CLI.Test.InterpreterError (assertionFailed', testExecuti
 import Language.Marlowe.CLI.Test.Log (Label, logStoreLabeledMsg, throwLabeledError)
 import Language.Marlowe.CLI.Types qualified as CT
 import Language.Marlowe.Cardano (marloweNetworkFromLocalNodeConnectInfo)
-import Ledger.Tx.CardanoAPI (fromCardanoPolicyId, toCardanoPolicyId)
 import Plutus.V1.Ledger.Value (valueOf)
 import Plutus.V1.Ledger.Value qualified as PV
 import Plutus.V2.Ledger.Api (MintingPolicyHash (..))
@@ -208,11 +209,11 @@ fetchWalletsUTxOs = do
   let addressToUtxos =
         Map.fromListWith mappend $
           utxos <&> \anUtxo@(CT.AnUTxO (_, C.TxOut addr _ _ _)) ->
-            (addr, [anUtxo])
+            (toPlutusAddress addr, [anUtxo])
 
   pure $
     wallets <&> \wallet ->
-      fromMaybe mempty $ Map.lookup (_waAddress wallet) addressToUtxos
+      fromMaybe mempty $ Map.lookup (toPlutusAddress $ _waAddress wallet) addressToUtxos
 
 fetchWalletsValue
   :: forall env st m era
@@ -592,7 +593,7 @@ interpret so@Mint{..} = do
         printStats
 
   logStoreLabeledMsg so $ "This currency symbol is " <> show policy
-  let currencySymbol = PV.mpsSymbol . fromCardanoPolicyId $ policy
+  let currencySymbol = PV.mpsSymbol . P.MintingPolicyHash . P.toBuiltin . serialiseToRawBytes $ policy
       currency = Currency currencySymbol (Just issuerNickname) policy
 
   updateWallet issuerNickname \issuer@Wallet{..} ->

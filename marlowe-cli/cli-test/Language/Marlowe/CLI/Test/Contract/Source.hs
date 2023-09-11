@@ -55,7 +55,6 @@ import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddressBech3
 import Language.Marlowe.Core.V1.Semantics.Types.Address qualified as V1
 import Language.Marlowe.Extended.V1 (toCore)
 import Language.Marlowe.Extended.V1 qualified as E
-import Ledger.Orphans ()
 import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
 import Marlowe.Contracts.ChunkedValueTransfer (chunkedValueTransfer)
 import Marlowe.Contracts.ChunkedValueTransfer qualified as ChunkedValueTransfer

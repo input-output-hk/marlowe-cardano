@@ -1,15 +1,10 @@
------------------------------------------------------------------------------
+-- | Test the `PlutusTx.AssocMap` functions used by the Marlowe validators.
 --
 -- Module      :  $Headers
 -- License     :  Apache 2.0
 --
 -- Stability   :  Experimental
 -- Portability :  Portable
---
-
------------------------------------------------------------------------------
-
--- | Test the `PlutusTx.AssocMap` functions used by the Marlowe validators.
 module Spec.Marlowe.Plutus.AssocMap (
   -- * Testing
   tests,

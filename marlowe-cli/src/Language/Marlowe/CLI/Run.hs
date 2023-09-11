@@ -13,6 +13,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -44,6 +45,11 @@ module Language.Marlowe.CLI.Run (
   -- * Party Addresses
   marloweAddressFromCardanoAddress,
   marloweAddressToCardanoAddress,
+
+  -- * Utilities
+  toCardanoAddressInEra,
+  toCardanoValue,
+  toCardanoPolicyId,
 ) where
 
 import Cardano.Api (
@@ -56,6 +62,7 @@ import Cardano.Api (
   QueryInShelleyBasedEra (..),
   QueryUTxOFilter (..),
   ScriptDataSupportedInEra (..),
+  SerialiseAsRawBytes (..),
   SlotNo (..),
   StakeAddressReference (..),
   TxBody,
@@ -80,7 +87,9 @@ import Control.Monad (forM_, guard, unless, void, when)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
 import Control.Monad.Reader (MonadReader)
 import Data.Bifunctor (bimap)
+import Data.ByteString qualified as BS
 import Data.Function (on)
+import Data.Functor ((<&>))
 import Data.List (groupBy, sortBy)
 import Data.Map.Strict qualified as M (toList)
 import Data.Maybe (catMaybes, fromMaybe)
@@ -110,6 +119,7 @@ import Language.Marlowe.CLI.IO (
  )
 import Language.Marlowe.CLI.Merkle (merkleizeMarlowe)
 import Language.Marlowe.CLI.Orphans ()
+import Language.Marlowe.CLI.Sync (toPlutusAddress)
 import Language.Marlowe.CLI.Transaction (
   buildBody,
   buildPayFromScript,
@@ -171,27 +181,36 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   Payee (..),
   State (accounts),
   Token (..),
+  TokenName (..),
   getInputContent,
  )
 import Language.Marlowe.Core.V1.Semantics.Types.Address (Network, mainnet, testnet)
-import Ledger.Address (toPlutusAddress)
-import Ledger.Tx.CardanoAPI (toCardanoAddressInEra, toCardanoScriptDataHash, toCardanoValue)
 import Plutus.ApiCommon (ProtocolVersion)
 import Plutus.V1.Ledger.Ada (fromValue)
+import Plutus.V1.Ledger.Api (Credential (..), DatumHash (..), fromBuiltin)
+import Plutus.V1.Ledger.Api qualified as P
 import Plutus.V1.Ledger.SlotConfig (SlotConfig, posixTimeToEnclosingSlot, slotToBeginPOSIXTime, slotToEndPOSIXTime)
-import Plutus.V1.Ledger.Value (AssetClass (..), Value (..), assetClassValue, singleton)
+import Plutus.V1.Ledger.Value (
+  AssetClass (..),
+  Value (..),
+  assetClass,
+  assetClassValue,
+  currencyMPSHash,
+  flattenValue,
+  singleton,
+ )
 import Plutus.V2.Ledger.Api (
   Address,
   CostModelParams,
   Datum (..),
+  MintingPolicyHash (..),
   POSIXTime,
-  TokenName,
   adaSymbol,
   adaToken,
   toBuiltinData,
  )
 import PlutusTx.AssocMap qualified as AM (toList)
-import Prettyprinter.Extras (Pretty (..))
+import Prettyprinter (Pretty (..))
 import System.IO (hPutStrLn, stderr)
 
 -- | Serialise a deposit input to a file.
@@ -522,7 +541,7 @@ makeMarlowe marloweIn@MarloweTransaction{..} transactionInput =
                 ( slotToBeginPOSIXTime mtSlotConfig . toSlot $ minimumTime
                 , slotToEndPOSIXTime mtSlotConfig . toSlot $ maximumTime
                 )
-          when (txInterval' /= txInterval) $ do
+          when (txInterval' /= txInterval) $
             liftIO $
               hPutStrLn stderr $
                 "Rounding  `TransactionInput` txInterval boundries to:" <> show txInterval'
@@ -532,7 +551,7 @@ makeMarlowe marloweIn@MarloweTransaction{..} transactionInput =
     liftIO $ print transactionInput'
     transactionInput''@TransactionInput{..} <-
       merkleizeInputs (MerkleizedContract mtContract mtContinuations) mtState transactionInput'
-        `catchError` (const $ pure transactionInput') -- TODO: Consider not catching errors here.
+        `catchError` const (pure transactionInput') -- TODO: Consider not catching errors here.
     case computeTransaction transactionInput'' mtState mtContract of
       Error message -> throwError . CliError . show $ message
       TransactionOutput{..} ->
@@ -1319,3 +1338,74 @@ autoWithdrawFundsImpl connection token validatorInfo range changeAddress signing
           else void $ submitBody connection body signingKeys timeout
     -- Return the transaction identifier.
     pure body
+
+toCardanoValue :: Value -> Either String C.Value
+toCardanoValue =
+  fmap C.valueFromList . traverse toSingleton . flattenValue
+  where
+    toSingleton (cs, tn, q) =
+      toCardanoAssetId (assetClass cs tn) <&> (,C.Quantity q)
+
+toCardanoAssetId :: AssetClass -> Either String C.AssetId
+toCardanoAssetId (AssetClass (currencySymbol, tokenName))
+  | currencySymbol == adaSymbol && tokenName == adaToken =
+      pure C.AdaAssetId
+  | otherwise =
+      C.AssetId
+        <$> toCardanoPolicyId (currencyMPSHash currencySymbol)
+        <*> toCardanoAssetName tokenName
+
+toCardanoAssetName :: TokenName -> Either String C.AssetName
+toCardanoAssetName (TokenName bs) =
+  maybe (Left "toCardanoAssetName") Right $
+    deserialiseFromRawBytes C.AsAssetName (fromBuiltin bs)
+
+toCardanoPolicyId :: MintingPolicyHash -> Either String C.PolicyId
+toCardanoPolicyId (MintingPolicyHash bs) =
+  maybe (Left "toCardanoPolicyId") Right $
+    deserialiseFromRawBytes C.AsPolicyId (fromBuiltin bs)
+
+toCardanoScriptDataHash :: DatumHash -> Either String (C.Hash C.ScriptData)
+toCardanoScriptDataHash (DatumHash bs) =
+  maybe (Left "toCardanoTxOutDatumHash") Right $
+    deserialiseFromRawBytes (C.AsHash C.AsScriptData) (fromBuiltin bs)
+
+toCardanoAddressInEra :: C.NetworkId -> Address -> Either String (C.AddressInEra C.BabbageEra)
+toCardanoAddressInEra networkId (P.Address addressCredential addressStakingCredential) =
+  C.AddressInEra (C.ShelleyAddressInEra C.ShelleyBasedEraBabbage)
+    <$> ( C.makeShelleyAddress networkId
+            <$> toCardanoPaymentCredential addressCredential
+            <*> toCardanoStakeAddressReference addressStakingCredential
+        )
+
+toCardanoPaymentCredential :: Credential -> Either String C.PaymentCredential
+toCardanoPaymentCredential (PubKeyCredential pubKeyHash) = C.PaymentCredentialByKey <$> toCardanoPaymentKeyHash pubKeyHash
+toCardanoPaymentCredential (ScriptCredential validatorHash) = C.PaymentCredentialByScript <$> toCardanoScriptHash validatorHash
+
+toCardanoPaymentKeyHash :: P.PubKeyHash -> Either String (C.Hash C.PaymentKey)
+toCardanoPaymentKeyHash (P.PubKeyHash bs) =
+  let bsx = fromBuiltin bs
+      tg = "toCardanoPaymentKeyHash (" <> show (BS.length bsx) <> " bytes)"
+   in maybe (Left tg) Right $ deserialiseFromRawBytes (C.AsHash C.AsPaymentKey) bsx
+
+toCardanoStakeAddressReference :: Maybe P.StakingCredential -> Either String C.StakeAddressReference
+toCardanoStakeAddressReference Nothing = pure C.NoStakeAddress
+toCardanoStakeAddressReference (Just (P.StakingHash credential)) =
+  C.StakeAddressByValue <$> toCardanoStakeCredential credential
+toCardanoStakeAddressReference (Just P.StakingPtr{}) = Left "StakingPointersNotSupported"
+
+toCardanoStakeCredential :: Credential -> Either String C.StakeCredential
+toCardanoStakeCredential (PubKeyCredential pubKeyHash) = CS.StakeCredentialByKey <$> toCardanoStakeKeyHash pubKeyHash
+toCardanoStakeCredential (ScriptCredential validatorHash) = CS.StakeCredentialByScript <$> toCardanoScriptHash validatorHash
+
+toCardanoScriptHash :: P.ValidatorHash -> Either String C.ScriptHash
+toCardanoScriptHash (P.ValidatorHash bs) =
+  maybe (Left "toCardanoScriptHash") Right $
+    deserialiseFromRawBytes C.AsScriptHash $
+      fromBuiltin bs
+
+toCardanoStakeKeyHash :: P.PubKeyHash -> Either String (C.Hash C.StakeKey)
+toCardanoStakeKeyHash (P.PubKeyHash bs) =
+  maybe (Left "toCardanoStakeKeyHash") Right $
+    deserialiseFromRawBytes (C.AsHash C.AsStakeKey) $
+      fromBuiltin bs

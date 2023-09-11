@@ -61,8 +61,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   Value (..),
  )
 import Language.Marlowe.FindInputs (getAllInputs)
-import Plutus.Script.Utils.Scripts (dataHash)
-import Plutus.V2.Ledger.Api (POSIXTime (..), toBuiltinData)
+import Plutus.V2.Ledger.Api (POSIXTime (..))
 import Spec.Marlowe.Semantics.Arbitrary (
   SemiArbitrary (semiArbitrary),
   arbitraryAssocMap,
@@ -92,6 +91,7 @@ import Test.Tasty.QuickCheck (
   testProperty,
  )
 
+import Language.Marlowe.Util (dataHash)
 import qualified PlutusTx.AssocMap as AM (delete, empty, filter, fromList, insert, keys, lookup, member, null, toList)
 
 -- | Run the tests.
@@ -866,8 +866,8 @@ checkGetContinuation =
             contract <- arbitrary
             contract' <- if sameContract then pure contract else arbitrary
             contract'' <- arbitrary
-            let contractHash = dataHash $ toBuiltinData contract
-                contractHash' = dataHash . toBuiltinData $ if correctHash then contract' else contract''
+            let contractHash = dataHash contract
+                contractHash' = dataHash $ if correctHash then contract' else contract''
             content <- arbitrary
             action <- arbitrary
             input <- elements [NormalInput content, MerkleizedInput content contractHash' contract']

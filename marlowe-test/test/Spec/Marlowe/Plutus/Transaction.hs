@@ -35,6 +35,7 @@ import Control.Monad (when)
 import Control.Monad.State (StateT, execStateT, lift)
 import Data.Bifunctor (bimap, second)
 import Data.List (nub)
+import Language.Marlowe.Core.V1.Merkle (MerkleizedContract (..), deepMerkleize, merkleizeInputs)
 import Language.Marlowe.Core.V1.Semantics (
   MarloweData (MarloweData),
   MarloweParams (..),
@@ -55,8 +56,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   Token (Token),
   getInputContent,
  )
-import Language.Marlowe.Scripts (MarloweInput, MarloweTxInput (..))
-import Plutus.Script.Utils.Scripts (datumHash)
+import Language.Marlowe.Scripts.Types (MarloweInput, MarloweTxInput (..))
 import Plutus.V1.Ledger.Value (gt)
 import Plutus.V2.Ledger.Api (
   Address (Address),
@@ -107,10 +107,11 @@ import Spec.Marlowe.Plutus.Types (
 import Spec.Marlowe.Reference (ReferencePath, arbitraryReferenceTransaction)
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryGoldenTransaction, arbitraryPositiveInteger)
 import Spec.Marlowe.Semantics.Golden (GoldenTransaction)
-import Spec.Marlowe.Semantics.Merkle (deepMerkleize, merkleizeInputs)
 import Test.Tasty.QuickCheck (Arbitrary (..), Gen, frequency, listOf, suchThat)
 
+import Control.Monad.Writer (runWriter)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M (Party (Address))
+import Language.Marlowe.Util (dataHash)
 import qualified Plutus.V1.Ledger.Value as V (adaSymbol, adaToken, singleton)
 import qualified PlutusTx.AssocMap as AM (fromList, toList)
 import Test.QuickCheck (shuffle)
@@ -177,7 +178,7 @@ makeScriptInput =
   do
     inValue <- inputState `uses` totalValue
     inDatum <- use datum
-    let inDatumHash = datumHash inDatum
+    let inDatumHash = DatumHash $ dataHash inDatum
     (,pure (inDatumHash, inDatum))
       . flip TxInInfo (TxOut semanticsAddress inValue (OutputDatumHash inDatumHash) Nothing)
       <$> lift arbitrary
@@ -229,7 +230,7 @@ makeScriptOutput =
     outState <- output `uses` txOutState
     outContract <- output `uses` txOutContract
     let outDatum = Datum . toBuiltinData $ MarloweData params outState outContract
-        outDatumHash = datumHash outDatum
+        outDatumHash = DatumHash $ dataHash outDatum
     pure $
       unzip
         [ ( TxOut semanticsAddress (totalValue outState) (OutputDatumHash outDatumHash) Nothing
@@ -258,7 +259,7 @@ makePayment _ payment@(Payment _ (Party (M.Address _ address)) _ _) =
 makePayment currencySymbol payment@(Payment _ (Party (Role role')) _ _) =
   do
     let roleDatum = Datum $ toBuiltinData (currencySymbol, role')
-        roleDatumHash = datumHash roleDatum
+        roleDatumHash = DatumHash $ dataHash roleDatum
     pure
       ( pure $ TxOut payoutAddress (paymentMoney payment) (OutputDatumHash roleDatumHash) Nothing
       , pure (roleDatumHash, roleDatum)
@@ -395,7 +396,7 @@ makePayoutIn =
   do
     txInInfoOutRef <- lift arbitrary
     inDatum <- ((Datum . toBuiltinData) .) . (,) <$> marloweParamsPayout `uses` rolesCurrency <*> use role
-    let inDatumHash = datumHash inDatum
+    let inDatumHash = DatumHash $ dataHash inDatum
     txInInfoResolved <- TxOut payoutAddress <$> use amount <*> pure (OutputDatumHash inDatumHash) <*> pure Nothing
     pure (TxInInfo{..}, (inDatumHash, inDatum))
 
@@ -449,7 +450,7 @@ validPayoutTransaction noisy =
     infoData <>= AM.fromList [inData]
     scriptPurpose .= Spending (txInInfoOutRef inScript)
 
-    -- The datum is the currency symbole and role name.
+    -- The datum is the currency symbol and role name.
     datum .= inDatum
 
     -- The redeemer is unit.
@@ -533,12 +534,12 @@ merkleize =
     contract <- use inputContract
     inputs <- use input
     -- Merkleize the contract and the input.
-    let (contract', continuations) = deepMerkleize contract
-        inputs' = maybe (error "Merkleization of inputs failed.") id $ merkleizeInputs continuations state contract' inputs
+    let (mcContract, mcContinuations) = runWriter $ deepMerkleize contract
+        inputs' = either error id $ merkleizeInputs MerkleizedContract{..} state inputs
     -- Update the contract, inputs, and outputs.
-    inputContract .= contract'
+    inputContract .= mcContract
     input .= inputs'
-    output .= computeTransaction inputs' state contract'
+    output .= computeTransaction inputs' state mcContract
 
 -- | Generate an arbitrary, valid Marlowe payout transaction: datum, redeemer, and script context.
 arbitraryPayoutTransaction

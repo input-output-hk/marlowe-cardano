@@ -41,7 +41,7 @@ import Language.Marlowe.Analysis.Safety.Transaction (executeTransaction, findTra
 import Language.Marlowe.Analysis.Safety.Types (Transaction (..))
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage (..), toScriptLanguageInEra)
 import Language.Marlowe.CLI.IO (decodeFileStrict, liftCli, liftCliIO, liftCliMaybe)
-import Language.Marlowe.CLI.Run (marloweAddressFromCardanoAddress)
+import Language.Marlowe.CLI.Run (marloweAddressFromCardanoAddress, toCardanoAddressInEra, toCardanoValue)
 import Language.Marlowe.CLI.Types (
   CliError (CliError),
   MarloweTransaction (
@@ -90,7 +90,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   getInputContent,
  )
 import Language.Marlowe.Core.V1.Semantics.Types.Address (mainnet)
-import Language.Marlowe.Scripts (marloweTxInputsFromInputs)
+import Language.Marlowe.Scripts.Types (marloweTxInputsFromInputs)
 
 import Cardano.Api qualified as Api
 import Cardano.Api.Shelley qualified as Api
@@ -102,7 +102,6 @@ import Data.ByteString.Char8 qualified as BS8 (putStr)
 import Data.Map.Strict qualified as M (lookup)
 import Data.Set qualified as S (filter, member)
 import Data.Yaml qualified as Y (encode)
-import Ledger.Tx.CardanoAPI qualified as P (toCardanoAddressInEra, toCardanoValue)
 import Plutus.V1.Ledger.Ada qualified as P (lovelaceValueOf)
 import Plutus.V1.Ledger.SlotConfig qualified as P (SlotConfig, posixTimeToEnclosingSlot)
 import Plutus.V2.Ledger.Api qualified as P hiding (evaluateScriptCounting)
@@ -381,7 +380,7 @@ checkMinimumUtxo era protocol info verbose =
   do
     let compute tokens =
           do
-            value <- liftCli (P.toCardanoValue $ mconcat [P.singleton cs tn 1 | Token cs tn <- toList tokens])
+            value <- liftCli (toCardanoValue $ mconcat [P.singleton cs tn 1 | Token cs tn <- toList tokens])
             let address =
                   Api.makeShelleyAddressInEra
                     Api.Mainnet
@@ -567,7 +566,7 @@ checkTransactionSize era protocol ContractInstance{..} (Transaction marloweState
                 (Api.fromPlutusData $ P.toData redeemer)
                 (Api.ExecutionUnits 0 0)
           )
-    outValue <- liftCli . P.toCardanoValue $ totalBalance $ accounts txOutState
+    outValue <- liftCli . toCardanoValue $ totalBalance $ accounts txOutState
     let outScript =
           if txOutContract == Close
             then mempty
@@ -581,10 +580,10 @@ checkTransactionSize era protocol ContractInstance{..} (Transaction marloweState
                       Api.ReferenceScriptNone
         makePayment (Payment _ (Party (Address network address)) (Token currency name) amount) =
           do
-            value <- liftCli . P.toCardanoValue $ P.singleton currency name amount
+            value <- liftCli . toCardanoValue $ P.singleton currency name amount
             address' <-
               liftCli $
-                P.toCardanoAddressInEra
+                toCardanoAddressInEra
                   (if network == mainnet then Api.Mainnet else Api.Testnet $ Api.NetworkMagic 2)
                   address
             address'' <-
@@ -600,7 +599,7 @@ checkTransactionSize era protocol ContractInstance{..} (Transaction marloweState
               ]
         makePayment (Payment _ (Party (Role role)) (Token currency name) amount) =
           do
-            value <- liftCli $ P.toCardanoValue $ P.singleton currency name amount
+            value <- liftCli $ toCardanoValue $ P.singleton currency name amount
             pure
               [ Api.TxOut
                   (viAddress ciPayoutValidator)
@@ -616,7 +615,7 @@ checkTransactionSize era protocol ContractInstance{..} (Transaction marloweState
         findRole _ = mempty
     roles <-
       liftCli
-        . mapM P.toCardanoValue
+        . mapM toCardanoValue
         $ fmap (flip (P.singleton ciRolesCurrency) 1)
           . foldMap findRole
         $ getInputContent

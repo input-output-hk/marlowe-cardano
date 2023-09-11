@@ -1,12 +1,3 @@
------------------------------------------------------------------------------
---
--- Module      :  $Headers
--- License     :  Apache 2.0
---
--- Stability   :  Experimental
--- Portability :  Portable
---
------------------------------------------------------------------------------
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -14,6 +5,12 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | Tests of Marlowe's Plutus implementation against its on-chain specification.
+--
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
 module Spec.Marlowe.Plutus.Specification (
   -- * Testing
   tests,
@@ -43,8 +40,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   Payee (Party),
   State (accounts),
  )
-import Language.Marlowe.Scripts (MarloweInput)
-import Plutus.Script.Utils.Scripts (datumHash)
+import Language.Marlowe.Scripts.Types (MarloweInput)
 import Plutus.V1.Ledger.Address (toPubKeyHash)
 import Plutus.V1.Ledger.Value (flattenValue, valueOf)
 import Plutus.V2.Ledger.Api (
@@ -123,6 +119,7 @@ import Test.Tasty.QuickCheck (
 
 import qualified Language.Marlowe.Core.V1.Semantics as M (MarloweData (marloweParams))
 import qualified Language.Marlowe.Core.V1.Semantics.Types as M (Party (Address), State (..))
+import Language.Marlowe.Util (dataHash)
 import qualified PlutusTx.AssocMap as AM (Map, fromList, insert, keys, null, toList)
 import qualified Test.Tasty.QuickCheck as Q (shuffle)
 
@@ -237,8 +234,8 @@ tests referencePaths =
               -- APPROVED CHANGES TO MARLOWE'S SEMANTICS VALIDATOR. THIS HASH
               -- HAS IMPLICATIONS FOR VERSIONING, AUDIT, AND CONTRACT DISCOVERY.
               ( if checkPlutusLog
-                  then "c6db3a4f2e08ce10cd34aa1cd06f97730f5d55e0fcc20e3cb5149ea4"
-                  else "2ed2631dbb277c84334453c5c437b86325d371f0835a28b910a91a6e"
+                  then "7ff54a5e50dee4adf28bc2f5dbaa22791ee44a6ef622ace834dc2d9b"
+                  else "d85fa9bc2bdfd97d5ebdbc5e3fc66f7476213c40c21b73b41257f09d"
               )
         ]
     , testGroup
@@ -271,7 +268,7 @@ tests referencePaths =
               -- DO NOT ALTER THE FOLLOWING VALUE UNLESS YOU ARE COMMITTING
               -- APPROVED CHANGES TO MARLOWE'S ROLE VALIDATOR. THIS HASH HAS
               -- IMPLICATIONS FOR VERSIONING, AUDIT, AND CONTRACT DISCOVERY.
-              "e165610232235bbbbeff5b998b233daae42979dec92a6722d9cda989"
+              "10ec7e02d25f5836b3e1098e0d4d8389e71d7a97a57aa737adc1d1fa"
         ]
     ]
 
@@ -375,7 +372,7 @@ checkDoubleInput referencePaths =
         do
           -- Create a random datum.
           inDatum <- lift arbitrary
-          let inDatumHash = datumHash inDatum
+          let inDatumHash = DatumHash $ dataHash inDatum
           -- Create a random input to the script.
           inScript <-
             TxInInfo
@@ -536,7 +533,7 @@ checkDatumOutput referencePaths perturb =
           -- Find the existing Marlowe data output.
           marloweData <- MarloweData <$> use marloweParams <*> output `uses` txOutState <*> output `uses` txOutContract
           -- Compute its hash.
-          let outDatumHash = datumHash . Datum $ toBuiltinData marloweData
+          let outDatumHash = DatumHash $ dataHash marloweData
           -- Modify the original datum.
           outDatum' <- fmap (Datum . toBuiltinData) . lift $ perturb marloweData
           -- Let
@@ -592,7 +589,7 @@ checkContractOutput referencePaths =
   checkDatumOutput referencePaths $
     \marloweData ->
       do
-        -- Replace the output ccontact with a random one.
+        -- Replace the output contract with a random one.
         let old = marloweContract marloweData
         new <- arbitrary `suchThat` (/= old)
         pure $ marloweData{marloweContract = new}
@@ -607,7 +604,7 @@ hasMerkleizedInput =
 -- | Check than an invalid merkleization is rejected.
 checkMerkleization :: [ReferencePath] -> Bool -> Property
 checkMerkleization referencePaths valid =
-  let -- Merkleizedd the contract and its input.
+  let -- Merkleized the contract and its input.
       modifyBefore = merkleize
       -- Extract the merkle hash, if any.
       merkleHash (NormalInput _) = mempty

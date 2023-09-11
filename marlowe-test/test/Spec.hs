@@ -1,16 +1,13 @@
------------------------------------------------------------------------------
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE OverloadedStrings #-}
+
+-- | Marlowe tests.
 --
 -- Module      :  $Headers
 -- License     :  Apache 2.0
 --
 -- Stability   :  Experimental
 -- Portability :  Portable
---
------------------------------------------------------------------------------
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE OverloadedStrings #-}
-
--- | Marlowe tests.
 module Main (
   -- * Testing
   main,

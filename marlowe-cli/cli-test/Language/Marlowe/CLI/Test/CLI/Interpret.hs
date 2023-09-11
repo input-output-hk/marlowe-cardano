@@ -27,35 +27,10 @@ import Cardano.Api (
   StakeAddressReference (NoStakeAddress),
  )
 import Cardano.Api qualified as C
-import Control.Lens (assign, coerced, modifying, use, view)
-import Data.Foldable (fold)
-import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
-import Data.Map.Strict qualified as Map
-import Data.Traversable (for)
-import Language.Marlowe.CLI.Test.Wallet.Types (
-  Currency (Currency, ccCurrencySymbol),
-  CurrencyNickname,
-  SomeTxBody (..),
-  Wallet (Wallet, _waAddress, _waBalanceCheckBaseline, _waSigningKey, _waSubmittedTransactions),
-  WalletNickname (WalletNickname),
-  faucetNickname,
- )
-import Language.Marlowe.CLI.Types (
-  AnUTxO (AnUTxO, unAnUTxO),
-  CoinSelectionStrategy (CoinSelectionStrategy),
-  MarlowePlutusVersion,
-  MarloweScriptsRefs (MarloweScriptsRefs),
-  MarloweTransaction (mtState),
-  PrintStats (PrintStats),
-  PublishingStrategy (PublishAtAddress, PublishPermanently),
-  ValidatorInfo (ValidatorInfo),
-  toSlotRoundedPlutusPOSIXTime,
- )
-import Ledger.Orphans ()
-
 import Contrib.Control.Monad.Except (note)
 import Contrib.Data.Foldable (anyFlipped, foldMapFlipped, foldMapMFlipped)
 import Contrib.Data.List.Random (combinationWithRepetitions)
+import Control.Lens (assign, coerced, modifying, use, view)
 import Control.Monad (foldM, when)
 import Control.Monad.Error.Class (MonadError (throwError))
 import Control.Monad.IO.Class (liftIO)
@@ -63,10 +38,14 @@ import Control.Monad.Loops (untilJust)
 import Data.Aeson qualified as A
 import Data.Aeson.OneLine qualified as A
 import Data.Coerce (coerce)
+import Data.Foldable (fold)
 import Data.Functor ((<&>))
+import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
 import Data.List.NonEmpty qualified as List.NonEmpty
+import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe, isJust, mapMaybe)
 import Data.Text qualified as Text
+import Data.Traversable (for)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage)
 import Language.Marlowe.CLI.Run (
   autoRunTransactionImpl,
@@ -119,6 +98,25 @@ import Language.Marlowe.CLI.Test.Wallet.Interpret (
   getFaucet,
   getSingletonCurrency,
   updateWallet,
+ )
+import Language.Marlowe.CLI.Test.Wallet.Types (
+  Currency (Currency, ccCurrencySymbol),
+  CurrencyNickname,
+  SomeTxBody (..),
+  Wallet (Wallet, _waAddress, _waBalanceCheckBaseline, _waSigningKey, _waSubmittedTransactions),
+  WalletNickname (WalletNickname),
+  faucetNickname,
+ )
+import Language.Marlowe.CLI.Types (
+  AnUTxO (AnUTxO, unAnUTxO),
+  CoinSelectionStrategy (CoinSelectionStrategy),
+  MarlowePlutusVersion,
+  MarloweScriptsRefs (MarloweScriptsRefs),
+  MarloweTransaction (mtState),
+  PrintStats (PrintStats),
+  PublishingStrategy (PublishAtAddress, PublishPermanently),
+  ValidatorInfo (ValidatorInfo),
+  toSlotRoundedPlutusPOSIXTime,
  )
 import Language.Marlowe.Cardano.Thread (
   anyMarloweThreadCreated,
