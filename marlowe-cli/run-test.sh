@@ -56,10 +56,10 @@ cabal run exe:marlowe-cli -- \
   ./test/operations/mint.yaml \
   ./test/operations/open-role-based-choice.yaml \
   ./test/operations/open-role-based-choice.yaml \
-  ./test/operations/open-role-release-fails-without-thread-token.yaml \
   ./test/operations/open-role-based-deposit-mixed-with-other-inputs.yaml \
   ./test/operations/open-role-based-deposit.yaml \
   ./test/operations/open-role-multi-token-release.yaml \
+  ./test/operations/open-role-release-fails-without-thread-token.yaml \
   ./test/operations/open-role-release-fails-without-thread-token.yaml \
   ./test/operations/open-role-uses-thread-token-name-to-release-the-token.yaml \
   ./test/operations/publish.yaml \

@@ -660,7 +660,7 @@ data PayFromScript lang = PayFromScript
   -- ^ The eUTxO to be spent.
   , script :: C.PlutusScriptOrReferenceInput lang
   -- ^ The script.
-  , datum :: Datum
+  , datum :: Maybe Datum
   -- ^ The datum.
   , redeemer :: Redeemer
   -- ^ The redeemer.

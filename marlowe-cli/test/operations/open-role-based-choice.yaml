@@ -1,0 +1,143 @@
+testName: Test role token release from a open role script on deposit
+
+operations:
+
+- Publish:
+    publishPermanently: true
+
+- CheckBalance:
+    wallet: Faucet
+    balance:
+      - [ADA, 0]
+
+- Mint:
+    issuer: Faucet
+    nickname: RoleTokenCurrency
+    minLovelace: 2000000
+    tokenDistribution:
+      - [{ script: OpenRole }, ChoiceMaker, 1]
+      - [{ wallet: Faucet }, '', 1]
+
+- CheckBalance:
+    wallet: Faucet
+    balance:
+      # Temporarly spent on the Depositor token min UTxO
+      - [ADA, -2]
+      - [RoleTokenCurrency, '', 1]
+
+- Comment: "To simplify the flow we manually deposit the \"thread token\" into the contract. We put it under the user account so at the end of the contract we can easily calculate the expected balance."
+
+- Initialize:
+    minLovelace: 2000000
+    roleCurrency: RoleTokenCurrency
+    marloweValidators:
+      publishCurrent:
+        permanently: true
+    submitter: Faucet
+    source:
+      timeout:
+        relative: +3600
+      timeout_continuation: close
+      unless:
+        party:
+          address: Faucet
+        deposits: 1
+        of_token:
+          currency_symbol: RoleTokenCurrency
+          token_name: ''
+        into_account:
+          address: Faucet
+      then:
+        timeout:
+          relative: +3600
+        timeout_continuation: close
+        unless:
+          choose_between:
+            - from: 0
+              to: 0
+          for_choice:
+            choice_name: Test choice
+            choice_owner:
+              role_token: ChoiceMaker
+        then:
+          timeout:
+            relative: +3600
+          timeout_continuation: close
+          unless:
+            notify_if: true
+          then: close
+
+- AutoRun
+
+- CheckBalance:
+    wallet: Faucet
+    balance:
+      - [ADA, -4]
+      - [RoleTokenCurrency, '', 1]
+
+- Comment: Manually deposit thread token to the script
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          address: Faucet
+        that_deposits: 1
+        of_token:
+          currency_symbol: RoleTokenCurrency
+          token_name: ''
+        into_account:
+          address: Faucet
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun
+
+- CheckBalance:
+    wallet: Faucet
+    balance:
+      - [ADA, -4]
+
+- Comment: Perform the actual choice which releases the role token.
+
+- Prepare:
+    inputs:
+      - for_choice_id:
+          choice_name: Test choice
+          choice_owner:
+            role_token: ChoiceMaker
+        input_that_chooses_num: 0
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun:
+    submitter: Faucet
+
+- Comment: Wallet should get back `ChoiceMaker` token for the applied choice input. Wallet should also get back 2 ADA which was locked by the OpenRole script.
+
+- CheckBalance:
+    wallet: Faucet
+    balance:
+      - [ADA, -2]
+      - [RoleTokenCurrency, ChoiceMaker, 1]
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun:
+    submitter: Faucet
+
+- CheckBalance:
+    wallet: Faucet
+    balance:
+      - [ADA, 0]
+      - [RoleTokenCurrency, ChoiceMaker, 1]
+      - [RoleTokenCurrency, '', 1]

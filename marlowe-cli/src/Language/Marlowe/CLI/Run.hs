@@ -712,7 +712,7 @@ runTransactionImpl txBuildupCtx marloweInBundle marloweOut' inputs outputs chang
                     marloweParams' = MC.marloweParams $ mtRolesCurrency marloweIn
                     redeemer = riRedeemer $ buildRedeemer (mtInputs marloweOut)
                     inputDatum = diDatum $ buildMarloweDatum marloweParams (mtContract marloweIn) (mtState marloweIn)
-                    spend' = buildPayFromScript validator inputDatum redeemer spend
+                    spend' = buildPayFromScript validator (Just inputDatum) redeemer spend
                     -- SCP-3610: Remove when Babbage era features become available and the validator is revised.
                     merkles =
                       catMaybes
@@ -853,7 +853,7 @@ withdrawFunds connection marloweOutFile roleName collateral inputs outputs chang
         . S.singleton
         . toAddressAny'
         $ roleAddress
-    let spend = buildPayFromScript roleScript roleDatum roleRedeemer . fst <$> utxos
+    let spend = buildPayFromScript roleScript (Just roleDatum) roleRedeemer . fst <$> utxos
         withdrawal = (changeAddress, C.TxOutDatumNone, mconcat [txOutValueToValue value | (_, TxOut _ value _ _) <- utxos])
     outputs' <- mapM (uncurry3 makeTxOut') $ withdrawal : outputs
     body <-
@@ -991,7 +991,7 @@ autoRunTransactionImpl txBuildupCtx marloweInBundle marloweOut' extraSpend chang
                     -- Build the datum.
                     inputDatum = diDatum $ buildMarloweDatum marloweParams (mtContract marloweIn) (mtState marloweIn)
                     -- Build the spending witness.
-                    spend' = buildPayFromScript validator inputDatum redeemer spend
+                    spend' = buildPayFromScript validator (Just inputDatum) redeemer spend
                     -- Handle merkleization.
                     merkles =
                       catMaybes
@@ -1281,7 +1281,7 @@ autoWithdrawFundsImpl txBuildupCtx token validatorInfo range changeAddress signi
     role <- liftCli $ toCardanoValue $ singleton rolesCurrency roleName 1
     let utxos = filterPayoutUtxos allPayouts
         -- Build the spending from the script.
-        spend = buildPayFromScript roleScript (diDatum roleDatum) roleRedeemer . fst . unAnUTxO <$> utxos
+        spend = buildPayFromScript roleScript (Just $ diDatum roleDatum) roleRedeemer . fst . unAnUTxO <$> utxos
         -- Find how much is being spent from the script.
         -- The output value should include the spending from the script and the role token.
         withdrawn = mconcat [txOutValueToValue value | AnUTxO (_, TxOut _ value _ _) <- utxos]

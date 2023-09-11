@@ -65,7 +65,6 @@ import Language.Marlowe.CLI.Test.Wallet.Types (
  )
 import Ledger.Orphans ()
 
-import Cardano.Api.Shelley qualified as CS
 import Contrib.Control.Monad.Except (note)
 import Contrib.Data.Foldable (anyFlipped, foldMapFlipped, foldMapMFlipped)
 import Contrib.Data.List.Random (combinationWithRepetitions)
@@ -273,20 +272,11 @@ autoRunTransaction currency defaultSubmitter prev curr@MarloweTransaction{..} in
                       roleTokenAssetId = C.AssetId policyId roleAssetName
                       queryCtx = toQueryContext txBuildupCtx
                   runCli era "[AutoRun]" (selectUtxosImpl queryCtx openRoleAddress (AssetOnly roleTokenAssetId)) >>= \case
-                    OutputQueryResult{oqrMatching = fromUTxO -> (AnUTxO (txIn, txOut) : _)} -> do
-                      let C.TxOut _ _ txOutDatum _ = txOut
-                      scriptData <- case txOutDatum of
-                        C.TxOutDatumInline _ sc -> pure sc
-                        _ -> throwError $ testExecutionFailed' "[autoRunTransaction] Unexpected datum type in the open role script output."
-                      (datum :: P.Datum) <-
-                        liftEither $
-                          note (testExecutionFailed' "[autoRunTransaction] Datum is not a token name.") $
-                            P.fromData . CS.toPlutusData $
-                              scriptData
+                    OutputQueryResult{oqrMatching = fromUTxO -> (AnUTxO (txIn, _) : _)} -> do
                       let scriptOrReference = validatorInfoScriptOrReference openRoleValidatorInfo
                           redeemer = P.Redeemer $ P.toBuiltinData P.emptyByteString
                           payFromOpenRole :: PayFromScript lang
-                          payFromOpenRole = buildPayFromScript scriptOrReference datum redeemer txIn
+                          payFromOpenRole = buildPayFromScript scriptOrReference Nothing redeemer txIn
 
                       pure ([], [payFromOpenRole])
                     _ -> do

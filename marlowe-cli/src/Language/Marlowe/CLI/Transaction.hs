@@ -1351,7 +1351,7 @@ buildContinuing connection scriptAddress validatorFile redeemerFile inputDatumFi
     body <-
       buildBody
         (QueryNode connection)
-        [buildPayFromScript (C.PScript validator) inputDatum redeemer txIn]
+        [buildPayFromScript (C.PScript validator) (Just inputDatum) redeemer txIn]
         (Just $ buildPayToScript era scriptAddress outputValue outputDatum)
         []
         inputs
@@ -1421,7 +1421,7 @@ buildOutgoing connection validatorFile redeemerFile inputDatumFile signingKeyFil
     body <-
       buildBody
         (QueryNode connection)
-        [buildPayFromScript (C.PScript validator) inputDatum redeemer txIn]
+        [buildPayFromScript (C.PScript validator) (Just inputDatum) redeemer txIn]
         Nothing
         []
         inputs
@@ -1442,7 +1442,7 @@ buildOutgoing connection validatorFile redeemerFile inputDatumFile signingKeyFil
 buildPayFromScript
   :: C.PlutusScriptOrReferenceInput lang
   -- ^ The script.
-  -> Datum
+  -> Maybe Datum
   -- ^ The datum.
   -> Redeemer
   -- ^ The redeemer.
@@ -1785,13 +1785,16 @@ scriptWitness
   -> m (C.BuildTxWith C.BuildTx (Witness WitCtxTxIn era))
 scriptWitness era PayFromScript{..} = do
   scriptInEra <- liftCliMaybe "Script language not supported in era" $ toScriptLanguageInEra era
+  let datum' = case datum of
+        Just d -> ScriptDatumForTxIn . fromPlutusData $ toData d
+        Nothing -> InlineScriptDatum
   pure $
     BuildTxWith . ScriptWitness ScriptWitnessForSpending $
       C.PlutusScriptWitness
         scriptInEra
         (plutusScriptVersion @lang)
         script
-        (ScriptDatumForTxIn . fromPlutusData $ toData datum)
+        datum'
         (fromPlutusData $ toData redeemer)
         (ExecutionUnits 0 0)
 
