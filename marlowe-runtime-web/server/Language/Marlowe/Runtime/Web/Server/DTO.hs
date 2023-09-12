@@ -84,7 +84,7 @@ import Language.Marlowe.Protocol.Query.Types (
 
 import Cardano.Ledger.Alonzo.Core (TxWits)
 import Cardano.Ledger.Binary (Annotator, DecCBOR (..), Decoder, decodeFullAnnotator, serialize')
-import Cardano.Ledger.Core (EraTxWits)
+import Cardano.Ledger.Core (EraTxWits, eraProtVerLow)
 import Data.Bitraversable (Bitraversable (..))
 import Data.Function (on)
 import Data.Kind (Type)
@@ -705,7 +705,7 @@ instance
   )
   => SerialiseAsCBOR (ShelleyTxWitness era)
   where
-  serialiseToCBOR (ShelleyTxWitness wit) = serialize' maxBound wit
+  serialiseToCBOR (ShelleyTxWitness wit) = serialize' (eraProtVerLow @(ShelleyLedgerEra era)) wit
 
   deserialiseFromCBOR _ bs = do
     let lbs = BSL.fromStrict bs
@@ -713,7 +713,8 @@ instance
         annotator :: forall s. Decoder s (Annotator (TxWits (ShelleyLedgerEra era)))
         annotator = decCBOR
 
-    (w :: TxWits (ShelleyLedgerEra era)) <- decodeFullAnnotator maxBound "Shelley Tx Witness" annotator lbs
+    (w :: TxWits (ShelleyLedgerEra era)) <-
+      decodeFullAnnotator (eraProtVerLow @(ShelleyLedgerEra era)) "Shelley Tx Witness" annotator lbs
     pure $ ShelleyTxWitness w
 
 instance

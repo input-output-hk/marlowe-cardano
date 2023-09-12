@@ -169,7 +169,7 @@ instance Arbitrary TokenName where
 instance Arbitrary Datum where
   arbitrary =
     oneofStructured
-      [ (Node, Constr <$> arbitrary <*> listOf (resized (`div` 10) arbitrary))
+      [ (Node, Constr . abs <$> arbitrary <*> listOf (resized (`div` 10) arbitrary))
       , (Node, Map <$> listOf (resized (`div` 10) arbitrary))
       , (Node, List <$> listOf (resized (`div` 10) arbitrary))
       , (Leaf, I <$> arbitrary)
