@@ -28,16 +28,16 @@ import Data.Default (Default (def))
 import Data.Time.Clock qualified as Time
 import Data.Time.Clock.POSIX qualified as Time
 import GHC.Generics (Generic)
-import Plutus.V1.Ledger.Interval (
-  Extended (..),
-  Interval (Interval),
-  LowerBound (..),
-  UpperBound (..),
-  interval,
-  member,
- )
 import Plutus.V1.Ledger.Slot (Slot (Slot), SlotRange)
-import Plutus.V1.Ledger.Time (POSIXTime (POSIXTime, getPOSIXTime), POSIXTimeRange)
+import PlutusLedgerApi.V1 (
+  Extended (..),
+  Interval (..),
+  LowerBound (..),
+  POSIXTime (..),
+  POSIXTimeRange,
+  UpperBound (..),
+ )
+import PlutusLedgerApi.V1.Interval (interval, member)
 import PlutusTx.Lift (makeLift)
 import PlutusTx.Prelude hiding (Eq, (<$>))
 import Prettyprinter (Pretty (pretty), (<+>))

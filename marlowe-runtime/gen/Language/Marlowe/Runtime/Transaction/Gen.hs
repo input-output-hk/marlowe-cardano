@@ -6,13 +6,13 @@ module Language.Marlowe.Runtime.Transaction.Gen where
 
 import Cardano.Api (CardanoEra (..), IsCardanoEra, cardanoEra)
 import Cardano.Api.Shelley (
-  ReferenceTxInsScriptsInlineDatumsSupportedInEra (ReferenceTxInsScriptsInlineDatumsInBabbageEra),
+  ReferenceTxInsScriptsInlineDatumsSupportedInEra (..),
  )
 import Control.Applicative (liftA2)
 import qualified Data.ByteString.Char8 as BS
 import Data.Foldable (fold)
 import qualified Data.List.NonEmpty as NE
-import Gen.Cardano.Api.Typed (genTx, genTxBody)
+import Data.Semigroup (Semigroup (..))
 import Language.Marlowe.Runtime.ChainSync.Gen ()
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.Core.Gen (ArbitraryMarloweVersion)
@@ -27,6 +27,7 @@ import Network.Protocol.Job.Types (ArbitraryCommand (..), CommandVariations (..)
 import qualified Network.URI
 import qualified Network.URI as Network
 import Spec.Marlowe.Semantics.Arbitrary ()
+import Test.Gen.Cardano.Api.Typed (genTx, genTxBody)
 import Test.QuickCheck hiding (shrinkMap)
 import Test.QuickCheck.Hedgehog (hedgehog)
 import Test.QuickCheck.Instances ()
@@ -212,9 +213,15 @@ instance Arbitrary SubmitError where
   shrink = genericShrink
 
 instance (ArbitraryMarloweVersion v) => Arbitrary (ContractCreated v) where
-  arbitrary = ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> arbitrary
+  arbitrary =
+    oneof
+      [ ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> arbitrary
+      , ContractCreated ReferenceTxInsScriptsInlineDatumsInConwayEra <$> arbitrary
+      ]
   shrink (ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra created) =
     ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> shrink created
+  shrink (ContractCreated ReferenceTxInsScriptsInlineDatumsInConwayEra created) =
+    ContractCreated ReferenceTxInsScriptsInlineDatumsInConwayEra <$> shrink created
 
 instance (ArbitraryMarloweVersion v, IsCardanoEra era) => Arbitrary (ContractCreatedInEra era v) where
   arbitrary =
@@ -240,9 +247,15 @@ instance (ArbitraryMarloweVersion v, IsCardanoEra era) => Arbitrary (ContractCre
       ]
 
 instance (ArbitraryMarloweVersion v) => Arbitrary (InputsApplied v) where
-  arbitrary = InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> arbitrary
+  arbitrary =
+    oneof
+      [ InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> arbitrary
+      , InputsApplied ReferenceTxInsScriptsInlineDatumsInConwayEra <$> arbitrary
+      ]
   shrink (InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra created) =
     InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> shrink created
+  shrink (InputsApplied ReferenceTxInsScriptsInlineDatumsInConwayEra created) =
+    InputsApplied ReferenceTxInsScriptsInlineDatumsInConwayEra <$> shrink created
 
 instance (ArbitraryMarloweVersion v, IsCardanoEra era) => Arbitrary (InputsAppliedInEra era v) where
   arbitrary =
@@ -264,9 +277,15 @@ instance (ArbitraryMarloweVersion v, IsCardanoEra era) => Arbitrary (InputsAppli
       ]
 
 instance (ArbitraryMarloweVersion v) => Arbitrary (WithdrawTx v) where
-  arbitrary = WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> arbitrary
+  arbitrary =
+    oneof
+      [ WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> arbitrary
+      , WithdrawTx ReferenceTxInsScriptsInlineDatumsInConwayEra <$> arbitrary
+      ]
   shrink (WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra created) =
     WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> shrink created
+  shrink (WithdrawTx ReferenceTxInsScriptsInlineDatumsInConwayEra created) =
+    WithdrawTx ReferenceTxInsScriptsInlineDatumsInConwayEra <$> shrink created
 
 instance (ArbitraryMarloweVersion v, IsCardanoEra era) => Arbitrary (WithdrawTxInEra era v) where
   arbitrary =
@@ -305,7 +324,11 @@ instance ArbitraryCommand MarloweTxCommand where
       Withdraw Core.MarloweV1
         <$> arbitrary
         <*> arbitrary
-    TagSubmit -> Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> hedgehog (genTx BabbageEra)
+    TagSubmit ->
+      oneof
+        [ Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> hedgehog (genTx BabbageEra)
+        , Submit ReferenceTxInsScriptsInlineDatumsInConwayEra <$> hedgehog (genTx ConwayEra)
+        ]
   arbitraryJobId = \case
     TagCreate Core.MarloweV1 -> Nothing
     TagApplyInputs Core.MarloweV1 -> Nothing
@@ -439,8 +462,11 @@ instance CommandVariations MarloweTxCommand where
     TagWithdraw Core.MarloweV1 ->
       Withdraw Core.MarloweV1 <$> variations `varyAp` variations
     TagSubmit ->
-      Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra
-        <$> variations
+      sconcat $
+        NE.fromList
+          [ Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> variations
+          , Submit ReferenceTxInsScriptsInlineDatumsInConwayEra <$> variations
+          ]
   jobIdVariations = \case
     TagCreate Core.MarloweV1 -> []
     TagApplyInputs Core.MarloweV1 -> []

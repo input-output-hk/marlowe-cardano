@@ -15,12 +15,10 @@ module Language.Marlowe.Runtime.Plutus.V2.Scripts.MarloweV1.RoleTokensPolicy (
   policy,
 ) where
 
+import qualified PlutusLedgerApi.V2 as PV2
 import qualified PlutusTx
-import PlutusTx.AssocMap as AssocMap
+import qualified PlutusTx.AssocMap as AssocMap
 import PlutusTx.Prelude
-
-import qualified Plutus.V2.Ledger.Api as PV2
-import Plutus.V2.Ledger.Contexts as PV2
 
 -- I was forced to extract types to a submodule
 -- because of the `TempleteHaskell` expansion problem.
@@ -31,6 +29,8 @@ import Language.Marlowe.Runtime.Plutus.V2.Scripts.MarloweV1.RoleTokensPolicy.Typ
   mkRoleTokens,
   mkRoleTokensHash,
  )
+import qualified PlutusLedgerApi.V2.Contexts as PV2
+import PlutusTx (CompiledCode)
 
 -- | One shot policy which encodes the `txOutRef` and tokens minting in its hash.
 -- In theory this currency can be reused accross multiple Marlowe Contracts when the precise
@@ -84,13 +84,12 @@ missingFromOutputsValue currencySymbol PV2.ScriptContext{scriptContextTxInfo} = 
       missingFromOutputValue PV2.TxOut{txOutValue} = isNothing . AssocMap.lookup currencySymbol . PV2.getValue $ txOutValue
   all missingFromOutputValue txInfoOutputs
 
-policy :: RoleTokens -> PV2.TxOutRef -> PV2.MintingPolicy
+policy :: RoleTokens -> PV2.TxOutRef -> CompiledCode (BuiltinData -> BuiltinData -> ())
 policy roleTokens txOutRef = do
   let roleTokensHash = mkRoleTokensHash roleTokens
-  PV2.mkMintingPolicyScript
-    $ $$(PlutusTx.compile [||\rs seed -> wrapMintingPolicy (mkPolicy rs seed)||])
-    `PlutusTx.applyCode` PlutusTx.liftCode roleTokensHash
-    `PlutusTx.applyCode` PlutusTx.liftCode txOutRef
+  $$(PlutusTx.compile [||\rs seed -> wrapMintingPolicy (mkPolicy rs seed)||])
+    `PlutusTx.unsafeApplyCode` PlutusTx.liftCode roleTokensHash
+    `PlutusTx.unsafeApplyCode` PlutusTx.liftCode txOutRef
 
 -- Extracted from plutus-ledger
 

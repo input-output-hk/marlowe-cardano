@@ -75,10 +75,10 @@ import Cardano.Api (
  )
 import Cardano.Api.Shelley (Hash (..), Tx (..), toShelleyTxIn)
 import Cardano.Binary (serialize')
-import qualified Cardano.Ledger.Alonzo.Data as Alonzo
+import qualified Cardano.Ledger.Alonzo.Scripts.Data as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import qualified Cardano.Ledger.Alonzo.TxBody as Alonzo
-import qualified Cardano.Ledger.Alonzo.TxWitness as Alonzo
+import qualified Cardano.Ledger.Alonzo.TxWits as Alonzo
 import qualified Cardano.Ledger.Babbage.Tx as Babbage
 import qualified Cardano.Ledger.Babbage.TxBody as Babbage
 import Cardano.Ledger.SafeHash (originalBytes)
@@ -87,13 +87,13 @@ import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
-import Data.ByteString.Base16 (encodeBase16)
 import Data.ByteString.Short (fromShort, toShort)
 import Data.Foldable (toList)
 import Data.Int (Int16, Int64)
 import qualified Data.Map.Strict as M
 import Data.Profunctor (rmap)
 import qualified Data.Set as Set
+import Data.String (IsString (..))
 import Data.Text (Text)
 import Data.Vector (Vector)
 import qualified Data.Vector as V
@@ -192,13 +192,13 @@ getGenesisBlock =
 
 decodeTxId :: ByteString -> Either Text TxId
 decodeTxId txId = case deserialiseFromRawBytes AsTxId txId of
-  Nothing -> Left $ "Invalid TxId bytes: " <> encodeBase16 txId
-  Just txId' -> Right txId'
+  Left err -> Left $ "Invalid TxId bytes: " <> fromString (show err)
+  Right txId' -> Right txId'
 
 decodeAddressAny :: ByteString -> Either Text AddressAny
 decodeAddressAny address = case deserialiseFromRawBytes AsAddressAny address of
-  Nothing -> Left $ "Invalid address bytes: " <> encodeBase16 address
-  Just address' -> Right address'
+  Left err -> Left $ "Invalid address bytes: " <> fromString (show err)
+  Right address' -> Right address'
 
 -- GetIntersectionPoints
 
@@ -630,15 +630,15 @@ commitBlocks = CommitBlocks \blocks ->
           pure $ SomeTxOut (getTxId body) (TxIx ix) slotNo txOut datumInfo False era
       where
         datums = case tx of
-          ShelleyTx ShelleyBasedEraAlonzo (Alonzo.ValidatedTx body wits _ _) ->
-            let getDatum (Alonzo.TxOut _ _ (SJust dh)) =
+          ShelleyTx ShelleyBasedEraAlonzo (Alonzo.AlonzoTx body wits _ _) ->
+            let getDatum (Alonzo.AlonzoTxOut _ _ (SJust dh)) =
                   ( Just $ originalBytes dh
                   , fmap serialize' . M.lookup dh . Alonzo.unTxDats $ Alonzo.txdats' wits
                   )
-                getDatum (Alonzo.TxOut _ _ SNothing) = (Nothing, Nothing)
+                getDatum (Alonzo.AlonzoTxOut _ _ SNothing) = (Nothing, Nothing)
              in toList $ getDatum <$> Alonzo.outputs' body
-          ShelleyTx ShelleyBasedEraBabbage (Babbage.ValidatedTx body wits _ _) ->
-            let getDatum (Babbage.TxOut _ _ datum _) =
+          ShelleyTx ShelleyBasedEraBabbage (Alonzo.AlonzoTx body wits _ _) ->
+            let getDatum (Babbage.BabbageTxOut _ _ datum _) =
                   case datum of
                     Babbage.NoDatum -> (Nothing, Nothing)
                     Babbage.DatumHash dh ->
@@ -666,11 +666,11 @@ commitBlocks = CommitBlocks \blocks ->
       where
         getRedeemer :: TxIn -> Maybe ByteString
         getRedeemer = case tx of
-          ShelleyTx ShelleyBasedEraAlonzo alonzoTx@Alonzo.ValidatedTx{} ->
+          ShelleyTx ShelleyBasedEraAlonzo alonzoTx@Alonzo.AlonzoTx{} ->
             \txIn -> do
               (datum, _) <- Alonzo.indexedRdmrs alonzoTx $ Alonzo.Spending $ toShelleyTxIn txIn
               pure $ originalBytes $ Alonzo.dataToBinaryData datum
-          ShelleyTx ShelleyBasedEraBabbage babbageTx@Babbage.ValidatedTx{} -> do
+          ShelleyTx ShelleyBasedEraBabbage babbageTx -> do
             \txIn -> do
               (datum, _) <- Babbage.indexedRdmrs babbageTx $ Babbage.Spending $ toShelleyTxIn txIn
               pure $ originalBytes $ Alonzo.dataToBinaryData datum
@@ -702,7 +702,7 @@ lovelaceToParam :: Lovelace -> Int64
 lovelaceToParam (Lovelace slotNo) = fromIntegral slotNo
 
 slotNoToParam :: SlotNo -> Int64
-slotNoToParam (SlotNo slotNo) = fromIntegral $ minimum [slotNo, fromIntegral (maxBound :: Int64)]
+slotNoToParam (SlotNo slotNo) = fromIntegral $ min slotNo (fromIntegral (maxBound :: Int64))
 
 txIxToParam :: TxIx -> Int16
 txIxToParam (TxIx txIx) = fromIntegral txIx

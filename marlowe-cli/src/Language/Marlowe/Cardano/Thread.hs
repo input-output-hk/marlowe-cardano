@@ -23,7 +23,7 @@ import Data.Aeson qualified as A
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.List.NonEmpty qualified as List
 import Language.Marlowe qualified as M
-import Plutus.V2.Ledger.Api qualified as P
+import PlutusLedgerApi.V2 qualified as P
 
 data Running
 

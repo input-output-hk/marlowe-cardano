@@ -19,7 +19,7 @@ import Cardano.Api (
   EraHistory,
   IsCardanoEra,
   NetworkId (..),
-  ScriptDataSupportedInEra (ScriptDataInBabbageEra),
+  ScriptDataSupportedInEra (..),
   ShelleyBasedEra (..),
   StakeAddressReference (..),
   Tx,
@@ -31,6 +31,7 @@ import Cardano.Api (
   getTxBody,
   getTxId,
   makeShelleyAddress,
+  toLedgerEpochInfo,
  )
 import Cardano.Api.Shelley (
   ProtocolParameters,
@@ -206,7 +207,7 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                   solveConstraints =
                     Constraints.solveConstraints
                       systemStart
-                      eraHistory
+                      (toLedgerEpochInfo eraHistory)
                       protocolParameters
               case command of
                 Create mStakeCredential version addresses roles metadata minAda contract ->
@@ -258,6 +259,8 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                       payouts
                 Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra tx ->
                   execSubmit (mkSubmitJob ScriptDataInBabbageEra) trackSubmitJob tx
+                Submit ReferenceTxInsScriptsInlineDatumsInConwayEra tx ->
+                  execSubmit (mkSubmitJob ScriptDataInConwayEra) trackSubmitJob tx
           , recvMsgAttach = \case
               jobId@(JobIdSubmit txId) ->
                 attachSubmit jobId $ getSubmitJob txId
@@ -389,6 +392,7 @@ referenceInputsSupportedInEra e = \case
   MaryEra -> throwE e
   AlonzoEra -> throwE e
   BabbageEra -> pure ReferenceTxInsScriptsInlineDatumsInBabbageEra
+  ConwayEra -> pure ReferenceTxInsScriptsInlineDatumsInConwayEra
 
 singletonContinuations :: Contract.ContractWithAdjacency -> Continuations 'V1
 singletonContinuations Contract.ContractWithAdjacency{..} = Map.singleton contractHash contract

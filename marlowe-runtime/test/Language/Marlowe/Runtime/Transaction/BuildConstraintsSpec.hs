@@ -20,6 +20,7 @@ import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (maybeToList)
+import Data.SOP.Counting (Exactly (..))
 import Data.SOP.Strict (K (..), NP (..))
 import qualified Data.Set as Set
 import Data.Time (UTCTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
@@ -73,9 +74,8 @@ import Ouroboros.Consensus.HardFork.History (
   mkInterpreter,
   summaryWithExactly,
  )
-import Ouroboros.Consensus.Util.Counting (Exactly (..))
-import Plutus.V1.Ledger.Api (Address (Address), Credential (PubKeyCredential), PubKeyHash (PubKeyHash), fromBuiltin)
-import Plutus.V1.Ledger.Time (POSIXTime (POSIXTime))
+import PlutusLedgerApi.V1 (Address (Address), Credential (PubKeyCredential), PubKeyHash (PubKeyHash), fromBuiltin)
+import PlutusLedgerApi.V1.Time (POSIXTime (POSIXTime))
 import qualified PlutusTx.AssocMap as AM
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Test.Hspec (Spec, shouldBe)
@@ -358,7 +358,8 @@ buildApplyInputsConstraintsSpec =
               :* K (oneSecondEraSummary 2) -- Allegra lasted 1 second
               :* K (oneSecondEraSummary 3) -- Mary lasted 1 second
               :* K (oneSecondEraSummary 4) -- Alonzo lasted 1 second
-              :* K (unboundedEraSummary 5) -- Babbage never ends
+              :* K (oneSecondEraSummary 5) -- Babbage lasted 1 second
+              :* K (unboundedEraSummary 6) -- Conway never ends
               :* Nil
         -- Important note: these slot computations cannot be used generally, but are specifically tailored
         -- to the contrived era history and system start used for this test case.

@@ -13,6 +13,7 @@ import Cardano.Api (
   ConsensusModeParams (..),
   EpochSlots (..),
   EraInMode (..),
+  File (..),
   GenesisParameters (..),
   LocalNodeConnectInfo (..),
   NetworkId (..),
@@ -115,7 +116,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
           { -- FIXME read from config - what is the appropriate value?
             localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
           , localNodeNetworkId = networkId
-          , localNodeSocketPath = nodeSocket
+          , localNodeSocketPath = File nodeSocket
           }
 
       genesisBlock = computeGenesisBlock (abstractHashToBytes hash) genesisConfig shelleyGenesis

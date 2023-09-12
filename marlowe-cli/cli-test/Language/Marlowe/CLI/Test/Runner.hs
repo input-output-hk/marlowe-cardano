@@ -143,7 +143,7 @@ import Language.Marlowe.Runtime.App.Types qualified as Apps
 import Network.Protocol.Connection qualified as Network.Protocol
 import Network.Protocol.Driver qualified as Network.Protocol
 import Plutus.V1.Ledger.SlotConfig (SlotConfig)
-import Plutus.V2.Ledger.Api qualified as P
+import PlutusLedgerApi.V2 qualified as P
 import PlutusTx.Monoid qualified as P
 import System.IO (hPrint, hPutStrLn)
 import UnliftIO (MonadUnliftIO (withRunInIO), atomically, race, writeIORef)
@@ -204,7 +204,7 @@ data Env lang era resource = Env
   , _envStreamJSON :: Bool
   , _envSlotConfig :: SlotConfig
   , _envProtocolParams :: CS.ProtocolParameters
-  , _envCostModelParams :: P.CostModelParams
+  , _envCostModelParams :: [Integer]
   , _envMaxRetries :: Int
   , _envTxBuildupContext :: TxBuildupContext era
   , _envReportDir :: FilePath

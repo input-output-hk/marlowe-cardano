@@ -26,6 +26,7 @@ import Cardano.Api (
   CardanoMode,
   ConsensusModeParams (..),
   EpochSlots (..),
+  File (..),
   LocalNodeConnectInfo (..),
   NetworkId (..),
   NetworkMagic (..),
@@ -211,7 +212,7 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
   withLocalTestnet' localTestnetOptions \testnet@LocalTestnet{..} -> runResourceT do
     let localConsensusModeParams = CardanoModeParams $ EpochSlots 500
     let localNodeNetworkId = Testnet $ NetworkMagic $ fromIntegral testnetMagic
-    let localNodeSocketPath = SpoNode.socket . head $ spoNodes
+    let localNodeSocketPath = File . SpoNode.socket . head $ spoNodes
     let localNodeConnectInfo = LocalNodeConnectInfo{..}
     marloweScripts <- liftIO $ publishCurrentScripts testnet localNodeConnectInfo
     (dbReleaseKey, dbName) <- allocate (createDatabase workspace) (cleanupDatabase 10_000)

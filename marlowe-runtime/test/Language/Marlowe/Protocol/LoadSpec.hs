@@ -7,7 +7,6 @@
 
 module Language.Marlowe.Protocol.LoadSpec where
 
-import Cardano.Api (hashScriptData)
 import Control.Monad (join)
 import Control.Monad.Trans.Writer
 import qualified Data.Map as Map
@@ -16,14 +15,15 @@ import Language.Marlowe.Core.V1.Semantics.Types (Contract (Close))
 import Language.Marlowe.Protocol.Load.Client (pushContract, serveMarloweLoadClient)
 import Language.Marlowe.Protocol.Load.Server (pullContract)
 import Language.Marlowe.Protocol.Load.Types
-import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScriptData)
-import Language.Marlowe.Runtime.ChainSync.Api (DatumHash (unDatumHash), toDatum)
+import Language.Marlowe.Runtime.ChainSync.Api (DatumHash (..))
 import Language.Marlowe.Runtime.ChainSync.Gen (StructureType (..), oneofStructured, resized)
+import Language.Marlowe.Util (dataHash)
 import Network.Protocol.Codec.Spec
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec
-import qualified Plutus.V2.Ledger.Api as PV2
+import PlutusLedgerApi.V2 (fromBuiltin)
+import qualified PlutusLedgerApi.V2 as PV2
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Test.Hspec (Spec, describe)
 import Test.Hspec.QuickCheck (prop)
@@ -50,7 +50,7 @@ merkleizeWithLibrary = mapWriter (fmap removeClose . addRoot) . deepMerkleize
     removeClose = Map.delete $ PV2.DatumHash $ PV2.toBuiltin $ unDatumHash $ hashContract Close
 
 hashContract :: Contract -> DatumHash
-hashContract = fromCardanoDatumHash . hashScriptData . toCardanoScriptData . toDatum
+hashContract = DatumHash . fromBuiltin . dataHash
 
 merkleizeWithPeers :: Contract -> Writer Continuations (Maybe DatumHash)
 merkleizeWithPeers contract =

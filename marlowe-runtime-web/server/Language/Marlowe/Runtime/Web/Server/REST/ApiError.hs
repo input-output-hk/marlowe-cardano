@@ -12,6 +12,7 @@ module Language.Marlowe.Runtime.Web.Server.REST.ApiError where
 
 import Control.Monad.Except (MonadError (throwError))
 import Data.Aeson (ToJSON (toJSON), Value (Null), encode, object, (.=))
+import Data.Kind (Type)
 import Data.Maybe (fromMaybe)
 import GHC.Generics (C1, Constructor (..), D1, Generic (..), M1 (..), type (:+:) (..))
 import Language.Marlowe.Runtime.Transaction.Api (
@@ -187,7 +188,7 @@ apiError' err f = let statusCode = f err in apiError err statusCode
 constructorToString :: (HasConstructor (Rep a)) => (Generic a) => a -> String
 constructorToString = constructorName . from
 
-class HasConstructor (f :: * -> *) where
+class HasConstructor (f :: Type -> Type) where
   constructorName :: f x -> String
 
 instance (HasConstructor f) => HasConstructor (D1 c f) where
@@ -198,4 +199,4 @@ instance (HasConstructor x, HasConstructor y) => HasConstructor (x :+: y) where
   constructorName (R1 r) = constructorName r
 
 instance (Constructor c) => HasConstructor (C1 c f) where
-  constructorName x = conName x
+  constructorName = conName

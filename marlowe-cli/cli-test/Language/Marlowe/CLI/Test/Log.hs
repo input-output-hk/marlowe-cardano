@@ -49,6 +49,7 @@ import Language.Marlowe.CLI.Test.InterpreterError (
 import Language.Marlowe.CLI.Test.Log.Label (Label (..))
 import Language.Marlowe.CLI.Types (QueryExecutionContext)
 import System.IO (hPutStrLn)
+import Cardano.Api (File(..))
 
 printLabeledMsg :: (Label l) => l -> String -> String
 printLabeledMsg l msg = do
@@ -156,7 +157,7 @@ logTxBody l msg txBody jsonRewrite = do
           , ("resourceUsage", A.toJSON resourceUsage)
           ]
     liftIO $ writeFile jsonFile txJson
-    liftIO (C.writeFileTextEnvelope envelopeFile mempty txBody) >>= \case
+    liftIO (C.writeFileTextEnvelope (File envelopeFile) mempty txBody) >>= \case
       Left err -> throwLabeledError l $ TestExecutionFailed (show err) []
       Right () -> pure ()
     logStoreMsgWith l msg info

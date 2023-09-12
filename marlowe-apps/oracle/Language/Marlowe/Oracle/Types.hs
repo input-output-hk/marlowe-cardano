@@ -9,7 +9,7 @@ module Language.Marlowe.Oracle.Types (
 
 import Data.Aeson (ToJSON (..), object, (.=))
 import Language.Marlowe.Core.V1.Semantics.Types (Bound, ChoiceName, Contract)
-import Plutus.V2.Ledger.Api (BuiltinByteString, fromBuiltin)
+import PlutusLedgerApi.V2 (BuiltinByteString, fromBuiltin)
 
 import qualified Data.ByteString.Base16.Aeson as Base16.Aeson (byteStringToJSON)
 import Data.ByteString.Char8 as BS8 (unpack)

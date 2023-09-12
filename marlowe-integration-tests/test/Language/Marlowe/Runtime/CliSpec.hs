@@ -6,15 +6,14 @@ module Language.Marlowe.Runtime.CliSpec where
 
 import Cardano.Api (
   AsType (..),
-  BabbageEra,
-  CardanoEra (BabbageEra),
+  File (..),
+  InAnyShelleyBasedEra (..),
   TxBody,
   deserialiseFromCBOR,
   readFileTextEnvelope,
   serialiseToCBOR,
+  shelleyBasedToCardanoEra,
  )
-import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
-import qualified Cardano.Api.Shelley
 import qualified Control.Monad.Reader as Reader
 import qualified Data.Aeson as Aeson
 import Data.Foldable (for_)
@@ -33,6 +32,10 @@ import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Object.Archive (packArchive)
 import Language.Marlowe.Object.Types (LabelledObject (LabelledObject), ObjectType (ContractType), fromCoreContract)
 import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType)
+import Language.Marlowe.Runtime.Cardano.Feature (
+  ShelleyFeature (shelleyBasedEraOfFeature),
+  withShelleyBasedEra,
+ )
 import Language.Marlowe.Runtime.ChainSync.Api (renderTxOutRef)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as ChainSync.Api
 import Language.Marlowe.Runtime.Client (runMarloweTxClient)
@@ -63,7 +66,7 @@ import Language.Marlowe.Runtime.Transaction.Api (
 import qualified Language.Marlowe.Runtime.Transaction.Api as Runtime.Transaction.Api
 import Language.Marlowe.Util (ada)
 import qualified Network.Protocol.Job.Client as JobClient
-import qualified Plutus.V2.Ledger.Api
+import qualified PlutusLedgerApi.V2
 import Test.Hspec (
   Spec,
   describe,
@@ -117,7 +120,7 @@ toCliArgs = \case
       <> do address <- Set.toList extraAddresses; ["--address", serializeAddress address]
       <> ["--min-utxo", show minUTXO]
   ApplyInputs MarloweV1 WalletAddresses{changeAddress, extraAddresses} contractId _metadata _ _ inputs ->
-    let tokenNotAda :: V1.Token -> Maybe (Plutus.V2.Ledger.Api.CurrencySymbol, Plutus.V2.Ledger.Api.TokenName)
+    let tokenNotAda :: V1.Token -> Maybe (PlutusLedgerApi.V2.CurrencySymbol, PlutusLedgerApi.V2.TokenName)
         tokenNotAda = \case V1.Token "" "" -> Nothing; V1.Token a b -> Just (a, b)
      in case inputs of
           [V1.NormalInput (V1.IDeposit toParty fromParty (tokenNotAda -> Nothing) quantity)] ->
@@ -151,35 +154,24 @@ toCliArgs = \case
     removeQuotes :: String -> String
     removeQuotes = init . tail
 
-marloweRuntimeJobClient :: MarloweTxCommand Void err result -> Integration (TxBody BabbageEra, result)
+marloweRuntimeJobClient :: MarloweTxCommand Void err result -> Integration result
 marloweRuntimeJobClient = \case
   cmd@(Create _ MarloweV1 _ _ _ _ _) ->
     runMarloweTxClient (JobClient.liftCommand cmd) >>= \case
       Left err -> error ("Some JobClient create error: " <> show err)
-      Right
-        result@( Runtime.Transaction.Api.ContractCreated
-                  ReferenceTxInsScriptsInlineDatumsInBabbageEra
-                  Runtime.Transaction.Api.ContractCreatedInEra{txBody}
-                ) -> pure (txBody, result)
+      Right result -> pure result
   cmd@(ApplyInputs MarloweV1 _ _ _ _ _ _) ->
     runMarloweTxClient (JobClient.liftCommand cmd) >>= \case
       Left err -> error ("Some JobClient input error: " <> show err)
-      Right
-        result@( Runtime.Transaction.Api.InputsApplied
-                  ReferenceTxInsScriptsInlineDatumsInBabbageEra
-                  Runtime.Transaction.Api.InputsAppliedInEra{txBody}
-                ) -> pure (txBody, result)
+      Right result -> pure result
   cmd@(Withdraw MarloweV1 _ _) ->
     runMarloweTxClient (JobClient.liftCommand cmd) >>= \case
       Left err -> error ("Some JobClient withdraw error: " <> show err)
-      Right
-        result@( Runtime.Transaction.Api.WithdrawTx
-                  ReferenceTxInsScriptsInlineDatumsInBabbageEra
-                  Runtime.Transaction.Api.WithdrawTxInEra{txBody}
-                ) -> pure (txBody, result)
+      Right result -> pure result
 
-expectSameResultFromCLIAndJobClient :: String -> [String] -> MarloweTxCommand Void err result -> Integration ()
-expectSameResultFromCLIAndJobClient outputFile extraCliArgs command = do
+expectSameResultFromCLIAndJobClient
+  :: String -> [String] -> (result -> InAnyShelleyBasedEra TxBody) -> MarloweTxCommand Void err result -> Integration ()
+expectSameResultFromCLIAndJobClient outputFile extraCliArgs extractTxBody command = do
   workspace <- Reader.asks $ workspace . testnet
 
   let txBodyEnvelopeFilePath :: FilePath
@@ -190,42 +182,26 @@ expectSameResultFromCLIAndJobClient outputFile extraCliArgs command = do
         Runtime.Integration.Common.execMarlowe $
           toCliArgs command <> extraCliArgs <> ["--manual-sign", txBodyEnvelopeFilePath]
 
-      jobClientEffect :: Integration (TxBody BabbageEra)
-      jobClientEffect =
-        either (error . show) id . deserialiseFromCBOR (AsTxBody AsBabbageEra) . serialiseToCBOR . fst
-          <$> marloweRuntimeJobClient command
+      jobClientEffect :: Integration (InAnyShelleyBasedEra TxBody)
+      jobClientEffect = do
+        InAnyShelleyBasedEra era txBody <- extractTxBody <$> marloweRuntimeJobClient command
+        either (fail . show) (pure . InAnyShelleyBasedEra era)
+          . deserialiseFromCBOR (AsTxBody $ cardanoEraToAsType $ shelleyBasedToCardanoEra era)
+          . serialiseToCBOR
+          $ txBody
 
-  (_, expected) <- concurrently cliEffect jobClientEffect
+  (_, InAnyShelleyBasedEra era expected) <- concurrently cliEffect jobClientEffect
 
   (either (error . show) id -> actual) <-
-    liftIO $ readFileTextEnvelope (AsTxBody (cardanoEraToAsType BabbageEra)) txBodyEnvelopeFilePath
+    liftIO $
+      readFileTextEnvelope (AsTxBody (cardanoEraToAsType $ shelleyBasedToCardanoEra era)) $
+        File txBodyEnvelopeFilePath
 
   liftIO do
-    let Cardano.Api.Shelley.ShelleyTxBody
-          actualEra
-          -- FIXME compare all fields except _vldt in _actualShelleyLedgerBabbageTxBody with fields in _expectedShelleyLedgerBabbageTxBody
-          _actualShelleyLedgerBabbageTxBody -- Cardano.Ledger.Babbage.TxBody.TxBody (Cardano.Ledger.Babbage.BabbageEra Cardano.Ledger.Crypto.StandardCrypto)
-          actualLedgerScripts
-          actualTxBodyScriptData
-          actualAuxiliaryData
-          actualTxScriptValidity = actual
+    actual `shouldBe` expected
 
-        Cardano.Api.Shelley.ShelleyTxBody
-          expectedEra
-          _expectedShelleyLedgerBabbageTxBody
-          expectedLedgerScripts
-          expectedTxBodyScriptData
-          expectedAuxiliaryData
-          expectedTxScriptValidity = expected
-
-    actualEra `shouldBe` expectedEra
-    actualLedgerScripts `shouldBe` expectedLedgerScripts
-    actualTxBodyScriptData `shouldBe` expectedTxBodyScriptData
-    actualAuxiliaryData `shouldBe` expectedAuxiliaryData
-    actualTxScriptValidity `shouldBe` expectedTxScriptValidity
-
-toPosixTime :: Time.UTCTime -> Plutus.V2.Ledger.Api.POSIXTime
-toPosixTime t = Plutus.V2.Ledger.Api.POSIXTime $ floor $ 1000 * Time.nominalDiffTimeToSeconds (POSIX.utcTimeToPOSIXSeconds t)
+toPosixTime :: Time.UTCTime -> PlutusLedgerApi.V2.POSIXTime
+toPosixTime t = PlutusLedgerApi.V2.POSIXTime $ floor $ 1000 * Time.nominalDiffTimeToSeconds (POSIX.utcTimeToPOSIXSeconds t)
 
 standardMetadata :: Map MarloweMetadataTag (Maybe ChainSync.Api.Metadata) -> MarloweTransactionMetadata
 standardMetadata tags =
@@ -281,7 +257,7 @@ createSpec = describe "create" $
             (ChainSync.Api.Lovelace 2_000_000)
             (Left contract)
 
-    expectSameResultFromCLIAndJobClient "create-tx-body.json" extraCliArgs creationCommand
+    expectSameResultFromCLIAndJobClient "create-tx-body.json" extraCliArgs extractCreateTxBody creationCommand
 
 depositSpec :: Hspec.SpecWith CLISpecTestData
 depositSpec = describe "deposit" $
@@ -301,9 +277,7 @@ depositSpec = describe "deposit" $
         tags :: Map MarloweMetadataTag (Maybe ChainSync.Api.Metadata)
         tags = Map.empty
 
-    Runtime.Transaction.Api.ContractCreated
-      ReferenceTxInsScriptsInlineDatumsInBabbageEra
-      Runtime.Transaction.Api.ContractCreatedInEra{contractId, txBody} <-
+    Runtime.Transaction.Api.ContractCreated era Runtime.Transaction.Api.ContractCreatedInEra{contractId, txBody} <-
       Runtime.Integration.Common.expectRight "failed to create deposit contract"
         =<< Runtime.Client.createContract
           Nothing
@@ -317,7 +291,7 @@ depositSpec = describe "deposit" $
           2_000_000
           (Left contract)
 
-    _ <- Runtime.Integration.Common.submit partyAWallet txBody
+    _ <- Runtime.Integration.Common.submit partyAWallet era txBody
 
     let Wallet{addresses} = partyAWallet
 
@@ -338,7 +312,7 @@ depositSpec = describe "deposit" $
             Nothing
             [V1.NormalInput $ V1.IDeposit partyA partyA ada 100_000_000]
 
-    expectSameResultFromCLIAndJobClient "deposit-tx-body.json" extraCliArgs command
+    expectSameResultFromCLIAndJobClient "deposit-tx-body.json" extraCliArgs extractApplyTxBody command
 
 chooseSpec :: Hspec.SpecWith CLISpecTestData
 chooseSpec = describe "choose" $
@@ -358,9 +332,7 @@ chooseSpec = describe "choose" $
         tags :: Map MarloweMetadataTag (Maybe ChainSync.Api.Metadata)
         tags = Map.empty
 
-    Runtime.Transaction.Api.ContractCreated
-      ReferenceTxInsScriptsInlineDatumsInBabbageEra
-      Runtime.Transaction.Api.ContractCreatedInEra{contractId, txBody} <-
+    Runtime.Transaction.Api.ContractCreated era Runtime.Transaction.Api.ContractCreatedInEra{contractId, txBody} <-
       Runtime.Integration.Common.expectRight "failed to create choose contract"
         =<< Runtime.Client.createContract
           Nothing
@@ -374,7 +346,7 @@ chooseSpec = describe "choose" $
           2_000_000
           (Left contract)
 
-    _ <- Runtime.Integration.Common.submit partyAWallet txBody
+    _ <- Runtime.Integration.Common.submit partyAWallet era txBody
 
     let Wallet{addresses} = partyAWallet
 
@@ -395,7 +367,7 @@ chooseSpec = describe "choose" $
             Nothing
             [V1.NormalInput $ V1.IChoice (V1.ChoiceId "my choice" partyA) 0]
 
-    expectSameResultFromCLIAndJobClient "choose-tx-body.json" extraCliArgs command
+    expectSameResultFromCLIAndJobClient "choose-tx-body.json" extraCliArgs extractApplyTxBody command
 
 notifySpec :: Hspec.SpecWith CLISpecTestData
 notifySpec = describe "notify" $
@@ -412,9 +384,7 @@ notifySpec = describe "notify" $
         tags :: Map MarloweMetadataTag (Maybe ChainSync.Api.Metadata)
         tags = Map.empty
 
-    Runtime.Transaction.Api.ContractCreated
-      ReferenceTxInsScriptsInlineDatumsInBabbageEra
-      Runtime.Transaction.Api.ContractCreatedInEra{contractId, txBody} <-
+    Runtime.Transaction.Api.ContractCreated era Runtime.Transaction.Api.ContractCreatedInEra{contractId, txBody} <-
       Runtime.Integration.Common.expectRight "failed to create notify contract"
         =<< Runtime.Client.createContract
           Nothing
@@ -428,7 +398,7 @@ notifySpec = describe "notify" $
           2_000_000
           (Left contract)
 
-    _ <- Runtime.Integration.Common.submit partyAWallet txBody
+    _ <- Runtime.Integration.Common.submit partyAWallet era txBody
 
     let Wallet{addresses} = partyAWallet
 
@@ -449,7 +419,7 @@ notifySpec = describe "notify" $
             Nothing
             [V1.NormalInput V1.INotify]
 
-    expectSameResultFromCLIAndJobClient "notify-tx-body.json" extraCliArgs command
+    expectSameResultFromCLIAndJobClient "notify-tx-body.json" extraCliArgs extractApplyTxBody command
 
 applySpec :: Hspec.SpecWith CLISpecTestData
 applySpec = describe "apply" $
@@ -489,9 +459,7 @@ applySpec = describe "apply" $
           , V1.NormalInput V1.INotify
           ]
 
-    Runtime.Transaction.Api.ContractCreated
-      ReferenceTxInsScriptsInlineDatumsInBabbageEra
-      Runtime.Transaction.Api.ContractCreatedInEra{contractId, txBody} <-
+    Runtime.Transaction.Api.ContractCreated era Runtime.Transaction.Api.ContractCreatedInEra{contractId, txBody} <-
       Runtime.Integration.Common.expectRight "failed to create deposit-choose-notify contract"
         =<< Runtime.Client.createContract
           Nothing
@@ -505,7 +473,7 @@ applySpec = describe "apply" $
           2_000_000
           (Left contract)
 
-    _ <- Runtime.Integration.Common.submit partyAWallet txBody
+    _ <- Runtime.Integration.Common.submit partyAWallet era txBody
 
     inputsFilePath <- do
       workspace <- Reader.asks $ workspace . testnet
@@ -530,7 +498,7 @@ applySpec = describe "apply" $
             Nothing
             inputs
 
-    expectSameResultFromCLIAndJobClient "deposit-choose-notify-tx-body.json" extraCliArgs command
+    expectSameResultFromCLIAndJobClient "deposit-choose-notify-tx-body.json" extraCliArgs extractApplyTxBody command
 
 withdrawSpec :: Hspec.SpecWith CLISpecTestData
 withdrawSpec = describe "withdraw" $
@@ -550,9 +518,7 @@ withdrawSpec = describe "withdraw" $
         tags :: Map MarloweMetadataTag (Maybe ChainSync.Api.Metadata)
         tags = Map.empty
 
-    Runtime.Transaction.Api.ContractCreated
-      ReferenceTxInsScriptsInlineDatumsInBabbageEra
-      Runtime.Transaction.Api.ContractCreatedInEra{contractId, txBody} <-
+    Runtime.Transaction.Api.ContractCreated era0 Runtime.Transaction.Api.ContractCreatedInEra{contractId, txBody} <-
       Runtime.Integration.Common.expectRight "failed to create withdraw contract"
         =<< Runtime.Client.createContract
           Nothing
@@ -566,7 +532,7 @@ withdrawSpec = describe "withdraw" $
           2_000_000
           (Left contract)
 
-    _ <- Runtime.Integration.Common.submit partyAWallet txBody
+    _ <- Runtime.Integration.Common.submit partyAWallet era0 txBody
 
     let Wallet{addresses} = partyAWallet
 
@@ -585,10 +551,10 @@ withdrawSpec = describe "withdraw" $
             Nothing
             [V1.NormalInput $ V1.IDeposit partyA partyA ada 100_000_000]
 
-    (depositTxBody, InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra InputsAppliedInEra{output}) <-
+    InputsApplied era1 InputsAppliedInEra{output, txBody = depositTxBody} <-
       marloweRuntimeJobClient depositCommand
 
-    _ <- Runtime.Integration.Common.submit partyAWallet depositTxBody
+    _ <- Runtime.Integration.Common.submit partyAWallet era1 depositTxBody
 
     let extraCliArgs = []
 
@@ -604,7 +570,7 @@ withdrawSpec = describe "withdraw" $
             $ Map.keysSet
             $ payouts output
 
-    expectSameResultFromCLIAndJobClient "withdraw-tx-body.json" extraCliArgs command
+    expectSameResultFromCLIAndJobClient "withdraw-tx-body.json" extraCliArgs extractWithdrawTxBody command
 
 bugPLT6773 :: Hspec.SpecWith CLISpecTestData
 bugPLT6773 = do
@@ -709,3 +675,21 @@ bugPLT6773 = do
           loadStderr' `shouldBe` ""
           loadCode' `shouldBe` ExitSuccess
           loadStdout' `shouldBe` loadStdout
+
+extractCreateTxBody :: Runtime.Transaction.Api.ContractCreated 'V1 -> InAnyShelleyBasedEra TxBody
+extractCreateTxBody = \case
+  Runtime.Transaction.Api.ContractCreated era Runtime.Transaction.Api.ContractCreatedInEra{..} ->
+    withShelleyBasedEra era $
+      InAnyShelleyBasedEra (shelleyBasedEraOfFeature era) txBody
+
+extractApplyTxBody :: InputsApplied 'V1 -> InAnyShelleyBasedEra TxBody
+extractApplyTxBody = \case
+  Runtime.Transaction.Api.InputsApplied era Runtime.Transaction.Api.InputsAppliedInEra{..} ->
+    withShelleyBasedEra era $
+      InAnyShelleyBasedEra (shelleyBasedEraOfFeature era) txBody
+
+extractWithdrawTxBody :: WithdrawTx 'V1 -> InAnyShelleyBasedEra TxBody
+extractWithdrawTxBody = \case
+  Runtime.Transaction.Api.WithdrawTx era Runtime.Transaction.Api.WithdrawTxInEra{..} ->
+    withShelleyBasedEra era $
+      InAnyShelleyBasedEra (shelleyBasedEraOfFeature era) txBody

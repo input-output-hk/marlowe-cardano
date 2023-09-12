@@ -13,15 +13,15 @@
 module Language.Marlowe.Runtime.Web.Server.DTO where
 
 import Cardano.Api (
-  AsType (AsStakeAddress, AsTx, AsTxBody),
+  AsType (..),
   HasTextEnvelope,
   HasTypeProxy,
-  IsCardanoEra (cardanoEra),
-  IsShelleyBasedEra (shelleyBasedEra),
+  IsCardanoEra (..),
+  IsShelleyBasedEra (..),
   NetworkId (..),
   NetworkMagic (..),
   SerialiseAsCBOR,
-  ShelleyBasedEra (ShelleyBasedEraAlonzo, ShelleyBasedEraBabbage),
+  ShelleyBasedEra (..),
   TextEnvelope (..),
   TextEnvelopeType (..),
   Tx,
@@ -36,18 +36,14 @@ import Cardano.Api (
   serialiseToTextEnvelope,
  )
 import Cardano.Api.Byron (HasTextEnvelope (textEnvelopeType))
-import Cardano.Api.SerialiseTextEnvelope (TextEnvelopeDescr (..))
 import Cardano.Api.Shelley (
   ReferenceTxInsScriptsInlineDatumsSupportedInEra (..),
   ShelleyLedgerEra,
   StakeAddress (..),
   fromShelleyStakeCredential,
  )
-import qualified Cardano.Binary as Binary
 import qualified Cardano.Ledger.Alonzo.Scripts as Ledger.Alonzo.Scripts
-import Cardano.Ledger.Alonzo.TxWitness (TxWitness)
 import qualified Cardano.Ledger.Core as Ledger.Core
-import Cardano.Ledger.Era (ValidateScript)
 import Control.Arrow (Arrow (..), second)
 import Control.Error.Util (hush)
 import Control.Monad ((<=<))
@@ -56,7 +52,6 @@ import Data.Aeson (Value (..))
 import Data.Bifunctor (bimap)
 import qualified Data.ByteString.Lazy as BSL
 import Data.Coerce (coerce)
-import Data.Data (Typeable)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map (Map)
 import qualified Data.Map as M
@@ -87,8 +82,12 @@ import Language.Marlowe.Protocol.Query.Types (
   Withdrawal (..),
  )
 
+import Cardano.Ledger.Alonzo.Core (TxWits)
+import Cardano.Ledger.Binary (Annotator, DecCBOR (..), Decoder, decodeFullAnnotator, serialize')
+import Cardano.Ledger.Core (EraTxWits)
 import Data.Bitraversable (Bitraversable (..))
 import Data.Function (on)
+import Data.Kind (Type)
 import Data.List (groupBy)
 import Data.Set (Set)
 import qualified Language.Marlowe.Protocol.Query.Types as Query
@@ -117,11 +116,12 @@ import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx (..), TempTxStatus (
 import Network.HTTP.Media (MediaType, parseAccept)
 import Servant.Pagination (IsRangeType)
 import qualified Servant.Pagination as Pagination
+import Unsafe.Coerce (unsafeCoerce)
 
 -- | A class that states a type has a DTO representation.
 class HasDTO a where
   -- | The type used in the API to represent this type.
-  type DTO a :: *
+  type DTO a :: Type
 
 -- | States that a type can be encoded as a DTO.
 class (HasDTO a) => ToDTO a where
@@ -589,6 +589,7 @@ instance ToDTOWithTxStatus (Tx.ContractCreated v) where
       , txBody = case status of
           Unsigned -> Just case era of
             ReferenceTxInsScriptsInlineDatumsInBabbageEra -> toDTO txBody
+            ReferenceTxInsScriptsInlineDatumsInConwayEra -> toDTO txBody
           Submitted -> Nothing
       , unclaimedPayouts = []
       }
@@ -625,6 +626,7 @@ instance ToDTOWithTxStatus (Tx.InputsApplied v) where
       , txBody = case status of
           Unsigned -> Just case era of
             ReferenceTxInsScriptsInlineDatumsInBabbageEra -> toDTO txBody
+            ReferenceTxInsScriptsInlineDatumsInConwayEra -> toDTO txBody
           Submitted -> Nothing
       }
 
@@ -690,7 +692,7 @@ instance (IsCardanoEra era) => FromDTO (Tx era) where
     where
       asType = AsTx $ cardanoEraToAsType $ cardanoEra @era
 
-newtype ShelleyTxWitness era = ShelleyTxWitness (TxWitness (ShelleyLedgerEra era))
+newtype ShelleyTxWitness era = ShelleyTxWitness (TxWits (ShelleyLedgerEra era))
 
 instance (HasTypeProxy era) => HasTypeProxy (ShelleyTxWitness era) where
   data AsType (ShelleyTxWitness era) = AsShelleyTxWitness (AsType era)
@@ -698,27 +700,26 @@ instance (HasTypeProxy era) => HasTypeProxy (ShelleyTxWitness era) where
 
 instance
   ( HasTypeProxy era
-  , Typeable (ShelleyLedgerEra era)
-  , ValidateScript (ShelleyLedgerEra era)
-  , Ledger.Core.Script (ShelleyLedgerEra era) ~ Ledger.Alonzo.Scripts.Script (ShelleyLedgerEra era)
+  , EraTxWits (ShelleyLedgerEra era)
+  , Ledger.Core.Script (ShelleyLedgerEra era) ~ Ledger.Alonzo.Scripts.AlonzoScript (ShelleyLedgerEra era)
   )
   => SerialiseAsCBOR (ShelleyTxWitness era)
   where
-  serialiseToCBOR (ShelleyTxWitness wit) = Binary.serialize' wit
+  serialiseToCBOR (ShelleyTxWitness wit) = serialize' maxBound wit
 
   deserialiseFromCBOR _ bs = do
     let lbs = BSL.fromStrict bs
 
-        annotator :: forall s. Binary.Decoder s (Binary.Annotator (TxWitness (ShelleyLedgerEra era)))
-        annotator = Binary.fromCBOR
+        annotator :: forall s. Decoder s (Annotator (TxWits (ShelleyLedgerEra era)))
+        annotator = decCBOR
 
-    (w :: TxWitness (ShelleyLedgerEra era)) <- Binary.decodeAnnotator "Shelley Tx Witness" annotator lbs
+    (w :: TxWits (ShelleyLedgerEra era)) <- decodeFullAnnotator maxBound "Shelley Tx Witness" annotator lbs
     pure $ ShelleyTxWitness w
 
 instance
   ( IsShelleyBasedEra era
-  , ValidateScript (ShelleyLedgerEra era)
-  , Ledger.Core.Script (ShelleyLedgerEra era) ~ Ledger.Alonzo.Scripts.Script (ShelleyLedgerEra era)
+  , EraTxWits (ShelleyLedgerEra era)
+  , Ledger.Core.Script (ShelleyLedgerEra era) ~ Ledger.Alonzo.Scripts.AlonzoScript (ShelleyLedgerEra era)
   )
   => HasTextEnvelope (ShelleyTxWitness era)
   where
@@ -726,14 +727,15 @@ instance
     "ShelleyTxWitness " <> case shelleyBasedEra :: ShelleyBasedEra era of
       ShelleyBasedEraAlonzo -> "AlonzoEra"
       ShelleyBasedEraBabbage -> "BabbageEra"
+      ShelleyBasedEraConway -> "ConwayEra"
 
 instance HasDTO (ShelleyTxWitness era) where
   type DTO (ShelleyTxWitness era) = Web.TextEnvelope
 
 instance
   ( IsShelleyBasedEra era
-  , ValidateScript (ShelleyLedgerEra era)
-  , Ledger.Core.Script (ShelleyLedgerEra era) ~ Ledger.Alonzo.Scripts.Script (ShelleyLedgerEra era)
+  , EraTxWits (ShelleyLedgerEra era)
+  , Ledger.Core.Script (ShelleyLedgerEra era) ~ Ledger.Alonzo.Scripts.AlonzoScript (ShelleyLedgerEra era)
   )
   => ToDTO (ShelleyTxWitness era)
   where
@@ -741,9 +743,8 @@ instance
 
 instance
   ( IsShelleyBasedEra era
-  , ValidateScript (ShelleyLedgerEra era)
-  , IsCardanoEra era
-  , Ledger.Core.Script (ShelleyLedgerEra era) ~ Ledger.Alonzo.Scripts.Script (ShelleyLedgerEra era)
+  , EraTxWits (ShelleyLedgerEra era)
+  , Ledger.Core.Script (ShelleyLedgerEra era) ~ Ledger.Alonzo.Scripts.AlonzoScript (ShelleyLedgerEra era)
   )
   => FromDTO (ShelleyTxWitness era)
   where
@@ -759,12 +760,12 @@ instance ToDTO TextEnvelope where
   toDTO
     TextEnvelope
       { teType = TextEnvelopeType teType
-      , teDescription = TextEnvelopeDescr teDescription
+      , teDescription
       , teRawCBOR
       } =
       Web.TextEnvelope
         { teType = T.pack teType
-        , teDescription = T.pack teDescription
+        , teDescription = T.pack $ unsafeCoerce teDescription
         , teCborHex = Web.Base16 teRawCBOR
         }
 
@@ -778,7 +779,7 @@ instance FromDTO TextEnvelope where
       Just
         TextEnvelope
           { teType = TextEnvelopeType $ T.unpack teType
-          , teDescription = TextEnvelopeDescr $ T.unpack teDescription
+          , teDescription = fromString $ T.unpack teDescription
           , teRawCBOR = Web.unBase16 teCborHex
           }
 

@@ -27,6 +27,7 @@ import Data.List (find, sortBy)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes, fromMaybe, listToMaybe, maybeToList)
+import Data.SOP.Counting (NonEmpty (..))
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Time (UTCTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
@@ -117,10 +118,8 @@ import Ouroboros.Consensus.HardFork.History (
   slotToWallclock,
   wallclockToSlot,
  )
-import Ouroboros.Consensus.Util.Counting (NonEmpty (..))
 import qualified Ouroboros.Network.Block as O
-import qualified Plutus.V2.Ledger.Api as P
-import qualified Plutus.V2.Ledger.Api as PV2
+import qualified PlutusLedgerApi.V2 as PV2
 import qualified PlutusTx.AssocMap as AM
 
 maxFees :: Lovelace
@@ -262,7 +261,7 @@ buildCreateConstraintsV1 era walletCtx roles metadata minAda contract = do
         let txOutRef' = toPlutusTxOutRef txOutRef
 
             roleTokens = RoleTokensPolicy.mkRoleTokens (map ((,1) . toPlutusTokenName) . Map.keys $ minting)
-            plutusScript = fromPlutusScript . PV2.getMintingPolicy . RoleTokensPolicy.policy roleTokens $ txOutRef'
+            plutusScript = fromPlutusScript . RoleTokensPolicy.policy roleTokens $ txOutRef'
 
         (script, scriptHash) <- liftMaybe (MintingScriptDecodingFailed plutusScript) do
           script <- toCardanoPlutusScript plutusScript
@@ -271,13 +270,14 @@ buildCreateConstraintsV1 era walletCtx roles metadata minAda contract = do
         let plutusScriptV2InEra :: C.ScriptLanguageInEra C.PlutusScriptV2 era
             plutusScriptV2InEra = case era of
               C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.PlutusScriptV2InBabbage
+              C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.PlutusScriptV2InConway
             witness =
               C.PlutusScriptWitness
                 plutusScriptV2InEra
                 C.PlutusScriptV2
                 (C.PScript script)
                 C.NoScriptDatumForMint
-                (C.fromPlutusData $ PV2.toData RoleTokensPolicy.Mint)
+                (C.unsafeHashableScriptData $ C.fromPlutusData $ PV2.toData RoleTokensPolicy.Mint)
                 (C.ExecutionUnits 0 0)
             policyId = PolicyId . unScriptHash $ scriptHash
 
@@ -387,8 +387,8 @@ buildApplyInputsConstraintsV1 merkleizeInputs systemStart eraHistory marloweOutp
   -- Require signature of an every party which is authorized through an address.
   for_ requiredParties $ traverse_ $ \case
     V1.Address _ address -> case address of
-      P.Address (P.PubKeyCredential (P.PubKeyHash pkh)) _ ->
-        tell $ requiresSignature $ PaymentKeyHash $ P.fromBuiltin pkh
+      PV2.Address (PV2.PubKeyCredential (PV2.PubKeyHash pkh)) _ ->
+        tell $ requiresSignature $ PaymentKeyHash $ PV2.fromBuiltin pkh
       _ -> pure ()
     _ -> pure ()
 
@@ -492,7 +492,7 @@ buildApplyInputsConstraintsV1 merkleizeInputs systemStart eraHistory marloweOutp
     utcToPOSIXTime = PV2.POSIXTime . floor . (1000 *) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds
 
     posixTimeToUTCTime :: PV2.POSIXTime -> UTCTime
-    posixTimeToUTCTime (P.POSIXTime t) = posixSecondsToUTCTime $ secondsToNominalDiffTime $ fromInteger t / 1000
+    posixTimeToUTCTime (PV2.POSIXTime t) = posixSecondsToUTCTime $ secondsToNominalDiffTime $ fromInteger t / 1000
 
     nextMarloweTimeoutAfter :: UTCTime -> V1.Contract -> Maybe UTCTime
     nextMarloweTimeoutAfter limit (V1.When _ timeout c)

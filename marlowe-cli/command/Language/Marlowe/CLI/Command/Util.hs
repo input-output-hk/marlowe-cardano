@@ -33,7 +33,7 @@ import Cardano.Api (
   SlotNo,
   TxMetadataInEra (TxMetadataNone),
   TxMintValue (TxMintNone),
-  lovelaceToValue,
+  lovelaceToValue, File (..),
  )
 import Control.Monad.Except (MonadError, MonadIO, liftIO)
 import Language.Marlowe.CLI.Codec (decodeBech32, encodeBech32)
@@ -61,8 +61,7 @@ import Language.Marlowe.CLI.Types (
   SigningKeyFile,
   TxBodyFile,
  )
-import Plutus.V1.Ledger.Api (TokenName)
-
+import PlutusLedgerApi.V1 (TokenName)
 import Control.Applicative ((<|>))
 import Control.Category ((>>>))
 import Control.Monad.Reader (MonadReader)
@@ -174,7 +173,7 @@ data UtilCommand era
       , content :: String
       -- ^ The base16-encoded bytes to be encoded in Bech32.
       }
-  | -- | Extract slot configuation.
+  | -- | Extract slot configuration.
     Slotting
       { network :: NetworkId
       -- ^ The network ID, if any.
@@ -230,9 +229,9 @@ runUtilCommand command =
     let network' = network command
         connection =
           LocalNodeConnectInfo
-            { localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
+            { localConsensusModeParams = CardanoModeParams $ EpochSlots 21_600
             , localNodeNetworkId = network'
-            , localNodeSocketPath = socketPath command
+            , localNodeSocketPath = File $ socketPath command
             }
         printTxId = liftIO . putStrLn . ("TxId " <>) . show
     case command of
@@ -418,7 +417,7 @@ mintOptions network socket =
     <*> (O.optional . O.option parseSlotNo)
       ( O.long "expires"
           <> O.metavar "SLOT_NO"
-          <> O.help "The slot number after which miniting is no longer possible."
+          <> O.help "The slot number after which minting is no longer possible."
       )
     <*> txBodyFileOpt
     <*> (O.optional . O.option O.auto)

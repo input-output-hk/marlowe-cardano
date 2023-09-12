@@ -65,6 +65,9 @@ handle config request =
             Sign{reqTxEra = ReferenceTxInsScriptsInlineDatumsInBabbageEra, ..} ->
               pure . Right . uncurry (Tx ReferenceTxInsScriptsInlineDatumsInBabbageEra) $
                 sign reqTxBody reqPaymentKeys reqPaymentExtendedKeys
+            Sign{reqTxEra = ReferenceTxInsScriptsInlineDatumsInConwayEra, ..} ->
+              pure . Right . uncurry (Tx ReferenceTxInsScriptsInlineDatumsInConwayEra) $
+                sign reqTxBody reqPaymentKeys reqPaymentExtendedKeys
             Submit{..} -> second TxId <$> submit reqPollingSeconds reqTxEra reqTx
     {-
               Wait{..} -> second TxInfo <$> waitForTx reqPollingSeconds reqTxId

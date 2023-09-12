@@ -24,6 +24,7 @@ module Language.Marlowe.CLI.Test (
 import Cardano.Api (
   ConsensusModeParams (CardanoModeParams),
   EpochSlots (..),
+  File (..),
   IsShelleyBasedEra,
   Key (getVerificationKey, verificationKeyHash),
   LocalNodeConnectInfo (..),
@@ -197,7 +198,7 @@ import Network.Protocol.Handshake.Types (Handshake)
 import Observe.Event.Render.JSON (defaultRenderSelectorJSON)
 import Observe.Event.Render.JSON.Handle (simpleJsonStderrBackend)
 import Plutus.V1.Ledger.Ada qualified as PV
-import Plutus.V1.Ledger.Value qualified as PV
+import PlutusLedgerApi.V1.Value qualified as PV
 import System.Exit (exitFailure, exitSuccess)
 import System.IO (hPrint, hPutStrLn)
 import System.IO.Temp (createTempDirectory)
@@ -227,9 +228,9 @@ runTestSuite era TestSuite{..} = do
   let printStats = PrintStats True
       connection =
         LocalNodeConnectInfo
-          { localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
+          { localConsensusModeParams = CardanoModeParams $ EpochSlots 21_600
           , localNodeNetworkId = tsNetwork
-          , localNodeSocketPath = tsSocketPath
+          , localNodeSocketPath = File tsSocketPath
           }
       resource = (tsFaucetAddress, faucetSigningKey)
 

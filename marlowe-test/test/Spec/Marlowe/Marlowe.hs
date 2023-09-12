@@ -21,6 +21,9 @@ module Spec.Marlowe.Marlowe (
   tests,
 ) where
 
+import Cardano.Api (SerialiseAsRawBytes (deserialiseFromRawBytes))
+import qualified Cardano.Api as C
+import Cardano.Api.Shelley (StakeCredential (..))
 import Control.Exception (SomeException, catch)
 import Control.Monad (when)
 import Data.Aeson (decode, eitherDecode, encode)
@@ -29,7 +32,10 @@ import Data.Bifunctor (first)
 import Data.Either (isRight)
 import Data.Maybe (isJust, isNothing)
 import Data.SBV ()
+import qualified Data.Set as Set
 import Data.String (IsString (fromString))
+import qualified Data.Text as T
+import qualified Data.Text.IO as T
 import Data.Text.Lazy (toStrict)
 import GHC.IO (unsafePerformIO)
 import Language.Haskell.Interpreter (
@@ -43,6 +49,7 @@ import Language.Haskell.Interpreter (
   set,
   setImports,
  )
+import qualified Language.Marlowe as M
 import Language.Marlowe.Analysis.FSSemantics (warningsTrace)
 import Language.Marlowe.Core.V1.Semantics (
   TransactionInput (TransactionInput, txInputs, txInterval),
@@ -74,7 +81,12 @@ import Language.Marlowe.Core.V1.Semantics.Types.Address (
   serialiseAddressBech32,
  )
 import Language.Marlowe.Util (ada, extractNonMerkleizedContractRoles)
-import Plutus.V2.Ledger.Api (POSIXTime (POSIXTime))
+import qualified PlutusLedgerApi.V1 as PV1
+import qualified PlutusLedgerApi.V1.Credential as Credential
+import PlutusLedgerApi.V2 (POSIXTime (POSIXTime))
+import qualified PlutusTx.AssocMap as AssocMap
+import qualified PlutusTx.Prelude as P
+import qualified PlutusTx.Ratio as P
 import Spec.Marlowe.Common (alicePk, amount, contractGen, pangramContract, shrinkContract, valueGen)
 import Spec.Marlowe.Semantics.Arbitrary ()
 import System.Timeout (timeout)
@@ -94,19 +106,6 @@ import Test.QuickCheck.Instances.ByteString ()
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (assertBool, assertFailure, testCase, (@=?))
 import Test.Tasty.QuickCheck (Property, testProperty)
-
-import Cardano.Api (SerialiseAsRawBytes (deserialiseFromRawBytes))
-import qualified Cardano.Api as C
-import Cardano.Api.Shelley (StakeCredential (..))
-import qualified Data.Set as Set
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
-import qualified Language.Marlowe as M
-import qualified Plutus.V1.Ledger.Api as PV1
-import qualified Plutus.V1.Ledger.Credential as Credential
-import qualified PlutusTx.AssocMap as AssocMap
-import qualified PlutusTx.Prelude as P
-import qualified PlutusTx.Ratio as P
 
 -- | Set to `True` to print the JSON for the pangram contract.
 _PRINT_PANGRAM_JSON_ :: Bool
@@ -176,7 +175,7 @@ checkEqValue = property $ do
 -- | Test that `NegValue` is its own inverse.
 doubleNegation :: Property
 doubleNegation = property $ do
-  let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
+  let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1_000)) (emptyState (POSIXTime 10))
   forAll valueGen $ \a -> eval (NegValue (NegValue a)) === eval a
 
 -- | Test that `Value` forms an Abelian group.
@@ -187,7 +186,7 @@ valuesFormAbelianGroup = property $ do
         b <- valueGen
         c <- valueGen
         return (a, b, c)
-  let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
+  let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1_000)) (emptyState (POSIXTime 10))
   forAll gen $ \(a, b, c) ->
     -- associativity of addition
     eval (AddValue (AddValue a b) c)
@@ -195,24 +194,24 @@ valuesFormAbelianGroup = property $ do
       .&&.
       -- commutativity of addition
       eval (AddValue a b)
-        === eval (AddValue b a)
+      === eval (AddValue b a)
       .&&.
       -- additive identity
       eval (AddValue a (Constant 0))
-        === eval a
+      === eval a
       .&&.
       -- additive inverse
       eval (AddValue a (NegValue a))
-        === 0
+      === 0
       .&&.
       -- subtraction works
       eval (SubValue (AddValue a b) b)
-        === eval a
+      === eval a
 
 -- | Test rounding of `DivValue`.
 divisionRoundingTest :: Property
 divisionRoundingTest = property $ do
-  let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
+  let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1_000)) (emptyState (POSIXTime 10))
   -- test half-even rounding
   let gen = do
         n <- amount
@@ -225,17 +224,17 @@ divisionRoundingTest = property $ do
 -- | Test `DivValue` with zero in numerator or denominator.
 divZeroTest :: Property
 divZeroTest = property $ do
-  let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
+  let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1_000)) (emptyState (POSIXTime 10))
   forAll valueGen $ \a ->
     eval (DivValue (Constant 0) a)
       === 0
       .&&. eval (DivValue a (Constant 0))
-        === 0
+      === 0
 
 -- | Test `MulValue` with a zero numerator.
 mulTest :: Property
 mulTest = property $ do
-  let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
+  let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1_000)) (emptyState (POSIXTime 10))
   forAll valueGen $ \a ->
     eval (MulValue (Constant 0) a) === 0
 
@@ -251,7 +250,7 @@ valueSerialization = property $
 mulAnalysisTest :: IO ()
 mulAnalysisTest = do
   let multiply = foldl (\a _ -> MulValue (UseValue $ ValueId "a") a) (Constant 1) ([1 .. 100] :: [Int])
-      contract = If (multiply `M.ValueGE` Constant 10000) Close (Pay alicePk (Party alicePk) ada (Constant (-100)) Close)
+      contract = If (multiply `M.ValueGE` Constant 10_000) Close (Pay alicePk (Party alicePk) ada (Constant (-100)) Close)
   result <- warningsTrace contract
   --  print result
   assertBool "Analysis ok" $ isRight result
@@ -269,7 +268,7 @@ divAnalysisTest = do
   result' <- warningsTrace (contract 9 2)
   assertBool "Analysis ok" $ isRight result' && either (const False) isJust result'
 
-  let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
+  let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1_000)) (emptyState (POSIXTime 10))
   eval (DivValue (Constant 0) (Constant 2)) @=? 0
   eval (DivValue (Constant 1) (Constant 0)) @=? 0
   eval (DivValue (Constant 5) (Constant 2)) @=? 2
@@ -280,7 +279,7 @@ divAnalysisTest = do
 -- | Golden tests for `DivValue`.
 divTest :: IO ()
 divTest = do
-  let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1000)) (emptyState (POSIXTime 10))
+  let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1_000)) (emptyState (POSIXTime 10))
   eval (DivValue (Constant 0) (Constant 2)) @=? 0
   eval (DivValue (Constant 1) (Constant 0)) @=? 0
   eval (DivValue (Constant 5) (Constant 2)) @=? 2
@@ -422,7 +421,7 @@ noFalsePositivesForContract timeLimit cont =
           )
     )
   where
-    limitTime = maybe (Just <$>) timeout $ (1_000_000 *) <$> timeLimit
+    limitTime = maybe (Just <$>) (timeout . (1_000_000 *)) timeLimit
 
 -- | Test that contract execution does not exhibit false positives for warnings.
 prop_noFalsePositives :: Maybe Int -> Property
@@ -452,13 +451,13 @@ toCardanoPaymentCredential :: Credential.Credential -> Maybe C.PaymentCredential
 toCardanoPaymentCredential (Credential.PubKeyCredential pubKeyHash) = C.PaymentCredentialByKey <$> toCardanoPaymentKeyHash pubKeyHash
 toCardanoPaymentCredential (Credential.ScriptCredential validatorHash) = C.PaymentCredentialByScript <$> toCardanoScriptHash validatorHash
 
-toCardanoScriptHash :: PV1.ValidatorHash -> Maybe C.ScriptHash
-toCardanoScriptHash (PV1.ValidatorHash bs) = deserialiseFromRawBytes C.AsScriptHash $ PV1.fromBuiltin bs
+toCardanoScriptHash :: PV1.ScriptHash -> Maybe C.ScriptHash
+toCardanoScriptHash (PV1.ScriptHash bs) = either (const Nothing) Just $ deserialiseFromRawBytes C.AsScriptHash $ PV1.fromBuiltin bs
 
 toCardanoPaymentKeyHash :: PV1.PubKeyHash -> Maybe (C.Hash C.PaymentKey)
 toCardanoPaymentKeyHash (PV1.PubKeyHash bs) =
   let bsx = PV1.fromBuiltin bs
-   in deserialiseFromRawBytes (C.AsHash C.AsPaymentKey) bsx
+   in either (const Nothing) Just $ deserialiseFromRawBytes (C.AsHash C.AsPaymentKey) bsx
 
 toCardanoStakeAddressReference :: Maybe Credential.StakingCredential -> Maybe C.StakeAddressReference
 toCardanoStakeAddressReference Nothing = pure C.NoStakeAddress
@@ -471,7 +470,7 @@ toCardanoStakeCredential (Credential.PubKeyCredential pubKeyHash) = StakeCredent
 toCardanoStakeCredential (Credential.ScriptCredential validatorHash) = StakeCredentialByScript <$> toCardanoScriptHash validatorHash
 
 toCardanoStakeKeyHash :: PV1.PubKeyHash -> Maybe (C.Hash C.StakeKey)
-toCardanoStakeKeyHash (PV1.PubKeyHash bs) = deserialiseFromRawBytes (C.AsHash C.AsStakeKey) (PV1.fromBuiltin bs)
+toCardanoStakeKeyHash (PV1.PubKeyHash bs) = either (const Nothing) Just $ deserialiseFromRawBytes (C.AsHash C.AsStakeKey) (PV1.fromBuiltin bs)
 
 -- | Serialise an address to bytes and then deserialize.
 addressSerialiseDeserialiseBytes :: Property

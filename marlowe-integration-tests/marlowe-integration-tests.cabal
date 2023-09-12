@@ -1,4 +1,4 @@
-cabal-version: 3.0
+cabal-version: 3.4
 name:          marlowe-integration-tests
 version:       0.1.0.0
 synopsis:      End to end integration tests for the Marlowe Runtime
@@ -113,7 +113,6 @@ executable marlowe-integration-tests
     , network-uri
     , pipes ^>=4.3.16
     , plutus-ledger-api
-    , plutus-tx
     , QuickCheck
     , resourcet
     , servant-client

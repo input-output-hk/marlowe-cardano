@@ -9,13 +9,13 @@ import Cardano.Api (
   serialiseToTextEnvelope,
   signShelleyTransaction,
  )
-import Cardano.Api.SerialiseTextEnvelope (TextEnvelopeDescr (..))
 import Control.Concurrent (threadDelay)
 import Control.Exception (throw)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Aeson (decodeFileStrict)
 import Data.Either (fromRight)
 import Data.Maybe (fromJust)
+import Data.String (IsString (..))
 import qualified Data.Text as T
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.ChainSync.Api (Address (..), fromBech32, toBech32)
@@ -109,7 +109,7 @@ signShelleyTransaction' Web.TextEnvelope{..} wits = do
   let te =
         TextEnvelope
           { teType = TextEnvelopeType (T.unpack teType)
-          , teDescription = TextEnvelopeDescr (T.unpack teDescription)
+          , teDescription = fromString (T.unpack teDescription)
           , teRawCBOR = Web.unBase16 teCborHex
           }
   txBody <- case deserialiseFromTextEnvelope (AsTxBody AsBabbage) te of

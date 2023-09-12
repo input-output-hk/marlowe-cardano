@@ -16,6 +16,8 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE LambdaCase #-}
 
 -- | Run Marlowe contracts.
 module Language.Marlowe.CLI.Run (
@@ -59,7 +61,7 @@ import Cardano.Api (
   LocalNodeConnectInfo (..),
   NetworkId (..),
   NetworkMagic (..),
-  PlutusScriptVersion (PlutusScriptV1, PlutusScriptV2),
+  PlutusScriptVersion (..),
   QueryInShelleyBasedEra (..),
   QueryUTxOFilter (..),
   ScriptDataSupportedInEra (..),
@@ -77,7 +79,7 @@ import Cardano.Api (
   getTxId,
   lovelaceToValue,
   txOutValueToValue,
-  writeFileTextEnvelope,
+  writeFileTextEnvelope, File (..),
  )
 import Cardano.Api qualified as Api (Value)
 import Cardano.Api qualified as C
@@ -87,8 +89,7 @@ import Cardano.Ledger.BaseTypes qualified as LC (Network (..))
 import Control.Monad (forM_, guard, unless, void, when)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
 import Control.Monad.Reader (MonadReader)
-import Data.Bifunctor (bimap)
-import Data.ByteString qualified as BS
+import Data.Bifunctor (bimap, Bifunctor (..))
 import Data.Function (on)
 import Data.Functor ((<&>))
 import Data.List (groupBy, sortBy)
@@ -194,25 +195,22 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   getInputContent,
  )
 import Language.Marlowe.Core.V1.Semantics.Types.Address (Network, mainnet, testnet)
-import Plutus.ApiCommon (ProtocolVersion)
+import PlutusLedgerApi.Common (ProtocolVersion)
 import Plutus.V1.Ledger.Ada (fromValue)
-import Plutus.V1.Ledger.Api (Credential (..), DatumHash (..), fromBuiltin)
-import Plutus.V1.Ledger.Api qualified as P
+import PlutusLedgerApi.V1 (Credential (..), DatumHash (..), fromBuiltin)
+import PlutusLedgerApi.V1 qualified as P
 import Plutus.V1.Ledger.SlotConfig (SlotConfig, posixTimeToEnclosingSlot, slotToBeginPOSIXTime, slotToEndPOSIXTime)
-import Plutus.V1.Ledger.Value (
+import PlutusLedgerApi.V1.Value (
   AssetClass (..),
   Value (..),
   assetClass,
   assetClassValue,
-  currencyMPSHash,
   flattenValue,
   singleton,
  )
-import Plutus.V2.Ledger.Api (
+import PlutusLedgerApi.V2 (
   Address,
-  CostModelParams,
   Datum (..),
-  MintingPolicyHash (..),
   POSIXTime,
   adaSymbol,
   adaToken,
@@ -221,6 +219,8 @@ import Plutus.V2.Ledger.Api (
 import PlutusTx.AssocMap qualified as AM (toList)
 import Prettyprinter (Pretty (..))
 import System.IO (hPutStrLn, stderr)
+import Data.Type.Equality (type (:~:) (..))
+import Data.String (IsString(..))
 
 -- | Serialise a deposit input to a file.
 makeDeposit
@@ -282,7 +282,7 @@ initializeTransaction
   -> SlotConfig
   -- ^ The POSIXTime-to-slot configuration.
   -> ProtocolVersion
-  -> CostModelParams
+  -> [Integer]
   -- ^ The cost model parameters.
   -> NetworkId
   -- ^ The network ID.
@@ -344,7 +344,7 @@ initializeTransactionImpl
   -> SlotConfig
   -- ^ The POSIXTime-to-slot configuration.
   -> ProtocolVersion
-  -> CostModelParams
+  -> [Integer]
   -- ^ The cost model parameters.
   -> NetworkId
   -- ^ The network ID.
@@ -363,6 +363,7 @@ initializeTransactionImpl
   -- ^ Action to return a MarloweTransaction
 initializeTransactionImpl marloweParams mtSlotConfig protocolVersion costModelParams network stake mtContract mtState refs merkleize printStats = case plutusScriptVersion @lang of
   PlutusScriptV1 -> throwError "Plutus Script V1 not supported"
+  PlutusScriptV3 -> throwError "Plutus Script V3 not supported"
   PlutusScriptV2 -> do
     era <- askEra
     let mtRolesCurrency = rolesCurrency marloweParams
@@ -602,7 +603,7 @@ readMarloweTransactionFile lang marloweInFile = do
 -- | Run a Marlowe transaction using FS.
 runTransaction
   :: forall era m
-   . (MonadError CliError m)
+   . (MonadError CliError m, CS.IsCardanoEra era)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
   => LocalNodeConnectInfo CardanoMode
@@ -637,7 +638,7 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
     SomeMarloweTransaction _ era' marloweOut' <- decodeFileStrict marloweOutFile
     era <- askEra @era
     signingKeys <- mapM readSigningKey signingKeyFiles
-    let go :: forall lang. (IsPlutusScriptLanguage lang) => (C.IsCardanoEra era) => MarloweTransaction lang era -> m TxId
+    let go :: forall lang. (IsPlutusScriptLanguage lang) => MarloweTransaction lang era -> m TxId
         go marloweOut'' = do
           marloweInBundle' <- case marloweInBundle of
             Nothing -> pure Nothing
@@ -657,19 +658,29 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
               metadata
               printStats
               invalid
-          doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
+          doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope (File bodyFile) Nothing body
           pure $ getTxId body
 
-    case (era, era') of
-      (ScriptDataInAlonzoEra, ScriptDataInAlonzoEra) -> go marloweOut'
-      (ScriptDataInBabbageEra, ScriptDataInBabbageEra) -> go marloweOut'
-      (ScriptDataInAlonzoEra, ScriptDataInBabbageEra) -> throwError "Running in Alonzo era, read file in Babbage era"
-      (ScriptDataInBabbageEra, ScriptDataInAlonzoEra) -> throwError "Running in Babbage era, read file in Alonzo era"
+    case testSameEra era era' of
+      Just Refl -> go marloweOut'
+      Nothing -> throwError $ fromString $ "Running in " <> show era <> ", read file in " <> show era'
+
+testSameEra :: ScriptDataSupportedInEra era -> ScriptDataSupportedInEra era' -> Maybe (era :~: era')
+testSameEra = \case
+  ScriptDataInAlonzoEra -> \case
+    ScriptDataInAlonzoEra -> Just Refl
+    _ -> Nothing
+  C.ScriptDataInBabbageEra -> \case
+    C.ScriptDataInBabbageEra -> Just Refl
+    _ -> Nothing
+  C.ScriptDataInConwayEra -> \case
+    C.ScriptDataInConwayEra -> Just Refl
+    _ -> Nothing
 
 -- | Run a Marlowe transaction.
 runTransactionImpl
   :: forall era lang m
-   . (MonadError CliError m)
+   . (MonadError CliError m, CS.IsCardanoEra era)
   => (IsPlutusScriptLanguage lang)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
@@ -873,14 +884,14 @@ withdrawFunds connection marloweOutFile roleName collateral inputs outputs chang
         metadata
         printStats
         invalid
-    doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
+    doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope (File bodyFile) Nothing body
     let txBuildupCtx = mkNodeTxBuildup connection timeout
     submitBody txBuildupCtx body signingKeys invalid
 
 -- | Run a Marlowe transaction using FS, without selecting inputs or outputs.
 autoRunTransaction
   :: forall era m
-   . (MonadError CliError m)
+   . (MonadError CliError m, CS.IsCardanoEra era)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
   => LocalNodeConnectInfo CardanoMode
@@ -911,7 +922,7 @@ autoRunTransaction connection marloweInBundle marloweOutFile changeAddress signi
     SomeMarloweTransaction _ era' marloweOut' <- decodeFileStrict marloweOutFile
     era <- askEra @era
     signingKeys <- mapM readSigningKey signingKeyFiles
-    let go :: forall lang. (IsPlutusScriptLanguage lang) => (C.IsCardanoEra era) => MarloweTransaction lang era -> m TxId
+    let go :: forall lang. (IsPlutusScriptLanguage lang) => MarloweTransaction lang era -> m TxId
         go marloweOut'' = do
           marloweInBundle' <- case marloweInBundle of
             Nothing -> pure Nothing
@@ -931,19 +942,17 @@ autoRunTransaction connection marloweInBundle marloweOutFile changeAddress signi
               printStats
               invalid
           -- Write the transaction file.
-          doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope bodyFile Nothing body
+          doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope (File bodyFile) Nothing body
           pure $ getTxId body
 
-    case (era, era') of
-      (ScriptDataInAlonzoEra, ScriptDataInAlonzoEra) -> go marloweOut'
-      (ScriptDataInBabbageEra, ScriptDataInBabbageEra) -> go marloweOut'
-      (ScriptDataInAlonzoEra, ScriptDataInBabbageEra) -> throwError "Running in Alonzo era, read file in Babbage era"
-      (ScriptDataInBabbageEra, ScriptDataInAlonzoEra) -> throwError "Running in Babbage era, read file in Alonzo era"
+    case testSameEra era era' of
+      Just Refl -> go marloweOut'
+      Nothing -> throwError $ fromString $ "Running in " <> show era <> ", read file in " <> show era'
 
 -- | Run a Marlowe transaction, without selecting inputs or outputs.
 autoRunTransactionImpl
   :: forall era lang m
-   . (MonadError CliError m)
+   . (MonadError CliError m, CS.IsCardanoEra era)
   => (IsPlutusScriptLanguage lang)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
@@ -1210,21 +1219,19 @@ autoWithdrawFunds connection marloweOutFile roleName changeAddress signingKeyFil
               printStats
               invalid
 
-          doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope (unTxBodyFile bodyFile) Nothing txBody
+          doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope (File $ unTxBodyFile bodyFile) Nothing txBody
           pure $ getTxId txBody
 
-    case (era, era') of
-      (ScriptDataInAlonzoEra, ScriptDataInAlonzoEra) -> go marloweOut
-      (ScriptDataInBabbageEra, ScriptDataInBabbageEra) -> go marloweOut
-      (ScriptDataInAlonzoEra, ScriptDataInBabbageEra) -> throwError "Running in Alonzo era, read file in Babbage era"
-      (ScriptDataInBabbageEra, ScriptDataInAlonzoEra) -> throwError "Running in Babbage era, read file in Alonzo era"
+    case testSameEra era era' of
+      Just Refl -> go marloweOut
+      Nothing -> throwError $ fromString $ "Running in " <> show era <> ", read file in " <> show era'
 
 type FilterPayouts era = [AnUTxO era] -> [AnUTxO era]
 
 -- | Withdraw funds for a specific role from the role address, without selecting inputs or outputs.
 autoWithdrawFundsImpl
   :: forall era lang m
-   . (MonadError CliError m)
+   . (MonadError CliError m, CS.IsCardanoEra era)
   => (MonadReader (CliEnv era) m)
   => (MonadIO m)
   => (IsPlutusScriptLanguage lang)
@@ -1333,22 +1340,22 @@ toCardanoAssetId (AssetClass (currencySymbol, tokenName))
       pure C.AdaAssetId
   | otherwise =
       C.AssetId
-        <$> toCardanoPolicyId (currencyMPSHash currencySymbol)
+        <$> toCardanoPolicyId currencySymbol
         <*> toCardanoAssetName tokenName
 
 toCardanoAssetName :: TokenName -> Either String C.AssetName
 toCardanoAssetName (TokenName bs) =
-  maybe (Left "toCardanoAssetName") Right $
+  first show $
     deserialiseFromRawBytes C.AsAssetName (fromBuiltin bs)
 
-toCardanoPolicyId :: MintingPolicyHash -> Either String C.PolicyId
-toCardanoPolicyId (MintingPolicyHash bs) =
-  maybe (Left "toCardanoPolicyId") Right $
+toCardanoPolicyId :: P.CurrencySymbol -> Either String C.PolicyId
+toCardanoPolicyId (P.CurrencySymbol  bs) =
+  first show $
     deserialiseFromRawBytes C.AsPolicyId (fromBuiltin bs)
 
 toCardanoScriptDataHash :: DatumHash -> Either String (C.Hash C.ScriptData)
 toCardanoScriptDataHash (DatumHash bs) =
-  maybe (Left "toCardanoTxOutDatumHash") Right $
+  first show $
     deserialiseFromRawBytes (C.AsHash C.AsScriptData) (fromBuiltin bs)
 
 toCardanoAddressInEra :: C.NetworkId -> Address -> Either String (C.AddressInEra C.BabbageEra)
@@ -1366,8 +1373,7 @@ toCardanoPaymentCredential (ScriptCredential validatorHash) = C.PaymentCredentia
 toCardanoPaymentKeyHash :: P.PubKeyHash -> Either String (C.Hash C.PaymentKey)
 toCardanoPaymentKeyHash (P.PubKeyHash bs) =
   let bsx = fromBuiltin bs
-      tg = "toCardanoPaymentKeyHash (" <> show (BS.length bsx) <> " bytes)"
-   in maybe (Left tg) Right $ deserialiseFromRawBytes (C.AsHash C.AsPaymentKey) bsx
+   in first show $ deserialiseFromRawBytes (C.AsHash C.AsPaymentKey) bsx
 
 toCardanoStakeAddressReference :: Maybe P.StakingCredential -> Either String C.StakeAddressReference
 toCardanoStakeAddressReference Nothing = pure C.NoStakeAddress
@@ -1379,14 +1385,14 @@ toCardanoStakeCredential :: Credential -> Either String C.StakeCredential
 toCardanoStakeCredential (PubKeyCredential pubKeyHash) = CS.StakeCredentialByKey <$> toCardanoStakeKeyHash pubKeyHash
 toCardanoStakeCredential (ScriptCredential validatorHash) = CS.StakeCredentialByScript <$> toCardanoScriptHash validatorHash
 
-toCardanoScriptHash :: P.ValidatorHash -> Either String C.ScriptHash
-toCardanoScriptHash (P.ValidatorHash bs) =
-  maybe (Left "toCardanoScriptHash") Right $
+toCardanoScriptHash :: P.ScriptHash -> Either String C.ScriptHash
+toCardanoScriptHash (P.ScriptHash bs) =
+  first show $
     deserialiseFromRawBytes C.AsScriptHash $
       fromBuiltin bs
 
 toCardanoStakeKeyHash :: P.PubKeyHash -> Either String (C.Hash C.StakeKey)
 toCardanoStakeKeyHash (P.PubKeyHash bs) =
-  maybe (Left "toCardanoStakeKeyHash") Right $
+  first show $
     deserialiseFromRawBytes (C.AsHash C.AsStakeKey) $
       fromBuiltin bs

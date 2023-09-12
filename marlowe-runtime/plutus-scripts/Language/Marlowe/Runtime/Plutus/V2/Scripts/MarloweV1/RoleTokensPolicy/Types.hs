@@ -33,7 +33,7 @@ import PlutusTx.Prelude
 import qualified Prelude as Haskell
 
 import GHC.Generics (Generic)
-import qualified Plutus.V2.Ledger.Api as PV2
+import qualified PlutusLedgerApi.V2 as PV2
 
 -- | Invariant: internal list has unique token name entries and is sorted.
 newtype RoleTokens = RoleTokens [(PV2.TokenName, Integer)]

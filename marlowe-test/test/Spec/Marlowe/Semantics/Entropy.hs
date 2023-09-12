@@ -18,7 +18,7 @@ module Spec.Marlowe.Semantics.Entropy (
 
 import Data.List (group, sort)
 import Language.Marlowe.Core.V1.Semantics.Types (Accounts, ChoiceId, ChosenNum, Party, Token, ValueId)
-import Plutus.V2.Ledger.Api (CurrencySymbol, PubKeyHash, TokenName)
+import PlutusLedgerApi.V2 (CurrencySymbol, PubKeyHash, TokenName)
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryChoiceName)
 import Spec.Marlowe.Semantics.Orphans ()
 import Test.Tasty (TestTree, testGroup)

@@ -90,6 +90,7 @@ chainSyncQueryServer ChainSyncQueryServerDependencies{..} = ServerSource $ pure 
           MaryEraInCardanoMode -> pure ShelleyBasedEraMary
           AlonzoEraInCardanoMode -> pure ShelleyBasedEraAlonzo
           BabbageEraInCardanoMode -> pure ShelleyBasedEraBabbage
+          ConwayEraInCardanoMode -> pure ShelleyBasedEraConway
         result <-
           withExceptT show $
             ExceptT $

@@ -1,4 +1,4 @@
-cabal-version: 3.0
+cabal-version: 3.4
 name:          marlowe-integration
 version:       0.1.0.0
 synopsis:      Run integration tests in the context of a marlowe runtime
@@ -77,7 +77,6 @@ library
     , marlowe-runtime:{marlowe-runtime, contract, indexer, proxy-api, runtime, sync}
     , network
     , nonempty-containers
-    , ouroboros-network
     , postgresql-libpq
     , process
     , random

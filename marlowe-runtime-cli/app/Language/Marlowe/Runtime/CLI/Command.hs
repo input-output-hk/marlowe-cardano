@@ -6,7 +6,6 @@ module Language.Marlowe.Runtime.CLI.Command where
 
 import Control.Concurrent.STM (STM)
 import Control.Monad.Trans.Reader (runReaderT)
-import Data.Foldable (asum)
 import Language.Marlowe.Runtime.CLI.Command.Apply (
   ApplyCommand,
   advanceCommandParser,

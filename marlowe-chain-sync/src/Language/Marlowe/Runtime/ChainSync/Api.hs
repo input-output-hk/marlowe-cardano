@@ -2,6 +2,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE EmptyDataDeriving #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE PolyKinds #-}
@@ -67,6 +68,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
 import Data.Proxy (Proxy (..))
+import qualified Data.SOP.Counting as Counting
 import Data.Set (Set)
 import Data.Set.NonEmpty (NESet)
 import qualified Data.Set.NonEmpty as NESet
@@ -84,6 +86,7 @@ import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)
 import GHC.Natural (Natural)
 import GHC.Show (showSpace)
+import Language.Marlowe.Runtime.Cardano.Feature (hush)
 import Network.Protocol.ChainSeek.Client
 import Network.Protocol.ChainSeek.Server
 import Network.Protocol.ChainSeek.Types
@@ -104,8 +107,7 @@ import Ouroboros.Consensus.HardFork.History (
   Summary (Summary),
   mkInterpreter,
  )
-import qualified Ouroboros.Consensus.Util.Counting as Counting
-import qualified Plutus.V1.Ledger.Api as Plutus
+import qualified PlutusLedgerApi.V1 as Plutus
 import Text.Read (readMaybe)
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -384,7 +386,7 @@ fromRedeemer = fromDatum . unRedeemer
 toRedeemer :: (Plutus.ToData a) => a -> Redeemer
 toRedeemer = Redeemer . toDatum
 
--- | Convert from Plutus.V1.Ledger.Api.Data to Datum
+-- | Convert from PlutusLedgerApi.V1.Data to Datum
 fromPlutusData :: Plutus.Data -> Datum
 fromPlutusData (Plutus.Constr i ds) = Constr i $ fromPlutusData <$> ds
 fromPlutusData (Plutus.Map m) = Map $ bimap fromPlutusData fromPlutusData <$> m
@@ -392,7 +394,7 @@ fromPlutusData (Plutus.List ds) = List $ fromPlutusData <$> ds
 fromPlutusData (Plutus.I i) = I i
 fromPlutusData (Plutus.B b) = B b
 
--- | Convert to Plutus.V1.Ledger.Api.Data to Datum
+-- | Convert to PlutusLedgerApi.V1.Data to Datum
 toPlutusData :: Datum -> Plutus.Data
 toPlutusData (Constr i ds) = Plutus.Constr i $ toPlutusData <$> ds
 toPlutusData (Map m) = Plutus.Map $ bimap toPlutusData toPlutusData <$> m
@@ -576,7 +578,7 @@ fromCardanoAddressAny = \case
   _ -> Nothing
 
 toCardanoAddressAny :: Address -> Maybe Cardano.AddressAny
-toCardanoAddressAny = Cardano.deserialiseFromRawBytes Cardano.AsAddressAny . unAddress
+toCardanoAddressAny = hush . Cardano.deserialiseFromRawBytes Cardano.AsAddressAny . unAddress
 
 paymentCredential :: Address -> Maybe Credential
 paymentCredential =
@@ -1002,6 +1004,7 @@ instance Binary AnyCardanoEra where
       3 -> pure $ AnyCardanoEra MaryEra
       4 -> pure $ AnyCardanoEra AlonzoEra
       5 -> pure $ AnyCardanoEra BabbageEra
+      6 -> pure $ AnyCardanoEra ConwayEra
       _ -> fail $ "Invalid era tag: " <> show tag
 
 deriving instance Show (ChainSyncQuery a)
@@ -1225,12 +1228,14 @@ instance Job.Command ChainSyncCommand where
       case era of
         ScriptDataInAlonzoEra -> putWord8 0x01
         ScriptDataInBabbageEra -> putWord8 0x02
+        ScriptDataInConwayEra -> putWord8 0x03
   getTag =
     getWord8 >>= \case
       0x01 ->
         getWord8 >>= \case
           0x01 -> pure $ Job.SomeTag $ TagSubmitTx ScriptDataInAlonzoEra
           0x02 -> pure $ Job.SomeTag $ TagSubmitTx ScriptDataInBabbageEra
+          0x03 -> pure $ Job.SomeTag $ TagSubmitTx ScriptDataInConwayEra
           tag -> fail $ "invalid era tag " <> show tag
       tag -> fail $ "invalid command tag " <> show tag
   putJobId = \case {}
@@ -1239,6 +1244,7 @@ instance Job.Command ChainSyncCommand where
   putCommand = \case
     SubmitTx ScriptDataInAlonzoEra tx -> put $ serialiseToCBOR tx
     SubmitTx ScriptDataInBabbageEra tx -> put $ serialiseToCBOR tx
+    SubmitTx ScriptDataInConwayEra tx -> put $ serialiseToCBOR tx
   getCommand = \case
     TagSubmitTx era ->
       SubmitTx era <$> do
@@ -1248,6 +1254,9 @@ instance Job.Command ChainSyncCommand where
             Left err -> fail $ show err
             Right tx -> pure tx
           ScriptDataInBabbageEra -> case deserialiseFromCBOR (AsTx AsBabbage) bytes of
+            Left err -> fail $ show err
+            Right tx -> pure tx
+          ScriptDataInConwayEra -> case deserialiseFromCBOR (AsTx AsConway) bytes of
             Left err -> fail $ show err
             Right tx -> pure tx
   putStatus = \case
@@ -1268,6 +1277,7 @@ instance Job.ShowCommand ChainSyncCommand where
     showParen (p >= 11) . showString . \case
       TagSubmitTx ScriptDataInAlonzoEra -> "TagSubmitTx ScriptDataInAlonzoEra"
       TagSubmitTx ScriptDataInBabbageEra -> "TagSubmitTx ScriptDataInBabbageEra"
+      TagSubmitTx ScriptDataInConwayEra -> "TagSubmitTx ScriptDataInConwayEra"
   showsPrecCommand p =
     showParen (p >= 11) . \case
       SubmitTx ScriptDataInAlonzoEra tx ->
@@ -1277,6 +1287,11 @@ instance Job.ShowCommand ChainSyncCommand where
         )
       SubmitTx ScriptDataInBabbageEra tx ->
         ( showString "TagSubmitTx ScriptDataInBabbageEra"
+            . showSpace
+            . showsPrec p tx
+        )
+      SubmitTx ScriptDataInConwayEra tx ->
+        ( showString "TagSubmitTx ScriptDataInConwayEra"
             . showSpace
             . showsPrec p tx
         )
@@ -1295,12 +1310,15 @@ instance Job.OTelCommand ChainSyncCommand where
       "submit_tx/" <> case era of
         ScriptDataInAlonzoEra -> "alonzo"
         ScriptDataInBabbageEra -> "babbage"
+        ScriptDataInConwayEra -> "babbage"
 
 eraEq :: ScriptDataSupportedInEra era1 -> ScriptDataSupportedInEra era2 -> Maybe (era1 :~: era2)
 eraEq ScriptDataInAlonzoEra ScriptDataInAlonzoEra = Just Refl
 eraEq ScriptDataInAlonzoEra _ = Nothing
 eraEq ScriptDataInBabbageEra ScriptDataInBabbageEra = Just Refl
 eraEq ScriptDataInBabbageEra _ = Nothing
+eraEq ScriptDataInConwayEra ScriptDataInConwayEra = Just Refl
+eraEq ScriptDataInConwayEra _ = Nothing
 
 -- * Orphan instances
 

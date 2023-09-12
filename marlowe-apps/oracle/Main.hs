@@ -17,7 +17,7 @@ import Network.Oracle (makeOracle)
 import Observe.Event.Render.JSON (DefaultRenderSelectorJSON (defaultRenderSelectorJSON))
 import Observe.Event.Render.JSON.Handle (simpleJsonStderrBackend)
 
-import qualified Cardano.Api as C (AsType (AsPaymentExtendedKey, AsSigningKey), readFileTextEnvelope)
+import qualified Cardano.Api as C (AsType (AsPaymentExtendedKey, AsSigningKey), File (..), readFileTextEnvelope)
 import Data.Time.Units (Second)
 import qualified Options.Applicative as O
 
@@ -29,7 +29,7 @@ main =
         requeueFrequency' = RequeueFrequency requeueFrequency
         dontFinishOnWait = FinishOnWait False
     key <-
-      C.readFileTextEnvelope (C.AsSigningKey C.AsPaymentExtendedKey) keyFile
+      C.readFileTextEnvelope (C.AsSigningKey C.AsPaymentExtendedKey) (C.File keyFile)
         >>= \case
           Right key' -> pure key'
           Left message -> error $ show message

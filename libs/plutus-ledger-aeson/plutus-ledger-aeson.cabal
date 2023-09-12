@@ -1,4 +1,4 @@
-cabal-version: 3.0
+cabal-version: 3.4
 name:          plutus-ledger-aeson
 version:       1.0.1
 license:       Apache-2.0
@@ -53,13 +53,9 @@ library
     , base >=4.9 && <5
     , base16-aeson
     , bytestring
-    , cborg
-    , flat
     , hashable
-    , prettyprinter
     , scientific
     , serialise
-    , tagged
     , text
 
   ghc-options:      -fprint-potential-instances

@@ -1,4 +1,4 @@
-cabal-version:   3.0
+cabal-version:   3.4
 name:            marlowe-cli
 version:         0.0.12.0
 license:         Apache-2.0
@@ -119,7 +119,7 @@ library
     , mtl
     , one-line-aeson-text
     , ouroboros-consensus
-    , ouroboros-network
+    , ouroboros-network-protocols
     , parser-combinators
     , plutus-core
     , plutus-ledger-ada
@@ -133,7 +133,6 @@ library
     , text
     , time
     , time-units
-    , transformers
     , yaml
 
 library cli-test
@@ -147,7 +146,6 @@ library cli-test
     Contrib.Control.Monad.Trans.State.IO
     Contrib.Data.Aeson.Generic
     Contrib.Data.Aeson.Traversals
-    Contrib.Data.List
     Contrib.Data.List.Random
     Contrib.Data.Time.Clock
     Contrib.Monad.Loops
@@ -210,7 +208,6 @@ library cli-test
     , mtl
     , network
     , one-line-aeson-text
-    , plutus-core
     , plutus-ledger-ada
     , plutus-ledger-api ^>=1.5
     , plutus-ledger-slot
@@ -247,7 +244,6 @@ library command
     , base16-bytestring
     , bytestring
     , cardano-api
-    , cardano-slotting
     , containers
     , filepath
     , marlowe-actus
@@ -258,17 +254,14 @@ library command
     , mtl
     , network
     , optparse-applicative
-    , ouroboros-network
     , plutus-ledger-ada
     , plutus-ledger-api ^>=1.5
     , plutus-ledger-slot
-    , plutus-tx
     , regex-posix
     , servant-client
     , split
     , text
     , time-units
-    , transformers
 
 executable marlowe-cli
   import:          lang
@@ -279,7 +272,6 @@ executable marlowe-cli
   build-depends:
     , base >=4.9 && <5
     , marlowe-cli:command
-    , text
 
   ghc-options:     -threaded
 

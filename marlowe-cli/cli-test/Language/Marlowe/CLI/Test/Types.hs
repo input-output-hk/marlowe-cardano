@@ -32,10 +32,8 @@ import Data.List qualified as List
 import Data.Map (Map)
 import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Types (MarloweScriptsRefs, PrintStats, TxBuildupContext, toQueryContext)
-import Plutus.ApiCommon (ProtocolVersion)
-import Plutus.V1.Ledger.Api (CostModelParams)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig)
-
+import PlutusLedgerApi.Common (ProtocolVersion)
 import Cardano.Api qualified as C
 import Contrib.Data.Foldable (foldMapM)
 import Contrib.Data.Time.Units.Aeson qualified as A
@@ -81,8 +79,8 @@ import Language.Marlowe.CLI.Test.Wallet.Types qualified as Wallet
 import Language.Marlowe.Protocol.Client qualified as Marlowe.Protocol
 import Network.Protocol.Connection qualified as Network.Protocol
 import Network.Socket (PortNumber)
-import Plutus.V1.Ledger.Value qualified as P.Value
-import Plutus.V2.Ledger.Api qualified as P
+import PlutusLedgerApi.V1.Value qualified as P.Value
+import PlutusLedgerApi.V2 qualified as P
 import PlutusTx.AssocMap qualified as P.AssocMap
 import System.IO.Temp (emptySystemTempFile)
 
@@ -280,7 +278,7 @@ data InterpretEnv lang era = InterpretEnv
   , _ieEra :: ScriptDataSupportedInEra era
   , _iePrintStats :: PrintStats
   , _ieSlotConfig :: SlotConfig
-  , _ieCostModelParams :: CostModelParams
+  , _ieCostModelParams :: [Integer]
   , _ieProtocolVersion :: ProtocolVersion
   , _ieTxBuildupContext :: TxBuildupContext era
   , _ieReportDir :: FilePath
@@ -376,11 +374,11 @@ contractInfoToJSON (ContractNickname nickname) Runtime.ContractInfo{..} = do
     filename <- emptySystemTempFile filenameBase
     BSL.writeFile filename $ A.encodePretty _ciContract
     pure filename
-  continuationsFile <- for _ciContinuations \containuations -> do
+  continuationsFile <- for _ciContinuations \continuations -> do
     let filenameBase = "contract-" <> nickname <> "-continuations.json"
     liftIO $ do
       filename <- emptySystemTempFile filenameBase
-      BSL.writeFile filename $ A.encodePretty containuations
+      BSL.writeFile filename $ A.encodePretty continuations
       pure filename
   pure
     [

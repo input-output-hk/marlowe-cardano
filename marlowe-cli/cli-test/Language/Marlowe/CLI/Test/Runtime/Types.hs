@@ -64,7 +64,7 @@ where
 
 import Cardano.Api (CardanoMode, LocalNodeConnectInfo, ScriptDataSupportedInEra)
 import Cardano.Api qualified as C
-import Contrib.Data.List qualified as List
+import Data.List qualified as List
 import Contrib.Data.Time.Units.Aeson qualified as A
 import Control.Concurrent.STM (TChan, TVar)
 import Control.Error (lastMay)

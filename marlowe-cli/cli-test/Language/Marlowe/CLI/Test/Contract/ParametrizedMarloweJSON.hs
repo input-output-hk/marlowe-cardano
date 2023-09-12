@@ -54,7 +54,7 @@ import Language.Marlowe.CLI.Test.Wallet.Types (
 import Language.Marlowe.CLI.Types (CliError (CliError), SomeTimeout (..))
 import Language.Marlowe.Cardano (marloweNetworkFromLocalNodeConnectInfo)
 import Language.Marlowe.Core.V1.Semantics.Types.Address qualified as Marlowe
-import Plutus.V1.Ledger.Value qualified as PV
+import PlutusLedgerApi.V1.Value qualified as PV
 
 -- | Either a JSON of the Input or a JSON of the Contract which
 -- | is parametrized by the currencies and wallets.

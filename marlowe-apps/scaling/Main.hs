@@ -38,11 +38,12 @@ import Observe.Event.Explicit (EventBackend, addField, hoistEventBackend, idInje
 import Observe.Event.Render.JSON (DefaultRenderSelectorJSON (defaultRenderSelectorJSON))
 import Observe.Event.Render.JSON.Handle (JSONRef, simpleJsonStderrBackend)
 import Observe.Event.Syntax ((≔))
-import Plutus.V2.Ledger.Api (POSIXTime (..))
+import PlutusLedgerApi.V2 (POSIXTime (..))
 import System.Random (randomRIO)
 
 import qualified Cardano.Api as C (
-  AsType (AsPaymentExtendedKey, AsSigningKey),
+  AsType (..),
+  File (..),
   PaymentExtendedKey,
   SigningKey,
   readFileTextEnvelope,
@@ -59,7 +60,7 @@ makeContract
   -> Contract
 makeContract timeout party =
   When
-    [ Case (Choice (ChoiceId "Amount" party) [Bound 1 2000000]) $
+    [ Case (Choice (ChoiceId "Amount" party) [Bound 1 2_000_000]) $
         When
           [ Case (Deposit party party (Token "" "") (ChoiceValue $ ChoiceId "Amount" party)) $
               When
@@ -104,7 +105,7 @@ runScenario backend config address key contract inputs =
   runWithEvents backend config address key contract (pure . NormalInput <$> inputs) 1_500_000
 
 currentTime :: (MonadIO m) => m POSIXTime
-currentTime = POSIXTime . floor . (* 1000) . nominalDiffTimeToSeconds <$> liftIO P.getPOSIXTime
+currentTime = POSIXTime . floor . (* 1_000) . nominalDiffTimeToSeconds <$> liftIO P.getPOSIXTime
 
 runOne
   :: EventBackend IO JSONRef DynamicEventSelector
@@ -127,7 +128,7 @@ runOne eventBackend config address key =
                 case deserialiseAddress $ unAddress address of
                   Just address' -> pure $ uncurry Address address'
                   Nothing -> throwError "Address conversion failed."
-              let contract = makeContract (now + 5 * 60 * 60 * 1000) party
+              let contract = makeContract (now + 5 * 60 * 60 * 1_000) party
               inputs <- randomInputs party
               runScenario subBackend config address key contract inputs
         case result of
@@ -141,7 +142,7 @@ main =
     Command{..} <- O.execParser =<< commandParser
     addressKeys <-
       sequence
-        [ C.readFileTextEnvelope (C.AsSigningKey C.AsPaymentExtendedKey) keyFilename
+        [ C.readFileTextEnvelope (C.AsSigningKey C.AsPaymentExtendedKey) (C.File keyFilename)
           >>= \case
             Right key -> pure (address, key)
             Left message -> error $ show message

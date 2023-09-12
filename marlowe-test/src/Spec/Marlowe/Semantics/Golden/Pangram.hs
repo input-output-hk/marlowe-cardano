@@ -56,7 +56,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   ValueId (ValueId),
  )
 import Language.Marlowe.Util ()
-import Plutus.V2.Ledger.Api (POSIXTime (..))
+import PlutusLedgerApi.V2 (POSIXTime (..))
 
 import qualified PlutusTx.AssocMap as AM (Map, fromList)
 

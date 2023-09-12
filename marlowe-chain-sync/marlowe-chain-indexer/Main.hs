@@ -8,7 +8,7 @@
 
 module Main where
 
-import Cardano.Api (CardanoMode, ConsensusModeParams (..), EpochSlots (..), LocalNodeConnectInfo (..))
+import Cardano.Api (CardanoMode, ConsensusModeParams (..), EpochSlots (..), File (..), LocalNodeConnectInfo (..))
 import qualified Cardano.Api as Cardano
 import Cardano.Api.Byron (toByronRequiresNetworkMagic)
 import qualified Cardano.Chain.Genesis as Byron
@@ -95,7 +95,7 @@ run Options{..} = do
         { -- FIXME read from config - what is the appropriate value?
           localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
         , localNodeNetworkId = networkId
-        , localNodeSocketPath = nodeSocket
+        , localNodeSocketPath = File nodeSocket
         }
 
     persistRateLimit = secondsToNominalDiffTime 1

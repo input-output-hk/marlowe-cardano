@@ -36,6 +36,7 @@ chainSyncJobServer ChainSyncJobServerDependencies{..} = ServerSource $ pure serv
               case era of
                 ScriptDataInAlonzoEra -> AlonzoEra
                 ScriptDataInBabbageEra -> BabbageEra
+                ScriptDataInConwayEra -> ConwayEra
               tx
           pure case result of
             SubmitFail err -> Left $ show err

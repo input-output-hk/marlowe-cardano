@@ -23,8 +23,8 @@ import Marlowe.Contracts.UTC.StructuredProducts
 import Marlowe.Contracts.UTC.Swap
 import Marlowe.Contracts.UTC.ZeroCouponBond
 import Plutus.V1.Ledger.Ada (lovelaceValueOf)
-import Plutus.V1.Ledger.Api (TokenName, singleton)
-import Plutus.V1.Ledger.Value (CurrencySymbol)
+import PlutusLedgerApi.V1 (TokenName, singleton)
+import PlutusLedgerApi.V1.Value (CurrencySymbol)
 import Test.Tasty
 import Test.Tasty.HUnit
 

@@ -6,6 +6,7 @@
 
 module Contrib.Data.Aeson.Generic where
 
+import Data.Kind (Type)
 import GHC.Generics (C1, Constructor (conName), D1, Generic (Rep, from), M1 (M1), type (:+:) (L1, R1))
 
 class GetConName f where
@@ -25,5 +26,5 @@ instance (GetConName a) => GetConName (D1 d a) where
 constructorName :: forall a. (Generic a, GetConName (Rep a)) => a -> String
 constructorName = getConName . from
 
-class GetConNames (rep :: * -> *) where
+class GetConNames (rep :: Type -> Type) where
   getConNames :: [String]

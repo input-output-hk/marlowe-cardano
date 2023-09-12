@@ -11,8 +11,8 @@ import Cardano.Api (
   ConsensusMode (CardanoMode),
   EraHistory (EraHistory),
   SystemStart (SystemStart),
-  hashScriptData,
  )
+import qualified Cardano.Api as C
 import Control.Monad (guard, mfilter, zipWithM)
 import Control.Monad.Trans.State (State, evalState, execState, runState)
 import Control.Monad.Trans.Writer (WriterT, execWriterT)
@@ -23,6 +23,7 @@ import Data.Functor (($>), (<&>))
 import Data.List (nub)
 import qualified Data.Map as Map
 import Data.Maybe (isJust, mapMaybe, maybeToList)
+import Data.SOP.Counting (Exactly (..))
 import Data.SOP.Strict (K (..), NP (..))
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -48,7 +49,7 @@ import Language.Marlowe.Runtime.History.Api (
  )
 import Language.Marlowe.Runtime.Indexer.Types
 import Language.Marlowe.Runtime.Plutus.V2.Api (fromPlutusCurrencySymbol, fromPlutusTokenName, toPlutusCurrencySymbol)
-import Language.Marlowe.Util (ada)
+import Language.Marlowe.Util (ada, dataHash)
 import Ouroboros.Consensus.BlockchainTime (RelativeTime (..), mkSlotLength)
 import Ouroboros.Consensus.HardFork.History (
   Bound (..),
@@ -59,8 +60,8 @@ import Ouroboros.Consensus.HardFork.History (
   mkInterpreter,
  )
 import Ouroboros.Consensus.HardFork.History.Summary (summaryWithExactly)
-import Ouroboros.Consensus.Util.Counting (Exactly (..))
 import qualified PlutusTx.AssocMap as AM
+import PlutusTx.Builtins (fromBuiltin)
 import Spec.Marlowe.Semantics.Arbitrary (SemiArbitrary (semiArbitrary), arbitraryValidInput)
 import Test.Hspec (Spec, describe)
 import Test.Hspec.QuickCheck (prop)
@@ -156,8 +157,9 @@ extractApplyInputsTxSpec = describe "extractApplyInputsTx" do
               | otherwise = Just a
             origOut = Map.lookup contractId $ unspentContractOutputs utxo
             newOut = Map.lookup contractId $ unspentContractOutputs utxo'
-         in origOut /= newOut && isJust applyTx' ==>
-              Map.keysSet (Map.differenceWith isModified (unspentContractOutputs utxo) (unspentContractOutputs utxo'))
+         in origOut /= newOut
+              && isJust applyTx'
+              ==> Map.keysSet (Map.differenceWith isModified (unspentContractOutputs utxo) (unspentContractOutputs utxo'))
                 === Set.singleton contractId
   prop "Sets the unspent contract output to the expected value" $ forAll (genApplyTx testBlockHeader) \(inputDatum, applyTx) ->
     forAll (applyTxToChainTx inputDatum Nothing applyTx) \tx ->
@@ -196,8 +198,9 @@ extractApplyInputsTxSpec = describe "extractApplyInputsTx" do
               | otherwise = Just a
             origOut = Map.lookup contractId $ unspentPayoutOutputs utxo
             newOut = Map.lookup contractId $ unspentPayoutOutputs utxo'
-         in origOut /= newOut ==>
-              Map.keysSet (Map.differenceWith isModified (unspentPayoutOutputs utxo') (unspentPayoutOutputs utxo))
+         in origOut
+              /= newOut
+              ==> Map.keysSet (Map.differenceWith isModified (unspentPayoutOutputs utxo') (unspentPayoutOutputs utxo))
                 === Set.singleton contractId
   prop "Doesn't leave empty payout sets" $ forAll (genApplyTx testBlockHeader) \(inputDatum, applyTx) ->
     forAll (applyTxToChainTx inputDatum Nothing applyTx) \tx ->
@@ -235,7 +238,8 @@ eraHistory =
             :* K (oneMillisecondEraSummary 2) -- Allegra lasted 1 ms
             :* K (oneMillisecondEraSummary 3) -- Mary lasted 1 ms
             :* K (oneMillisecondEraSummary 4) -- Alonzo lasted 1 ms
-            :* K (unboundedEraSummary 5) -- Babbage never ends
+            :* K (oneMillisecondEraSummary 5) -- Babbage lasted 1 ms
+            :* K (unboundedEraSummary 6) -- Conway never ends
             :* Nil
 
 unboundedEraSummary :: Integer -> EraSummary
@@ -304,7 +308,8 @@ extractWithdrawTxSpec = describe "extractWithdrawTx" do
                     , consumingTx = txId
                     }
            in not (null txIns) ==>
-                evalState (execWriterT $ extractWithdrawTx tx) utxo === [expected]
+                evalState (execWriterT $ extractWithdrawTx tx) utxo
+                  === [expected]
   prop "Payouts are conserved" \txId txIns utxo ->
     let tx = Chain.Transaction txId Chain.Unbounded mempty txIns [] mempty
         (txs, utxo') = runState (execWriterT $ extractWithdrawTx tx) utxo
@@ -351,7 +356,7 @@ createTxToChainTx bug MarloweCreateTransaction{..} = do
         Chain.TransactionOutput
           address
           assets
-          (Just $ fromCardanoDatumHash $ hashScriptData $ toCardanoScriptData $ Chain.toDatum datum)
+          (Just $ Chain.DatumHash $ fromBuiltin $ dataHash datum)
           (Just $ Chain.toDatum datum)
   outputs <- case bug of
     Nothing -> pure outputs'
@@ -408,7 +413,7 @@ applyTxToChainTx inputDatum _ MarloweApplyInputsTransaction{..} = case marloweVe
               Chain.TransactionOutput
                 { address
                 , assets
-                , datumHash = Just $ fromCardanoDatumHash $ hashScriptData $ toCardanoScriptData $ Chain.toDatum datum
+                , datumHash = Just $ Chain.DatumHash $ fromBuiltin $ dataHash datum
                 , datum = Just $ Chain.toDatum datum
                 }
         payoutOutputs =
@@ -417,7 +422,8 @@ applyTxToChainTx inputDatum _ MarloweApplyInputsTransaction{..} = case marloweVe
              in Chain.TransactionOutput
                   { address
                   , assets
-                  , datumHash = Just $ fromCardanoDatumHash $ hashScriptData $ toCardanoScriptData chainDatum
+                  , datumHash =
+                      Just $ fromCardanoDatumHash $ C.hashScriptDataBytes $ C.unsafeHashableScriptData $ toCardanoScriptData chainDatum
                   , datum = Just chainDatum
                   }
     let outputs = scriptChainOutputs <> payoutOutputs

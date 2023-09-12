@@ -56,7 +56,7 @@ import Language.Marlowe.Core.V1.Semantics.Types as S (
  )
 import Language.Marlowe.Core.V1.Semantics.Types.Address
 import Language.Marlowe.Pretty
-import Plutus.V1.Ledger.Time (POSIXTime (..))
+import PlutusLedgerApi.V1.Time (POSIXTime (..))
 import PlutusTx.Builtins (BuiltinByteString)
 import PlutusTx.Builtins.Class (ToBuiltin (..))
 import Text.Megaparsec

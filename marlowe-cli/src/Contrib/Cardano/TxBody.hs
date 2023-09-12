@@ -5,7 +5,7 @@ module Contrib.Cardano.TxBody (exUnits) where
 import Cardano.Api qualified as C
 import Cardano.Api.Shelley qualified as CS
 import Cardano.Ledger.Alonzo.Scripts (ExUnits (..))
-import Cardano.Ledger.Alonzo.TxWitness (Redeemers (..))
+import Cardano.Ledger.Alonzo.TxWits (Redeemers (..))
 import Data.Map.Strict as Map
 
 -- | Total the execution units in a transaction.

@@ -5,13 +5,9 @@
 module Language.Marlowe.Runtime.Integration.Create where
 
 import Cardano.Api (
-  BabbageEra,
-  CardanoEra (..),
   Script (..),
   SimpleScript (..),
-  SimpleScriptVersion (..),
   SlotNo (..),
-  TimeLocksSupported (..),
   TxBody (..),
   TxBodyContent (..),
   TxInsCollateral (..),
@@ -44,6 +40,7 @@ import Language.Marlowe.Runtime.Cardano.Api (
   fromCardanoTxIn,
   fromCardanoTxOutValue,
  )
+import Language.Marlowe.Runtime.Cardano.Feature (CardanoFeature (..))
 import Language.Marlowe.Runtime.ChainSync.Api (
   AssetId (..),
   Assets (..),
@@ -148,12 +145,7 @@ setup runSpec = withLocalMarloweRuntime $ runIntegrationTest do
         , multiAddressSufficientBalanceMultiInsufficientCollateralWallet
         , multiAddressSufficientBalanceOneSufficientCollateralWallet
         , multiAddressSufficientBalanceMultiSufficientCollateralWallet
-        , existingRoleTokenPolicy =
-            fromCardanoPolicyId $
-              scriptPolicyId $
-                SimpleScript SimpleScriptV2 $
-                  RequireTimeAfter TimeLocksInSimpleScriptV2 $
-                    SlotNo 0
+        , existingRoleTokenPolicy = fromCardanoPolicyId $ scriptPolicyId $ SimpleScript $ RequireTimeAfter $ SlotNo 0
         , runtime
         }
 
@@ -240,7 +232,9 @@ roleTokenSpec = \case
       let tokensOutput = case txBody of
             TxBody TxBodyContent{..} ->
               txOuts & foldMap \(TxOut _ value _ _) -> case value of
-                TxOutAdaOnly era' _ -> case (era, era') of {}
+                TxOutAdaOnly era' _ -> case era of
+                  ReferenceTxInsScriptsInlineDatumsInBabbageEra -> case era' of {}
+                  ReferenceTxInsScriptsInlineDatumsInConwayEra -> case era' of {}
                 TxOutValue _ value' -> Set.fromList $ fst <$> valueToList value'
       tokensOutput `shouldBe` Set.singleton C.AdaAssetId
   ExistingPolicyRoleTokens -> Just do
@@ -254,7 +248,9 @@ roleTokenSpec = \case
       let tokensOutput = case txBody of
             TxBody TxBodyContent{..} ->
               txOuts & foldMap \(TxOut _ value _ _) -> case value of
-                TxOutAdaOnly era' _ -> case (era, era') of {}
+                TxOutAdaOnly era' _ -> case era of
+                  ReferenceTxInsScriptsInlineDatumsInBabbageEra -> case era' of {}
+                  ReferenceTxInsScriptsInlineDatumsInConwayEra -> case era' of {}
                 TxOutValue _ value' -> Set.fromList $ fst <$> valueToList value'
       tokensOutput `shouldBe` Set.singleton C.AdaAssetId
   -- Metadata checks done with other metadata checks.
@@ -273,9 +269,7 @@ roleTokenSpec = \case
                   Map.fromList
                     $ fmap
                       ( \(assetId, quantity) ->
-                          ( (case era of ReferenceTxInsScriptsInlineDatumsInBabbageEra -> fromCardanoAddressInEra BabbageEra address, assetId)
-                          , quantity
-                          )
+                          ((fromCardanoAddressInEra (cardanoEraOfFeature era) address, assetId), quantity)
                       )
                     $ Map.toList
                     $ unTokens
@@ -286,9 +280,8 @@ roleTokenSpec = \case
 
 metadataSpec :: RoleTokenCase -> MetadataCase -> Maybe (SpecWith (TestData, ContractCreated 'V1))
 metadataSpec roleTokens metadataCase = Just do
-  it "Should write the expected metadata" \(_, ContractCreated era contract@ContractCreatedInEra{..}) -> do
-    metadata `shouldBe` case era of
-      ReferenceTxInsScriptsInlineDatumsInBabbageEra -> addNFTMetadata contract roleTokens (expectedMetadata metadataCase)
+  it "Should write the expected metadata" \(_, ContractCreated _ contract@ContractCreatedInEra{..}) -> do
+    metadata `shouldBe` addNFTMetadata contract roleTokens (expectedMetadata metadataCase)
 
 expectedMetadata :: MetadataCase -> MarloweTransactionMetadata
 expectedMetadata (MetadataCase marloweMetadata extraMetadata) = MarloweTransactionMetadata
@@ -307,7 +300,7 @@ expectedMetadata (MetadataCase marloweMetadata extraMetadata) = MarloweTransacti
             mkExtraMetadata extraMetadata
 
 addNFTMetadata
-  :: ContractCreatedInEra BabbageEra 'V1 -> RoleTokenCase -> MarloweTransactionMetadata -> MarloweTransactionMetadata
+  :: ContractCreatedInEra era 'V1 -> RoleTokenCase -> MarloweTransactionMetadata -> MarloweTransactionMetadata
 addNFTMetadata ContractCreatedInEra{..} = \case
   MintRoleTokensMetadata -> \MarloweTransactionMetadata{..} ->
     MarloweTransactionMetadata

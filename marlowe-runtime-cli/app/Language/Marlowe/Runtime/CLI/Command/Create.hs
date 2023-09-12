@@ -5,7 +5,7 @@
 module Language.Marlowe.Runtime.CLI.Command.Create where
 
 import qualified Cardano.Api as C
-import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
+import Cardano.Api.Shelley (File (..), ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import qualified Cardano.Api.Shelley as C
 import Control.Error.Util (hoistMaybe, noteT)
 import Control.Monad.IO.Class (liftIO)
@@ -289,5 +289,6 @@ runCreateCommand TxCommand{walletAddresses, signingMethod, tagsFile, metadataFil
           ExceptT @_ @_ @() $
             liftIO $
               first TransactionFileWriteFailed <$> case era of
-                ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.writeFileTextEnvelope outputFile Nothing txBody
+                ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.writeFileTextEnvelope (File outputFile) Nothing txBody
+                ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.writeFileTextEnvelope (File outputFile) Nothing txBody
           pure (contractId, safetyErrors)

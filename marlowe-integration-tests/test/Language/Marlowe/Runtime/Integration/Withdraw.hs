@@ -3,7 +3,7 @@
 
 module Language.Marlowe.Runtime.Integration.Withdraw where
 
-import Cardano.Api (BabbageEra, getTxId)
+import Cardano.Api (getTxId)
 import Cardano.Api.Shelley (
   ReferenceTxInsScriptsInlineDatumsSupportedInEra (ReferenceTxInsScriptsInlineDatumsInBabbageEra),
  )
@@ -34,7 +34,9 @@ import Language.Marlowe.Runtime.Integration.Common (
 import Language.Marlowe.Runtime.Integration.StandardContract
 import Language.Marlowe.Runtime.Transaction.Api (
   ConstraintError (..),
+  ContractCreated (..),
   ContractCreatedInEra (..),
+  InputsApplied (..),
   InputsAppliedInEra (..),
   WalletAddresses (..),
   WithdrawError (..),
@@ -63,7 +65,7 @@ noPayoutsTest TestData{..} = flip runIntegrationTest runtime do
 
 nonPayoutTest :: ActionWith TestData
 nonPayoutTest TestData{..} = flip runIntegrationTest runtime do
-  let ContractCreatedInEra{..} = randomCreation
+  ContractCreated _ ContractCreatedInEra{..} <- pure randomCreation
   let fakePayout = unContractId contractId
   let realPayout = payoutId wallet1AvailablePayout1
   result <- withdraw MarloweV1 (addresses wallet1) $ Set.fromList [fakePayout, realPayout]
@@ -72,7 +74,7 @@ nonPayoutTest TestData{..} = flip runIntegrationTest runtime do
 
 nonScriptPayoutTest :: ActionWith TestData
 nonScriptPayoutTest TestData{..} = flip runIntegrationTest runtime do
-  let ContractCreatedInEra{..} = randomCreation
+  ContractCreated _ ContractCreatedInEra{..} <- pure randomCreation
   let fakePayout = (unContractId contractId){txIx = 0}
   let realPayout = payoutId wallet1AvailablePayout1
   result <- withdraw MarloweV1 (addresses wallet1) $ Set.fromList [fakePayout, realPayout]
@@ -148,7 +150,7 @@ data TestData = TestData
   , wallet1AvailablePayout2 :: PayoutState 'V1
   , wallet1WithdrawnPayout :: PayoutState 'V1
   , wallet2AvailablePayout :: PayoutState 'V1
-  , randomCreation :: ContractCreatedInEra BabbageEra 'V1
+  , randomCreation :: ContractCreated 'V1
   , wallet1 :: Wallet
   , wallet2 :: Wallet
   , runtime :: MarloweRuntime
@@ -174,11 +176,11 @@ setupPayments partyA partyB = do
 createAndExecuteStandardContractWithoutWithdrawing :: Wallet -> Wallet -> Integration (PayoutState 'V1)
 createAndExecuteStandardContractWithoutWithdrawing partyA partyB = do
   StandardContractInit{..} <- createStandardContract partyA partyB
-  let ContractCreatedInEra{..} = contractCreated
+  ContractCreated _ ContractCreatedInEra{..} <- pure contractCreated
   step2 <- makeInitialDeposit
   step3 <- chooseGimmeTheMoney step2
   step4 <- sendNotify step3
-  StandardContractClosed{returnDeposited = InputsAppliedInEra{output}} <- makeReturnDeposit step4
+  StandardContractClosed{returnDeposited = InputsApplied _ InputsAppliedInEra{output}} <- makeReturnDeposit step4
   case Map.toList $ payouts output of
     [(payoutId, payout)] ->
       pure
@@ -193,12 +195,12 @@ createAndExecuteStandardContractWithoutWithdrawing partyA partyB = do
 createAndExecuteStandardContract :: Wallet -> Wallet -> Integration (PayoutState 'V1)
 createAndExecuteStandardContract partyA partyB = do
   StandardContractInit{..} <- createStandardContract partyA partyB
-  let ContractCreatedInEra{contractId} = contractCreated
+  ContractCreated _ ContractCreatedInEra{contractId} <- pure contractCreated
   step2 <- makeInitialDeposit
   step3 <- chooseGimmeTheMoney step2
   step4 <- sendNotify step3
   step5 <- makeReturnDeposit step4
-  (WithdrawTxInEra{inputs, txBody}, _) <- withdrawPartyAFunds step5
+  (WithdrawTx _ WithdrawTxInEra{inputs, txBody}, _) <- withdrawPartyAFunds step5
   case Map.toList inputs of
     [(payoutId, payout)] ->
       pure

@@ -70,6 +70,10 @@ package marlowe-cardano
   tests: True
   ghc-options: -Werror
 
+package marlowe-apps
+  tests: True
+  ghc-options: -Werror
+
 package marlowe-test
   tests: True
   ghc-options: -Werror
@@ -79,6 +83,26 @@ package marlowe-object
   ghc-options: -Werror
 
 package aeson-record
+  tests: True
+  ghc-options: -Werror
+
+package aeson-via-serialise
+  tests: True
+  ghc-options: -Werror
+
+package base16-aeson
+  tests: True
+  ghc-options: -Werror
+
+package plutus-ledger-aeson
+  tests: True
+  ghc-options: -Werror
+
+package plutus-ledger-ada
+  tests: True
+  ghc-options: -Werror
+
+package plutus-ledger-slot
   tests: True
   ghc-options: -Werror
 

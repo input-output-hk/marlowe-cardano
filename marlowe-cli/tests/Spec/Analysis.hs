@@ -12,7 +12,9 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# HLINT ignore "Use underscore" #-}
 {-# LANGUAGE TypeApplications #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 -- | Golden test for transaction cost measurement.
 module Spec.Analysis (
@@ -59,7 +61,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   Value (Constant),
  )
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (SlotConfig))
-import Plutus.V2.Ledger.Api (ProtocolVersion (..))
+import PlutusLedgerApi.V2 (ProtocolVersion (..))
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (Assertion, assertBool, testCase)
 
@@ -252,7 +254,8 @@ protocolTestnet =
         M.singleton
           (C.AnyPlutusScriptVersion C.PlutusScriptV2)
           . C.CostModel
-          $ M.fromList
+          . M.elems
+          $ M.fromList @String
             [ ("addInteger-cpu-arguments-intercept", 205665)
             , ("addInteger-cpu-arguments-slope", 812)
             , ("addInteger-memory-arguments-intercept", 1)

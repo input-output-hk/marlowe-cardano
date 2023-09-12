@@ -1,4 +1,4 @@
-cabal-version: 3.0
+cabal-version: 3.4
 name:          marlowe-runtime
 version:       0.0.4
 synopsis:
@@ -88,9 +88,7 @@ library
     , marlowe-cardano ==0.1.2.0
     , marlowe-chain-sync ==0.0.4
     , marlowe-protocols ==0.2.0.0
-    , ouroboros-network ^>=0.7
     , plutus-ledger-api ^>=1.5
-    , plutus-tx ^>=1.5
     , text ^>=1.2
     , time >=1.9 && <2
 
@@ -153,7 +151,7 @@ library history-api
     , marlowe-protocols ==0.2.0.0
     , marlowe-runtime ==0.0.4
     , ouroboros-consensus ^>=0.7
-    , ouroboros-network ^>=0.7
+    , ouroboros-network-api ^>=0.5
     , plutus-ledger-api ^>=1.5
     , transformers ^>=0.5.6
     , typed-protocols ^>=0.1
@@ -246,7 +244,6 @@ library contract-api
     , aeson >=2 && <3
     , base >=4.9 && <5
     , binary ^>=0.8.8
-    , cardano-api ^>=8.2
     , containers ^>=0.6.5
     , hs-opentelemetry-api ==0.0.3.6
     , marlowe-cardano ==0.1.2.0
@@ -277,7 +274,6 @@ library contract
     , base >=4.9 && <5
     , binary ^>=0.8.8
     , bytestring >=0.10.12 && <0.12
-    , cardano-api ^>=8.2
     , containers ^>=0.6.5
     , dlist ^>=1.0
     , eventuo11y >=0.9 && <0.11
@@ -434,7 +430,7 @@ library tx
     , marlowe-protocols ==0.2.0.0
     , marlowe-runtime:{marlowe-runtime, contract-api, history-api, plutus-scripts, tx-api} ==0.0.4
     , ouroboros-consensus ^>=0.7
-    , ouroboros-network ^>=0.7
+    , ouroboros-network-api ^>=0.5
     , plutus-ledger-api ^>=1.5
     , plutus-tx ^>=1.5
     , retry ^>=0.9.3
@@ -550,7 +546,6 @@ executable marlowe-indexer
     , eventuo11y-otel ^>=0.1
     , hasql >=1.6 && <2
     , hasql-pool ^>=0.8
-    , hs-opentelemetry-api ==0.0.3.6
     , hs-opentelemetry-sdk ==0.0.3.4
     , marlowe-chain-sync ==0.0.4
     , marlowe-protocols ==0.2.0.0
@@ -583,7 +578,6 @@ executable marlowe-sync
     , eventuo11y-otel ^>=0.1
     , hasql >=1.6 && <2
     , hasql-pool ^>=0.8
-    , hs-opentelemetry-api ==0.0.3.6
     , hs-opentelemetry-sdk ==0.0.3.4
     , marlowe-chain-sync ==0.0.4
     , marlowe-protocols ==0.2.0.0
@@ -612,7 +606,6 @@ executable marlowe-tx
     , eventuo11y >=0.9 && <0.11
     , eventuo11y-extras ==0.1.1.0
     , eventuo11y-otel ^>=0.1
-    , hs-opentelemetry-api ==0.0.3.6
     , hs-opentelemetry-sdk ==0.0.3.4
     , marlowe-chain-sync ==0.0.4
     , marlowe-protocols ==0.2.0.0
@@ -639,7 +632,6 @@ executable marlowe-contract
     , eventuo11y >=0.9 && <0.11
     , eventuo11y-extras ==0.1.1.0
     , eventuo11y-otel ^>=0.1
-    , hs-opentelemetry-api ==0.0.3.6
     , hs-opentelemetry-sdk ==0.0.3.4
     , marlowe-protocols ==0.2.0.0
     , marlowe-runtime:{contract, contract-api} ==0.0.4
@@ -665,7 +657,6 @@ executable marlowe-proxy
     , eventuo11y >=0.9 && <0.11
     , eventuo11y-extras ==0.1.1.0
     , eventuo11y-otel ^>=0.1
-    , hs-opentelemetry-api ==0.0.3.6
     , hs-opentelemetry-sdk ==0.0.3.4
     , marlowe-protocols ==0.2.0.0
     , marlowe-runtime:{config, contract-api, discovery-api, history-api, proxy, proxy-api, sync-api, tx-api} ==0.0.4
@@ -697,7 +688,6 @@ executable marlowe-runtime
     , eventuo11y-otel ^>=0.1
     , hasql >=1.6 && <2
     , hasql-pool ^>=0.8
-    , hs-opentelemetry-api ==0.0.3.6
     , hs-opentelemetry-sdk >=0.0.3 && <0.0.4
     , marlowe-chain-sync:{marlowe-chain-sync, chain-indexer, libchainsync} ==0.0.4
     , marlowe-protocols ==0.2.0.0
@@ -706,10 +696,8 @@ executable marlowe-runtime
     , network >=3.1 && <4
     , nonempty-containers ^>=0.3.4
     , optparse-applicative ^>=0.17
-    , ouroboros-network ^>=0.7
     , postgresql-libpq ^>=0.9
     , text ^>=1.2
-    , transformers ^>=0.5.6
     , typed-protocols ^>=0.1
     , unliftio ^>=0.2.1
 
@@ -743,7 +731,6 @@ test-suite marlowe-runtime-test
     , bytestring >=0.10.12 && <0.12
     , cardano-api ^>=8.2
     , cardano-api-gen ^>=8.1
-    , cardano-slotting
     , containers ^>=0.6.5
     , errors >=2.3 && <3
     , filepath ^>=1.4

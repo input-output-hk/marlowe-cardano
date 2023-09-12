@@ -70,6 +70,7 @@ import Language.Marlowe.CLI.Types (
   ),
   SomeMarloweTransaction (SomeMarloweTransaction),
   ValidatorInfo (..),
+  toCardanoEra,
   toCollateralSupportedInEra,
   toExtraKeyWitnessesSupportedInEra,
   toMultiAssetSupportedInEra,
@@ -103,20 +104,23 @@ import Language.Marlowe.Core.V1.Semantics.Types (
 import Language.Marlowe.Core.V1.Semantics.Types.Address (mainnet)
 import Language.Marlowe.Scripts.Types (marloweTxInputsFromInputs)
 
+import Cardano.Api (bundleProtocolParams, unsafeHashableScriptData)
 import Cardano.Api qualified as Api
 import Cardano.Api.Shelley qualified as Api
 import Cardano.Ledger.Credential qualified as Shelley
+import Control.Monad.Writer (WriterT (..))
 import Data.Aeson qualified as A
 import Data.Aeson.Types qualified as A (Pair)
 import Data.ByteString qualified as BS (length)
 import Data.ByteString.Char8 qualified as BS8 (putStr)
 import Data.Foldable.Extra (foldlM)
 import Data.Map.Strict qualified as M (lookup)
+import Data.SatInt (SatInt (..))
 import Data.Set qualified as S (filter, member)
 import Data.Yaml qualified as Y (encode)
 import Plutus.V1.Ledger.Ada qualified as P (lovelaceValueOf)
 import Plutus.V1.Ledger.SlotConfig qualified as P (SlotConfig, posixTimeToEnclosingSlot)
-import Plutus.V2.Ledger.Api qualified as P hiding (evaluateScriptCounting)
+import PlutusLedgerApi.V2 qualified as P hiding (evaluateScriptCounting)
 import PlutusTx.AssocMap qualified as AM
 import PlutusTx.Prelude qualified as P
 
@@ -415,13 +419,13 @@ checkMinimumUtxo era protocol info verbose =
                     (Api.TxOutValue (toMultiAssetSupportedInEra era) value)
                     (Api.TxOutDatumHash era "5555555555555555555555555555555555555555555555555555555555555555")
                     Api.ReferenceScriptNone
-            liftCli $ Api.calculateMinimumUTxO Api.shelleyBasedEra out protocol
+            liftCli $ Api.calculateMinimumUTxO Api.shelleyBasedEra out <$> bundleProtocolParams (toCardanoEra era) protocol
     (value, worst) <-
       case info of
         Right transactions ->
           let measure tx@(Transaction _ contract _ _) = pure . (,Just tx) <$> compute (extractAll contract)
-           in ( maximumBy (compare `on` (Api.selectLovelace . fst))
-                  :: [(Api.Value, Maybe Transaction)] -> (Api.Value, Maybe Transaction)
+           in ( maximumBy (compare `on` fst)
+                  :: [(Api.Lovelace, Maybe Transaction)] -> (Api.Lovelace, Maybe Transaction)
               )
                 <$> foldTransactionsM measure transactions
         Left ContractInstance{..} -> fmap (,Nothing) . compute $ extractAllWithContinuations ciContract ciContinuations
@@ -449,7 +453,7 @@ checkExecutionCost protocol ContractInstance{..} transactions verbose =
     Api.CostModel costModel <-
       liftCliMaybe "Plutus cost model not found." $
         Api.AnyPlutusScriptVersion Api.PlutusScriptV2 `M.lookup` Api.protocolParamCostModels protocol
-    evaluationContext <- liftCli $ P.mkEvaluationContext costModel
+    (evaluationContext, _) <- liftCli $ runWriterT $ P.mkEvaluationContext costModel
     let creatorAddress =
           P.Address
             (P.PubKeyCredential "88888888888888888888888888888888888888888888888888888888")
@@ -482,10 +486,10 @@ checkExecutionCost protocol ContractInstance{..} transactions verbose =
       unzip
         . fmap (\(tx, P.ExBudget{..}) -> ((tx, exBudgetCPU), (tx, exBudgetMemory)))
         <$> mapM (liftM2 (<$>) (,) executor) transactions
-    let (worstSteps, P.ExCPU actualSteps) = maximumBy (compare `on` snd) steps
-        maximumSteps = maybe 0 fromEnum $ Api.executionSteps <$> Api.protocolParamMaxTxExUnits protocol
-        (worstMemory, P.ExMemory actualMemory) = maximumBy (compare `on` snd) memories
-        maximumMemory = maybe 0 fromEnum $ Api.executionMemory <$> Api.protocolParamMaxTxExUnits protocol
+    let (worstSteps, P.ExCPU (unSatInt -> actualSteps)) = maximumBy (compare `on` snd) steps
+        maximumSteps = maybe 0 (fromEnum . Api.executionSteps) (Api.protocolParamMaxTxExUnits protocol)
+        (worstMemory, P.ExMemory (unSatInt -> actualMemory)) = maximumBy (compare `on` snd) memories
+        maximumMemory = maybe 0 (fromEnum . Api.executionMemory) (Api.protocolParamMaxTxExUnits protocol)
     pure $
       putJson
         "Execution cost"
@@ -524,7 +528,7 @@ calcMarloweTxExBudgets protocol ContractInstance{..} transactionsPath lockedRole
   Api.CostModel costModel <-
     liftCliMaybe "Plutus cost model not found." $
       Api.AnyPlutusScriptVersion Api.PlutusScriptV2 `M.lookup` Api.protocolParamCostModels protocol
-  evaluationContext <- liftCli $ P.mkEvaluationContext costModel
+  (evaluationContext, _) <- liftCli $ runWriterT $ P.mkEvaluationContext costModel
   let useSemanticsReferenceInput = UseReferenceInput $ isJust $ viTxIn ciSemanticsValidator
       useOperatorReferenceInput = UseReferenceInput $ isJust $ viTxIn ciOpenRoleValidator
 
@@ -625,8 +629,8 @@ checkTransactionSize era protocol ContractInstance{..} (Transaction marloweState
                 scriptInEra
                 (plutusScriptVersion @lang)
                 (validatorInfoScriptOrReference ciSemanticsValidator)
-                (Api.ScriptDatumForTxIn . Api.fromPlutusData $ P.toData inDatum)
-                (Api.fromPlutusData $ P.toData redeemer)
+                (Api.ScriptDatumForTxIn . unsafeHashableScriptData . Api.fromPlutusData $ P.toData inDatum)
+                (unsafeHashableScriptData . Api.fromPlutusData $ P.toData redeemer)
                 (Api.ExecutionUnits 0 0)
           )
     outValue <- liftCli . toCardanoValue $ totalBalance $ accounts txOutState
@@ -639,7 +643,7 @@ checkTransactionSize era protocol ContractInstance{..} (Transaction marloweState
                     Api.TxOut
                       (viAddress ciSemanticsValidator)
                       (Api.TxOutValue (toMultiAssetSupportedInEra era) outValue)
-                      (Api.TxOutDatumInTx era . Api.fromPlutusData $ P.toData outDatum)
+                      (Api.TxOutDatumInTx era . unsafeHashableScriptData . Api.fromPlutusData $ P.toData outDatum)
                       Api.ReferenceScriptNone
         makePayment (Payment _ (Party (Address network address)) (Token currency name) amount) =
           do
@@ -667,7 +671,7 @@ checkTransactionSize era protocol ContractInstance{..} (Transaction marloweState
               [ Api.TxOut
                   (viAddress ciPayoutValidator)
                   (Api.TxOutValue (toMultiAssetSupportedInEra era) value)
-                  (Api.TxOutDatumInTx era . Api.fromPlutusData $ P.toData (ciRolesCurrency, role))
+                  (Api.TxOutDatumInTx era . unsafeHashableScriptData . Api.fromPlutusData $ P.toData (ciRolesCurrency, role))
                   Api.ReferenceScriptNone
               ]
         makePayment _ = pure []
@@ -679,10 +683,7 @@ checkTransactionSize era protocol ContractInstance{..} (Transaction marloweState
     roles <-
       liftCli
         . mapM toCardanoValue
-        $ fmap (flip (P.singleton ciRolesCurrency) 1)
-          . foldMap findRole
-        $ getInputContent
-          <$> txInputs
+        $ fmap (flip (P.singleton ciRolesCurrency) 1) (foldMap (findRole . getInputContent) txInputs)
     let inRoles =
           (,Api.BuildTxWith $ Api.KeyWitness Api.KeyWitnessForSpending)
             . Api.TxIn "1111111111111111111111111111111111111111111111111111111111111111"
@@ -704,7 +705,7 @@ checkTransactionSize era protocol ContractInstance{..} (Transaction marloweState
                   Api.TxOut
                     creatorAddress
                     (Api.TxOutValue (toMultiAssetSupportedInEra era) oneLovelace)
-                    (Api.TxOutDatumInTx era . Api.fromPlutusData $ P.toData contract)
+                    (Api.TxOutDatumInTx era . unsafeHashableScriptData . Api.fromPlutusData $ P.toData contract)
                     Api.ReferenceScriptNone
               _ -> mempty
             | input <- txInputs
@@ -757,7 +758,7 @@ checkTransactionSize era protocol ContractInstance{..} (Transaction marloweState
         txUpdateProposal = Api.TxUpdateProposalNone
         txMintValue = Api.TxMintNone
         txScriptValidity = Api.TxScriptValidityNone
-    body <- liftCli $ Api.makeTransactionBody Api.TxBodyContent{..}
+    body <- liftCli $ Api.createAndValidateTransactionBody Api.TxBodyContent{..}
     keys <-
       liftIO $
         sequence

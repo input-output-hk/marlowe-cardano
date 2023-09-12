@@ -12,16 +12,15 @@
 -- | A server machine type for loading contracts incrementally.
 module Language.Marlowe.Protocol.Load.Server where
 
-import Cardano.Api (hashScriptData)
 import Data.Kind (Type)
 import Data.Type.Equality (type (:~:) (..))
 import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Protocol.Load.Types
-import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScriptData)
-import Language.Marlowe.Runtime.ChainSync.Api (DatumHash (..), toDatum)
+import Language.Marlowe.Runtime.ChainSync.Api (DatumHash (..))
+import Language.Marlowe.Util (dataHash)
 import Network.Protocol.Peer.Trace hiding (Close)
 import Network.TypedProtocol
-import Plutus.V2.Ledger.Api (toBuiltin)
+import PlutusLedgerApi.V2 (fromBuiltin, toBuiltin)
 
 -- A server of the MarloweLoad protocol.
 newtype MarloweLoadServer m a = MarloweLoadServer
@@ -329,7 +328,7 @@ pullContract batchSize stageContract flush complete =
         popState n st' (Assert obs contract)
 
 closeHash :: DatumHash
-closeHash = fromCardanoDatumHash $ hashScriptData $ toCardanoScriptData $ toDatum Close
+closeHash = DatumHash $ fromBuiltin $ dataHash Close
 
 data PeerState (node :: Node) where
   StateRoot :: PeerState 'RootNode

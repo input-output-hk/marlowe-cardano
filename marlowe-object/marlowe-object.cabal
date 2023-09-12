@@ -1,4 +1,4 @@
-cabal-version: 3.0
+cabal-version: 3.4
 name:          marlowe-object
 version:       0.1.0.0
 synopsis:      Object format for Marlowe contracts.

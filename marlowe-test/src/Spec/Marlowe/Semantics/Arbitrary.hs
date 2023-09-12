@@ -91,20 +91,19 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   getAction,
  )
 import Language.Marlowe.Core.V1.Semantics.Types.Address (testnet)
-import Plutus.V2.Ledger.Api (
+import PlutusLedgerApi.V2 (
   Credential (..),
   CurrencySymbol (..),
   DatumHash (..),
   ExBudget (..),
   POSIXTime (..),
   PubKeyHash (..),
+  ScriptHash (..),
   StakingCredential (StakingHash),
   TokenName (..),
-  ValidatorHash (..),
   adaSymbol,
   adaToken,
   toBuiltin,
-  toData,
  )
 import PlutusTx.Builtins (BuiltinByteString, appendByteString, lengthOfByteString, sliceByteString)
 import Spec.Marlowe.Semantics.Golden (GoldenTransaction, goldenContracts, goldenTransactions)
@@ -126,10 +125,9 @@ import Test.QuickCheck (
 
 import Data.Functor ((<&>))
 
-import Cardano.Api (SerialiseAsRawBytes (serialiseToRawBytes), hashScriptData)
-import Cardano.Api.Shelley (fromPlutusData)
 import Control.Monad.Writer (runWriter)
-import qualified Plutus.V2.Ledger.Api as Ledger (Address (..))
+import Language.Marlowe.Util (dataHash)
+import qualified PlutusLedgerApi.V2 as Ledger (Address (..))
 import qualified PlutusTx.AssocMap as AM (Map, delete, empty, fromList, keys, toList)
 import qualified PlutusTx.Eq as P (Eq)
 
@@ -420,12 +418,12 @@ instance Arbitrary Credential where
 instance Arbitrary StakingCredential where
   arbitrary = StakingHash <$> arbitrary
 
-instance Arbitrary ValidatorHash where
-  arbitrary = arbitraryFibonacci randomValidatorHashes
+instance Arbitrary ScriptHash where
+  arbitrary = arbitraryFibonacci randomScriptHashes
 
 -- | Some validator hashes.
-randomValidatorHashes :: [ValidatorHash]
-randomValidatorHashes =
+randomScriptHashes :: [ScriptHash]
+randomScriptHashes =
   [ "03e718204caac168d55e891f87b2b01da688e4501ce560ae613fa7e7"
   , "1b4a1ddee561fdce46d70d07976d3ef2f4c03985195906c08f547249"
   , "2f7bbc97515f6313cd667ac7345b5530241f2b0300c46b12f083ef46"
@@ -1094,7 +1092,7 @@ instance Arbitrary Input where
   shrink (MerkleizedInput i b c) =
     [NormalInput i]
       <> [MerkleizedInput i' b c | i' <- shrink i]
-      <> [MerkleizedInput i (toBuiltin $ serialiseToRawBytes $ hashScriptData $ fromPlutusData $ toData c) c' | c' <- shrink c]
+      <> [MerkleizedInput i (dataHash c) c' | c' <- shrink c]
 
 instance SemiArbitrary Input where
   semiArbitrary context =
@@ -1106,7 +1104,7 @@ instance SemiArbitrary Input where
             input <- semiArbitrary context
             contract <- semiArbitrary context
             pure $
-              MerkleizedInput input (toBuiltin $ serialiseToRawBytes $ hashScriptData $ fromPlutusData $ toData contract) contract
+              MerkleizedInput input (dataHash contract) contract
         )
       ]
 
@@ -1150,7 +1148,7 @@ arbitraryValidStep state@State{..} contract@(When cases timeout _) =
             [ (9, pure [NormalInput i])
             ,
               ( 1
-              , pure [MerkleizedInput i (toBuiltin $ serialiseToRawBytes $ hashScriptData $ fromPlutusData $ toData contract) contract]
+              , pure [MerkleizedInput i (dataHash contract) contract]
               )
             ]
         pure $ TransactionInput times is
@@ -1163,11 +1161,11 @@ arbitraryValidStep State{minTime} contract =
   -}
   let nextTimeout Close = minTime
       nextTimeout (Pay _ _ _ _ continuation) = nextTimeout continuation
-      nextTimeout (If _ thenContinuation elseContinuation) = maximum $ nextTimeout <$> [thenContinuation, elseContinuation]
+      nextTimeout (If _ thenContinuation elseContinuation) = on max nextTimeout thenContinuation elseContinuation
       nextTimeout (When _ timeout _) = timeout
       nextTimeout (Let _ _ continuation) = nextTimeout continuation
       nextTimeout (Assert _ continuation) = nextTimeout continuation
-   in TransactionInput <$> arbitraryTimeIntervalAfter (maximum [minTime, nextTimeout contract]) <*> pure []
+   in TransactionInput <$> arbitraryTimeIntervalAfter (max minTime (nextTimeout contract)) <*> pure []
 
 -- | Generate random transaction input.
 arbitraryValidInput

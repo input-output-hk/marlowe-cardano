@@ -31,7 +31,7 @@ import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Orphans ()
 import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams (..))
 import Language.Marlowe.Core.V1.Semantics.Types (Input, TimeInterval)
-import Plutus.V1.Ledger.Api (Address, TokenName)
+import PlutusLedgerApi.V1 (Address, TokenName)
 
 import Data.Aeson qualified as A (Value)
 import Data.Map.Strict qualified as M (Map)

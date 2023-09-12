@@ -11,23 +11,22 @@ module Main where
 import Control.Monad (replicateM)
 import Data.Aeson (ToJSON, Value (Null))
 import qualified Data.ByteString as BS
+import Data.Data (Typeable)
+import Data.Kind (Type)
 import Data.OpenApi hiding (version)
 import Data.Proxy
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics (Input (..))
+import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Object.Gen ()
+import Language.Marlowe.Runtime.Transaction.Gen ()
+import Language.Marlowe.Runtime.Web (ContractOrSourceId (..), WithRuntimeStatus)
 import qualified Language.Marlowe.Runtime.Web as Web
-import Network.Arbitrary ()
+import Servant.API
 import Servant.OpenApi
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Spec.Marlowe.Semantics.Next.Arbitrary ()
-
-import Data.Data (Typeable)
-import Data.Kind (Type)
-import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
-import Language.Marlowe.Runtime.Web (ContractOrSourceId (..), WithRuntimeStatus)
-import Servant.API
 import Test.Hspec (Spec, describe, hspec)
 import Test.QuickCheck (Arbitrary (..), Gen, elements, genericShrink, listOf, oneof, resize, suchThat)
 import Test.QuickCheck.Instances ()

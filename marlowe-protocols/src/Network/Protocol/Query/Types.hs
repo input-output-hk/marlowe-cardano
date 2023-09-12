@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE EmptyCase #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MonadComprehensions #-}
@@ -102,9 +103,9 @@ deriving instance forall req (st :: Query req). (forall a. Show (Tag req a)) => 
 deriving instance Show (NobodyHasAgency (st :: Query req))
 
 -- | Basic class for requests.
-class Request (req :: * -> *) where
+class Request (req :: Type -> Type) where
   -- | A data family that represents which request was issued, but lacks the data associated with the request.
-  data Tag req :: * -> *
+  data Tag req :: Type -> Type
 
   -- | Given a request, provide a tag for the request.
   tagFromReq :: req a -> Tag req a
@@ -152,7 +153,7 @@ instance (Request req) => Request (ReqTree req) where
 
 deriving instance (forall x. Show (Tag req x)) => Show (Tag (ReqTree req) a)
 
-class (Request req) => BinaryRequest (req :: * -> *) where
+class (Request req) => BinaryRequest (req :: Type -> Type) where
   putReq :: req a -> Put
   getReq :: Get (SomeRequest req)
   putResult :: Tag req a -> a -> Put

@@ -4,7 +4,6 @@ module Language.Marlowe.Runtime.Contract.Store.File (
   defaultContractStoreOptions,
 ) where
 
-import Cardano.Api (hashScriptData)
 import Codec.Compression.GZip (compress, decompress)
 import Control.Applicative (liftA2)
 import Control.Monad (guard, unless)
@@ -27,13 +26,13 @@ import Data.String (fromString)
 import Data.UUID.V4 (nextRandom)
 import GHC.IO (mkUserError)
 import Language.Marlowe (Case (..), Contract (..))
-import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScriptData)
-import Language.Marlowe.Runtime.ChainSync.Api (DatumHash (..), toDatum)
+import Language.Marlowe.Runtime.ChainSync.Api (DatumHash (..))
 import Language.Marlowe.Runtime.Contract.Api hiding (getContract)
 import Language.Marlowe.Runtime.Contract.Store
 import Language.Marlowe.Runtime.Contract.Store.Memory (merkleizeInputsDefault)
 import Language.Marlowe.Runtime.Core.Api ()
-import Plutus.V2.Ledger.Api (fromBuiltin)
+import Language.Marlowe.Util (dataHash)
+import PlutusLedgerApi.V2 (fromBuiltin)
 import System.FilePath (takeBaseName, (<.>), (</>))
 import System.IO.LockFile (LockingParameters (..), RetryStrategy (NumberOfTimes), withLockFile)
 import UnliftIO
@@ -197,7 +196,7 @@ createContractStore ContractStoreOptions{..} = do
                 Close -> pure closeHash
                 contract -> do
                   -- hash the contract
-                  let hash = fromCardanoDatumHash $ hashScriptData $ toCardanoScriptData $ toDatum contract
+                  let hash = DatumHash $ fromBuiltin $ dataHash contract
                   -- modify the buffer atomically.
                   modifyMVar mBuffer \(closures, buffer) ->
                     -- Do nothing if the contract has already been staged.
@@ -292,7 +291,7 @@ computeClosure rootHash closures = fmap (HashSet.insert rootHash . fold) . trave
 
 -- | Static hash for the close contract.
 closeHash :: DatumHash
-closeHash = fromCardanoDatumHash $ hashScriptData $ toCardanoScriptData $ toDatum Close
+closeHash = DatumHash $ fromBuiltin $ dataHash Close
 
 -- | A contract with its adjacency and closure information. Like ContractWithAdjacency but uses Hash Maps.
 data ContractRecord = ContractRecord

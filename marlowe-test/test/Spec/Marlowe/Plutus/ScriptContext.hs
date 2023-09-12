@@ -14,15 +14,15 @@ module Spec.Marlowe.Plutus.ScriptContext (
 ) where
 
 import Data.List (find)
-import Data.Maybe (catMaybes)
-import Plutus.V2.Ledger.Api (
+import Data.Maybe (mapMaybe)
+import PlutusLedgerApi.V2 (
   Address (Address),
   Credential (PubKeyCredential),
   TxInInfo (txInInfoResolved),
   TxInfo (TxInfo, txInfoData, txInfoInputs, txInfoOutputs, txInfoSignatories),
   TxOut (TxOut, txOutAddress, txOutValue),
  )
-import Plutus.V2.Ledger.Contexts (findDatum, findDatumHash, txSignedBy, valuePaidTo, valueSpent)
+import PlutusLedgerApi.V2.Contexts (findDatum, findDatumHash, txSignedBy, valuePaidTo, valueSpent)
 import Spec.Marlowe.Plutus.Arbitrary ()
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck (Arbitrary (..), Property, elements, forAll, property, suchThat, testProperty)
@@ -95,7 +95,7 @@ checkValuePaid =
             txInfo@TxInfo{txInfoOutputs} <- arbitrary
             let getPkh (Address (PubKeyCredential pkh) _) = Just pkh
                 getPkh _ = Nothing
-                pkhs = catMaybes $ getPkh . txOutAddress <$> txInfoOutputs
+                pkhs = mapMaybe (getPkh . txOutAddress) txInfoOutputs
             isPresent <- arbitrary
             if isPresent && not (null txInfoOutputs)
               then (txInfo,) <$> elements pkhs

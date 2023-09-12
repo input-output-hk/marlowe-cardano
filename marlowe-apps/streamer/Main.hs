@@ -50,7 +50,7 @@ import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import qualified Language.Marlowe.Runtime.History.Api as History
 import qualified Options.Applicative as O
-import qualified Plutus.V2.Ledger.Api as P
+import qualified PlutusLedgerApi.V2 as P
 import qualified PlutusTx.AssocMap as AM
 
 runDetection

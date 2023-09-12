@@ -23,7 +23,7 @@ module Language.Marlowe.CLI.Command (
   runCommand,
 ) where
 
-import Cardano.Api (AlonzoEra, BabbageEra, IsShelleyBasedEra, NetworkId, ScriptDataSupportedInEra (..))
+import Cardano.Api (AlonzoEra, BabbageEra, ConwayEra, IsShelleyBasedEra, NetworkId, ScriptDataSupportedInEra (..))
 import Control.Monad.Except (MonadError, MonadIO, liftIO, runExceptT)
 import Data.Foldable (Foldable (fold), asum)
 import Language.Marlowe.CLI.Command.Contract (ContractCommand, parseContractCommand, runContractCommand)
@@ -160,17 +160,21 @@ mkCommandParser networkId socketPath version = do
     mkSomeCommandParser = do
       let parseTestCommand :: forall era. (IsShelleyBasedEra era) => IO (O.Parser (TestCommand era))
           parseTestCommand = mkParseTestCommand networkId socketPath
-      -- FIXME: Is is possible to aviod this duplication?
+      -- FIXME: Is is possible to avoid this duplication?
       -- It seems to be hard to mix `BindP` and `IO`.
-      testCommandParsers <- (,) <$> parseTestCommand <*> parseTestCommand
+      testCommandParsers <- (,,) <$> parseTestCommand <*> parseTestCommand <*> parseTestCommand
       pure $ O.BindP eraOption (mkSomeCommandParser' testCommandParsers)
 
     mkSomeCommandParser'
-      :: (O.Parser (TestCommand AlonzoEra), O.Parser (TestCommand BabbageEra)) -> SomeEra -> O.Parser SomeCommand
-    mkSomeCommandParser' (testCommandParser, _) (SomeEra ScriptDataInAlonzoEra) = do
+      :: (O.Parser (TestCommand AlonzoEra), O.Parser (TestCommand BabbageEra), O.Parser (TestCommand ConwayEra))
+      -> SomeEra
+      -> O.Parser SomeCommand
+    mkSomeCommandParser' (testCommandParser, _, _) (SomeEra ScriptDataInAlonzoEra) = do
       SomeCommand ScriptDataInAlonzoEra <$> commandParser testCommandParser
-    mkSomeCommandParser' (_, testCommandParser) (SomeEra ScriptDataInBabbageEra) = do
+    mkSomeCommandParser' (_, testCommandParser, _) (SomeEra ScriptDataInBabbageEra) = do
       SomeCommand ScriptDataInBabbageEra <$> commandParser testCommandParser
+    mkSomeCommandParser' (_, _, testCommandParser) (SomeEra ScriptDataInConwayEra) = do
+      SomeCommand ScriptDataInConwayEra <$> commandParser testCommandParser
 
     commandParser :: (IsShelleyBasedEra era) => O.Parser (TestCommand era) -> O.Parser (Command era)
     commandParser testCommandParser =

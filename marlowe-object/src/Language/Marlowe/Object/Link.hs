@@ -15,20 +15,17 @@ import Cardano.Api (
   SerialiseAsRawBytes (serialiseToRawBytes),
   StakeAddressPointer (..),
   StakeAddressReference (..),
-  hashScriptData,
  )
 import Cardano.Api.Byron (ShelleyAddr)
 import Cardano.Api.Shelley (
   Address (..),
   StakeCredential (..),
-  fromPlutusData,
   fromShelleyPaymentCredential,
   fromShelleyStakeReference,
  )
 import Cardano.Ledger.BaseTypes (Network (..))
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Credential (Ptr (..))
-import qualified Cardano.Ledger.Slot as Ledger
 import Control.Applicative (liftA2)
 import Control.Lens (Fold, folding, makePrisms, traverseOf_, (^.))
 import Control.Monad (when)
@@ -55,11 +52,11 @@ import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as C
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as C
 import qualified Language.Marlowe.Object.Types as O
+import Language.Marlowe.Util (dataHash)
 import Network.Protocol.Codec.Spec (Variations)
-import qualified Plutus.V1.Ledger.Address as PV2
-import Plutus.V1.Ledger.Api (ToData)
-import Plutus.V2.Ledger.Api (toBuiltin, toData)
-import qualified Plutus.V2.Ledger.Api as PV2
+import PlutusLedgerApi.V1 (ToData)
+import PlutusLedgerApi.V2 (fromBuiltin, toBuiltin)
+import qualified PlutusLedgerApi.V2 as PV2
 
 -- | Something that can go wrong when linking.
 data LinkError
@@ -265,10 +262,10 @@ toPlutusAddress (ShelleyAddress _ payment staking) =
 toPlutusPayment :: PaymentCredential -> PV2.Credential
 toPlutusPayment = \case
   PaymentCredentialByKey keyHash -> PV2.PubKeyCredential $ toPlutusPubKeyHash keyHash
-  PaymentCredentialByScript scriptHash -> PV2.ScriptCredential $ toPlutusValidatorHash scriptHash
+  PaymentCredentialByScript scriptHash -> PV2.ScriptCredential $ toPlutusScriptHash scriptHash
 
-toPlutusValidatorHash :: ScriptHash -> PV2.ValidatorHash
-toPlutusValidatorHash = PV2.ValidatorHash . PV2.toBuiltin . serialiseToRawBytes
+toPlutusScriptHash :: ScriptHash -> PV2.ScriptHash
+toPlutusScriptHash = PV2.ScriptHash . PV2.toBuiltin . serialiseToRawBytes
 
 toPlutusPubKeyHash :: Hash PaymentKey -> PV2.PubKeyHash
 toPlutusPubKeyHash = PV2.PubKeyHash . PV2.toBuiltin . serialiseToRawBytes
@@ -279,7 +276,7 @@ toPlutusStaking = \case
   StakeAddressByValue credential -> Just $ PV2.StakingHash $ case credential of
     StakeCredentialByKey keyHash ->
       PV2.PubKeyCredential $ PV2.PubKeyHash $ PV2.toBuiltin $ serialiseToRawBytes keyHash
-    StakeCredentialByScript scriptHash -> PV2.ScriptCredential $ toPlutusValidatorHash scriptHash
+    StakeCredentialByScript scriptHash -> PV2.ScriptCredential $ toPlutusScriptHash scriptHash
   StakeAddressByPointer (StakeAddressPointer (Ptr slotNo txIx certIx)) ->
     Just $
       PV2.StakingPtr
@@ -509,7 +506,7 @@ fromLinkedObject lbl = \case
 
 hashLabel :: (ToData a) => Text -> a -> O.Label
 hashLabel prefix a =
-  O.Label $ prefix <> "-" <> encodeBase16 (serialiseToRawBytes $ hashScriptData $ fromPlutusData $ toData a)
+  O.Label $ prefix <> "-" <> encodeBase16 (fromBuiltin $ dataHash a)
 
 linkedChildren :: Fold LinkedObject LinkedObject
 linkedChildren = folding \case

@@ -45,7 +45,7 @@ import Language.Marlowe.Runtime.Core.Api (
  )
 import Language.Marlowe.Runtime.History.Api (ContractStep (..), RedeemStep (..))
 import Language.Marlowe.Runtime.Sync.Database (Next (..))
-import qualified Plutus.V2.Ledger.Api as PV2
+import qualified PlutusLedgerApi.V2 as PV2
 import Witherable (catMaybes, mapMaybe)
 import Prelude hiding (init)
 

@@ -33,7 +33,7 @@ import Language.Marlowe.Runtime.Core.Api (
   emptyMarloweTransactionMetadata,
  )
 import Language.Marlowe.Runtime.History.Api (CreateStep (..), SomeCreateStep (..))
-import qualified Plutus.V2.Ledger.Api as PV2
+import qualified PlutusLedgerApi.V2 as PV2
 import Prelude hiding (init)
 
 getCreateStep :: ContractId -> T.Transaction (Maybe (BlockHeader, SomeCreateStep))

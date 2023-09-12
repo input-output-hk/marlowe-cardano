@@ -23,7 +23,7 @@ import Cardano.Api (
   ScriptDataSupportedInEra,
   StakeAddressReference (NoStakeAddress),
   generateSigningKey,
-  makeShelleyAddressInEra,
+  makeShelleyAddressInEra, File (..),
  )
 import Cardano.Api qualified as C
 import Control.Lens (ifor_, modifying, use, view, (.=))
@@ -34,7 +34,7 @@ import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
 import Data.Traversable (for)
-import Language.Marlowe.CLI.Cardano.Api.Value (lovelaceToPlutusValue, toMintingPolicyHash, toPlutusValue)
+import Language.Marlowe.CLI.Cardano.Api.Value (lovelaceToPlutusValue, toPlutusValue, toCurrencySymbol)
 import Language.Marlowe.CLI.Test.Wallet.Types (
   Asset (Asset),
   AssetId (AdaAssetId, AssetId),
@@ -86,9 +86,8 @@ import Language.Marlowe.CLI.Types (
   validatorAddress,
  )
 import Language.Marlowe.Core.V1.Semantics.Types qualified as M
-import Plutus.V1.Ledger.Api (CurrencySymbol, TokenName)
-import Plutus.V1.Ledger.Value qualified as P
-
+import PlutusLedgerApi.V1 (CurrencySymbol, TokenName)
+import PlutusLedgerApi.V1.Value qualified as P
 import Cardano.Api.Shelley qualified as CAS
 import Contrib.Control.Monad.Except (note)
 import Contrib.Data.Foldable (foldMapFlipped, ifoldMapMFlipped)
@@ -131,10 +130,8 @@ import Language.Marlowe.CLI.Test.Log (Label, logStoreLabeledMsg, logTxBody, thro
 import Language.Marlowe.CLI.Test.Report qualified as Report
 import Language.Marlowe.CLI.Types qualified as CT
 import Language.Marlowe.Cardano (marloweNetworkFromCaradnoNetworkId)
-import Plutus.V1.Ledger.Value (valueOf)
-import Plutus.V1.Ledger.Value qualified as PV
-import Plutus.V2.Ledger.Api (MintingPolicyHash (..))
-import Plutus.V2.Ledger.Api qualified as P
+import PlutusLedgerApi.V1.Value (valueOf)
+import PlutusLedgerApi.V2 qualified as P
 import PlutusTx.AssocMap qualified as AssocMap
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 import PlutusTx.Monoid (Group (inv))
@@ -202,9 +199,7 @@ addPublishingCosts
 addPublishingCosts nickname marloweScriptsRefs = do
   let MarloweScriptsRefs{mrMarloweValidator, mrRolePayoutValidator, mrOpenRoleValidator} = marloweScriptsRefs
       total =
-        fold $
-          toPlutusValue . C.txOutValueToValue . CV.txOutValue . snd . unAnUTxO . fst
-            <$> [mrMarloweValidator, mrRolePayoutValidator, mrOpenRoleValidator]
+        foldMap (toPlutusValue . C.txOutValueToValue . CV.txOutValue . snd . unAnUTxO . fst) [mrMarloweValidator, mrRolePayoutValidator, mrOpenRoleValidator]
   updateWallet nickname $ \wallet ->
     wallet
       { T._waPublishingCosts = T._waPublishingCosts wallet <> total
@@ -380,14 +375,10 @@ findWalletByUniqueToken currencyNickname tokenName = runExceptT do
           if check value
             then Just n
             else Nothing
-      step n value res =
+      step n value (Just res) =
         if check value
-          then case res of
-            Just n' ->
-              throwError $ "[findByUniqueToken] Token is not unique - found in two wallets: " <> show n <> " and " <> show n' <> "."
-            Nothing ->
-              pure $ Just n
-          else pure res
+          then throwError $ "[findByUniqueToken] Token is not unique - found in two wallets: " <> show n <> " and " <> show res <> "."
+          else pure $ Just res
   wallet2value <- lift fetchWalletsValue
   possibleOwnerNickname <- ifoldrM step Nothing wallet2value
   ownerNickname <-
@@ -683,7 +674,7 @@ interpret wo@Mint{..} = do
         printStats
 
   logStoreLabeledMsg wo $ "This currency symbol is " <> show policy
-  let currencySymbol = PV.mpsSymbol . toMintingPolicyHash $ policy
+  let currencySymbol = toCurrencySymbol policy
       currency = Currency currencySymbol (Just issuerNickname) woMintingExpirationSlot policy
 
   addWalletTransaction issuerNickname wo "" mintingTx
@@ -742,9 +733,9 @@ interpret ExternalCurrency{..} = do
     (Just _, Just _) -> throwError $ testExecutionFailed' "You can't specify both currency symbol and policy id."
     (Nothing, Nothing) -> throwError $ testExecutionFailed' "You must specify either currency symbol or policy id."
     (Just (EncodeBase16 bs), _) -> do
-      let cs@(P.CurrencySymbol currencySymbol) = P.currencySymbol bs
+      let cs = P.currencySymbol bs
 
-      case toCardanoPolicyId $ MintingPolicyHash currencySymbol of
+      case toCardanoPolicyId cs of
         Right policy -> pure (cs, policy)
         Left err -> throwError $ testExecutionFailed' $ "Failed to parse currency symbol: " <> show err
     (_, Just _) -> throwError $ testExecutionFailed' "External currency with policy id is not supported yet."
@@ -770,7 +761,7 @@ saveWalletFiles walletNickname wallet dir = do
       Wallet{_waAddress, _waSigningKey = sskey} = wallet
       addrFileTpl = "wallet-of-" <> nickname <> "-" <> ".pay"
       skeyFileTpl = "wallet-of-" <> nickname <> "-" <> ".skey"
-      writeEnvelope p c = C.writeFileTextEnvelope p Nothing c
+      writeEnvelope p = C.writeFileTextEnvelope p Nothing
 
   (addrFile, skeyFile) <- case dir of
     Nothing -> do
@@ -782,7 +773,7 @@ saveWalletFiles walletNickname wallet dir = do
       s <- emptyTempFile dir' skeyFileTpl
       pure (a, s)
   writeFile addrFile (Text.unpack $ C.serialiseAddress _waAddress)
-  void $ either (writeEnvelope skeyFile) (writeEnvelope skeyFile) sskey
+  void $ either (writeEnvelope (File skeyFile)) (writeEnvelope (File skeyFile)) sskey
   pure (addrFile, CT.SigningKeyFile skeyFile)
 
 -- TODO: We should use `CardanoEra era` as an `era` carrier here.
@@ -804,7 +795,7 @@ createWallet _ = do
   pure $ emptyWallet address (Left skey)
 
 fundWallets
-  :: (InterpretMonad env st m era)
+  :: (InterpretMonad env st m era, CAS.IsCardanoEra era)
   => (Label l)
   => l
   -> [WalletNickname]
@@ -823,7 +814,7 @@ fundWallets label walletNicknames utxos = do
     faucet{_waSubmittedTransactions = SomeTxBody era txBody : faucetTransactions}
 
 buildFaucet
-  :: (InterpretMonad env st m era)
+  :: (InterpretMonad env st m era, CAS.IsCardanoEra era)
   => (Label l)
   => l
   -> [AddressInEra era]

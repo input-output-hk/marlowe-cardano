@@ -56,7 +56,7 @@ import Marlowe.Contracts.ChunkedValueTransfer qualified as ChunkedValueTransfer
 import Marlowe.Contracts.Raffle (raffle)
 import Marlowe.Contracts.Raffle qualified as Raffle
 import Options.Applicative qualified as O
-import Plutus.V1.Ledger.Value qualified as P
+import PlutusLedgerApi.V1.Value qualified as P
 import Text.Read (readEither)
 
 -- | Marlowe CLI commands and options for contract templates.

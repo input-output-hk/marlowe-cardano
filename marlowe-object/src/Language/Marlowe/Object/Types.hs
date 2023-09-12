@@ -59,8 +59,8 @@ import qualified Language.Marlowe.Core.V1.Semantics.Types as Core
 import Language.Marlowe.Core.V1.Semantics.Types.Address (serialiseAddressBech32)
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as Core
 import Network.Protocol.Codec.Spec (Variations (..), varyAp)
-import Plutus.V2.Ledger.Api (BuiltinByteString, POSIXTime (..))
-import qualified Plutus.V2.Ledger.Api as PV2
+import PlutusLedgerApi.V2 (BuiltinByteString, POSIXTime (..))
+import qualified PlutusLedgerApi.V2 as PV2
 import Text.Read (Lexeme (..), ReadPrec, parens, prec, reset, step)
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -583,7 +583,7 @@ instance IsString ShelleyAddress where
 instance Binary ShelleyAddress where
   put = put . serialiseToRawBytes . unShelleyAddress
   get =
-    maybe (fail "failed to deserialize address") (pure . ShelleyAddress)
+    either (fail . (<> "failed to deserialize address: ") . show) (pure . ShelleyAddress)
       . deserialiseFromRawBytes (AsAddress AsShelleyAddr)
       =<< get
 

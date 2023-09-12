@@ -5,7 +5,7 @@
 module Language.Marlowe.Runtime.CLI.Command.Withdraw where
 
 import qualified Cardano.Api as C
-import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
+import Cardano.Api.Shelley (File (..), ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT (ExceptT))
 import Data.Aeson (toJSON)
@@ -58,7 +58,8 @@ runWithdrawCommand TxCommand{walletAddresses, signingMethod, subCommand = Withdr
         ExceptT @_ @_ @() $
           liftIO $
             first TransactionFileWriteFailed <$> case era of
-              ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.writeFileTextEnvelope outputFile Nothing txBody
+              ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.writeFileTextEnvelope (File outputFile) Nothing txBody
+              ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.writeFileTextEnvelope (File outputFile) Nothing txBody
         let txId = C.getTxId txBody
             res =
               A.object
