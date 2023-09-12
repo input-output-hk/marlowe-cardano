@@ -12,7 +12,7 @@
   shellcheck.enable = true;
 
 
-  fourmolu.enable = true; # <--- 2.2G
+  fourmolu.enable = true;
 
 
   hlint.enable = true;

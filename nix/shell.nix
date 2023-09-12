@@ -19,17 +19,15 @@ in
     inputs'.cardano-world.cardano.packages.cardano-address
     inputs'.cardano-world.cardano.packages.cardano-node
     inputs'.cardano-world.cardano.packages.cardano-cli
-    # ^^^^^ 2.7G
 
     pkgs.z3
     pkgs.sqitchPg
     pkgs.postgresql
 
-    pkgs.haskellPackages.hspec-golden
-    # ^^^^^ 2.1G
-
     pkgs.jq
     pkgs.docker-compose
+
+    project.hsPkgs.hspec-golden.components.exes.hgold
   ];
 
 
