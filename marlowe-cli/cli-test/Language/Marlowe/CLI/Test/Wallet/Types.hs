@@ -75,7 +75,6 @@ import Language.Marlowe.CLI.Test.Operation.Aeson (
  )
 import Language.Marlowe.CLI.Test.Operation.Aeson qualified as Operation
 import Language.Marlowe.CLI.Types (PrintStats, SomePaymentSigningKey, TxBuildupContext)
-import Ledger.Orphans ()
 import Plutus.V1.Ledger.Api (CurrencySymbol, TokenName)
 import Plutus.V1.Ledger.Value qualified as P
 import Text.Read (readMaybe)

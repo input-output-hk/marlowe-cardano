@@ -12,6 +12,7 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeApplications #-}
 
 -- | Golden test for transaction cost measurement.
 module Spec.Analysis (
@@ -30,6 +31,7 @@ import Language.Marlowe.CLI.Analyze (
     ContractInstance,
     ciContinuations,
     ciContract,
+    ciOpenRoleValidator,
     ciPayoutValidator,
     ciRolesCurrency,
     ciSemanticsValidator,
@@ -87,6 +89,7 @@ checkTransactionCost merkleize =
       MarloweTransaction{..} <-
         flip runReaderT (CliEnv C.ScriptDataInBabbageEra) $
           initializeTransactionImpl
+            @C.PlutusScriptV2
             (marloweParams "8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d")
             (SlotConfig 0 1000)
             (uncurry ProtocolVersion $ fromEnum *** fromEnum $ C.protocolParamProtocolVersion protocolTestnet)
@@ -103,6 +106,7 @@ checkTransactionCost merkleize =
           ciContinuations = mtContinuations
           ciRolesCurrency = mtRolesCurrency
           ciSemanticsValidator = mtValidator
+          ciOpenRoleValidator = mtOpenRoleValidator
           ciPayoutValidator = mtRoleValidator
           ciSlotConfig = mtSlotConfig
       transactions <- findTransactions' True $ MerkleizedContract ciContract ciContinuations

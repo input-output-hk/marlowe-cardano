@@ -30,6 +30,7 @@ cabal run exe:marlowe-cli -- \
   --write-to-json-file report.json \
   --max-retries 3 \
   --stream-json \
+  --simulation-mode \
   ./test/templates/role-based/runtime/chunked-value-transfer.yaml \
   ./test/inline/role-based/cli/contract-for-differences-with-oracle.yaml \
   ./test/inline/role-based/cli/contract-for-differences.yaml \

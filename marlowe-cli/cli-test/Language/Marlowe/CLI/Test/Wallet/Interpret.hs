@@ -10,6 +10,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module Language.Marlowe.CLI.Test.Wallet.Interpret where
@@ -33,7 +34,7 @@ import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
 import Data.Traversable (for)
-import Language.Marlowe.CLI.Cardano.Api.Value (lovelaceToPlutusValue, toPlutusValue)
+import Language.Marlowe.CLI.Cardano.Api.Value (lovelaceToPlutusValue, toMintingPolicyHash, toPlutusValue)
 import Language.Marlowe.CLI.Test.Wallet.Types (
   Asset (Asset),
   AssetId (AdaAssetId, AssetId),
@@ -88,7 +89,7 @@ import Language.Marlowe.Core.V1.Semantics.Types qualified as M
 import Plutus.V1.Ledger.Api (CurrencySymbol, TokenName)
 import Plutus.V1.Ledger.Value qualified as P
 
-import Cardano.Api.Byron (SerialiseAsRawBytes (..))
+import Cardano.Api.Shelley (PlutusScript (..))
 import Cardano.Api.Shelley qualified as CAS
 import Contrib.Control.Monad.Except (note)
 import Contrib.Data.Foldable (foldMapFlipped, ifoldMapMFlipped)
@@ -112,14 +113,10 @@ import Data.Maybe (catMaybes, fromMaybe, isJust)
 import Data.Text qualified as Text
 import Data.Tuple.Extra (uncurry3)
 import Language.Marlowe.CLI.Cardano.Api (toReferenceTxInsScriptsInlineDatumsSupportedInEra, toTxOutDatumInline)
-import Language.Marlowe.CLI.Cardano.Api.PlutusScript (fromV2Validator)
 import Language.Marlowe.CLI.Cardano.Api.Value qualified as CV
-<<<<<<< HEAD
-import Language.Marlowe.CLI.IO (queryInEra, readSigningKey)
+import Language.Marlowe.CLI.IO (readSigningKey, submitTxBody')
 import Language.Marlowe.CLI.Run (toCardanoPolicyId)
 import Language.Marlowe.CLI.Sync (toPlutusAddress)
-import Language.Marlowe.CLI.Test.CLI.Monad (runCli, runLabeledCli)
-import Language.Marlowe.CLI.IO (readSigningKey, submitTxBody')
 import Language.Marlowe.CLI.Test.CLI.Monad (runLabeledCli)
 import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (
   ParametrizedMarloweJSON,
@@ -134,9 +131,7 @@ import Language.Marlowe.CLI.Test.Log (Label, logStoreLabeledMsg, logTxBody, thro
 import Language.Marlowe.CLI.Test.Report qualified as Report
 import Language.Marlowe.CLI.Types qualified as CT
 import Language.Marlowe.Cardano (marloweNetworkFromCaradnoNetworkId)
-import Language.Marlowe.Scripts.OpenRole (openRoleValidator)
-import Ledger.Tx.CardanoAPI (fromCardanoPolicyId, toCardanoPolicyId)
-import Ledger.Tx.CardanoAPI qualified as P
+import Language.Marlowe.Scripts.OpenRole (openRoleValidatorBytes)
 import Plutus.V1.Ledger.Value (valueOf)
 import Plutus.V1.Ledger.Value qualified as PV
 import Plutus.V2.Ledger.Api (MintingPolicyHash (..))
@@ -209,7 +204,7 @@ addPublishingCosts nickname marloweScriptsRefs = do
   let MarloweScriptsRefs{mrMarloweValidator, mrRolePayoutValidator, mrOpenRoleValidator} = marloweScriptsRefs
       total =
         fold $
-          P.fromCardanoValue . C.txOutValueToValue . CV.txOutValue . snd . unAnUTxO . fst
+          toPlutusValue . C.txOutValueToValue . CV.txOutValue . snd . unAnUTxO . fst
             <$> [mrMarloweValidator, mrRolePayoutValidator, mrOpenRoleValidator]
   updateWallet nickname $ \wallet ->
     wallet
@@ -240,7 +235,8 @@ openRoleValidatorAddress
 openRoleValidatorAddress = do
   era <- view eraL
   networkId <- getNetworkId
-  pure $ validatorAddress (fromV2Validator openRoleValidator) era networkId NoStakeAddress
+  let openRoleScript = PlutusScriptSerialised @C.PlutusScriptV2 openRoleValidatorBytes
+  pure $ validatorAddress openRoleScript era networkId NoStakeAddress
 
 getNetworkId
   :: forall env st m era
@@ -688,7 +684,7 @@ interpret wo@Mint{..} = do
         printStats
 
   logStoreLabeledMsg wo $ "This currency symbol is " <> show policy
-  let currencySymbol = PV.mpsSymbol . fromCardanoPolicyId $ policy
+  let currencySymbol = PV.mpsSymbol . toMintingPolicyHash $ policy
       currency = Currency currencySymbol (Just issuerNickname) woMintingExpirationSlot policy
 
   addWalletTransaction issuerNickname wo "" mintingTx

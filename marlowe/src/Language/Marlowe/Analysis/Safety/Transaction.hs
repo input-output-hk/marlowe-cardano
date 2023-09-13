@@ -430,6 +430,9 @@ calcValidatorExBudget evaluationContext scriptContext (ValidatorEvalContext vali
     (_, Right budget) -> pure budget
     (msg, Left err) -> throwError . fromString $ "Plutus execution failed: " <> show err <> " with log " <> show msg <> "."
 
+datumHash :: P.Datum -> P.DatumHash
+datumHash = P.DatumHash . dataHash
+
 calcValidatorsExBudget
   :: (IsString e)
   => (MonadError e m)
@@ -465,7 +468,7 @@ calcValidatorsExBudget evaluationContext creatorAddress txInSpecs txOutSpecs (in
               parts' <&> \((address, datum), value) -> do
                 let datum' = case datum of
                       Nothing -> P.NoOutputDatum
-                      Just d -> P.OutputDatumHash $ P.datumHash d
+                      Just d -> P.OutputDatumHash $ datumHash d
                 P.TxOut address value datum' Nothing
         extraTxOuts <> parts''
 
@@ -483,7 +486,7 @@ calcValidatorsExBudget evaluationContext creatorAddress txInSpecs txOutSpecs (in
         let datum' = case possibleDatum of
               Nothing -> P.Datum $ P.toBuiltinData P.emptyByteString
               Just d -> d
-            txIn = P.TxInInfo txOutRef (P.TxOut address value (P.OutputDatumHash $ P.datumHash datum') Nothing)
+            txIn = P.TxInInfo txOutRef (P.TxOut address value (P.OutputDatumHash $ datumHash datum') Nothing)
             possibleValidatorContext = do
               (name, validator, redeemer, _) <- possibleScriptEvalContext
               let validatorEvalContext = ValidatorEvalContext validator datum' redeemer txOutRef
@@ -526,7 +529,7 @@ calcValidatorsExBudget evaluationContext creatorAddress txInSpecs txOutSpecs (in
       txInfoData = do
         let inDatums = catMaybes $ txInSpecs <&> \(TxInSpec _ _ datum _) -> datum
             outDatums = catMaybes $ txOutSpecs <&> \(TxOutSpec _ _ datum) -> datum
-        AM.fromList $ ((,) =<< P.datumHash) <$> (nub $ inDatums <> outDatums)
+        AM.fromList $ ((,) =<< datumHash) <$> (nub $ inDatums <> outDatums)
 
   scriptPurposePlaceholder <- P.Spending <$> freshTxOutRef
   let scriptContextTxInfo = P.TxInfo{..}

@@ -50,15 +50,12 @@ module Language.Marlowe.Scripts.OpenRole (
   openRoleValidatorHash,
 ) where
 
-import Codec.Serialise (serialise)
-import Data.ByteString.Lazy qualified as LBS
-import Data.ByteString.Short qualified as SBS
 import GHC.Generics (Generic)
 import Language.Marlowe.Core.V1.Semantics.Types qualified as V1
+import Language.Marlowe.Scripts (hashScript, serialiseCompiledCode)
 import Language.Marlowe.Scripts qualified as V1.Scripts
-import Plutus.Script.Utils.V2.Scripts (validatorHash)
+import Language.Marlowe.Scripts.Types qualified as V1.Scripts
 import Plutus.V1.Ledger.Address (scriptHashAddress)
-import Plutus.V1.Ledger.Scripts (mkValidatorScript)
 import Plutus.V1.Ledger.Value (adaSymbol, getValue, valueOf)
 import Plutus.V2.Ledger.Api (
   Redeemer (..),
@@ -68,9 +65,9 @@ import Plutus.V2.Ledger.Api (
   TxOut (..),
   ValidatorHash,
   fromBuiltinData,
-  getValidator,
  )
 import Plutus.V2.Ledger.Api qualified as PV2
+import PlutusTx (CompiledCode)
 import PlutusTx qualified
 import PlutusTx.AssocMap qualified as AssocMap
 import PlutusTx.Prelude as PlutusTxPrelude hiding (traceError, traceIfFalse)
@@ -240,19 +237,18 @@ mkOpenRoleValidator _ _ _ _ = False
 --  * Create a validator which is simply typed.
 --  * Create "typed by `Any` validator".
 --  * Coerce it if you like. This step is not required - we only need `TypedValidator`.
-openRoleValidator :: PV2.Validator
+openRoleValidator :: CompiledCode (BuiltinData -> BuiltinData -> BuiltinData -> ())
 openRoleValidator = do
-  let mkUntypedOpenRoleValidator :: ValidatorHash -> BuiltinData -> BuiltinData -> BuiltinData -> ()
-      mkUntypedOpenRoleValidator mvh d r p = PlutusTxPrelude.check $ mkOpenRoleValidator mvh (PV2.unsafeFromBuiltinData d) r (PV2.unsafeFromBuiltinData p)
-  mkValidatorScript
-    $ $$(PlutusTx.compile [||mkUntypedOpenRoleValidator||])
+  let openRoleValidator' :: ValidatorHash -> BuiltinData -> BuiltinData -> BuiltinData -> ()
+      openRoleValidator' mvh d r p = PlutusTxPrelude.check $ mkOpenRoleValidator mvh (PV2.unsafeFromBuiltinData d) r (PV2.unsafeFromBuiltinData p)
+  $$(PlutusTx.compile [||openRoleValidator'||])
     `PlutusTx.applyCode` PlutusTx.liftCode V1.Scripts.marloweValidatorHash
 
 openRoleValidatorBytes :: SerializedScript
-openRoleValidatorBytes = SBS.toShort . LBS.toStrict . serialise . getValidator $ openRoleValidator
+openRoleValidatorBytes = serialiseCompiledCode openRoleValidator
 
-openRoleValidatorHash :: PV2.ValidatorHash
-openRoleValidatorHash = validatorHash openRoleValidator
+openRoleValidatorHash :: ValidatorHash
+openRoleValidatorHash = hashScript openRoleValidator
 
 PlutusTx.makeLift ''SubTxInfo
 PlutusTx.makeIsDataIndexed ''SubTxInfo [('SubTxInfo, 0)]

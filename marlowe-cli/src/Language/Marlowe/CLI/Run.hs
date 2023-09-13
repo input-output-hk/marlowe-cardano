@@ -48,6 +48,7 @@ module Language.Marlowe.CLI.Run (
 
   -- * Utilities
   toCardanoAddressInEra,
+  toCardanoAssetName,
   toCardanoValue,
   toCardanoPolicyId,
 ) where

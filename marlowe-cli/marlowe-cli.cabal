@@ -116,7 +116,6 @@ library
     , marlowe-cardano
     , marlowe-plutus
     , megaparsec
-    , marlowe-scripts
     , memory
     , mtl
     , one-line-aeson-text
@@ -206,9 +205,9 @@ library cli-test
     , marlowe-cli
     , marlowe-client
     , marlowe-contracts
+    , marlowe-plutus
     , marlowe-protocols
     , marlowe-runtime:{marlowe-runtime, history-api, proxy-api, sync-api, tx-api}
-    , marlowe-scripts
     , monad-loops
     , mtl
     , network

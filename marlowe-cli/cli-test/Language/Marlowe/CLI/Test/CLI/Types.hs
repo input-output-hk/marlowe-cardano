@@ -83,8 +83,6 @@ import Language.Marlowe.Core.V1.Semantics.Types qualified as M
 import Language.Marlowe.Runtime.Cardano.Api qualified as Runtime.Api
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Language.Marlowe.Runtime.Core.Api qualified as Runtime.Api
-import qualified Language.Marlowe.Runtime.Core.Api as Runtime.Api
-import Ledger.Orphans ()
 import Plutus.V1.Ledger.Api (CostModelParams, ProtocolVersion, TokenName)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig)
 

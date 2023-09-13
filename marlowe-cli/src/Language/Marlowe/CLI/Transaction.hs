@@ -296,8 +296,8 @@ import Language.Marlowe.CLI.Types (
   withShelleyBasedEra,
  )
 import Language.Marlowe.CLI.Types qualified as PayToScript (PayToScript (value))
-import Language.Marlowe.Scripts (marloweValidatorBytes, rolePayoutValidatorBytes, marloweValidator, rolePayoutValidator)
-import Language.Marlowe.Scripts.OpenRole (openRoleValidator)
+import Language.Marlowe.Scripts (marloweValidatorBytes, rolePayoutValidatorBytes)
+import Language.Marlowe.Scripts.OpenRole (openRoleValidatorBytes)
 import Ouroboros.Consensus.HardFork.History (interpreterToEpochInfo)
 import Plutus.V1.Ledger.Api (Datum (..), POSIXTime (..), Redeemer (..), TokenName (..), fromBuiltin, toData)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
@@ -982,9 +982,9 @@ buildPublishingImpl buildupCtx signingKey expires changeAddress publishingStrate
   PlutusScriptV1 -> throwError "Plutus Script V1 not supported"
   PlutusScriptV2 -> do
     let queryCtx = toQueryContext buildupCtx
-    pm <- buildScriptPublishingInfo @lang queryCtx (fromV2TypedValidator marloweValidator) publishingStrategy
-    pp <- buildScriptPublishingInfo @lang queryCtx (fromV2TypedValidator rolePayoutValidator) publishingStrategy
-    po <- buildScriptPublishingInfo @lang queryCtx (fromV2Validator openRoleValidator) publishingStrategy
+    pm <- buildScriptPublishingInfo @lang queryCtx (PlutusScriptSerialised marloweValidatorBytes) publishingStrategy
+    pp <- buildScriptPublishingInfo @lang queryCtx (PlutusScriptSerialised rolePayoutValidatorBytes) publishingStrategy
+    po <- buildScriptPublishingInfo @lang queryCtx (PlutusScriptSerialised openRoleValidatorBytes) publishingStrategy
 
     let buildPublishedScriptTxOut (minAda, publisher, referenceValidator) = do
           referenceScript <- buildReferenceScript $ viScript referenceValidator
@@ -1244,9 +1244,9 @@ findMarloweScriptsRefs queryCtx publishingStrategy printStats = case plutusScrip
   PlutusScriptV1 -> do
     throwError . CliError $ "Plutus script version 1 is not supported"
   PlutusScriptV2 -> do
-    let marloweHash = hashScript (PS.toScript $ fromV2TypedValidator marloweValidator)
-        payoutHash = hashScript (PS.toScript $ fromV2TypedValidator rolePayoutValidator)
-        openRoleHash = hashScript (PS.toScript $ fromV2TypedValidator openRoleValidator)
+    let marloweHash = hashScript (PS.toScript $ PlutusScriptSerialised @PlutusScriptV2 marloweValidatorBytes)
+        payoutHash = hashScript (PS.toScript $ PlutusScriptSerialised @PlutusScriptV2 rolePayoutValidatorBytes)
+        openRoleHash = hashScript (PS.toScript $ PlutusScriptSerialised @PlutusScriptV2 openRoleValidatorBytes)
     runMaybeT do
       m <- MaybeT $ findScriptRef @lang queryCtx marloweHash publishingStrategy printStats
       p <- MaybeT $ findScriptRef @lang queryCtx payoutHash publishingStrategy printStats

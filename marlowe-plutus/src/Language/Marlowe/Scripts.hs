@@ -36,6 +36,10 @@ module Language.Marlowe.Scripts (
   rolePayoutValidator,
   rolePayoutValidatorBytes,
   rolePayoutValidatorHash,
+
+  -- * Utilities
+  serialiseCompiledCode,
+  hashScript,
 ) where
 
 import Cardano.Crypto.Hash qualified as Hash

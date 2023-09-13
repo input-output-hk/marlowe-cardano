@@ -50,40 +50,19 @@ import Contrib.Data.Foldable (anyFlipped, foldMapFlipped, foldMapMFlipped)
 import Contrib.Data.List.Random (combinationWithRepetitions)
 import Control.Lens (assign, coerced, modifying, use, view)
 import Control.Monad (foldM, when)
-import Control.Monad.Error.Class (MonadError (throwError))
-import Control.Lens (assign, coerced, modifying, use, view)
-import Data.Foldable (fold, for_)
-import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
-import Data.Map.Strict qualified as Map
-import Data.Traversable (for)
-import Language.Marlowe.CLI.Test.Wallet.Types (
-  Currency (..),
-  CurrencyNickname,
-  Wallet (Wallet, _waAddress, _waSigningKey),
-  WalletNickname (WalletNickname),
-  faucetNickname,
- )
-import Ledger.Orphans ()
-
-import Contrib.Control.Monad.Except (note)
-import Contrib.Data.Foldable (anyFlipped, foldMapFlipped, foldMapMFlipped)
-import Contrib.Data.List.Random (combinationWithRepetitions)
-import Control.Monad (foldM, when)
 import Control.Monad.Error.Class (MonadError (throwError), liftEither)
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Loops (untilJust)
 import Data.Aeson qualified as A
 import Data.Aeson.OneLine qualified as A
 import Data.Bifunctor qualified as Bifunctor
 import Data.Coerce (coerce)
-import Data.Foldable (fold)
-import Data.Foldable qualified as Foldable
-import Data.Functor ((<&>))
+import Data.Foldable (fold, for_)
+import Data.Function (on)
+import Data.List qualified as List
 import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
 import Data.List.NonEmpty qualified as List.NonEmpty
 import Data.Map.Strict qualified as Map
-import Data.Maybe (fromMaybe, isJust, mapMaybe)
-import Data.Function (on)
-import Data.List qualified as List
-import Data.List.NonEmpty qualified as List.NonEmpty
 import Data.Maybe (fromMaybe, isJust, mapMaybe, maybeToList)
 import Data.Text qualified as Text
 import Data.Traversable (for)
@@ -96,6 +75,7 @@ import Language.Marlowe.CLI.Run (
   marloweAddressFromCardanoAddress,
   marloweAddressToCardanoAddress,
   prepareTransactionImpl,
+  toCardanoAssetName,
  )
 import Language.Marlowe.CLI.Sync (classifyOutputs, isMarloweOut)
 import Language.Marlowe.CLI.Sync.Types (MarloweOut (ApplicationOut, moTxIn))
@@ -138,21 +118,10 @@ import Language.Marlowe.CLI.Test.Wallet.Interpret (
 import Language.Marlowe.CLI.Test.Wallet.Types (
   Currency (Currency, ccCurrencySymbol),
   CurrencyNickname,
-  SomeTxBody (..),
-  Wallet (Wallet, _waAddress, _waBalanceCheckBaseline, _waSigningKey, _waSubmittedTransactions),
+  Wallet (Wallet, _waAddress, _waSigningKey),
   WalletNickname (WalletNickname),
+  ccPolicyId,
   faucetNickname,
- )
-import Language.Marlowe.CLI.Types (
-  AnUTxO (AnUTxO, unAnUTxO),
-  CoinSelectionStrategy (CoinSelectionStrategy),
-  MarlowePlutusVersion,
-  MarloweScriptsRefs (MarloweScriptsRefs),
-  MarloweTransaction (mtState),
-  PrintStats (PrintStats),
-  PublishingStrategy (PublishAtAddress, PublishPermanently),
-  ValidatorInfo (ValidatorInfo),
-  toSlotRoundedPlutusPOSIXTime,
  )
 import Language.Marlowe.Cardano.Thread (
   anyMarloweThreadCreated,
@@ -162,7 +131,6 @@ import Language.Marlowe.Cardano.Thread (
  )
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, State (..))
 import Language.Marlowe.Extended.V1 (ada)
-import Ledger.Tx.CardanoAPI (toCardanoAssetName)
 import Plutus.V2.Ledger.Api qualified as P
 import PlutusTx.AssocMap qualified as AM
 import PlutusTx.Builtins qualified as P
@@ -227,8 +195,7 @@ autoRunTransaction currency defaultSubmitter prev curr@MarloweTransaction{..} in
         M.NormalInput inputContent -> getInputContentParty inputContent
         M.MerkleizedInput inputContent _ _ -> getInputContentParty inputContent
 
-      parties = List.nub $ List.sort $ foldMapFlipped mtInputs \input ->
-        maybeToList $ getInputParty input
+      parties = List.nub $ List.sort $ foldMapFlipped mtInputs (maybeToList . getInputParty)
 
   logWith
     "Applying marlowe inputs: "
@@ -381,8 +348,7 @@ publishCurrentValidators publishPermanently possiblePublisher = do
             (PrintStats True)
       let publisherWalletNickname = fromMaybe faucetNickname possiblePublisher
 
-      for_ txBodies \txBody ->
-        addWalletTransaction publisherWalletNickname label "" txBody
+      for_ txBodies $ addWalletTransaction publisherWalletNickname label ""
       addPublishingCosts walletNickname refs
       pure refs
 
@@ -395,7 +361,7 @@ interpret
   -> m ()
 interpret co@Initialize{..} = do
   let submitterNickname = fromMaybe faucetNickname coSubmitter
-      merkleize = fromMaybe False coMerkleize
+      merkleize = Just True == coMerkleize
 
   marloweContract <- case coContractSource of
     InlineContract json -> decodeContractJSON json
@@ -426,13 +392,12 @@ interpret co@Initialize{..} = do
       mkContractNickname = do
         CLIContracts contracts <- use contractsL
         case coContractNickname of
-          Nothing -> do
-            liftIO $ untilJust do
-              suffix <- combinationWithRepetitions 8 ['a' .. 'z']
-              let nickname = ContractNickname $ "contract-" <> suffix
-              if isJust $ Map.lookup nickname contracts
-                then pure Nothing
-                else pure $ Just nickname
+          Nothing -> liftIO $ untilJust do
+            suffix <- combinationWithRepetitions 8 ['a' .. 'z']
+            let nickname = ContractNickname $ "contract-" <> suffix
+            if isJust $ Map.lookup nickname contracts
+              then pure Nothing
+              else pure $ Just nickname
           Just nickname -> do
             when (isJust . Map.lookup nickname $ contracts) do
               throwLabeledError co $ testExecutionFailed' "Contract with a given nickname already exist."
@@ -477,7 +442,7 @@ interpret co@Initialize{..} = do
           Nothing
           merkleize
           True
-    ReferenceRuntimeValidators -> do
+    ReferenceRuntimeValidators ->
       throwLabeledError co $ testExecutionFailed' "Usage of reference runtime scripts is not supported yet."
   contractNickname <- mkContractNickname
   logStoreLabeledMsg co $ "Saving initialized contract " <> show (coerce contractNickname :: String)
@@ -630,8 +595,7 @@ interpret co@Withdraw{..} = do
         pure [txBody]
       else pure []
 
-  for_ txBodies \txBody ->
-    addWalletTransaction coWalletNickname co "" txBody
+  for_ txBodies $ addWalletTransaction coWalletNickname co ""
 
   let newWithdrawals = foldMapFlipped roles \role ->
         Map.singleton role (C.getTxId . overAnyMarloweThread getCLIMarloweThreadTxBody $ marloweThread)

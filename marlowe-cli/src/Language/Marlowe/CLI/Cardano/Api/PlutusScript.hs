@@ -8,10 +8,6 @@
 -- | Additional conversion functions for `PlutusScript` plus a copy of not exposed `IsPlutusScriptLanguage` class.
 module Language.Marlowe.CLI.Cardano.Api.PlutusScript (
   IsPlutusScriptLanguage (..),
-  fromTypedValidator,
-  fromV2Validator,
-  fromV1TypedValidator,
-  fromV2TypedValidator,
   toScript,
   toScriptLanguageInEra,
   withPlutusScriptVersion,
@@ -27,11 +23,6 @@ import Cardano.Api (
 import Cardano.Api qualified as C
 import Cardano.Api.Shelley (PlutusScript)
 import Language.Marlowe.CLI.Orphans ()
-import Language.Marlowe.CLI.Plutus.Script.Utils (TypedValidator' (TypedValidatorV1, TypedValidatorV2))
-import Plutus.Script.Utils.V2.Typed.Scripts qualified as V1.Scripts
-import Plutus.Script.Utils.V2.Typed.Scripts qualified as V2.Scripts
-import Plutus.V2.Ledger.Api qualified as PV2
-import Plutus.V2.Ledger.Api qualified as Plutus
 
 withPlutusScriptVersion :: PlutusScriptVersion lang -> ((IsPlutusScriptLanguage lang) => a) -> a
 withPlutusScriptVersion PlutusScriptV1 = id
@@ -45,30 +36,6 @@ instance IsPlutusScriptLanguage PlutusScriptV1 where
 
 instance IsPlutusScriptLanguage PlutusScriptV2 where
   plutusScriptVersion = PlutusScriptV2
-
-fromTypedValidator :: forall lang t. TypedValidator' lang t -> PlutusScript lang
-fromTypedValidator (TypedValidatorV1 v) = fromV1TypedValidator v
-fromTypedValidator (TypedValidatorV2 v) = fromV2TypedValidator v
-
-fromV1TypedValidator :: V1.Scripts.TypedValidator t -> PlutusScript PlutusScriptV1
-fromV1TypedValidator =
-  PlutusScriptSerialised
-    . BSS.toShort
-    . BSL.toStrict
-    . serialise
-    . Plutus.getValidator
-    . V1.Scripts.validatorScript
-
-fromV2TypedValidator :: V2.Scripts.TypedValidator t -> PlutusScript PlutusScriptV2
-fromV2TypedValidator = fromV2Validator . V2.Scripts.validatorScript
-
-fromV2Validator :: PV2.Validator -> PlutusScript PlutusScriptV2
-fromV2Validator =
-  PlutusScriptSerialised
-    . BSS.toShort
-    . BSL.toStrict
-    . serialise
-    . Plutus.getValidator
 
 toScript :: forall lang. (IsPlutusScriptLanguage lang) => PlutusScript lang -> Script lang
 toScript = PlutusScript (plutusScriptVersion :: PlutusScriptVersion lang)

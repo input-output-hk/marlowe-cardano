@@ -31,8 +31,7 @@ import Data.Aeson qualified as Aeson
 import Data.List qualified as List
 import Data.Map (Map)
 import GHC.Generics (Generic)
-import Language.Marlowe.CLI.Types (MarlowePlutusVersion, MarloweScriptsRefs, PrintStats, TxBuildupContext, toQueryContext)
-import Ledger.Orphans ()
+import Language.Marlowe.CLI.Types (MarloweScriptsRefs, PrintStats, TxBuildupContext, toQueryContext)
 import Plutus.ApiCommon (ProtocolVersion)
 import Plutus.V1.Ledger.Api (CostModelParams)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig)
