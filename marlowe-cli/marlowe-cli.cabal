@@ -114,7 +114,6 @@ library
     , extra
     , indexed-traversable
     , marlowe-cardano
-    , marlowe-plutus
     , megaparsec
     , memory
     , mtl
@@ -205,7 +204,6 @@ library cli-test
     , marlowe-cli
     , marlowe-client
     , marlowe-contracts
-    , marlowe-plutus
     , marlowe-protocols
     , marlowe-runtime:{marlowe-runtime, history-api, proxy-api, sync-api, tx-api}
     , monad-loops

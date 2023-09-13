@@ -208,7 +208,6 @@ test-suite marlowe-test
     , ilist ==0.4.0.1
     , lens >=5.2 && <6
     , marlowe-cardano ==0.1.2.0
-    , marlowe-plutus
     , marlowe-spec-test ==0.1.0.0
     , marlowe-test
     , mtl >=2.2 && <3
