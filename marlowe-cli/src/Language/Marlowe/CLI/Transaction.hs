@@ -18,6 +18,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 -- | Submitting Marlowe transactions.
 module Language.Marlowe.CLI.Transaction (
@@ -44,7 +45,7 @@ module Language.Marlowe.CLI.Transaction (
   submit,
   submitBody,
 
-  -- * Quering
+  -- * Querying
   findMarloweScriptsRefs,
   findPublished,
 
@@ -90,7 +91,6 @@ import Cardano.Api (
   PaymentCredential (PaymentCredentialByScript),
   PaymentKey,
   PlutusScript,
-  PlutusScriptV2,
   PlutusScriptVersion (..),
   PolicyId (..),
   Quantity (..),
@@ -168,7 +168,6 @@ import Cardano.Api (
 import Cardano.Api qualified as C
 import Cardano.Api.Shelley (
   ExecutionUnitPrices (..),
-  PlutusScript (..),
   ProtocolParameters (..),
   ReferenceScript (ReferenceScript, ReferenceScriptNone),
   SimpleScriptOrReferenceInput (SScript),
@@ -227,7 +226,7 @@ import Language.Marlowe.CLI.Cardano.Api (
 import Language.Marlowe.CLI.Cardano.Api qualified as MCA
 import Language.Marlowe.CLI.Cardano.Api.Address.ProofOfBurn (permanentPublisher)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript as PS
-import Language.Marlowe.CLI.Export (buildValidatorInfo)
+import Language.Marlowe.CLI.Export (buildValidatorInfo, readMarloweValidator, readRolePayoutValidator, readOpenRoleValidator)
 import Language.Marlowe.CLI.IO (
   decodeFileBuiltinData,
   decodeFileStrict,
@@ -254,7 +253,6 @@ import Language.Marlowe.CLI.Types (
   CliError (..),
   CoinSelectionStrategy (CoinSelectionStrategy, csPreserveInlineDatums, csPreserveReferenceScripts, csPreserveTxIns),
   CurrencyIssuer (CurrencyIssuer),
-  MarlowePlutusVersion,
   MarloweScriptsRefs (MarloweScriptsRefs),
   MintingAction (BurnAll, Mint, maIssuer),
   OutputQuery (..),
@@ -296,8 +294,6 @@ import Language.Marlowe.CLI.Types (
   withShelleyBasedEra,
  )
 import Language.Marlowe.CLI.Types qualified as PayToScript (PayToScript (value))
-import Language.Marlowe.Scripts (marloweValidatorBytes, rolePayoutValidatorBytes)
-import Language.Marlowe.Scripts.OpenRole (openRoleValidatorBytes)
 import Ouroboros.Consensus.HardFork.History (interpreterToEpochInfo)
 import Plutus.V1.Ledger.Api (Datum (..), POSIXTime (..), Redeemer (..), TokenName (..), fromBuiltin, toData)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
@@ -667,7 +663,7 @@ buildMintingImpl
   => TxBuildupContext era
   -- ^ The connection info for the local node.
   -> MintingAction era
-  -- ^ The token names, amount and a possible receipient addresses.
+  -- ^ The token names, amount and a possible recipient addresses.
   -> Maybe Aeson.Object
   -- ^ The CIP-25 metadata for the minting, with keys for each token name.
   -> Maybe SlotNo
@@ -745,7 +741,7 @@ buildMintingImpl txBuildupCtx mintingAction metadataProps expires (PrintStats pr
               let changeValue = value <> negateValue tokensValue
                   -- Accumulate change value per token provider address.
                   -- `AddressInEra` has no `Ord` instance so we fallback to the
-                  -- `AdressAny` which complicates a bit the final `outputs` build up.
+                  -- `AddressAny` which complicates a bit the final `outputs` build up.
                   change =
                     AM.AppendMap $
                       M.singleton
@@ -952,7 +948,7 @@ buildScriptPublishingInfo queryCtx plutusScript publishingStrategy = do
       scriptHash = hashScript . PS.toScript $ plutusScript
       publisher = publisherAddress scriptHash publishingStrategy era networkId
 
-  -- Stake information in this context is probably meaningless. We assing real staking when we use a reference.
+  -- Stake information in this context is probably meaningless. We assign real staking when we use a reference.
   referenceScriptInfo <- validatorInfo' plutusScript Nothing era protocolVersion costModel networkId NoStakeAddress
   referenceScript <- buildReferenceScript plutusScript
 
@@ -960,12 +956,11 @@ buildScriptPublishingInfo queryCtx plutusScript publishingStrategy = do
   pure (minAda, publisher, referenceScriptInfo)
 
 buildPublishingImpl
-  :: forall lang era m
-   . (MonadError CliError m)
+  :: forall era lang m
+   . (MonadError CliError m, IsPlutusScriptLanguage lang)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
   => (C.IsShelleyBasedEra era)
-  => (IsPlutusScriptLanguage lang)
   => TxBuildupContext era
   -- ^ The connection info for the local node or pure tx buildup context.
   -> SomePaymentSigningKey
@@ -978,147 +973,148 @@ buildPublishingImpl
   -> CoinSelectionStrategy
   -> PrintStats
   -> m ([TxBody era], MarloweScriptsRefs lang era)
-buildPublishingImpl buildupCtx signingKey expires changeAddress publishingStrategy coinSelectionStrategy (PrintStats printStats) = case plutusScriptVersion @lang of
-  PlutusScriptV1 -> throwError "Plutus Script V1 not supported"
-  PlutusScriptV2 -> do
-    let queryCtx = toQueryContext buildupCtx
-    pm <- buildScriptPublishingInfo @lang queryCtx (PlutusScriptSerialised marloweValidatorBytes) publishingStrategy
-    pp <- buildScriptPublishingInfo @lang queryCtx (PlutusScriptSerialised rolePayoutValidatorBytes) publishingStrategy
-    po <- buildScriptPublishingInfo @lang queryCtx (PlutusScriptSerialised openRoleValidatorBytes) publishingStrategy
+buildPublishingImpl buildupCtx signingKey expires changeAddress publishingStrategy coinSelectionStrategy (PrintStats printStats) = do
+  let queryCtx = toQueryContext buildupCtx
+  marloweValidator <- readMarloweValidator
+  payoutValidator <- readRolePayoutValidator
+  openRoleValidator <- readOpenRoleValidator
+  pm <- buildScriptPublishingInfo @lang queryCtx marloweValidator publishingStrategy
+  pp <- buildScriptPublishingInfo @lang queryCtx payoutValidator publishingStrategy
+  po <- buildScriptPublishingInfo @lang queryCtx openRoleValidator publishingStrategy
 
-    let buildPublishedScriptTxOut (minAda, publisher, referenceValidator) = do
-          referenceScript <- buildReferenceScript $ viScript referenceValidator
-          makeTxOut publisher C.TxOutDatumNone (lovelaceToValue minAda) referenceScript
+  let buildPublishedScriptTxOut (minAda, publisher, referenceValidator) = do
+        referenceScript <- buildReferenceScript $ viScript referenceValidator
+        makeTxOut publisher C.TxOutDatumNone (lovelaceToValue minAda) referenceScript
 
-    initialUTxOs <- queryByAddress queryCtx changeAddress
+  initialUTxOs <- queryByAddress queryCtx changeAddress
 
-    let publish utxos publishScripts = do
-          outputs <- for publishScripts buildPublishedScriptTxOut
-          (_, inputs, outputs') <-
-            selectCoins
-              queryCtx
-              mempty
-              outputs
-              Nothing
-              changeAddress
-              coinSelectionStrategy
-              (Just utxos)
+  let publish utxos publishScripts = do
+        outputs <- for publishScripts buildPublishedScriptTxOut
+        (_, inputs, outputs') <-
+          selectCoins
+            queryCtx
+            mempty
+            outputs
+            Nothing
+            changeAddress
+            coinSelectionStrategy
+            (Just utxos)
 
-          (txBodyContent, txBody) <-
-            buildBodyWithContent
-              queryCtx
-              ([] :: [PayFromScript lang])
-              Nothing
-              []
-              inputs
-              outputs'
-              Nothing
-              changeAddress
-              ((0,) <$> expires)
-              [hashSigningKey signingKey]
-              TxMintNone
-              TxMetadataNone
-              printStats
-              False
-              (Just utxos)
+        (txBodyContent, txBody) <-
+          buildBodyWithContent
+            queryCtx
+            ([] :: [PayFromScript lang])
+            Nothing
+            []
+            inputs
+            outputs'
+            Nothing
+            changeAddress
+            ((0,) <$> expires)
+            [hashSigningKey signingKey]
+            TxMintNone
+            TxMetadataNone
+            printStats
+            False
+            (Just utxos)
 
-          -- We track utxo set which we operate on so we can construct
-          -- the next transaction.
-          let TxBodyContent{txIns, txInsCollateral, txOuts} = txBodyContent
-              txIns' = do
-                let collateralTxIns = case txInsCollateral of
-                      TxInsCollateralNone -> []
-                      TxInsCollateral _ txInsCollateral' -> txInsCollateral'
-                collateralTxIns <> (fst <$> txIns)
-              txId = C.getTxId txBody
-              newUtxos = Map.fromList $ foldMapFlipped (zip [0 ..] txOuts) \(idx, txOut@(C.TxOut addr _ _ _)) ->
-                [(C.TxIn txId (C.TxIx idx), C.toCtxUTxOTxOut txOut) | addr == changeAddress]
-              utxos' = unUTxO utxos `Map.withoutKeys` S.fromList txIns' <> newUtxos
-          pure (UTxO utxos', txBody)
+        -- We track utxo set which we operate on so we can construct
+        -- the next transaction.
+        let TxBodyContent{txIns, txInsCollateral, txOuts} = txBodyContent
+            txIns' = do
+              let collateralTxIns = case txInsCollateral of
+                    TxInsCollateralNone -> []
+                    TxInsCollateral _ txInsCollateral' -> txInsCollateral'
+              collateralTxIns <> (fst <$> txIns)
+            txId = C.getTxId txBody
+            newUtxos = Map.fromList $ foldMapFlipped (zip [0 ..] txOuts) \(idx, txOut@(C.TxOut addr _ _ _)) ->
+              [(C.TxIn txId (C.TxIx idx), C.toCtxUTxOTxOut txOut) | addr == changeAddress]
+            utxos' = unUTxO utxos `Map.withoutKeys` S.fromList txIns' <> newUtxos
+        pure (UTxO utxos', txBody)
 
-    (utxos', txBody1) <- publish initialUTxOs [pm, pp]
-    (_, txBody2) <- publish utxos' [po]
+  (utxos', txBody1) <- publish initialUTxOs [pm, pp]
+  (_, txBody2) <- publish utxos' [po]
 
-    let findReferenceScriptOutput txBody plutusV2Script = do
-          let txId = C.getTxId txBody
-              C.TxBody C.TxBodyContent{txOuts} = txBody
-              script =
-                C.ScriptInAnyLang
-                  (C.PlutusScriptLanguage C.PlutusScriptV2)
-                  (C.PlutusScript C.PlutusScriptV2 plutusV2Script)
+  let findReferenceScriptOutput txBody plutusV2Script = do
+        let txId = C.getTxId txBody
+            C.TxBody C.TxBodyContent{txOuts} = txBody
+            script =
+              C.ScriptInAnyLang
+                (C.PlutusScriptLanguage $ plutusScriptVersion @lang)
+                (C.PlutusScript (plutusScriptVersion @lang) plutusV2Script)
 
-              match (ix, txOut@(C.TxOut _ _ _ referenceScript)) = case referenceScript of
-                C.ReferenceScript _ txOutScript ->
-                  if script == txOutScript
-                    then Just (ix, txOut)
-                    else Nothing
-                _ -> Nothing
+            match (ix, txOut@(C.TxOut _ _ _ referenceScript)) = case referenceScript of
+              C.ReferenceScript _ txOutScript ->
+                if script == txOutScript
+                  then Just (ix, txOut)
+                  else Nothing
+              _ -> Nothing
 
-          (ix, txOut) <-
-            liftEither $ note "Unable to find published script" $ listToMaybe $ mapMaybe match $ zip [0 ..] txOuts
-          let txOut' = C.toCtxUTxOTxOut txOut
-          pure (AnUTxO (C.TxIn txId (C.TxIx ix), txOut'))
+        (ix, txOut) <-
+          liftEither $ note "Unable to find published script" $ listToMaybe $ mapMaybe match $ zip [0 ..] txOuts
+        let txOut' = C.toCtxUTxOTxOut txOut
+        pure (AnUTxO (C.TxIn txId (C.TxIx ix), txOut'))
 
-    marlowRef <- do
-      let (_, _, referenceScriptInfo) = pm
-          ValidatorInfo{viScript} = referenceScriptInfo
-      anUTxO <- findReferenceScriptOutput txBody1 viScript
-      pure (anUTxO, referenceScriptInfo)
+  marloweRef <- do
+    let (_, _, referenceScriptInfo) = pm
+        ValidatorInfo{viScript} = referenceScriptInfo
+    anUTxO <- findReferenceScriptOutput txBody1 viScript
+    pure (anUTxO, referenceScriptInfo)
 
-    rolePayoutRef <- do
-      let (_, _, referenceScriptInfo) = pp
-          ValidatorInfo{viScript} = referenceScriptInfo
-      anUTxO <- findReferenceScriptOutput txBody1 viScript
-      pure (anUTxO, referenceScriptInfo)
+  rolePayoutRef <- do
+    let (_, _, referenceScriptInfo) = pp
+        ValidatorInfo{viScript} = referenceScriptInfo
+    anUTxO <- findReferenceScriptOutput txBody1 viScript
+    pure (anUTxO, referenceScriptInfo)
 
-    openRoleRef <- do
-      let (_, _, referenceScriptInfo) = po
-          ValidatorInfo{viScript} = referenceScriptInfo
-      anUTxO <- findReferenceScriptOutput txBody2 viScript
-      pure (anUTxO, referenceScriptInfo)
+  openRoleRef <- do
+    let (_, _, referenceScriptInfo) = po
+        ValidatorInfo{viScript} = referenceScriptInfo
+    anUTxO <- findReferenceScriptOutput txBody2 viScript
+    pure (anUTxO, referenceScriptInfo)
 
-    let txBodies = [txBody1, txBody2]
-        serialiseAddress (_, addr, _) = T.unpack . C.serialiseAddress $ addr
-        showScriptHash (_, _, ValidatorInfo{viHash}) = show viHash
-        showMinAda (ma, _, _) = show ma
-        showTxIn (AnUTxO (txIn, _), _) = show txIn
+  let txBodies = [txBody1, txBody2]
+      serialiseAddress (_, addr, _) = T.unpack . C.serialiseAddress $ addr
+      showScriptHash (_, _, ValidatorInfo{viHash}) = show viHash
+      showMinAda (ma, _, _) = show ma
+      showTxIn (AnUTxO (txIn, _), _) = show txIn
 
-    when printStats $ liftIO do
-      hPutStrLn stderr ""
-      hPutStrLn stderr $
-        "Marlowe script published at address: " <> serialiseAddress pm
-      hPutStrLn stderr ""
-      hPutStrLn stderr $ "Marlowe script hash: " <> showScriptHash pm
-      hPutStrLn stderr ""
-      hPutStrLn stderr $
-        "Marlowe ref script UTxO min ADA: " <> showMinAda pm
-      hPutStrLn stderr ""
-      hPutStrLn stderr $ "Marlowe ref script UTxO: " <> showTxIn marlowRef
+  when printStats $ liftIO do
+    hPutStrLn stderr ""
+    hPutStrLn stderr $
+      "Marlowe script published at address: " <> serialiseAddress pm
+    hPutStrLn stderr ""
+    hPutStrLn stderr $ "Marlowe script hash: " <> showScriptHash pm
+    hPutStrLn stderr ""
+    hPutStrLn stderr $
+      "Marlowe ref script UTxO min ADA: " <> showMinAda pm
+    hPutStrLn stderr ""
+    hPutStrLn stderr $ "Marlowe ref script UTxO: " <> showTxIn marloweRef
 
-      hPutStrLn stderr ""
-      hPutStrLn stderr $
-        "Payout script published at address: " <> serialiseAddress pp
-      hPutStrLn stderr ""
-      hPutStrLn stderr $ "Payout script hash: " <> showScriptHash pp
-      hPutStrLn stderr ""
-      hPutStrLn stderr $ "Payout ref script UTxO min ADA: " <> showMinAda pp
-      hPutStrLn stderr ""
-      hPutStrLn stderr $ "Payout ref script UTxO: " <> showTxIn rolePayoutRef
+    hPutStrLn stderr ""
+    hPutStrLn stderr $
+      "Payout script published at address: " <> serialiseAddress pp
+    hPutStrLn stderr ""
+    hPutStrLn stderr $ "Payout script hash: " <> showScriptHash pp
+    hPutStrLn stderr ""
+    hPutStrLn stderr $ "Payout ref script UTxO min ADA: " <> showMinAda pp
+    hPutStrLn stderr ""
+    hPutStrLn stderr $ "Payout ref script UTxO: " <> showTxIn rolePayoutRef
 
-      hPutStrLn stderr ""
-      hPutStrLn stderr $ "Open role script published at address: " <> serialiseAddress po
-      hPutStrLn stderr ""
-      hPutStrLn stderr $ "Open role script hash: " <> showScriptHash po
-      hPutStrLn stderr ""
-      hPutStrLn stderr $ "Open role ref script UTxO min ADA: " <> showMinAda po
-      hPutStrLn stderr ""
-      hPutStrLn stderr $ "Open role ref script UTxO: " <> showTxIn openRoleRef
-    pure (txBodies, MarloweScriptsRefs marlowRef rolePayoutRef openRoleRef)
+    hPutStrLn stderr ""
+    hPutStrLn stderr $ "Open role script published at address: " <> serialiseAddress po
+    hPutStrLn stderr ""
+    hPutStrLn stderr $ "Open role script hash: " <> showScriptHash po
+    hPutStrLn stderr ""
+    hPutStrLn stderr $ "Open role ref script UTxO min ADA: " <> showMinAda po
+    hPutStrLn stderr ""
+    hPutStrLn stderr $ "Open role ref script UTxO: " <> showTxIn openRoleRef
+  pure (txBodies, MarloweScriptsRefs marloweRef rolePayoutRef openRoleRef)
 
 -- CLI command handler.
 buildPublishing
-  :: forall era m
-   . (MonadError CliError m)
+  :: forall era lang m
+   . (MonadError CliError m, IsPlutusScriptLanguage lang)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
   => (C.IsShelleyBasedEra era)
@@ -1139,8 +1135,7 @@ buildPublishing connection signingKeyFile expires changeAddress strategy (TxBody
   let strategy' = fromMaybe (PublishAtAddress changeAddress) strategy
   signingKey <- readSigningKey signingKeyFile
   (txBodies, _) <-
-    buildPublishingImpl
-      @MarlowePlutusVersion
+    buildPublishingImpl @era @lang
       (mkNodeTxBuildup connection timeout)
       signingKey
       expires
@@ -1176,8 +1171,7 @@ publishImpl
   -> m ([TxBody era], MarloweScriptsRefs lang era)
 publishImpl txBuildupCtx signingKey expires changeAddress publishingStrategy coinSelectionStrategy printStats = do
   (txBodies, _) <-
-    buildPublishingImpl
-      @lang
+    buildPublishingImpl @era @lang
       txBuildupCtx
       signingKey
       expires
@@ -1229,33 +1223,34 @@ findScriptRef queryCtx scriptHash publishingStrategy (PrintStats printStats) = d
     pure (u, i)
 
 findMarloweScriptsRefs
-  :: forall lang era m
-   . (MonadReader (CliEnv era) m)
+  :: forall era lang m
+   . (MonadReader (CliEnv era) m, IsPlutusScriptLanguage lang)
   => (MonadIO m)
   => (MonadError CliError m)
   => (C.IsShelleyBasedEra era)
-  => (IsPlutusScriptLanguage lang)
   => QueryExecutionContext era
   -- ^ Either already selected UTxOs or connection info to select UTxOs.
   -> PublishingStrategy era
   -> PrintStats
   -> m (Maybe (MarloweScriptsRefs lang era))
-findMarloweScriptsRefs queryCtx publishingStrategy printStats = case plutusScriptVersion @lang of
-  PlutusScriptV1 -> do
-    throwError . CliError $ "Plutus script version 1 is not supported"
-  PlutusScriptV2 -> do
-    let marloweHash = hashScript (PS.toScript $ PlutusScriptSerialised @PlutusScriptV2 marloweValidatorBytes)
-        payoutHash = hashScript (PS.toScript $ PlutusScriptSerialised @PlutusScriptV2 rolePayoutValidatorBytes)
-        openRoleHash = hashScript (PS.toScript $ PlutusScriptSerialised @PlutusScriptV2 openRoleValidatorBytes)
-    runMaybeT do
-      m <- MaybeT $ findScriptRef @lang queryCtx marloweHash publishingStrategy printStats
-      p <- MaybeT $ findScriptRef @lang queryCtx payoutHash publishingStrategy printStats
-      o <- MaybeT $ findScriptRef @lang queryCtx openRoleHash publishingStrategy printStats
-      pure $ MarloweScriptsRefs m p o
+findMarloweScriptsRefs queryCtx publishingStrategy printStats = do
+  marloweValidator <- readMarloweValidator @_ @lang
+  payoutValidator <- readRolePayoutValidator @_ @lang
+  openRoleValidator <- readRolePayoutValidator @_ @lang
+  let marloweHash = hashScript $ PS.toScript marloweValidator
+      payoutHash = hashScript $ PS.toScript payoutValidator
+      openRoleHash = hashScript $ PS.toScript openRoleValidator
+
+  runMaybeT do
+    m <- MaybeT $ findScriptRef queryCtx marloweHash publishingStrategy printStats
+    p <- MaybeT $ findScriptRef queryCtx payoutHash publishingStrategy printStats
+    o <- MaybeT $ findScriptRef queryCtx openRoleHash publishingStrategy printStats
+    pure $ MarloweScriptsRefs m p o
 
 -- | CLI Command handler.
 findPublished
-  :: (C.IsShelleyBasedEra era)
+  :: forall era lang m
+   . (C.IsShelleyBasedEra era, IsPlutusScriptLanguage lang)
   => (MonadReader (CliEnv era) m)
   => (MonadIO m)
   => (MonadError CliError m)
@@ -1264,7 +1259,7 @@ findPublished
   -> m ()
 findPublished queryCtx publishingStrategy = do
   let publishingStrategy' = fromMaybe (PublishPermanently NoStakeAddress) publishingStrategy
-  findMarloweScriptsRefs @C.PlutusScriptV2 queryCtx publishingStrategy' (PrintStats True) >>= \case
+  findMarloweScriptsRefs @era @lang queryCtx publishingStrategy' (PrintStats True) >>= \case
     Just (MarloweScriptsRefs (mu, mi) (ru, ri) (ou, oi)) -> do
       let refJSON (AnUTxO (i, _)) ValidatorInfo{viHash} =
             A.object
@@ -1614,13 +1609,12 @@ buildBodyWithContent queryCtx payFromScript payToScript extraInputs inputs outpu
         refTxIns = txInsReferencesToTxIns txInsReference
         allTxIns = (fst <$> txIns) <> refTxIns
 
-    -- This UTxO set is used for change calcuation.
+    -- This UTxO set is used for change calculation.
     utxos <- case possibleUTxOs of
       Just utxos -> pure utxos
       Nothing -> do
         let q = QueryUTxOByTxIn . S.fromList $ allTxIns
         queryUTxOs queryCtx q
-
     let eraInMode = toEraInMode era
 
     let foundTxIns = map fst . M.toList . unUTxO $ utxos

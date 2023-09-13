@@ -89,7 +89,6 @@ import Language.Marlowe.Core.V1.Semantics.Types qualified as M
 import Plutus.V1.Ledger.Api (CurrencySymbol, TokenName)
 import Plutus.V1.Ledger.Value qualified as P
 
-import Cardano.Api.Shelley (PlutusScript (..))
 import Cardano.Api.Shelley qualified as CAS
 import Contrib.Control.Monad.Except (note)
 import Contrib.Data.Foldable (foldMapFlipped, ifoldMapMFlipped)
@@ -131,7 +130,6 @@ import Language.Marlowe.CLI.Test.Log (Label, logStoreLabeledMsg, logTxBody, thro
 import Language.Marlowe.CLI.Test.Report qualified as Report
 import Language.Marlowe.CLI.Types qualified as CT
 import Language.Marlowe.Cardano (marloweNetworkFromCaradnoNetworkId)
-import Language.Marlowe.Scripts.OpenRole (openRoleValidatorBytes)
 import Plutus.V1.Ledger.Value (valueOf)
 import Plutus.V1.Ledger.Value qualified as PV
 import Plutus.V2.Ledger.Api (MintingPolicyHash (..))
@@ -140,6 +138,7 @@ import PlutusTx.AssocMap qualified as AssocMap
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 import PlutusTx.Monoid (Group (inv))
 import System.IO.Temp (emptySystemTempFile, emptyTempFile)
+import Language.Marlowe.CLI.Export (readOpenRoleValidator)
 
 findWallet
   :: (InterpretMonad env st m era)
@@ -235,7 +234,7 @@ openRoleValidatorAddress
 openRoleValidatorAddress = do
   era <- view eraL
   networkId <- getNetworkId
-  let openRoleScript = PlutusScriptSerialised @C.PlutusScriptV2 openRoleValidatorBytes
+  openRoleScript <- readOpenRoleValidator @_ @C.PlutusScriptV2
   pure $ validatorAddress openRoleScript era networkId NoStakeAddress
 
 getNetworkId
@@ -313,7 +312,7 @@ getSingletonCurrency = do
   Currencies currencies <- use currenciesL
   case Map.toList currencies of
     [c] -> pure c
-    _ -> throwError $ testExecutionFailed' "Ambigious currency lookup."
+    _ -> throwError $ testExecutionFailed' "Ambiguous currency lookup."
 
 getCurrency
   :: (InterpretMonad env st m era)
@@ -647,7 +646,7 @@ interpret wo@Mint{..} = do
       $ throwError
       $ testExecutionFailed'
       $ "Currency with the same nickname but different issuer or minting slot already exists. "
-        <> " You can remint some tokens but you have to use the same issuer and minting slot."
+        <> " You can re-mint some tokens but you have to use the same issuer and minting slot."
 
   Wallet issuerAddress _ issuerSigningKey _ _ _ <- getWallet issuerNickname
   tokenDistribution <- forM woTokenDistribution \(TokenAssignment recipient tokens) -> do

@@ -2,14 +2,15 @@ module Language.Marlowe.Runtime.Core.ScriptRegistrySpec (
   spec,
 ) where
 
+import Cardano.Api (AsType (..), hashScript, readFileTextEnvelope)
 import Control.Monad (unless)
 import Data.Foldable (traverse_)
 import qualified Data.Set as Set
-import Language.Marlowe.Runtime.ChainSync.Api (ScriptHash (..))
+import Language.Marlowe.Runtime.ChainSync.Api (fromCardanoScriptHash)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion, withSomeMarloweVersion)
 import Language.Marlowe.Runtime.Core.ScriptRegistry
-import Language.Marlowe.Scripts (marloweValidatorHash, rolePayoutValidatorHash)
-import Plutus.V1.Ledger.Api (ValidatorHash (..), fromBuiltin)
+import Paths_marlowe_cardano (getDataFileName)
+import System.FilePath ((</>))
 import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe)
 
 spec :: Spec
@@ -33,12 +34,13 @@ scriptSetSpec marloweVersion = do
             , "but it does not."
             ]
     it "Should specify the correct current scripts" do
-      let payoutScript = fromPlutusValidatorHash rolePayoutValidatorHash
-      let marloweScript = fromPlutusValidatorHash marloweValidatorHash
+      payoutScriptPath <- getDataFileName $ "scripts" </> "marlowe-rolepayout.plutus"
+      marloweScriptPath <- getDataFileName $ "scripts" </> "marlowe-semantics.plutus"
+      Right payoutScriptBytes <- readFileTextEnvelope (AsScript AsPlutusScriptV2) payoutScriptPath
+      Right marloweScriptBytes <- readFileTextEnvelope (AsScript AsPlutusScriptV2) marloweScriptPath
+      let payoutScript = fromCardanoScriptHash $ hashScript payoutScriptBytes
+      let marloweScript = fromCardanoScriptHash $ hashScript marloweScriptBytes
       let marloweScriptUTxOs = mempty
       let payoutScriptUTxOs = mempty
       let currentScripts' = MarloweScripts{..}
       currentScripts `shouldBe` currentScripts'
-
-fromPlutusValidatorHash :: ValidatorHash -> ScriptHash
-fromPlutusValidatorHash (ValidatorHash hash) = ScriptHash $ fromBuiltin hash

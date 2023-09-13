@@ -169,10 +169,8 @@ test-suite marlowe-test
     Spec.Marlowe.Plutus.Lens
     Spec.Marlowe.Plutus.MList
     Spec.Marlowe.Plutus.Prelude
-    Spec.Marlowe.Plutus.Script
     Spec.Marlowe.Plutus.ScriptContext
     Spec.Marlowe.Plutus.Specification
-    Spec.Marlowe.Plutus.Transaction
     Spec.Marlowe.Plutus.Types
     Spec.Marlowe.Plutus.Value
     Spec.Marlowe.Semantics
@@ -216,12 +214,10 @@ test-suite marlowe-test
     , QuickCheck >=2.14 && <3
     , quickcheck-instances ^>=0.3.29
     , sbv >=8.4
-    , serialise ^>=0.2.6
     , tasty ^>=1.4.2
     , tasty-hunit ^>=0.10
     , tasty-quickcheck ^>=0.10
     , text >=1.2.4 && <2
-    , these >=1.1 && <2
     , type-iso ==1.0.1.0
 
   if flag(trace-plutus)

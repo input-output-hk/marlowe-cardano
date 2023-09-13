@@ -10,6 +10,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeApplications #-}
 
 -- | Role-related commands of the Marlowe CLI tool.
 module Language.Marlowe.CLI.Command.Role (
@@ -38,6 +39,7 @@ import Control.Monad.Reader.Class (MonadReader)
 import Language.Marlowe.CLI.IO (getDefaultCostModel)
 import Options.Applicative qualified as O
 import Plutus.ApiCommon (ProtocolVersion)
+import qualified Cardano.Api as C
 
 -- | Marlowe CLI commands and options for exporting role information.
 data RoleCommand
@@ -98,8 +100,8 @@ runRoleCommand command =
     let network' = network command
         stake' = fromMaybe NoStakeAddress $ stake command
     case command of
-      ExportAddress{} -> exportRoleAddress network' stake'
-      ExportValidator{..} -> do exportRoleValidator protocolVersion costModel network' stake' outputFile printHash printStats
+      ExportAddress{} -> exportRoleAddress @_ @C.PlutusScriptV2 network' stake'
+      ExportValidator{..} -> do exportRoleValidator @_ @C.PlutusScriptV2 protocolVersion costModel network' stake' outputFile printHash printStats
       ExportDatum{..} ->
         exportRoleDatum
           (Token rolesCurrency' roleName)

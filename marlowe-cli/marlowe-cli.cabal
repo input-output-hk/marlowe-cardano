@@ -82,7 +82,6 @@ library
     Language.Marlowe.CLI.IO
     Language.Marlowe.CLI.Merkle
     Language.Marlowe.CLI.Orphans
-    Language.Marlowe.CLI.Plutus.Script.Utils
     Language.Marlowe.CLI.Run
     Language.Marlowe.CLI.Sync
     Language.Marlowe.CLI.Sync.Types
@@ -112,6 +111,7 @@ library
     , directory
     , errors
     , extra
+    , filepath
     , indexed-traversable
     , marlowe-cardano
     , megaparsec

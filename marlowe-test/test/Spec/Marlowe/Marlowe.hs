@@ -73,7 +73,6 @@ import Language.Marlowe.Core.V1.Semantics.Types.Address (
   serialiseAddress,
   serialiseAddressBech32,
  )
-import Language.Marlowe.Scripts (marloweValidatorBytes)
 import Language.Marlowe.Util (ada, extractNonMerkleizedContractRoles)
 import Plutus.V2.Ledger.Api (POSIXTime (POSIXTime))
 import Spec.Marlowe.Common (alicePk, amount, contractGen, pangramContract, shrinkContract, valueGen)
@@ -99,7 +98,6 @@ import Test.Tasty.QuickCheck (Property, testProperty)
 import Cardano.Api (SerialiseAsRawBytes (deserialiseFromRawBytes))
 import qualified Cardano.Api as C
 import Cardano.Api.Shelley (StakeCredential (..))
-import qualified Data.ByteString.Short as SBS
 import qualified Data.Set as Set
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
@@ -123,10 +121,6 @@ tests =
     , testCase "Pangram Contract serializes into valid JSON" pangramContractSerialization
     , testCase "State serializes into valid JSON" stateSerialization
     , testCase "Input serializes into valid JSON" inputSerialization
-    , testGroup
-        "Validator size is reasonable"
-        [ testCase "Untyped validator size" marloweValidatorSize
-        ]
     , testCase "Mul analysis" mulAnalysisTest
     , testCase "Div analysis" divAnalysisTest
     , testCase "Div tests" divTest
@@ -150,19 +144,6 @@ tests =
         [ testProperty "Serialise toJSON then deserialise" partySerialiseDeserialiseJSON
         ]
     ]
-
-maxMarloweValidatorSize :: Int
-#ifdef TRACE_PLUTUS
-maxMarloweValidatorSize = 12737
-#else
-maxMarloweValidatorSize = 12194
-#endif
-
--- | Test that the untyped validator is not too large.
-marloweValidatorSize :: IO ()
-marloweValidatorSize = do
-  let vsize = SBS.length marloweValidatorBytes
-  assertBool ("marloweValidator is too large " <> show vsize) (vsize <= maxMarloweValidatorSize)
 
 -- | Test `extractNonMerkleizedContractRoles`.
 extractContractRolesTest :: IO ()
@@ -224,7 +205,7 @@ valuesFormAbelianGroup = property $ do
       eval (AddValue a (NegValue a))
         === 0
       .&&.
-      -- substraction works
+      -- subtraction works
       eval (SubValue (AddValue a b) b)
         === eval a
 
@@ -269,8 +250,8 @@ valueSerialization = property $
 -- | Test a complicated sequence of multiplications.
 mulAnalysisTest :: IO ()
 mulAnalysisTest = do
-  let muliply = foldl (\a _ -> MulValue (UseValue $ ValueId "a") a) (Constant 1) ([1 .. 100] :: [Int])
-      contract = If (muliply `M.ValueGE` Constant 10000) Close (Pay alicePk (Party alicePk) ada (Constant (-100)) Close)
+  let multiply = foldl (\a _ -> MulValue (UseValue $ ValueId "a") a) (Constant 1) ([1 .. 100] :: [Int])
+      contract = If (multiply `M.ValueGE` Constant 10000) Close (Pay alicePk (Party alicePk) ada (Constant (-100)) Close)
   result <- warningsTrace contract
   --  print result
   assertBool "Analysis ok" $ isRight result

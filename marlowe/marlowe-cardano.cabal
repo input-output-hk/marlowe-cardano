@@ -21,6 +21,8 @@ extra-doc-files:
   CHANGELOG.md
   README.md
 
+data-files:      scripts/*.plutus
+
 source-repository head
   type:     git
   location: https://github.com/input-output-hk/marlowe-cardano

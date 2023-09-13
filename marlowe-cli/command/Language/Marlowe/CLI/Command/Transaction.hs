@@ -10,6 +10,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeApplications #-}
 
 -- | Transaction-related commands in the Marlowe CLI tool.
 module Language.Marlowe.CLI.Command.Transaction (
@@ -71,6 +72,7 @@ import Cardano.Api qualified as Api (Value)
 import Control.Monad.Reader.Class (MonadReader)
 import Data.Time.Units (Second)
 import Options.Applicative qualified as O
+import qualified Cardano.Api as C
 
 -- | Marlowe CLI commands and options.
 data TransactionCommand era
@@ -354,7 +356,7 @@ runTransactionCommand command =
           (fromMaybe 0 submitTimeout)
           >>= printTxId
       Publish{..} ->
-        buildPublishing
+        buildPublishing @_ @C.PlutusScriptV2
           connection
           signingKeyFile
           expires
@@ -364,7 +366,7 @@ runTransactionCommand command =
           submitTimeout
           (PrintStats True)
       FindPublished{..} ->
-        findPublished
+        findPublished @_ @C.PlutusScriptV2
           (QueryNode connection)
           strategy
 

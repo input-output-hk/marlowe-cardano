@@ -744,6 +744,7 @@ test-suite marlowe-runtime-test
     , cardano-slotting
     , containers ^>=0.6.5
     , errors >=2.3 && <3
+    , filepath ^>=1.4
     , hasql >=1.6 && <2
     , hedgehog-quickcheck ^>=0.1
     , hspec
