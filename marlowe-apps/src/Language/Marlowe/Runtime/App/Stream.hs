@@ -59,7 +59,11 @@ import Language.Marlowe.Runtime.Core.Api (
   assertVersionsEqual,
  )
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader (blockHeader, contractId))
-import Language.Marlowe.Runtime.History.Api (ContractStep (ApplyTransaction), CreateStep (CreateStep, createOutput))
+import Language.Marlowe.Runtime.History.Api (
+  ContractStep (ApplyTransaction, RedeemPayout),
+  CreateStep (CreateStep, createOutput),
+  RedeemStep (RedeemStep, redeemingTx),
+ )
 import Observe.Event.Dynamic (DynamicEventSelector (..))
 import Observe.Event.Explicit (EventBackend, addField, withEvent)
 import Observe.Event.Syntax ((≔))
@@ -228,6 +232,7 @@ transactionIdFromStream
   -> Maybe TxId
 transactionIdFromStream ContractStreamStart{csCreateStep = CreateStep{createOutput = TransactionScriptOutput{utxo = TxOutRef{txId}}}} = pure txId
 transactionIdFromStream ContractStreamContinued{csContractStep = (ApplyTransaction Transaction{transactionId})} = pure transactionId
+transactionIdFromStream ContractStreamContinued{csContractStep = (RedeemPayout RedeemStep{redeemingTx})} = pure redeemingTx
 transactionIdFromStream _ = Nothing
 
 isContractStreamFinish

@@ -41,7 +41,7 @@ import Language.Marlowe.Runtime.App.Stream (
 import Language.Marlowe.Runtime.App.Types
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag (V1))
-import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep)
+import Language.Marlowe.Runtime.History.Api (ContractStep (ApplyTransaction, RedeemPayout), CreateStep)
 import Observe.Event.Backend (hoistEventBackend)
 import Observe.Event.Dynamic (DynamicEventSelector (..), DynamicField)
 import Observe.Event.Explicit (Event, EventBackend, addField, withEvent)
@@ -171,12 +171,13 @@ runContractAction selectorName eventBackend runInput (RequeueFrequency requeueFr
       update :: Event IO r DynamicField -> ContractStream 'V1 -> M.Map ContractId LastSeen -> IO (M.Map ContractId LastSeen)
       update event cs lastSeen =
         let contractId = csContractId cs
-         in case (contractId `M.lookup` lastSeen, contractFromStream cs, transactionIdFromStream cs) of
-              (Nothing, Just contract, Just txId) -> pure $ M.insert contractId (LastSeen contractId mempty contract txId mempty) lastSeen
-              (Just seen, Just contract, Just txId) -> pure $ M.insert contractId (seen{lastContract = contract, lastTxId = txId}) lastSeen
-              (Just _, Nothing, Just _) -> pure $ M.delete contractId lastSeen
-              (seen, _, _) -> do
-                -- FIXME: Diagnose and remedy situations if this ever occurs.
+         in case (contractId `M.lookup` lastSeen, contractFromStream cs, transactionIdFromStream cs, cs) of
+              (Nothing, Just contract, Just txId, ContractStreamStart{}) -> pure $ M.insert contractId (LastSeen contractId mempty contract txId mempty) lastSeen
+              (Just seen, Just contract, Just txId, ContractStreamContinued{csContractStep = ApplyTransaction{}}) -> pure $ M.insert contractId (seen{lastContract = contract, lastTxId = txId}) lastSeen
+              (Just _, Nothing, Just _, ContractStreamContinued{csContractStep = ApplyTransaction{}}) -> pure $ M.delete contractId lastSeen
+              (Just _, Nothing, Just _, ContractStreamContinued{csContractStep = RedeemPayout{}}) -> pure lastSeen
+              (seen, _, _, _) -> do
+                -- FIXME: This should be impossible, but diagnose and remedy if this ever occurs.
                 addField event $
                   ("invalidContractStream" :: Text)
                     ≔ object
