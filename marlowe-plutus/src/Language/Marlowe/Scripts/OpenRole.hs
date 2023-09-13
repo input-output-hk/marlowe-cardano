@@ -153,7 +153,7 @@ instance Eq SubTxInfo where
    3. The list of Marlowe inputs should contain at least one action either `IDeposit` or `IChoice` dedicated for the same role
    party as the locked role token.
 
-   In the current version we assume that thread token has the same currency as the role token which can be actually undesired.
+   In the current version we assume that thread token has the same currency as the role token, even though this might actually be undesired.
 
    Error codes:
 
@@ -208,12 +208,10 @@ mkOpenRoleValidator
         -- All the other actions will be checked by Marlowe validator itself.
         marloweRedeemerOk = do
           let TxInInfo{txInInfoOutRef = marloweTxOutRef} = marloweInput
-              {-# INLINEABLE inputContentUsesRole #-}
               inputContentUsesRole (V1.IDeposit _ (V1.Role role) _ _) = role PlutusTxPrelude.== roleName
               inputContentUsesRole (V1.IChoice (V1.ChoiceId _ (V1.Role role)) _) = role PlutusTxPrelude.== roleName
               inputContentUsesRole _ = False
 
-              {-# INLINEABLE inputUsesRole #-}
               inputUsesRole (V1.Scripts.MerkleizedTxInput inputContent _) = inputContentUsesRole inputContent
               inputUsesRole (V1.Scripts.Input inputContent) = inputContentUsesRole inputContent
 

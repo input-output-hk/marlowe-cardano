@@ -31,7 +31,6 @@ cabal run exe:marlowe-cli -- \
   --max-retries 3 \
   --stream-json \
   --simulation-mode \
-  ./test/templates/role-based/runtime/chunked-value-transfer.yaml \
   ./test/inline/role-based/cli/contract-for-differences-with-oracle.yaml \
   ./test/inline/role-based/cli/contract-for-differences.yaml \
   ./test/inline/role-based/cli/coupon-bond-guaranteed.yaml \
@@ -83,6 +82,7 @@ cabal run exe:marlowe-cli -- \
   ./test/templates/role-based/cli/escrow.yaml \
   ./test/templates/role-based/cli/swap.yaml \
   ./test/templates/role-based/cli/zero-coupon-bond.yaml \
+  ./test/templates/role-based/runtime/chunked-value-transfer.yaml \
   ./test/templates/role-based/runtime/covered-call.yaml \
   ./test/templates/role-based/runtime/escrow.yaml \
   ./test/templates/role-based/runtime/swap.yaml \
