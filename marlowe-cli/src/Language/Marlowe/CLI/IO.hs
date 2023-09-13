@@ -84,8 +84,8 @@ import Control.Monad.Except (MonadError (..), MonadIO, liftEither, liftIO)
 import Data.Aeson (FromJSON (..), ToJSON)
 import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.Bifunctor (first)
-import Data.Yaml as Yaml (decodeFileEither, encode, encodeFile)
 import Data.ByteString qualified as BS (length)
+import Data.Yaml as Yaml (decodeFileEither, encode, encodeFile)
 import Language.Marlowe.CLI.Types (
   CliEnv,
   CliError (..),
