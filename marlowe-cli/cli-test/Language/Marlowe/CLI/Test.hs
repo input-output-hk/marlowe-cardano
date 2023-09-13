@@ -94,6 +94,7 @@ import Language.Marlowe.CLI.IO (
   decodeFileStrict,
   getDefaultCostModel,
   getEraHistory,
+  getPV2CostModelParams,
   getProtocolParams,
   getSystemStart,
   liftCli,
@@ -131,10 +132,10 @@ import Language.Marlowe.CLI.Test.Runtime.Types qualified as Runtime
 import Language.Marlowe.CLI.Test.Runtime.Types qualified as Runtime.Monitor
 import Language.Marlowe.CLI.Test.TestCase qualified as TestCase
 import Language.Marlowe.CLI.Test.Types (
-  ConcurrentRunners (ConcurrentRunners),
   FailureReport (FailureReport),
   InterpretEnv (..),
   InterpretState (..),
+  MaxConcurrentRunners (MaxConcurrentRunners),
   ReportingStrategy (..),
   RuntimeConfig (..),
   TestCase (..),
@@ -197,7 +198,6 @@ import Observe.Event.Render.JSON (defaultRenderSelectorJSON)
 import Observe.Event.Render.JSON.Handle (simpleJsonStderrBackend)
 import Plutus.V1.Ledger.Ada qualified as PV
 import Plutus.V1.Ledger.Value qualified as PV
-import PlutusCore (defaultCostModelParams)
 import System.Exit (exitFailure, exitSuccess)
 import System.IO (hPrint, hPutStrLn)
 import System.IO.Temp (createTempDirectory)
@@ -265,7 +265,7 @@ runTestSuite era TestSuite{..} = do
 
   protocolParameters <- queryInEra connection C.QueryProtocolParameters
   slotConfig <- querySlotConfig connection
-  costModel <- getDefaultCostModel
+  costModel <- getPV2CostModelParams (QueryNode connection)
   -- FIXME: This should be configurable.
   reportDir <- liftIO $ createTempDirectory "/tmp" "marlowe-cli-test-report"
 

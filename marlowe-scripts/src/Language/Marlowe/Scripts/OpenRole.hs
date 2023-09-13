@@ -163,8 +163,7 @@ instance Eq SubTxInfo where
    "1" - Own input (never happen) or Marlowe input not found.
    "2" - Invalid own value - we expect only the role token(s) and min ADA.
    "3" - Invalid Marlowe redeemer.
-   "4" - Invalid datum.
-   "5" - Missing thread token.
+   "4" - Missing thread token.
 -}
 mkOpenRoleValidator
   :: ValidatorHash
@@ -224,7 +223,6 @@ mkOpenRoleValidator
               inputs :: V1.Scripts.MarloweInput
               inputs = case AssocMap.lookup (Spending marloweTxOutRef) txInfoRedeemers of
                 Nothing -> traceError "3" -- Invalid Marlowe redeemer
-                -- Let's decode lazely only the first input.
                 Just (Redeemer bytes) -> case fromBuiltinData bytes of
                   Just inputs -> inputs
                   _ -> traceError "3" -- Invalid Marlowe redeemer
@@ -233,7 +231,7 @@ mkOpenRoleValidator
         -- Check the Marlowe input `Value` for the thread token.
         threadTokenOk = do
           let marloweValue = txOutValue $ txInInfoResolved marloweInput
-          traceIfFalse "5" (valueOf marloweValue currencySymbol threadTokenName > 0)
+          traceIfFalse "4" (valueOf marloweValue currencySymbol threadTokenName > 0)
     marloweRedeemerOk && threadTokenOk
 mkOpenRoleValidator _ _ _ _ = False
 

@@ -470,12 +470,6 @@ marloweValidatorCompiled
   :: PlutusTx.CompiledCode (ValidatorHash -> PlutusTx.BuiltinData -> PlutusTx.BuiltinData -> PlutusTx.BuiltinData -> ())
 marloweValidatorCompiled = Haskell.undefined
 
---  let
---    mkUntypedMarloweValidator :: ValidatorHash -> PlutusTx.BuiltinData -> PlutusTx.BuiltinData -> PlutusTx.BuiltinData -> ()
---    mkUntypedMarloweValidator rp = Scripts.mkUntypedValidator (mkMarloweValidator rp)
---  in
---    $$(PlutusTx.compile [|| mkUntypedMarloweValidator ||])
-
 -- | The hash of the Marlowe semantics validator.
 marloweValidatorHash :: ValidatorHash
 marloweValidatorHash = hashScript marloweValidator

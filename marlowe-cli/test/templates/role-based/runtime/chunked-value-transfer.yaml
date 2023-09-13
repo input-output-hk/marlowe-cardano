@@ -35,15 +35,11 @@ operations:
           - [Token02, 1]
           - [Token03, 1]
           - [Token04, 1]
-          - [Token05, 1]
 
 - RuntimeCreateContract:
     minLovelace: 2000000
     awaitConfirmed: 120
     roleCurrency: PriceTokens
-    tags:
-      raffello-payout-dev-0.1: null
-    # merkleize: ClientSide
     template:
       UseChunkedValueTransfer:
         sender: { address: Organizer }
@@ -55,11 +51,10 @@ operations:
           - recipient: { role_token: SecondPriceToken }
             assets:
               - [PriceAsset, Token03, 1]
-              - [PriceAsset, Token04, 1]
           - recipient: { role_token: ThirdPriceToken }
             assets:
-              - [PriceAsset, Token05, 1]
-        payoutChunkSize: 2
+              - [PriceAsset, Token04, 1]
+        payoutChunkSize: 1
         timeout:
           relative: 3600
 
@@ -108,18 +103,6 @@ operations:
           token_name: Token03
         into_account:
           address: Organizer
-      - input_from_party:
-          address: Organizer
-        that_deposits: 1
-        of_token:
-          currency_symbol: PriceAsset
-          token_name: Token04
-        into_account:
-          address: Organizer
-    invalidBefore:
-      relative: -60
-    invalidHereafter:
-      relative: +1800
 
 - RuntimeApplyInputs:
     submitter: Organizer
@@ -134,7 +117,7 @@ operations:
         that_deposits: 1
         of_token:
           currency_symbol: PriceAsset
-          token_name: Token05
+          token_name: Token04
         into_account:
           address: Organizer
     invalidBefore:
@@ -192,7 +175,7 @@ operations:
 - CheckBalance:
     wallet: First
     balance:
-      - [ADA, [20, 30]]
+      - [ADA, [30, 40]]
       - [PriceTokens, FirstPriceToken, 1]
       - [PriceAsset, Token01, 1]
       - [PriceAsset, Token02, 1]
@@ -205,10 +188,9 @@ operations:
 - CheckBalance:
     wallet: Second
     balance:
-      - [ADA, [20, 30]]
+      - [ADA, [30, 40]]
       - [PriceTokens, SecondPriceToken, 1]
       - [PriceAsset, Token03, 1]
-      - [PriceAsset, Token04, 1]
 
 - RuntimeWithdraw:
     wallets:
@@ -218,6 +200,6 @@ operations:
 - CheckBalance:
     wallet: Third
     balance:
-      - [ADA, [20, 30]]
+      - [ADA, [30, 40]]
       - [PriceTokens, ThirdPriceToken, 1]
-      - [PriceAsset, Token05, 1]
+      - [PriceAsset, Token04, 1]

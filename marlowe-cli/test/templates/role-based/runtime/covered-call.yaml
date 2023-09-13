@@ -58,7 +58,7 @@ operations:
 # Transaction 2. The issuer deposits Tokens into the Contract.
 - RuntimeApplyInputs:
     invalidBefore:
-      relative: -60
+      relative: -15
     invalidHereafter:
       relative: +1800
     submitter: Issuer
@@ -76,7 +76,7 @@ operations:
 # Transaction 3. The Counter-Party chooses to exercise the option.
 - RuntimeApplyInputs:
     invalidBefore:
-      relative: -60
+      relative: -15
     invalidHereafter:
       relative: +1800
     submitter: CounterParty
@@ -91,7 +91,7 @@ operations:
 # Transaction 4. The Counter-Party Deposits their Tokens."
 - RuntimeApplyInputs:
     invalidBefore:
-      relative: -60
+      relative: -15
     invalidHereafter:
       relative: +1800
     submitter: CounterParty

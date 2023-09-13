@@ -93,6 +93,7 @@ runRoleCommand
   -- ^ Action for running the command.
 runRoleCommand command =
   do
+    -- FIXME: we should use `getPV2CostModel` here - add node socket path to the command.
     costModel <- getDefaultCostModel
     let network' = network command
         stake' = fromMaybe NoStakeAddress $ stake command

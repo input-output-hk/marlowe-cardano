@@ -27,7 +27,7 @@ import Language.Marlowe.CLI.Command.Parse (parseAddress, parseNetworkId)
 import Language.Marlowe.CLI.Test (runTestSuite)
 import Language.Marlowe.CLI.Test.ExecutionMode (UseExecutionMode (..))
 import Language.Marlowe.CLI.Test.Types (
-  ConcurrentRunners (ConcurrentRunners),
+  MaxConcurrentRunners (MaxConcurrentRunners),
   ReportingStrategy (..),
   RuntimeConfig (RuntimeConfig),
   TestSuite (TestSuite),
@@ -141,12 +141,12 @@ mkParseTestCommand network socket = do
         )
       <*> runtimeConfigParser
       <*> do
-        let parser = ConcurrentRunners <$> O.auto
-            defaultValue = ConcurrentRunners 3
+        let parser = MaxConcurrentRunners <$> O.auto
+            defaultValue = MaxConcurrentRunners 3
         O.option
           parser
           ( O.value defaultValue
-              <> O.long "concurrent-runners"
+              <> O.long "max-concurrent-runners"
               <> O.metavar "INTEGER"
               <> O.help "The number of concurrent test runners."
           )

@@ -182,7 +182,6 @@ import Cardano.Api.Shelley qualified as C
 import Cardano.Ledger.Alonzo.Scripts (ExUnits (..))
 import Cardano.Ledger.Alonzo.TxWitness (Redeemers (..))
 import Cardano.Slotting.EpochInfo.API (epochInfoRange, epochInfoSlotToUTCTime, hoistEpochInfo)
-import Contrib.Cardano.Debug qualified as C.Debug
 import Contrib.Cardano.UTxO qualified as U
 import Contrib.Data.Foldable (foldMapFlipped, tillFirstMatch)
 import Control.Arrow ((***))
@@ -196,7 +195,6 @@ import Data.Aeson qualified as A (Value (Null, Object), object)
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Aeson.Key
 import Data.Aeson.KeyMap qualified as KeyMap
-import Data.Aeson.OneLine qualified as A
 import Data.ByteString qualified as BS (length)
 import Data.ByteString.Char8 qualified as BS8 (unpack)
 import Data.Fixed (div')
@@ -281,7 +279,6 @@ import Language.Marlowe.CLI.Types (
   queryContextNetworkId,
   toAddressAny',
   toAsType,
-  toCardanoEra,
   toCollateralSupportedInEra,
   toEraInMode,
   toExtraKeyWitnessesSupportedInEra,
@@ -304,9 +301,6 @@ import Language.Marlowe.Scripts.OpenRole (openRoleValidator)
 import Ouroboros.Consensus.HardFork.History (interpreterToEpochInfo)
 import Plutus.V1.Ledger.Api (Datum (..), POSIXTime (..), Redeemer (..), TokenName (..), fromBuiltin, toData)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
-
--- FIXME:paluh - reference
--- import Plutus.V2.Ledger.Api (fromData, OutputDatum(..))
 import System.IO (hPutStrLn, stderr)
 
 -- | Build a non-Marlowe transaction.
@@ -518,10 +512,6 @@ buildFaucetImpl txBuildupCtx possibleValues destAddresses fundAddress fundSignin
             coinSelectionStrategy
             Nothing
         pure (i, o, fundAddress)
-
-    liftIO $ hPutStrLn stderr "buildFaucetImpl: "
-    liftIO $ hPutStrLn stderr $ "Inputs: " <> show inputs
-    liftIO $ hPutStrLn stderr $ "utxos: " <> show utxos
 
     body <-
       buildBody
@@ -1687,8 +1677,6 @@ buildBodyWithContent queryCtx payFromScript payToScript extraInputs inputs outpu
             maxSize = fromIntegral $ protocolParamMaxTxSize protocol
             fractionSize = 100 * size `div` maxSize
         hPutStrLn stderr $ "Size: " <> show size <> " / " <> show maxSize <> " = " <> show fractionSize <> "%"
-        let era' = toCardanoEra era
-        hPutStrLn stderr $ T.unpack $ A.renderValue $ A.object $ C.Debug.friendlyTxBody era' txBody
         let ExUnits memory steps = findExUnits txBody
             maxExecutionUnits = protocolParamMaxTxExUnits protocol
             fractionMemory = 100 * memory `div` maybe 0 executionMemory maxExecutionUnits

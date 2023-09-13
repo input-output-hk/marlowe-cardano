@@ -99,12 +99,12 @@ import Language.Marlowe.CLI.Test.TestCase (
   testsFaucetBudgetUpperBound,
  )
 import Language.Marlowe.CLI.Test.Types (
-  ConcurrentRunners (ConcurrentRunners),
   FailureError (InterpreterError, RuntimeMonitorError),
   FailureReport (FailureReport),
   FaucetsNumber (FaucetsNumber),
   InterpretEnv (..),
   InterpretState (..),
+  MaxConcurrentRunners (MaxConcurrentRunners),
   RuntimeConfig (..),
   TestCase (..),
   TestName (TestName),
@@ -650,14 +650,14 @@ runTest (testFile, testCase@TestCase{testName, operations = testOperations}) = d
   liftIO $ hPutStrLn stderr ""
   liftIO $ hPutStrLn stderr $ "***** Test " <> coerce testName <> " *****"
   maxRetries <- view envMaxRetries
-  rConfigured <- asks hasRuntimeConfigured
+  runtimeConfigured <- asks hasRuntimeConfigured
   simulationMode <- do
     txBuildupContext <- view envTxBuildupContext
     case txBuildupContext of
       PureTxBuildup{} -> pure True
       _ -> pure False
   result <-
-    if involvesRuntime testCase && (not rConfigured || simulationMode)
+    if involvesRuntime testCase && (not runtimeConfigured || simulationMode)
       then
         pure
           if simulationMode
@@ -908,9 +908,9 @@ runTests
    . (IsShelleyBasedEra era)
   => (IsPlutusScriptLanguage lang)
   => [(FilePath, TestCase)]
-  -> ConcurrentRunners
+  -> MaxConcurrentRunners
   -> TestSuiteRunnerM lang era (TestSuiteResult lang era)
-runTests tests (ConcurrentRunners maxConcurrentRunners) = do
+runTests tests (MaxConcurrentRunners maxConcurrentRunners) = do
   protocolParams <- view envProtocolParams
   let concurrentRunners = min maxConcurrentRunners (length tests)
       -- Our coin selection algorithm bounds the tx fees using this 2x factor.

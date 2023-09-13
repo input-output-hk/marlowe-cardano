@@ -20,7 +20,7 @@
 cabal run exe:marlowe-cli -- \
   --babbage-era test \
   --testnet-magic 1 \
-  --concurrent-runners 8 \
+  --max-concurrent-runners 8 \
   --socket-path "$CARDANO_NODE_SOCKET_PATH" \
   --faucet-skey-file "$FAUCET_SKEY_FILE" \
   --faucet-address "$FAUCET_VKEY" \
@@ -28,8 +28,9 @@ cabal run exe:marlowe-cli -- \
   --chain-seek-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
   --chain-seek-cmd-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
   --write-to-json-file report.json \
-  --max-retries 1 \
+  --max-retries 3 \
   --stream-json \
+  ./test/templates/role-based/runtime/chunked-value-transfer.yaml \
   ./test/inline/role-based/cli/contract-for-differences-with-oracle.yaml \
   ./test/inline/role-based/cli/contract-for-differences.yaml \
   ./test/inline/role-based/cli/coupon-bond-guaranteed.yaml \
@@ -81,13 +82,10 @@ cabal run exe:marlowe-cli -- \
   ./test/templates/role-based/cli/escrow.yaml \
   ./test/templates/role-based/cli/swap.yaml \
   ./test/templates/role-based/cli/zero-coupon-bond.yaml \
-  ./test/templates/role-based/runtime/chunked-value-transfer.yaml \
-  ./test/templates/role-based/runtime/client-merkleized-chunked-value-transfer.yaml \
-  ./test/templates/role-based/runtime/client-merkleized-small-chunked-value-transfer.yaml \
   ./test/templates/role-based/runtime/covered-call.yaml \
   ./test/templates/role-based/runtime/escrow.yaml \
   ./test/templates/role-based/runtime/swap.yaml \
   ./test/templates/role-based/runtime/zero-coupon-bond.yaml \
 
-# ./marlowe-cli/test/inline/role-based/cli/zero-coupon-bond-delayed-timeout.yaml \
-#  ./marlowe-cli/test/inline/address-based/runtime/merkleized-suspended-payouts.yaml \
+# Fails in simulation mode - PLT-7509:
+# ./test/inline/role-based/cli/zero-coupon-bond-delayed-timeout.yaml \

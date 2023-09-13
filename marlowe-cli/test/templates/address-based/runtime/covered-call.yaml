@@ -42,7 +42,7 @@ operations:
         issueDate:
           relative: 18000 # now + 5h
         maturityDate:
-          relative: 0 # now
+          relative: -15 # now
         settlementDate:
           relative: 36000 # now + 10h
 
@@ -60,7 +60,7 @@ operations:
         into_account:
           address: Issuer
     invalidBefore:
-      relative: -60
+      relative: -15
     invalidHereafter:
       relative: +1800
 

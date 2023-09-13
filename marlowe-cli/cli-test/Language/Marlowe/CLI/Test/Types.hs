@@ -95,7 +95,7 @@ data RuntimeConfig = RuntimeConfig
   }
   deriving stock (Eq, Generic, Show)
 
-newtype ConcurrentRunners = ConcurrentRunners Int
+newtype MaxConcurrentRunners = MaxConcurrentRunners Int
   deriving stock (Eq, Generic, Show)
 
 data ReportingStrategy
@@ -117,7 +117,7 @@ data TestSuite era a = TestSuite
   , tsTests :: [a]
   -- ^ Input for the tests.
   , tsRuntime :: RuntimeConfig
-  , tsConcurrentRunners :: ConcurrentRunners
+  , tsConcurrentRunners :: MaxConcurrentRunners
   , tsReportingStrategy :: Maybe ReportingStrategy
   , tsMaxRetries :: Int
   }

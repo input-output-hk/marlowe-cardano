@@ -74,7 +74,7 @@ import Cardano.Api qualified as Api (Value)
 import Cardano.Api qualified as C
 import Control.Monad.Reader (MonadReader)
 import Data.Time.Units (Second)
-import Language.Marlowe.CLI.IO (getDefaultCostModel, getProtocolVersion)
+import Language.Marlowe.CLI.IO (getPV2CostModelParams, getProtocolVersion)
 import Options.Applicative qualified as O
 
 -- | Marlowe CLI commands and options for running contracts.
@@ -265,7 +265,6 @@ runRunCommand
   -- ^ Action for running the command.
 runRunCommand command =
   do
-    costModel <- getDefaultCostModel
     let network' = network command
         connection =
           LocalNodeConnectInfo
@@ -278,6 +277,7 @@ runRunCommand command =
         printTxId = liftIO . putStrLn . ("TxId " <>) . show
         padTxOut (address, value) = (address, C.TxOutDatumNone, value)
         outputs' = padTxOut <$> outputs command
+    costModel <- getPV2CostModelParams (QueryNode connection)
     case command of
       Initialize{..} -> do
         slotConfig <- querySlotConfig connection
