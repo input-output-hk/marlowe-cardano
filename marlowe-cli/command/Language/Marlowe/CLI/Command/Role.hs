@@ -35,11 +35,11 @@ import Language.Marlowe.CLI.Types (CliEnv, CliError)
 import Language.Marlowe.Core.V1.Semantics.Types (Token (Token))
 import Plutus.V1.Ledger.Api (CurrencySymbol, TokenName)
 
+import Cardano.Api qualified as C
 import Control.Monad.Reader.Class (MonadReader)
 import Language.Marlowe.CLI.IO (getDefaultCostModel)
 import Options.Applicative qualified as O
 import Plutus.ApiCommon (ProtocolVersion)
-import qualified Cardano.Api as C
 
 -- | Marlowe CLI commands and options for exporting role information.
 data RoleCommand

@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  $Headers
@@ -18,7 +19,6 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE AllowAmbiguousTypes #-}
 
 -- | Submitting Marlowe transactions.
 module Language.Marlowe.CLI.Transaction (
@@ -226,7 +226,12 @@ import Language.Marlowe.CLI.Cardano.Api (
 import Language.Marlowe.CLI.Cardano.Api qualified as MCA
 import Language.Marlowe.CLI.Cardano.Api.Address.ProofOfBurn (permanentPublisher)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript as PS
-import Language.Marlowe.CLI.Export (buildValidatorInfo, readMarloweValidator, readRolePayoutValidator, readOpenRoleValidator)
+import Language.Marlowe.CLI.Export (
+  buildValidatorInfo,
+  readMarloweValidator,
+  readOpenRoleValidator,
+  readRolePayoutValidator,
+ )
 import Language.Marlowe.CLI.IO (
   decodeFileBuiltinData,
   decodeFileStrict,

@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
@@ -6,7 +7,6 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE AllowAmbiguousTypes #-}
 
 -- | Export information for Marlowe contracts and roles.
 --
@@ -194,7 +194,8 @@ exportMarlowe marloweParams protocolVersion costModel network stake contractFile
     inputs :: [Input] <- mapM decodeFileStrict inputFiles
     marloweInfo@MarloweInfo{..} <-
       liftEither
-        =<< join (asksEra \era -> buildMarlowe @m @lang marloweParams era protocolVersion costModel network stake contract state inputs)
+        =<< join
+          (asksEra \era -> buildMarlowe @m @lang marloweParams era protocolVersion costModel network stake contract state inputs)
     let ValidatorInfo{..} = miValidatorInfo
         DatumInfo{..} = miDatumInfo
         RedeemerInfo{..} = miRedeemerInfo
@@ -266,9 +267,10 @@ printMarlowe marloweParams era protocolVersion costModel network stake contract 
         putStrLn ""
         putStrLn $ "Inputs: " <> show inputs
         putStrLn ""
-        putStrLn $ "Validator: " <> LBS8.unpack case plutusScriptVersion @lang of
-          PlutusScriptV1 -> encode $ C.serialiseToTextEnvelope Nothing viScript
-          PlutusScriptV2 -> encode $ C.serialiseToTextEnvelope Nothing viScript
+        putStrLn $
+          "Validator: " <> LBS8.unpack case plutusScriptVersion @lang of
+            PlutusScriptV1 -> encode $ C.serialiseToTextEnvelope Nothing viScript
+            PlutusScriptV2 -> encode $ C.serialiseToTextEnvelope Nothing viScript
         putStrLn ""
         putStrLn $ "Validator address: " <> T.unpack (withCardanoEra era $ serialiseAddress viAddress)
         putStrLn ""

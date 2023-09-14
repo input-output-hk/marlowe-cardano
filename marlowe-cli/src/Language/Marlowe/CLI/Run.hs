@@ -107,7 +107,8 @@ import Language.Marlowe.CLI.Export (
   buildRoleDatum,
   buildRoleRedeemer,
   marloweValidatorInfo,
-  openRoleValidatorInfo, payoutValidatorInfo,
+  openRoleValidatorInfo,
+  payoutValidatorInfo,
  )
 import Language.Marlowe.CLI.IO (
   decodeFileStrict,

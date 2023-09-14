@@ -69,10 +69,10 @@ import Language.Marlowe.CLI.Types (
  )
 
 import Cardano.Api qualified as Api (Value)
+import Cardano.Api qualified as C
 import Control.Monad.Reader.Class (MonadReader)
 import Data.Time.Units (Second)
 import Options.Applicative qualified as O
-import qualified Cardano.Api as C
 
 -- | Marlowe CLI commands and options.
 data TransactionCommand era

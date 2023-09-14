@@ -113,6 +113,7 @@ import Data.Text qualified as Text
 import Data.Tuple.Extra (uncurry3)
 import Language.Marlowe.CLI.Cardano.Api (toReferenceTxInsScriptsInlineDatumsSupportedInEra, toTxOutDatumInline)
 import Language.Marlowe.CLI.Cardano.Api.Value qualified as CV
+import Language.Marlowe.CLI.Export (readOpenRoleValidator)
 import Language.Marlowe.CLI.IO (readSigningKey, submitTxBody')
 import Language.Marlowe.CLI.Run (toCardanoPolicyId)
 import Language.Marlowe.CLI.Sync (toPlutusAddress)
@@ -138,7 +139,6 @@ import PlutusTx.AssocMap qualified as AssocMap
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 import PlutusTx.Monoid (Group (inv))
 import System.IO.Temp (emptySystemTempFile, emptyTempFile)
-import Language.Marlowe.CLI.Export (readOpenRoleValidator)
 
 findWallet
   :: (InterpretMonad env st m era)
