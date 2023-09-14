@@ -29,4 +29,8 @@ in
 
 
   packages.integration-tests = nix.marlowe-cardano.integration-tests { inherit projects; };
+
+  checks = {
+    check-validators = nix.marlowe-cardano.check-validators;
+  };
 }
