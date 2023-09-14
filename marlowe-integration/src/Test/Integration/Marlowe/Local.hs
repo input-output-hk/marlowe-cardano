@@ -447,7 +447,7 @@ toMarloweScripts :: Int -> MarloweScriptsRefs MarlowePlutusVersion BabbageEra ->
 toMarloweScripts testnetMagic MarloweScriptsRefs{..} = MarloweScripts{..}
   where
     marloweValidatorInfo = snd mrMarloweValidator
-    payoutValidatorInfo = snd mrMarloweValidator
+    payoutValidatorInfo = snd mrRolePayoutValidator
     marloweScript = fromCardanoScriptHash $ viHash marloweValidatorInfo
     payoutScript = fromCardanoScriptHash $ viHash payoutValidatorInfo
     networkId = Testnet $ NetworkMagic $ fromIntegral testnetMagic
