@@ -19,11 +19,11 @@ import Data.Aeson (FromJSON (..), ToJSON (..), (.=))
 import Data.Aeson qualified as A
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty qualified as NonEmptyList
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Text qualified as T
 import GHC.Generics (Generic)
-import Language.Marlowe (Token (..))
 import Language.Marlowe.CLI.IO (liftCliMaybe)
 import Language.Marlowe.CLI.Run (marloweAddressFromCardanoAddress)
 import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (ParametrizedMarloweJSON)
@@ -32,9 +32,9 @@ import Language.Marlowe.CLI.Test.Operation.Aeson qualified as Operation
 import Language.Marlowe.CLI.Test.Wallet.Interpret (
   assetIdToToken,
   assetToPlutusValue,
-  findWallet,
-  findWalletByUniqueToken,
   getSingletonCurrency,
+  getWallet,
+  getWalletByUniqueToken,
  )
 import Language.Marlowe.CLI.Test.Wallet.Types (
   Asset (Asset),
@@ -213,7 +213,7 @@ data UseTemplate
       , utOracle :: PartyRef
       , utChunkSize :: Raffle.ChunkSize
       , utParties :: NonEmpty PartyRef
-      , utprizeNFTPerRound :: NonEmpty Token
+      , utprizeNFTPerRound :: [AssetId]
       , utDepositDeadline :: SomeTimeout
       , utSelectDeadline :: SomeTimeout
       , utPayoutDeadline :: SomeTimeout
@@ -265,7 +265,7 @@ buildParty
   -> m M.Party
 buildParty mRoleCurrency = \case
   WalletRef nickname -> do
-    wallet <- findWallet nickname
+    wallet <- getWallet nickname
     uncurry M.Address <$> rethrowCliError (marloweAddressFromCardanoAddress (_waAddress wallet))
   KnownAddress (n, a) -> pure $ M.Address n a
   RoleRef token -> do
@@ -273,7 +273,7 @@ buildParty mRoleCurrency = \case
     currency <- case mRoleCurrency of
       Nothing -> fst <$> getSingletonCurrency
       Just cn -> pure cn
-    void $ findWalletByUniqueToken currency token
+    void $ getWalletByUniqueToken currency token
     -- We are allowed to use this M.Role
     pure $ M.Role token
 
@@ -385,13 +385,18 @@ useTemplate currency = \case
     oracle <- buildParty currency utOracle
     parties <- traverse (buildParty currency) utParties
 
+    possiblePrizeNFTPerRound <- traverse assetIdToToken utprizeNFTPerRound
+    prizeNFTPerRound <- case NonEmptyList.nonEmpty possiblePrizeNFTPerRound of
+      Nothing -> throwError $ testExecutionFailed' "Price NFT per round must be specified"
+      Just nfts -> pure nfts
+
     pure $
       raffle
         (Raffle.Sponsor sponsor)
         (Raffle.Oracle oracle)
         utChunkSize
         parties
-        utprizeNFTPerRound
+        prizeNFTPerRound
         depositDeadline'
         selectDeadline'
         payoutDeadline'

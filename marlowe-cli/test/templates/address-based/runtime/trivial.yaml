@@ -23,9 +23,16 @@ operations:
           token_name: ""
         into_account:
           address: Faucet
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800
 
 - RuntimeApplyInputs:
     awaitConfirmed: 120
     inputs:
       - input_notify
-
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800

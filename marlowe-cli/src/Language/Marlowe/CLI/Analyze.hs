@@ -25,6 +25,7 @@ module Language.Marlowe.CLI.Analyze (
   -- * Analysis
   analyze,
   checkExecutionCost,
+  calcMarloweTxExBudgets,
 ) where
 
 import Control.Monad (guard, liftM2, (<=<))
@@ -34,10 +35,19 @@ import Data.Bifunctor (bimap)
 import Data.Foldable (toList)
 import Data.Function (on)
 import Data.List (maximumBy, nub, (\\))
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes, isJust)
 import Data.String (IsString (..))
 import Language.Marlowe.Analysis.Safety.Ledger (worstValueSize)
-import Language.Marlowe.Analysis.Safety.Transaction (executeTransaction, findTransactions', foldTransactionsM)
+import Language.Marlowe.Analysis.Safety.Transaction (
+  LockedRoles (..),
+  MarloweExBudget (..),
+  UseReferenceInput (..),
+  calcMarloweTxExBudget,
+  executeTransaction,
+  findTransactions',
+  foldTransactionsM,
+  inputsRequiredRoles,
+ )
 import Language.Marlowe.Analysis.Safety.Types (Transaction (..))
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage (..), toScriptLanguageInEra)
 import Language.Marlowe.CLI.IO (decodeFileStrict, liftCli, liftCliIO, liftCliMaybe)
@@ -49,6 +59,7 @@ import Language.Marlowe.CLI.Types (
     mtContinuations,
     mtContract,
     mtInputs,
+    mtOpenRoleValidator,
     mtPayments,
     mtRange,
     mtRoleValidator,
@@ -99,6 +110,7 @@ import Data.Aeson qualified as A
 import Data.Aeson.Types qualified as A (Pair)
 import Data.ByteString qualified as BS (length)
 import Data.ByteString.Char8 qualified as BS8 (putStr)
+import Data.Foldable.Extra (foldlM)
 import Data.Map.Strict qualified as M (lookup)
 import Data.Set qualified as S (filter, member)
 import Data.Yaml qualified as Y (encode)
@@ -179,6 +191,8 @@ data ContractInstance lang era = ContractInstance
   -- ^ The semantics validator.
   , ciPayoutValidator :: ValidatorInfo lang era
   -- ^ The payout validator.
+  , ciOpenRoleValidator :: ValidatorInfo lang era
+  -- ^ The open role validator.
   , ciSlotConfig :: P.SlotConfig
   -- ^ The slot configuration.
   }
@@ -220,7 +234,16 @@ analyzeImpl
 analyzeImpl era protocol MarloweTransaction{..} preconditions roles tokens maximumValue minimumUtxo executionCost transactionSize best verbose =
   do
     let checkAll = not $ preconditions || roles || tokens || maximumValue || minimumUtxo || executionCost || transactionSize
-        ci = ContractInstance mtRolesCurrency mtState mtContract mtContinuations mtValidator mtRoleValidator mtSlotConfig
+        ci =
+          ContractInstance
+            mtRolesCurrency
+            mtState
+            mtContract
+            mtContinuations
+            mtValidator
+            mtRoleValidator
+            mtOpenRoleValidator
+            mtSlotConfig
     transactions <-
       if checkAll || executionCost || transactionSize || best && (maximumValue || minimumUtxo)
         then findTransactions' True $ MerkleizedContract mtContract mtContinuations
@@ -431,12 +454,12 @@ checkExecutionCost protocol ContractInstance{..} transactions verbose =
           P.Address
             (P.PubKeyCredential "88888888888888888888888888888888888888888888888888888888")
             (Just . P.StakingHash $ P.PubKeyCredential "99999999999999999999999999999999999999999999999999999999")
-        referenceAddress =
-          P.Address
-            (P.PubKeyCredential "77777777777777777777777777777777777777777777777777777777")
-            (Just . P.StakingHash $ P.PubKeyCredential "99999999999999999999999999999999999999999999999999999999")
-        semanticsHash = P.ScriptHash . P.toBuiltin $ Api.serialiseToRawBytes $ viHash ciSemanticsValidator
-        referenceInput =
+        referenceInput = do
+          let referenceAddress =
+                P.Address
+                  (P.PubKeyCredential "77777777777777777777777777777777777777777777777777777777")
+                  (Just . P.StakingHash $ P.PubKeyCredential "99999999999999999999999999999999999999999999999999999999")
+              semanticsHash = P.ScriptHash . P.toBuiltin $ Api.serialiseToRawBytes $ viHash ciSemanticsValidator
           case viTxIn ciSemanticsValidator of
             Nothing -> mempty
             Just _ ->
@@ -485,6 +508,46 @@ checkExecutionCost protocol ContractInstance{..} transactions verbose =
                   <> maybe [] (pure . ("Worst case" .=)) (guard verbose >> Just worstMemory)
               )
         ]
+
+calcMarloweTxExBudgets
+  :: (MonadError CliError m)
+  => Api.ProtocolParameters
+  -- ^ The protocol parameters.
+  -> ContractInstance lang era
+  -- ^ The bundle of contract information.
+  -> [Transaction]
+  -- ^ The transaction-path through the contract. It should be a list of *consecutive* transactions.
+  -> [P.TokenName]
+  -> m [MarloweExBudget]
+  -- ^ Action to print a report on validity of transaction execution costs.
+calcMarloweTxExBudgets protocol ContractInstance{..} transactionsPath lockedRoles = do
+  Api.CostModel costModel <-
+    liftCliMaybe "Plutus cost model not found." $
+      Api.AnyPlutusScriptVersion Api.PlutusScriptV2 `M.lookup` Api.protocolParamCostModels protocol
+  evaluationContext <- liftCli $ P.mkEvaluationContext costModel
+  let useSemanticsReferenceInput = UseReferenceInput $ isJust $ viTxIn ciSemanticsValidator
+      useOperatorReferenceInput = UseReferenceInput $ isJust $ viTxIn ciOpenRoleValidator
+
+  semanticsAddress <- fmap snd . liftCli $ marloweAddressFromCardanoAddress $ viAddress ciSemanticsValidator
+  payoutAddress <- fmap snd . liftCli $ marloweAddressFromCardanoAddress $ viAddress ciPayoutValidator
+  openRoleAddress <- fmap snd . liftCli $ marloweAddressFromCardanoAddress $ viAddress ciOpenRoleValidator
+  let calcTxBudget transaction stillLockedRoles =
+        calcMarloweTxExBudget
+          evaluationContext
+          (viBytes ciSemanticsValidator, semanticsAddress, useSemanticsReferenceInput)
+          (viBytes ciOpenRoleValidator, openRoleAddress, useOperatorReferenceInput, LockedRoles stillLockedRoles)
+          payoutAddress
+          (MarloweParams ciRolesCurrency)
+          transaction
+
+      step (budgets, stillLockedRoles) transaction = do
+        let Transaction _ _ TransactionInput{txInputs = txInputs} _ = transaction
+            requiredRoles = inputsRequiredRoles txInputs
+            stillLockedRoles' = filter (`notElem` requiredRoles) stillLockedRoles
+        txBudgets <- calcTxBudget transaction stillLockedRoles
+        -- result@(MarloweExBudget _ (_, stillLockedRoles')) <- evaluator transaction stillLockeRoles
+        pure (txBudgets : budgets, stillLockedRoles')
+  reverse . fst <$> foldlM step ([], lockedRoles) transactionsPath
 
 -- | Check that transactions satisfy the transaction-size protocol limit.
 checkTransactionSizes

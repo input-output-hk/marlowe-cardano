@@ -1,0 +1,251 @@
+testName: Test the limit of deposits to a single (address based) account of distinct tokens
+
+operations:
+
+# We keep publishing before minting to avoid balancing error in publishing coin selection
+- Publish:
+    publishPermanently: true
+
+- Mint:
+    issuer: Faucet
+    nickname: NFTs
+    minLovelace: 4000000
+    tokenDistribution:
+      - recipient: Faucet
+        # addr_test1qq0acgkfkgeeuezdy2fn2y5mxhn9zcvrjesxxen4k2d2t2zrhp2etmnsef6wnpvrsu5n80kxceafnxpv5te923agndxs5c4ter
+        tokens:
+          - [Token01, 1]
+          - [Token02, 1]
+          - [Token03, 1]
+          - [Token04, 1]
+          - [Token05, 1]
+          - [Token06, 1]
+          - [Token07, 1]
+
+- Initialize:
+    minLovelace: 2000000
+    merkleize: false
+    marloweValidators:
+      publishCurrent:
+        permanently: true
+    submitter: Faucet
+    source:
+      timeout:
+        relative: +3600
+      timeout_continuation: close
+      unless:
+        party:
+          address: Faucet
+        deposits: 1
+        of_token:
+          currency_symbol: NFTs
+          token_name: Token01
+        into_account:
+          address: Faucet
+      then:
+        timeout:
+          relative: +3600
+        timeout_continuation: close
+        unless:
+          party:
+            address: Faucet
+          deposits: 1
+          of_token:
+            currency_symbol: NFTs
+            token_name: Token02
+          into_account:
+            address: Faucet
+        then:
+          timeout:
+            relative: +3600
+          timeout_continuation: close
+          unless:
+            party:
+              address: Faucet
+            deposits: 1
+            of_token:
+              currency_symbol: NFTs
+              token_name: Token03
+            into_account:
+              address: Faucet
+          then:
+            timeout:
+              relative: +3600
+            timeout_continuation: close
+            unless:
+              party:
+                address: Faucet
+              deposits: 1
+              of_token:
+                currency_symbol: NFTs
+                token_name: Token04
+              into_account:
+                address: Faucet
+            then:
+              timeout:
+                relative: +3600
+              timeout_continuation: close
+              unless:
+                party:
+                  address: Faucet
+                deposits: 1
+                of_token:
+                  currency_symbol: NFTs
+                  token_name: Token05
+                into_account:
+                  address: Faucet
+              then:
+                timeout:
+                  relative: +3600
+                timeout_continuation: close
+                unless:
+                  party:
+                    address: Faucet
+                  deposits: 1
+                  of_token:
+                    currency_symbol: NFTs
+                    token_name: Token06
+                  into_account:
+                    address: Faucet
+                then:
+                  # If we drop this part the 6th deposit succeeds ;-)
+                  # On the other hand those six deposits are really the limit.
+                  timeout:
+                    relative: +3600
+                  timeout_continuation: close
+                  unless:
+                    party:
+                      address: Faucet
+                    deposits: 1
+                    of_token:
+                      currency_symbol: NFTs
+                      token_name: Token07
+                    into_account:
+                      address: Faucet
+                  then: close
+
+- Comment: Deposit all the NFT's on by one
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          address: Faucet
+        that_deposits: 1
+        of_token:
+          currency_symbol: NFTs
+          token_name: Token01
+        into_account:
+          address: Faucet
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          address: Faucet
+        that_deposits: 1
+        of_token:
+          currency_symbol: NFTs
+          token_name: Token02
+        into_account:
+          address: Faucet
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          address: Faucet
+        that_deposits: 1
+        of_token:
+          currency_symbol: NFTs
+          token_name: Token03
+        into_account:
+          address: Faucet
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          address: Faucet
+        that_deposits: 1
+        of_token:
+          currency_symbol: NFTs
+          token_name: Token04
+        into_account:
+          address: Faucet
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          address: Faucet
+        that_deposits: 1
+        of_token:
+          currency_symbol: NFTs
+          token_name: Token05
+        into_account:
+          address: Faucet
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun
+
+- Comment: It is expected that we fail at sixth deposit...
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          address: Faucet
+        that_deposits: 1
+        of_token:
+          currency_symbol: NFTs
+          token_name: Token06
+        into_account:
+          address: Faucet
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- ShouldFail: AutoRun
+
+- Comment: It is expected that we fail at seventh deposit...
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          address: Faucet
+        that_deposits: 1
+        of_token:
+          currency_symbol: NFTs
+          token_name: Token07
+        into_account:
+          address: Faucet
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- ShouldFail: AutoRun
+

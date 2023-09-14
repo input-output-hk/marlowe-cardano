@@ -42,7 +42,7 @@ operations:
         issueDate:
           relative: 18000 # now + 5h
         maturityDate:
-          relative: 0 # now
+          relative: -15 # now
         settlementDate:
           relative: 36000 # now + 10h
 
@@ -59,6 +59,10 @@ operations:
           token_name: Globe
         into_account:
           address: Issuer
+    invalidBefore:
+      relative: -15
+    invalidHereafter:
+      relative: +1800
 
 # Transaction 3. The Counter-Party chooses to exercise the option.
 - RuntimeApplyInputs:
@@ -70,6 +74,10 @@ operations:
           choice_owner:
             address: CounterParty
         input_that_chooses_num: 1
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800
 
 # Transaction 4. The Counter-Party Deposits their Tokens."
 - RuntimeApplyInputs:
@@ -84,6 +92,10 @@ operations:
           token_name: Swan
         into_account:
           address: CounterParty
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800
 
 - CheckBalance:
     wallet: Issuer

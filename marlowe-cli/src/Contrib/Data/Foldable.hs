@@ -1,7 +1,14 @@
 module Contrib.Data.Foldable where
 
-import Data.Foldable (foldlM)
+import Data.Foldable (foldlM, foldrM)
 import Data.Foldable.WithIndex (FoldableWithIndex, ifoldlM)
+
+tillFirstMatch :: (Foldable f) => f a -> (a -> Maybe b) -> Maybe b
+tillFirstMatch l match = do
+  let step a acc = case match a of
+        res@(Just _) -> res
+        _ -> acc
+  foldr step Nothing l
 
 -- Useful aliases for infix usage.
 
@@ -42,3 +49,9 @@ ifoldMapM f =
 
 ifoldMapMFlipped :: (Monad m, Monoid w, FoldableWithIndex i t) => t a -> (i -> a -> m w) -> m w
 ifoldMapMFlipped = flip ifoldMapM
+
+foldlMFlipped :: (Foldable t, Monad m) => b -> t a -> (b -> a -> m b) -> m b
+foldlMFlipped zero foldable step = foldlM step zero foldable
+
+foldrMFlipped :: (Foldable t, Monad m) => b -> t a -> (a -> b -> m b) -> m b
+foldrMFlipped zero foldable step = foldrM step zero foldable

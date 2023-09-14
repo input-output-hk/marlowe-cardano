@@ -1,0 +1,199 @@
+testName: Test the limit of deposits to a single (address based) account of distinct tokens using open roles
+
+operations:
+
+# We keep publishing before minting to avoid balancing error in coin selection
+- Publish:
+    publishPermanently: true
+
+- Mint:
+    nickname: RoleTokens
+    mintingExpirationSlot: 20219351600
+    minLovelace: 2000000
+    tokenDistribution:
+      - [{ script: OpenRole }, Role01, 1]
+      - [{ script: OpenRole }, Role02, 1]
+      - [{ script: OpenRole }, Role03, 1]
+      - [{ script: OpenRole }, Role04, 1]
+      - [Faucet, '', 1]
+
+- Mint:
+    issuer: Faucet
+    nickname: NFTs
+    mintingExpirationSlot: 10219351600
+    minLovelace: 4000000
+    tokenDistribution:
+      - recipient: Faucet
+        tokens:
+          - [Token01, 1]
+          - [Token02, 1]
+          - [Token03, 1]
+          - [Token04, 1]
+
+- CheckBalance:
+    wallet: Faucet
+    balance:
+      - [RoleTokens, '', 1]
+      - [ADA, -8]
+      - NFTs:
+        - [Token01, 1]
+        - [Token02, 1]
+        - [Token03, 1]
+        - [Token04, 1]
+
+
+- Initialize:
+    minLovelace: 2000000
+    merkleize: true
+    roleCurrency: RoleTokens
+    marloweValidators:
+      publishCurrent:
+        permanently: true
+    source:
+      timeout: +1h
+      timeout_continuation: close
+      unless:
+        party:
+          address: Faucet
+        deposits: 1
+        of_token: [RoleTokens, '']
+        into_account:
+          address: Faucet
+      then:
+        timeout: +1h
+        timeout_continuation: close
+        unless:
+          party:
+            role_token: Role01
+          deposits: 1
+          of_token: [NFTs, Token01]
+          into_account:
+            address: Faucet
+        then:
+          timeout: +1h
+          timeout_continuation: close
+          unless:
+            party:
+              role_token: Role02
+            deposits: 1
+            of_token: [NFTs, Token02]
+            into_account:
+              address: Faucet
+          then:
+            timeout: +1h
+            timeout_continuation: close
+            unless:
+              party:
+                role_token: Role03
+              deposits: 1
+              of_token: [NFTs, Token03]
+              into_account:
+                address: Faucet
+            then:
+              timeout: +1h
+              timeout_continuation: close
+              unless:
+                party:
+                  role_token: Role04
+                deposits: 1
+                of_token: [NFTs, Token04]
+                into_account:
+                  address: Faucet
+              then: close
+
+- Comment: Manually deposit thread token to the script.
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          address: Faucet
+        that_deposits: 1
+        of_token: [RoleTokens, '']
+        into_account:
+          address: Faucet
+    minimumTime: -15s
+    maximumTime: +2m
+
+- AutoRun:
+    submitter: Faucet
+
+# We extra 2 ADA for contract deployment and deposited thread token as well
+- CheckBalance:
+    wallet: Faucet
+    balance:
+      - [ADA, -10]
+      - NFTs:
+        - [Token01, 1]
+        - [Token02, 1]
+        - [Token03, 1]
+        - [Token04, 1]
+
+- Comment: Now deposit all the NFT's on by one
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: Role01
+        that_deposits: 1
+        of_token: [NFTs, Token01]
+        into_account:
+          address: Faucet
+    minimumTime: -15s
+    maximumTime: +2m
+
+- AutoRun:
+    submitter: Faucet
+
+- Comment: We "exchanged" NFT for a role token and get back also 2 ADA from min utxo from the role carring utxo which was locked by open roles script
+
+- CheckBalance:
+    wallet: Faucet
+    balance:
+      - [ADA, -8]
+      - NFTs:
+        - [Token02, 1]
+        - [Token03, 1]
+        - [Token04, 1]
+      - RoleTokens:
+        - [Role01, 1]
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: Role02
+        that_deposits: 1
+        of_token: [NFTs, Token02]
+        into_account:
+          address: Faucet
+    minimumTime: -15s
+    maximumTime: +2m
+
+- Comment: With unfortunate arrangement of the context sometime this step can fail...
+
+- AutoRun:
+    submitter: Faucet
+
+- CheckBalance:
+    wallet: Faucet
+    balance:
+      - [ADA, -6]
+      - NFTs:
+        - [Token03, 1]
+        - [Token04, 1]
+      - RoleTokens:
+        - [Role01, 1]
+        - [Role02, 1]
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: Role03
+        that_deposits: 1
+        of_token: [NFTs, Token03]
+        into_account:
+          address: Faucet
+    minimumTime: -15s
+    maximumTime: +2m
+
+- ShouldFail: AutoRun
+

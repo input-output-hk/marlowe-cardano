@@ -28,6 +28,10 @@ data InterpreterError
       { _ieMessage :: String
       , _ieInfo :: [(A.Key, A.Value)]
       }
+  | SimulationOperationFailed
+      { _ieMessage :: String
+      , _ieInfo :: [(A.Key, A.Value)]
+      }
   | RuntimeOperationFailed
       { _ieMessage :: String
       , _ieInfo :: [(A.Key, A.Value)]

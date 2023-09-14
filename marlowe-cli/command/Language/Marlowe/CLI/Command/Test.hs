@@ -25,9 +25,9 @@ import Control.Monad.Except (MonadError, MonadIO)
 import Data.Maybe (fromMaybe)
 import Language.Marlowe.CLI.Command.Parse (parseAddress, parseNetworkId)
 import Language.Marlowe.CLI.Test (runTestSuite)
-import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode (OnChainMode, SimulationMode))
+import Language.Marlowe.CLI.Test.ExecutionMode (UseExecutionMode (..))
 import Language.Marlowe.CLI.Test.Types (
-  ConcurrentRunners (ConcurrentRunners),
+  MaxConcurrentRunners (MaxConcurrentRunners),
   ReportingStrategy (..),
   RuntimeConfig (RuntimeConfig),
   TestSuite (TestSuite),
@@ -60,14 +60,14 @@ runTestCommand cmd = do
   era <- askEra
   runTestSuite era cmd
 
-executionModeParser :: O.Parser ExecutionMode
-executionModeParser = fmap (fromMaybe (OnChainMode (120 :: Second))) simulationModeOpt
+txBuildupContextParser :: O.Parser UseExecutionMode
+txBuildupContextParser = fmap (fromMaybe (UseOnChainMode (120 :: Second))) simulationModeOpt
 
-simulationModeOpt :: O.Parser (Maybe ExecutionMode)
+simulationModeOpt :: O.Parser (Maybe UseExecutionMode)
 simulationModeOpt =
   O.optional
     ( O.flag'
-        SimulationMode
+        UseSimulationMode
         (O.long "simulation-mode" <> O.help "Run test suite in simulation mode by ignoring the transaction submission timeout")
     )
 
@@ -135,18 +135,18 @@ mkParseTestCommand network socket = do
         parseAddress
         ( O.long "faucet-address" <> O.metavar "FAUCET_ADDRESS" <> O.help "The address of the faucet."
         )
-      <*> executionModeParser
+      <*> txBuildupContextParser
       <*> (O.some . O.strArgument)
         ( O.metavar "TEST_FILE" <> O.help "JSON file containing a test case."
         )
       <*> runtimeConfigParser
       <*> do
-        let parser = ConcurrentRunners <$> O.auto
-            defaultValue = ConcurrentRunners 3
+        let parser = MaxConcurrentRunners <$> O.auto
+            defaultValue = MaxConcurrentRunners 3
         O.option
           parser
           ( O.value defaultValue
-              <> O.long "concurrent-runners"
+              <> O.long "max-concurrent-runners"
               <> O.metavar "INTEGER"
               <> O.help "The number of concurrent test runners."
           )

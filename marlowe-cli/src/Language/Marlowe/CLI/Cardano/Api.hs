@@ -12,7 +12,10 @@ module Language.Marlowe.CLI.Cardano.Api (
   adjustMinimumUTxO,
   toMultiAssetSupportedInEra,
   toPlutusProtocolVersion,
+  toTxOutDatumInTx,
+  toTxOutDatumInline,
   toReferenceTxInsScriptsInlineDatumsSupportedInEra,
+  fromReferenceTxInsScriptsInlineDatumsSupportedInEra,
   withShelleyBasedEra,
 ) where
 
@@ -24,27 +27,26 @@ import Cardano.Api (
   MultiAssetSupportedInEra (MultiAssetInAlonzoEra, MultiAssetInBabbageEra),
   ScriptDataSupportedInEra (..),
   TxOut (..),
-  TxOutDatum (..),
   TxOutValue (..),
   calculateMinimumUTxO,
   lovelaceToValue,
   selectLovelace,
   shelleyBasedEra,
  )
-import Cardano.Api qualified as Api (Value)
+import Cardano.Api qualified as Api
 import Cardano.Api qualified as C
 import Cardano.Api.Shelley (
   ProtocolParameters,
   ReferenceScript,
   ReferenceTxInsScriptsInlineDatumsSupportedInEra (ReferenceTxInsScriptsInlineDatumsInBabbageEra),
-  fromPlutusData,
  )
+import Cardano.Api.Shelley qualified as CS
 import Control.Monad.Except (liftEither)
 import GHC.Natural (Natural, naturalToInteger)
 import Language.Marlowe.CLI.Cardano.Api.Value qualified as Value
 import Language.Marlowe.CLI.Orphans ()
 import Plutus.V1.Ledger.Api (ProtocolVersion (ProtocolVersion))
-import Plutus.V2.Ledger.Api (Datum (..), toData)
+import Plutus.V2.Ledger.Api qualified as PV2
 
 withShelleyBasedEra :: forall era a. ScriptDataSupportedInEra era -> ((IsShelleyBasedEra era) => a) -> a
 withShelleyBasedEra = \case
@@ -62,11 +64,15 @@ toReferenceTxInsScriptsInlineDatumsSupportedInEra = \case
   ScriptDataInAlonzoEra -> Nothing
   ScriptDataInBabbageEra -> Just ReferenceTxInsScriptsInlineDatumsInBabbageEra
 
+fromReferenceTxInsScriptsInlineDatumsSupportedInEra
+  :: ReferenceTxInsScriptsInlineDatumsSupportedInEra era -> ScriptDataSupportedInEra era
+fromReferenceTxInsScriptsInlineDatumsSupportedInEra ReferenceTxInsScriptsInlineDatumsInBabbageEra = ScriptDataInBabbageEra
+
 toPlutusProtocolVersion :: (Natural, Natural) -> ProtocolVersion
 toPlutusProtocolVersion (major, minor) = ProtocolVersion (fromInteger . naturalToInteger $ major) (fromInteger . naturalToInteger $ minor)
 
 -- | 2022-08 This function was written to compensate for a bug in Cardano's calculateMinimumUTxO. It's called by adjustMinimumUTxO below. We will eventually be able to remove it.
-ensureAtLeastHalfAnAda :: Api.Value -> Api.Value
+ensureAtLeastHalfAnAda :: C.Value -> C.Value
 ensureAtLeastHalfAnAda origValue =
   if origLovelace < minLovelace
     then origValue <> lovelaceToValue (minLovelace - origLovelace)
@@ -83,9 +89,9 @@ adjustMinimumUTxO
   -- ^ The protocol parameters.
   -> AddressInEra era
   -- ^ The output address.
-  -> Maybe Datum
+  -> C.TxOutDatum C.CtxTx era
   -- ^ The datum, if any.
-  -> Api.Value
+  -> C.Value
   -- ^ The output value.
   -> ReferenceScript era
   -> Either MinimumUTxOError (Lovelace, Api.Value)
@@ -97,9 +103,19 @@ adjustMinimumUTxO era protocol address datum origValue mRefScript =
           TxOut
             address
             (TxOutValue (toMultiAssetSupportedInEra era) value) -- (value <> calcDeficit))
-            (maybe TxOutDatumNone (TxOutDatumInTx era . fromPlutusData . toData) datum)
+            datum
             mRefScript
     minValue <- liftEither $ calculateMinimumUTxO (withShelleyBasedEra era shelleyBasedEra) txOut protocol
     let minLovelace = selectLovelace minValue
         deficit = minLovelace <> negate (minimum [selectLovelace value, minLovelace])
     pure (minLovelace, value <> lovelaceToValue deficit)
+
+toTxOutDatumInTx :: ScriptDataSupportedInEra era -> PV2.Datum -> C.TxOutDatum C.CtxTx era
+toTxOutDatumInTx era plutusDatum = do
+  let scriptData = CS.fromPlutusData . PV2.toData $ plutusDatum
+  C.TxOutDatumInTx era scriptData
+
+toTxOutDatumInline :: ReferenceTxInsScriptsInlineDatumsSupportedInEra era -> PV2.Datum -> C.TxOutDatum C.CtxTx era
+toTxOutDatumInline era plutusDatum = do
+  let scriptData = CS.fromPlutusData . PV2.toData $ plutusDatum
+  C.TxOutDatumInline era scriptData

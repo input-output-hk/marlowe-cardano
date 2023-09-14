@@ -16,10 +16,11 @@
 # FAUCET_SKEY_FILE - private key file for the faucet.
 # FAUCET_VKEY - faucet address.
 #
-cabal run marlowe-cli -- \
+#
+cabal run exe:marlowe-cli -- \
   --babbage-era test \
-  --testnet-magic 2 \
-  --concurrent-runners 8 \
+  --testnet-magic 1 \
+  --max-concurrent-runners 8 \
   --socket-path "$CARDANO_NODE_SOCKET_PATH" \
   --faucet-skey-file "$FAUCET_SKEY_FILE" \
   --faucet-address "$FAUCET_VKEY" \
@@ -29,25 +30,46 @@ cabal run marlowe-cli -- \
   --write-to-json-file report.json \
   --max-retries 3 \
   --stream-json \
+  --simulation-mode \
   ./test/inline/role-based/cli/contract-for-differences-with-oracle.yaml \
   ./test/inline/role-based/cli/contract-for-differences.yaml \
   ./test/inline/role-based/cli/coupon-bond-guaranteed.yaml \
   ./test/inline/role-based/cli/escrow-with-collateral.yaml \
   ./test/inline/role-based/cli/escrow.yaml \
+  ./test/inline/role-based/cli/open-escrow-with-collateral.yaml \
+  ./test/inline/role-based/cli/open-swap-for-ada.yaml \
   ./test/inline/role-based/cli/swap-of-ada-for-ada.yaml \
-  ./test/inline/role-based/cli/zero-coupon-bond-delayed-timeout.yaml \
   ./test/inline/role-based/cli/zero-coupon-bond-immediate-timeout.yaml \
   ./test/inline/role-based/cli/zero-coupon-bond-too-late.yaml \
   ./test/inline/role-based/cli/zero-coupon-bond.yaml \
+  ./test/on-chain-limits/accounts-map-size.yaml \
+  ./test/on-chain-limits/deposits-chain-with-open-roles-and-merkleization.yaml \
+  ./test/on-chain-limits/deposits-chain-with-open-roles.yaml \
+  ./test/on-chain-limits/deposits-chain-with-roles.yaml \
+  ./test/on-chain-limits/deposits-chain.yaml \
+  ./test/on-chain-limits/payouts-chain.yaml \
   ./test/operations/burn-distributed.yaml \
   ./test/operations/burn-multi-asset.yaml \
   ./test/operations/burn.yaml \
   ./test/operations/mint-distributed.yaml \
+  ./test/operations/mint-multiple.yaml \
+  ./test/operations/mint-to-open-role-script.yaml \
   ./test/operations/mint.yaml \
+  ./test/operations/open-role-based-choice.yaml \
+  ./test/operations/open-role-based-choice.yaml \
+  ./test/operations/open-role-based-deposit-mixed-with-other-inputs.yaml \
+  ./test/operations/open-role-based-deposit.yaml \
+  ./test/operations/open-role-multi-token-release.yaml \
+  ./test/operations/open-role-release-fails-without-thread-token.yaml \
+  ./test/operations/open-role-release-fails-without-thread-token.yaml \
+  ./test/operations/open-role-uses-thread-token-name-to-release-the-token.yaml \
+  ./test/operations/publish.yaml \
   ./test/operations/return-funds.yaml \
+  ./test/operations/runtime-with-client-side-merkleization.yaml \
   ./test/operations/runtime.yaml \
   ./test/templates/address-based/cli/covered-call.yaml \
   ./test/templates/address-based/cli/escrow.yaml \
+  ./test/templates/address-based/cli/raffle.yaml \
   ./test/templates/address-based/cli/swap.yaml \
   ./test/templates/address-based/cli/trivial.yaml \
   ./test/templates/address-based/cli/zero-coupon-bond.yaml \
@@ -60,8 +82,11 @@ cabal run marlowe-cli -- \
   ./test/templates/role-based/cli/escrow.yaml \
   ./test/templates/role-based/cli/swap.yaml \
   ./test/templates/role-based/cli/zero-coupon-bond.yaml \
+  ./test/templates/role-based/runtime/chunked-value-transfer.yaml \
   ./test/templates/role-based/runtime/covered-call.yaml \
   ./test/templates/role-based/runtime/escrow.yaml \
   ./test/templates/role-based/runtime/swap.yaml \
   ./test/templates/role-based/runtime/zero-coupon-bond.yaml \
 
+# Fails in simulation mode - PLT-7509:
+# ./test/inline/role-based/cli/zero-coupon-bond-delayed-timeout.yaml \

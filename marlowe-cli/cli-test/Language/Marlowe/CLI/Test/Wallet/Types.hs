@@ -20,8 +20,6 @@ module Language.Marlowe.CLI.Test.Wallet.Types where
 
 import Cardano.Api (
   AddressInEra,
-  CardanoMode,
-  LocalNodeConnectInfo,
   Lovelace,
   PolicyId,
   ScriptDataSupportedInEra,
@@ -36,7 +34,13 @@ import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Reader.Class (MonadReader)
 import Control.Monad.State.Class (MonadState)
-import Data.Aeson (FromJSON (..), ToJSON (..), ToJSONKey)
+import Data.Aeson (
+  FromJSON (..),
+  ToJSON (..),
+  ToJSONKey,
+  (.:),
+  (.:?),
+ )
 import Data.Aeson qualified as A
 import Data.Aeson qualified as Aeson
 import Data.Aeson.KeyMap qualified as KeyMap
@@ -58,7 +62,6 @@ import GHC.Generics (Generic)
 import GHC.Natural (Natural)
 import Language.Marlowe qualified as M
 import Language.Marlowe.CLI.Cardano.Api.Value (toPlutusValue, txOutValueValue)
-import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode)
 import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError)
 import Language.Marlowe.CLI.Test.Log qualified as Log
 import Language.Marlowe.CLI.Test.Operation.Aeson (
@@ -71,16 +74,19 @@ import Language.Marlowe.CLI.Test.Operation.Aeson (
   rewriteToSingletonObject,
  )
 import Language.Marlowe.CLI.Test.Operation.Aeson qualified as Operation
-import Language.Marlowe.CLI.Types (PrintStats, SomePaymentSigningKey)
+import Language.Marlowe.CLI.Types (PrintStats, SomePaymentSigningKey, TxBuildupContext)
 import Plutus.V1.Ledger.Api (CurrencySymbol, TokenName)
 import Plutus.V1.Ledger.Value qualified as P
 import Text.Read (readMaybe)
 
--- import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1
--- import qualified Plutus.V2.Ledger.Api as Ledger
-
+import Control.Lens.Getter (Getter)
+import Data.Aeson.Key qualified as K
+import Data.Aeson.KeyMap qualified as KM
 import Data.ByteString.Base16.Aeson (EncodeBase16)
+import Data.List qualified as List
+import Data.Maybe (fromMaybe, isJust)
 import Data.Text (Text)
+import Language.Marlowe.CLI.Test.ExecutionMode qualified as EM
 import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddressBech32)
 
 -- | Runtime interaction (submission) works against specific era (Babbage).
@@ -111,6 +117,9 @@ data Wallet era = Wallet
   , _waSubmittedTransactions :: [SomeTxBody]
   -- ^ We keep track of all the transactions so we can
   -- discard fees from the balance check calculation.
+  , _waPublishingCosts :: P.Value
+  -- ^ We keep track of script publishing costs so we can
+  -- discard them from the balance check calculation.
   , _waExternal :: Bool
   -- ^ We allow loading of external wallets from the file system.
   -- We keep track of them so we don't move funds out of these wallet
@@ -121,14 +130,14 @@ data Wallet era = Wallet
 makeLenses ''Wallet
 
 emptyWallet :: AddressInEra era -> SomePaymentSigningKey -> Wallet era
-emptyWallet address signignKey = Wallet address mempty signignKey mempty False -- mempty
+emptyWallet address signignKey = Wallet address mempty signignKey mempty mempty False -- mempty
 
 newtype IsExternalWallet = IsExternalWallet {unExternalWallet :: Bool}
 
 fromUTxO :: AddressInEra era -> SomePaymentSigningKey -> UTxO era -> IsExternalWallet -> Wallet era
 fromUTxO address signignKey (UTxO utxo) (IsExternalWallet isExternalWallet) = do
   let total = foldMap (toPlutusValue . txOutValueValue) (Map.elems utxo)
-  Wallet address total signignKey mempty isExternalWallet
+  Wallet address total signignKey mempty mempty isExternalWallet
 
 -- | In many contexts this defaults to the `RoleName` but at some
 -- | point we want to also support multiple marlowe contracts scenarios
@@ -168,10 +177,11 @@ instance IsString CurrencyNickname where fromString = CurrencyNickname
 instance ToJSONKey CurrencyNickname where
   toJSONKey = toJSONKeyText $ T.pack . unCurrencyNickname
 
--- We want to probably issuer with minting strategies
+-- Currently we mint using native script with minting expiration date.
 data Currency = Currency
   { ccCurrencySymbol :: CurrencySymbol
-  , ccIssuer :: Maybe WalletNickname -- , ccMintingExpirationSlot :: C.SlotNo
+  , ccIssuer :: Maybe WalletNickname
+  , ccMintingExpirationSlot :: Maybe C.SlotNo
   , ccPolicyId :: PolicyId
   }
   deriving stock (Eq, Ord, Generic, Show)
@@ -312,6 +322,15 @@ instance FromJSON AssetsBalance where
           assetId <- parseJSON $ A.Array $ V.fromList [assetNameJSON, tokenNameJSON]
           balance <- parseJSON balanceJSON
           pure $ assetsSingleton assetId balance
+        A.Object (KM.toList -> [(assetNameJSON, A.Array (V.toList -> tokenAmountPairsJSON))]) -> do
+          let assetId = K.toString assetNameJSON
+          m <- fmap Map.fromList $ for tokenAmountPairsJSON $ \case
+            A.Array (V.toList -> [tokenNameJSON, amountJSON]) -> do
+              tokenName <- parseTokenNameJSON tokenNameJSON
+              amount <- parseJSON amountJSON
+              pure (AssetId (CurrencyNickname assetId) tokenName, amount)
+            _ -> fail "Expecting a token amount pair."
+          pure $ AssetsBalance m
         _ -> fail "Expecting an assets map encoding."
 
 instance ToJSON AssetsBalance where
@@ -342,44 +361,82 @@ instance ToJSON AssetsBalance where
         toJSON
           [toJSON currencyNickname, toJSON tokenName, toJSON [toJSON minValue, toJSON maxValue]]
 
+newtype ThreadTokenName = ThreadTokenName String
+  deriving stock (Eq, Generic, Show)
+  deriving newtype (FromJSON, ToJSON)
+
+newtype TokenRecipientScript
+  = OpenRoleScript ThreadTokenName
+  deriving stock (Eq, Generic, Show)
+
+instance FromJSON TokenRecipientScript where
+  parseJSON json@(A.Object obj) = do
+    script <- obj .: "script"
+    case script of
+      (T.toLower -> "openrole") -> do
+        possibleThreadTokenName <- obj .:? "threadTokenName"
+        pure $ OpenRoleScript $ fromMaybe (ThreadTokenName "") possibleThreadTokenName
+      _ -> fail $ "Expecting a token recipient script: " <> T.unpack (A.renderValue json)
+  parseJSON _ = fail "Expecting a token recipient script"
+
+-- Either a wallet or a script
+data TokenRecipient
+  = WalletRecipient WalletNickname
+  | AddressRecipient Text
+  | ScriptRecipient TokenRecipientScript
+  deriving stock (Eq, Generic, Show)
+
+-- We encode token recipient as:
+--   * `String` - then it is wallet nickname
+--   * `{ script: "openRole" }` - then it is a script
+--   * `{ wallet: walletNickname }` - then it is a wallet
+instance FromJSON TokenRecipient where
+  parseJSON = \case
+    walletNicknameJSON@(A.String txt) -> case deserialiseAddressBech32 txt of
+      Just _ -> pure $ AddressRecipient txt
+      Nothing -> WalletRecipient <$> parseJSON walletNicknameJSON
+    json@(A.Object props) | (isJust $ List.find ((==) "script" . fst) (KeyMap.toList props)) -> ScriptRecipient <$> parseJSON json
+    A.Object (KeyMap.toList -> [("wallet", walletNicknameJSON)]) -> WalletRecipient <$> parseJSON walletNicknameJSON
+    A.Object (KeyMap.toList -> [("address", addressJSON)]) -> AddressRecipient <$> parseJSON addressJSON
+    json -> fail $ "Expecting a `TokenRecipient` string or object: " <> T.unpack (A.renderValue json)
+
+instance ToJSON TokenRecipient where
+  toJSON = \case
+    WalletRecipient walletNickname -> toJSON walletNickname
+    AddressRecipient address -> toJSON address
+    ScriptRecipient (OpenRoleScript possibleName) ->
+      A.object [("script", "OpenRole"), ("threadTokenName", toJSON possibleName)]
+
 data TokenAssignment = TokenAssignment
-  { taWalletNickname :: Either Text WalletNickname
+  { taTokenRecipient :: TokenRecipient
   -- ^ Default to the same wallet nickname as a token name.
-  , tokens :: [(TokenName, Natural)]
+  , taTokens :: [(TokenName, Natural)]
   }
   deriving stock (Eq, Generic, Show)
 
 instance FromJSON TokenAssignment where
   parseJSON = do
-    let parseRecipient json = do
-          txt <- parseJSON json
-          case deserialiseAddressBech32 txt of
-            Just _ -> pure $ Left txt
-            Nothing -> pure $ Right $ WalletNickname $ T.unpack txt
     \case
       A.Array (V.toList -> [recipientJSON, tokenNameJSON, amountJSON]) -> do
-        walletNickname <- parseRecipient recipientJSON
+        recipient <- parseJSON recipientJSON
         tokenName <- parseTokenNameJSON tokenNameJSON
         amount <- parseJSON amountJSON
-        pure $ TokenAssignment walletNickname [(tokenName, amount)]
+        pure $ TokenAssignment recipient [(tokenName, amount)]
       A.Object (sort . KeyMap.toList -> [("recipient", recipientJSON), ("tokens", A.Array tokensJSONs)]) -> do
-        walletNickname <- parseRecipient recipientJSON
+        recipient <- parseJSON recipientJSON
         tokensVector <- for tokensJSONs \case
           A.Array (V.toList -> [tokenNameJSON, amountJSON]) -> do
             tokenName <- parseTokenNameJSON tokenNameJSON
             amount <- parseJSON amountJSON
             pure (tokenName, amount)
           _ -> fail "Expecting a `TokenAssignment` tuple: `[TokenName, Integer]`."
-        pure $ TokenAssignment walletNickname $ V.toList tokensVector
-      _ -> fail "Expecting a `TokenAssignment` tuple: `[WalletNickname, TokenName, Integer]`."
+        pure $ TokenAssignment recipient $ V.toList tokensVector
+      _ -> fail "Expecting a `TokenAssignment` tuple: `[WalletNickname | Bech32, TokenName, Integer]`."
 
 instance ToJSON TokenAssignment where
-  toJSON (TokenAssignment recipient tokens) = do
-    let recipientJSON = case recipient of
-          Left txt -> toJSON txt
-          Right walletNickname -> toJSON walletNickname
+  toJSON (TokenAssignment recipient tokens) =
     A.object
-      [ ("recipient", recipientJSON)
+      [ ("recipient", toJSON recipient)
       , ("tokens", A.Array $ V.fromList $ map tokenToJSON tokens)
       ]
     where
@@ -417,8 +474,8 @@ data WalletOperation
       , woMetadata :: Maybe Aeson.Object
       , woTokenDistribution :: NonEmpty TokenAssignment
       , woMinLovelace :: Lovelace
-      -- We should make this relative
-      -- , woMitingExpirationSlot :: Maybe C.SlotNo
+      , -- We should make this relative
+        woMintingExpirationSlot :: Maybe C.SlotNo
       }
   | ExternalCurrency
       { woCurrencyNickname :: CurrencyNickname
@@ -551,14 +608,14 @@ lookupWallet walletNickname (Wallets wallets faucet)
   | walletNickname == faucetNickname = Just faucet
   | otherwise = Map.lookup walletNickname wallets
 
-getAllWallets :: Wallets era -> Map WalletNickname (Wallet era)
-getAllWallets (Wallets wallets faucet) = Map.insert faucetNickname faucet wallets
+allWalletsMap :: Wallets era -> Map WalletNickname (Wallet era)
+allWalletsMap (Wallets wallets faucet) = Map.insert faucetNickname faucet wallets
 
-getNonFaucetWallets :: Wallets era -> Map WalletNickname (Wallet era)
-getNonFaucetWallets (Wallets wallets _) = wallets
+nonFaucetWalletsMap :: Wallets era -> Map WalletNickname (Wallet era)
+nonFaucetWalletsMap (Wallets wallets _) = wallets
 
-getFaucet :: Wallets era -> Wallet era
-getFaucet (Wallets _ f) = f
+faucetWallet :: Wallets era -> Wallet era
+faucetWallet (Wallets _ f) = f
 
 makeLenses ''Wallets
 
@@ -567,19 +624,19 @@ class HasInterpretState st era | st -> era where
   currenciesL :: Lens' st Currencies
 
 class HasInterpretEnv env era | env -> era where
-  connectionL :: Lens' env (LocalNodeConnectInfo CardanoMode)
   eraL :: Lens' env (ScriptDataSupportedInEra era)
   printStatsL :: Lens' env PrintStats
-  executionModeL :: Lens' env ExecutionMode
+  txBuildupContextL :: Getter env (TxBuildupContext era)
 
 type InterpretMonad env st m era =
   ( MonadState st m
   , HasInterpretState st era
   , MonadReader env m
   , HasInterpretEnv env era
+  , EM.HasInterpretEnv env era
   , MonadError InterpreterError m
   , MonadIO m
-  , Log.HasLogStore st
+  , Log.InterpretMonad env st m era
   )
 
 adaToken :: M.Token

@@ -5,13 +5,13 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | A local copy of the cardano-cli `Contrib.Cardano.CLI.Run.Friendly`
 -- | because I'm not able to use `cardano-cli` lib in our current setup.
-module Contrib.Cardano.Formatting (friendlyTxOut, friendlyTxBS, friendlyTxBody, friendlyTxBodyBS) where
+module Contrib.Cardano.Debug (friendlyTxOut, friendlyTxBS, friendlyTxBody, friendlyTxBodyBS) where
 
--- import           Cardano.Prelude
 import Prelude
 
 import Data.Aeson (Value (..), object, toJSON, (.=))
@@ -40,6 +40,7 @@ import Cardano.Api.Shelley (
 
 -- import           Cardano.CLI.Helpers (textShow)
 import Cardano.Ledger.Shelley.API qualified as Shelley
+import Data.Aeson qualified as A
 import Data.Char (isAlphaNum, isAscii)
 import Data.Function ((&))
 import Data.Functor ((<&>))
@@ -47,15 +48,13 @@ import Data.Maybe (catMaybes, isJust)
 import Data.Ratio (denominator)
 import GHC.Real (numerator)
 
--- textShow = T.unpack . show
-
 yamlConfig :: Yaml.Config
 yamlConfig = Yaml.defConfig & setConfCompare compare
 
-friendlyTxBS :: (IsCardanoEra era) => CardanoEra era -> Tx era -> BSC.ByteString
+friendlyTxBS :: CardanoEra era -> Tx era -> BSC.ByteString
 friendlyTxBS era = Yaml.encodePretty yamlConfig . object . friendlyTx era
 
-friendlyTx :: (IsCardanoEra era) => CardanoEra era -> Tx era -> [Aeson.Pair]
+friendlyTx :: CardanoEra era -> Tx era -> [Aeson.Pair]
 friendlyTx era (Tx body witnesses) =
   ("witnesses" .= map friendlyKeyWitness witnesses) : friendlyTxBody era body
 
@@ -69,13 +68,12 @@ friendlyKeyWitness =
       ShelleyKeyWitness _era (Shelley.WitVKey key signature) ->
         ["key" .= textShow key, "signature" .= textShow signature]
 
-friendlyTxBodyBS
-  :: (IsCardanoEra era) => CardanoEra era -> TxBody era -> BSC.ByteString
+friendlyTxBodyBS :: CardanoEra era -> TxBody era -> BSC.ByteString
 friendlyTxBodyBS era =
   Yaml.encodePretty yamlConfig . object . friendlyTxBody era
 
 friendlyTxBody
-  :: (IsCardanoEra era) => CardanoEra era -> TxBody era -> [Aeson.Pair]
+  :: CardanoEra era -> TxBody era -> [Aeson.Pair]
 friendlyTxBody
   era
   ( TxBody
@@ -102,13 +100,22 @@ friendlyTxBody
     , "inputs" .= friendlyInputs txIns
     , "metadata" .= friendlyMetadata txMetadata
     , "mint" .= friendlyMintValue txMintValue
-    , "outputs" .= map friendlyTxOut txOuts
+    , "outputs" .= map (withCardanoEra era friendlyTxOut) txOuts
     , "required signers (payment key hashes needed for scripts)"
         .= friendlyExtraKeyWits txExtraKeyWits
     , "update proposal" .= friendlyUpdateProposal txUpdateProposal
     , "validity range" .= friendlyValidityRange era txValidityRange
     , "withdrawals" .= friendlyWithdrawals txWithdrawals
     ]
+
+withCardanoEra :: forall era a. CardanoEra era -> ((IsCardanoEra era) => a) -> a
+withCardanoEra = \case
+  ByronEra -> id
+  ShelleyEra -> id
+  AllegraEra -> id
+  MaryEra -> id
+  AlonzoEra -> id
+  BabbageEra -> id
 
 friendlyExtraKeyWits :: TxExtraKeyWitnesses era -> Aeson.Value
 friendlyExtraKeyWits = \case
@@ -165,7 +172,13 @@ friendlyStakeAddress (StakeAddress net cred) =
   , friendlyStakeCredential $ fromShelleyStakeCredential cred
   ]
 
-friendlyTxOut :: (IsCardanoEra era) => TxOut CtxTx era -> Aeson.Value
+--  data ByronEra
+--  data ShelleyEra
+--  data AllegraEra
+--  data MaryEra
+--  data AlonzoEra
+
+friendlyTxOut :: forall era. (IsCardanoEra era) => TxOut CtxTx era -> Aeson.Value
 friendlyTxOut (TxOut addr amount mdatum script) =
   object $
     case addr of
@@ -197,7 +210,9 @@ friendlyTxOut (TxOut addr amount mdatum script) =
       Aeson.String $ serialiseToRawBytesHexText h
     renderDatum (TxOutDatumInTx _ sData) =
       scriptDataToJson ScriptDataJsonDetailedSchema sData
-    renderDatum (TxOutDatumInline _ _) = error "TODO: Babbage"
+    renderDatum (TxOutDatumInline _ sData) =
+      A.object
+        [("inline", scriptDataToJson ScriptDataJsonDetailedSchema sData)]
 
 -- datum ShelleyBasedEraBabbage = panic "TODO: Babbage"
 

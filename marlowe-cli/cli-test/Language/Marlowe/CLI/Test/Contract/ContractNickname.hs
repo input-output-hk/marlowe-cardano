@@ -1,5 +1,5 @@
-{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Language.Marlowe.CLI.Test.Contract.ContractNickname where
 
@@ -10,5 +10,5 @@ import GHC.Generics (Generic)
 
 newtype ContractNickname = ContractNickname {unContractNickname :: String}
   deriving stock (Eq, Ord, Generic, Show)
-  deriving anyclass (FromJSON, ToJSON)
+  deriving newtype (FromJSON, ToJSON)
 instance IsString ContractNickname where fromString = ContractNickname

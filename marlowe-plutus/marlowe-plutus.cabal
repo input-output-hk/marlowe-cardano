@@ -71,7 +71,9 @@ library
     , plutus-tx-plugin ==1.0.0.0
     , serialise ^>=0.2.6
 
-  exposed-modules: Language.Marlowe.Scripts
+  exposed-modules:
+    Language.Marlowe.Scripts
+    Language.Marlowe.Scripts.OpenRole
 
   if flag(trace-plutus)
     cpp-options: -DTRACE_PLUTUS

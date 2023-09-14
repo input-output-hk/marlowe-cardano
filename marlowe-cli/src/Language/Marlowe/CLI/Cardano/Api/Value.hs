@@ -31,7 +31,10 @@ assetToValue C.AdaAssetId (C.Quantity quantity) =
   P.singleton P.adaSymbol P.adaToken quantity
 
 toCurrencySymbol :: C.PolicyId -> P.CurrencySymbol
-toCurrencySymbol = P.mpsSymbol . P.MintingPolicyHash . P.toBuiltin . C.serialiseToRawBytes
+toCurrencySymbol = P.mpsSymbol . toMintingPolicyHash
+
+toMintingPolicyHash :: C.PolicyId -> P.MintingPolicyHash
+toMintingPolicyHash = P.MintingPolicyHash . P.toBuiltin . C.serialiseToRawBytes
 
 toTokenName :: C.AssetName -> P.TokenName
 toTokenName (C.AssetName bs) = P.TokenName $ PlutusTx.toBuiltin bs

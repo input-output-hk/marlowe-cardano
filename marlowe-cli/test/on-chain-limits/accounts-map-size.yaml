@@ -1,0 +1,232 @@
+testName: Test account map size with ADA
+
+operations:
+
+# We don't actually need the tokens - we  are going to fail
+- ExternalCurrency:
+    currencySymbol: 774d4f5daedfb7734cc60b5f05a9c66647534d862ed2831e8bb486f9
+    currencyNickname: RoleTokens
+
+- Initialize:
+    minLovelace: 2000000
+    merkleize: true
+    roleCurrency: RoleTokens
+    marloweValidators:
+      publishCurrent:
+        permanently: true
+    submitter: Faucet
+    source:
+      timeout: +1h
+      timeout_continuation: close
+      unless:
+        party:
+          address: Faucet
+        deposits: 15
+        of_token: ADA
+        into_account:
+          address: Faucet
+      then:
+        pay: 1
+        token: ADA
+        from_account:
+          address: Faucet
+        to:
+          account:
+            role_token: Role01
+        then:
+          pay: 1
+          token: ADA
+          from_account:
+            address: Faucet
+          to:
+            account:
+              role_token: Role02
+          then:
+            pay: 1
+            token: ADA
+            from_account:
+              address: Faucet
+            to:
+              account:
+                role_token: Role03
+            then:
+              pay: 1
+              token: ADA
+              from_account:
+                address: Faucet
+              to:
+                account:
+                  role_token: Role04
+              then:
+                pay: 1
+                token: ADA
+                from_account:
+                  address: Faucet
+                to:
+                  account:
+                    role_token: Role05
+                then:
+                  timeout: +1h
+                  timeout_continuation: close
+                  unless:
+                    notify_if: true
+                  then:
+                    pay: 1
+                    token: ADA
+                    from_account:
+                      address: Faucet
+                    to:
+                      account:
+                        role_token: Role06
+                    then:
+                      pay: 1
+                      token: ADA
+                      from_account:
+                        address: Faucet
+                      to:
+                        account:
+                          role_token: Role07
+                      then:
+                        timeout: +1h
+                        timeout_continuation: close
+                        unless:
+                          notify_if: true
+                        then:
+                          pay: 1
+                          token: ADA
+                          from_account:
+                            address: Faucet
+                          to:
+                            account:
+                              role_token: Role08
+                          then:
+                            timeout: +1h
+                            timeout_continuation: close
+                            unless:
+                              notify_if: true
+                            then:
+                              pay: 1
+                              token: ADA
+                              from_account:
+                                address: Faucet
+                              to:
+                                account:
+                                  role_token: Role09
+                              then:
+                                timeout: +1h
+                                timeout_continuation: close
+                                unless:
+                                  notify_if: true
+                                then:
+                                  pay: 1
+                                  token: ADA
+                                  from_account:
+                                    address: Faucet
+                                  to:
+                                    account:
+                                      role_token: Role10
+                                  then:
+                                    timeout: +1h
+                                    timeout_continuation: close
+                                    unless:
+                                      notify_if: true
+                                    then:
+                                      pay: 1
+                                      token: ADA
+                                      from_account:
+                                        address: Faucet
+                                      to:
+                                        account:
+                                          role_token: Role11
+                                      then:
+                                        timeout: +1h
+                                        timeout_continuation: close
+                                        unless:
+                                          notify_if: true
+                                        then:
+                                          pay: 1
+                                          token: ADA
+                                          from_account:
+                                            address: Faucet
+                                          to:
+                                            account:
+                                              role_token: Role12
+                                          then: close
+
+- Comment: Depositing and splitting assets between 5 new accounts (6 in total)
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          address: Faucet
+        that_deposits: 15
+        of_token: ADA
+        into_account:
+          address: Faucet
+    minimumTime: -15s
+    maximumTime: +2m
+
+- AutoRun
+
+- Comment: Notifying and splitting between 2 new accounts (8 in total)
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime: -15s
+    maximumTime: +2m
+
+- AutoRun
+
+- Comment: Notifying and creating 1 new account (9 in total)
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime: -15s
+    maximumTime: +2m
+
+- AutoRun
+
+- Comment: Notifying and creating 1 new account (10 in total)
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime: -15s
+    maximumTime: +2m
+
+- AutoRun
+
+- Comment: Notifying and creating 1 new account (11 in total)
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime: -15s
+    maximumTime: +2m
+
+- AutoRun
+
+- Comment: Notifying and creating 1 new account (12 in total)
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime: -15s
+    maximumTime: +2m
+
+- AutoRun
+
+- Comment: >
+    Attempting to create 1 additional account (12 role accounts + 1 min Ada account = 13 in total).
+    This operation should fail because of the memory limits.
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime: -15s
+    maximumTime: +2m
+
+- ShouldFail: AutoRun
+

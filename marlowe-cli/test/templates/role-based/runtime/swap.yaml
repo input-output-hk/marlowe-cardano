@@ -75,6 +75,10 @@ operations:
           relative: 1000000
 
 - RuntimeApplyInputs:
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800
     submitter: AParty
     awaitConfirmed: 120
     inputs:
@@ -88,6 +92,10 @@ operations:
           role_token: APartyRoleToken
 
 - RuntimeApplyInputs:
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800
     submitter: BParty
     awaitConfirmed: 120
     inputs:

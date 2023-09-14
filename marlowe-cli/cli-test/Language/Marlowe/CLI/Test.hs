@@ -10,6 +10,7 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -Wno-unused-imports #-}
@@ -31,6 +32,7 @@ import Cardano.Api (
  )
 import Cardano.Api qualified as C
 import Cardano.Api.Shelley (protocolParamProtocolVersion)
+import Cardano.Api.Shelley qualified as CS
 import Contrib.Cardano.Api (lovelaceFromInt, lovelaceToInt)
 import Contrib.Control.Concurrent.Async (altIO)
 import Contrib.Control.Monad.Trans.State.IO (IOStateT, unsafeExecIOStateT)
@@ -63,6 +65,7 @@ import Control.Monad.State (execStateT)
 import Data.Aeson qualified as A
 import Data.Aeson.Encode.Pretty qualified as A
 import Data.Aeson.OneLine qualified as A
+import Data.ByteString.Char8 qualified as BS8
 import Data.ByteString.Lazy qualified as B
 import Data.Coerce (coerce)
 import Data.Default (Default (def))
@@ -79,11 +82,25 @@ import Data.Time.Units (Second, TimeUnit (toMicroseconds))
 import Data.Traversable (for)
 import GHC.IO (bracket)
 import GHC.IO.Handle.FD (stderr)
-import Language.Marlowe.CLI.Cardano.Api (toPlutusProtocolVersion, txOutValueValue)
+import Language.Marlowe.CLI.Cardano.Api (
+  toMultiAssetSupportedInEra,
+  toPlutusProtocolVersion,
+  txOutValueValue,
+ )
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage)
 import Language.Marlowe.CLI.Cardano.Api.Value (toPlutusValue)
 import Language.Marlowe.CLI.Cardano.Api.Value qualified as CV
-import Language.Marlowe.CLI.IO (decodeFileStrict, getDefaultCostModel, queryInEra, readSigningKey)
+import Language.Marlowe.CLI.IO (
+  decodeFileStrict,
+  getDefaultCostModel,
+  getEraHistory,
+  getPV2CostModelParams,
+  getProtocolParams,
+  getSystemStart,
+  liftCli,
+  queryInEra,
+  readSigningKey,
+ )
 import Language.Marlowe.CLI.Test.CLI.Types (
   CLIContractInfo (CLIContractInfo),
   CLIContracts (CLIContracts),
@@ -92,7 +109,12 @@ import Language.Marlowe.CLI.Test.CLI.Types (
   ciThread,
   unCLIContracts,
  )
-import Language.Marlowe.CLI.Test.ExecutionMode (ExecutionMode (OnChainMode), toSubmitMode)
+import Language.Marlowe.CLI.Test.ExecutionMode (
+  ExecutionMode (OnChainMode),
+  UseExecutionMode (UseOnChainMode, UseSimulationMode),
+  newSimulationMode,
+  toSubmitMode,
+ )
 import Language.Marlowe.CLI.Test.Interpret (interpret)
 import Language.Marlowe.CLI.Test.Log (logLabeledMsg)
 import Language.Marlowe.CLI.Test.Runner (
@@ -110,10 +132,10 @@ import Language.Marlowe.CLI.Test.Runtime.Types qualified as Runtime
 import Language.Marlowe.CLI.Test.Runtime.Types qualified as Runtime.Monitor
 import Language.Marlowe.CLI.Test.TestCase qualified as TestCase
 import Language.Marlowe.CLI.Test.Types (
-  ConcurrentRunners (ConcurrentRunners),
   FailureReport (FailureReport),
   InterpretEnv (..),
   InterpretState (..),
+  MaxConcurrentRunners (MaxConcurrentRunners),
   ReportingStrategy (..),
   RuntimeConfig (..),
   TestCase (..),
@@ -123,7 +145,6 @@ import Language.Marlowe.CLI.Test.Types (
   failureReportToJSON,
   ieConnection,
   ieEra,
-  ieExecutionMode,
   iePrintStats,
   isCLIContracts,
   isCurrencies,
@@ -148,18 +169,21 @@ import Language.Marlowe.CLI.Transaction (
   buildMintingImpl,
   querySlotConfig,
   queryUtxos,
-  submitBody',
  )
 import Language.Marlowe.CLI.Types (
   CliEnv (CliEnv),
   CliError (..),
   MarlowePlutusVersion,
   MarloweTransaction (MarloweTransaction),
+  NodeStateInfo (..),
   PayFromScript (PayFromScript),
   PrintStats (PrintStats),
+  QueryExecutionContext (..),
   SigningKeyFile (SigningKeyFile),
   SomePaymentSigningKey,
+  TxBuildupContext (..),
   defaultCoinSelectionStrategy,
+  toShelleyBasedEra,
  )
 import Language.Marlowe.CLI.Types qualified as T
 import Language.Marlowe.Cardano.Thread (marloweThreadTxInfos, overAnyMarloweThread)
@@ -174,9 +198,9 @@ import Observe.Event.Render.JSON (defaultRenderSelectorJSON)
 import Observe.Event.Render.JSON.Handle (simpleJsonStderrBackend)
 import Plutus.V1.Ledger.Ada qualified as PV
 import Plutus.V1.Ledger.Value qualified as PV
-import PlutusCore (defaultCostModelParams)
 import System.Exit (exitFailure, exitSuccess)
 import System.IO (hPrint, hPutStrLn)
+import System.IO.Temp (createTempDirectory)
 
 -- | Run tests of a Marlowe contract.
 runTestSuite
@@ -209,9 +233,41 @@ runTestSuite era TestSuite{..} = do
           }
       resource = (tsFaucetAddress, faucetSigningKey)
 
+  txBuildupContext <- do
+    case tsUseExecutionMode of
+      UseSimulationMode -> do
+        txId <-
+          liftCli $
+            C.deserialiseFromRawBytesHex C.AsTxId $
+              BS8.pack "b1c9a36fff21ab3941e63e3ff15351a2f4459d8e055521a4b581044789e3a0db"
+        let txIx = C.TxIx 0
+            txIn = C.TxIn txId txIx
+            era' = toMultiAssetSupportedInEra era
+            txOutValue = C.TxOutValue era' $ C.lovelaceToValue $ C.Lovelace 1000_000 * 1000_000
+            txOut = C.TxOut tsFaucetAddress txOutValue C.TxOutDatumNone CS.ReferenceScriptNone
+            utxo = C.UTxO $ Map.singleton txIn txOut
+            queryCtx = QueryNode connection
+        utxoVar <- liftIO $ newTVarIO utxo
+        protocolParams <- getProtocolParams queryCtx
+        systemStart <- getSystemStart queryCtx
+        eraHistory <- getEraHistory queryCtx
+
+        let nodeStateInfo =
+              NodeStateInfo
+                tsNetwork
+                protocolParams
+                systemStart
+                eraHistory
+
+        pure $ PureTxBuildup utxoVar nodeStateInfo
+      UseOnChainMode timeout ->
+        pure $ NodeTxBuildup connection (T.DoSubmit timeout)
+
   protocolParameters <- queryInEra connection C.QueryProtocolParameters
   slotConfig <- querySlotConfig connection
-  costModel <- getDefaultCostModel
+  costModel <- getPV2CostModelParams (QueryNode connection)
+  -- FIXME: This should be configurable.
+  reportDir <- liftIO $ createTempDirectory "/tmp" "marlowe-cli-test-report"
 
   let env :: TestSuiteRunnerEnv MarlowePlutusVersion era
       env =
@@ -221,12 +277,13 @@ runTestSuite era TestSuite{..} = do
           , _envSlotConfig = slotConfig
           , _envProtocolParams = protocolParameters
           , _envCostModelParams = costModel
-          , _envExecutionMode = tsExecutionMode
+          , _envTxBuildupContext = txBuildupContext
           , _envResource = resource
           , _envRuntimeConfig = Just tsRuntime
           , _envPrintStats = printStats
           , _envStreamJSON = True
           , _envMaxRetries = tsMaxRetries
+          , _envReportDir = reportDir
           }
 
   testSuiteResult <- liftIO $ flip runReaderT env $ runTests tests tsConcurrentRunners

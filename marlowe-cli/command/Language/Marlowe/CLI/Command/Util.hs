@@ -52,7 +52,15 @@ import Language.Marlowe.CLI.Command.Parse (
 import Language.Marlowe.CLI.Merkle (demerkleize, merkleize)
 import Language.Marlowe.CLI.Sync (watchMarlowe)
 import Language.Marlowe.CLI.Transaction (buildClean, buildFaucet, buildMinting, querySlotting, selectUtxos)
-import Language.Marlowe.CLI.Types (CliEnv, CliError, OutputQuery, OutputQueryResult, SigningKeyFile, TxBodyFile)
+import Language.Marlowe.CLI.Types (
+  CliEnv,
+  CliError,
+  OutputQuery,
+  OutputQueryResult,
+  QueryExecutionContext (QueryNode),
+  SigningKeyFile,
+  TxBodyFile,
+ )
 import Plutus.V1.Ledger.Api (TokenName)
 
 import Control.Applicative ((<|>))
@@ -276,7 +284,7 @@ runUtilCommand command =
           >>= printTxId
       Output{..} ->
         selectUtxos
-          connection
+          (QueryNode connection)
           address
           query
       DecodeBech32{..} ->

@@ -1,0 +1,262 @@
+testName: Open swap for ADA
+
+operations:
+
+- Publish:
+    publishPermanently: true
+
+- Comment: Create the wallet for the ADA provider.
+
+- CreateWallet: Token provider
+
+- Comment: Create the wallet for the other token provider.
+
+- CreateWallet: Token buyer
+
+- Comment: Fund both wallets with 50 ADA.
+
+- Fund:
+    wallets:
+      - Token buyer
+      - Token provider
+    utxo: 50000000
+
+- Comment: We mint role tokens and fungible tokens for the swap. We use different expiration slot parameter to get two different currencies.
+
+- Mint:
+    issuer: Token provider
+    mintingExpirationSlot: 20219351600
+    nickname: RoleTokenCurrency
+    minLovelace: 2000000
+    tokenDistribution:
+      - [{ wallet: Token provider }, Token provider, 1]
+      - [{ script: OpenRole }, Token buyer, 1]
+      - [{ wallet: Faucet }, '', 1]
+
+- Comment: Token provider mints 5 Fungible Token (FT) Coins.
+
+- Mint:
+    issuer: Token provider
+    mintingExpirationSlot: 10219351600
+    nickname: FT
+    minLovelace: 2000000
+    tokenDistribution:
+      - [Token provider, Coin, 5]
+
+- CheckBalance:
+    wallet: Token provider
+    balance:
+      - [ADA, 46]
+      - [RoleTokenCurrency, Token provider, 1]
+      - [FT, Coin, 5]
+
+- CheckBalance:
+    wallet: Token buyer
+    balance:
+      - [ADA, 50]
+
+- Comment: The ADA provider creates the swap contract for 25 ADA to 5 FT Coins
+
+- Initialize:
+    minLovelace: 2000000
+    roleCurrency: RoleTokenCurrency
+    source:
+      timeout: +1h
+      timeout_continuation: close
+      unless:
+        party:
+          address: Faucet
+        deposits: 1
+        of_token:
+          currency_symbol: RoleTokenCurrency
+          token_name: ''
+        into_account:
+          address: Faucet
+      then:
+        timeout: +1h
+        timeout_continuation: close
+        unless:
+          party:
+            role_token: Token provider
+          deposits: 5
+          of_token:
+            currency_symbol: FT
+            token_name: Coin
+          into_account:
+            role_token: Token provider
+        then:
+          timeout: +1h
+          timeout_continuation: close
+          unless:
+            party:
+              role_token: Token buyer
+            deposits:
+              multiply: 1000000
+              times: 25
+            of_token:
+              currency_symbol: ''
+              token_name: ''
+            into_account:
+              role_token: Token buyer
+          then:
+            timeout: { relative: +3600 }
+            timeout_continuation: close
+            unless: { notify_if: true }
+            then:
+              pay:
+                multiply: 1000000
+                times: 25
+              token:
+                currency_symbol: ''
+                token_name: ''
+              from_account:
+                role_token: Token buyer
+              to:
+                party:
+                  role_token: Token provider
+              then:
+                pay: 5
+                token:
+                  currency_symbol: FT
+                  token_name: Coin
+                from_account:
+                  role_token: Token provider
+                to:
+                  party:
+                    role_token: Token buyer
+                then: close
+
+- AutoRun:
+    submitter: Token provider
+
+- Comment: The token provider should have 44 ADA now, since 2 ADA was sent to the script when creating the contract and 4 ADA were sent together with role tokens.
+
+- CheckBalance:
+    wallet: Token provider
+    balance:
+      - [ADA, 44]
+      - [RoleTokenCurrency, Token provider, 1]
+      - [FT, Coin, 5]
+
+- Comment: The other provider should have 40 ADA. The role token is still locked in the "OpenRole" script.
+
+- CheckBalance:
+    wallet: Token buyer
+    balance:
+      - [ADA, 50]
+
+- Comment: The token provider deposits their 5 coins of this fungible tokens.
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          address: Faucet
+        that_deposits: 1
+        of_token:
+          currency_symbol: RoleTokenCurrency
+          token_name: ''
+        into_account:
+          address: Faucet
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: Token provider
+        that_deposits: 5
+        of_token:
+          currency_symbol: FT
+          token_name: Coin
+        into_account:
+          role_token: Token provider
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun:
+    submitter: Token provider
+
+- Comment: The token provider should have locked it's FT coins into the swap.
+
+- CheckBalance:
+    wallet: Token provider
+    balance:
+      - [ADA, 44]
+      - [RoleTokenCurrency, Token provider, 1]
+
+- Comment: The buyer provider deposits their 25 ADA for the swap.
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: Token buyer
+        that_deposits: 25000000
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          role_token: Token buyer
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun:
+    submitter: Token buyer
+
+- Comment: After deposit of 25 ADA and release of 2 ADA from open role script UTxO we should have 27 ADA in the buyer wallet.
+
+- CheckBalance:
+    wallet: Token buyer
+    balance:
+      - [ADA, 27]
+      - [RoleTokenCurrency, Token buyer, 1]
+
+- Comment: "We have to separate the Open Role script usage by notify - that is a double spending prevention on Marlowe validator level."
+
+- Prepare:
+    inputs:
+      - "input_notify"
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun:
+    submitter: Token provider
+
+- Comment: Token provider performed last transaction and was forced to cover min ADA for both withdrawals (we estimate this to be more than 1 ADA! 44 - 1 = 43).
+
+- CheckBalance:
+    wallet: Token provider
+    balance:
+      - [ADA, [42,43]]
+      - [RoleTokenCurrency, Token provider, 1]
+
+- Withdraw: Token buyer
+
+- Comment: Together with the FT coins buyer received a small amount of min ADA - we estimate this to be more than ADA (27 + 1 = 28).
+
+- CheckBalance:
+    wallet: Token buyer
+    balance:
+      - [ADA, [28,29]]
+      - [RoleTokenCurrency, Token buyer, 1]
+      - [FT, Coin, 5]
+
+- Withdraw: Token provider
+
+- Comment: After the provider withdrawal we should see extra 25 ADA in that wallet.
+
+- CheckBalance:
+    wallet: Token provider
+    balance:
+      - [ADA, [67,68]]
+      - [RoleTokenCurrency, Token provider, 1]
+

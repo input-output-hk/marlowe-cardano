@@ -31,10 +31,8 @@ import Cardano.Api (
   NetworkMagic (..),
   ScriptDataSupportedInEra (ScriptDataInBabbageEra),
   StakeAddressReference (..),
-  TxBody,
   deserialiseFromBech32,
   deserialiseFromTextEnvelope,
-  getTxId,
   shelleyAddressInEra,
  )
 import qualified Cardano.Api as Cardano
@@ -60,6 +58,7 @@ import Control.Monad.Trans.Resource (allocate, runResourceT, unprotect)
 import Data.Aeson (eitherDecodeFileStrict)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BS
+import Data.Foldable (for_)
 import Data.Functor (void)
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
@@ -74,14 +73,17 @@ import Data.Word (Word16)
 import Database.PostgreSQL.LibPQ (connectdb, errorMessage, exec, finish, resultErrorMessage)
 import Hasql.Connection (settings)
 import qualified Hasql.Pool as Pool
-import Language.Marlowe.CLI.Transaction (buildPublishingImpl, submitBody)
+import Language.Marlowe.CLI.IO (submitTxBody)
+import Language.Marlowe.CLI.Transaction (buildPublishingImpl)
 import Language.Marlowe.CLI.Types (
+  AnUTxO (..),
   CliEnv (..),
   MarlowePlutusVersion,
+  MarloweScriptsRefs (..),
   PrintStats (..),
-  PublishMarloweScripts (..),
-  PublishScript (..),
   PublishingStrategy (..),
+  SubmitMode (..),
+  TxBuildupContext (..),
   ValidatorInfo (..),
   defaultCoinSelectionStrategy,
  )
@@ -89,17 +91,15 @@ import Language.Marlowe.Protocol.Client (MarloweRuntimeClient, hoistMarloweRunti
 import Language.Marlowe.Protocol.Server (marloweRuntimeServerDirectPeer, serveMarloweRuntimeClientDirect)
 import Language.Marlowe.Runtime (MarloweRuntimeDependencies (..), marloweRuntime)
 import qualified Language.Marlowe.Runtime as Runtime
-import Language.Marlowe.Runtime.Cardano.Api (fromCardanoAddressInEra, fromCardanoLovelace, fromCardanoTxId)
+import Language.Marlowe.Runtime.Cardano.Api (assetsFromCardanoValue, fromCardanoAddressInEra, fromCardanoTxIn)
 import Language.Marlowe.Runtime.ChainIndexer.Database (CommitGenesisBlock (..), DatabaseQueries (..))
 import qualified Language.Marlowe.Runtime.ChainIndexer.Database as ChainIndexer
 import qualified Language.Marlowe.Runtime.ChainIndexer.Database.PostgreSQL as ChainIndexer
 import Language.Marlowe.Runtime.ChainIndexer.Genesis (GenesisBlock, computeGenesisBlock)
 import Language.Marlowe.Runtime.ChainIndexer.NodeClient (CostModel (CostModel))
 import Language.Marlowe.Runtime.ChainSync.Api (
-  Assets (..),
   BlockNo (..),
   TransactionOutput (..),
-  TxOutRef (TxOutRef),
   fromCardanoScriptHash,
  )
 import qualified Language.Marlowe.Runtime.ChainSync.Database as ChainSync
@@ -429,36 +429,40 @@ publishCurrentScripts LocalTestnet{..} localNodeConnectInfo = do
   let coinSelectionStrategy = defaultCoinSelectionStrategy
   either throwIO pure =<< runExceptT do
     flip runReaderT (CliEnv ScriptDataInBabbageEra) do
-      (txBody, publishScripts) <-
+      let submitCtx = NodeTxBuildup localNodeConnectInfo (DoSubmit (30 :: Second))
+      (txBodies, publishedScripts) <-
         buildPublishingImpl
-          localNodeConnectInfo
+          submitCtx
           signingKey
           Nothing
           changeAddress
           publishingStrategy
           coinSelectionStrategy
           (PrintStats False)
-      void $ submitBody localNodeConnectInfo txBody [signingKey] (30 :: Second)
-      pure $ toMarloweScripts testnetMagic txBody publishScripts
+      for_ txBodies \txBody -> do
+        submitTxBody submitCtx txBody [signingKey]
+      pure $ toMarloweScripts testnetMagic publishedScripts
 
-toMarloweScripts :: Int -> TxBody BabbageEra -> PublishMarloweScripts MarlowePlutusVersion BabbageEra -> MarloweScripts
-toMarloweScripts testnetMagic txBody PublishMarloweScripts{..} = MarloweScripts{..}
+toMarloweScripts :: Int -> MarloweScriptsRefs MarlowePlutusVersion BabbageEra -> MarloweScripts
+toMarloweScripts testnetMagic MarloweScriptsRefs{..} = MarloweScripts{..}
   where
-    marloweValidatorInfo = psReferenceValidator pmsMarloweScript
-    payoutValidatorInfo = psReferenceValidator pmsRolePayoutScript
+    marloweValidatorInfo = snd mrMarloweValidator
+    payoutValidatorInfo = snd mrRolePayoutValidator
     marloweScript = fromCardanoScriptHash $ viHash marloweValidatorInfo
     payoutScript = fromCardanoScriptHash $ viHash payoutValidatorInfo
     networkId = Testnet $ NetworkMagic $ fromIntegral testnetMagic
-    publishTxId = fromCardanoTxId $ getTxId txBody
-    marloweTxOutRef = TxOutRef publishTxId 1
-    payoutTxOutRef = TxOutRef publishTxId 2
+    marloweTxOutRef = fromCardanoTxIn $ fst $ unAnUTxO $ fst mrMarloweValidator
+    payoutTxOutRef = fromCardanoTxIn $ fst $ unAnUTxO $ fst mrRolePayoutValidator
+    refScritptPublisher (AnUTxO (_, Cardano.TxOut addr _ _ _), _) = addr
+    refScriptValue (AnUTxO (_, Cardano.TxOut _ value _ _), _) = Cardano.txOutValueToValue value
+
     marloweReferenceScriptUTxO =
       ReferenceScriptUtxo
         { txOutRef = marloweTxOutRef
         , txOut =
             TransactionOutput
-              { address = fromCardanoAddressInEra BabbageEra $ psPublisher pmsMarloweScript
-              , assets = Assets (fromCardanoLovelace $ psMinAda pmsMarloweScript) mempty
+              { address = fromCardanoAddressInEra BabbageEra $ refScritptPublisher mrMarloweValidator
+              , assets = assetsFromCardanoValue $ refScriptValue mrMarloweValidator
               , datumHash = Nothing
               , datum = Nothing
               }
@@ -469,8 +473,8 @@ toMarloweScripts testnetMagic txBody PublishMarloweScripts{..} = MarloweScripts{
         { txOutRef = payoutTxOutRef
         , txOut =
             TransactionOutput
-              { address = fromCardanoAddressInEra BabbageEra $ psPublisher pmsRolePayoutScript
-              , assets = Assets (fromCardanoLovelace $ psMinAda pmsRolePayoutScript) mempty
+              { address = fromCardanoAddressInEra BabbageEra $ refScritptPublisher mrRolePayoutValidator
+              , assets = assetsFromCardanoValue $ refScriptValue mrRolePayoutValidator
               , datumHash = Nothing
               , datum = Nothing
               }

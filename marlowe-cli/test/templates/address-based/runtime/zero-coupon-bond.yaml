@@ -45,6 +45,11 @@ operations:
           token_name: ""
         into_account:
           address: Lender
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800
+
 
 # Transaction 3. Borrower Repays the Loan's Principal and Interest"
 - RuntimeApplyInputs:
@@ -59,6 +64,10 @@ operations:
           token_name: ""
         into_account:
           address: Borrower
+    invalidBefore:
+      relative: -60
+    invalidHereafter:
+      relative: +1800
 
 - CheckBalance:
     wallet: Borrower

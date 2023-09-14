@@ -17,7 +17,12 @@
 
 module Language.Marlowe.CLI.Test.CLI.Types where
 
-import Cardano.Api (CardanoMode, LocalNodeConnectInfo, Lovelace, ScriptDataSupportedInEra)
+import Cardano.Api (
+  CardanoMode,
+  LocalNodeConnectInfo,
+  Lovelace,
+  ScriptDataSupportedInEra,
+ )
 import Cardano.Api qualified as C
 import Contrib.Data.List qualified as List
 import Control.Lens (Lens', makeLenses)
@@ -27,7 +32,6 @@ import Control.Monad.Reader.Class (MonadReader)
 import Control.Monad.State.Class (MonadState)
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:?), (.=))
 import Data.Aeson qualified as A
-import Data.Aeson qualified as Aeson
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.List.NonEmpty qualified as List
 import Data.Map (Map)
@@ -37,28 +41,36 @@ import GHC.Base (Alternative ((<|>)))
 import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Test.Contract (ContractNickname)
 import Language.Marlowe.CLI.Test.Contract qualified as Contract
-import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (ParametrizedMarloweJSON)
-import Language.Marlowe.CLI.Test.ExecutionMode
+import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (
+  ParametrizedMarloweJSON,
+ )
 import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError)
 import Language.Marlowe.CLI.Test.Operation.Aeson (
   ConstructorName (ConstructorName),
   NewPropName (NewPropName),
   OldPropName (OldPropName),
   PropName (PropName),
+  genericJSONOptions,
   rewriteProp,
   rewritePropWith,
   rewriteToEmptyObject,
+  rewriteToSingleConstructorJSON,
   rewriteToSingletonObject,
  )
 import Language.Marlowe.CLI.Test.Operation.Aeson qualified as Operation
-import Language.Marlowe.CLI.Test.Wallet.Types (Currencies, CurrencyNickname, WalletNickname, Wallets)
+import Language.Marlowe.CLI.Test.Wallet.Types (
+  Currencies,
+  CurrencyNickname,
+  WalletNickname,
+  Wallets,
+ )
 import Language.Marlowe.CLI.Test.Wallet.Types qualified as Wallet
 import Language.Marlowe.CLI.Types (
-  MarlowePlutusVersion,
   MarloweScriptsRefs,
   MarloweTransaction (MarloweTransaction, mtInputs),
   PrintStats,
   SomeTimeout,
+  TxBuildupContext,
  )
 import Language.Marlowe.Cardano.Thread (
   AnyMarloweThread,
@@ -76,9 +88,11 @@ import Plutus.V1.Ledger.SlotConfig (SlotConfig)
 
 type CLITxInfo lang era = (MarloweTransaction lang era, C.TxBody era)
 
-type CLIMarloweThread lang era status = MarloweThread (CLITxInfo lang era) status
+type CLIMarloweThread lang era status =
+  MarloweThread (CLITxInfo lang era) status
 
-getCLIMarloweThreadTransaction :: CLIMarloweThread lang era status -> MarloweTransaction lang era
+getCLIMarloweThreadTransaction
+  :: CLIMarloweThread lang era status -> MarloweTransaction lang era
 getCLIMarloweThreadTransaction (Created (mt, _) _) = mt
 getCLIMarloweThreadTransaction (InputsApplied (mt, _) _ _ _) = mt
 getCLIMarloweThreadTransaction (Redemption (mt, _) _ _) = mt
@@ -97,7 +111,8 @@ anyCLIMarloweThreadInputsApplied
   -> Maybe C.TxIn
   -> AnyCLIMarloweThread lang era
   -> Maybe (AnyCLIMarloweThread lang era)
-anyCLIMarloweThreadInputsApplied txInfo@(MarloweTransaction{..}, _) mTxIn = anyMarloweThreadInputsApplied txInfo mTxIn mtInputs
+anyCLIMarloweThreadInputsApplied txInfo@(MarloweTransaction{..}, _) mTxIn =
+  anyMarloweThreadInputsApplied txInfo mTxIn mtInputs
 
 data MarloweValidators
   = -- | Embed Marlowe validator in the applying transaction.
@@ -110,22 +125,23 @@ data MarloweValidators
       }
   | -- | Pick a version of the validator from the runtime registry.
     ReferenceRuntimeValidators
-  deriving stock (Eq, Generic, Show)
+  deriving (Eq, Generic, Show)
 
 instance FromJSON MarloweValidators where
   parseJSON json = do
     let inTx =
           parseJSON json >>= \case
-            Aeson.String "inTxCurrent" -> pure InTxCurrentValidators
+            A.String "inTxCurrent" -> pure InTxCurrentValidators
             _ -> fail "Expected string `inTxCurrent`"
         fromRuntimeRegistry =
           parseJSON json >>= \case
-            Aeson.String "referenceRuntime" -> pure ReferenceRuntimeValidators
-            Aeson.String "referenceCurrent" -> pure $ ReferenceCurrentValidators Nothing Nothing
+            A.String "referenceRuntime" -> pure ReferenceRuntimeValidators
+            A.String "referenceCurrent" ->
+              pure $ ReferenceCurrentValidators Nothing Nothing
             _ -> fail "Expected string `referenceRuntime`"
         fromPublished =
           parseJSON json >>= \case
-            Aeson.Object (KeyMap.toList -> [("publishCurrent", objJson)]) -> do
+            A.Object (KeyMap.toList -> [("publishCurrent", objJson)]) -> do
               obj <- parseJSON objJson
               publisher <- obj .:? "publisher"
               permanently <- obj .:? "permanently"
@@ -134,16 +150,33 @@ instance FromJSON MarloweValidators where
     inTx <|> fromRuntimeRegistry <|> fromPublished
 
 instance ToJSON MarloweValidators where
-  toJSON InTxCurrentValidators = Aeson.String "inTxCurrent"
-  toJSON ReferenceRuntimeValidators = Aeson.String "referenceRuntime"
+  toJSON InTxCurrentValidators = A.String "inTxCurrent"
+  toJSON ReferenceRuntimeValidators = A.String "referenceRuntime"
   toJSON (ReferenceCurrentValidators permanent publisher) =
-    Aeson.object
+    A.object
       [ "referenceCurrent"
-          .= Aeson.object
-            [ "permanent" .= permanent
-            , "publisher" .= publisher
-            ]
+          .= A.object ["permanent" .= permanent, "publisher" .= publisher]
       ]
+
+data AnalysisStrategy = AnalysisStrategy
+  { asMinimumUtxo :: Maybe Bool
+  , asExecutionCost :: Maybe Bool
+  , asTransactionSize :: Maybe Bool
+  , asVerbose :: Maybe Bool
+  }
+  deriving (Eq, Generic, Show)
+
+instance FromJSON AnalysisStrategy where
+  parseJSON json = do
+    let json' = rewriteToSingleConstructorJSON (ConstructorName "AnalysisStrategy") json
+    A.genericParseJSON (genericJSONOptions "as") json'
+
+instance ToJSON AnalysisStrategy where
+  toJSON a = do
+    let json = A.genericToJSON (genericJSONOptions "as") a
+    case json of
+      A.Object (KeyMap.toAscList -> [("content", objJson), ("tag", "AnalysisStrategy")]) -> objJson
+      _ -> json
 
 -- | On-chain test operations for the Marlowe contract and payout validators.
 data CLIOperation
@@ -162,6 +195,7 @@ data CLIOperation
       -- ^ A wallet which gonna submit the initial transaction.
       , coMarloweValidators :: Maybe MarloweValidators
       , coMerkleize :: Maybe Bool
+      , coFullyAnalyze :: Maybe AnalysisStrategy
       }
   | Prepare
       { coContractNickname :: Maybe ContractNickname
@@ -172,6 +206,7 @@ data CLIOperation
       , coMaximumTime :: SomeTimeout
       , coOverrideMarloweState :: Maybe M.State
       -- ^ Useful for testing scenarios with non standard initial state.
+      , coAnalyze :: Maybe AnalysisStrategy
       }
   | -- | Publishing can be a part of `Initialize` operation but we can also test it separately.
     Publish
@@ -183,12 +218,15 @@ data CLIOperation
   | AutoRun
       { coContractNickname :: Maybe ContractNickname
       , coInvalid :: Maybe Bool
+      , coSubmitter :: Maybe WalletNickname
+      -- ^ In the case of open roles we are not able to pick a wallet.
+      -- We fallback to the initial contract submitter as a default.
       }
   | Withdraw
       { coContractNickname :: Maybe ContractNickname
       , coWalletNickname :: WalletNickname
       }
-  deriving stock (Eq, Generic, Show)
+  deriving (Eq, Generic, Show)
 
 instance FromJSON CLIOperation where
   parseJSON = do
@@ -213,14 +251,20 @@ instance FromJSON CLIOperation where
                         (OldPropName "nickname")
                         (NewPropName "contractNickname")
                 rewriteTemplate <> rewriteContract <> rewriteContractNickname
-
               rewriteAutoRun = do
                 let constructorName = ConstructorName "AutoRun"
-                    rewriteToContractNickname = rewriteToSingletonObject constructorName (PropName "contractNickname")
-                rewriteToContractNickname <> rewriteToEmptyObject constructorName
+                    rewriteToContractNickname =
+                      rewriteToSingletonObject
+                        constructorName
+                        (PropName "contractNickname")
+                rewriteToContractNickname
+                  <> rewriteToEmptyObject constructorName
               rewriteWithdraw = do
                 let constructorName = ConstructorName "Withdraw"
-                    rewriteToWalletNickname = rewriteToSingletonObject constructorName (PropName "walletNickname")
+                    rewriteToWalletNickname =
+                      rewriteToSingletonObject
+                        constructorName
+                        (PropName "walletNickname")
                     rewriteWallet =
                       rewriteProp
                         constructorName
@@ -243,39 +287,41 @@ data CLIContractInfo lang era = CLIContractInfo
   -- We should use new marlowe thread data type support for withdrawals tracking instead.
   , _ciSubmitter :: WalletNickname
   }
+
 makeLenses 'CLIContractInfo
 
-data MarloweReferenceScripts = MarloweReferenceScripts
-  { mrsMarloweValidator :: C.TxIn
-  , mrsPayoutValidator :: C.TxIn
+newtype CLIContracts lang era = CLIContracts
+  { _unCLIContracts :: Map ContractNickname (CLIContractInfo lang era)
   }
-
-newtype CLIContracts lang era = CLIContracts {_unCLIContracts :: Map ContractNickname (CLIContractInfo lang era)}
 
 makeLenses 'CLIContracts
 
 cliMarloweThreadContractId :: AnyCLIMarloweThread lang era -> ContractId
 cliMarloweThreadContractId =
-  Runtime.Api.ContractId . Runtime.Api.fromCardanoTxIn . overAnyMarloweThread marloweThreadInitialTxIn
+  Runtime.Api.ContractId
+    . Runtime.Api.fromCardanoTxIn
+    . overAnyMarloweThread marloweThreadInitialTxIn
 
 cliContractsIds :: CLIContracts lang era -> Map ContractNickname ContractId
 cliContractsIds (CLIContracts contracts) =
-  Map.fromList $ mapMaybe (\(k, v) -> (k,) . cliMarloweThreadContractId <$> _ciThread v) $ Map.toList contracts
+  Map.fromList $
+    mapMaybe (\(k, v) -> (k,) . cliMarloweThreadContractId <$> _ciThread v) $
+      Map.toList contracts
 
 class HasInterpretState st lang era | st -> lang era where
   walletsL :: Lens' st (Wallets era)
   currenciesL :: Lens' st Currencies
   contractsL :: Lens' st (CLIContracts lang era)
-  publishedScriptsL :: Lens' st (Maybe (MarloweScriptsRefs MarlowePlutusVersion era))
+  publishedScriptsL :: Lens' st (Maybe (MarloweScriptsRefs lang era))
 
 class HasInterpretEnv env lang era | env -> lang era where
   connectionL :: Lens' env (LocalNodeConnectInfo CardanoMode)
   eraL :: Lens' env (ScriptDataSupportedInEra era)
   printStatsL :: Lens' env PrintStats
-  executionModeL :: Lens' env ExecutionMode
   slotConfigL :: Lens' env SlotConfig
   costModelParamsL :: Lens' env CostModelParams
   protocolVersionL :: Lens' env ProtocolVersion
+  txBuildupContextL :: Lens' env (TxBuildupContext era)
 
 type InterpretMonad env st m lang era =
   ( MonadState st m

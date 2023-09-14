@@ -41,29 +41,30 @@ genericJSONOptions prefix = do
 newtype ConstructorName = ConstructorName String
   deriving (Eq, Ord, Show)
 
-newtype PreprocessInputJSON = PreprocessInputJSON (ConstructorName -> Maybe A.Value -> Maybe A.Value)
+-- Constructor based rewrites.
+newtype PreprocessConstructorJSON = PreprocessConstructorJSON (ConstructorName -> Maybe A.Value -> Maybe A.Value)
 
-instance Semigroup PreprocessInputJSON where
-  (<>) (PreprocessInputJSON f) (PreprocessInputJSON g) = PreprocessInputJSON \cn v -> do
+instance Semigroup PreprocessConstructorJSON where
+  (<>) (PreprocessConstructorJSON f) (PreprocessConstructorJSON g) = PreprocessConstructorJSON \cn v -> do
     let v' = f cn v
     g cn v'
 
-instance Monoid PreprocessInputJSON where
-  mempty = PreprocessInputJSON \_ v -> v
+instance Monoid PreprocessConstructorJSON where
+  mempty = PreprocessConstructorJSON \_ v -> v
 
 -- We want to chain transformations so you should return back the original value if you don't want to change it.
 -- This smart constructor guards this invariant.
-preprocessInputJSON :: (ConstructorName -> Maybe A.Value -> Maybe A.Value) -> PreprocessInputJSON
-preprocessInputJSON f = PreprocessInputJSON \cn v -> f cn v <|> v
+preprocessConstructorJSON :: (ConstructorName -> Maybe A.Value -> Maybe A.Value) -> PreprocessConstructorJSON
+preprocessConstructorJSON f = PreprocessConstructorJSON \cn v -> f cn v <|> v
 
-runPreprocessInputJSON :: PreprocessInputJSON -> ConstructorName -> Maybe A.Value -> Maybe A.Value
-runPreprocessInputJSON (PreprocessInputJSON f) = f
+runPreprocessConstructorJSON :: PreprocessConstructorJSON -> ConstructorName -> Maybe A.Value -> Maybe A.Value
+runPreprocessConstructorJSON (PreprocessConstructorJSON f) = f
 
 newtype OldPropName = OldPropName String
 
 newtype NewPropName = NewPropName String
 
-rewritePropWith :: ConstructorName -> OldPropName -> NewPropName -> (A.Value -> A.Value) -> PreprocessInputJSON
+rewritePropWith :: ConstructorName -> OldPropName -> NewPropName -> (A.Value -> A.Value) -> PreprocessConstructorJSON
 rewritePropWith expectedConstructor (OldPropName oldPropName) (NewPropName newPropName) f = do
   let preprocess givenConstructor (Just (A.Object (A.KeyMap.toList -> km))) =
         if expectedConstructor == givenConstructor
@@ -76,9 +77,9 @@ rewritePropWith expectedConstructor (OldPropName oldPropName) (NewPropName newPr
                 Just $ A.object $ Map.toList $ Map.insert (Key.fromString newPropName) (f v) km''
           else Nothing
       preprocess _ _ = Nothing
-  preprocessInputJSON preprocess
+  preprocessConstructorJSON preprocess
 
-rewriteProp :: ConstructorName -> OldPropName -> NewPropName -> PreprocessInputJSON
+rewriteProp :: ConstructorName -> OldPropName -> NewPropName -> PreprocessConstructorJSON
 rewriteProp expectedConstructor oldPropName newPropName = rewritePropWith expectedConstructor oldPropName newPropName id
 
 newtype PropName = PropName String
@@ -87,7 +88,7 @@ newtype PropName = PropName String
 -- we can transform it to `{ Withdraw: { wallet: Buyer }}` with
 -- `rewriteToSingleton (ConstructorName "Withdraw") (PropName "wallet")`.
 -- If a given value is an object we don't change it.
-rewriteToSingletonObject :: ConstructorName -> PropName -> PreprocessInputJSON
+rewriteToSingletonObject :: ConstructorName -> PropName -> PreprocessConstructorJSON
 rewriteToSingletonObject expectedConstructor (PropName propName) = do
   let preprocess _ (Just (A.Object _)) = Nothing
       preprocess givenConstructor (Just v)
@@ -97,9 +98,9 @@ rewriteToSingletonObject expectedConstructor (PropName propName) = do
                 [ (Key.fromString propName, v)
                 ]
       preprocess _ _ = Nothing
-  preprocessInputJSON preprocess
+  preprocessConstructorJSON preprocess
 
-rewriteToSingletonObjectConstrutorWith :: ConstructorName -> (A.Value -> A.Value) -> PreprocessInputJSON
+rewriteToSingletonObjectConstrutorWith :: ConstructorName -> (A.Value -> A.Value) -> PreprocessConstructorJSON
 rewriteToSingletonObjectConstrutorWith constructorName@(ConstructorName cn) f = do
   let preprocess givenConstructor (Just v) =
         if givenConstructor == constructorName
@@ -111,29 +112,29 @@ rewriteToSingletonObjectConstrutorWith constructorName@(ConstructorName cn) f = 
                 ]
           else Nothing
       preprocess _ _ = Nothing
-  preprocessInputJSON preprocess
+  preprocessConstructorJSON preprocess
 
-rewriteToSingleFieldConstructor :: ConstructorName -> PreprocessInputJSON
+rewriteToSingleFieldConstructor :: ConstructorName -> PreprocessConstructorJSON
 rewriteToSingleFieldConstructor constructorName = rewriteToSingletonObjectConstrutorWith constructorName id
 
 -- Given a string value like `"Withdraw"` we can transform
 -- it to `{ Withdraw: {} }` with
 -- `rewriteToEmptyObject (ConstructorName "Withdraw")`.
-rewriteToEmptyObject :: ConstructorName -> PreprocessInputJSON
+rewriteToEmptyObject :: ConstructorName -> PreprocessConstructorJSON
 rewriteToEmptyObject constructorName = do
   let rewrite givenConstructorName Nothing | givenConstructorName == constructorName = Just $ A.object []
       rewrite _ _ = Nothing
-  preprocessInputJSON rewrite
+  preprocessConstructorJSON rewrite
 
 parseConstructorBasedJSON
-  :: forall a. (A.GFromJSON A.Zero (Rep a)) => (Generic a) => String -> PreprocessInputJSON -> A.Value -> A.Parser a
+  :: forall a. (A.GFromJSON A.Zero (Rep a)) => (Generic a) => String -> PreprocessConstructorJSON -> A.Value -> A.Parser a
 parseConstructorBasedJSON prefix preprocess orig = do
   let json = fromMaybe orig $ case orig of
         (A.Object (KeyMap.toList -> [(k, v)])) -> do
-          v' <- runPreprocessInputJSON preprocess (ConstructorName $ A.Key.toString k) (Just v)
+          v' <- runPreprocessConstructorJSON preprocess (ConstructorName $ A.Key.toString k) (Just v)
           pure $ A.Object $ KeyMap.fromList [(k, v')]
         (A.String s) -> do
-          case runPreprocessInputJSON preprocess (ConstructorName $ Text.unpack s) Nothing of
+          case runPreprocessConstructorJSON preprocess (ConstructorName $ Text.unpack s) Nothing of
             Nothing -> Nothing
             Just v' ->
               pure $ A.Object $ KeyMap.fromList [(A.Key.fromText s, v')]
@@ -214,3 +215,8 @@ toSingleFieldConstructorBasedJSON a = do
           then A.String constructorName'
           else A.Object $ KeyMap.fromList [(Key.fromText constructorName', A.object $ Map.toList km')]
     _ -> Nothing
+
+-- Plain object JSON is rewritten to a tagged version for a given constructor.
+rewriteToSingleConstructorJSON :: ConstructorName -> A.Value -> A.Value
+rewriteToSingleConstructorJSON (ConstructorName constructorName) json = do
+  A.object [("tag", A.String $ Text.pack constructorName), ("contents", json)]

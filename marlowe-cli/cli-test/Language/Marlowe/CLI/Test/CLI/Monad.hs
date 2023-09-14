@@ -13,7 +13,7 @@ import Control.Monad.Except (ExceptT, MonadError (catchError, throwError), runEx
 import Control.Monad.Reader (ReaderT (runReaderT))
 import Data.Aeson qualified as A
 import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError, fromCliError)
-import Language.Marlowe.CLI.Test.Log (Label (label))
+import Language.Marlowe.CLI.Test.Log.Label (Label (label))
 import Language.Marlowe.CLI.Types (CliEnv (CliEnv), CliError (CliError))
 
 -- This helper is present in the newer version of mtl

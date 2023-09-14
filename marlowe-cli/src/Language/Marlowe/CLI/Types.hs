@@ -14,11 +14,14 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE StrictData #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -28,13 +31,17 @@ module Language.Marlowe.CLI.Types (
   CliEnv (..),
   CoinSelectionStrategy (..),
   DatumInfo (..),
+  ExecutionLimitsExceeded (..),
   MarloweInfo (..),
   MarlowePlutusVersion,
   MarloweTransaction (..),
+  NodeStateInfo (..),
+  Percent (..),
   RedeemerInfo (..),
   SomeMarloweTransaction (..),
   SomeTimeout (..),
   SubmitMode (..),
+  TxResourceUsage (..),
   ValidatorInfo (..),
 
   -- * eUTxOs
@@ -44,6 +51,7 @@ module Language.Marlowe.CLI.Types (
 
   -- * Minting
   CurrencyIssuer (..),
+  TokensRecipient (..),
   MintingAction (..),
 
   -- * Keys
@@ -56,11 +64,11 @@ module Language.Marlowe.CLI.Types (
   -- * Queries
   OutputQuery (..),
   OutputQueryResult (..),
+  QueryExecutionContext (..),
+  TxBuildupContext (..),
 
   -- * Publishing
   MarloweScriptsRefs (..),
-  PublishMarloweScripts (..),
-  PublishScript (..),
   PublishingStrategy (..),
 
   -- * Newtype wrappers
@@ -99,18 +107,22 @@ module Language.Marlowe.CLI.Types (
   -- * accessors and converters
   anUTxOValue,
   getVerificationKey,
+  queryContextNetworkId,
+  toQueryContext,
   submitModeFromTimeout,
   toMarloweExtendedTimeout,
   toPaymentVerificationKey,
   toMarloweTimeout,
+  toUTxO,
   toSlotRoundedMarloweTimeout,
   toSlotRoundedPlutusPOSIXTime,
-  toUTxO,
   validatorInfoScriptOrReference,
 
   -- * constructors and defaults
   defaultCoinSelectionStrategy,
+  mkNodeTxBuildup,
   fromUTxO,
+  validatorAddress,
   validatorInfo,
   validatorInfo',
 ) where
@@ -125,7 +137,6 @@ import Cardano.Api (
   CollateralSupportedInEra (..),
   EraInMode (..),
   HasTypeProxy (proxyToAsType),
-  Hash,
   IsCardanoEra,
   IsScriptLanguage,
   IsShelleyBasedEra,
@@ -135,7 +146,6 @@ import Cardano.Api (
   PlutusScript,
   PlutusScriptVersion,
   Script (PlutusScript),
-  ScriptData,
   ScriptDataSupportedInEra (..),
   ScriptLanguageInEra (..),
   ShelleyBasedEra (..),
@@ -173,23 +183,27 @@ import Plutus.V1.Ledger.Api (CurrencySymbol, Datum, DatumHash, ExBudget, Redeeme
 import Plutus.V1.Ledger.Api qualified as P
 import Plutus.V1.Ledger.SlotConfig (SlotConfig, posixTimeToEnclosingSlot, slotToBeginPOSIXTime)
 
-import Cardano.Api qualified as Api (Value)
 import Cardano.Api qualified as C
 import Cardano.Api.Byron qualified as CB
 import Cardano.Api.Shelley qualified as C
 import Cardano.Api.Shelley qualified as CS
+import Contrib.Data.Time.Units as Time.Units
+import Contrib.Data.Time.Units.Aeson (Duration (..))
+import Control.Concurrent.STM (TVar)
 import Control.Exception (Exception)
 import Control.Monad.Except (MonadError, liftEither)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Reader.Class (MonadReader (..), asks)
 import Data.Aeson qualified as Aeson
 import Data.Aeson.KeyMap qualified as KeyMap
+import Data.Aeson.OneLine qualified as A
 import Data.Bifunctor qualified as Bifunctor
 import Data.ByteString.Lazy qualified as LBS (fromStrict)
 import Data.ByteString.Short qualified as SBS (fromShort, length)
 import Data.List.NonEmpty qualified as L
 import Data.Map.Strict qualified as Map
 import Data.Proxy (Proxy (Proxy))
+import Data.Text qualified as Text
 import Data.Time (NominalDiffTime, UTCTime, addUTCTime, getCurrentTime, nominalDiffTimeToSeconds)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Data.Time.Units (Second)
@@ -373,6 +387,8 @@ data MarloweTransaction lang era = MarloweTransaction
   -- ^ The Marlowe validator.
   , mtRoleValidator :: ValidatorInfo lang era
   -- ^ The roles validator.
+  , mtOpenRoleValidator :: ValidatorInfo lang era
+  -- ^ The open roles validator.
   , mtRolesCurrency :: CurrencySymbol
   -- ^ The roles currency.
   , mtState :: State
@@ -414,6 +430,7 @@ instance (IsScriptLanguage lang, IsShelleyBasedEra era) => FromJSON (MarloweTran
         do
           mtValidator <- o .: "marloweValidator"
           mtRoleValidator <- o .: "rolesValidator"
+          mtOpenRoleValidator <- o .: "openRolesValidator"
           mtRolesCurrency <- o .: "roles"
           mtState <- o .: "state"
           mtContract <- o .: "contract"
@@ -475,6 +492,19 @@ data ValidatorInfo lang era = ValidatorInfo
   }
   deriving (Eq, Generic, Show)
 
+-- Let's extract validatorAddress build up from the above
+validatorAddress
+  :: (IsPlutusScriptLanguage lang)
+  => PlutusScript lang
+  -> ScriptDataSupportedInEra era
+  -> CS.NetworkId
+  -> CS.StakeAddressReference
+  -> AddressInEra era
+validatorAddress viScript era network stake = do
+  let viHash = C.hashScript (C.PlutusScript plutusScriptVersion viScript)
+      paymentCredential = C.PaymentCredentialByScript viHash
+  withShelleyBasedEra era $ C.makeShelleyAddressInEra network paymentCredential stake
+
 -- | Build validator info.
 validatorInfo
   :: (IsPlutusScriptLanguage lang)
@@ -494,10 +524,8 @@ validatorInfo
   -- ^ The validator information, or an error message.
 validatorInfo viScript viTxIn era protocolVersion costModel network stake = do
   let C.PlutusScriptSerialised viBytes = viScript
-      -- viBytes = SBS.toShort . LBS.toStrict . serialise . Scripts.getValidator $  viScript
       viHash = C.hashScript (C.PlutusScript plutusScriptVersion viScript)
-      paymentCredential = C.PaymentCredentialByScript viHash
-      viAddress = withShelleyBasedEra era $ C.makeShelleyAddressInEra network paymentCredential stake
+      viAddress = validatorAddress viScript era network stake
       viSize = SBS.length viBytes
 
   evaluationContext <- Bifunctor.first show $ P.mkEvaluationContext costModel
@@ -632,7 +660,7 @@ data PayFromScript lang = PayFromScript
   -- ^ The eUTxO to be spent.
   , script :: C.PlutusScriptOrReferenceInput lang
   -- ^ The script.
-  , datum :: Datum
+  , datum :: Maybe Datum
   -- ^ The datum.
   , redeemer :: Redeemer
   -- ^ The redeemer.
@@ -643,12 +671,10 @@ data PayFromScript lang = PayFromScript
 data PayToScript era = PayToScript
   { address :: AddressInEra era
   -- ^ The script address.
-  , value :: Api.Value
+  , value :: C.Value
   -- ^ The value to be paid.
-  , datumOut :: ScriptData
-  -- ^ The datum.
-  , datumHash :: Hash ScriptData
-  -- ^ The datum hash.
+  , datumOut :: C.TxOutDatum C.CtxTx era
+  -- ^ The output datum if any.
   }
   deriving (Eq, Generic, Show)
 
@@ -663,6 +689,7 @@ data OutputQuery era result where
   LovelaceOnly :: (Lovelace -> Bool) -> OutputQuery era (OutputQueryResult era)
   -- | Match UTxOs containing only the specified asset.
   AssetOnly :: AssetId -> OutputQuery era (OutputQueryResult era)
+  PolicyIdOnly :: C.PolicyId -> OutputQuery era (OutputQueryResult era)
   FindReferenceScript
     :: PlutusScriptVersion lang -> C.ScriptHash -> OutputQuery era (Maybe (AnUTxO era, PlutusScript lang))
 
@@ -670,18 +697,36 @@ data SomeTimeout = AbsoluteTimeout Integer | RelativeTimeout NominalDiffTime
   deriving stock (Eq, Generic, Show)
 
 instance ToJSON SomeTimeout where
-  toJSON (AbsoluteTimeout timeout) = Aeson.object [("absolute", toJSON timeout)]
-  toJSON (RelativeTimeout duration) = Aeson.object [("relative", toJSON duration)]
+  toJSON (AbsoluteTimeout timeout) = toJSON timeout
+  toJSON (RelativeTimeout duration) =
+    if duration < 0
+      then Aeson.String $ Text.pack $ show duration
+      else Aeson.String $ Text.pack $ '+' : show duration
 
 instance FromJSON SomeTimeout where
-  parseJSON json = case json of
-    Aeson.Object (KeyMap.toList -> [("absolute", absoluteTimeout)]) -> do
-      parsedTimeout <- parseJSON absoluteTimeout
-      pure $ AbsoluteTimeout parsedTimeout
-    Aeson.Object (KeyMap.toList -> [("relative", duration)]) -> do
-      parsedDuration <- parseJSON duration
-      pure $ RelativeTimeout parsedDuration
-    _ -> fail "Expected object with a single field of either `absolute` or `relative`"
+  parseJSON json = do
+    let parseRelativeTime durationJson = do
+          Duration microseconds <- parseJSON durationJson
+          pure $ RelativeTimeout $ Time.Units.toNominalDiffTime microseconds
+        errorMsg =
+          "Expecting either relative timeout like +10s, -1h, +1d or just a timestamp"
+            <> "or an object with a single field of either `absolute` or `relative` but got:"
+            <> Text.unpack (A.renderValue json)
+    case json of
+      Aeson.Object (KeyMap.toList -> [("absolute", absoluteTimeout)]) -> do
+        parsedTimeout <- parseJSON absoluteTimeout
+        pure $ AbsoluteTimeout parsedTimeout
+      -- When we use `relative' syntax then we expect seconds
+      Aeson.Object (KeyMap.toList -> [("relative", duration)]) -> do
+        parsedDuration <- parseJSON duration
+        pure $ RelativeTimeout parsedDuration
+      -- If starts with `+` or `-` then parse as relative timeout.
+      Aeson.String text -> case Text.unpack text of
+        ('+' : _) -> parseRelativeTime json
+        ('-' : _) -> parseRelativeTime json
+        _ -> fail errorMsg
+      Aeson.Number _ -> AbsoluteTimeout <$> parseJSON json
+      _ -> fail errorMsg
 
 someTimeoutToMilliseconds :: (MonadIO m) => SomeTimeout -> m Integer
 someTimeoutToMilliseconds (AbsoluteTimeout t) = pure t
@@ -716,18 +761,6 @@ data PublishingStrategy era
   = PublishPermanently C.StakeAddressReference
   | PublishAtAddress (AddressInEra era)
 
--- | Information required to publish a script
-data PublishScript lang era = PublishScript
-  { psMinAda :: Lovelace
-  , psPublisher :: AddressInEra era
-  , psReferenceValidator :: ValidatorInfo lang era
-  }
-
-data PublishMarloweScripts lang era = PublishMarloweScripts
-  { pmsMarloweScript :: PublishScript lang era
-  , pmsRolePayoutScript :: PublishScript lang era
-  }
-
 newtype PrintStats = PrintStats {unPrintStats :: Bool}
 
 newtype TxBodyFile = TxBodyFile {unTxBodyFile :: FilePath}
@@ -753,6 +786,7 @@ anUTxOValue (AnUTxO (_, C.TxOut _ v _ _)) = C.txOutValueToValue v
 data MarloweScriptsRefs lang era = MarloweScriptsRefs
   { mrMarloweValidator :: (AnUTxO era, ValidatorInfo lang era)
   , mrRolePayoutValidator :: (AnUTxO era, ValidatorInfo lang era)
+  , mrOpenRoleValidator :: (AnUTxO era, ValidatorInfo lang era)
   }
 
 data CoinSelectionStrategy = CoinSelectionStrategy
@@ -769,12 +803,22 @@ data CurrencyIssuer era = CurrencyIssuer
   , ciSigingKey :: SomePaymentSigningKey
   }
 
+data TokensRecipient era
+  = RegularAddressRecipient (AddressInEra era)
+  | ScriptAddressRecipient
+      (AddressInEra era)
+      -- ^ The value to be paid.
+      (C.TxOutDatum C.CtxTx era)
+      -- ^ The datum.
+
 data MintingAction era
   = -- | The token names, amount and a possible receipient addresses.
     Mint
       { maIssuer :: CurrencyIssuer era
-      , maTokenDistribution
-          :: L.NonEmpty (AddressInEra era, Maybe Lovelace, [(P.TokenName, Natural)])
+      , -- , maTokenDistribution
+        --     :: L.NonEmpty (AddressInEra era, Maybe Lovelace, [(P.TokenName, Natural)])
+        maTokenDistribution
+          :: L.NonEmpty (TokensRecipient era, Maybe Lovelace, [(P.TokenName, Natural)])
       }
   | -- | Burn all found tokens on the providers UTxOs of a given "private currency".
     BurnAll
@@ -787,3 +831,66 @@ data SubmitMode = DontSubmit | DoSubmit Second
 submitModeFromTimeout :: Maybe Second -> SubmitMode
 submitModeFromTimeout Nothing = DontSubmit
 submitModeFromTimeout (Just timeout) = DoSubmit timeout
+
+data NodeStateInfo = NodeStateInfo
+  { nsiNetworkId :: C.NetworkId
+  , nsiProtocolParameters :: C.ProtocolParameters
+  , nsiSystemStart :: C.SystemStart
+  , nsiEraHistory :: C.EraHistory C.CardanoMode
+  }
+
+-- We slowely migrate all the internal functions to use these types.
+-- They allow us to perform fully dry run over contract execution.
+data QueryExecutionContext era
+  = QueryNode (C.LocalNodeConnectInfo C.CardanoMode)
+  | PureQueryContext
+      (TVar (C.UTxO era))
+      NodeStateInfo
+
+queryContextNetworkId :: QueryExecutionContext era -> C.NetworkId
+queryContextNetworkId (QueryNode connection) = C.localNodeNetworkId connection
+queryContextNetworkId (PureQueryContext _ NodeStateInfo{nsiNetworkId}) = nsiNetworkId
+
+-- Same as above but with timeout information.
+data TxBuildupContext era
+  = NodeTxBuildup (C.LocalNodeConnectInfo C.CardanoMode) SubmitMode
+  | PureTxBuildup
+      (TVar (C.UTxO era))
+      NodeStateInfo
+
+mkNodeTxBuildup :: forall era. C.LocalNodeConnectInfo C.CardanoMode -> Maybe Second -> TxBuildupContext era
+mkNodeTxBuildup connection timeout = NodeTxBuildup connection (submitModeFromTimeout timeout)
+
+toQueryContext :: TxBuildupContext era -> QueryExecutionContext era
+toQueryContext (NodeTxBuildup nodeInfo _) = QueryNode nodeInfo
+toQueryContext (PureTxBuildup utxo nodeInfo) = PureQueryContext utxo nodeInfo
+
+newtype Percent = Percent {unPercent :: Natural}
+  deriving stock (Eq, Generic, Show)
+  deriving newtype (FromJSON, ToJSON)
+
+data TxResourceUsage = TxResourceUsage
+  { elMemory :: (Natural, Percent)
+  , elSteps :: (Natural, Percent)
+  , elSize :: (Natural, Percent)
+  }
+  deriving stock (Eq, Show, Generic)
+
+instance ToJSON TxResourceUsage where
+  toJSON TxResourceUsage{elMemory, elSteps, elSize} =
+    Aeson.object
+      [ "memory" .= elMemory
+      , "steps" .= elSteps
+      , "size" .= elSize
+      ]
+
+instance FromJSON TxResourceUsage where
+  parseJSON =
+    Aeson.withObject "TxResourceUsage" $ \o ->
+      TxResourceUsage
+        <$> o .: "memory"
+        <*> o .: "steps"
+        <*> o .: "size"
+
+newtype ExecutionLimitsExceeded = ExecutionLimitsExceeded {unExecutionLimitsExceeded :: TxResourceUsage}
+  deriving stock (Eq, Show, Generic)

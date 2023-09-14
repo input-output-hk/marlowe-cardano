@@ -1,0 +1,130 @@
+testName: Open role token should be released on deposit mixed with other valid inputs.
+
+operations:
+
+- Publish:
+    publishPermanently: true
+
+- CheckBalance:
+    wallet: Faucet
+    balance:
+      - [ADA, 0]
+
+- Mint:
+    issuer: Faucet
+    nickname: RoleTokenCurrency
+    minLovelace: 2000000
+    tokenDistribution:
+      - [{ script: OpenRole, threadTokenName: "thread-token-name" }, Depositor-1, 1]
+      - [{ wallet: Faucet }, Depositor-2, 1]
+      - [{ wallet: Faucet }, "thread-token-name", 1]
+
+- Initialize:
+    contractNickname: "Contract with valid thread token"
+    minLovelace: 2000000
+    roleCurrency: RoleTokenCurrency
+    marloweValidators:
+      publishCurrent:
+        permanently: true
+    submitter: Faucet
+    source:
+      timeout:
+        relative: +3600
+      timeout_continuation: close
+      unless:
+        party:
+          address: Faucet
+        deposits: 1
+        of_token:
+          currency_symbol: RoleTokenCurrency
+          token_name: 'thread-token-name'
+        into_account:
+          address: Faucet
+      then:
+        timeout:
+          relative: +3600
+        timeout_continuation: close
+        unless:
+          party:
+            role_token: Depositor-1
+          deposits: 2000000
+          of_token:
+            currency_symbol: ''
+            token_name: ''
+          into_account:
+            role_token: Depositor-1
+        then:
+          timeout:
+            relative: +3600
+          timeout_continuation: close
+          unless:
+            party:
+              role_token: Depositor-2
+            deposits: 2000000
+            of_token:
+              currency_symbol: ''
+              token_name: ''
+            into_account:
+              role_token: Depositor-2
+          then:
+            timeout:
+              relative: +3600
+            timeout_continuation: close
+            unless:
+              notify_if: true
+            then: close
+
+- AutoRun:
+    contractNickname: "Contract with valid thread token"
+
+- Comment: Manually deposit invalid thread token to the script.
+
+- Prepare:
+    contractNickname: "Contract with valid thread token"
+    inputs:
+      - input_from_party:
+          address: Faucet
+        that_deposits: 1
+        of_token: [RoleTokenCurrency, 'thread-token-name']
+        into_account:
+          address: Faucet
+    minimumTime: -15s
+    maximumTime: +2m
+
+- AutoRun:
+    submitter: Faucet
+    contractNickname: "Contract with valid thread token"
+
+- Prepare:
+    contractNickname: "Contract with valid thread token"
+    inputs:
+      - input_from_party:
+          role_token: Depositor-1
+        that_deposits: 2000000
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          role_token: Depositor-1
+      - input_from_party:
+          role_token: Depositor-2
+        that_deposits: 2000000
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          role_token: Depositor-2
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- AutoRun:
+    contractNickname: "Contract with valid thread token"
+
+- CheckBalance:
+    wallet: Faucet
+    balance:
+      - [ADA, -6]
+      - [RoleTokenCurrency, Depositor-1, 1]
+      - [RoleTokenCurrency, Depositor-2, 1]

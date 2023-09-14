@@ -46,7 +46,8 @@ module Language.Marlowe.CLI.Export (
 
   -- * Role Validator
   exportRoleValidator,
-  roleValidatorInfo,
+  payoutValidatorInfo,
+  openRoleValidatorInfo,
 
   -- * Role Datum
   buildRoleDatum,
@@ -80,22 +81,24 @@ import Control.Monad.Except (MonadError, MonadIO, liftEither, liftIO)
 import Data.Aeson (encode)
 import Language.Marlowe.CLI.IO (
   decodeFileStrict,
-  getDefaultCostModel,
+  getPV2CostModelParams,
+  getProtocolParams,
   maybeWriteJson,
   maybeWriteTextEnvelope,
-  queryInEra,
  )
 import Language.Marlowe.CLI.Types (
   CliEnv,
   CliError (..),
   DatumInfo (..),
   MarloweInfo (..),
+  QueryExecutionContext (..),
   RedeemerInfo (..),
   ValidatorInfo (..),
   askEra,
   asksEra,
   doWithCardanoEra,
   doWithShelleyBasedEra,
+  queryContextNetworkId,
   validatorInfo',
   withCardanoEra,
   withShelleyBasedEra,
@@ -119,6 +122,7 @@ import Data.ByteString.Short qualified as SBS
 import Language.Marlowe.CLI.Cardano.Api qualified as C
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript qualified as PlutusScript
+import Language.Marlowe.Scripts.OpenRole (openRoleValidatorBytes)
 import Language.Marlowe.Scripts.Types (marloweTxInputsFromInputs)
 import Plutus.ApiCommon (ProtocolVersion)
 import Plutus.V1.Ledger.Api (DatumHash (..), toBuiltin, toData)
@@ -328,17 +332,17 @@ exportMarloweAddress = exportAddress marloweValidatorBytes
 
 buildValidatorInfo
   :: (MonadReader (CliEnv era) m, MonadIO m, MonadError CliError m, IsPlutusScriptLanguage lang)
-  => CS.LocalNodeConnectInfo CS.CardanoMode
+  => QueryExecutionContext era
   -> CS.PlutusScript lang
   -> Maybe C.TxIn
   -> StakeAddressReference
   -> m (ValidatorInfo lang era)
-buildValidatorInfo connection plutusScript txIn stake = do
+buildValidatorInfo queryCtx plutusScript txIn stake = do
   era <- askEra
-  protocol <- queryInEra connection C.QueryProtocolParameters
-  costModel <- getDefaultCostModel
-  let networkId = C.localNodeNetworkId connection
-      protocolVersion = C.toPlutusProtocolVersion $ CS.protocolParamProtocolVersion protocol
+  protocolParams <- getProtocolParams queryCtx
+  costModel <- getPV2CostModelParams queryCtx
+  let networkId = queryContextNetworkId queryCtx
+      protocolVersion = C.toPlutusProtocolVersion $ CS.protocolParamProtocolVersion protocolParams
   validatorInfo' plutusScript txIn era protocolVersion costModel networkId stake
 
 -- | Export to a file the validator information.
@@ -587,7 +591,7 @@ exportRoleAddress
 exportRoleAddress = exportAddress rolePayoutValidatorBytes
 
 -- | Current Marlowe validator information.
-roleValidatorInfo
+payoutValidatorInfo
   :: ScriptDataSupportedInEra era
   -- ^ The era to build he validator in.
   -> ProtocolVersion
@@ -599,7 +603,22 @@ roleValidatorInfo
   -- ^ The stake address.
   -> Either CliError (ValidatorInfo PlutusScriptV2 era)
   -- ^ The validator information, or an error message.
-roleValidatorInfo = validatorInfo' (PlutusScriptSerialised rolePayoutValidatorBytes) Nothing
+payoutValidatorInfo = validatorInfo' (PlutusScriptSerialised rolePayoutValidatorBytes) Nothing
+
+-- | Open role validator
+openRoleValidatorInfo
+  :: ScriptDataSupportedInEra era
+  -- ^ The era to build he validator in.
+  -> ProtocolVersion
+  -> CostModelParams
+  -- ^ The cost model parameters.
+  -> NetworkId
+  -- ^ The network ID.
+  -> StakeAddressReference
+  -- ^ The stake address.
+  -> Either CliError (ValidatorInfo PlutusScriptV2 era)
+  -- ^ The validator information, or an error message.
+openRoleValidatorInfo = validatorInfo' (PlutusScriptSerialised openRoleValidatorBytes) Nothing
 
 -- | Export to a file the role validator information about a Marlowe contract.
 exportRoleValidator
