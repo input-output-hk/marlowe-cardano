@@ -219,7 +219,7 @@ readRolePayoutValidator :: (MonadIO m, IsPlutusScriptLanguage lang) => m (Plutus
 readRolePayoutValidator = readValidator "marlowe-rolepayout.plutus"
 
 readOpenRoleValidator :: (MonadIO m, IsPlutusScriptLanguage lang) => m (PlutusScript lang)
-readOpenRoleValidator = readValidator "marlowe-open-role.plutus"
+readOpenRoleValidator = readValidator "open-role.plutus"
 
 readValidator :: forall lang m. (MonadIO m, IsPlutusScriptLanguage lang) => FilePath -> m (PlutusScript lang)
 readValidator scriptFile = liftIO do
