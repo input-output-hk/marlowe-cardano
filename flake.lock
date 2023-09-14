@@ -4763,11 +4763,11 @@
         "iogx": "iogx_2"
       },
       "locked": {
-        "lastModified": 1694698631,
-        "narHash": "sha256-GOYgo7BZQGvkPHzagS3r05X+827qSNI/Vhq9wR9k11Q=",
+        "lastModified": 1694714815,
+        "narHash": "sha256-rhzqeJ2wgGwm0r88h44PA8XxQezz+ksb/K3zwvXbRgY=",
         "owner": "input-output-hk",
         "repo": "marlowe-plutus",
-        "rev": "4d0473e89676c4b97cd5d9a272f6cd06cca45822",
+        "rev": "fae354094690e21ae148f6775d2f55eae976f211",
         "type": "github"
       },
       "original": {
