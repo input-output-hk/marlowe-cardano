@@ -59,6 +59,12 @@ in
       description = "Marlowe CLI";
       group = "marlowe";
     };
+
+    refresh-validators = {
+      exec = scripts.refresh-validators;
+      description = "Pull the latest validators from the marlowe-plutus flake input.";
+      group = "marlowe";
+    };
   };
 
 

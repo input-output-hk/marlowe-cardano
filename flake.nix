@@ -11,6 +11,7 @@
     iogx.url = "github:input-output-hk/iogx";
     # Use upstream when https://github.com/nlewo/nix2container/pull/82 is merged
     n2c.url = "github:shlevy/nix2container/no-Size-on-dir";
+    marlowe-plutus.url = "github:input-output-hk/marlowe-plutus";
   };
 
 
