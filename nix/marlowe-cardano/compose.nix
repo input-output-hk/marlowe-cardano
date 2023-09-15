@@ -21,7 +21,7 @@ let
     cd /src
     # Hard-coding linux because this won't work on Mac anyway.
     # TODO find a setup that works on MacOS
-    BIN=./dist-newstyle/build/x86_64-linux/ghc-8.10.7/$PKG/x/$PROG/build/$PROG/$PROG
+    BIN=./dist-newstyle/build/x86_64-linux/ghc-9.2.0/$PKG/x/$PROG/build/$PROG/$PROG
     export PATH="$PATH:${l.makeBinPath [ sqitchPg postgresql ]}"
     export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
     cd marlowe-chain-sync
@@ -37,7 +37,7 @@ let
     cd /src
     # Hard-coding linux because this won't work on Mac anyway.
     # TODO find a setup that works on MacOS
-    BIN=./dist-newstyle/build/x86_64-linux/ghc-8.10.7/$PKG/x/$PROG/build/$PROG/$PROG
+    BIN=./dist-newstyle/build/x86_64-linux/ghc-9.2.0/$PKG/x/$PROG/build/$PROG/$PROG
     export PATH="$PATH:${l.makeBinPath [ sqitchPg postgresql ]}"
     export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
     cd marlowe-runtime/marlowe-indexer
@@ -54,7 +54,7 @@ let
     cd /src
     # Hard-coding linux because this won't work on Mac anyway.
     # TODO find a setup that works on MacOS
-    BIN=./dist-newstyle/build/x86_64-linux/ghc-8.10.7/$PKG/x/$PROG/build/$PROG/$PROG
+    BIN=./dist-newstyle/build/x86_64-linux/ghc-9.2.0/$PKG/x/$PROG/build/$PROG/$PROG
     export PATH="$PATH:${l.makeBinPath [ sqitchPg postgresql ]}"
     export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
     cd marlowe-chain-sync
@@ -74,7 +74,7 @@ let
     cd /src
     # Hard-coding linux because this won't work on Mac anyway.
     # TODO find a setup that works on MacOS
-    BIN=./dist-newstyle/build/x86_64-linux/ghc-8.10.7/$PKG/x/$PROG/build/$PROG/$PROG
+    BIN=./dist-newstyle/build/x86_64-linux/ghc-9.2.0/$PKG/x/$PROG/build/$PROG/$PROG
     exec -a $PROG $BIN "$@"
   '';
 
@@ -96,7 +96,7 @@ let
   '';
 
   node-service = {
-    image = "inputoutput/cardano-node:1.35.4";
+    image = "inputoutput/cardano-node:8.1.2";
 
     environment = [
       "NETWORK=${network.name}"

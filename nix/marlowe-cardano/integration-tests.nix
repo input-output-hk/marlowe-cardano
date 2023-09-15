@@ -3,8 +3,8 @@
 { projects }:
 
 let
-  cardano-cli = inputs'.cardano-world.cardano.packages.cardano-cli;
-  cardano-node = inputs'.cardano-world.cardano.packages.cardano-node;
+  cardano-cli = inputs'.cardano-node.packages.cardano-cli;
+  cardano-node = inputs'.cardano-node.packages.cardano-node;
   marlowe-runtime-cli = projects.default.hsPkgs.marlowe-runtime-cli.components.exes.marlowe-runtime-cli;
   marlowe-integration-tests = projects.default.hsPkgs.marlowe-integration-tests.components.exes.marlowe-integration-tests;
 in
