@@ -31,7 +31,7 @@ jobs:
       - name: Rewrite file mod times (GHC uses file modification times for caching)
         run: |
           rev=HEAD
-          for f in $(git ls-tree -r -t --full-name --name-only "$rev") ; do
+          for f in "$(git ls-tree -r -t --full-name --name-only "$rev")" ; do
               touch -d $(git log --pretty=format:%cI -1 "$rev" -- "$f") "$f";
           done
       - name: Install Nix
