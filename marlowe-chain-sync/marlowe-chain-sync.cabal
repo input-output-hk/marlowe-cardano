@@ -73,6 +73,7 @@ library
     , marlowe-protocols ==0.2.0.0
     , nonempty-containers ^>=0.3.4
     , ouroboros-consensus ^>=0.7
+    , plutus-core ^>=1.5
     , plutus-ledger-api ^>=1.5
     , serialise ^>=0.2.6
     , text ^>=1.2

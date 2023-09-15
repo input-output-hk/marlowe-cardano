@@ -107,6 +107,7 @@ import Ouroboros.Consensus.HardFork.History (
   Summary (Summary),
   mkInterpreter,
  )
+import PlutusCore.Evaluation.Machine.ExBudgetingDefaults (defaultCostModelParams)
 import qualified PlutusLedgerApi.V1 as Plutus
 import Text.Read (readMaybe)
 import Unsafe.Coerce (unsafeCoerce)
@@ -1343,7 +1344,7 @@ instance Variations C.AnyPlutusScriptVersion where
       ]
 
 instance Variations C.CostModel where
-  variations = C.CostModel <$> variations
+  variations = pure $ C.CostModel $ Map.elems $ fromJust defaultCostModelParams
 
 instance Variations C.ExecutionUnitPrices where
   variations = C.ExecutionUnitPrices <$> variations `varyAp` variations
