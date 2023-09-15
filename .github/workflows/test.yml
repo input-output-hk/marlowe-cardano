@@ -25,6 +25,15 @@ jobs:
           remove-docker-images: 'true'
       - name: Checkout the code
         uses: actions/checkout@v3
+        with:
+          # Deep fetch to get the commit history to rewrite file mod times
+          fetch-depth: 0
+      - name: Rewrite file mod times (GHC uses file modification times for caching)
+        run: |
+          rev=HEAD
+          for f in $(git ls-tree -r -t --full-name --name-only "$rev") ; do
+              touch -d $(git log --pretty=format:%cI -1 "$rev" -- "$f") "$f";
+          done
       - name: Install Nix
         uses: cachix/install-nix-action@v21
         with:
@@ -40,9 +49,21 @@ jobs:
         with:
           name: ${{ env.CACHE_NAME }}
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
-      - name: Clean Build on Ubuntu
+      - name: Freeze Cabal plan
         run: |
-          nix develop --show-trace --command bash -c "cabal clean && cabal update && cabal build all"
+          nix develop --show-trace --command bash -c "cabal freeze"
+      - name: Cache Cabal build artifacts
+          uses: actions/cache@v2
+          with:
+            path: |
+              ~/.cabal/store
+              dist-newstyle
+            key: ${{ runner.os }}-cabal-${{ hashFiles('cabal.project.freeze') }}
+            restore-keys: |
+              ${{ runner.os }}-cabal
+      - name: Build with Cabal
+        run: |
+          nix develop --show-trace --command bash -c "cabal build all"
   integration:
     runs-on: ubuntu-latest
     services:
