@@ -49,7 +49,6 @@ module Language.Marlowe.CLI.Sync (
 import Cardano.Api (
   AddressInEra (..),
   AddressTypeInEra (..),
-  AsType (..),
   Block (..),
   BlockHeader (..),
   BlockInMode (..),
@@ -63,7 +62,9 @@ import Cardano.Api (
   LocalNodeClientProtocols (..),
   LocalNodeConnectInfo (..),
   PaymentCredential (..),
+  PlutusScriptVersion (..),
   PolicyId,
+  Script (..),
   ScriptHash,
   SerialiseAsRawBytes (..),
   ShelleyBasedEra (..),
@@ -87,6 +88,7 @@ import Cardano.Api (
   connectToLocalNode,
   getTxBody,
   getTxId,
+  hashScript,
   metadataToJson,
   txOutValueToValue,
   valueToNestedRep,
@@ -128,7 +130,6 @@ import Language.Marlowe.CLI.Transaction (querySlotConfig)
 import Language.Marlowe.CLI.Types (CliEnv, CliError (..))
 import Language.Marlowe.Client (marloweParams)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract (..), Input (..), TimeInterval)
-import Language.Marlowe.Scripts (marloweValidatorHash, rolePayoutValidatorHash)
 import Plutus.V1.Ledger.Api (
   BuiltinByteString,
   CurrencySymbol (..),
@@ -166,6 +167,7 @@ import Data.ByteString qualified as BS (hPutStr)
 import Data.ByteString.Lazy.Char8 qualified as LBS8 (hPutStrLn)
 import Data.Map.Strict qualified as M (elems, filter, null, toList)
 import Data.Set qualified as S (singleton, toList)
+import Language.Marlowe.CLI.Export (readMarloweValidator, readRolePayoutValidator)
 import Language.Marlowe.Scripts.Types (MarloweInput, MarloweTxInput (..))
 import Language.Marlowe.Util (dataHash)
 import Plutus.V1.Ledger.Api qualified as PV1
@@ -239,7 +241,7 @@ type Reverter =
   -> IO ()
   -- ^ Action to handle the rollback.
 
--- | Peform action when idle.
+-- | Perform action when idle.
 type Idler =
   IO Bool
   -- ^ Action that returns whether processing should terminate.
@@ -512,7 +514,7 @@ extractMarlowe
   :: IORef ()
   -- ^ State information (unused).
   -> (MarloweEvent -> IO ())
-  -- ^ The outputter for Marlowe events.
+  -- ^ The sink for Marlowe events.
   -> SlotConfig
   -- ^ The slot configuration.
   -> Bool
@@ -523,13 +525,25 @@ extractMarlowe
   -- ^ The transaction.
   -> IO ()
   -- ^ Action to output potential Marlowe transactions.
-extractMarlowe _ printer slotConfig includeAll meBlock tx =
+extractMarlowe _ printer slotConfig includeAll meBlock tx = do
+  marloweValidator <- readMarloweValidator
+  payoutValidator <- readRolePayoutValidator
   mapM_ printer $
-    classifyMarlowe slotConfig includeAll meBlock (getTxBody tx)
+    classifyMarlowe
+      (hashScript $ PlutusScript PlutusScriptV2 marloweValidator)
+      (hashScript $ PlutusScript PlutusScriptV2 payoutValidator)
+      slotConfig
+      includeAll
+      meBlock
+      (getTxBody tx)
 
 -- | Classify a transaction's Marlowe content.
 classifyMarlowe
-  :: SlotConfig
+  :: ScriptHash
+  -- ^ The marlowe validator hash
+  -> ScriptHash
+  -- ^ The role payout validator hash
+  -> SlotConfig
   -- ^ The slot configuration.
   -> Bool
   -- ^ Include non-Marlowe transactions.
@@ -539,11 +553,11 @@ classifyMarlowe
   -- ^ The transaction.
   -> [MarloweEvent]
   -- ^ Any Marlowe events in the transaction.
-classifyMarlowe slotConfig includeAll meBlock txBody =
+classifyMarlowe marloweValidatorHash rolePayoutValidatorHash slotConfig includeAll meBlock txBody =
   let TxBody TxBodyContent{..} = txBody
       meTxId = getTxId txBody
       meMetadata = extractMetadata txMetadata
-      parameters = makeParameters meBlock meTxId meMetadata <$> extractMints txMintValue
+      parameters = makeParameters marloweValidatorHash rolePayoutValidatorHash meBlock meTxId meMetadata <$> extractMints txMintValue
       meIns = classifyInputs txBody
       meInterval = convertSlots slotConfig txValidityRange
       meOuts = classifyOutputs meTxId txOuts
@@ -628,19 +642,19 @@ classifyInput
   -> Maybe [Input]
   -- ^ The the Marlowe input, if any.
 classifyInput continuations =
-  mapM $ unmerkleize continuations
+  mapM $ demerkleize continuations
 
 -- | Restore a contract from its merkleization.
-unmerkleize
+demerkleize
   :: [(BuiltinByteString, Contract)]
   -- ^ Contract continuations and their hashes.
   -> MarloweTxInput
   -- ^ The Marlowe transaction input.
   -> Maybe Input
   -- ^ Marlowe input, if any.
-unmerkleize _ (Input content) =
+demerkleize _ (Input content) =
   pure $ NormalInput content
-unmerkleize continuations (MerkleizedTxInput content continuationHash) =
+demerkleize continuations (MerkleizedTxInput content continuationHash) =
   do
     continuation <- continuationHash `lookup` continuations
     pure $ MerkleizedInput content continuationHash continuation
@@ -736,31 +750,13 @@ extractMetadata
 extractMetadata (TxMetadataInEra _ metadata) = Just $ metadataToJson TxMetadataJsonNoSchema metadata
 extractMetadata _ = Nothing
 
--- | Lift into a report of an anomaly.
-liftAnomaly
-  :: (Show e)
-  => BlockHeader
-  -- ^ The block's header.
-  -> TxId
-  -- ^ The transaction ID.
-  -> Either e a
-  -- ^ The potential anomaly.
-  -> Either MarloweEvent a
-  -- ^ The lifted anomaly.
-liftAnomaly _ _ (Right x) = Right x
-liftAnomaly meBlock meTxId (Left e) = let meAnomaly = show e in Left Anomaly{..}
-
--- | Handle anomalies.
-runAnomaly
-  :: Either MarloweEvent MarloweEvent
-  -- ^ The potential anomaly.
-  -> MarloweEvent
-  -- ^ The Marlowe event.
-runAnomaly = either id id
-
 -- | Make Marlowe parameters for a currency value.
 makeParameters
-  :: BlockHeader
+  :: ScriptHash
+  -- ^ The marlowe validator hash
+  -> ScriptHash
+  -- ^ The role payout validator hash
+  -> BlockHeader
   -- ^ The block's header.
   -> TxId
   -- ^ The transaction ID.
@@ -770,23 +766,14 @@ makeParameters
   -- ^ The policy ID.
   -> MarloweEvent
   -- ^ The Marlowe event.
-makeParameters meBlock meTxId meMetadata policy =
-  runAnomaly $
-    do
-      let anomaly = liftAnomaly meBlock meTxId
-          MintingPolicyHash currencyHash = PV1.MintingPolicyHash $ PV1.toBuiltin (serialiseToRawBytes policy)
+makeParameters marloweValidatorHash rolePayoutValidatorHash meBlock meTxId meMetadata policy = Parameters{..}
+  where
+    MintingPolicyHash currencyHash = PV1.MintingPolicyHash $ PV1.toBuiltin (serialiseToRawBytes policy)
 
-          meParams = marloweParams $ CurrencySymbol currencyHash
+    meParams = marloweParams $ CurrencySymbol currencyHash
 
-      meApplicationAddress <- anomaly $ ApplicationCredential <$> toCardanoScriptHash marloweValidatorHash
-      mePayoutAddress <- anomaly $ PayoutCredential <$> toCardanoScriptHash rolePayoutValidatorHash
-      pure Parameters{..}
-
-toCardanoScriptHash :: PV1.ValidatorHash -> Either String ScriptHash
-toCardanoScriptHash (PV1.ValidatorHash bs) =
-  maybe (Left "toCardanoScriptHash") pure $
-    deserialiseFromRawBytes AsScriptHash $
-      PV1.fromBuiltin bs
+    meApplicationAddress = ApplicationCredential marloweValidatorHash
+    mePayoutAddress = PayoutCredential rolePayoutValidatorHash
 
 -- | Extract policy IDs from minting.
 extractMints

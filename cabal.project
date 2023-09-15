@@ -36,7 +36,6 @@ packages:
   marlowe-integration
   marlowe-integration-tests
   marlowe-object
-  marlowe-plutus
   marlowe-protocols
   marlowe-runtime
   marlowe-runtime-cli

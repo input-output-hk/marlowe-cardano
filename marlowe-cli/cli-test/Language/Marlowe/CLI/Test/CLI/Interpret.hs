@@ -230,7 +230,7 @@ autoRunTransaction currency defaultSubmitter prev curr@MarloweTransaction{..} in
                   throwError $
                     testExecutionFailed' $
                       "[autoRunTransaction] Contract requires role token but open role script was not published yet "
-                        <> "and role token is not posessed the open role script and was not found between wallets: "
+                        <> "and role token is not owned the open role script and was not found between wallets: "
                         <> err
                 Just MarloweScriptsRefs{mrOpenRoleValidator = (_, openRoleValidatorInfo)} -> do
                   roleAssetName <-
@@ -321,7 +321,7 @@ publishCurrentValidators publishPermanently possiblePublisher = do
       fnName = "publishCurrentValidators"
       logTraceMsg' = logStoreLabeledMsg fnName
       queryCtx = toQueryContext txBuildupCtx
-  runCli era fnName (findMarloweScriptsRefs @lang queryCtx publishingStrategy printStats) >>= \case
+  runCli era fnName (findMarloweScriptsRefs @_ @lang queryCtx publishingStrategy printStats) >>= \case
     Just marloweScriptRefs@(MarloweScriptsRefs (AnUTxO (mTxIn, _), mv) (AnUTxO (pTxIn, _), pv) (AnUTxO (orTxIn, _), orv)) -> do
       let logValidatorInfo ValidatorInfo{..} =
             logTraceMsg' $ Text.unpack (C.serialiseAddress viAddress)
@@ -428,7 +428,7 @@ interpret co@Initialize{..} = do
           merkleize
           True
     InTxCurrentValidators -> do
-      logStoreLabeledMsg co "Using in Tx scripts embeding strategy to initialize Marlowe contract."
+      logStoreLabeledMsg co "Using in Tx scripts embedding strategy to initialize Marlowe contract."
       runLabeledCli era co $
         initializeTransactionImpl
           marloweParams

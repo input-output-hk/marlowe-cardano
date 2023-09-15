@@ -10,6 +10,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeApplications #-}
 
 -- | Export-related commands in the Marlowe CLI tool.
 module Language.Marlowe.CLI.Command.Contract (
@@ -35,11 +36,11 @@ import Language.Marlowe.CLI.Export (
   exportMarloweValidator,
   exportRedeemer,
  )
-import Language.Marlowe.CLI.Plutus.Script.Utils (printPir, printUplc)
 import Language.Marlowe.CLI.Types (CliEnv, CliError)
 import Language.Marlowe.Client (defaultMarloweParams, marloweParams)
 import Plutus.V1.Ledger.Api (CurrencySymbol, ProtocolVersion)
 
+import Cardano.Api qualified as C
 import Control.Monad.Reader.Class (MonadReader)
 import Language.Marlowe.CLI.IO (getDefaultCostModel)
 import Options.Applicative qualified as O
@@ -111,16 +112,6 @@ data ContractCommand
       , printStats :: Bool
       -- ^ Whether to print statistics about the redeemer.
       }
-  | -- | Print the PIR for the Marlowe validator.
-    PrintPir
-      { outputFile :: Maybe FilePath
-      -- ^ The output file for the PIR.
-      }
-  | -- | Print the UPLC for the Marlowe validator.
-    PrintUplc
-      { outputFile :: Maybe FilePath
-      -- ^ The output file for the UPLC.
-      }
 
 -- | Run an export-related command.
 runContractCommand
@@ -139,7 +130,7 @@ runContractCommand command =
         stake' = fromMaybe NoStakeAddress $ stake command
     case command of
       Export{..} ->
-        exportMarlowe
+        exportMarlowe @_ @C.PlutusScriptV2
           marloweParams'
           protocolVersion
           costModel
@@ -150,8 +141,9 @@ runContractCommand command =
           inputFiles
           outputFile
           printStats
-      ExportAddress{} -> exportMarloweAddress network' stake'
-      ExportValidator{..} -> exportMarloweValidator protocolVersion costModel network' stake' outputFile printHash printStats
+      ExportAddress{} -> exportMarloweAddress @_ @C.PlutusScriptV2 network' stake'
+      ExportValidator{..} ->
+        exportMarloweValidator @_ @C.PlutusScriptV2 protocolVersion costModel network' stake' outputFile printHash printStats
       ExportDatum{..} ->
         exportDatum
           marloweParams'
@@ -164,8 +156,6 @@ runContractCommand command =
           inputFiles
           outputFile
           printStats
-      PrintPir{..} -> printPir outputFile
-      PrintUplc{..} -> printUplc outputFile
 
 -- | Parser for export-related commands.
 parseContractCommand
@@ -179,8 +169,6 @@ parseContractCommand network =
       <> exportMarloweCommand network
       <> exportRedeemerCommand
       <> exportValidatorCommand network
-      <> printPirCommand
-      <> printUplcCommand
 
 -- | Parser for the "marlowe" command.
 exportMarloweCommand
@@ -310,23 +298,3 @@ exportRedeemerOptions =
       (O.long "out-file" <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for redeemer.")
     <*> O.switch
       (O.long "print-stats" <> O.help "Print statistics.")
-
--- | Parser for the "pir" command.
-printPirCommand :: O.Mod O.CommandFields ContractCommand
-printPirCommand =
-  O.command "pir"
-    . O.info
-      ( PrintPir
-          <$> (O.optional . O.strOption) (O.long "out-file" <> O.metavar "OUTPUT_FILE" <> O.help "The output file for the PIR.")
-      )
-    $ O.progDesc "Print the Plutus Intermediate Representation (PIR) for the Marlowe validator."
-
--- | Parser for the "uplc" command.
-printUplcCommand :: O.Mod O.CommandFields ContractCommand
-printUplcCommand =
-  O.command "uplc"
-    . O.info
-      ( PrintUplc
-          <$> (O.optional . O.strOption) (O.long "out-file" <> O.metavar "OUTPUT_FILE" <> O.help "The output file for the UPLC.")
-      )
-    $ O.progDesc "Print the Untyped Plutus Core (UPLC) for the Marlowe validator."

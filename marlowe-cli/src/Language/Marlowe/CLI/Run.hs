@@ -369,9 +369,9 @@ initializeTransactionImpl marloweParams mtSlotConfig protocolVersion costModelPa
     (mtValidator, mtRoleValidator, mtOpenRoleValidator) <-
       case refs of
         Nothing -> do
-          mv <- liftCli $ marloweValidatorInfo era protocolVersion costModelParams network stake
-          rv <- liftCli $ payoutValidatorInfo era protocolVersion costModelParams network stake
-          ov <- liftCli $ openRoleValidatorInfo era protocolVersion costModelParams network stake
+          mv <- liftCli =<< marloweValidatorInfo era protocolVersion costModelParams network stake
+          rv <- liftCli =<< payoutValidatorInfo era protocolVersion costModelParams network stake
+          ov <- liftCli =<< openRoleValidatorInfo era protocolVersion costModelParams network stake
           pure (mv, rv, ov)
         Just MarloweScriptsRefs{..} -> do
           let vi = snd mrMarloweValidator
@@ -521,7 +521,7 @@ prepareTransactionImpl marloweIn txInputs minimumTime maximumTime printStats =
             when printStats $
               do
                 hPutStrLn stderr $ "Payment " <> show (i :: Int)
-                hPutStrLn stderr $ "  Acccount: " <> show accountId
+                hPutStrLn stderr $ "  Account: " <> show accountId
                 hPutStrLn stderr $ "  Payee: " <> show payee
                 hPutStrLn stderr $ "  Ada: " <> show (fromValue money)
             sequence_
@@ -558,7 +558,7 @@ makeMarlowe marloweIn@MarloweTransaction{..} transactionInput =
           when (txInterval' /= txInterval) $
             liftIO $
               hPutStrLn stderr $
-                "Rounding  `TransactionInput` txInterval boundries to:" <> show txInterval'
+                "Rounding  `TransactionInput` txInterval boundaries to:" <> show txInterval'
           pure ti{txInterval = txInterval'}
 
     transactionInput' <- roundTxInterval transactionInput
@@ -1060,7 +1060,7 @@ autoRunTransactionImpl txBuildupCtx marloweInBundle marloweOut' extraSpend chang
                   IDeposit _ (Role role) _ _ -> role : roles inputs
                   IChoice (ChoiceId _ (Role role)) _ -> role : roles inputs
                   _ -> roles inputs
-              -- Extract the value comming from an UTxO.
+              -- Extract the value coming from an UTxO.
               incomingValue (txIn', TxOut _ value _ _)
                 | txIn' `elem` fmap txIn spend = txOutValueToValue value
                 | otherwise = mempty
@@ -1241,7 +1241,7 @@ autoWithdrawFundsImpl
   -> [SomePaymentSigningKey]
   -- ^ Required signing keys.
   -> Maybe (FilterPayouts era)
-  -- ^ Filtering option so transactoin limits can be imposed.
+  -- ^ Filtering option so transaction limits can be imposed.
   -> TxMetadataInEra era
   -- ^ The file containing JSON metadata, if any.
   -> PrintStats
