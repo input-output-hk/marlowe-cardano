@@ -65,18 +65,40 @@ jobs:
         with:
           name: ${{ env.CACHE_NAME }}
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
-      - name: Run tests
+      - name: Evaluate test derivation
         run: |
-          nix run .#integration-tests --show-trace -- --strict
+          nix build --dry-run --json .#integration-tests > test-store-path.json
+      - name: Cache test results
+        id: cache-results
+        uses: actions/cache@v3
+        with:
+          # Use run_attempt in the cache key so that explicitly re-running the
+          # tests will force the test to run again.
+          key: ${{ runner.os }}-integration-tests-${{ hashFiles('test-store-path.json') }}-${{ github.run_attempt }}
+          path: |
+            ~/integration-tests.log
+            ~/integration-tests.status
+      - if: ${{ steps.cache-results.outputs.cache-hit != 'true' }}
+        name: Run tests
+        run: |
+          nix run .#integration-tests --show-trace -- --strict > ~/integration-tests.log
+          echo $? > ~/integration-tests.status
+          exit $?
         env:
           MARLOWE_RT_TEST_DB_HOST: localhost
           MARLOWE_RT_TEST_CLEANUP_DATABASE: "False"
           MARLOWE_RT_TEST_SUBMIT_CONFIRMATION_BLOCKS: 0
-      - name: Upload failed test directories as artifacts
-        if: ${{ failure() }}
+      - if: ${{ failure() && steps.cache-results.outputs.cache-hit != 'true' }}
+        name: Upload failed test directories as artifacts
         uses: actions/upload-artifact@v3
         with:
           name: workspaces
           path: |
             /tmp/workspaces
             !/tmp/workspaces/**/*.socket
+      - if: ${{ steps.cache-results.outputs.cache-hit == 'true' }}
+        name: Display cached test results
+        run: |
+          echo "Using cached test results. Test log:"
+          cat ~/integration-tests.log
+          exit $(cat ~/integration-tests.status)
