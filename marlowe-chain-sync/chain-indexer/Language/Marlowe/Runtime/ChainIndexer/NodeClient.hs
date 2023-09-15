@@ -309,7 +309,7 @@ mkClientStIdle lastLog costModel maxCost changesVar slotNoToBlockNo pipelineDeci
        . MkPipelineDecision
       -> Nat n'
       -> ClientStNext n' NumberedCardanoBlock ChainPoint NumberedChainTip m ()
-    collect pipelineDecision' = mkClientStNext lastLog costModel maxCost changesVar slotNoToBlockNo pipelineDecision'
+    collect = mkClientStNext lastLog costModel maxCost changesVar slotNoToBlockNo
 
 mkClientStNext
   :: (MonadIO m, WithLog env Message m)

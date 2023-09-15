@@ -21,25 +21,19 @@
 module Language.Marlowe.CLI.Test.Types where
 
 import Cardano.Api (AddressInEra, CardanoMode, IsCardanoEra, LocalNodeConnectInfo, NetworkId, ScriptDataSupportedInEra)
-import Control.Lens (makeLenses, view, (^.), _1, _2, _Just)
-import Control.Monad.Except (MonadError)
-import Control.Monad.IO.Class (MonadIO (..))
-import Control.Monad.Reader (MonadReader)
-import Data.Aeson (FromJSON, ToJSON (..), (.=))
-import Data.Aeson qualified as A
-import Data.Aeson qualified as Aeson
-import Data.List qualified as List
-import Data.Map (Map)
-import GHC.Generics (Generic)
-import Language.Marlowe.CLI.Types (MarloweScriptsRefs, PrintStats, TxBuildupContext, toQueryContext)
-import Plutus.V1.Ledger.SlotConfig (SlotConfig)
-import PlutusLedgerApi.Common (ProtocolVersion)
 import Cardano.Api qualified as C
 import Contrib.Data.Foldable (foldMapM)
 import Contrib.Data.Time.Units.Aeson qualified as A
 import Control.Category ((<<<))
+import Control.Lens (makeLenses, view, (^.), _1, _2, _Just)
 import Control.Lens.Getter qualified as Getter
+import Control.Monad.Except (MonadError)
+import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.Reader (MonadReader)
 import Control.Monad.State.Class (MonadState)
+import Data.Aeson (FromJSON, ToJSON (..), (.=))
+import Data.Aeson qualified as A
+import Data.Aeson qualified as Aeson
 import Data.Aeson.Encode.Pretty qualified as A
 import Data.Aeson.Key qualified as A.Key
 import Data.Aeson.Key qualified as Key
@@ -47,8 +41,11 @@ import Data.Aeson.Types qualified as A
 import Data.Bifunctor (Bifunctor (bimap))
 import Data.ByteString.Lazy qualified as BSL
 import Data.Functor ((<&>))
+import Data.List qualified as List
+import Data.Map (Map)
 import Data.Map.Strict qualified as Map
 import Data.Traversable (for)
+import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Test.CLI.Types (CLIContracts (CLIContracts), CLIOperation, HasInterpretEnv (..))
 import Language.Marlowe.CLI.Test.CLI.Types qualified as CLI
 import Language.Marlowe.CLI.Test.Contract.ContractNickname (ContractNickname (ContractNickname))
@@ -76,9 +73,12 @@ import Language.Marlowe.CLI.Test.Wallet.Types (
   txBodyFee,
  )
 import Language.Marlowe.CLI.Test.Wallet.Types qualified as Wallet
+import Language.Marlowe.CLI.Types (MarloweScriptsRefs, PrintStats, TxBuildupContext, toQueryContext)
 import Language.Marlowe.Protocol.Client qualified as Marlowe.Protocol
 import Network.Protocol.Connection qualified as Network.Protocol
 import Network.Socket (PortNumber)
+import Plutus.V1.Ledger.SlotConfig (SlotConfig)
+import PlutusLedgerApi.Common (ProtocolVersion)
 import PlutusLedgerApi.V1.Value qualified as P.Value
 import PlutusLedgerApi.V2 qualified as P
 import PlutusTx.AssocMap qualified as P.AssocMap

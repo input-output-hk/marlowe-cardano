@@ -1,29 +1,19 @@
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
-{-# OPTIONS_GHC -Wno-unused-imports #-}
 {-# OPTIONS_GHC -Wno-unused-matches #-}
 
 module Language.Marlowe.Analysis.FSSemantics where
 
-import Data.List (foldl', genericIndex)
+import Data.List (foldl')
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
-import Data.Maybe (isNothing)
 import Data.SBV
-import qualified Data.SBV.Either as SE
 import Data.SBV.Internals (SMTModel (..))
-import qualified Data.SBV.List as SL
-import qualified Data.SBV.Maybe as SM
-import qualified Data.SBV.Tuple as ST
-import Data.Set (Set)
-import qualified Data.Set as S
 import Language.Marlowe.Core.V1.Semantics
 import Language.Marlowe.Core.V1.Semantics.Types
 import PlutusLedgerApi.V2 (POSIXTime (POSIXTime, getPOSIXTime))
 import qualified PlutusTx.AssocMap as AssocMap
-import qualified PlutusTx.Prelude as P
-import qualified PlutusTx.Ratio as P
 
 ---------------------------------------------------
 -- Static analysis logic and symbolic operations --
@@ -48,7 +38,7 @@ data SymInput
 
 -- lowTime, highTime -- time interval for the most recent transaction
 -- symInput -- input for the most recent transaction
--- whenPos -- position in the When for the most recen transaction (see trace and paramTrace)
+-- whenPos -- position in the When for the most recent transaction (see trace and paramTrace)
 --
 
 -- *** Previous transaction info
@@ -161,9 +151,9 @@ mkInitialSymState
           , symBoundValues = toSymMap bVal
           }
 
--- It converts a symbolic trace into a list of 4-uples of symbolic integers,
--- this is a minimalistic representation of the counter-example trace that aims
--- to minimise the functionalities from SBV that we use (just integers) for efficiency.
+-- It converts a symbolic trace into a list of 4-tuples of symbolic integers,
+-- this is a minimal representation of the counter-example trace that aims
+-- to minimize the functionalities from SBV that we use (just integers) for efficiency.
 -- The integers in the tuple represent:
 -- 1st - time interval min time
 -- 2nd - time interval max time
@@ -491,7 +481,7 @@ isValidAndFailsAux oa hasErr (Assert obs cont) sState =
   where
     obsVal = symEvalObs obs sState
 
--- Returns sTrue iif the given sinteger is in the list of bounds
+-- Returns sTrue iif the given sInteger is in the list of bounds
 ensureBounds :: SInteger -> [Bound] -> SBool
 ensureBounds cho [] = sFalse
 ensureBounds cho (Bound lowBnd hiBnd : t) =
@@ -819,7 +809,7 @@ generateLabels = go 1
         action_label = "action_" ++ show n ++ "_"
 
 -- Takes a list of variable names for the paramTrace and generates the list of symbolic
--- variables. It returns the list of symbolic variables generated (list of 4-uples).
+-- variables. It returns the list of symbolic variables generated (list of 4-tuples).
 generateParameters :: [String] -> Symbolic [(SInteger, SInteger, SInteger, SInteger)]
 generateParameters (sl : sh : v : b : t) =
   do
@@ -833,7 +823,7 @@ generateParameters [] = return []
 generateParameters _ = error "Wrong number of labels generated"
 
 -- Takes the list of paramTrace variable names and the list of mappings of these
--- names to concrete values, and reconstructs a concrete list of 4-uples of the ordered
+-- names to concrete values, and reconstructs a concrete list of 4-tuples of the ordered
 -- concrete values.
 groupResult :: [String] -> Map String Integer -> [(Integer, Integer, Integer, Integer)]
 groupResult (sl : sh : v : b : t) mappings =
@@ -861,7 +851,7 @@ caseToInput (Case h _ : t) c v
   | otherwise = error "Negative case number"
 caseToInput (MerkleizedCase _ _ : t) c v
   | c > 1 = caseToInput t (c - 1) v
-  | c == 1 = error "Finding this counter example would have required finding a hash preimage"
+  | c == 1 = error "Finding this counter example would have required finding a hash pre-image"
   | otherwise = error "Negative case number"
 
 -- Given an input, state, and contract, it runs the semantics on the transaction,
@@ -869,8 +859,8 @@ caseToInput (MerkleizedCase _ _ : t) c v
 -- transaction was not useless. It assumes the transaction is either valid or useless,
 -- other errors would mean the counterexample is not valid.
 -- Input is passed as a combination and function from input list to transaction input and
--- input list for convenience. The list of 4-uples is passed through because it is used
--- to recursively call executeAndInterpret (co-recursive funtion).
+-- input list for convenience. The list of 4-tuples is passed through because it is used
+-- to recursively call executeAndInterpret (co-recursive function).
 computeAndContinue
   :: ([Input] -> TransactionInput)
   -> [Input]
@@ -889,7 +879,7 @@ computeAndContinue transaction inps sta cont t =
         ([transaction inps], war)
           : executeAndInterpret newSta t newCont
 
--- Takes a list of 4-uples (and state and contract) and interprets it as a list of
+-- Takes a list of 4-tuples (and state and contract) and interprets it as a list of
 -- transactions and also computes the resulting list of warnings.
 executeAndInterpret
   :: State
@@ -957,7 +947,7 @@ extractCounterExample smtModel cont maybeState maps = interpretedResult
     interpretedResult = interpretResult (reverse counterExample) cont maybeState
 
 -- Wrapper function that carries the static analysis and interprets the result.
--- It generates variables, runs SBV, and it interprets the result in Marlow terms.
+-- It generates variables, runs SBV, and it interprets the result in Marlowe terms.
 warningsTraceCustom
   :: Bool
   -> Contract

@@ -27,6 +27,7 @@ module Language.Marlowe.CLI.Test.Log (
 )
 where
 
+import Cardano.Api (File (..))
 import Cardano.Api qualified as C
 import Contrib.Cardano.Debug as C.Debug
 import Control.Lens (Lens', view, (%=), (^.))
@@ -49,7 +50,6 @@ import Language.Marlowe.CLI.Test.InterpreterError (
 import Language.Marlowe.CLI.Test.Log.Label (Label (..))
 import Language.Marlowe.CLI.Types (QueryExecutionContext)
 import System.IO (hPutStrLn)
-import Cardano.Api (File(..))
 
 printLabeledMsg :: (Label l) => l -> String -> String
 printLabeledMsg l msg = do

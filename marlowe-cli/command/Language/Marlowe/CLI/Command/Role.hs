@@ -21,7 +21,10 @@ module Language.Marlowe.CLI.Command.Role (
 ) where
 
 import Cardano.Api (NetworkId (..), StakeAddressReference (..))
+import Cardano.Api qualified as C
 import Control.Monad.Except (MonadError, MonadIO)
+import Control.Monad.Reader.Class (MonadReader)
+import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
 import Language.Marlowe.CLI.Command.Parse (
   parseCurrencySymbol,
@@ -31,15 +34,12 @@ import Language.Marlowe.CLI.Command.Parse (
   protocolVersionOpt,
  )
 import Language.Marlowe.CLI.Export (exportRoleAddress, exportRoleDatum, exportRoleRedeemer, exportRoleValidator)
+import Language.Marlowe.CLI.IO (getDefaultCostModel)
 import Language.Marlowe.CLI.Types (CliEnv, CliError)
 import Language.Marlowe.Core.V1.Semantics.Types (Token (Token))
-import PlutusLedgerApi.V1 (CurrencySymbol, TokenName)
-import Cardano.Api qualified as C
-import Control.Monad.Reader.Class (MonadReader)
-import Language.Marlowe.CLI.IO (getDefaultCostModel)
 import Options.Applicative qualified as O
 import PlutusLedgerApi.Common (ProtocolVersion)
-import qualified Data.Map as Map
+import PlutusLedgerApi.V1 (CurrencySymbol, TokenName)
 
 -- | Marlowe CLI commands and options for exporting role information.
 data RoleCommand
@@ -101,7 +101,15 @@ runRoleCommand command =
         stake' = fromMaybe NoStakeAddress $ stake command
     case command of
       ExportAddress{} -> exportRoleAddress @_ @C.PlutusScriptV2 network' stake'
-      ExportValidator{..} -> do exportRoleValidator @_ @C.PlutusScriptV2 protocolVersion (Map.elems costModel) network' stake' outputFile printHash printStats
+      ExportValidator{..} -> do
+        exportRoleValidator @_ @C.PlutusScriptV2
+          protocolVersion
+          (Map.elems costModel)
+          network'
+          stake'
+          outputFile
+          printHash
+          printStats
       ExportDatum{..} ->
         exportRoleDatum
           (Token rolesCurrency' roleName)

@@ -24,14 +24,10 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# OPTIONS_GHC -Wno-name-shadowing #-}
-{-# OPTIONS_GHC -Wno-simplifiable-class-constraints #-}
-{-# OPTIONS_GHC -Wno-unused-imports #-}
 {-# OPTIONS_GHC -fno-ignore-interface-pragmas #-}
 {-# OPTIONS_GHC -fno-omit-interface-pragmas #-}
 -- A big hammer, but it helps.
 {-# OPTIONS_GHC -fno-specialise #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 -- | Types for Marlowe semantics
 module Language.Marlowe.Core.V1.Semantics.Types (
@@ -368,7 +364,7 @@ instance ToJSON Input where
   toJSON (NormalInput content) = toJSON content
   toJSON (MerkleizedInput content hash continuation) =
     let obj = case toJSON content of
-          Object obj -> obj
+          Object o -> o
           _ -> KeyMap.empty
      in Object
           $ obj
@@ -941,7 +937,7 @@ instance Eq Observation where
   AndObs{} == _ = False
   OrObs o1l o2l == OrObs o1r o2r = o1l == o1r && o2l == o2r
   OrObs{} == _ = False
-  NotObs ol == NotObs or = ol == or
+  NotObs a == NotObs b = a == b
   NotObs{} == _ = False
   ChoseSomething cid1 == ChoseSomething cid2 = cid1 == cid2
   ChoseSomething _ == _ = False

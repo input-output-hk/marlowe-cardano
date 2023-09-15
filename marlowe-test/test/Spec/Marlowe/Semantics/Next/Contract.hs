@@ -1,5 +1,5 @@
 module Spec.Marlowe.Semantics.Next.Contract (
-  hasValidEnvironement,
+  hasValidEnvironment,
   isIrreducible,
   isNotClose,
   isReducible,
@@ -26,8 +26,8 @@ isReducible environment' state contract =
     ContractQuiescent True _ _ _ _ -> True
     _otherwise -> False
 
-hasValidEnvironement :: Environment -> State -> Contract -> Bool
-hasValidEnvironement environment state contract =
+hasValidEnvironment :: Environment -> State -> Contract -> Bool
+hasValidEnvironment environment state contract =
   case fixInterval (timeInterval environment) state of
     IntervalTrimmed e s ->
       case reduceContractUntilQuiescent e s contract of

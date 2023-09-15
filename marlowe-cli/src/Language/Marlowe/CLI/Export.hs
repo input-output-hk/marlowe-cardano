@@ -65,6 +65,7 @@ module Language.Marlowe.CLI.Export (
 import Cardano.Api (
   AddressInEra,
   AsType (..),
+  File (..),
   NetworkId,
   PaymentCredential (..),
   PlutusScriptVersion (..),
@@ -74,10 +75,12 @@ import Cardano.Api (
   SerialiseAsRawBytes (..),
   StakeAddressReference (..),
   hashScript,
+  hashScriptDataBytes,
   makeShelleyAddressInEra,
   readFileTextEnvelope,
   scriptDataToJson,
-  serialiseAddress, File (..), unsafeHashableScriptData, hashScriptDataBytes,
+  serialiseAddress,
+  unsafeHashableScriptData,
  )
 import Cardano.Api.Shelley (PlutusScript (..), fromPlutusData)
 import Control.Monad (join, when)
@@ -482,7 +485,9 @@ buildDatumImpl datum =
           . unsafeHashableScriptData
           . fromPlutusData
           $ PlutusTx.builtinDataToData datum
-      diHash = DatumHash . toBuiltin . serialiseToRawBytes . hashScriptDataBytes . unsafeHashableScriptData . fromPlutusData $ toData diDatum
+      diHash =
+        DatumHash . toBuiltin . serialiseToRawBytes . hashScriptDataBytes . unsafeHashableScriptData . fromPlutusData $
+          toData diDatum
       diSize = SBS.length diBytes
    in DatumInfo{..}
 

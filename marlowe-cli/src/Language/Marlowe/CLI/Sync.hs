@@ -87,13 +87,15 @@ import Cardano.Api (
   ValueNestedBundle (..),
   ValueNestedRep (..),
   connectToLocalNode,
+  getScriptData,
   getTxBody,
   getTxId,
   hashScript,
   metadataToJson,
   txOutValueToValue,
-  valueToNestedRep, getScriptData,
+  valueToNestedRep,
  )
+import Cardano.Api.Byron (Address (..))
 import Cardano.Api.ChainSync.Client (ChainSyncClient (..), ClientStIdle (..), ClientStIntersect (..), ClientStNext (..))
 import Cardano.Api.Shelley (
   Address (..),
@@ -106,20 +108,30 @@ import Cardano.Api.Shelley (
   fromShelleyStakeReference,
   toPlutusData,
  )
+import Cardano.Chain.Common (addrToBase58)
 import Cardano.Ledger.Alonzo.TxWits (RdmrPtr (..), Redeemers (..), TxDats (..))
+import Cardano.Ledger.Era (Era)
 import Codec.CBOR.Encoding (encodeBreak, encodeListLenIndef)
 import Codec.CBOR.JSON (encodeValue)
 import Codec.CBOR.Write (toStrictByteString)
 import Control.Monad (guard, when)
 import Control.Monad.Except (MonadError, MonadIO, liftIO)
 import Control.Monad.Extra (whenJust)
+import Control.Monad.Reader (MonadReader)
 import Data.Aeson (FromJSON, ToJSON (..), decodeFileStrict, encode, encodeFile)
+import Data.Aeson qualified as A (Value)
 import Data.Bifunctor (first)
+import Data.ByteArray qualified as BA (length)
+import Data.ByteString qualified as BS (hPutStr)
+import Data.ByteString.Lazy.Char8 qualified as LBS8 (hPutStrLn)
 import Data.Default (Default (..))
 import Data.IORef (IORef, newIORef, readIORef)
 import Data.List (nub)
 import Data.List.Extra (mconcatMap)
+import Data.Map.Strict qualified as M (elems, filter, null, toList)
 import Data.Maybe (catMaybes, fromMaybe, isJust)
+import Data.Set qualified as S (singleton, toList)
+import Language.Marlowe.CLI.Export (readMarloweValidator, readRolePayoutValidator)
 import Language.Marlowe.CLI.Sync.Types (
   MarloweAddress (..),
   MarloweEvent (..),
@@ -131,6 +143,10 @@ import Language.Marlowe.CLI.Transaction (querySlotConfig)
 import Language.Marlowe.CLI.Types (CliEnv, CliError (..))
 import Language.Marlowe.Client (marloweParams)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract (..), Input (..), TimeInterval)
+import Language.Marlowe.Scripts.Types (MarloweInput, MarloweTxInput (..))
+import Language.Marlowe.Util (dataHash)
+import Plutus.V1.Ledger.Slot (Slot (..))
+import Plutus.V1.Ledger.SlotConfig (SlotConfig, slotRangeToPOSIXTimeRange)
 import PlutusLedgerApi.V1 (
   BuiltinByteString,
   CurrencySymbol (..),
@@ -143,8 +159,7 @@ import PlutusLedgerApi.V1 (
   dataToBuiltinData,
   fromData,
  )
-import Plutus.V1.Ledger.Slot (Slot (..))
-import Plutus.V1.Ledger.SlotConfig (SlotConfig, slotRangeToPOSIXTimeRange)
+import PlutusLedgerApi.V1 qualified as PV1
 import System.Directory (doesFileExist, renameFile)
 import System.IO (
   BufferMode (LineBuffering),
@@ -156,20 +171,6 @@ import System.IO (
   stderr,
   stdout,
  )
-import Cardano.Api.Byron (Address (..))
-import Cardano.Chain.Common (addrToBase58)
-import Cardano.Ledger.Era (Era)
-import Control.Monad.Reader (MonadReader)
-import Data.Aeson qualified as A (Value)
-import Data.ByteArray qualified as BA (length)
-import Data.ByteString qualified as BS (hPutStr)
-import Data.ByteString.Lazy.Char8 qualified as LBS8 (hPutStrLn)
-import Data.Map.Strict qualified as M (elems, filter, null, toList)
-import Data.Set qualified as S (singleton, toList)
-import Language.Marlowe.CLI.Export (readMarloweValidator, readRolePayoutValidator)
-import Language.Marlowe.Scripts.Types (MarloweInput, MarloweTxInput (..))
-import Language.Marlowe.Util (dataHash)
-import PlutusLedgerApi.V1 qualified as PV1
 
 -- | Record the point on the chain.
 type Recorder =

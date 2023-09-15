@@ -64,7 +64,6 @@ where
 
 import Cardano.Api (CardanoMode, LocalNodeConnectInfo, ScriptDataSupportedInEra)
 import Cardano.Api qualified as C
-import Data.List qualified as List
 import Contrib.Data.Time.Units.Aeson qualified as A
 import Control.Concurrent.STM (TChan, TVar)
 import Control.Error (lastMay)
@@ -78,6 +77,7 @@ import Data.Aeson qualified as A
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Aeson.Types (ToJSON)
+import Data.List qualified as List
 import Data.Map (Map)
 import Data.Map.Strict qualified as Map
 import Data.Time.Units

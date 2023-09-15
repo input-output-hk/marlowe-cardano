@@ -25,6 +25,7 @@ import Cardano.Api (
   AddressInEra,
   ConsensusModeParams (CardanoModeParams),
   EpochSlots (..),
+  File (..),
   IsCardanoEra,
   IsShelleyBasedEra,
   LocalNodeConnectInfo (..),
@@ -33,9 +34,17 @@ import Cardano.Api (
   SlotNo,
   TxMetadataInEra (TxMetadataNone),
   TxMintValue (TxMintNone),
-  lovelaceToValue, File (..),
+  lovelaceToValue,
  )
+import Control.Applicative ((<|>))
+import Control.Category ((>>>))
 import Control.Monad.Except (MonadError, MonadIO, liftIO)
+import Control.Monad.Reader (MonadReader)
+import Data.List.NonEmpty qualified as L
+import Data.List.Split (splitOn)
+import Data.Maybe (fromMaybe)
+import Data.Time.Units (Second)
+import GHC.Natural (Natural)
 import Language.Marlowe.CLI.Codec (decodeBech32, encodeBech32)
 import Language.Marlowe.CLI.Command.Parse (
   parseAddress,
@@ -61,17 +70,9 @@ import Language.Marlowe.CLI.Types (
   SigningKeyFile,
   TxBodyFile,
  )
-import PlutusLedgerApi.V1 (TokenName)
-import Control.Applicative ((<|>))
-import Control.Category ((>>>))
-import Control.Monad.Reader (MonadReader)
-import Data.List.NonEmpty qualified as L
-import Data.List.Split (splitOn)
-import Data.Maybe (fromMaybe)
-import Data.Time.Units (Second)
-import GHC.Natural (Natural)
 import Options.Applicative qualified as O
 import Options.Applicative.NonEmpty qualified as O
+import PlutusLedgerApi.V1 (TokenName)
 
 -- | Marlowe CLI commands and options.
 data UtilCommand era

@@ -8,6 +8,7 @@
 --
 -----------------------------------------------------------------------------
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -17,7 +18,6 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE LambdaCase #-}
 
 -- | Run Marlowe contracts.
 module Language.Marlowe.CLI.Run (
@@ -58,6 +58,7 @@ module Language.Marlowe.CLI.Run (
 import Cardano.Api (
   AddressInEra (..),
   CardanoMode,
+  File (..),
   LocalNodeConnectInfo (..),
   NetworkId (..),
   NetworkMagic (..),
@@ -79,7 +80,7 @@ import Cardano.Api (
   getTxId,
   lovelaceToValue,
   txOutValueToValue,
-  writeFileTextEnvelope, File (..),
+  writeFileTextEnvelope,
  )
 import Cardano.Api qualified as Api (Value)
 import Cardano.Api qualified as C
@@ -89,16 +90,18 @@ import Cardano.Ledger.BaseTypes qualified as LC (Network (..))
 import Control.Monad (forM_, guard, unless, void, when)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
 import Control.Monad.Reader (MonadReader)
-import Data.Bifunctor (bimap, Bifunctor (..))
+import Data.Bifunctor (Bifunctor (..), bimap)
 import Data.Function (on)
 import Data.Functor ((<&>))
 import Data.List (groupBy, sortBy)
 import Data.Map.Strict qualified as M (toList)
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Set qualified as S (fromList, singleton)
+import Data.String (IsString (..))
 import Data.Time.Units (Second)
 import Data.Traversable (for)
 import Data.Tuple.Extra (uncurry3)
+import Data.Type.Equality (type (:~:) (..))
 import Language.Marlowe.CLI.Cardano.Api (adjustMinimumUTxO, toTxOutDatumInTx)
 import Language.Marlowe.CLI.Cardano.Api.Address (toShelleyStakeReference)
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage (plutusScriptVersion))
@@ -195,11 +198,11 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   getInputContent,
  )
 import Language.Marlowe.Core.V1.Semantics.Types.Address (Network, mainnet, testnet)
-import PlutusLedgerApi.Common (ProtocolVersion)
 import Plutus.V1.Ledger.Ada (fromValue)
+import Plutus.V1.Ledger.SlotConfig (SlotConfig, posixTimeToEnclosingSlot, slotToBeginPOSIXTime, slotToEndPOSIXTime)
+import PlutusLedgerApi.Common (ProtocolVersion)
 import PlutusLedgerApi.V1 (Credential (..), DatumHash (..), fromBuiltin)
 import PlutusLedgerApi.V1 qualified as P
-import Plutus.V1.Ledger.SlotConfig (SlotConfig, posixTimeToEnclosingSlot, slotToBeginPOSIXTime, slotToEndPOSIXTime)
 import PlutusLedgerApi.V1.Value (
   AssetClass (..),
   Value (..),
@@ -219,8 +222,6 @@ import PlutusLedgerApi.V2 (
 import PlutusTx.AssocMap qualified as AM (toList)
 import Prettyprinter (Pretty (..))
 import System.IO (hPutStrLn, stderr)
-import Data.Type.Equality (type (:~:) (..))
-import Data.String (IsString(..))
 
 -- | Serialise a deposit input to a file.
 makeDeposit
@@ -1349,7 +1350,7 @@ toCardanoAssetName (TokenName bs) =
     deserialiseFromRawBytes C.AsAssetName (fromBuiltin bs)
 
 toCardanoPolicyId :: P.CurrencySymbol -> Either String C.PolicyId
-toCardanoPolicyId (P.CurrencySymbol  bs) =
+toCardanoPolicyId (P.CurrencySymbol bs) =
   first show $
     deserialiseFromRawBytes C.AsPolicyId (fromBuiltin bs)
 

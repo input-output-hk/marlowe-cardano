@@ -13,7 +13,6 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# OPTIONS_GHC -Wno-unused-imports #-}
 
 -- | Marlowe test DSL main runner.
 module Language.Marlowe.CLI.Test (

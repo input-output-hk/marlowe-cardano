@@ -194,19 +194,19 @@ valuesFormAbelianGroup = property $ do
       .&&.
       -- commutativity of addition
       eval (AddValue a b)
-      === eval (AddValue b a)
+        === eval (AddValue b a)
       .&&.
       -- additive identity
       eval (AddValue a (Constant 0))
-      === eval a
+        === eval a
       .&&.
       -- additive inverse
       eval (AddValue a (NegValue a))
-      === 0
+        === 0
       .&&.
       -- subtraction works
       eval (SubValue (AddValue a b) b)
-      === eval a
+        === eval a
 
 -- | Test rounding of `DivValue`.
 divisionRoundingTest :: Property
@@ -229,7 +229,7 @@ divZeroTest = property $ do
     eval (DivValue (Constant 0) a)
       === 0
       .&&. eval (DivValue a (Constant 0))
-      === 0
+        === 0
 
 -- | Test `MulValue` with a zero numerator.
 mulTest :: Property

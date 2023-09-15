@@ -24,7 +24,6 @@ import Cardano.Api (
   ScriptDataSupportedInEra,
  )
 import Cardano.Api qualified as C
-import Data.List qualified as List
 import Control.Lens (Lens', makeLenses)
 import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO)
@@ -33,6 +32,7 @@ import Control.Monad.State.Class (MonadState)
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:?), (.=))
 import Data.Aeson qualified as A
 import Data.Aeson.KeyMap qualified as KeyMap
+import Data.List qualified as List
 import Data.List.NonEmpty qualified as NE
 import Data.Map (Map)
 import Data.Map.Strict qualified as Map

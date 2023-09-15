@@ -56,6 +56,7 @@ import Cardano.Api (
   AsType (..),
   CardanoMode,
   ConsensusModeIsMultiEra (..),
+  File (..),
   FromSomeType (..),
   HasTextEnvelope,
   LocalNodeConnectInfo,
@@ -68,6 +69,7 @@ import Cardano.Api (
   ShelleyWitnessSigningKey (..),
   TxMetadataInEra (..),
   TxMetadataJsonSchema (..),
+  getScriptData,
   getTxId,
   metadataFromJson,
   queryNodeLocalState,
@@ -76,16 +78,33 @@ import Cardano.Api (
   serialiseToTextEnvelope,
   signShelleyTransaction,
   submitTxToNodeLocal,
-  writeFileTextEnvelope, File (..), getScriptData,
+  writeFileTextEnvelope,
  )
 import Cardano.Api.Shelley (ProtocolParameters (protocolParamProtocolVersion), toPlutusData)
+import Cardano.Api.Shelley qualified as C
 import Cardano.Ledger.Alonzo.Scripts (ExUnits (..))
+import Contrib.Cardano.TxBody qualified as T
+import Contrib.Cardano.UTxO qualified as U
+import Contrib.Control.Concurrent (threadDelay)
+import Control.Concurrent.STM (atomically, readTVar, readTVarIO, writeTVar)
+import Control.Error (note)
+import Control.Monad (when, (<=<))
 import Control.Monad.Except (MonadError (..), MonadIO, liftEither, liftIO)
+import Control.Monad.Reader (MonadReader)
 import Data.Aeson (FromJSON (..), ToJSON)
 import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.Bifunctor (first)
 import Data.ByteString qualified as BS (length)
+import Data.ByteString.Char8 qualified as BS8 (putStrLn)
+import Data.ByteString.Lazy qualified as LBS (writeFile)
+import Data.ByteString.Lazy.Char8 qualified as LBS8 (putStrLn)
+import Data.Functor ((<&>))
+import Data.Map.Strict qualified as Map
+import Data.Set qualified as Set
+import Data.Time.Units (Second, TimeUnit, toMicroseconds)
 import Data.Yaml as Yaml (decodeFileEither, encode, encodeFile)
+import GHC.Natural (naturalFromInteger)
+import Language.Marlowe.CLI.Cardano.Api (toPlutusProtocolVersion, withShelleyBasedEra)
 import Language.Marlowe.CLI.Types (
   CliEnv,
   CliError (..),
@@ -108,33 +127,16 @@ import Language.Marlowe.CLI.Types (
   toTxMetadataSupportedInEra,
   withCardanoEra,
  )
-import PlutusLedgerApi.V1 (BuiltinData)
-import PlutusTx (dataToBuiltinData)
-import System.Environment (lookupEnv)
-import Text.Read (readMaybe)
-import Cardano.Api.Shelley qualified as C
-import Contrib.Cardano.TxBody qualified as T
-import Contrib.Cardano.UTxO qualified as U
-import Contrib.Control.Concurrent (threadDelay)
-import Control.Concurrent.STM (atomically, readTVar, readTVarIO, writeTVar)
-import Control.Error (note)
-import Control.Monad (when, (<=<))
-import Control.Monad.Reader (MonadReader)
-import Data.ByteString.Char8 qualified as BS8 (putStrLn)
-import Data.ByteString.Lazy qualified as LBS (writeFile)
-import Data.ByteString.Lazy.Char8 qualified as LBS8 (putStrLn)
-import Data.Functor ((<&>))
-import Data.Map.Strict qualified as Map
-import Data.Set qualified as Set
-import Data.Time.Units (Second, TimeUnit, toMicroseconds)
-import GHC.Natural (naturalFromInteger)
-import Language.Marlowe.CLI.Cardano.Api (toPlutusProtocolVersion, withShelleyBasedEra)
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult (..))
-import PlutusLedgerApi.Common (ProtocolVersion)
-import PlutusLedgerApi.V2 (CostModelParams)
 import PlutusCore.Evaluation.Machine.ExBudgetingDefaults (defaultCostModelParams)
+import PlutusLedgerApi.Common (ProtocolVersion)
+import PlutusLedgerApi.V1 (BuiltinData)
+import PlutusLedgerApi.V2 (CostModelParams)
+import PlutusTx (dataToBuiltinData)
 import System.Directory.Internal.Prelude (fromMaybe)
+import System.Environment (lookupEnv)
 import System.IO (hPrint, hPutStrLn, stderr)
+import Text.Read (readMaybe)
 
 -- | Lift an 'Either' result into the CLI.
 liftCli

@@ -144,7 +144,14 @@ runContractCommand command =
           printStats
       ExportAddress{} -> exportMarloweAddress @_ @C.PlutusScriptV2 network' stake'
       ExportValidator{..} ->
-        exportMarloweValidator @_ @C.PlutusScriptV2 protocolVersion (Map.elems costModel) network' stake' outputFile printHash printStats
+        exportMarloweValidator @_ @C.PlutusScriptV2
+          protocolVersion
+          (Map.elems costModel)
+          network'
+          stake'
+          outputFile
+          printHash
+          printStats
       ExportDatum{..} ->
         exportDatum
           marloweParams'

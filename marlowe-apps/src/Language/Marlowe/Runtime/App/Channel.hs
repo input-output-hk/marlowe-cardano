@@ -186,9 +186,8 @@ runContractAction selectorName eventBackend runInput (RequeueFrequency requeueFr
                       ]
                 pure lastSeen
       -- Ignore the transaction in the future.
-      ignore :: ContractId -> TxId -> M.Map ContractId LastSeen -> M.Map ContractId LastSeen
-      ignore contractId txId lastSeen =
-        M.adjust (\seen -> seen{ignoredTxIds = txId `S.insert` ignoredTxIds seen}) contractId lastSeen
+      ignore :: TxId -> ContractId -> M.Map ContractId LastSeen -> M.Map ContractId LastSeen
+      ignore txId = M.adjust (\seen -> seen{ignoredTxIds = txId `S.insert` ignoredTxIds seen})
       -- Revisit a contract later.
       revisit :: ContractId -> IO ()
       revisit contractId
@@ -225,7 +224,7 @@ runContractAction selectorName eventBackend runInput (RequeueFrequency requeueFr
                             unless (lastTxId `S.member` ignoredTxIds seen) $
                               runInput event seen
                             revisit csContractId
-                            pure $ ignore csContractId lastTxId lastSeen
+                            pure $ ignore lastTxId csContractId lastSeen
                         _ ->
                           do
                             -- FIXME: Diagnose and remedy situations if this ever occurs.

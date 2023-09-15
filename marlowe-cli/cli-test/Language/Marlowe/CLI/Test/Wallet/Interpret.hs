@@ -18,23 +18,64 @@ module Language.Marlowe.CLI.Test.Wallet.Interpret where
 import Cardano.Api (
   AddressInEra,
   AsType (AsPaymentKey),
+  File (..),
   Key (getVerificationKey, verificationKeyHash),
   PaymentCredential (PaymentCredentialByKey),
   ScriptDataSupportedInEra,
   StakeAddressReference (NoStakeAddress),
   generateSigningKey,
-  makeShelleyAddressInEra, File (..),
+  makeShelleyAddressInEra,
  )
 import Cardano.Api qualified as C
+import Cardano.Api.Shelley qualified as CAS
+import Contrib.Control.Monad.Except (note)
+import Contrib.Data.Foldable (foldMapFlipped, ifoldMapMFlipped)
+import Control.Category ((>>>))
+import Control.Error.Util qualified as Error
 import Control.Lens (ifor_, modifying, use, view, (.=))
+import Control.Monad (forM, unless, void, when)
+import Control.Monad.Error.Class (MonadError (throwError))
+import Control.Monad.Except (liftEither, runExceptT)
 import Control.Monad.IO.Class (MonadIO (liftIO))
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Except (ExceptT (..))
+import Data.Bifunctor qualified as Bifunctor
+import Data.ByteString.Base16.Aeson (EncodeBase16 (..))
+import Data.Coerce (coerce)
 import Data.Fixed qualified as F
 import Data.Foldable (Foldable (fold), find, for_)
+import Data.Foldable qualified as Foldable
+import Data.Foldable.WithIndex (ifoldrM)
+import Data.Functor ((<&>))
 import Data.List.NonEmpty (NonEmpty ((:|)))
+import Data.List.NonEmpty qualified as List
+import Data.List.NonEmpty qualified as List.NonEmpty
+import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
+import Data.Maybe (catMaybes, fromMaybe, isJust)
 import Data.Set qualified as Set
+import Data.Text qualified as Text
 import Data.Traversable (for)
-import Language.Marlowe.CLI.Cardano.Api.Value (lovelaceToPlutusValue, toPlutusValue, toCurrencySymbol)
+import Data.Tuple.Extra (uncurry3)
+import Language.Marlowe.CLI.Cardano.Api (toReferenceTxInsScriptsInlineDatumsSupportedInEra, toTxOutDatumInline)
+import Language.Marlowe.CLI.Cardano.Api.Value (lovelaceToPlutusValue, toCurrencySymbol, toPlutusValue)
+import Language.Marlowe.CLI.Cardano.Api.Value qualified as CV
+import Language.Marlowe.CLI.Export (readOpenRoleValidator)
+import Language.Marlowe.CLI.IO (readSigningKey, submitTxBody')
+import Language.Marlowe.CLI.Run (toCardanoPolicyId)
+import Language.Marlowe.CLI.Sync (toPlutusAddress)
+import Language.Marlowe.CLI.Test.CLI.Monad (runLabeledCli)
+import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (
+  ParametrizedMarloweJSON,
+  decodeParametrizedContractJSON,
+  decodeParametrizedInputJSON,
+  now,
+ )
+import Language.Marlowe.CLI.Test.ExecutionMode (queryByAddress, queryUTxOs)
+import Language.Marlowe.CLI.Test.ExecutionMode qualified as EM
+import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError (..), assertionFailed', testExecutionFailed')
+import Language.Marlowe.CLI.Test.Log (Label, logStoreLabeledMsg, logTxBody, throwLabeledError)
+import Language.Marlowe.CLI.Test.Report qualified as Report
 import Language.Marlowe.CLI.Test.Wallet.Types (
   Asset (Asset),
   AssetId (AdaAssetId, AssetId),
@@ -85,52 +126,12 @@ import Language.Marlowe.CLI.Types (
   toQueryContext,
   validatorAddress,
  )
-import Language.Marlowe.Core.V1.Semantics.Types qualified as M
-import PlutusLedgerApi.V1 (CurrencySymbol, TokenName)
-import PlutusLedgerApi.V1.Value qualified as P
-import Cardano.Api.Shelley qualified as CAS
-import Contrib.Control.Monad.Except (note)
-import Contrib.Data.Foldable (foldMapFlipped, ifoldMapMFlipped)
-import Control.Category ((>>>))
-import Control.Error.Util qualified as Error
-import Control.Monad (forM, unless, void, when)
-import Control.Monad.Error.Class (MonadError (throwError))
-import Control.Monad.Except (liftEither, runExceptT)
-import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (ExceptT (..))
-import Data.Bifunctor qualified as Bifunctor
-import Data.ByteString.Base16.Aeson (EncodeBase16 (..))
-import Data.Coerce (coerce)
-import Data.Foldable qualified as Foldable
-import Data.Foldable.WithIndex (ifoldrM)
-import Data.Functor ((<&>))
-import Data.List.NonEmpty qualified as List
-import Data.List.NonEmpty qualified as List.NonEmpty
-import Data.Map.Strict (Map)
-import Data.Maybe (catMaybes, fromMaybe, isJust)
-import Data.Text qualified as Text
-import Data.Tuple.Extra (uncurry3)
-import Language.Marlowe.CLI.Cardano.Api (toReferenceTxInsScriptsInlineDatumsSupportedInEra, toTxOutDatumInline)
-import Language.Marlowe.CLI.Cardano.Api.Value qualified as CV
-import Language.Marlowe.CLI.Export (readOpenRoleValidator)
-import Language.Marlowe.CLI.IO (readSigningKey, submitTxBody')
-import Language.Marlowe.CLI.Run (toCardanoPolicyId)
-import Language.Marlowe.CLI.Sync (toPlutusAddress)
-import Language.Marlowe.CLI.Test.CLI.Monad (runLabeledCli)
-import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (
-  ParametrizedMarloweJSON,
-  decodeParametrizedContractJSON,
-  decodeParametrizedInputJSON,
-  now,
- )
-import Language.Marlowe.CLI.Test.ExecutionMode (queryByAddress, queryUTxOs)
-import Language.Marlowe.CLI.Test.ExecutionMode qualified as EM
-import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError (..), assertionFailed', testExecutionFailed')
-import Language.Marlowe.CLI.Test.Log (Label, logStoreLabeledMsg, logTxBody, throwLabeledError)
-import Language.Marlowe.CLI.Test.Report qualified as Report
 import Language.Marlowe.CLI.Types qualified as CT
 import Language.Marlowe.Cardano (marloweNetworkFromCaradnoNetworkId)
+import Language.Marlowe.Core.V1.Semantics.Types qualified as M
+import PlutusLedgerApi.V1 (CurrencySymbol, TokenName)
 import PlutusLedgerApi.V1.Value (valueOf)
+import PlutusLedgerApi.V1.Value qualified as P
 import PlutusLedgerApi.V2 qualified as P
 import PlutusTx.AssocMap qualified as AssocMap
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
@@ -199,7 +200,9 @@ addPublishingCosts
 addPublishingCosts nickname marloweScriptsRefs = do
   let MarloweScriptsRefs{mrMarloweValidator, mrRolePayoutValidator, mrOpenRoleValidator} = marloweScriptsRefs
       total =
-        foldMap (toPlutusValue . C.txOutValueToValue . CV.txOutValue . snd . unAnUTxO . fst) [mrMarloweValidator, mrRolePayoutValidator, mrOpenRoleValidator]
+        foldMap
+          (toPlutusValue . C.txOutValueToValue . CV.txOutValue . snd . unAnUTxO . fst)
+          [mrMarloweValidator, mrRolePayoutValidator, mrOpenRoleValidator]
   updateWallet nickname $ \wallet ->
     wallet
       { T._waPublishingCosts = T._waPublishingCosts wallet <> total
