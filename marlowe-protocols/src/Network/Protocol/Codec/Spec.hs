@@ -17,6 +17,7 @@ import Data.Foldable (fold)
 import Data.Function ((&))
 import Data.Functor.Identity (Identity (..))
 import Data.Int
+import Data.List (sortOn)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map.Internal as Map
@@ -246,11 +247,17 @@ codecGoldenTests :: forall ps. (MessageVariations ps, ShowProtocol ps, BinaryMes
 codecGoldenTests protocolName = describe "Message Golden Tests" do
   let Codec{..} = binaryCodec @Identity @ps
   it "Matches the golden output" $
-    defaultGolden protocolName $ unlines do
-      AnyMessageAndAgency tok message <- NE.toList variations
-      [ "Show: " <> showsPrecMessage 0 tok message ""
-        , "Binary: " <> TL.unpack (encodeBase16 $ encode tok message)
-        ]
+    defaultGolden protocolName $
+      unlines $
+        concatMap (\(a, b) -> [a, b]) $
+          sortOn
+            fst
+            do
+              AnyMessageAndAgency tok message <- NE.toList variations
+              pure
+                ( "Show: " <> showsPrecMessage 0 tok message ""
+                , "Binary: " <> TL.unpack (encodeBase16 $ encode tok message)
+                )
 
 checkPropCodec
   :: forall ps
