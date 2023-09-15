@@ -53,14 +53,14 @@ jobs:
         run: |
           nix develop --show-trace --command bash -c "cabal freeze"
       - name: Cache Cabal build artifacts
-          uses: actions/cache@v2
-          with:
-            path: |
-              ~/.cabal/store
-              dist-newstyle
-            key: ${{ runner.os }}-cabal-${{ hashFiles('cabal.project.freeze') }}
-            restore-keys: |
-              ${{ runner.os }}-cabal
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cabal/store
+            dist-newstyle
+          key: ${{ runner.os }}-cabal-${{ hashFiles('cabal.project.freeze') }}
+          restore-keys: |
+            ${{ runner.os }}-cabal
       - name: Build with Cabal
         run: |
           nix develop --show-trace --command bash -c "cabal build all"
