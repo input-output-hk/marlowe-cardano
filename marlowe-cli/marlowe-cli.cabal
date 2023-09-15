@@ -188,11 +188,9 @@ library cli-test
     , bytestring
     , cardano-api ^>=8.2
     , containers
-    , data-default
     , data-has
     , errors
     , eventuo11y
-    , eventuo11y-json
     , extra
     , indexed-traversable
     , lens
@@ -208,7 +206,6 @@ library cli-test
     , mtl
     , network
     , one-line-aeson-text
-    , plutus-ledger-ada
     , plutus-ledger-api ^>=1.5
     , plutus-ledger-slot
     , plutus-tx

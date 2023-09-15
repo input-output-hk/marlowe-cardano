@@ -25,74 +25,33 @@ import Cardano.Api (
   EpochSlots (..),
   File (..),
   IsShelleyBasedEra,
-  Key (getVerificationKey, verificationKeyHash),
   LocalNodeConnectInfo (..),
-  Lovelace (Lovelace),
   ScriptDataSupportedInEra,
  )
 import Cardano.Api qualified as C
-import Cardano.Api.Shelley (protocolParamProtocolVersion)
 import Cardano.Api.Shelley qualified as CS
-import Contrib.Cardano.Api (lovelaceFromInt, lovelaceToInt)
-import Contrib.Control.Concurrent.Async (altIO)
-import Contrib.Control.Monad.Trans.State.IO (IOStateT, unsafeExecIOStateT)
-import Contrib.Data.Foldable (foldMapMFlipped)
-import Contrib.Monad.Loops (MaxRetries (MaxRetries), RetryCounter (RetryCounter), retryTillJust, retryTillRight)
-import Control.Concurrent.Async (race)
-import Control.Concurrent.Async.Pool (mapTasks, mapTasks_, withTaskGroup)
 import Control.Concurrent.STM (
-  TVar,
-  atomically,
-  modifyTVar',
-  newTVar,
   newTVarIO,
-  readTVar,
-  readTVarIO,
-  retry,
-  writeTVar,
  )
-import Control.Error (ExceptT, hush, note)
-import Control.Lens (At (at), Bifunctor (bimap), Each (each), coerced, non, traversed, (^.), (^..), _2, _Just)
-import Control.Lens qualified as L
-import Control.Lens qualified as Lens
-import Control.Monad (replicateM, void, when)
+import Control.Lens ((^.))
 import Control.Monad.Error.Class (throwError)
-import Control.Monad.Except (MonadError, MonadIO, catchError, liftEither, runExceptT)
+import Control.Monad.Except (MonadError, MonadIO, catchError)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Reader (ReaderT (runReaderT), runReader)
+import Control.Monad.Reader (ReaderT (runReaderT))
 import Control.Monad.Reader.Class (MonadReader)
-import Control.Monad.State (execStateT)
-import Data.Aeson qualified as A
 import Data.Aeson.Encode.Pretty qualified as A
-import Data.Aeson.OneLine qualified as A
 import Data.ByteString.Char8 qualified as BS8
 import Data.ByteString.Lazy qualified as B
-import Data.Coerce (coerce)
-import Data.Default (Default (def))
-import Data.Foldable (for_, toList)
-import Data.Functor ((<&>))
-import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
+import Data.Foldable (for_)
 import Data.List (intercalate)
-import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
-import Data.Set qualified as S (singleton)
-import Data.Text qualified as Text
-import Data.Time.Units (Second, TimeUnit (toMicroseconds))
-import Data.Traversable (for)
-import GHC.IO (bracket)
 import GHC.IO.Handle.FD (stderr)
 import Language.Marlowe.CLI.Cardano.Api (
   toMultiAssetSupportedInEra,
-  toPlutusProtocolVersion,
-  txOutValueValue,
  )
-import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage)
-import Language.Marlowe.CLI.Cardano.Api.Value (toPlutusValue)
-import Language.Marlowe.CLI.Cardano.Api.Value qualified as CV
 import Language.Marlowe.CLI.IO (
   decodeFileStrict,
-  getDefaultCostModel,
   getEraHistory,
   getPV2CostModelParams,
   getProtocolParams,
@@ -101,105 +60,37 @@ import Language.Marlowe.CLI.IO (
   queryInEra,
   readSigningKey,
  )
-import Language.Marlowe.CLI.Test.CLI.Types (
-  CLIContractInfo (CLIContractInfo),
-  CLIContracts (CLIContracts),
-  CLITxInfo,
-  ciPlan,
-  ciThread,
-  unCLIContracts,
- )
 import Language.Marlowe.CLI.Test.ExecutionMode (
-  ExecutionMode (OnChainMode),
   UseExecutionMode (UseOnChainMode, UseSimulationMode),
-  newSimulationMode,
-  toSubmitMode,
  )
-import Language.Marlowe.CLI.Test.Interpret (interpret)
-import Language.Marlowe.CLI.Test.Log (logLabeledMsg)
 import Language.Marlowe.CLI.Test.Runner (
   Env (..),
-  TestSuiteResult (TestSuiteResult),
   TestSuiteRunnerEnv,
   runTests,
   testSuiteResultToJSON,
   tsResult,
  )
-import Language.Marlowe.CLI.Test.Runtime.Monitor qualified as Runtime.Monitor
-import Language.Marlowe.CLI.Test.Runtime.Types (RuntimeError (RuntimeRollbackError))
-import Language.Marlowe.CLI.Test.Runtime.Types qualified as R
-import Language.Marlowe.CLI.Test.Runtime.Types qualified as Runtime
-import Language.Marlowe.CLI.Test.Runtime.Types qualified as Runtime.Monitor
-import Language.Marlowe.CLI.Test.TestCase qualified as TestCase
 import Language.Marlowe.CLI.Test.Types (
-  FailureReport (FailureReport),
-  InterpretEnv (..),
-  InterpretState (..),
-  MaxConcurrentRunners (MaxConcurrentRunners),
   ReportingStrategy (..),
-  RuntimeConfig (..),
-  TestCase (..),
-  TestName (TestName),
-  TestResult (TestFailed, TestSucceeded),
+  TestResult (TestFailed),
   TestSuite (..),
-  failureReportToJSON,
-  ieConnection,
-  ieEra,
-  iePrintStats,
-  isCLIContracts,
-  isCurrencies,
-  isKnownContracts,
-  isLogs,
-  isWallets,
-  testResultToJSON,
  )
-import Language.Marlowe.CLI.Test.Wallet.Interpret (createWallet)
-import Language.Marlowe.CLI.Test.Wallet.Types (
-  Currencies (Currencies),
-  Currency (Currency),
-  CurrencyNickname (CurrencyNickname),
-  Wallet (Wallet, _waAddress, _waBalanceCheckBaseline),
-  WalletNickname (WalletNickname),
-  waSubmittedTransactions,
- )
-import Language.Marlowe.CLI.Test.Wallet.Types qualified as Wallet
 import Language.Marlowe.CLI.Transaction (
-  buildBodyWithContent,
-  buildFaucetImpl,
-  buildMintingImpl,
   querySlotConfig,
-  queryUtxos,
  )
 import Language.Marlowe.CLI.Types (
-  CliEnv (CliEnv),
+  CliEnv,
   CliError (..),
   MarlowePlutusVersion,
-  MarloweTransaction (MarloweTransaction),
   NodeStateInfo (..),
-  PayFromScript (PayFromScript),
   PrintStats (PrintStats),
   QueryExecutionContext (..),
   SigningKeyFile (SigningKeyFile),
-  SomePaymentSigningKey,
   TxBuildupContext (..),
-  defaultCoinSelectionStrategy,
-  toShelleyBasedEra,
  )
 import Language.Marlowe.CLI.Types qualified as T
-import Language.Marlowe.Cardano.Thread (marloweThreadTxInfos, overAnyMarloweThread)
-import Language.Marlowe.Protocol.Client qualified as Marlowe.Protocol
-import Language.Marlowe.Protocol.Types qualified as Marlowe.Protocol
-import Language.Marlowe.Runtime.App.Types qualified as Apps
-import Network.Protocol.Connection qualified as Network.Protocol
-import Network.Protocol.Driver qualified as Network.Protocol
-import Network.Protocol.Handshake.Client qualified as Network.Protocol
-import Network.Protocol.Handshake.Types (Handshake)
-import Observe.Event.Render.JSON (defaultRenderSelectorJSON)
-import Observe.Event.Render.JSON.Handle (simpleJsonStderrBackend)
-import Plutus.V1.Ledger.Ada qualified as PV
-import PlutusLedgerApi.V1.Value qualified as PV
 import System.Exit (exitFailure, exitSuccess)
-import System.IO (hPrint, hPutStrLn)
+import System.IO (hPutStrLn)
 import System.IO.Temp (createTempDirectory)
 
 -- | Run tests of a Marlowe contract.
