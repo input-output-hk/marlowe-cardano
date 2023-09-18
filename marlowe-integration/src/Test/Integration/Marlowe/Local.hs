@@ -83,6 +83,7 @@ import Language.Marlowe.CLI.Types (
   MarloweScriptsRefs (..),
   PrintStats (..),
   PublishingStrategy (..),
+  SomePaymentSigningKey (SomePaymentSigningKeyGenesisUTxO),
   SubmitMode (..),
   TxBuildupContext (..),
   ValidatorInfo (..),
@@ -403,13 +404,11 @@ randomPort lo hi = do
 
 publishCurrentScripts :: LocalTestnet -> LocalNodeConnectInfo CardanoMode -> IO MarloweScripts
 publishCurrentScripts LocalTestnet{..} localNodeConnectInfo = do
-  let Delegator{..} = head delegators
-  let PaymentKeyPair{..} = paymentKeyPair
-  let StakingKeyPair{..} = stakingKeyPair
+  let PaymentKeyPair{..} = head wallets
   signingKey <-
-    Left
+    SomePaymentSigningKeyGenesisUTxO
       . either (error . show) id
-      . deserialiseFromTextEnvelope (AsSigningKey AsPaymentKey)
+      . deserialiseFromTextEnvelope (AsSigningKey AsGenesisUTxOKey)
       . either error id
       <$> eitherDecodeFileStrict paymentSKey
   changeAddress <-
@@ -421,8 +420,6 @@ publishCurrentScripts LocalTestnet{..} localNodeConnectInfo = do
         , "build"
         , "--payment-verification-key-file"
         , paymentVKey
-        , "--stake-verification-key-file"
-        , stakingVKey
         , "--testnet-magic"
         , show testnetMagic
         ]

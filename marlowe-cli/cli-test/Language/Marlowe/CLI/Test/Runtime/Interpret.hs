@@ -86,7 +86,7 @@ import Language.Marlowe.CLI.Test.Wallet.Types (
   faucetNickname,
  )
 import Language.Marlowe.CLI.Types (
-  somePaymentsigningKeyToTxWitness,
+  somePaymentSigningKeyToTxWitness,
   toSlotRoundedPlutusPOSIXTime,
  )
 import Language.Marlowe.Cardano.Thread (
@@ -341,7 +341,7 @@ withdraw ro contractId tokenName walletNickname Wallet{_waAddress, _waSigningKey
     Marlowe.Class.withdraw MarloweV1 walletAddresses payouts
   case result of
     Right (WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra WithdrawTxInEra{..}) -> do
-      let witness = somePaymentsigningKeyToTxWitness _waSigningKey
+      let witness = somePaymentSigningKeyToTxWitness _waSigningKey
           tx = C.signShelleyTransaction txBody [witness]
       res <- liftIO $ flip runMarloweT connector do
         Marlowe.Class.submitAndWait ReferenceTxInsScriptsInlineDatumsInBabbageEra tx
@@ -355,7 +355,7 @@ withdraw ro contractId tokenName walletNickname Wallet{_waAddress, _waSigningKey
         Left err ->
           throwLabeledError ro $ runtimeOperationFailed' $ "Failed to submit withdrawal: " <> show err
     Right (WithdrawTx ReferenceTxInsScriptsInlineDatumsInConwayEra WithdrawTxInEra{..}) -> do
-      let witness = somePaymentsigningKeyToTxWitness _waSigningKey
+      let witness = somePaymentSigningKeyToTxWitness _waSigningKey
           tx = C.signShelleyTransaction txBody [witness]
       res <- liftIO $ flip runMarloweT connector do
         Marlowe.Class.submitAndWait ReferenceTxInsScriptsInlineDatumsInConwayEra tx
@@ -525,7 +525,7 @@ interpret ro@RuntimeCreateContract{..} = do
           Transaction.ContractCreatedInEra{datum, txBody, contractId}
         ) -> do
         logStoreLabeledMsg ro $ "Creating contract: " <> show contractId
-        let witness = somePaymentsigningKeyToTxWitness _waSigningKey
+        let witness = somePaymentSigningKeyToTxWitness _waSigningKey
             tx = C.signShelleyTransaction txBody [witness]
             submitterNickname = fromMaybe faucetNickname roSubmitter
         logStoreLabeledMsg ro $ "Submitting contract: " <> show contractId
@@ -568,7 +568,7 @@ interpret ro@RuntimeCreateContract{..} = do
           Transaction.ContractCreatedInEra{datum, txBody, contractId}
         ) -> do
         logStoreLabeledMsg ro $ "Creating contract: " <> show contractId
-        let witness = somePaymentsigningKeyToTxWitness _waSigningKey
+        let witness = somePaymentSigningKeyToTxWitness _waSigningKey
             tx = C.signShelleyTransaction txBody [witness]
             submitterNickname = fromMaybe faucetNickname roSubmitter
         logStoreLabeledMsg ro $ "Submitting contract: " <> show contractId
@@ -653,7 +653,7 @@ interpret ro@RuntimeApplyInputs{..} = do
           Transaction.InputsAppliedInEra{output = R.TransactionOutput{scriptOutput = possibleMarloweOutput}, txBody}
         ) -> do
         logStoreLabeledMsg ro "Successful application."
-        let witness = somePaymentsigningKeyToTxWitness _waSigningKey
+        let witness = somePaymentSigningKeyToTxWitness _waSigningKey
             tx = withShelleyBasedEra ScriptDataInBabbageEra . C.signShelleyTransaction txBody $ [witness]
             submitterNickname = fromMaybe faucetNickname roSubmitter
 
@@ -699,7 +699,7 @@ interpret ro@RuntimeApplyInputs{..} = do
           Transaction.InputsAppliedInEra{output = R.TransactionOutput{scriptOutput = possibleMarloweOutput}, txBody}
         ) -> do
         logStoreLabeledMsg ro "Successful application."
-        let witness = somePaymentsigningKeyToTxWitness _waSigningKey
+        let witness = somePaymentSigningKeyToTxWitness _waSigningKey
             tx = withShelleyBasedEra ScriptDataInConwayEra . C.signShelleyTransaction txBody $ [witness]
             submitterNickname = fromMaybe faucetNickname roSubmitter
 

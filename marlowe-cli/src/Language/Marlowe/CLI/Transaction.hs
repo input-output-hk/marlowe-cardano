@@ -139,9 +139,7 @@ import Cardano.Api (
   WitCtxTxIn,
   Witness (..),
   calculateMinimumUTxO,
-  castVerificationKey,
   getTxId,
-  getVerificationKey,
   hashScript,
   lovelaceToValue,
   makeShelleyAddressInEra,
@@ -276,6 +274,7 @@ import Language.Marlowe.CLI.Types (
   asksEra,
   defaultCoinSelectionStrategy,
   doWithCardanoEra,
+  getVerificationKey,
   mkNodeTxBuildup,
   queryContextNetworkId,
   toAddressAny',
@@ -283,6 +282,7 @@ import Language.Marlowe.CLI.Types (
   toCollateralSupportedInEra,
   toExtraKeyWitnessesSupportedInEra,
   toMultiAssetSupportedInEra,
+  toPaymentVerificationKey,
   toQueryContext,
   toSimpleScriptLanguageInEra,
   toTxFeesExplicitInEra,
@@ -681,10 +681,7 @@ buildMintingImpl txBuildupCtx mintingAction metadataProps expires (PrintStats pr
     protocol <- getProtocolParams queryCtx
     let CurrencyIssuer changeAddress signingKey = maIssuer mintingAction
         verification =
-          verificationKeyHash $
-            case signingKey of
-              Left k -> getVerificationKey k
-              Right k -> castVerificationKey $ getVerificationKey k
+          verificationKeyHash $ toPaymentVerificationKey $ getVerificationKey signingKey
         (script, scriptHash) = mintingScript verification expires
 
         policy = PolicyId scriptHash
@@ -1461,9 +1458,8 @@ hashSigningKey
   -- ^ The hash.
 hashSigningKey =
   verificationKeyHash
-    . either
-      getVerificationKey
-      (castVerificationKey . getVerificationKey)
+    . toPaymentVerificationKey
+    . getVerificationKey
 
 -- | Build a balanced transaction body.
 buildBody

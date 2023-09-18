@@ -64,9 +64,8 @@ import Cardano.Api (
   NetworkMagic (..),
   QueryInEra (QueryInShelleyBasedEra),
   QueryInMode (..),
-  QueryInShelleyBasedEra (QueryProtocolParameters),
+  QueryInShelleyBasedEra (..),
   ScriptDataJsonSchema (..),
-  ShelleyWitnessSigningKey (..),
   TxMetadataInEra (..),
   TxMetadataJsonSchema (..),
   getScriptData,
@@ -113,13 +112,14 @@ import Language.Marlowe.CLI.Types (
   Percent (..),
   QueryExecutionContext (..),
   SigningKeyFile (unSigningKeyFile),
-  SomePaymentSigningKey,
-  SomePaymentVerificationKey,
+  SomePaymentSigningKey (..),
+  SomePaymentVerificationKey (..),
   SubmitMode (..),
   TxBuildupContext (..),
   TxResourceUsage (..),
   askEra,
   asksEra,
+  somePaymentSigningKeyToTxWitness,
   toAddressAny',
   toEraInMode,
   toMultiAssetSupportedInEra,
@@ -210,8 +210,9 @@ readVerificationKey
 readVerificationKey =
   liftCliIO
     . readFileTextEnvelopeAnyOf
-      [ FromSomeType (AsVerificationKey AsPaymentKey) Left
-      , FromSomeType (AsVerificationKey AsPaymentExtendedKey) Right
+      [ FromSomeType (AsVerificationKey AsPaymentKey) SomePaymentVerificationKeyPayment
+      , FromSomeType (AsVerificationKey AsPaymentExtendedKey) SomePaymentVerificationKeyPaymentExtended
+      , FromSomeType (AsVerificationKey AsGenesisUTxOKey) SomePaymentVerificationKeyGenesisUTxO
       ]
     . File
 
@@ -226,8 +227,9 @@ readSigningKey
 readSigningKey =
   liftCliIO
     . readFileTextEnvelopeAnyOf
-      [ FromSomeType (AsSigningKey AsPaymentKey) Left
-      , FromSomeType (AsSigningKey AsPaymentExtendedKey) Right
+      [ FromSomeType (AsSigningKey AsPaymentKey) SomePaymentSigningKeyPayment
+      , FromSomeType (AsSigningKey AsPaymentExtendedKey) SomePaymentSigningKeyPaymentExtended
+      , FromSomeType (AsSigningKey AsGenesisUTxOKey) SomePaymentSigningKeyGenesisUTxO
       ]
     . File
     . unSigningKeyFile
@@ -509,8 +511,7 @@ submitTxBody txBuildupContext txBody signings =
     let tx =
           withShelleyBasedEra era $
             signShelleyTransaction txBody $
-              either WitnessPaymentKey WitnessPaymentExtendedKey
-                <$> signings
+              somePaymentSigningKeyToTxWitness <$> signings
         txId = getTxId txBody
     case txBuildupContext of
       (NodeTxBuildup _ DontSubmit) -> pure txId

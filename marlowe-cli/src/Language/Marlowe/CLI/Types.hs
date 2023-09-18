@@ -55,8 +55,8 @@ module Language.Marlowe.CLI.Types (
   MintingAction (..),
 
   -- * Keys
-  SomePaymentSigningKey,
-  SomePaymentVerificationKey,
+  SomePaymentSigningKey (..),
+  SomePaymentVerificationKey (..),
 
   -- * Exceptions
   CliError (..),
@@ -84,7 +84,7 @@ module Language.Marlowe.CLI.Types (
   asksEra,
   doWithCardanoEra,
   doWithShelleyBasedEra,
-  somePaymentsigningKeyToTxWitness,
+  somePaymentSigningKeyToTxWitness,
   toAddressAny',
   toAsType,
   toCardanoEra,
@@ -136,6 +136,7 @@ import Cardano.Api (
   CardanoMode,
   CollateralSupportedInEra (..),
   EraInMode (..),
+  GenesisUTxOKey,
   HasTypeProxy (..),
   IsCardanoEra,
   IsScriptLanguage,
@@ -230,21 +231,39 @@ instance IsString CliError where
 instance Exception CliError
 
 -- | A payment key.
-type SomePaymentVerificationKey = Either (VerificationKey PaymentKey) (VerificationKey PaymentExtendedKey)
+data SomePaymentVerificationKey
+  = SomePaymentVerificationKeyPayment (VerificationKey PaymentKey)
+  | SomePaymentVerificationKeyPaymentExtended (VerificationKey PaymentExtendedKey)
+  | SomePaymentVerificationKeyGenesisUTxO (VerificationKey GenesisUTxOKey)
+  deriving (Show)
 
 toPaymentVerificationKey :: SomePaymentVerificationKey -> VerificationKey PaymentKey
-toPaymentVerificationKey (Left vkey) = vkey
-toPaymentVerificationKey (Right vkey) = castVerificationKey vkey
+toPaymentVerificationKey (SomePaymentVerificationKeyPayment vkey) = vkey
+toPaymentVerificationKey (SomePaymentVerificationKeyPaymentExtended vkey) = castVerificationKey vkey
+toPaymentVerificationKey (SomePaymentVerificationKeyGenesisUTxO vkey) = castVerificationKey vkey
 
 -- | A payment signing key.
-type SomePaymentSigningKey = Either (SigningKey PaymentKey) (SigningKey PaymentExtendedKey)
+data SomePaymentSigningKey
+  = SomePaymentSigningKeyPayment (SigningKey PaymentKey)
+  | SomePaymentSigningKeyPaymentExtended (SigningKey PaymentExtendedKey)
+  | SomePaymentSigningKeyGenesisUTxO (SigningKey GenesisUTxOKey)
+  deriving (Show)
 
 getVerificationKey :: SomePaymentSigningKey -> SomePaymentVerificationKey
-getVerificationKey (Left skey) = Left $ C.getVerificationKey skey
-getVerificationKey (Right skey) = Right $ C.getVerificationKey skey
+getVerificationKey (SomePaymentSigningKeyPayment skey) =
+  SomePaymentVerificationKeyPayment $ C.getVerificationKey skey
+getVerificationKey (SomePaymentSigningKeyPaymentExtended skey) =
+  SomePaymentVerificationKeyPaymentExtended $ C.getVerificationKey skey
+getVerificationKey (SomePaymentSigningKeyGenesisUTxO skey) =
+  SomePaymentVerificationKeyGenesisUTxO $ C.getVerificationKey skey
 
-somePaymentsigningKeyToTxWitness :: SomePaymentSigningKey -> CS.ShelleyWitnessSigningKey
-somePaymentsigningKeyToTxWitness = either C.WitnessPaymentKey C.WitnessPaymentExtendedKey
+somePaymentSigningKeyToTxWitness :: SomePaymentSigningKey -> CS.ShelleyWitnessSigningKey
+somePaymentSigningKeyToTxWitness (SomePaymentSigningKeyPayment skey) =
+  CS.WitnessPaymentKey skey
+somePaymentSigningKeyToTxWitness (SomePaymentSigningKeyPaymentExtended skey) =
+  CS.WitnessPaymentExtendedKey skey
+somePaymentSigningKeyToTxWitness (SomePaymentSigningKeyGenesisUTxO skey) =
+  CS.WitnessGenesisUTxOKey skey
 
 -- | A marlowe transaction in an existentially quantified era
 data SomeMarloweTransaction

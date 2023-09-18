@@ -19,7 +19,7 @@ import Cardano.Api (
   AddressInEra,
   AsType (AsPaymentKey),
   File (..),
-  Key (getVerificationKey, verificationKeyHash),
+  Key (verificationKeyHash),
   PaymentCredential (PaymentCredentialByKey),
   ScriptDataSupportedInEra,
   StakeAddressReference (NoStakeAddress),
@@ -120,9 +120,12 @@ import Language.Marlowe.CLI.Types (
   MarloweScriptsRefs (..),
   PayFromScript,
   SigningKeyFile (..),
+  SomePaymentSigningKey (..),
   TokensRecipient (..),
   defaultCoinSelectionStrategy,
+  getVerificationKey,
   queryContextNetworkId,
+  toPaymentVerificationKey,
   toQueryContext,
   validatorAddress,
  )
@@ -556,7 +559,7 @@ interpret so@ExternalWallet{..} = do
   era <- view eraL
   skey <- runLabeledCli era so $ readSigningKey (SigningKeyFile woSigningKeyFile)
   networkId <- getNetworkId
-  let vkey = either getVerificationKey (C.castVerificationKey . getVerificationKey) skey
+  let vkey = toPaymentVerificationKey $ getVerificationKey skey
       (address :: AddressInEra era) = makeShelleyAddressInEra networkId (PaymentCredentialByKey (verificationKeyHash vkey)) NoStakeAddress
 
   utxo <- EM.queryByAddress address
@@ -776,7 +779,10 @@ saveWalletFiles walletNickname wallet dir = do
       s <- emptyTempFile dir' skeyFileTpl
       pure (a, s)
   writeFile addrFile (Text.unpack $ C.serialiseAddress _waAddress)
-  void $ either (writeEnvelope (File skeyFile)) (writeEnvelope (File skeyFile)) sskey
+  void case sskey of
+    SomePaymentSigningKeyPayment k -> writeEnvelope (File skeyFile) k
+    SomePaymentSigningKeyPaymentExtended k -> writeEnvelope (File skeyFile) k
+    SomePaymentSigningKeyGenesisUTxO k -> writeEnvelope (File skeyFile) k
   pure (addrFile, CT.SigningKeyFile skeyFile)
 
 -- TODO: We should use `CardanoEra era` as an `era` carrier here.
@@ -789,13 +795,13 @@ createWallet
 createWallet _ = do
   skey <- liftIO $ generateSigningKey AsPaymentKey
   networkId <- getNetworkId
-  let vkey = getVerificationKey skey
+  let vkey = C.getVerificationKey skey
       (address :: AddressInEra era) =
         makeShelleyAddressInEra
           networkId
           (PaymentCredentialByKey (verificationKeyHash vkey))
           NoStakeAddress
-  pure $ emptyWallet address (Left skey)
+  pure $ emptyWallet address (SomePaymentSigningKeyPayment skey)
 
 fundWallets
   :: (InterpretMonad env st m era, CAS.IsCardanoEra era)
