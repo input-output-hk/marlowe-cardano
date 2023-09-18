@@ -23,9 +23,11 @@ in
     pkgs.z3
     pkgs.sqitchPg
     pkgs.postgresql
-    pkgs.haskellPackages.hspec-golden
+
     pkgs.jq
     pkgs.docker-compose
+
+    project.hsPkgs.hspec-golden.components.exes.hgold
   ];
 
 
