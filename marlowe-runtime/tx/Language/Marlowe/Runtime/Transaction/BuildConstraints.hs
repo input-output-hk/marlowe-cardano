@@ -4,6 +4,7 @@
 
 module Language.Marlowe.Runtime.Transaction.BuildConstraints (
   ApplyResults,
+  MkRoleTokenMintingPolicy,
   buildApplyInputsConstraints,
   buildCreateConstraints,
   buildWithdrawConstraints,
@@ -17,7 +18,7 @@ import Control.Category ((>>>))
 import Control.Error (ExceptT, note)
 import Control.Monad (unless, when, (>=>))
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (except, throwE, withExceptT)
+import Control.Monad.Trans.Except (except, runExceptT, throwE, withExceptT)
 import Control.Monad.Trans.Writer (WriterT (runWriterT), tell)
 import Data.Bifunctor (first)
 import Data.Foldable (for_, traverse_)
@@ -75,15 +76,11 @@ import Language.Marlowe.Runtime.Core.Api (
   withMarloweVersion,
  )
 import Language.Marlowe.Runtime.Plutus.V2.Api (
-  fromPlutusScript,
   fromPlutusValue,
   toAssetId,
   toPlutusAddress,
   toPlutusCurrencySymbol,
-  toPlutusTokenName,
-  toPlutusTxOutRef,
  )
-import qualified Language.Marlowe.Runtime.Plutus.V2.Scripts.MarloweV1.RoleTokensPolicy as RoleTokensPolicy
 import Language.Marlowe.Runtime.Transaction.Api (
   ApplyInputsConstraintsBuildupError (..),
   ApplyInputsError (..),
@@ -129,19 +126,22 @@ maxFees = Lovelace 2_170_000
 minAdaPerTokenOutput :: Lovelace
 minAdaPerTokenOutput = Lovelace 10_000
 
-type TxConstraintsBuilderM err era v a = WriterT (TxConstraints era v) (Either err) a
+type TxConstraintsBuilderM err era v m a = WriterT (TxConstraints era v) (ExceptT err m) a
 
 runTxConstraintsBuilder
   :: MarloweVersion v
-  -> TxConstraintsBuilderM err era v a
-  -> Either err (a, TxConstraints era v)
-runTxConstraintsBuilder v = runWriterT . withMarloweVersion v
+  -> TxConstraintsBuilderM err era v m a
+  -> m (Either err (a, TxConstraints era v))
+runTxConstraintsBuilder v = runExceptT . runWriterT . withMarloweVersion v
 
 -- | Creates a set of Tx constraints that are used to build a transaction that
 -- instantiates a contract.
 buildCreateConstraints
-  :: forall era v
-   . C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  :: forall era v m
+   . (Monad m)
+  => MkRoleTokenMintingPolicy m
+  -- ^ A validator creator for the role token minting policy.
+  -> C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
   -- ^ The era in which the transaction is being built. Requires reference scripts.
   -> MarloweVersion v
   -- ^ The Marlowe version to build the transaction for.
@@ -155,15 +155,22 @@ buildCreateConstraints
   -- ^ Min Lovelace value which should be used on the Marlowe output.
   -> Contract v
   -- ^ The contract being instantiated.
-  -> Either CreateError ((Datum v, Assets, PolicyId), TxConstraints era v)
-buildCreateConstraints era version walletCtx roles metadata minAda contract = case version of
-  MarloweV1 -> runTxConstraintsBuilder version $ buildCreateConstraintsV1 era walletCtx roles metadata minAda contract
+  -> m (Either CreateError ((Datum v, Assets, PolicyId), TxConstraints era v))
+buildCreateConstraints mkRoleTokenMintingPolicy era version walletCtx roles metadata minAda contract = case version of
+  MarloweV1 ->
+    runTxConstraintsBuilder version $
+      buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx roles metadata minAda contract
+
+type MkRoleTokenMintingPolicy m = TxOutRef -> Map TokenName Integer -> m CS.PlutusScript
 
 -- | Creates a set of Tx constraints that are used to build a transaction that
 -- instantiates a contract.
 buildCreateConstraintsV1
-  :: forall era
-   . C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  :: forall era m
+   . (Monad m)
+  => MkRoleTokenMintingPolicy m
+  -- ^ A validator creator for the role token minting policy.
+  -> C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
   -- ^ The era in which the transaction is being built. Requires reference scripts.
   -> WalletContext
   -- ^ The wallet used to mint tokens.
@@ -175,8 +182,8 @@ buildCreateConstraintsV1
   -- ^ Min Lovelace value which should be used on the Marlowe output.
   -> Contract 'V1
   -- ^ The contract being instantiated.
-  -> TxConstraintsBuilderM CreateError era 'V1 (Datum 'V1, Assets, PolicyId)
-buildCreateConstraintsV1 era walletCtx roles metadata minAda contract = do
+  -> TxConstraintsBuilderM CreateError era 'V1 m (Datum 'V1, Assets, PolicyId)
+buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx roles metadata minAda contract = do
   -- Output constraints.
   -- Role tokens minting and distribution.
   policyId <- mintRoleTokens
@@ -203,7 +210,7 @@ buildCreateConstraintsV1 era walletCtx roles metadata minAda contract = do
           metadata' -> TransactionMetadata (Map.singleton 721 (MetadataMap [(MetadataBytes policyId, MetadataMap metadata')]))
       _ -> mempty
 
-    liftMaybe err = lift . note (CreateBuildupFailed err)
+    liftMaybe err = lift . except . note (CreateBuildupFailed err)
 
     sendMarloweOutput policyId = do
       datum <- mkMarloweDatum policyId
@@ -211,13 +218,13 @@ buildCreateConstraintsV1 era walletCtx roles metadata minAda contract = do
       tell $ mustSendMarloweOutput assets datum
       pure (datum, assets)
 
-    mkMarloweDatum :: PolicyId -> TxConstraintsBuilderM CreateError era 'V1 (Datum 'V1)
+    mkMarloweDatum :: PolicyId -> TxConstraintsBuilderM CreateError era 'V1 m (Datum 'V1)
     mkMarloweDatum policyId = do
       marloweState <- mkInitialMarloweState
       let marloweParams = V1.MarloweParams . toPlutusCurrencySymbol $ policyId
       pure $ V1.MarloweData marloweParams marloweState contract
 
-    mkInitialMarloweState :: TxConstraintsBuilderM CreateError era 'V1 V1.State
+    mkInitialMarloweState :: TxConstraintsBuilderM CreateError era 'V1 m V1.State
     mkInitialMarloweState = do
       let WalletContext{changeAddress = minAdaProvider} = walletCtx
       (net, addr) <- liftMaybe (AddressDecodingFailed minAdaProvider) do
@@ -241,7 +248,7 @@ buildCreateConstraintsV1 era walletCtx roles metadata minAda contract = do
     adaAsset amount = Assets amount mempty
 
     -- Role token distribution constraints
-    mintRoleTokens :: TxConstraintsBuilderM CreateError era 'V1 PolicyId
+    mintRoleTokens :: TxConstraintsBuilderM CreateError era 'V1 m PolicyId
     mintRoleTokens = case roles of
       RoleTokensUsePolicy policyId -> pure policyId
       RoleTokensMint (unMint -> minting) -> do
@@ -258,10 +265,7 @@ buildCreateConstraintsV1 era walletCtx roles metadata minAda contract = do
                 <|> listToMaybe (toUTxOsList availableUtxos)
 
         UTxO txOutRef _ <- liftMaybe MintingUtxoSelectionFailed possibleInput
-        let txOutRef' = toPlutusTxOutRef txOutRef
-
-            roleTokens = RoleTokensPolicy.mkRoleTokens (map ((,1) . toPlutusTokenName) . Map.keys $ minting)
-            plutusScript = fromPlutusScript . RoleTokensPolicy.policy roleTokens $ txOutRef'
+        plutusScript <- lift $ lift $ mkRoleTokenMintingPolicy txOutRef $ 1 <$ minting
 
         (script, scriptHash) <- liftMaybe (MintingScriptDecodingFailed plutusScript) do
           script <- toCardanoPlutusScript plutusScript
@@ -277,7 +281,7 @@ buildCreateConstraintsV1 era walletCtx roles metadata minAda contract = do
                 C.PlutusScriptV2
                 (C.PScript script)
                 C.NoScriptDatumForMint
-                (C.unsafeHashableScriptData $ C.fromPlutusData $ PV2.toData RoleTokensPolicy.Mint)
+                (C.unsafeHashableScriptData $ C.ScriptDataConstructor 0 []) -- This corresponds to the Mint action in the validator.
                 (C.ExecutionUnits 0 0)
             policyId = PolicyId . unScriptHash $ scriptHash
 

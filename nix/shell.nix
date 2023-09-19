@@ -20,6 +20,8 @@ in
     inputs'.cardano-node.packages.cardano-node
     inputs'.cardano-node.packages.cardano-cli
 
+    inputs'.marlowe-plutus.packages.marlowe-minting-validator
+
     pkgs.z3
     pkgs.sqitchPg
     pkgs.postgresql

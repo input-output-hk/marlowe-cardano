@@ -13,23 +13,31 @@ import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes
 import Control.Concurrent.STM (STM, atomically)
 import Control.Monad.Event.Class (MonadInjectEvent)
+import qualified Data.ByteString as BS
+import Data.ByteString.Base16 (encodeBase16)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes, mapMaybe, maybeToList)
 import qualified Data.Set as Set
 import Data.String (fromString)
+import qualified Data.Text as T
 import Data.Time (NominalDiffTime)
 import Language.Marlowe.Runtime.ChainSync.Api (
   ChainSyncQuery,
+  PlutusScript (..),
   RuntimeChainSeekClient,
+  TokenName (..),
+  TxOutRef (..),
   UTxOs (..),
   renderTxOutRef,
   toBech32,
   unInterpreter,
+  unTxIx,
  )
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion (..), renderContractId)
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts, ReferenceScriptUtxo (..))
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
+import Language.Marlowe.Runtime.Transaction.BuildConstraints (MkRoleTokenMintingPolicy)
 import Language.Marlowe.Runtime.Transaction.Chain
 import Language.Marlowe.Runtime.Transaction.Constraints (MarloweContext (..), PayoutContext (..), WalletContext (..))
 import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext, LoadPayoutContext, LoadWalletContext)
@@ -42,7 +50,11 @@ import Network.Protocol.Query.Client (QueryClient)
 import Observe.Event.Render.OpenTelemetry (OTelRendered (..), RenderSelectorOTel)
 import OpenTelemetry.Trace.Core (SpanKind (Client, Internal), toAttribute)
 import qualified OpenTelemetry.Trace.Core as OTel
-import UnliftIO (MonadUnliftIO)
+import System.Exit (ExitCode (..))
+import System.IO (hGetContents)
+import UnliftIO (MonadUnliftIO, bracket, liftIO)
+import UnliftIO.Process (CreateProcess (..), StdStream (..), createProcess, terminateProcess, waitForProcess)
+import qualified UnliftIO.Process as P
 
 data TransactionDependencies m = TransactionDependencies
   { chainSyncConnector :: Connector RuntimeChainSeekClient m
@@ -54,6 +66,7 @@ data TransactionDependencies m = TransactionDependencies
   , contractQueryConnector :: Connector (QueryClient ContractRequest) m
   , getCurrentScripts :: forall v. MarloweVersion v -> MarloweScripts
   , analysisTimeout :: NominalDiffTime
+  , mkRoleTokenMintingPolicy :: MkRoleTokenMintingPolicy m
   }
 
 data MarloweTx m = MarloweTx
@@ -222,3 +235,21 @@ renderLoadMarloweContextSelectorOTel = \case
             , Just ("marlowe.payout_script_hash", fromString $ show payoutScriptHash)
             ]
       }
+
+mkCommandLineRoleTokenMintingPolicy :: (MonadUnliftIO m, MonadFail m) => String -> MkRoleTokenMintingPolicy m
+mkCommandLineRoleTokenMintingPolicy cmd TxOutRef{..} roleTokens = do
+  let txIdArg = filter (/= '"') $ show txId
+  let txIxArg = show $ unTxIx txIx
+  let roleTokenArgs = do
+        (TokenName name, quantity) <- Map.toList roleTokens
+        [T.unpack $ encodeBase16 name, show quantity]
+  let args = txIdArg : txIxArg : roleTokenArgs
+  bracket
+    (createProcess (P.proc cmd args){std_out = CreatePipe, std_err = CreatePipe})
+    (\(_, _, _, h) -> terminateProcess h)
+    \handles -> do
+      (_, Just stdOut, Just stdErr, handle) <- pure handles
+      exitCode <- waitForProcess handle
+      liftIO case exitCode of
+        ExitSuccess -> PlutusScript <$> BS.hGetContents stdOut
+        ExitFailure _ -> fail . ((cmd <> " " <> unwords args <> ": ") <>) =<< hGetContents stdErr

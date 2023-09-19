@@ -74,7 +74,7 @@ library
     , marlowe-cli
     , marlowe-protocols
     , marlowe-runtime-web:{marlowe-runtime-web, server}
-    , marlowe-runtime:{marlowe-runtime, contract, indexer, proxy-api, runtime, sync}
+    , marlowe-runtime:{marlowe-runtime, contract, indexer, proxy-api, runtime, sync, tx}
     , network
     , nonempty-containers
     , postgresql-libpq

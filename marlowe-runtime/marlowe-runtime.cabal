@@ -531,6 +531,8 @@ library tx
     , async
     , async-components ==0.1.1.0
     , base >=4.9 && <5
+    , base16 ^>=0.3.2
+    , bytestring >=0.10.12 && <0.12
     , cardano-api ^>=8.2
     , cardano-ledger-core ^>=1.2
     , co-log >=0.5.0.0 && <0.6.0.0
@@ -543,7 +545,7 @@ library tx
     , marlowe-cardano ==0.1.2.0
     , marlowe-chain-sync:{marlowe-chain-sync, plutus-compat} ==0.0.4
     , marlowe-protocols ==0.2.0.0
-    , marlowe-runtime:{marlowe-runtime, contract-api, history-api, plutus-scripts, tx-api} ==0.0.4
+    , marlowe-runtime:{marlowe-runtime, contract-api, history-api, tx-api} ==0.0.4
     , ouroboros-consensus ^>=0.7
     , ouroboros-network-api ^>=0.5
     , plutus-ledger-api ^>=1.5
@@ -551,6 +553,7 @@ library tx
     , retry ^>=0.9.3
     , semialign >=1.2 && <2
     , stm ^>=2.5
+    , text ^>=1.2
     , time >=1.9 && <2
     , transformers ^>=0.5.6
     , unliftio ^>=0.2.1
@@ -609,25 +612,6 @@ library runtime
     , time >=1.9 && <2
     , typed-protocols ^>=0.1
     , unliftio ^>=0.2.1
-
-library plutus-scripts
-  import:          lang
-  hs-source-dirs:  plutus-scripts
-  visibility:      public
-
-  -- Needed to suppress the erroneous warning about plutus-tx-plugin not being
-  -- needed.
-  ghc-options:     -Wno-unused-packages
-  exposed-modules:
-    Language.Marlowe.Runtime.Plutus.V2.Scripts.MarloweV1.RoleTokensPolicy
-    Language.Marlowe.Runtime.Plutus.V2.Scripts.MarloweV1.RoleTokensPolicy.Types
-
-  build-depends:
-    , base >=4.9 && <5
-    , newtype-generics ^>=0.6.2
-    , plutus-ledger-api ^>=1.5
-    , plutus-tx ^>=1.5
-    , plutus-tx-plugin ^>=1.5
 
 library config
   import:          lang

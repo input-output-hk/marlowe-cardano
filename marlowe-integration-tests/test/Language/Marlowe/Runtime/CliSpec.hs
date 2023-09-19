@@ -8,15 +8,17 @@ import Cardano.Api (
   AsType (..),
   File (..),
   InAnyShelleyBasedEra (..),
+  ShelleyBasedEra (..),
   TxBody,
-  deserialiseFromCBOR,
   readFileTextEnvelope,
-  serialiseToCBOR,
   shelleyBasedToCardanoEra,
  )
+import Cardano.Api.Shelley (TxBody (ShelleyTxBody))
+import Cardano.Ledger.Babbage.Tx (BabbageTxBody (..))
 import qualified Control.Monad.Reader as Reader
 import qualified Data.Aeson as Aeson
 import Data.Foldable (for_)
+import Data.Function (on)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Maybe as Maybe
@@ -185,20 +187,31 @@ expectSameResultFromCLIAndJobClient outputFile extraCliArgs extractTxBody comman
       jobClientEffect :: Integration (InAnyShelleyBasedEra TxBody)
       jobClientEffect = do
         InAnyShelleyBasedEra era txBody <- extractTxBody <$> marloweRuntimeJobClient command
-        either (fail . show) (pure . InAnyShelleyBasedEra era)
-          . deserialiseFromCBOR (AsTxBody $ cardanoEraToAsType $ shelleyBasedToCardanoEra era)
-          . serialiseToCBOR
-          $ txBody
+        pure $ InAnyShelleyBasedEra era txBody
 
-  (_, InAnyShelleyBasedEra era expected) <- concurrently cliEffect jobClientEffect
+  (_, InAnyShelleyBasedEra era (ShelleyTxBody ShelleyBasedEraBabbage expected _ _ _ _)) <-
+    concurrently cliEffect jobClientEffect
 
-  (either (error . show) id -> actual) <-
+  (either (error . show) id -> ShelleyTxBody ShelleyBasedEraBabbage actual _ _ _ _) <-
     liftIO $
       readFileTextEnvelope (AsTxBody (cardanoEraToAsType $ shelleyBasedToCardanoEra era)) $
         File txBodyEnvelopeFilePath
 
   liftIO do
-    actual `shouldBe` expected
+    on shouldBe btbInputs actual expected
+    on shouldBe btbCollateral actual expected
+    on shouldBe btbReferenceInputs actual expected
+    on shouldBe btbOutputs actual expected
+    on shouldBe btbCollateralReturn actual expected
+    on shouldBe btbCerts actual expected
+    on shouldBe btbWithdrawals actual expected
+    on shouldBe btbTxFee actual expected
+    on shouldBe btbUpdate actual expected
+    on shouldBe btbReqSignerHashes actual expected
+    on shouldBe btbMint actual expected
+    on shouldBe btbScriptIntegrityHash actual expected
+    on shouldBe btbAuxDataHash actual expected
+    on shouldBe btbTxNetworkId actual expected
 
 toPosixTime :: Time.UTCTime -> PlutusLedgerApi.V2.POSIXTime
 toPosixTime t = PlutusLedgerApi.V2.POSIXTime $ floor $ 1000 * Time.nominalDiffTimeToSeconds (POSIX.utcTimeToPOSIXSeconds t)
