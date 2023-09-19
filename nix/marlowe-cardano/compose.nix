@@ -3,6 +3,7 @@
 let
   inherit (pkgs) z3 sqitchPg postgresql runCommand writeShellScriptBin writeText glibcLocales;
   network = inputs'.self.networks.preview;
+  inherit (inputs') marlowe-plutus;
 
   mkSqitchRunner = name: path: writeShellScriptBin name ''
     export PATH="$PATH:${l.makeBinPath [ sqitchPg postgresql ]}"
@@ -48,7 +49,7 @@ let
 
   run-runtime = writeShellScriptBin "run-marlowe-runtime" ''
     set -e
-    export PATH="$PATH:${l.makeBinPath [ z3 ]}"
+    export PATH="$PATH:${l.makeBinPath [ z3 marlowe-plutus.packages.marlowe-minting-validator ]}"
     PROG=${l.escapeShellArg "marlowe-runtime"}
     PKG=${l.escapeShellArg "marlowe-runtime"}-${l.escapeShellArg marloweRuntimeVersion}
     cd /src
@@ -301,6 +302,8 @@ let
       network.nodeConfig.ByronGenesisHash
       "--shelley-genesis-config-file"
       network.nodeConfig.ShelleyGenesisFile
+      "--minting-policy-cmd"
+      "marlowe-minting-validator"
     ];
     environment = [
       "TZ=UTC"

@@ -1,7 +1,7 @@
 { inputs', pkgs, l, ... }:
 
 let
-  inherit (inputs') self std;
+  inherit (inputs') self std marlowe-plutus;
   inherit (pkgs)
     jq
     sqitchPg
@@ -334,7 +334,7 @@ in
 
   marlowe-tx = mkOperableWithProbes {
     package = marlowe-tx;
-    runtimeInputs = [ z3 ];
+    runtimeInputs = [ z3 marlowe-plutus.packages.marlowe-minting-validator ];
     runtimeScript = ''
       #################
       # REQUIRED VARS #
@@ -373,7 +373,8 @@ in
         --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
         --contract-host "$CONTRACT_HOST" \
         --contract-query-port "$CONTRACT_QUERY_PORT" \
-        --http-port "$HTTP_PORT"
+        --http-port "$HTTP_PORT" \
+        --minting-policy-cmd marlowe-minting-validator
     '';
   };
 
@@ -474,6 +475,7 @@ in
 
   marlowe-runtime = mkOperableWithProbes {
     package = marlowe-runtime;
+    runtimeInputs = [ z3 marlowe-plutus.packages.marlowe-minting-validator ];
     runtimeScript = ''
       #################
       # REQUIRED VARS #
@@ -542,7 +544,9 @@ in
         --host "$HOST" \
         --port "$PORT" \
         --port-traced "$TRACED_PORT" \
-        --http-port "$HTTP_PORT"
+        --http-port "$HTTP_PORT" \
+        --minting-policy-cmd marlowe-minting-validator
+
     '';
   };
 
