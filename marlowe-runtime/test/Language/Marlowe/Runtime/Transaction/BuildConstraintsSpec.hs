@@ -30,7 +30,7 @@ import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics as Semantics
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as Semantics
-import Language.Marlowe.Runtime.ChainSync.Api (Lovelace, toUTxOsList)
+import Language.Marlowe.Runtime.ChainSync.Api (Lovelace, PlutusScript (..), toUTxOsList)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (
   Contract,
@@ -201,14 +201,18 @@ extractMarloweAssets TxConstraints{..} = case marloweOutputConstraints of
 runBuildCreateConstraints :: CreateArgs v -> Either CreateError (TxConstraints BabbageEra v)
 runBuildCreateConstraints CreateArgs{..} =
   snd
-    <$> buildCreateConstraints
-      ReferenceTxInsScriptsInlineDatumsInBabbageEra
-      version
-      walletContext
-      roleTokensConfig
-      metadata
-      minAda
-      contract
+    <$> runIdentity
+      ( buildCreateConstraints
+          -- Since we don't actually run the script, we can just return empty bytes
+          (\_ _ -> pure $ PlutusScript mempty)
+          ReferenceTxInsScriptsInlineDatumsInBabbageEra
+          version
+          walletContext
+          roleTokensConfig
+          metadata
+          minAda
+          contract
+      )
 
 data CreateArgs v = CreateArgs
   { version :: MarloweVersion v
