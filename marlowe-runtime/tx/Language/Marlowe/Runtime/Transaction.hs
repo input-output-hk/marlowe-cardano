@@ -13,13 +13,15 @@ import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes
 import Control.Concurrent.STM (STM, atomically)
 import Control.Monad.Event.Class (MonadInjectEvent)
+import Data.Aeson (KeyValue (..), encode, object)
 import qualified Data.ByteString as BS
 import Data.ByteString.Base16 (encodeBase16)
+import qualified Data.ByteString.Char8 as BS8
+import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes, mapMaybe, maybeToList)
 import qualified Data.Set as Set
 import Data.String (fromString)
-import qualified Data.Text as T
 import Data.Time (NominalDiffTime)
 import Language.Marlowe.Runtime.ChainSync.Api (
   ChainSyncQuery,
@@ -31,7 +33,6 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   renderTxOutRef,
   toBech32,
   unInterpreter,
-  unTxIx,
  )
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion (..), renderContractId)
@@ -237,19 +238,21 @@ renderLoadMarloweContextSelectorOTel = \case
       }
 
 mkCommandLineRoleTokenMintingPolicy :: (MonadUnliftIO m, MonadFail m) => String -> MkRoleTokenMintingPolicy m
-mkCommandLineRoleTokenMintingPolicy cmd TxOutRef{..} roleTokens = do
-  let txIdArg = filter (/= '"') $ show txId
-  let txIxArg = show $ unTxIx txIx
-  let roleTokenArgs = do
-        (TokenName name, quantity) <- Map.toList roleTokens
-        [T.unpack $ encodeBase16 name, show quantity]
-  let args = txIdArg : txIxArg : roleTokenArgs
-  bracket
-    (createProcess (P.proc cmd args){std_out = CreatePipe, std_err = CreatePipe})
-    (\(_, _, _, h) -> terminateProcess h)
-    \handles -> do
-      (_, Just stdOut, Just stdErr, handle) <- pure handles
-      exitCode <- waitForProcess handle
-      liftIO case exitCode of
-        ExitSuccess -> PlutusScript <$> BS.hGetContents stdOut
-        ExitFailure _ -> fail . ((cmd <> " " <> unwords args <> ": ") <>) =<< hGetContents stdErr
+mkCommandLineRoleTokenMintingPolicy cmd TxOutRef{..} roleTokens = bracket
+  (createProcess (P.proc cmd []){std_out = CreatePipe, std_err = CreatePipe, std_in = CreatePipe})
+  (\(_, _, _, h) -> terminateProcess h)
+  \handles -> do
+    (Just stdIn, Just stdOut, Just stdErr, handle) <- pure handles
+    liftIO $
+      BS8.hPutStrLn stdIn $
+        LBS.toStrict $
+          encode $
+            object
+              [ "seedInputId" .= txId
+              , "seedInputIx" .= txIx
+              , "roleTokens" .= Map.mapKeys (encodeBase16 . unTokenName) roleTokens
+              ]
+    exitCode <- waitForProcess handle
+    liftIO case exitCode of
+      ExitSuccess -> PlutusScript <$> BS.hGetContents stdOut
+      ExitFailure _ -> fail . ("mkRoleTokenMintingPolicy: " <>) =<< hGetContents stdErr
