@@ -553,7 +553,6 @@ library tx
     , retry ^>=0.9.3
     , semialign >=1.2 && <2
     , stm ^>=2.5
-    , text ^>=1.2
     , time >=1.9 && <2
     , transformers ^>=0.5.6
     , unliftio ^>=0.2.1
