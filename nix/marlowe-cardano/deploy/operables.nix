@@ -14,15 +14,20 @@ let
     z3
     ;
 
-  marlowe-chain-indexer = self.packages.marlowe-chain-indexer;
-  marlowe-chain-sync = self.packages.marlowe-chain-sync;
-  marlowe-contract = self.packages.marlowe-contract;
-  marlowe-runtime = self.packages.marlowe-runtime;
-  marlowe-tx = self.packages.marlowe-tx;
-  marlowe-proxy = self.packages.marlowe-proxy;
-  marlowe-indexer = self.packages.marlowe-indexer;
-  marlowe-web-server = self.packages.marlowe-web-server;
-  marlowe-sync = self.packages.marlowe-sync;
+  inherit (self.packages)
+    marlowe-chain-indexer
+    marlowe-chain-sync
+    marlowe-contract
+    marlowe-runtime
+    marlowe-tx
+    marlowe-proxy
+    marlowe-indexer
+    marlowe-web-server
+    marlowe-sync
+    marlowe-pipe
+    marlowe-scaling
+    marlowe-oracle
+    marlowe-finder;
 
   # Ensure this path only changes when sqitch.plan file is updated, or DDL
   # files are updated.
@@ -121,6 +126,35 @@ let
 
   mkOperableWithProbes = args: mkOperable (args // probes);
 
+  mkMarloweAppScript = script: ''
+    #################
+    # REQUIRED VARS #
+    #################
+    # MARLOWE_RT_HOST: Host name of the marlowe runtime server.
+
+    [ -z "''${MARLOWE_RT_HOST:-}" ] && echo "MARLOWE_RT_HOST env var must be set -- aborting" && exit 1
+
+    #################
+    # OPTIONAL VARS #
+    #################
+    # MARLOWE_RT_PORT: Port number of the marlowe runtime server.
+    # TIMEOUT_SECONDS: Timeout in seconds for transaction confirmation.
+    # BUILD_SECONDS: Wait specified seconds before transaction construction.
+    # CONFIRM_SECONDS: Wait specified seconds after transaction confirmation.
+    # RETRY_SECONDS: Wait specified seconds after a failed transaction before trying again.
+    # RETRY_LIMIT: Maximum number of attempts for trying a failed transaction again.
+
+    export MARLOWE_RT_PORT="''${MARLOWE_RT_PORT:-3700}"
+    export TIMEOUT_SECONDS="''${TIMEOUT_SECONDS:-900}"
+    export BUILD_SECONDS="''${BUILD_SECONDS:-3}"
+    export CONFIRM_SECONDS="''${CONFIRM_SECONDS:-3}"
+    export RETRY_SECONDS="''${RETRY_SECONDS:-10}"
+    export RETRY_LIMIT="''${RETRY_LIMIT:-5}"
+
+    ${wait-for-tcp}/bin/wait-for-tcp "$RUNTIME_HOST" "$RUNTIME_PORT"
+
+    ${script}
+  '';
 in
 {
   marlowe-chain-indexer = mkOperableWithProbes {
@@ -598,5 +632,96 @@ in
         curl -f "http://localhost:$PORT/healthcheck"
       '';
     };
+  };
+
+  marlowe-pipe = mkOperable {
+    package = marlowe-pipe;
+    runtimeScript = mkMarloweAppScript ''
+      ${marlowe-pipe}/bin/marlowe-pipe \
+        --timeout-seconds "$TIMEOUT_SECONDS" \
+        --build-seconds "$BUILD_SECONDS" \
+        --confirm-seconds "$CONFIRM_SECONDS" \
+        --retry-seconds "$RETRY_SECONDS" \
+        --retry-limit "$RETRY_LIMIT"
+    '';
+  };
+
+  marlowe-scaling = mkOperable {
+    package = marlowe-scaling;
+    runtimeScript = mkMarloweAppScript ''
+      #################
+      # REQUIRED VARS #
+      #################
+      # CONTRACTS_PER_PARTY: The number of contracts to run sequentially for each party.
+
+      [ -z "''${CONTRACTS_PER_PARTY:-}" ] && echo "CONTRACTS_PER_PARTY env var must be set -- aborting" && exit 1
+
+      #################
+      # OPTIONAL VARS #
+      #################
+      # PARTIES: ADDRESS=KEYFILE per party separated by spaces
+
+      read -a -r args <<< "''${PARTIES:-}"
+
+      ${marlowe-scaling}/bin/marlowe-scaling \
+        --timeout-seconds "$TIMEOUT_SECONDS" \
+        --build-seconds "$BUILD_SECONDS" \
+        --confirm-seconds "$CONFIRM_SECONDS" \
+        --retry-seconds "$RETRY_SECONDS" \
+        --retry-limit "$RETRY_LIMIT" \
+        "$CONTRACTS_PER_PARTY" \
+        "''${args[@]}"
+    '';
+  };
+
+  marlowe-oracle = mkOperable {
+    package = marlowe-oracle;
+    runtimeScript = mkMarloweAppScript ''
+      #################
+      # REQUIRED VARS #
+      #################
+      # ADDRESS: The Bech32 address of the oracle.
+      # KEYFILE: The extended payment signing key file for the oracle.
+
+      [ -z "''${ADDRESS:-}" ] && echo "ADDRESS env var must be set -- aborting" && exit 1
+      [ -z "''${KEYFILE:-}" ] && echo "KEYFILE env var must be set -- aborting" && exit 1
+
+      #################
+      # OPTIONAL VARS #
+      #################
+      # POLLING_FREQUENCY: The polling frequency in seconds when waiting on Marlowe Runtime.
+      # REQUEUING_FREQUENCY: The requeuing frequency in seconds for reviewing the progress of contracts on Marlowe Runtime.
+
+      ${marlowe-oracle}/bin/marlowe-oracle \
+        --timeout-seconds "$TIMEOUT_SECONDS" \
+        --build-seconds "$BUILD_SECONDS" \
+        --confirm-seconds "$CONFIRM_SECONDS" \
+        --retry-seconds "$RETRY_SECONDS" \
+        --retry-limit "$RETRY_LIMIT" \
+        --polling "''${POLLING_FREQUENCY:-5}" \
+        --requeue "''${REQUEUING_FREQUENCY:-20}" \
+        "$ADDRESS" \
+        "$KEYFILE"
+    '';
+  };
+
+  marlowe-finder = mkOperable {
+    package = marlowe-finder;
+    runtimeScript = mkMarloweAppScript ''
+      #################
+      # OPTIONAL VARS #
+      #################
+      # POLLING_FREQUENCY: The polling frequency in seconds when waiting on Marlowe Runtime.
+      # REQUEUING_FREQUENCY: The requeuing frequency in seconds for reviewing the progress of contracts on Marlowe Runtime.
+
+      ${marlowe-finder}/bin/marlowe-finder \
+        --timeout-seconds "$TIMEOUT_SECONDS" \
+        --build-seconds "$BUILD_SECONDS" \
+        --confirm-seconds "$CONFIRM_SECONDS" \
+        --retry-seconds "$RETRY_SECONDS" \
+        --retry-limit "$RETRY_LIMIT" \
+        --polling "''${POLLING_FREQUENCY:-5}" \
+        --requeue "''${REQUEUING_FREQUENCY:-20}"
+    '';
   };
 }
