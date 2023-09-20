@@ -134,6 +134,7 @@ data Network = Network
   , byronGenesisJson :: FilePath
   , shelleyGenesisJson :: FilePath
   , alonzoGenesisJson :: FilePath
+  , conwayGenesisJson :: FilePath
   }
   deriving (Show, Eq, Ord, Generic)
 
@@ -221,13 +222,13 @@ startLocalTestnet options@LocalTestnetOptions{..} = do
               Delegator
                 { paymentKeyPair =
                     PaymentKeyPair
-                      { paymentSKey = shelleyGenesisDir </> "stake-delegator-keys" </> "payment" <> show n <> ".skey"
-                      , paymentVKey = shelleyGenesisDir </> "stake-delegator-keys" </> "payment" <> show n <> ".vkey"
+                      { paymentSKey = shelleyGenesisDir </> "delegate-keys" </> "payment" <> show n <> ".skey"
+                      , paymentVKey = shelleyGenesisDir </> "delegate-keys" </> "payment" <> show n <> ".vkey"
                       }
                 , stakingKeyPair =
                     StakingKeyPair
-                      { stakingSKey = shelleyGenesisDir </> "stake-delegator-keys" </> "staking" <> show n <> ".skey"
-                      , stakingVKey = shelleyGenesisDir </> "stake-delegator-keys" </> "staking" <> show n <> ".vkey"
+                      { stakingSKey = shelleyGenesisDir </> "delegate-keys" </> "staking" <> show n <> ".skey"
+                      , stakingVKey = shelleyGenesisDir </> "delegate-keys" </> "staking" <> show n <> ".vkey"
                       }
                 }
 
@@ -313,6 +314,12 @@ createShelleyGenesisStaked workspace startTime testnetMagic LocalTestnetOptions{
       "./configuration/alonzo-babbage-test-genesis.json"
       (shelleyGenesisDir </> "genesis.alonzo.spec.json")
 
+  _ <-
+    writeWorkspaceFileJSON
+      workspace
+      (shelleyGenesisDir </> "genesis.conway.spec.json")
+      $ object ["genDelegs" .= object []]
+
   configFile <-
     copyToWorkspace
       workspace
@@ -328,6 +335,7 @@ createShelleyGenesisStaked workspace startTime testnetMagic LocalTestnetOptions{
         . KM.insert "ByronGenesisFile" (toJSON @String "genesis/byron/genesis.json")
         . KM.insert "ShelleyGenesisFile" (toJSON @String "genesis/shelley/genesis.json")
         . KM.insert "AlonzoGenesisFile" (toJSON @String "genesis/shelley/genesis.alonzo.json")
+        . KM.insert "ConwayGenesisFile" (toJSON @String "genesis/shelley/genesis.conway.json")
         . KM.insert "RequiresNetworkMagic" (toJSON @String "RequiresMagic")
         . KM.insert "LastKnownBlockVersion-Major" (toJSON @Int 6)
         . KM.insert "LastKnownBlockVersion-Minor" (toJSON @Int 0)
@@ -336,7 +344,7 @@ createShelleyGenesisStaked workspace startTime testnetMagic LocalTestnetOptions{
         . KM.insert "TestMaryHardForkAtEpoch" (toJSON @Int 0)
         . KM.insert "TestAlonzoHardForkAtEpoch" (toJSON @Int 0)
         . KM.insert "TestBabbageHardForkAtEpoch" (toJSON @Int 0)
-        . KM.insert "TestEnableDevelopmentHardForkEras" (toJSON True)
+        . KM.insert "ExperimentalHardForksEnabled" (toJSON True)
     )
 
   execCli_
@@ -369,6 +377,8 @@ setupNetwork workspace LocalTestnetOptions{..} byronGenesisDir shelleyGenesisDir
   shelleyGenesisJson <- moveToWorkspace workspace (shelleyGenesisDir </> "genesis.json") "genesis/shelley/genesis.json"
   alonzoGenesisJson <-
     moveToWorkspace workspace (shelleyGenesisDir </> "genesis.alonzo.json") "genesis/shelley/genesis.alonzo.json"
+  conwayGenesisJson <-
+    moveToWorkspace workspace (shelleyGenesisDir </> "genesis.conway.json") "genesis/shelley/genesis.conway.json"
 
   rewriteJSONFile
     shelleyGenesisJson

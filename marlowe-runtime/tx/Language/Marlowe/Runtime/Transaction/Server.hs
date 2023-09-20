@@ -19,7 +19,7 @@ import Cardano.Api (
   EraHistory,
   IsCardanoEra,
   NetworkId (..),
-  ScriptDataSupportedInEra (ScriptDataInBabbageEra),
+  ScriptDataSupportedInEra (..),
   ShelleyBasedEra (..),
   StakeAddressReference (..),
   Tx,
@@ -31,6 +31,7 @@ import Cardano.Api (
   getTxBody,
   getTxId,
   makeShelleyAddress,
+  toLedgerEpochInfo,
  )
 import Cardano.Api.Shelley (
   ProtocolParameters,
@@ -114,6 +115,7 @@ import Language.Marlowe.Runtime.Transaction.Api (
   WithdrawTxInEra (..),
  )
 import Language.Marlowe.Runtime.Transaction.BuildConstraints (
+  MkRoleTokenMintingPolicy,
   buildApplyInputsConstraints,
   buildCreateConstraints,
   buildWithdrawConstraints,
@@ -171,6 +173,7 @@ data TransactionServerDependencies m = TransactionServerDependencies
   , getTip :: STM Chain.ChainPoint
   , getCurrentScripts :: forall v. MarloweVersion v -> MarloweScripts
   , analysisTimeout :: NominalDiffTime
+  , mkRoleTokenMintingPolicy :: MkRoleTokenMintingPolicy m
   }
 
 transactionServer
@@ -206,12 +209,13 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                   solveConstraints =
                     Constraints.solveConstraints
                       systemStart
-                      eraHistory
+                      (toLedgerEpochInfo eraHistory)
                       protocolParameters
               case command of
                 Create mStakeCredential version addresses roles metadata minAda contract ->
                   withEvent ExecCreate \_ ->
                     execCreate
+                      mkRoleTokenMintingPolicy
                       era
                       contractQueryConnector
                       getCurrentScripts
@@ -258,6 +262,8 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                       payouts
                 Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra tx ->
                   execSubmit (mkSubmitJob ScriptDataInBabbageEra) trackSubmitJob tx
+                Submit ReferenceTxInsScriptsInlineDatumsInConwayEra tx ->
+                  execSubmit (mkSubmitJob ScriptDataInConwayEra) trackSubmitJob tx
           , recvMsgAttach = \case
               jobId@(JobIdSubmit txId) ->
                 attachSubmit jobId $ getSubmitJob txId
@@ -274,7 +280,8 @@ attachSubmit jobId = submitJobServerAttach jobId <=< atomically
 execCreate
   :: forall era m v
    . (MonadUnliftIO m, IsCardanoEra era)
-  => CardanoEra era
+  => MkRoleTokenMintingPolicy m
+  -> CardanoEra era
   -> Connector (QueryClient ContractRequest) m
   -> (MarloweVersion v -> MarloweScripts)
   -> SolveConstraints
@@ -290,7 +297,7 @@ execCreate
   -> Either (Contract v) DatumHash
   -> NominalDiffTime
   -> m (ServerStCmd MarloweTxCommand Void CreateError (ContractCreated v) m ())
-execCreate era contractQueryConnector getCurrentScripts solveConstraints protocolParameters loadWalletContext networkId mStakeCredential version addresses roleTokens metadata minAda contract analysisTimeout = execExceptT do
+execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts solveConstraints protocolParameters loadWalletContext networkId mStakeCredential version addresses roleTokens metadata minAda contract analysisTimeout = execExceptT do
   referenceInputsSupported <- referenceInputsSupportedInEra (CreateEraUnsupported $ AnyCardanoEra era) era
   walletContext <- lift $ loadWalletContext addresses
   (contract', continuations) <- case contract of
@@ -302,8 +309,16 @@ execCreate era contractQueryConnector getCurrentScripts solveConstraints protoco
     Left c -> pure (c, noContinuations version)
   mCardanoStakeCredential <- except $ traverse (note CreateToCardanoError . toCardanoStakeCredential) mStakeCredential
   ((datum, assets, rolesCurrency), constraints) <-
-    except $
-      buildCreateConstraints referenceInputsSupported version walletContext roleTokens metadata minAda contract'
+    ExceptT $
+      buildCreateConstraints
+        mkRoleTokenMintingPolicy
+        referenceInputsSupported
+        version
+        walletContext
+        roleTokens
+        metadata
+        minAda
+        contract'
   let scripts@MarloweScripts{..} = getCurrentScripts version
       stakeReference = maybe NoStakeAddress StakeAddressByValue mCardanoStakeCredential
       marloweAddress =
@@ -389,6 +404,7 @@ referenceInputsSupportedInEra e = \case
   MaryEra -> throwE e
   AlonzoEra -> throwE e
   BabbageEra -> pure ReferenceTxInsScriptsInlineDatumsInBabbageEra
+  ConwayEra -> pure ReferenceTxInsScriptsInlineDatumsInConwayEra
 
 singletonContinuations :: Contract.ContractWithAdjacency -> Continuations 'V1
 singletonContinuations Contract.ContractWithAdjacency{..} = Map.singleton contractHash contract

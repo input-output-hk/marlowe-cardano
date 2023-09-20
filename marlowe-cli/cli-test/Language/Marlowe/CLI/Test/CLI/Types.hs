@@ -24,7 +24,6 @@ import Cardano.Api (
   ScriptDataSupportedInEra,
  )
 import Cardano.Api qualified as C
-import Contrib.Data.List qualified as List
 import Control.Lens (Lens', makeLenses)
 import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO)
@@ -33,7 +32,8 @@ import Control.Monad.State.Class (MonadState)
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:?), (.=))
 import Data.Aeson qualified as A
 import Data.Aeson.KeyMap qualified as KeyMap
-import Data.List.NonEmpty qualified as List
+import Data.List qualified as List
+import Data.List.NonEmpty qualified as NE
 import Data.Map (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
@@ -83,8 +83,8 @@ import Language.Marlowe.Core.V1.Semantics.Types qualified as M
 import Language.Marlowe.Runtime.Cardano.Api qualified as Runtime.Api
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Language.Marlowe.Runtime.Core.Api qualified as Runtime.Api
-import Plutus.V1.Ledger.Api (CostModelParams, ProtocolVersion, TokenName)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig)
+import PlutusLedgerApi.V1 (ProtocolVersion, TokenName)
 
 type CLITxInfo lang era = (MarloweTransaction lang era, C.TxBody era)
 
@@ -280,7 +280,7 @@ instance ToJSON CLIOperation where
 data CLIContractInfo lang era = CLIContractInfo
   { _ciContract :: M.Contract
   , _ciCurrency :: Maybe CurrencyNickname
-  , _ciPlan :: List.NonEmpty (MarloweTransaction lang era)
+  , _ciPlan :: NE.NonEmpty (MarloweTransaction lang era)
   , _ciThread :: Maybe (AnyCLIMarloweThread lang era)
   , _ciWithdrawalsCheckPoints :: Map TokenName C.TxId
   -- ^ TODO: Currently we track a point of the last withdrawal on the chain.
@@ -319,7 +319,7 @@ class HasInterpretEnv env lang era | env -> lang era where
   eraL :: Lens' env (ScriptDataSupportedInEra era)
   printStatsL :: Lens' env PrintStats
   slotConfigL :: Lens' env SlotConfig
-  costModelParamsL :: Lens' env CostModelParams
+  costModelParamsL :: Lens' env [Integer]
   protocolVersionL :: Lens' env ProtocolVersion
   txBuildupContextL :: Lens' env (TxBuildupContext era)
 

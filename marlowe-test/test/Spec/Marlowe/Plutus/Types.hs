@@ -56,7 +56,7 @@ module Spec.Marlowe.Plutus.Types (
 import Control.Lens (Lens', lens)
 import Language.Marlowe.Core.V1.Semantics (MarloweParams, TransactionInput, TransactionOutput)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, State)
-import Plutus.V2.Ledger.Api (
+import PlutusLedgerApi.V2 (
   DCert,
   Datum,
   DatumHash,

@@ -31,6 +31,7 @@ import Data.Binary.Put (putWord32be)
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import Data.Either (fromRight)
+import Data.Kind (Type)
 import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -57,9 +58,9 @@ import Language.Marlowe.Runtime.ChainSync.Api (
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Network.Protocol.Codec.Spec (GVariations (gVariations), Variations (..), varyAp)
 import Numeric.Natural (Natural)
-import qualified Plutus.V1.Ledger.Api as Plutus
-import qualified Plutus.V1.Ledger.Value as Plutus
-import qualified Plutus.V2.Ledger.Api as PV2
+import qualified PlutusLedgerApi.V1 as Plutus
+import qualified PlutusLedgerApi.V1.Value as Plutus
+import qualified PlutusLedgerApi.V2 as PV2
 
 -- | The ID of a contract is the TxId and TxIx of the UTxO that first created
 -- the contract.
@@ -107,11 +108,11 @@ deriving instance Eq (MarloweVersion v)
 deriving instance Ord (MarloweVersion v)
 
 class IsMarloweVersion (v :: MarloweVersionTag) where
-  type Contract v :: *
-  type TransactionError v :: *
-  type Datum v :: *
-  type Inputs (v :: MarloweVersionTag) :: *
-  type PayoutDatum v :: *
+  type Contract v :: Type
+  type TransactionError v :: Type
+  type Datum v :: Type
+  type Inputs (v :: MarloweVersionTag) :: Type
+  type PayoutDatum v :: Type
   marloweVersion :: MarloweVersion v
 
 instance IsMarloweVersion 'V1 where
@@ -558,7 +559,7 @@ instance Binary PV2.PubKeyHash
 instance Binary PV2.SatInt
 instance Binary PV2.StakingCredential
 instance Binary PV2.TokenName
-instance Binary PV2.ValidatorHash
+instance Binary PV2.ScriptHash
 instance Binary V1.Action
 instance Binary V1.Bound
 instance Binary V1.ChoiceId
@@ -601,7 +602,7 @@ instance Variations PV2.POSIXTime
 instance Variations PV2.PubKeyHash
 instance Variations PV2.StakingCredential
 instance Variations PV2.TokenName
-instance Variations PV2.ValidatorHash
+instance Variations PV2.ScriptHash
 instance Variations V1.Action
 instance Variations V1.Bound
 instance Variations V1.ChoiceId

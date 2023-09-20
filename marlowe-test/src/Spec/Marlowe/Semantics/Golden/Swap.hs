@@ -35,7 +35,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   Value (Constant),
  )
 import Language.Marlowe.Util ()
-import Plutus.V2.Ledger.Api (CurrencySymbol, POSIXTime (..))
+import PlutusLedgerApi.V2 (CurrencySymbol, POSIXTime (..))
 
 import qualified PlutusTx.AssocMap as AM (Map, fromList)
 
@@ -60,8 +60,8 @@ contract :: Contract
 contract =
   let aAmount = 300_000_000
       bAmount = 500_000_000
-      aTimeout = 1000
-      bTimeout = 2000
+      aTimeout = 1_000
+      bTimeout = 2_000
    in When
         [ Case (Deposit aParty aParty aToken $ Constant aAmount) $
             When
@@ -92,7 +92,7 @@ valids :: [(POSIXTime, [TransactionInput], TransactionOutput)]
 valids =
   [
     ( POSIXTime{getPOSIXTime = 0}
-    , [TransactionInput{txInterval = (POSIXTime{getPOSIXTime = 1000}, POSIXTime{getPOSIXTime = 1000}), txInputs = []}]
+    , [TransactionInput{txInterval = (POSIXTime{getPOSIXTime = 1_000}, POSIXTime{getPOSIXTime = 1_000}), txInputs = []}]
     , TransactionOutput
         { txOutWarnings = []
         , txOutPayments = []
@@ -101,7 +101,7 @@ valids =
               { accounts = toAM $ Map{unMap = []}
               , choices = toAM $ Map{unMap = []}
               , boundValues = toAM $ Map{unMap = []}
-              , minTime = POSIXTime{getPOSIXTime = 1000}
+              , minTime = POSIXTime{getPOSIXTime = 1_000}
               }
         , txOutContract = Close
         }
@@ -111,20 +111,20 @@ valids =
     ,
       [ TransactionInput
           { txInterval = (POSIXTime{getPOSIXTime = 0}, POSIXTime{getPOSIXTime = 0})
-          , txInputs = [NormalInput (IDeposit aParty aParty aToken 300000000)]
+          , txInputs = [NormalInput (IDeposit aParty aParty aToken 300_000_000)]
           }
-      , TransactionInput{txInterval = (POSIXTime{getPOSIXTime = 2000}, POSIXTime{getPOSIXTime = 2000}), txInputs = []}
+      , TransactionInput{txInterval = (POSIXTime{getPOSIXTime = 2_000}, POSIXTime{getPOSIXTime = 2_000}), txInputs = []}
       ]
     , TransactionOutput
         { txOutWarnings = []
         , txOutPayments =
-            [Payment aParty (Party aParty) (Token "13e78e78c233e131b0cbe4424225d338b7c5ac65e16df0a3e6c9d8f8" "Token A") 300000000]
+            [Payment aParty (Party aParty) (Token "13e78e78c233e131b0cbe4424225d338b7c5ac65e16df0a3e6c9d8f8" "Token A") 300_000_000]
         , txOutState =
             State
               { accounts = toAM $ Map{unMap = []}
               , choices = toAM $ Map{unMap = []}
               , boundValues = toAM $ Map{unMap = []}
-              , minTime = POSIXTime{getPOSIXTime = 2000}
+              , minTime = POSIXTime{getPOSIXTime = 2_000}
               }
         , txOutContract = Close
         }
@@ -134,18 +134,18 @@ valids =
     ,
       [ TransactionInput
           { txInterval = (POSIXTime{getPOSIXTime = 0}, POSIXTime{getPOSIXTime = 0})
-          , txInputs = [NormalInput (IDeposit aParty aParty aToken 300000000)]
+          , txInputs = [NormalInput (IDeposit aParty aParty aToken 300_000_000)]
           }
       , TransactionInput
           { txInterval = (POSIXTime{getPOSIXTime = 0}, POSIXTime{getPOSIXTime = 0})
-          , txInputs = [NormalInput (IDeposit bParty bParty bToken 500000000)]
+          , txInputs = [NormalInput (IDeposit bParty bParty bToken 500_000_000)]
           }
       ]
     , TransactionOutput
         { txOutWarnings = []
         , txOutPayments =
-            [ Payment aParty (Party bParty) (Token "13e78e78c233e131b0cbe4424225d338b7c5ac65e16df0a3e6c9d8f8" "Token A") 300000000
-            , Payment bParty (Party aParty) (Token "1b9af43b0eaafc42dfaefbbf4e71437af45454c7292a6b6606363741" "Token B") 500000000
+            [ Payment aParty (Party bParty) (Token "13e78e78c233e131b0cbe4424225d338b7c5ac65e16df0a3e6c9d8f8" "Token A") 300_000_000
+            , Payment bParty (Party aParty) (Token "1b9af43b0eaafc42dfaefbbf4e71437af45454c7292a6b6606363741" "Token B") 500_000_000
             ]
         , txOutState =
             State
@@ -173,7 +173,7 @@ invalids =
               { accounts = toAM $ Map{unMap = []}
               , choices = toAM $ Map{unMap = []}
               , boundValues = toAM $ Map{unMap = []}
-              , minTime = POSIXTime{getPOSIXTime = 1000}
+              , minTime = POSIXTime{getPOSIXTime = 1_000}
               }
         , txOutContract = Close
         }
@@ -183,20 +183,20 @@ invalids =
     ,
       [ TransactionInput
           { txInterval = (POSIXTime{getPOSIXTime = 0}, POSIXTime{getPOSIXTime = 0})
-          , txInputs = [NormalInput (IDeposit aParty aParty aToken 500000000)]
+          , txInputs = [NormalInput (IDeposit aParty aParty aToken 500_000_000)]
           }
-      , TransactionInput{txInterval = (POSIXTime{getPOSIXTime = 2000}, POSIXTime{getPOSIXTime = 2000}), txInputs = []}
+      , TransactionInput{txInterval = (POSIXTime{getPOSIXTime = 2_000}, POSIXTime{getPOSIXTime = 2_000}), txInputs = []}
       ]
     , TransactionOutput
         { txOutWarnings = []
         , txOutPayments =
-            [Payment aParty (Party aParty) (Token "13e78e78c233e131b0cbe4424225d338b7c5ac65e16df0a3e6c9d8f8" "Token A") 300000000]
+            [Payment aParty (Party aParty) (Token "13e78e78c233e131b0cbe4424225d338b7c5ac65e16df0a3e6c9d8f8" "Token A") 300_000_000]
         , txOutState =
             State
               { accounts = toAM $ Map{unMap = []}
               , choices = toAM $ Map{unMap = []}
               , boundValues = toAM $ Map{unMap = []}
-              , minTime = POSIXTime{getPOSIXTime = 2000}
+              , minTime = POSIXTime{getPOSIXTime = 2_000}
               }
         , txOutContract = Close
         }
@@ -206,18 +206,18 @@ invalids =
     ,
       [ TransactionInput
           { txInterval = (POSIXTime{getPOSIXTime = 0}, POSIXTime{getPOSIXTime = 0})
-          , txInputs = [NormalInput (IDeposit aParty aParty aToken 300000000)]
+          , txInputs = [NormalInput (IDeposit aParty aParty aToken 300_000_000)]
           }
       , TransactionInput
           { txInterval = (POSIXTime{getPOSIXTime = 0}, POSIXTime{getPOSIXTime = 0})
-          , txInputs = [NormalInput (IDeposit aParty bParty bToken 500000000)]
+          , txInputs = [NormalInput (IDeposit aParty bParty bToken 500_000_000)]
           }
       ]
     , TransactionOutput
         { txOutWarnings = []
         , txOutPayments =
-            [ Payment aParty (Party bParty) (Token "13e78e78c233e131b0cbe4424225d338b7c5ac65e16df0a3e6c9d8f8" "Token A") 300000000
-            , Payment bParty (Party aParty) (Token "1b9af43b0eaafc42dfaefbbf4e71437af45454c7292a6b6606363741" "Token B") 500000000
+            [ Payment aParty (Party bParty) (Token "13e78e78c233e131b0cbe4424225d338b7c5ac65e16df0a3e6c9d8f8" "Token A") 300_000_000
+            , Payment bParty (Party aParty) (Token "1b9af43b0eaafc42dfaefbbf4e71437af45454c7292a6b6606363741" "Token B") 500_000_000
             ]
         , txOutState =
             State

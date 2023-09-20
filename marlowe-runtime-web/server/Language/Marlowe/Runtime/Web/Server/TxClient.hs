@@ -32,6 +32,7 @@ import Control.Monad (when, (<=<))
 import Control.Monad.Event.Class
 import Control.Monad.IO.Unlift (MonadUnliftIO, liftIO, withRunInIO)
 import Data.Foldable (for_)
+import Data.Kind (Type)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import Data.Time (UTCTime)
@@ -105,7 +106,7 @@ type Submit r m = r -> Submit' m
 
 type Submit' m = forall era. ReferenceTxInsScriptsInlineDatumsSupportedInEra era -> Tx era -> m (Maybe SubmitError)
 
-data TempTx (tx :: * -> MarloweVersionTag -> *) where
+data TempTx (tx :: Type -> MarloweVersionTag -> Type) where
   TempTx
     :: ReferenceTxInsScriptsInlineDatumsSupportedInEra era -> MarloweVersion v -> TempTxStatus -> tx era v -> TempTx tx
 

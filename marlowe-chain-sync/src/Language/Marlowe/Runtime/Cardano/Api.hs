@@ -7,6 +7,7 @@
 -- | Utilities for converting to and from Cardano API types.
 module Language.Marlowe.Runtime.Cardano.Api where
 
+import Cardano.Api (getScriptData, unsafeHashableScriptData)
 import qualified Cardano.Api as C
 import qualified Cardano.Api.Shelley as C
 import qualified Cardano.Ledger.BaseTypes as L
@@ -55,10 +56,10 @@ fromCardanoBlockHeaderHash :: C.Hash C.BlockHeader -> BlockHeaderHash
 fromCardanoBlockHeaderHash (C.HeaderHash hash) = BlockHeaderHash $ fromShort hash
 
 toCardanoScriptHash :: ScriptHash -> Maybe C.ScriptHash
-toCardanoScriptHash = C.deserialiseFromRawBytes C.AsScriptHash . unScriptHash
+toCardanoScriptHash = hush . C.deserialiseFromRawBytes C.AsScriptHash . unScriptHash
 
 toCardanoPlutusScript :: forall lang. (C.HasTypeProxy lang) => PlutusScript -> Maybe (C.PlutusScript lang)
-toCardanoPlutusScript = C.deserialiseFromRawBytes (C.proxyToAsType (Proxy :: Proxy (C.PlutusScript lang))) . unPlutusScript
+toCardanoPlutusScript = hush . C.deserialiseFromRawBytes (C.proxyToAsType (Proxy :: Proxy (C.PlutusScript lang))) . unPlutusScript
 
 fromCardanoPlutusScript :: forall lang. (C.HasTypeProxy lang) => C.PlutusScript lang -> PlutusScript
 fromCardanoPlutusScript = PlutusScript . C.serialiseToRawBytes
@@ -72,7 +73,7 @@ plutusScriptHash ps = hashPlutusScript C.PlutusScriptV2 <|> hashPlutusScript C.P
       pure . fromCardanoScriptHash . C.hashScript $ script
 
 toCardanoDatumHash :: DatumHash -> Maybe (C.Hash C.ScriptData)
-toCardanoDatumHash = C.deserialiseFromRawBytes (C.AsHash C.AsScriptData) . unDatumHash
+toCardanoDatumHash = hush . C.deserialiseFromRawBytes (C.AsHash C.AsScriptData) . unDatumHash
 
 fromCardanoDatumHash :: C.Hash C.ScriptData -> DatumHash
 fromCardanoDatumHash = DatumHash . C.serialiseToRawBytes
@@ -130,13 +131,13 @@ fromCardanoStakeAddressReference = \case
         (fromCardanoCertIx certIx)
 
 toCardanoPaymentKeyHash :: PaymentKeyHash -> Maybe (C.Hash C.PaymentKey)
-toCardanoPaymentKeyHash = C.deserialiseFromRawBytes (C.AsHash C.AsPaymentKey) . unPaymentKeyHash
+toCardanoPaymentKeyHash = hush . C.deserialiseFromRawBytes (C.AsHash C.AsPaymentKey) . unPaymentKeyHash
 
 toCardanoStakeKeyHash :: StakeKeyHash -> Maybe (C.Hash C.StakeKey)
-toCardanoStakeKeyHash = C.deserialiseFromRawBytes (C.AsHash C.AsStakeKey) . unStakeKeyHash
+toCardanoStakeKeyHash = hush . C.deserialiseFromRawBytes (C.AsHash C.AsStakeKey) . unStakeKeyHash
 
 toCardanoPolicyId :: PolicyId -> Maybe C.PolicyId
-toCardanoPolicyId = C.deserialiseFromRawBytes C.AsPolicyId . unPolicyId
+toCardanoPolicyId = hush . C.deserialiseFromRawBytes C.AsPolicyId . unPolicyId
 
 fromCardanoPolicyId :: C.PolicyId -> PolicyId
 fromCardanoPolicyId = PolicyId . C.serialiseToRawBytes
@@ -154,7 +155,7 @@ fromCardanoQuantity :: C.Quantity -> Quantity
 fromCardanoQuantity (C.Quantity q) = Quantity $ fromIntegral q
 
 toCardanoTxId :: TxId -> Maybe C.TxId
-toCardanoTxId = C.deserialiseFromRawBytes C.AsTxId . unTxId
+toCardanoTxId = hush . C.deserialiseFromRawBytes C.AsTxId . unTxId
 
 fromCardanoTxId :: C.TxId -> TxId
 fromCardanoTxId = TxId . C.serialiseToRawBytes
@@ -178,7 +179,7 @@ fromCardanoTxIn :: C.TxIn -> TxOutRef
 fromCardanoTxIn (C.TxIn txId txIx) = TxOutRef (fromCardanoTxId txId) (fromCardanoTxIx txIx)
 
 toCardanoAddressAny :: Address -> Maybe C.AddressAny
-toCardanoAddressAny = C.deserialiseFromRawBytes C.AsAddressAny . unAddress
+toCardanoAddressAny = hush . C.deserialiseFromRawBytes C.AsAddressAny . unAddress
 
 fromCardanoAddressAny :: C.AddressAny -> Address
 fromCardanoAddressAny = Address . C.serialiseToRawBytes
@@ -186,7 +187,7 @@ fromCardanoAddressAny = Address . C.serialiseToRawBytes
 toCardanoAddressInEra :: C.CardanoEra era -> Address -> Maybe (C.AddressInEra era)
 toCardanoAddressInEra era =
   withCardanoEra era $
-    C.deserialiseFromRawBytes (C.AsAddressInEra $ cardanoEraToAsType era) . unAddress
+    hush . C.deserialiseFromRawBytes (C.AsAddressInEra $ cardanoEraToAsType era) . unAddress
 
 fromCardanoAddressInEra :: C.CardanoEra era -> C.AddressInEra era -> Address
 fromCardanoAddressInEra era =
@@ -250,7 +251,7 @@ toCardanoTxOutDatum era = curry case featureInCardanoEra era of
   Just scriptDataSupported -> \case
     (Nothing, Nothing) -> Just C.TxOutDatumNone
     (Just hash, Nothing) -> C.TxOutDatumHash scriptDataSupported <$> toCardanoDatumHash hash
-    (_, Just datum) -> Just $ C.TxOutDatumInTx scriptDataSupported $ toCardanoScriptData datum
+    (_, Just datum) -> Just $ C.TxOutDatumInTx scriptDataSupported $ unsafeHashableScriptData $ toCardanoScriptData datum
 
 toCardanoTxOutDatum'
   :: C.CardanoEra era
@@ -266,8 +267,8 @@ fromCardanoTxOutDatum :: C.TxOutDatum C.CtxTx era -> (Maybe DatumHash, Maybe Dat
 fromCardanoTxOutDatum = \case
   C.TxOutDatumNone -> (Nothing, Nothing)
   C.TxOutDatumHash _ hash -> (Just $ fromCardanoDatumHash hash, Nothing)
-  C.TxOutDatumInTx _ datum -> (Nothing, Just $ fromCardanoScriptData datum)
-  C.TxOutDatumInline _ datum -> (Nothing, Just $ fromCardanoScriptData datum)
+  C.TxOutDatumInTx _ datum -> (Nothing, Just $ fromCardanoScriptData $ getScriptData datum)
+  C.TxOutDatumInline _ datum -> (Nothing, Just $ fromCardanoScriptData $ getScriptData datum)
 
 toCardanoTxOut :: C.MultiAssetSupportedInEra era -> TransactionOutput -> Maybe (C.TxOut C.CtxTx era)
 toCardanoTxOut era TransactionOutput{..} =
@@ -318,3 +319,4 @@ cardanoEraToAsType = \case
   C.MaryEra -> C.AsMaryEra
   C.AlonzoEra -> C.AsAlonzoEra
   C.BabbageEra -> C.AsBabbageEra
+  C.ConwayEra -> C.AsConwayEra

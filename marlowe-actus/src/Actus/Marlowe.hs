@@ -51,8 +51,8 @@ import Data.Validation (Validation (..))
 import Language.Marlowe.Extended.V1
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 
--- | 'genContract' validatates the applicabilty of the contract terms in order
--- to genereate a Marlowe contract with risk factors observed at a given point
+-- | 'genContract' validates the applicability of the contract terms in order
+-- to generate a Marlowe contract with risk factors observed at a given point
 -- in time
 genContract
   :: (Party, Party)
@@ -62,10 +62,10 @@ genContract
   -> ContractTerms Double
   -- ^ ACTUS contract terms
   -> Validation [TermValidationError] Contract
-  -- ^ Marlowe contract or applicabilty errors
+  -- ^ Marlowe contract or applicability errors
 genContract p rf = fmap (genContract' p rf) . validateTerms
 
--- | Same as 'getContract', but does not validate the applicabilty of the contract
+-- | Same as 'getContract', but does not validate the applicability of the contract
 -- terms.
 genContract'
   :: (Party, Party)
@@ -76,7 +76,7 @@ genContract'
   -- ^ ACTUS contract terms
   -> Contract
   -- ^ Marlowe contract
-genContract' (party, couterparty) rf ct =
+genContract' (party, counterparty) rf ct =
   let cfs = genProjectedCashflows rf ct
    in foldl' gen Close $ reverse cfs
   where
@@ -99,7 +99,7 @@ genContract' (party, couterparty) rf ct =
             If
               (0 `ValueLT` amount)
               ( invoice
-                  couterparty
+                  counterparty
                   party
                   amount
                   t
@@ -109,7 +109,7 @@ genContract' (party, couterparty) rf ct =
                   (amount `ValueLT` 0)
                   ( invoice
                       party
-                      couterparty
+                      counterparty
                       (NegValue amount)
                       t
                       c
@@ -207,7 +207,7 @@ constant = Constant . toMarloweFixedPoint
 toTimeout :: LocalTime -> Timeout
 toTimeout LocalTime{..} =
   let secs = nominalDiffTimeToSeconds $ utcTimeToPOSIXSeconds (UTCTime localDay (timeOfDayToTime localTimeOfDay))
-   in POSIXTime (floor $ 1000 * secs)
+   in POSIXTime (floor $ 1_000 * secs)
 
 -- | 'genProjectedCashflows' generates a list of projected cashflows for
 --  given contract terms and provided risk factors. The function returns

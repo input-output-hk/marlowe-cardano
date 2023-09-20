@@ -14,6 +14,7 @@ import Cardano.Api (
   ConsensusModeParams (..),
   EpochSlots (..),
   EraInMode (..),
+  File (..),
   LocalNodeConnectInfo (..),
   TxInMode (..),
  )
@@ -90,6 +91,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
                   MaryEra -> MaryEraInCardanoMode
                   AlonzoEra -> AlonzoEraInCardanoMode
                   BabbageEra -> BabbageEraInCardanoMode
+                  ConwayEra -> ConwayEraInCardanoMode
               , nodeTip
               , scanBatchSize = 8192 -- TODO make this a command line option
               }
@@ -129,5 +131,5 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
         { -- The epoch slots ignored after Byron.
           localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
         , localNodeNetworkId = networkId
-        , localNodeSocketPath = nodeSocket
+        , localNodeSocketPath = File nodeSocket
         }

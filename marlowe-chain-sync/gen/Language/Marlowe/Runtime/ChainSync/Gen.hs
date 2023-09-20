@@ -18,7 +18,8 @@ import Cardano.Api (
   ScriptDataSupportedInEra (..),
   SerialiseAsRawBytes (..),
   SystemStart (..),
-  hashScriptData,
+  hashScriptDataBytes,
+  unsafeHashableScriptData,
  )
 import Cardano.Api.Byron (AnyCardanoEra (..))
 import qualified Cardano.Api.Shelley as Shelley
@@ -29,20 +30,13 @@ import qualified Data.ByteString as BS
 import Data.ByteString.Short (fromShort)
 import qualified Data.List.NonEmpty as NE
 import Data.Maybe (mapMaybe)
+import Data.SOP.Counting (Exactly (..))
 import Data.SOP.Strict (K (..), NP (..))
 import qualified Data.Set.NonEmpty as NESet
 import qualified Data.Text as T
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Data.Void (absurd)
 import Data.Word (Word64)
-import Gen.Cardano.Api.Typed (
-  genAddressShelley,
-  genPlutusScript,
-  genProtocolParameters,
-  genScriptHash,
-  genTx,
-  genVerificationKey,
- )
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScriptData)
 import qualified Language.Marlowe.Runtime.Cardano.Api as Cardano.Api
 import Language.Marlowe.Runtime.ChainSync.Api
@@ -60,7 +54,14 @@ import Ouroboros.Consensus.HardFork.History (
   mkInterpreter,
   summaryWithExactly,
  )
-import Ouroboros.Consensus.Util.Counting (Exactly (..))
+import Test.Gen.Cardano.Api.Typed (
+  genAddressShelley,
+  genPlutusScript,
+  genProtocolParameters,
+  genScriptHash,
+  genTx,
+  genVerificationKey,
+ )
 import Test.QuickCheck hiding (shrinkMap)
 import Test.QuickCheck.Gen (chooseWord64)
 import Test.QuickCheck.Hedgehog (hedgehog)
@@ -168,7 +169,7 @@ instance Arbitrary TokenName where
 instance Arbitrary Datum where
   arbitrary =
     oneofStructured
-      [ (Node, Constr <$> arbitrary <*> listOf (resized (`div` 10) arbitrary))
+      [ (Node, Constr . abs <$> arbitrary <*> listOf (resized (`div` 10) arbitrary))
       , (Node, Map <$> listOf (resized (`div` 10) arbitrary))
       , (Node, List <$> listOf (resized (`div` 10) arbitrary))
       , (Leaf, I <$> arbitrary)
@@ -182,7 +183,7 @@ instance Arbitrary Datum where
     B bytes -> B . BS.pack <$> shrinkList shrink (BS.unpack bytes)
 
 instance Arbitrary DatumHash where
-  arbitrary = fromCardanoDatumHash . hashScriptData . toCardanoScriptData <$> arbitrary
+  arbitrary = fromCardanoDatumHash . hashScriptDataBytes . unsafeHashableScriptData . toCardanoScriptData <$> arbitrary
 
 instance Arbitrary Redeemer where
   arbitrary = Redeemer <$> arbitrary
@@ -267,7 +268,7 @@ instance Arbitrary TransactionOutput where
       <*> arbitrary
       <*> maybe
         arbitrary
-        (pure . Just . fromCardanoDatumHash . hashScriptData . toCardanoScriptData)
+        (pure . Just . fromCardanoDatumHash . hashScriptDataBytes . unsafeHashableScriptData . toCardanoScriptData)
         mDatum
       <*> pure mDatum
   shrink = genericShrink
@@ -388,6 +389,7 @@ instance Arbitrary AnyCardanoEra where
       , AnyCardanoEra MaryEra
       , AnyCardanoEra AlonzoEra
       , AnyCardanoEra BabbageEra
+      , AnyCardanoEra ConwayEra
       ]
 
 instance Query.ArbitraryRequest ChainSyncQuery where
@@ -456,6 +458,7 @@ genEraHistory =
     marySummary <- genEraSummary
     alonzoSummary <- genEraSummary
     babbageSummary <- genEraSummary
+    conwaySummary <- genEraSummary
     pure $
       mkInterpreter $
         summaryWithExactly $
@@ -466,6 +469,7 @@ genEraHistory =
               :* K marySummary
               :* K alonzoSummary
               :* K babbageSummary
+              :* K conwaySummary
               :* Nil
 
 genEraSummary :: Gen EraSummary
@@ -524,10 +528,12 @@ instance Command.ArbitraryCommand ChainSyncCommand where
     elements
       [ Command.SomeTag $ TagSubmitTx ScriptDataInAlonzoEra
       , Command.SomeTag $ TagSubmitTx ScriptDataInBabbageEra
+      , Command.SomeTag $ TagSubmitTx ScriptDataInConwayEra
       ]
   arbitraryCmd = \case
     TagSubmitTx ScriptDataInAlonzoEra -> hedgehog $ SubmitTx ScriptDataInAlonzoEra <$> genTx AlonzoEra
     TagSubmitTx ScriptDataInBabbageEra -> hedgehog $ SubmitTx ScriptDataInBabbageEra <$> genTx BabbageEra
+    TagSubmitTx ScriptDataInConwayEra -> hedgehog $ SubmitTx ScriptDataInConwayEra <$> genTx ConwayEra
   arbitraryJobId = const Nothing
   arbitraryStatus = const Nothing
   arbitraryErr = \case
@@ -551,6 +557,9 @@ instance Command.CommandEq ChainSyncCommand where
       _ -> False
     SubmitTx ScriptDataInBabbageEra tx -> \case
       SubmitTx ScriptDataInBabbageEra tx' -> tx == tx'
+      _ -> False
+    SubmitTx ScriptDataInConwayEra tx -> \case
+      SubmitTx ScriptDataInConwayEra tx' -> tx == tx'
       _ -> False
   jobIdEq = \case {}
   statusEq = \case

@@ -26,6 +26,7 @@ import Cardano.Api (
   CardanoMode,
   ConsensusModeParams (..),
   EpochSlots (..),
+  File (..),
   LocalNodeConnectInfo (..),
   NetworkId (..),
   NetworkMagic (..),
@@ -82,6 +83,7 @@ import Language.Marlowe.CLI.Types (
   MarloweScriptsRefs (..),
   PrintStats (..),
   PublishingStrategy (..),
+  SomePaymentSigningKey (SomePaymentSigningKeyGenesisUTxO),
   SubmitMode (..),
   TxBuildupContext (..),
   ValidatorInfo (..),
@@ -112,6 +114,7 @@ import qualified Language.Marlowe.Runtime.Indexer.Database as Indexer
 import qualified Language.Marlowe.Runtime.Indexer.Database.PostgreSQL as IndexerDB
 import qualified Language.Marlowe.Runtime.Sync.Database as Sync
 import qualified Language.Marlowe.Runtime.Sync.Database.PostgreSQL as Sync
+import Language.Marlowe.Runtime.Transaction (mkCommandLineRoleTokenMintingPolicy)
 import Language.Marlowe.Runtime.Web.Client (healthcheck)
 import Language.Marlowe.Runtime.Web.Server (ServerDependencies (..), server)
 import Network.HTTP.Client (defaultManagerSettings, newManager)
@@ -211,7 +214,7 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
   withLocalTestnet' localTestnetOptions \testnet@LocalTestnet{..} -> runResourceT do
     let localConsensusModeParams = CardanoModeParams $ EpochSlots 500
     let localNodeNetworkId = Testnet $ NetworkMagic $ fromIntegral testnetMagic
-    let localNodeSocketPath = SpoNode.socket . head $ spoNodes
+    let localNodeSocketPath = File . SpoNode.socket . head $ spoNodes
     let localNodeConnectInfo = LocalNodeConnectInfo{..}
     marloweScripts <- liftIO $ publishCurrentScripts testnet localNodeConnectInfo
     (dbReleaseKey, dbName) <- allocate (createDatabase workspace) (cleanupDatabase 10_000)
@@ -402,13 +405,11 @@ randomPort lo hi = do
 
 publishCurrentScripts :: LocalTestnet -> LocalNodeConnectInfo CardanoMode -> IO MarloweScripts
 publishCurrentScripts LocalTestnet{..} localNodeConnectInfo = do
-  let Delegator{..} = head delegators
-  let PaymentKeyPair{..} = paymentKeyPair
-  let StakingKeyPair{..} = stakingKeyPair
+  let PaymentKeyPair{..} = head wallets
   signingKey <-
-    Left
+    SomePaymentSigningKeyGenesisUTxO
       . either (error . show) id
-      . deserialiseFromTextEnvelope (AsSigningKey AsPaymentKey)
+      . deserialiseFromTextEnvelope (AsSigningKey AsGenesisUTxOKey)
       . either error id
       <$> eitherDecodeFileStrict paymentSKey
   changeAddress <-
@@ -420,8 +421,6 @@ publishCurrentScripts LocalTestnet{..} localNodeConnectInfo = do
         , "build"
         , "--payment-verification-key-file"
         , paymentVKey
-        , "--stake-verification-key-file"
-        , stakingVKey
         , "--testnet-magic"
         , show testnetMagic
         ]
@@ -453,7 +452,7 @@ toMarloweScripts testnetMagic MarloweScriptsRefs{..} = MarloweScripts{..}
     networkId = Testnet $ NetworkMagic $ fromIntegral testnetMagic
     marloweTxOutRef = fromCardanoTxIn $ fst $ unAnUTxO $ fst mrMarloweValidator
     payoutTxOutRef = fromCardanoTxIn $ fst $ unAnUTxO $ fst mrRolePayoutValidator
-    refScritptPublisher (AnUTxO (_, Cardano.TxOut addr _ _ _), _) = addr
+    refScriptPublisher (AnUTxO (_, Cardano.TxOut addr _ _ _), _) = addr
     refScriptValue (AnUTxO (_, Cardano.TxOut _ value _ _), _) = Cardano.txOutValueToValue value
 
     marloweReferenceScriptUTxO =
@@ -461,7 +460,7 @@ toMarloweScripts testnetMagic MarloweScriptsRefs{..} = MarloweScripts{..}
         { txOutRef = marloweTxOutRef
         , txOut =
             TransactionOutput
-              { address = fromCardanoAddressInEra BabbageEra $ refScritptPublisher mrMarloweValidator
+              { address = fromCardanoAddressInEra BabbageEra $ refScriptPublisher mrMarloweValidator
               , assets = assetsFromCardanoValue $ refScriptValue mrMarloweValidator
               , datumHash = Nothing
               , datum = Nothing
@@ -473,7 +472,7 @@ toMarloweScripts testnetMagic MarloweScriptsRefs{..} = MarloweScripts{..}
         { txOutRef = payoutTxOutRef
         , txOut =
             TransactionOutput
-              { address = fromCardanoAddressInEra BabbageEra $ refScritptPublisher mrRolePayoutValidator
+              { address = fromCardanoAddressInEra BabbageEra $ refScriptPublisher mrRolePayoutValidator
               , assets = assetsFromCardanoValue $ refScriptValue mrRolePayoutValidator
               , datumHash = Nothing
               , datum = Nothing
@@ -531,6 +530,7 @@ testContainer = proc TestContainerDependencies{..} -> do
             confirmationTimeout = 60
             runtimeVersion = Version [0] []
             indexParties = pure ()
+            mkRoleTokenMintingPolicy = mkCommandLineRoleTokenMintingPolicy "marlowe-minting-validator"
          in MarloweRuntimeDependencies{..}
 
   tcpServer "marlowe-runtime"

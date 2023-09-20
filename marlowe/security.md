@@ -71,14 +71,14 @@ The pre-transaction state of the contract is defined in the Plutus `Datum` assoc
 - the current values of the contract's bound variables, and
 - the part of the contract that remains to be executed.
 
-The `Datum` can be extracted from the unsigned transaction body and deserialized to [`Language.Marlowe.Core.V1.Semantics.MarloweData`](src/Language/Marlowe/Core/V1/Semantics.hs) using the function `Plutus.V2.Ledger.Api.fromData`. Alternatively, the command-line tool `marlowe log --show contract` will display the on-chain history of the contract.
+The `Datum` can be extracted from the unsigned transaction body and deserialized to [`Language.Marlowe.Core.V1.Semantics.MarloweData`](src/Language/Marlowe/Core/V1/Semantics.hs) using the function `PlutusLedgerApi.V2.fromData`. Alternatively, the command-line tool `marlowe log --show contract` will display the on-chain history of the contract.
 
 
 #### What input is being applied to the contract?
 
 The input being applied to the contract in the transaction is defined in the Plutus `Redeemer` associated with spending the UTxO from the Marlowe script address, along with the slot validity interval for the transaction specified in the transaction body. The input is a sequence of zero or more deposits, choices, and notifications. The consequences of applying this input to the contract can be studied using a tool like Marlowe Playground or `marlowe-cli run prepare`.
 
-The `Redeemer` can be extracted from the unsigned transaction body and deserialized to [`Language.Marlowe.Scripts.MarloweInput`](src/Language/Marlowe/Scripts.hs) using the function `Plutus.V2.Ledger.Api.fromData`. The command-line tool `marlowe-cli util slotting` will compute the relationship between the slots mentioned in the validity interval to the POSIX times in the contract.
+The `Redeemer` can be extracted from the unsigned transaction body and deserialized to [`Language.Marlowe.Scripts.MarloweInput`](src/Language/Marlowe/Scripts.hs) using the function `PlutusLedgerApi.V2.fromData`. The command-line tool `marlowe-cli util slotting` will compute the relationship between the slots mentioned in the validity interval to the POSIX times in the contract.
 
 
 #### What else is occurring in the transaction?
@@ -98,7 +98,7 @@ addr1w9yswm4tyqjrmj2xy5glhx9fe7m3n7rwj6fz3qfekly3mucd3rynq
 Validator hash: "49076eab20243dc9462511fb98a9cfb719f86e9692288139b7c91df3"
 ```
 
-Deserialization of the `Datum` and `Redeemer` should target `(Plutus.V2.Ledger.Api.CurrencySymbol, Plutus.V2.Ledger.Api.TokenName)` and `()`, respectively.
+Deserialization of the `Datum` and `Redeemer` should target `(PlutusLedgerApi.V2.CurrencySymbol, PlutusLedgerApi.V2.TokenName)` and `()`, respectively.
 
 
 ## Role Tokens

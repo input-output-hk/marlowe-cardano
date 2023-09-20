@@ -1,4 +1,4 @@
-cabal-version: 3.0
+cabal-version: 3.4
 name:          plutus-ledger-slot
 version:       0.0.1
 license:       Apache-2.0
@@ -48,9 +48,8 @@ library
   -- Other IOG dependencies
   --------------------------
   build-depends:
-    , plutus-core >=1.0.0
-    , plutus-ledger-api >=1.0.0
-    , plutus-tx >=1.0.0
+    , plutus-ledger-api ^>=1.5
+    , plutus-tx ^>=1.5
 
   -- We don't need plutus ledger here but
   -- we have orphans collision.
@@ -61,7 +60,6 @@ library
   build-depends:
     , aeson
     , base >=4.9 && <5
-    , containers
     , data-default
     , deepseq
     , hashable

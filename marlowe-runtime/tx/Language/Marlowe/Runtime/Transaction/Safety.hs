@@ -60,6 +60,7 @@ import qualified Cardano.Api.Shelley as Shelley (
 import Control.Monad.IO.Class (MonadIO)
 import Data.Functor.Identity (runIdentity)
 import qualified Data.Map.Strict as M (Map, elems, empty, fromList, keys, map, mapKeys, singleton, size)
+import qualified Data.SOP.Counting as Ouroboros
 import qualified Data.Set as S (singleton)
 import qualified Language.Marlowe.Core.V1.Merkle as V1 (MerkleizedContract (..))
 import qualified Language.Marlowe.Core.V1.Plate as V1 (extractAllWithContinuations)
@@ -97,9 +98,8 @@ import qualified Ouroboros.Consensus.HardFork.History as Ouroboros (
   summaryWithExactly,
   wallclockToSlot,
  )
-import qualified Ouroboros.Consensus.Util.Counting as Ouroboros (Exactly (..))
 import qualified Ouroboros.Network.Block as Ouroboros (SlotNo (..))
-import qualified Plutus.V2.Ledger.Api as Plutus (
+import qualified PlutusLedgerApi.V2 as Plutus (
   CurrencySymbol (..),
   DatumHash (..),
   POSIXTime (..),
@@ -217,13 +217,13 @@ checkTransaction protocolParameters era version@MarloweV1 marloweContext@Marlowe
           | null txInputs =
               ( begin
               , Just begin
-              , Just $ maximum [addUTCTime 1 begin, end]
+              , Just $ max (addUTCTime 1 begin) end
               )
           -- For application of input, the current time must not be before the minimum time.
           | otherwise =
-              ( maximum [begin, earliest]
-              , Just $ minimum [begin, addUTCTime (-1) end]
-              , Just $ maximum [end, addUTCTime 1 earliest]
+              ( max begin earliest
+              , Just $ min begin (addUTCTime (-1) end)
+              , Just $ max end (addUTCTime 1 earliest)
               )
         marloweData = V1.MarloweData rolesCurrency' txState txContract
         scriptIncoming = foldMap (uncurry makeValue . first snd) . AM.toList . V1.accounts $ V1.marloweState marloweData
@@ -232,7 +232,7 @@ checkTransaction protocolParameters era version@MarloweV1 marloweContext@Marlowe
         metadata = MarloweTransactionMetadata Nothing $ Chain.TransactionMetadata mempty
         (start, history) =
           makeSystemHistory . posixTimeToUTCTime $ Plutus.POSIXTime 0
-        solveConstraints' = solveConstraints start history protocolParameters
+        solveConstraints' = solveConstraints start (C.toLedgerEpochInfo history) protocolParameters
     tipSlot <-
       utcTimeToSlotNo start history now
     constraints <-
@@ -379,7 +379,7 @@ makeSystemHistory time =
           , eraParams
           }
       eraHistory =
-        Shelley.EraHistory Shelley.CardanoMode
+        C.EraHistory Shelley.CardanoMode
           . Ouroboros.mkInterpreter
           . Ouroboros.summaryWithExactly
           . Ouroboros.Exactly
@@ -388,7 +388,8 @@ makeSystemHistory time =
             :* K (oneSecondEraSummary 2) -- Allegra lasted 1 second
             :* K (oneSecondEraSummary 3) -- Mary lasted 1 second
             :* K (oneSecondEraSummary 4) -- Alonzo lasted 1 second
-            :* K (unboundedEraSummary 5) -- Babbage never ends
+            :* K (oneSecondEraSummary 5) -- Babbage lasted 1 second
+            :* K (unboundedEraSummary 6) -- Conway never ends
             :* Nil
    in (systemStart, eraHistory)
 

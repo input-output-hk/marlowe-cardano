@@ -2,7 +2,7 @@ module Language.Marlowe.Runtime.Core.ScriptRegistrySpec (
   spec,
 ) where
 
-import Cardano.Api (AsType (..), hashScript, readFileTextEnvelope)
+import Cardano.Api (AsType (..), File (..), hashScript, readFileTextEnvelope)
 import Control.Monad (unless)
 import Data.Foldable (traverse_)
 import qualified Data.Set as Set
@@ -36,8 +36,8 @@ scriptSetSpec marloweVersion = do
     it "Should specify the correct current scripts" do
       payoutScriptPath <- getDataFileName $ "scripts" </> "marlowe-rolepayout.plutus"
       marloweScriptPath <- getDataFileName $ "scripts" </> "marlowe-semantics.plutus"
-      Right payoutScriptBytes <- readFileTextEnvelope (AsScript AsPlutusScriptV2) payoutScriptPath
-      Right marloweScriptBytes <- readFileTextEnvelope (AsScript AsPlutusScriptV2) marloweScriptPath
+      Right payoutScriptBytes <- readFileTextEnvelope (AsScript AsPlutusScriptV2) $ File payoutScriptPath
+      Right marloweScriptBytes <- readFileTextEnvelope (AsScript AsPlutusScriptV2) $ File marloweScriptPath
       let payoutScript = fromCardanoScriptHash $ hashScript payoutScriptBytes
       let marloweScript = fromCardanoScriptHash $ hashScript marloweScriptBytes
       let marloweScriptUTxOs = mempty

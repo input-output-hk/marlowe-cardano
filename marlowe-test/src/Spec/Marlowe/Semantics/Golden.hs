@@ -20,7 +20,7 @@ module Spec.Marlowe.Semantics.Golden (
 
 import Language.Marlowe.Core.V1.Semantics (TransactionInput, TransactionOutput (..), computeTransaction)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, State (State))
-import Plutus.V2.Ledger.Api (POSIXTime)
+import PlutusLedgerApi.V2 (POSIXTime)
 
 import qualified PlutusTx.AssocMap as AM (empty)
 import qualified Spec.Marlowe.Semantics.Golden.Escrow as Escrow (contract, valids)

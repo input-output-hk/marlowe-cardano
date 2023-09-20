@@ -18,7 +18,8 @@ module Language.Marlowe.CLI.Test.Wallet.Interpret where
 import Cardano.Api (
   AddressInEra,
   AsType (AsPaymentKey),
-  Key (getVerificationKey, verificationKeyHash),
+  File (..),
+  Key (verificationKeyHash),
   PaymentCredential (PaymentCredentialByKey),
   ScriptDataSupportedInEra,
   StakeAddressReference (NoStakeAddress),
@@ -26,15 +27,55 @@ import Cardano.Api (
   makeShelleyAddressInEra,
  )
 import Cardano.Api qualified as C
+import Cardano.Api.Shelley qualified as CAS
+import Contrib.Control.Monad.Except (note)
+import Contrib.Data.Foldable (foldMapFlipped, ifoldMapMFlipped)
+import Control.Category ((>>>))
+import Control.Error.Util qualified as Error
 import Control.Lens (ifor_, modifying, use, view, (.=))
+import Control.Monad (forM, unless, void, when)
+import Control.Monad.Error.Class (MonadError (throwError))
+import Control.Monad.Except (liftEither, runExceptT)
 import Control.Monad.IO.Class (MonadIO (liftIO))
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Except (ExceptT (..))
+import Data.Bifunctor qualified as Bifunctor
+import Data.ByteString.Base16.Aeson (EncodeBase16 (..))
+import Data.Coerce (coerce)
 import Data.Fixed qualified as F
 import Data.Foldable (Foldable (fold), find, for_)
+import Data.Foldable qualified as Foldable
+import Data.Foldable.WithIndex (ifoldrM)
+import Data.Functor ((<&>))
 import Data.List.NonEmpty (NonEmpty ((:|)))
+import Data.List.NonEmpty qualified as List
+import Data.List.NonEmpty qualified as List.NonEmpty
+import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
+import Data.Maybe (catMaybes, fromMaybe, isJust)
 import Data.Set qualified as Set
+import Data.Text qualified as Text
 import Data.Traversable (for)
-import Language.Marlowe.CLI.Cardano.Api.Value (lovelaceToPlutusValue, toMintingPolicyHash, toPlutusValue)
+import Data.Tuple.Extra (uncurry3)
+import Language.Marlowe.CLI.Cardano.Api (toReferenceTxInsScriptsInlineDatumsSupportedInEra, toTxOutDatumInline)
+import Language.Marlowe.CLI.Cardano.Api.Value (lovelaceToPlutusValue, toCurrencySymbol, toPlutusValue)
+import Language.Marlowe.CLI.Cardano.Api.Value qualified as CV
+import Language.Marlowe.CLI.Export (readOpenRoleValidator)
+import Language.Marlowe.CLI.IO (readSigningKey, submitTxBody')
+import Language.Marlowe.CLI.Run (toCardanoPolicyId)
+import Language.Marlowe.CLI.Sync (toPlutusAddress)
+import Language.Marlowe.CLI.Test.CLI.Monad (runLabeledCli)
+import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (
+  ParametrizedMarloweJSON,
+  decodeParametrizedContractJSON,
+  decodeParametrizedInputJSON,
+  now,
+ )
+import Language.Marlowe.CLI.Test.ExecutionMode (queryByAddress, queryUTxOs)
+import Language.Marlowe.CLI.Test.ExecutionMode qualified as EM
+import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError (..), assertionFailed', testExecutionFailed')
+import Language.Marlowe.CLI.Test.Log (Label, logStoreLabeledMsg, logTxBody, throwLabeledError)
+import Language.Marlowe.CLI.Test.Report qualified as Report
 import Language.Marlowe.CLI.Test.Wallet.Types (
   Asset (Asset),
   AssetId (AdaAssetId, AssetId),
@@ -79,62 +120,22 @@ import Language.Marlowe.CLI.Types (
   MarloweScriptsRefs (..),
   PayFromScript,
   SigningKeyFile (..),
+  SomePaymentSigningKey (..),
   TokensRecipient (..),
   defaultCoinSelectionStrategy,
+  getVerificationKey,
   queryContextNetworkId,
+  toPaymentVerificationKey,
   toQueryContext,
   validatorAddress,
  )
-import Language.Marlowe.Core.V1.Semantics.Types qualified as M
-import Plutus.V1.Ledger.Api (CurrencySymbol, TokenName)
-import Plutus.V1.Ledger.Value qualified as P
-
-import Cardano.Api.Shelley qualified as CAS
-import Contrib.Control.Monad.Except (note)
-import Contrib.Data.Foldable (foldMapFlipped, ifoldMapMFlipped)
-import Control.Category ((>>>))
-import Control.Error.Util qualified as Error
-import Control.Monad (forM, unless, void, when)
-import Control.Monad.Error.Class (MonadError (throwError))
-import Control.Monad.Except (liftEither, runExceptT)
-import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (ExceptT (..))
-import Data.Bifunctor qualified as Bifunctor
-import Data.ByteString.Base16.Aeson (EncodeBase16 (..))
-import Data.Coerce (coerce)
-import Data.Foldable qualified as Foldable
-import Data.Foldable.WithIndex (ifoldrM)
-import Data.Functor ((<&>))
-import Data.List.NonEmpty qualified as List
-import Data.List.NonEmpty qualified as List.NonEmpty
-import Data.Map.Strict (Map)
-import Data.Maybe (catMaybes, fromMaybe, isJust)
-import Data.Text qualified as Text
-import Data.Tuple.Extra (uncurry3)
-import Language.Marlowe.CLI.Cardano.Api (toReferenceTxInsScriptsInlineDatumsSupportedInEra, toTxOutDatumInline)
-import Language.Marlowe.CLI.Cardano.Api.Value qualified as CV
-import Language.Marlowe.CLI.Export (readOpenRoleValidator)
-import Language.Marlowe.CLI.IO (readSigningKey, submitTxBody')
-import Language.Marlowe.CLI.Run (toCardanoPolicyId)
-import Language.Marlowe.CLI.Sync (toPlutusAddress)
-import Language.Marlowe.CLI.Test.CLI.Monad (runLabeledCli)
-import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (
-  ParametrizedMarloweJSON,
-  decodeParametrizedContractJSON,
-  decodeParametrizedInputJSON,
-  now,
- )
-import Language.Marlowe.CLI.Test.ExecutionMode (queryByAddress, queryUTxOs)
-import Language.Marlowe.CLI.Test.ExecutionMode qualified as EM
-import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError (..), assertionFailed', testExecutionFailed')
-import Language.Marlowe.CLI.Test.Log (Label, logStoreLabeledMsg, logTxBody, throwLabeledError)
-import Language.Marlowe.CLI.Test.Report qualified as Report
 import Language.Marlowe.CLI.Types qualified as CT
 import Language.Marlowe.Cardano (marloweNetworkFromCaradnoNetworkId)
-import Plutus.V1.Ledger.Value (valueOf)
-import Plutus.V1.Ledger.Value qualified as PV
-import Plutus.V2.Ledger.Api (MintingPolicyHash (..))
-import Plutus.V2.Ledger.Api qualified as P
+import Language.Marlowe.Core.V1.Semantics.Types qualified as M
+import PlutusLedgerApi.V1 (CurrencySymbol, TokenName)
+import PlutusLedgerApi.V1.Value (valueOf)
+import PlutusLedgerApi.V1.Value qualified as P
+import PlutusLedgerApi.V2 qualified as P
 import PlutusTx.AssocMap qualified as AssocMap
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 import PlutusTx.Monoid (Group (inv))
@@ -202,9 +203,9 @@ addPublishingCosts
 addPublishingCosts nickname marloweScriptsRefs = do
   let MarloweScriptsRefs{mrMarloweValidator, mrRolePayoutValidator, mrOpenRoleValidator} = marloweScriptsRefs
       total =
-        fold $
-          toPlutusValue . C.txOutValueToValue . CV.txOutValue . snd . unAnUTxO . fst
-            <$> [mrMarloweValidator, mrRolePayoutValidator, mrOpenRoleValidator]
+        foldMap
+          (toPlutusValue . C.txOutValueToValue . CV.txOutValue . snd . unAnUTxO . fst)
+          [mrMarloweValidator, mrRolePayoutValidator, mrOpenRoleValidator]
   updateWallet nickname $ \wallet ->
     wallet
       { T._waPublishingCosts = T._waPublishingCosts wallet <> total
@@ -380,14 +381,10 @@ findWalletByUniqueToken currencyNickname tokenName = runExceptT do
           if check value
             then Just n
             else Nothing
-      step n value res =
+      step n value (Just res) =
         if check value
-          then case res of
-            Just n' ->
-              throwError $ "[findByUniqueToken] Token is not unique - found in two wallets: " <> show n <> " and " <> show n' <> "."
-            Nothing ->
-              pure $ Just n
-          else pure res
+          then throwError $ "[findByUniqueToken] Token is not unique - found in two wallets: " <> show n <> " and " <> show res <> "."
+          else pure $ Just res
   wallet2value <- lift fetchWalletsValue
   possibleOwnerNickname <- ifoldrM step Nothing wallet2value
   ownerNickname <-
@@ -562,7 +559,7 @@ interpret so@ExternalWallet{..} = do
   era <- view eraL
   skey <- runLabeledCli era so $ readSigningKey (SigningKeyFile woSigningKeyFile)
   networkId <- getNetworkId
-  let vkey = either getVerificationKey (C.castVerificationKey . getVerificationKey) skey
+  let vkey = toPaymentVerificationKey $ getVerificationKey skey
       (address :: AddressInEra era) = makeShelleyAddressInEra networkId (PaymentCredentialByKey (verificationKeyHash vkey)) NoStakeAddress
 
   utxo <- EM.queryByAddress address
@@ -683,7 +680,7 @@ interpret wo@Mint{..} = do
         printStats
 
   logStoreLabeledMsg wo $ "This currency symbol is " <> show policy
-  let currencySymbol = PV.mpsSymbol . toMintingPolicyHash $ policy
+  let currencySymbol = toCurrencySymbol policy
       currency = Currency currencySymbol (Just issuerNickname) woMintingExpirationSlot policy
 
   addWalletTransaction issuerNickname wo "" mintingTx
@@ -742,9 +739,9 @@ interpret ExternalCurrency{..} = do
     (Just _, Just _) -> throwError $ testExecutionFailed' "You can't specify both currency symbol and policy id."
     (Nothing, Nothing) -> throwError $ testExecutionFailed' "You must specify either currency symbol or policy id."
     (Just (EncodeBase16 bs), _) -> do
-      let cs@(P.CurrencySymbol currencySymbol) = P.currencySymbol bs
+      let cs = P.currencySymbol bs
 
-      case toCardanoPolicyId $ MintingPolicyHash currencySymbol of
+      case toCardanoPolicyId cs of
         Right policy -> pure (cs, policy)
         Left err -> throwError $ testExecutionFailed' $ "Failed to parse currency symbol: " <> show err
     (_, Just _) -> throwError $ testExecutionFailed' "External currency with policy id is not supported yet."
@@ -770,7 +767,7 @@ saveWalletFiles walletNickname wallet dir = do
       Wallet{_waAddress, _waSigningKey = sskey} = wallet
       addrFileTpl = "wallet-of-" <> nickname <> "-" <> ".pay"
       skeyFileTpl = "wallet-of-" <> nickname <> "-" <> ".skey"
-      writeEnvelope p c = C.writeFileTextEnvelope p Nothing c
+      writeEnvelope p = C.writeFileTextEnvelope p Nothing
 
   (addrFile, skeyFile) <- case dir of
     Nothing -> do
@@ -782,7 +779,10 @@ saveWalletFiles walletNickname wallet dir = do
       s <- emptyTempFile dir' skeyFileTpl
       pure (a, s)
   writeFile addrFile (Text.unpack $ C.serialiseAddress _waAddress)
-  void $ either (writeEnvelope skeyFile) (writeEnvelope skeyFile) sskey
+  void case sskey of
+    SomePaymentSigningKeyPayment k -> writeEnvelope (File skeyFile) k
+    SomePaymentSigningKeyPaymentExtended k -> writeEnvelope (File skeyFile) k
+    SomePaymentSigningKeyGenesisUTxO k -> writeEnvelope (File skeyFile) k
   pure (addrFile, CT.SigningKeyFile skeyFile)
 
 -- TODO: We should use `CardanoEra era` as an `era` carrier here.
@@ -795,16 +795,16 @@ createWallet
 createWallet _ = do
   skey <- liftIO $ generateSigningKey AsPaymentKey
   networkId <- getNetworkId
-  let vkey = getVerificationKey skey
+  let vkey = C.getVerificationKey skey
       (address :: AddressInEra era) =
         makeShelleyAddressInEra
           networkId
           (PaymentCredentialByKey (verificationKeyHash vkey))
           NoStakeAddress
-  pure $ emptyWallet address (Left skey)
+  pure $ emptyWallet address (SomePaymentSigningKeyPayment skey)
 
 fundWallets
-  :: (InterpretMonad env st m era)
+  :: (InterpretMonad env st m era, CAS.IsCardanoEra era)
   => (Label l)
   => l
   -> [WalletNickname]
@@ -823,7 +823,7 @@ fundWallets label walletNicknames utxos = do
     faucet{_waSubmittedTransactions = SomeTxBody era txBody : faucetTransactions}
 
 buildFaucet
-  :: (InterpretMonad env st m era)
+  :: (InterpretMonad env st m era, CAS.IsCardanoEra era)
   => (Label l)
   => l
   -> [AddressInEra era]

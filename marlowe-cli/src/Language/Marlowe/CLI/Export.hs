@@ -65,6 +65,7 @@ module Language.Marlowe.CLI.Export (
 import Cardano.Api (
   AddressInEra,
   AsType (..),
+  File (..),
   NetworkId,
   PaymentCredential (..),
   PlutusScriptVersion (..),
@@ -74,11 +75,12 @@ import Cardano.Api (
   SerialiseAsRawBytes (..),
   StakeAddressReference (..),
   hashScript,
-  hashScriptData,
+  hashScriptDataBytes,
   makeShelleyAddressInEra,
   readFileTextEnvelope,
   scriptDataToJson,
   serialiseAddress,
+  unsafeHashableScriptData,
  )
 import Cardano.Api.Shelley (PlutusScript (..), fromPlutusData)
 import Control.Monad (join, when)
@@ -110,7 +112,7 @@ import Language.Marlowe.CLI.Types (
  )
 import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract (..), Input, State (..), Token (Token))
-import Plutus.V2.Ledger.Api (BuiltinData, CostModelParams, Datum (..), Redeemer (..))
+import PlutusLedgerApi.V2 (BuiltinData, Datum (..), Redeemer (..))
 import PlutusTx (builtinDataToData, toBuiltinData)
 import System.IO (hPutStrLn, stderr)
 
@@ -128,8 +130,8 @@ import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage (pl
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript qualified as PlutusScript
 import Language.Marlowe.Scripts.Types (marloweTxInputsFromInputs)
 import Paths_marlowe_cardano (getDataFileName)
-import Plutus.ApiCommon (ProtocolVersion)
-import Plutus.V1.Ledger.Api (DatumHash (..), toBuiltin, toData)
+import PlutusLedgerApi.Common (ProtocolVersion)
+import PlutusLedgerApi.V1 (DatumHash (..), toBuiltin, toData)
 import System.FilePath ((</>))
 
 -- | Build comprehensive information about a Marlowe contract and transaction.
@@ -138,7 +140,7 @@ buildMarlowe
   => MarloweParams
   -> ScriptDataSupportedInEra era
   -> ProtocolVersion
-  -> CostModelParams
+  -> [Integer]
   -- ^ The cost model parameters.
   -> NetworkId
   -- ^ The network ID.
@@ -169,7 +171,7 @@ exportMarlowe
   => MarloweParams
   -- ^ The Marlowe contract parameters.
   -> ProtocolVersion
-  -> CostModelParams
+  -> [Integer]
   -- ^ The cost model parameters.
   -> NetworkId
   -- ^ The network ID.
@@ -226,8 +228,9 @@ readValidator :: forall lang m. (MonadIO m, IsPlutusScriptLanguage lang) => File
 readValidator scriptFile = liftIO do
   path <- getDataFileName $ "scripts" </> scriptFile
   case plutusScriptVersion @lang of
-    PlutusScriptV1 -> either (fail . show) pure =<< readFileTextEnvelope (AsPlutusScript AsPlutusScriptV1) path
-    PlutusScriptV2 -> either (fail . show) pure =<< readFileTextEnvelope (AsPlutusScript AsPlutusScriptV2) path
+    PlutusScriptV1 -> either (fail . show) pure =<< readFileTextEnvelope (AsPlutusScript AsPlutusScriptV1) (File path)
+    PlutusScriptV2 -> either (fail . show) pure =<< readFileTextEnvelope (AsPlutusScript AsPlutusScriptV2) (File path)
+    PlutusScriptV3 -> either (fail . show) pure =<< readFileTextEnvelope (AsPlutusScript AsPlutusScriptV3) (File path)
 
 -- | Print information about a Marlowe contract and transaction.
 printMarlowe
@@ -237,7 +240,7 @@ printMarlowe
   -- ^ The Marlowe contract parameters.
   -> ScriptDataSupportedInEra era
   -> ProtocolVersion
-  -> CostModelParams
+  -> [Integer]
   -- ^ The cost model parameters.
   -> NetworkId
   -- ^ The network ID.
@@ -271,6 +274,7 @@ printMarlowe marloweParams era protocolVersion costModel network stake contract 
           "Validator: " <> LBS8.unpack case plutusScriptVersion @lang of
             PlutusScriptV1 -> encode $ C.serialiseToTextEnvelope Nothing viScript
             PlutusScriptV2 -> encode $ C.serialiseToTextEnvelope Nothing viScript
+            PlutusScriptV3 -> encode $ C.serialiseToTextEnvelope Nothing viScript
         putStrLn ""
         putStrLn $ "Validator address: " <> T.unpack (withCardanoEra era $ serialiseAddress viAddress)
         putStrLn ""
@@ -386,7 +390,7 @@ exportValidatorImpl
   => (MonadIO m)
   => SBS.ShortByteString
   -> ProtocolVersion
-  -> CostModelParams
+  -> [Integer]
   -- ^ The cost model parameters.
   -> NetworkId
   -- ^ The network ID.
@@ -431,7 +435,7 @@ marloweValidatorInfo
   => ScriptDataSupportedInEra era
   -- ^ The era to build he validator in.
   -> ProtocolVersion
-  -> CostModelParams
+  -> [Integer]
   -- ^ The cost model parameters.
   -> NetworkId
   -- ^ The network ID.
@@ -449,7 +453,7 @@ exportMarloweValidator
    . (MonadError CliError m, MonadReader (CliEnv era) m, IsPlutusScriptLanguage lang)
   => (MonadIO m)
   => ProtocolVersion
-  -> CostModelParams
+  -> [Integer]
   -- ^ The cost model parameters.
   -> NetworkId
   -- ^ The network ID.
@@ -478,9 +482,12 @@ buildDatumImpl datum =
       diBytes = SBS.toShort . LBS.toStrict . serialise $ diDatum
       diJson =
         scriptDataToJson ScriptDataJsonDetailedSchema
+          . unsafeHashableScriptData
           . fromPlutusData
           $ PlutusTx.builtinDataToData datum
-      diHash = DatumHash . toBuiltin . serialiseToRawBytes . hashScriptData . fromPlutusData $ toData diDatum
+      diHash =
+        DatumHash . toBuiltin . serialiseToRawBytes . hashScriptDataBytes . unsafeHashableScriptData . fromPlutusData $
+          toData diDatum
       diSize = SBS.length diBytes
    in DatumInfo{..}
 
@@ -557,6 +564,7 @@ buildRedeemerImpl redeemer =
       riBytes = SBS.toShort . LBS.toStrict . serialise $ riRedeemer
       riJson =
         scriptDataToJson ScriptDataJsonDetailedSchema
+          . unsafeHashableScriptData
           . fromPlutusData
           $ PlutusTx.builtinDataToData redeemer
       riSize = SBS.length riBytes
@@ -644,7 +652,7 @@ payoutValidatorInfo
   => ScriptDataSupportedInEra era
   -- ^ The era to build he validator in.
   -> ProtocolVersion
-  -> CostModelParams
+  -> [Integer]
   -- ^ The cost model parameters.
   -> NetworkId
   -- ^ The network ID.
@@ -662,7 +670,7 @@ openRoleValidatorInfo
   => ScriptDataSupportedInEra era
   -- ^ The era to build he validator in.
   -> ProtocolVersion
-  -> CostModelParams
+  -> [Integer]
   -- ^ The cost model parameters.
   -> NetworkId
   -- ^ The network ID.
@@ -681,7 +689,7 @@ exportRoleValidator
   => (MonadIO m)
   => ProtocolVersion
   -- ^ The currency symbol for Marlowe contract roles.
-  -> CostModelParams
+  -> [Integer]
   -- ^ The cost model parameters.
   -> NetworkId
   -- ^ The network ID.

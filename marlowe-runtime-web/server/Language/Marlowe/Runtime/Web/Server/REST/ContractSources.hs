@@ -20,7 +20,7 @@ import Language.Marlowe.Runtime.Web.Server.REST.ApiError (badRequest', badReques
 import Language.Marlowe.Runtime.Web.Types (ContractSourceId (..), PostContractSourceResponse (..))
 import Pipes (MFunctor (..), Producer, liftIO, (>->))
 import qualified Pipes.Prelude as Pipes
-import qualified Plutus.V2.Ledger.Api as PV2
+import qualified PlutusLedgerApi.V2 as PV2
 import Servant
 
 server :: ServerT ContractSourcesAPI ServerM

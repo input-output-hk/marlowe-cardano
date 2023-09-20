@@ -26,6 +26,7 @@ import Cardano.Api (
   AddressInEra,
   ConsensusModeParams (CardanoModeParams),
   EpochSlots (..),
+  File (..),
   IsShelleyBasedEra,
   LocalNodeConnectInfo (..),
   NetworkId (..),
@@ -271,7 +272,7 @@ runTransactionCommand command =
           LocalNodeConnectInfo
             { localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
             , localNodeNetworkId = network'
-            , localNodeSocketPath = socketPath command
+            , localNodeSocketPath = File $ socketPath command
             }
         printTxId = liftIO . putStrLn . ("TxId " <>) . show
         padTxOut (address, value) = (address, TxOutDatumNone, value)

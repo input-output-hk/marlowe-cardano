@@ -36,7 +36,7 @@ import Language.Marlowe.Client qualified as Client
 import Language.Marlowe.Core.V1.Semantics qualified as M
 import Language.Marlowe.Core.V1.Semantics.Types qualified as M
 import Language.Marlowe.Pretty (pretty)
-import Plutus.V1.Ledger.Value qualified as P
+import PlutusLedgerApi.V1.Value qualified as P
 
 import Cardano.Api (
   IsShelleyBasedEra,
@@ -131,7 +131,7 @@ import Language.Marlowe.Cardano.Thread (
  )
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, State (..))
 import Language.Marlowe.Extended.V1 (ada)
-import Plutus.V2.Ledger.Api qualified as P
+import PlutusLedgerApi.V2 qualified as P
 import PlutusTx.AssocMap qualified as AM
 import PlutusTx.Builtins qualified as P
 

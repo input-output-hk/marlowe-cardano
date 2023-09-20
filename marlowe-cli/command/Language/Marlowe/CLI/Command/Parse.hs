@@ -96,8 +96,8 @@ import Language.Marlowe.CLI.Types (
 import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId (..), Input (..), InputContent (..), Party (..), Token (..))
 import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddressBech32)
 import Plutus.V1.Ledger.Ada (adaSymbol, adaToken)
-import Plutus.V1.Ledger.Api (BuiltinByteString, CurrencySymbol (..), POSIXTime (..), TokenName (..), toBuiltin)
 import Plutus.V1.Ledger.Slot (Slot (..))
+import PlutusLedgerApi.V1 (BuiltinByteString, CurrencySymbol (..), POSIXTime (..), TokenName (..), toBuiltin)
 import Servant.Client (BaseUrl, parseBaseUrl)
 import Text.Read (readEither)
 import Text.Regex.Posix ((=~))
@@ -111,8 +111,8 @@ import Data.Text qualified as T (pack)
 import Data.Time.Units (Second)
 import Language.Marlowe qualified as M
 import Options.Applicative qualified as O
-import Plutus.ApiCommon (ProtocolVersion)
-import Plutus.V1.Ledger.ProtocolVersions (alonzoPV, vasilPV)
+import PlutusLedgerApi.Common (ProtocolVersion)
+import PlutusLedgerApi.Common.Versions (alonzoPV, vasilPV)
 
 -- | Parser for network ID.
 parseNetworkId :: O.Mod O.OptionFields NetworkId -> O.Parser NetworkId

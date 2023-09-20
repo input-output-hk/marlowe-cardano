@@ -19,6 +19,7 @@ withCardanoEra f = case cardanoEraOfFeature f of
   MaryEra -> id
   AlonzoEra -> id
   BabbageEra -> id
+  ConwayEra -> id
 
 withShelleyBasedEra :: forall era f r. (ShelleyFeature f) => f era -> ((IsShelleyBasedEra era) => r) -> r
 withShelleyBasedEra f = case shelleyBasedEraOfFeature f of
@@ -27,6 +28,7 @@ withShelleyBasedEra f = case shelleyBasedEraOfFeature f of
   ShelleyBasedEraMary -> id
   ShelleyBasedEraAlonzo -> id
   ShelleyBasedEraBabbage -> id
+  ShelleyBasedEraConway -> id
 
 class CardanoFeature f where
   featureInCardanoEra :: CardanoEra era -> Maybe (f era)
@@ -49,6 +51,7 @@ instance CardanoFeature ShelleyBasedEra where
     MaryEra -> Just ShelleyBasedEraMary
     AlonzoEra -> Just ShelleyBasedEraAlonzo
     BabbageEra -> Just ShelleyBasedEraBabbage
+    ConwayEra -> Just ShelleyBasedEraConway
   cardanoEraOfFeature = shelleyBasedToCardanoEra
 
 instance ShelleyFeature ShelleyBasedEra where
@@ -92,11 +95,13 @@ instance CardanoFeature CollateralSupportedInEra where
   cardanoEraOfFeature = \case
     CollateralInAlonzoEra -> AlonzoEra
     CollateralInBabbageEra -> BabbageEra
+    CollateralInConwayEra -> ConwayEra
 
 instance ShelleyFeature CollateralSupportedInEra where
   shelleyBasedEraOfFeature = \case
     CollateralInAlonzoEra -> ShelleyBasedEraAlonzo
     CollateralInBabbageEra -> ShelleyBasedEraBabbage
+    CollateralInConwayEra -> ShelleyBasedEraConway
 
 instance CardanoFeature MultiAssetSupportedInEra where
   featureInCardanoEra = hush . multiAssetSupportedInEra
@@ -104,12 +109,14 @@ instance CardanoFeature MultiAssetSupportedInEra where
     MultiAssetInMaryEra -> MaryEra
     MultiAssetInAlonzoEra -> AlonzoEra
     MultiAssetInBabbageEra -> BabbageEra
+    MultiAssetInConwayEra -> ConwayEra
 
 instance ShelleyFeature MultiAssetSupportedInEra where
   shelleyBasedEraOfFeature = \case
     MultiAssetInMaryEra -> ShelleyBasedEraMary
     MultiAssetInAlonzoEra -> ShelleyBasedEraAlonzo
     MultiAssetInBabbageEra -> ShelleyBasedEraBabbage
+    MultiAssetInConwayEra -> ShelleyBasedEraConway
 
 instance CardanoFeature OnlyAdaSupportedInEra where
   featureInCardanoEra = whine . multiAssetSupportedInEra
@@ -126,6 +133,7 @@ instance CardanoFeature TxFeesExplicitInEra where
     TxFeesExplicitInMaryEra -> MaryEra
     TxFeesExplicitInAlonzoEra -> AlonzoEra
     TxFeesExplicitInBabbageEra -> BabbageEra
+    TxFeesExplicitInConwayEra -> ConwayEra
 
 instance ShelleyFeature TxFeesExplicitInEra where
   shelleyBasedEraOfFeature = \case
@@ -134,6 +142,7 @@ instance ShelleyFeature TxFeesExplicitInEra where
     TxFeesExplicitInMaryEra -> ShelleyBasedEraMary
     TxFeesExplicitInAlonzoEra -> ShelleyBasedEraAlonzo
     TxFeesExplicitInBabbageEra -> ShelleyBasedEraBabbage
+    TxFeesExplicitInConwayEra -> ShelleyBasedEraConway
 
 instance CardanoFeature TxFeesImplicitInEra where
   featureInCardanoEra = whine . txFeesExplicitInEra
@@ -148,6 +157,7 @@ instance CardanoFeature ValidityUpperBoundSupportedInEra where
     ValidityUpperBoundInMaryEra -> MaryEra
     ValidityUpperBoundInAlonzoEra -> AlonzoEra
     ValidityUpperBoundInBabbageEra -> BabbageEra
+    ValidityUpperBoundInConwayEra -> ConwayEra
 
 instance ShelleyFeature ValidityUpperBoundSupportedInEra where
   shelleyBasedEraOfFeature = \case
@@ -156,6 +166,7 @@ instance ShelleyFeature ValidityUpperBoundSupportedInEra where
     ValidityUpperBoundInMaryEra -> ShelleyBasedEraMary
     ValidityUpperBoundInAlonzoEra -> ShelleyBasedEraAlonzo
     ValidityUpperBoundInBabbageEra -> ShelleyBasedEraBabbage
+    ValidityUpperBoundInConwayEra -> ShelleyBasedEraConway
 
 instance CardanoFeature ValidityNoUpperBoundSupportedInEra where
   featureInCardanoEra = validityNoUpperBoundSupportedInEra
@@ -165,6 +176,7 @@ instance CardanoFeature ValidityNoUpperBoundSupportedInEra where
     ValidityNoUpperBoundInMaryEra -> MaryEra
     ValidityNoUpperBoundInAlonzoEra -> AlonzoEra
     ValidityNoUpperBoundInBabbageEra -> BabbageEra
+    ValidityNoUpperBoundInConwayEra -> ConwayEra
 
 instance CardanoFeature ValidityLowerBoundSupportedInEra where
   featureInCardanoEra = validityLowerBoundSupportedInEra
@@ -173,6 +185,7 @@ instance CardanoFeature ValidityLowerBoundSupportedInEra where
     ValidityLowerBoundInMaryEra -> MaryEra
     ValidityLowerBoundInAlonzoEra -> AlonzoEra
     ValidityLowerBoundInBabbageEra -> BabbageEra
+    ValidityLowerBoundInConwayEra -> ConwayEra
 
 instance ShelleyFeature ValidityLowerBoundSupportedInEra where
   shelleyBasedEraOfFeature = \case
@@ -180,6 +193,7 @@ instance ShelleyFeature ValidityLowerBoundSupportedInEra where
     ValidityLowerBoundInMaryEra -> ShelleyBasedEraMary
     ValidityLowerBoundInAlonzoEra -> ShelleyBasedEraAlonzo
     ValidityLowerBoundInBabbageEra -> ShelleyBasedEraBabbage
+    ValidityLowerBoundInConwayEra -> ShelleyBasedEraConway
 
 instance CardanoFeature TxMetadataSupportedInEra where
   featureInCardanoEra = txMetadataSupportedInEra
@@ -189,6 +203,7 @@ instance CardanoFeature TxMetadataSupportedInEra where
     TxMetadataInMaryEra -> MaryEra
     TxMetadataInAlonzoEra -> AlonzoEra
     TxMetadataInBabbageEra -> BabbageEra
+    TxMetadataInConwayEra -> ConwayEra
 
 instance ShelleyFeature TxMetadataSupportedInEra where
   shelleyBasedEraOfFeature = \case
@@ -197,6 +212,7 @@ instance ShelleyFeature TxMetadataSupportedInEra where
     TxMetadataInMaryEra -> ShelleyBasedEraMary
     TxMetadataInAlonzoEra -> ShelleyBasedEraAlonzo
     TxMetadataInBabbageEra -> ShelleyBasedEraBabbage
+    TxMetadataInConwayEra -> ShelleyBasedEraConway
 
 instance CardanoFeature AuxScriptsSupportedInEra where
   featureInCardanoEra = auxScriptsSupportedInEra
@@ -205,6 +221,7 @@ instance CardanoFeature AuxScriptsSupportedInEra where
     AuxScriptsInMaryEra -> MaryEra
     AuxScriptsInAlonzoEra -> AlonzoEra
     AuxScriptsInBabbageEra -> BabbageEra
+    AuxScriptsInConwayEra -> ConwayEra
 
 instance ShelleyFeature AuxScriptsSupportedInEra where
   shelleyBasedEraOfFeature = \case
@@ -212,31 +229,40 @@ instance ShelleyFeature AuxScriptsSupportedInEra where
     AuxScriptsInMaryEra -> ShelleyBasedEraMary
     AuxScriptsInAlonzoEra -> ShelleyBasedEraAlonzo
     AuxScriptsInBabbageEra -> ShelleyBasedEraBabbage
+    AuxScriptsInConwayEra -> ShelleyBasedEraConway
 
 instance CardanoFeature TxExtraKeyWitnessesSupportedInEra where
   featureInCardanoEra = \case
+    ByronEra -> Nothing
+    ShelleyEra -> Nothing
+    AllegraEra -> Nothing
+    MaryEra -> Nothing
     AlonzoEra -> Just ExtraKeyWitnessesInAlonzoEra
     BabbageEra -> Just ExtraKeyWitnessesInBabbageEra
-    _ -> Nothing
+    ConwayEra -> Just ExtraKeyWitnessesInConwayEra
   cardanoEraOfFeature = \case
     ExtraKeyWitnessesInAlonzoEra -> AlonzoEra
     ExtraKeyWitnessesInBabbageEra -> BabbageEra
+    ExtraKeyWitnessesInConwayEra -> ConwayEra
 
 instance ShelleyFeature TxExtraKeyWitnessesSupportedInEra where
   shelleyBasedEraOfFeature = \case
     ExtraKeyWitnessesInAlonzoEra -> ShelleyBasedEraAlonzo
     ExtraKeyWitnessesInBabbageEra -> ShelleyBasedEraBabbage
+    ExtraKeyWitnessesInConwayEra -> ShelleyBasedEraConway
 
 instance CardanoFeature ScriptDataSupportedInEra where
   featureInCardanoEra = scriptDataSupportedInEra
   cardanoEraOfFeature = \case
     ScriptDataInAlonzoEra -> AlonzoEra
     ScriptDataInBabbageEra -> BabbageEra
+    ScriptDataInConwayEra -> ConwayEra
 
 instance ShelleyFeature ScriptDataSupportedInEra where
   shelleyBasedEraOfFeature = \case
     ScriptDataInAlonzoEra -> ShelleyBasedEraAlonzo
     ScriptDataInBabbageEra -> ShelleyBasedEraBabbage
+    ScriptDataInConwayEra -> ShelleyBasedEraConway
 
 instance CardanoFeature WithdrawalsSupportedInEra where
   featureInCardanoEra = withdrawalsSupportedInEra
@@ -246,6 +272,7 @@ instance CardanoFeature WithdrawalsSupportedInEra where
     WithdrawalsInMaryEra -> MaryEra
     WithdrawalsInAlonzoEra -> AlonzoEra
     WithdrawalsInBabbageEra -> BabbageEra
+    WithdrawalsInConwayEra -> ConwayEra
 
 instance ShelleyFeature WithdrawalsSupportedInEra where
   shelleyBasedEraOfFeature = \case
@@ -254,6 +281,7 @@ instance ShelleyFeature WithdrawalsSupportedInEra where
     WithdrawalsInMaryEra -> ShelleyBasedEraMary
     WithdrawalsInAlonzoEra -> ShelleyBasedEraAlonzo
     WithdrawalsInBabbageEra -> ShelleyBasedEraBabbage
+    WithdrawalsInConwayEra -> ShelleyBasedEraConway
 
 instance CardanoFeature CertificatesSupportedInEra where
   featureInCardanoEra = certificatesSupportedInEra
@@ -263,6 +291,7 @@ instance CardanoFeature CertificatesSupportedInEra where
     CertificatesInMaryEra -> MaryEra
     CertificatesInAlonzoEra -> AlonzoEra
     CertificatesInBabbageEra -> BabbageEra
+    CertificatesInConwayEra -> ConwayEra
 
 instance ShelleyFeature CertificatesSupportedInEra where
   shelleyBasedEraOfFeature = \case
@@ -271,6 +300,7 @@ instance ShelleyFeature CertificatesSupportedInEra where
     CertificatesInMaryEra -> ShelleyBasedEraMary
     CertificatesInAlonzoEra -> ShelleyBasedEraAlonzo
     CertificatesInBabbageEra -> ShelleyBasedEraBabbage
+    CertificatesInConwayEra -> ShelleyBasedEraConway
 
 instance CardanoFeature UpdateProposalSupportedInEra where
   featureInCardanoEra = updateProposalSupportedInEra
@@ -280,6 +310,7 @@ instance CardanoFeature UpdateProposalSupportedInEra where
     UpdateProposalInMaryEra -> MaryEra
     UpdateProposalInAlonzoEra -> AlonzoEra
     UpdateProposalInBabbageEra -> BabbageEra
+    UpdateProposalInConwayEra -> ConwayEra
 
 instance ShelleyFeature UpdateProposalSupportedInEra where
   shelleyBasedEraOfFeature = \case
@@ -288,85 +319,89 @@ instance ShelleyFeature UpdateProposalSupportedInEra where
     UpdateProposalInMaryEra -> ShelleyBasedEraMary
     UpdateProposalInAlonzoEra -> ShelleyBasedEraAlonzo
     UpdateProposalInBabbageEra -> ShelleyBasedEraBabbage
+    UpdateProposalInConwayEra -> ShelleyBasedEraConway
 
 instance CardanoFeature ReferenceTxInsScriptsInlineDatumsSupportedInEra where
   featureInCardanoEra = \case
+    ByronEra -> Nothing
+    ShelleyEra -> Nothing
+    AllegraEra -> Nothing
+    MaryEra -> Nothing
+    AlonzoEra -> Nothing
     BabbageEra -> Just ReferenceTxInsScriptsInlineDatumsInBabbageEra
-    _ -> Nothing
+    ConwayEra -> Just ReferenceTxInsScriptsInlineDatumsInConwayEra
   cardanoEraOfFeature = \case
     ReferenceTxInsScriptsInlineDatumsInBabbageEra -> BabbageEra
+    ReferenceTxInsScriptsInlineDatumsInConwayEra -> ConwayEra
 
 instance ShelleyFeature ReferenceTxInsScriptsInlineDatumsSupportedInEra where
   shelleyBasedEraOfFeature = \case
     ReferenceTxInsScriptsInlineDatumsInBabbageEra -> ShelleyBasedEraBabbage
+    ReferenceTxInsScriptsInlineDatumsInConwayEra -> ShelleyBasedEraConway
 
-instance CardanoFeature (ScriptLanguageInEra SimpleScriptV1) where
+instance CardanoFeature (ScriptLanguageInEra SimpleScript') where
   featureInCardanoEra = \case
-    ShelleyEra -> Just SimpleScriptV1InShelley
-    AllegraEra -> Just SimpleScriptV1InAllegra
-    MaryEra -> Just SimpleScriptV1InMary
-    AlonzoEra -> Just SimpleScriptV1InAlonzo
-    BabbageEra -> Just SimpleScriptV1InBabbage
-    _ -> Nothing
+    ByronEra -> Nothing
+    ShelleyEra -> Just SimpleScriptInShelley
+    AllegraEra -> Just SimpleScriptInAllegra
+    MaryEra -> Just SimpleScriptInMary
+    AlonzoEra -> Just SimpleScriptInAlonzo
+    BabbageEra -> Just SimpleScriptInBabbage
+    ConwayEra -> Just SimpleScriptInConway
   cardanoEraOfFeature = \case
-    SimpleScriptV1InShelley -> ShelleyEra
-    SimpleScriptV1InAllegra -> AllegraEra
-    SimpleScriptV1InMary -> MaryEra
-    SimpleScriptV1InAlonzo -> AlonzoEra
-    SimpleScriptV1InBabbage -> BabbageEra
+    SimpleScriptInShelley -> ShelleyEra
+    SimpleScriptInAllegra -> AllegraEra
+    SimpleScriptInMary -> MaryEra
+    SimpleScriptInAlonzo -> AlonzoEra
+    SimpleScriptInBabbage -> BabbageEra
+    SimpleScriptInConway -> ConwayEra
 
-instance ShelleyFeature (ScriptLanguageInEra SimpleScriptV1) where
+instance ShelleyFeature (ScriptLanguageInEra SimpleScript') where
   shelleyBasedEraOfFeature = \case
-    SimpleScriptV1InShelley -> ShelleyBasedEraShelley
-    SimpleScriptV1InAllegra -> ShelleyBasedEraAllegra
-    SimpleScriptV1InMary -> ShelleyBasedEraMary
-    SimpleScriptV1InAlonzo -> ShelleyBasedEraAlonzo
-    SimpleScriptV1InBabbage -> ShelleyBasedEraBabbage
-
-instance CardanoFeature (ScriptLanguageInEra SimpleScriptV2) where
-  featureInCardanoEra = \case
-    AllegraEra -> Just SimpleScriptV2InAllegra
-    MaryEra -> Just SimpleScriptV2InMary
-    AlonzoEra -> Just SimpleScriptV2InAlonzo
-    BabbageEra -> Just SimpleScriptV2InBabbage
-    _ -> Nothing
-  cardanoEraOfFeature = \case
-    SimpleScriptV2InAllegra -> AllegraEra
-    SimpleScriptV2InMary -> MaryEra
-    SimpleScriptV2InAlonzo -> AlonzoEra
-    SimpleScriptV2InBabbage -> BabbageEra
-
-instance ShelleyFeature (ScriptLanguageInEra SimpleScriptV2) where
-  shelleyBasedEraOfFeature = \case
-    SimpleScriptV2InAllegra -> ShelleyBasedEraAllegra
-    SimpleScriptV2InMary -> ShelleyBasedEraMary
-    SimpleScriptV2InAlonzo -> ShelleyBasedEraAlonzo
-    SimpleScriptV2InBabbage -> ShelleyBasedEraBabbage
+    SimpleScriptInShelley -> ShelleyBasedEraShelley
+    SimpleScriptInAllegra -> ShelleyBasedEraAllegra
+    SimpleScriptInMary -> ShelleyBasedEraMary
+    SimpleScriptInAlonzo -> ShelleyBasedEraAlonzo
+    SimpleScriptInBabbage -> ShelleyBasedEraBabbage
+    SimpleScriptInConway -> ShelleyBasedEraConway
 
 instance CardanoFeature (ScriptLanguageInEra PlutusScriptV1) where
   featureInCardanoEra = \case
+    ByronEra -> Nothing
+    ShelleyEra -> Nothing
+    AllegraEra -> Nothing
+    MaryEra -> Nothing
     AlonzoEra -> Just PlutusScriptV1InAlonzo
     BabbageEra -> Just PlutusScriptV1InBabbage
-    _ -> Nothing
+    ConwayEra -> Just PlutusScriptV1InConway
   cardanoEraOfFeature = \case
     PlutusScriptV1InAlonzo -> AlonzoEra
     PlutusScriptV1InBabbage -> BabbageEra
+    PlutusScriptV1InConway -> ConwayEra
 
 instance ShelleyFeature (ScriptLanguageInEra PlutusScriptV1) where
   shelleyBasedEraOfFeature = \case
     PlutusScriptV1InAlonzo -> ShelleyBasedEraAlonzo
     PlutusScriptV1InBabbage -> ShelleyBasedEraBabbage
+    PlutusScriptV1InConway -> ShelleyBasedEraConway
 
 instance CardanoFeature (ScriptLanguageInEra PlutusScriptV2) where
   featureInCardanoEra = \case
+    ByronEra -> Nothing
+    ShelleyEra -> Nothing
+    AllegraEra -> Nothing
+    MaryEra -> Nothing
+    AlonzoEra -> Nothing
     BabbageEra -> Just PlutusScriptV2InBabbage
-    _ -> Nothing
+    ConwayEra -> Just PlutusScriptV2InConway
   cardanoEraOfFeature = \case
     PlutusScriptV2InBabbage -> BabbageEra
+    PlutusScriptV2InConway -> ConwayEra
 
 instance ShelleyFeature (ScriptLanguageInEra PlutusScriptV2) where
   shelleyBasedEraOfFeature = \case
     PlutusScriptV2InBabbage -> ShelleyBasedEraBabbage
+    PlutusScriptV2InConway -> ShelleyBasedEraConway
 
 hush :: Either a b -> Maybe b
 hush = either (const Nothing) Just

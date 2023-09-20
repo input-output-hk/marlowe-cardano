@@ -23,7 +23,7 @@ module Spec.Marlowe.Service.Types (
 
 import Control.Applicative ((<|>))
 import Data.Aeson (FromJSON (..), ToJSON (..))
-import Plutus.V1.Ledger.Api (POSIXTime (..))
+import PlutusLedgerApi.V1 (POSIXTime (..))
 
 import qualified Data.Aeson as A (Value (Object, String), object, withObject, (.:), (.:?), (.=))
 import qualified Data.Aeson.Types as A (Parser)

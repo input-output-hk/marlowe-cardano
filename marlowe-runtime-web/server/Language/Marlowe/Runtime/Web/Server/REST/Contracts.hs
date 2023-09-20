@@ -4,10 +4,10 @@
 -- | This module defines a server for the /contracts REST API.
 module Language.Marlowe.Runtime.Web.Server.REST.Contracts where
 
-import Cardano.Api (BabbageEra, TxBody, makeSignedTransaction)
+import Cardano.Api (BabbageEra, ConwayEra, TxBody, makeSignedTransaction)
 import qualified Cardano.Api as Cardano
 import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
-import Cardano.Ledger.Alonzo.TxWitness (TxWitness (TxWitness))
+import Cardano.Ledger.Alonzo.TxWits (AlonzoTxWits (..))
 import Data.Aeson (Value (Null))
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
@@ -93,6 +93,8 @@ postCreateTxBody PostContractsRequest{..} stakeAddressDTO changeAddressDTO mAddr
       Left err -> throwDTOError err
       Right
         (ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra ContractCreatedInEra{contractId, txBody, safetyErrors}) -> pure (contractId, TxBodyInAnyEra txBody, safetyErrors)
+      Right
+        (ContractCreated ReferenceTxInsScriptsInlineDatumsInConwayEra ContractCreatedInEra{contractId, txBody, safetyErrors}) -> pure (contractId, TxBodyInAnyEra txBody, safetyErrors)
 
 postCreateTxBodyResponse
   :: PostContractsRequest
@@ -191,10 +193,30 @@ put contractId body = do
         -- It seems that wallets provide nearly empty `TxWitness` back. Here is a quote from `CIP-30` docs:
         -- > Only the portion of the witness set that were signed as a result of this call are returned to
         -- > encourage dApps to verify the contents returned by this endpoint while building the final transaction.
-        Just (Right (ShelleyTxWitness (TxWitness wtKeys _ _ _ _))) -> do
+        Just (Right (ShelleyTxWitness (AlonzoTxWits wtKeys _ _ _ _))) -> do
           case makeSignedTxWithWitnessKeys txBody wtKeys of
             Just tx -> pure tx
             Nothing -> throwError $ badRequest' "Invalid witness keys"
       submitContract contractId' ReferenceTxInsScriptsInlineDatumsInBabbageEra tx >>= \case
+        Nothing -> pure NoContent
+        Just err -> throwError $ ApiError.toServerError $ ApiError (show err) "SubmissionError" Null 403
+    handleLoaded contractId' ReferenceTxInsScriptsInlineDatumsInConwayEra txBody = do
+      (req :: Maybe (Either (Cardano.Tx ConwayEra) (ShelleyTxWitness ConwayEra))) <- case teType body of
+        "Tx ConwayEra" -> pure $ Left <$> fromDTO body
+        "ShelleyTxWitness ConwayEra" -> pure $ Right <$> fromDTO body
+        _ ->
+          throwError $ badRequest' "Unknown envelope type - allowed types are: \"Tx ConwayEra\", \"ShelleyTxWitness ConwayEra\""
+
+      tx <- case req of
+        Nothing -> throwError $ badRequest' "Invalid text envelope cbor value"
+        Just (Left tx) -> pure tx
+        -- It seems that wallets provide nearly empty `TxWitness` back. Here is a quote from `CIP-30` docs:
+        -- > Only the portion of the witness set that were signed as a result of this call are returned to
+        -- > encourage dApps to verify the contents returned by this endpoint while building the final transaction.
+        Just (Right (ShelleyTxWitness (AlonzoTxWits wtKeys _ _ _ _))) -> do
+          case makeSignedTxWithWitnessKeys txBody wtKeys of
+            Just tx -> pure tx
+            Nothing -> throwError $ badRequest' "Invalid witness keys"
+      submitContract contractId' ReferenceTxInsScriptsInlineDatumsInConwayEra tx >>= \case
         Nothing -> pure NoContent
         Just err -> throwError $ ApiError.toServerError $ ApiError (show err) "SubmissionError" Null 403

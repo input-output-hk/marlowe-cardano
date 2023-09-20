@@ -9,52 +9,27 @@
 
 module Plutus.V1.Ledger.Aeson where
 
-import Data.Aeson (FromJSON (parseJSON), FromJSONKey, ToJSON (toJSON), ToJSONKey, (.:))
-import Data.Aeson qualified as JSON
-
-import Plutus.V1.Ledger.Api
-import Plutus.V1.Ledger.Tx
-
-import Codec.CBOR.Write qualified as CBOR.Write
 import Codec.Serialise as Serialise
+import Data.Aeson (FromJSON (parseJSON), FromJSONKey, ToJSON (toJSON), ToJSONKey, (.:))
 import Data.Aeson qualified as Aeson
+import Data.Aeson qualified as JSON
 import Data.Aeson.Types qualified as JSON
 import Data.ByteString qualified as BS
 import Data.ByteString.Base16.Aeson as Base16.Aeson
-import Data.ByteString.Lazy qualified as BSL
 import Data.Scientific (floatingOrInteger, scientific)
 import Data.String (IsString (fromString))
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as E
-import Flat qualified
-import Plutus.V1.Ledger.Bytes qualified as Bytes
-import Plutus.V1.Ledger.Scripts
-import Plutus.V1.Ledger.Value
 import PlutusTx.AssocMap qualified as Map
 import PlutusTx.Builtins qualified
 import PlutusTx.Builtins.Aeson ()
 
 import Data.Hashable (Hashable)
-
-{- Note [JSON instances for Script]
-The JSON instances for Script are partially hand-written rather than going via the Serialise
-instance directly. The reason for this is to *avoid* the size checks that are in place in the
-Serialise instance. These are only useful for deserialisation checks on-chain, whereas the
-JSON instances are used for e.g. transmitting validation events, which often include scripts
-with the data arguments applied (which can be very big!).
--}
-instance ToJSON Script where
-  -- See note [JSON instances for Script]
-  toJSON (Script p) = Base16.Aeson.byteStringToJSON . CBOR.Write.toStrictByteString . Serialise.encode . Flat.flat $ p
-
-instance FromJSON Script where
-  -- See note [JSON instances for Script]
-  parseJSON v = do
-    (EncodeBase16 bs) <- parseJSON v
-    let lbs = BSL.fromStrict bs
-    case Flat.unflatWith Flat.decode lbs of
-      Left err -> fail (show err)
-      Right res -> pure $ Script res
+import PlutusLedgerApi.V1
+import PlutusLedgerApi.V1.Bytes qualified as Bytes
+import PlutusLedgerApi.V1.Scripts
+import PlutusLedgerApi.V1.Tx
+import PlutusLedgerApi.V1.Value
 
 deriving anyclass instance ToJSON DatumHash
 deriving anyclass instance FromJSON DatumHash
@@ -68,49 +43,20 @@ deriving anyclass instance ToJSONKey RedeemerHash
 deriving anyclass instance FromJSONKey RedeemerHash
 deriving anyclass instance Serialise RedeemerHash
 
-deriving anyclass instance ToJSON MintingPolicyHash
-deriving anyclass instance FromJSON MintingPolicyHash
-deriving anyclass instance ToJSONKey MintingPolicyHash
-deriving anyclass instance FromJSONKey MintingPolicyHash
-deriving anyclass instance Serialise MintingPolicyHash
-
-deriving anyclass instance ToJSON StakeValidatorHash
-deriving anyclass instance FromJSON StakeValidatorHash
-deriving anyclass instance ToJSONKey StakeValidatorHash
-deriving anyclass instance FromJSONKey StakeValidatorHash
-deriving anyclass instance Serialise StakeValidatorHash
-
 deriving anyclass instance ToJSON ScriptHash
 deriving anyclass instance FromJSON ScriptHash
 deriving anyclass instance ToJSONKey ScriptHash
 deriving anyclass instance FromJSONKey ScriptHash
 deriving anyclass instance Serialise ScriptHash
 
-deriving anyclass instance ToJSON ValidatorHash
-deriving anyclass instance FromJSON ValidatorHash
-deriving anyclass instance ToJSONKey ValidatorHash
-deriving anyclass instance FromJSONKey ValidatorHash
-deriving anyclass instance Serialise ValidatorHash
-
 deriving newtype instance ToJSON Context
 deriving newtype instance FromJSON Context
 
-deriving anyclass instance ToJSON StakeValidator
-deriving anyclass instance FromJSON StakeValidator
-
-deriving anyclass instance ToJSON MintingPolicy
-deriving anyclass instance FromJSON MintingPolicy
-
-deriving anyclass instance ToJSON Validator
-deriving anyclass instance FromJSON Validator
-
 deriving anyclass instance ToJSON Redeemer
 deriving anyclass instance FromJSON Redeemer
-deriving anyclass instance Serialise Redeemer
 
 deriving anyclass instance ToJSON Datum
 deriving anyclass instance FromJSON Datum
-deriving anyclass instance Serialise Datum
 
 instance ToJSON CurrencySymbol where
   toJSON c =
@@ -255,17 +201,9 @@ deriving anyclass instance ToJSON ScriptTag
 deriving anyclass instance FromJSON ScriptTag
 deriving anyclass instance Serialise ScriptTag
 
-deriving anyclass instance ToJSON TxIn
-deriving anyclass instance FromJSON TxIn
-deriving anyclass instance Serialise TxIn
-
 deriving anyclass instance ToJSON TxOut
 deriving anyclass instance FromJSON TxOut
 deriving anyclass instance Serialise TxOut
-
-deriving anyclass instance ToJSON TxInType
-deriving anyclass instance FromJSON TxInType
-deriving anyclass instance Serialise TxInType
 
 deriving anyclass instance ToJSON TxOutRef
 deriving anyclass instance FromJSON TxOutRef

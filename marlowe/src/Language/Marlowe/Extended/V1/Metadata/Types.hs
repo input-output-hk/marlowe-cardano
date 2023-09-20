@@ -18,8 +18,8 @@ import Data.Set (Set)
 import Data.Set.Ordered (OSet)
 import Data.Text.Encoding as Text
 import qualified GHC.Generics
-import Plutus.V1.Ledger.Api (TokenName)
-import qualified Plutus.V1.Ledger.Value as Val
+import PlutusLedgerApi.V1 (TokenName)
+import qualified PlutusLedgerApi.V1.Value as Val
 
 data ContractType
   = Escrow

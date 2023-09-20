@@ -19,7 +19,7 @@ import Language.Marlowe (POSIXTime (..))
 import qualified Language.Marlowe as M
 import Language.Marlowe.Core.V1.Semantics.Types hiding (Deposit)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
-import qualified Plutus.V1.Ledger.Api as P
+import qualified PlutusLedgerApi.V1 as P
 import qualified PlutusTx.AssocMap as AssocMap
 
 newtype PayoutChunkSize = PayoutChunkSize Int
@@ -50,7 +50,7 @@ suspendContract :: Contract -> BaseTimeout -> Contract
 suspendContract continuation (BaseTimeout (POSIXTime timeoutMilliseconds)) = do
   let -- Mere mortal rough approximation of infinity.
       never = POSIXTime do
-        let hour = 1000 * 60 * 60
+        let hour = 1_000 * 60 * 60
         timeoutMilliseconds + hour * 24 * 365 * 10_000
   suspendContractWithTimeoutCleanup continuation never Close
 
@@ -100,7 +100,7 @@ mkDepositWithChunkedPaybacks (DepositStep alreadyDeposited deposit) payoutChunkS
           Payout sender (Recipient s) t a
 
       -- On timeout we are paying back to the sender.
-      -- This supspension is for merkleization.
+      -- This suspension is for merkleization.
       timeoutContract :: Contract
       timeoutContract = suspendContract (mkChunkedPayouts paybacks payoutChunkSize (BaseTimeout timeout)) (BaseTimeout timeout)
 
@@ -135,7 +135,7 @@ allPayouts sender (RecipientsAmounts recipient2Value) = do
 -- payout chunk.
 -- The contract is still possibly unsafe because at some point multiple "notifies" can in theory expire so a single
 -- trigger can turn into a larger set of payouts which can exceed on chain limits. Because of that we use infinity
--- approximation (+10_000 years) for all the timeouts in the `Notify` constrcuts.
+-- approximation (+10_000 years) for all the timeouts in the `Notify` constructs.
 chunkedValueTransfer
   :: Sender
   -> RecipientsAmounts

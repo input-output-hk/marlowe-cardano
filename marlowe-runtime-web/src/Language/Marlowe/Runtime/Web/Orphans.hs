@@ -56,7 +56,7 @@ import qualified Language.Marlowe.Object.Types as Object
 import Numeric.Natural (Natural)
 import Pipes (X)
 import qualified Pipes
-import qualified Plutus.V2.Ledger.Api as P
+import qualified PlutusLedgerApi.V2 as P
 
 data Address
 

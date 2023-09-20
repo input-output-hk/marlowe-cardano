@@ -7,7 +7,7 @@
 module Language.Marlowe.Runtime.CLI.Command.Apply where
 
 import qualified Cardano.Api as C
-import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
+import Cardano.Api.Shelley (File (..), ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import Control.Error (noteT)
 import Control.Error.Util (hoistMaybe)
 import Control.Monad.IO.Class (liftIO)
@@ -45,7 +45,7 @@ import Language.Marlowe.Runtime.Core.Api (
 import Language.Marlowe.Runtime.Transaction.Api (ApplyInputsError, InputsApplied (..), InputsAppliedInEra (..))
 import qualified Language.Marlowe.Util as V1
 import Options.Applicative
-import qualified Plutus.V1.Ledger.Api as P
+import qualified PlutusLedgerApi.V1 as P
 
 data ApplyCommand = V1ApplyCommand
   { contractId :: ContractId
@@ -284,7 +284,8 @@ runApplyCommand TxCommand{walletAddresses, signingMethod, tagsFile, metadataFile
       ExceptT @_ @_ @() $
         liftIO $
           first TransactionFileWriteFailed <$> case era of
-            ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.writeFileTextEnvelope outputFile Nothing txBody
+            ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.writeFileTextEnvelope (File outputFile) Nothing txBody
+            ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.writeFileTextEnvelope (File outputFile) Nothing txBody
       let txId = C.getTxId txBody
           res =
             A.object

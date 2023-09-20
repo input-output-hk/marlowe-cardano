@@ -53,6 +53,7 @@ import qualified Language.Marlowe.Runtime.Sync.Database as MarloweSync
 import Language.Marlowe.Runtime.Transaction (transaction)
 import qualified Language.Marlowe.Runtime.Transaction as MarloweTx
 import qualified Language.Marlowe.Runtime.Transaction as Tx
+import Language.Marlowe.Runtime.Transaction.BuildConstraints (MkRoleTokenMintingPolicy)
 import Language.Marlowe.Runtime.Transaction.Query (
   LoadMarloweContextSelector,
   LoadPayoutContextSelector,
@@ -105,6 +106,7 @@ data MarloweRuntimeDependencies r n m = MarloweRuntimeDependencies
   , networkId :: NetworkId
   , runtimeVersion :: Version
   , indexParties :: m ()
+  , mkRoleTokenMintingPolicy :: MkRoleTokenMintingPolicy m
   }
 
 data MarloweRuntime m = MarloweRuntime
@@ -155,6 +157,7 @@ marloweRuntime = proc MarloweRuntimeDependencies{..} -> do
               MaryEra -> MaryEraInCardanoMode
               AlonzoEra -> AlonzoEraInCardanoMode
               BabbageEra -> BabbageEraInCardanoMode
+              ConwayEra -> ConwayEraInCardanoMode
           , scanBatchSize = 8192
           , ..
           }

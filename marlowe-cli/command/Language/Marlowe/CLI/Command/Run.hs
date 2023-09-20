@@ -23,6 +23,7 @@ import Cardano.Api (
   AddressInEra,
   ConsensusModeParams (CardanoModeParams),
   EpochSlots (..),
+  File (..),
   IsShelleyBasedEra,
   LocalNodeConnectInfo (..),
   NetworkId (..),
@@ -68,7 +69,7 @@ import Language.Marlowe.CLI.Types (
  )
 import Language.Marlowe.Client (defaultMarloweParams, marloweParams)
 import Language.Marlowe.Core.V1.Semantics.Types (Input)
-import Plutus.V1.Ledger.Api (CurrencySymbol, POSIXTime (..), TokenName)
+import PlutusLedgerApi.V1 (CurrencySymbol, POSIXTime (..), TokenName)
 
 import Cardano.Api qualified as Api (Value)
 import Cardano.Api qualified as C
@@ -270,7 +271,7 @@ runRunCommand command =
           LocalNodeConnectInfo
             { localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
             , localNodeNetworkId = network'
-            , localNodeSocketPath = socketPath command
+            , localNodeSocketPath = File $ socketPath command
             }
         marloweParams' = maybe defaultMarloweParams marloweParams $ rolesCurrency command
         stake' = fromMaybe NoStakeAddress $ stake command

@@ -24,14 +24,10 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# OPTIONS_GHC -Wno-name-shadowing #-}
-{-# OPTIONS_GHC -Wno-simplifiable-class-constraints #-}
-{-# OPTIONS_GHC -Wno-unused-imports #-}
 {-# OPTIONS_GHC -fno-ignore-interface-pragmas #-}
 {-# OPTIONS_GHC -fno-omit-interface-pragmas #-}
 -- A big hammer, but it helps.
 {-# OPTIONS_GHC -fno-specialise #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 -- | Types for Marlowe semantics
 module Language.Marlowe.Core.V1.Semantics.Types (
@@ -98,9 +94,9 @@ import Deriving.Aeson
 import Language.Marlowe.Core.V1.Semantics.Types.Address
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
 import Language.Marlowe.Pretty (Pretty (..))
-import qualified Plutus.V1.Ledger.Value as Val
-import Plutus.V2.Ledger.Api (CurrencySymbol (unCurrencySymbol), POSIXTime (..), TokenName (unTokenName))
-import qualified Plutus.V2.Ledger.Api as Ledger (Address (..))
+import qualified PlutusLedgerApi.V1.Value as Val
+import PlutusLedgerApi.V2 (CurrencySymbol (unCurrencySymbol), POSIXTime (..), TokenName (unTokenName))
+import qualified PlutusLedgerApi.V2 as Ledger (Address (..))
 import PlutusTx (makeIsDataIndexed)
 import PlutusTx.AssocMap (Map)
 import qualified PlutusTx.AssocMap as Map
@@ -253,10 +249,10 @@ data Payee
   deriving anyclass (Pretty)
 
 -- | A case is a branch of a when clause, guarded by an action.
---   The continuation of the contrack may be merkleized or not.
+--   The continuation of the contract may be merkleized or not.
 --
 --   Plutus doesn't support mutually recursive data types yet.
---   datatype Case is mutually recurvive with @Contract@
+--   datatype Case is mutually recursive with @Contract@
 data Case a
   = Case Action a
   | MerkleizedCase Action BuiltinByteString
@@ -368,7 +364,7 @@ instance ToJSON Input where
   toJSON (NormalInput content) = toJSON content
   toJSON (MerkleizedInput content hash continuation) =
     let obj = case toJSON content of
-          Object obj -> obj
+          Object o -> o
           _ -> KeyMap.empty
      in Object
           $ obj
@@ -459,7 +455,7 @@ emptyState sn =
     , minTime = sn
     }
 
--- | Check if a 'num' is withint a list of inclusive bounds.
+-- | Check if a 'num' is within a list of inclusive bounds.
 inBounds :: ChosenNum -> [Bound] -> Bool
 inBounds num = any (\(Bound l u) -> num >= l && num <= u)
 
@@ -499,10 +495,7 @@ fromJSONAssocMap v = Map.fromList <$> parseJSON v
 
 instance FromJSON Party where
   parseJSON = withObject "Party" $ \v ->
-    ( maybe (parseFail "Address") (return . uncurry Address)
-        =<< deserialiseAddressBech32
-        <$> v .: "address"
-    )
+    (maybe (parseFail "Address") (return . uncurry Address) . deserialiseAddressBech32 =<< (v .: "address"))
       <|> (Role . Val.tokenName . Text.encodeUtf8 <$> (v .: "role_token"))
 
 instance ToJSON Party where
@@ -944,7 +937,7 @@ instance Eq Observation where
   AndObs{} == _ = False
   OrObs o1l o2l == OrObs o1r o2r = o1l == o1r && o2l == o2r
   OrObs{} == _ = False
-  NotObs ol == NotObs or = ol == or
+  NotObs a == NotObs b = a == b
   NotObs{} == _ = False
   ChoseSomething cid1 == ChoseSomething cid2 = cid1 == cid2
   ChoseSomething _ == _ = False
@@ -1086,7 +1079,7 @@ makeIsDataIndexed
 makeLift ''State
 makeIsDataIndexed ''State [('State, 0)]
 makeLift ''Environment
-makeLift ''Input
-makeIsDataIndexed ''Input [('NormalInput, 0), ('MerkleizedInput, 1)]
 makeLift ''InputContent
 makeIsDataIndexed ''InputContent [('IDeposit, 0), ('IChoice, 1), ('INotify, 2)]
+makeLift ''Input
+makeIsDataIndexed ''Input [('NormalInput, 0), ('MerkleizedInput, 1)]

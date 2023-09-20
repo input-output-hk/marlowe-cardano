@@ -12,6 +12,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
+{-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
 -- | This module specifies the Marlowe Runtime Web API as a Servant API type.
 module Language.Marlowe.Runtime.Web.API where
@@ -55,6 +56,7 @@ import GHC.TypeLits (KnownSymbol, symbolVal)
 import Language.Marlowe.Core.V1.Next
 import Language.Marlowe.Runtime.Web.Next.Schema ()
 
+import Data.Kind (Type)
 import Data.Text.Encoding (encodeUtf8)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract)
 import Language.Marlowe.Object.Types (Label, ObjectBundle)
@@ -193,7 +195,7 @@ instance MimeRender (TxJSON ContractTx) (PostContractsResponse CardanoTx) where
   mimeRender _ = encode . toJSON
 
 instance MimeUnrender (TxJSON ContractTx) (PostContractsResponse CardanoTx) where
-  mimeUnrender _ bs = eitherDecode bs
+  mimeUnrender _ = eitherDecode
 
 instance HasNamedLink (CreateTxEnvelope tx) API "contract" where
   type
@@ -274,7 +276,7 @@ instance MimeRender (TxJSON ApplyInputsTx) (PostTransactionsResponse CardanoTx) 
   mimeRender _ = encode . toJSON
 
 instance MimeUnrender (TxJSON ApplyInputsTx) (PostTransactionsResponse CardanoTx) where
-  mimeUnrender _ bs = eitherDecode bs
+  mimeUnrender _ = eitherDecode
 
 -- | POST /contracts/:contractId/transactions sub-API
 type PostTransactionsAPI =
@@ -412,7 +414,7 @@ instance MimeRender (TxJSON WithdrawTx) (PostWithdrawalsResponse CardanoTx) wher
   mimeRender _ = encode . toJSON
 
 instance MimeUnrender (TxJSON WithdrawTx) (PostWithdrawalsResponse CardanoTx) where
-  mimeUnrender _ bs = eitherDecode bs
+  mimeUnrender _ = eitherDecode
 
 instance HasNamedLink (WithdrawTxEnvelope tx) API "withdrawal" where
   type
@@ -502,7 +504,7 @@ instance
     pure \mkLink -> withSubMkLink $ mkLink a
 
 class (IsElem (Endpoint a api name) api, HasLink (Endpoint a api name)) => HasNamedLink a api (name :: Symbol) where
-  type Endpoint a api name :: *
+  type Endpoint a api name :: Type
   namedLink :: Proxy api -> Proxy name -> MkLink (Endpoint a api name) Link -> a -> Maybe Link
 
 instance (HasNamedLink a api name) => HasNamedLink (WithLink name' a) api name where

@@ -1,4 +1,4 @@
-cabal-version:   3.0
+cabal-version:   3.4
 name:            marlowe-cli
 version:         0.0.12.0
 license:         Apache-2.0
@@ -97,10 +97,10 @@ library
     , base16-bytestring
     , bech32
     , bytestring
-    , cardano-api
+    , cardano-api ^>=8.2
     , cardano-crypto-class
     , cardano-ledger-alonzo
-    , cardano-ledger-byron ==0.1.0.0
+    , cardano-ledger-byron ^>=1.0
     , cardano-ledger-core
     , cardano-ledger-shelley
     , cardano-slotting
@@ -119,11 +119,11 @@ library
     , mtl
     , one-line-aeson-text
     , ouroboros-consensus
-    , ouroboros-network
+    , ouroboros-network-protocols
     , parser-combinators
     , plutus-core
     , plutus-ledger-ada
-    , plutus-ledger-api
+    , plutus-ledger-api ^>=1.5
     , plutus-ledger-slot
     , plutus-tx
     , prettyprinter
@@ -133,7 +133,6 @@ library
     , text
     , time
     , time-units
-    , transformers
     , yaml
 
 library cli-test
@@ -147,7 +146,6 @@ library cli-test
     Contrib.Control.Monad.Trans.State.IO
     Contrib.Data.Aeson.Generic
     Contrib.Data.Aeson.Traversals
-    Contrib.Data.List
     Contrib.Data.List.Random
     Contrib.Data.Time.Clock
     Contrib.Monad.Loops
@@ -188,13 +186,11 @@ library cli-test
     , base >=4.9 && <5
     , base16-aeson ==0.1.0.0
     , bytestring
-    , cardano-api
+    , cardano-api ^>=8.2
     , containers
-    , data-default
     , data-has
     , errors
     , eventuo11y
-    , eventuo11y-json
     , extra
     , indexed-traversable
     , lens
@@ -210,9 +206,7 @@ library cli-test
     , mtl
     , network
     , one-line-aeson-text
-    , plutus-core
-    , plutus-ledger-ada
-    , plutus-ledger-api
+    , plutus-ledger-api ^>=1.5
     , plutus-ledger-slot
     , plutus-tx
     , random
@@ -247,7 +241,6 @@ library command
     , base16-bytestring
     , bytestring
     , cardano-api
-    , cardano-slotting
     , containers
     , filepath
     , marlowe-actus
@@ -258,17 +251,14 @@ library command
     , mtl
     , network
     , optparse-applicative
-    , ouroboros-network
     , plutus-ledger-ada
-    , plutus-ledger-api
+    , plutus-ledger-api ^>=1.5
     , plutus-ledger-slot
-    , plutus-tx
     , regex-posix
     , servant-client
     , split
     , text
     , time-units
-    , transformers
 
 executable marlowe-cli
   import:          lang
@@ -278,9 +268,7 @@ executable marlowe-cli
   autogen-modules: Paths_marlowe_cli
   build-depends:
     , base >=4.9 && <5
-    , cardano-config
     , marlowe-cli:command
-    , text
 
   ghc-options:     -threaded
 
@@ -303,7 +291,7 @@ test-suite marlowe-cli-test
     , marlowe-test
     , megaparsec
     , mtl
-    , plutus-ledger-api
+    , plutus-ledger-api ^>=1.5
     , plutus-ledger-slot
     , plutus-tx
     , tasty

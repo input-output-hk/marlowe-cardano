@@ -3,7 +3,6 @@
 module Language.Marlowe.Runtime.CLI.Option where
 
 import Control.Arrow ((>>>))
-import Data.Foldable (asum)
 import Data.List.Split (splitOn)
 import Data.String (fromString)
 import qualified Data.Text as T

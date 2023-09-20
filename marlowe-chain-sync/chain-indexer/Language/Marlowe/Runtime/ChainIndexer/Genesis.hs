@@ -19,7 +19,6 @@ import Data.Bifunctor (Bifunctor (..))
 import Data.ByteString (ByteString)
 import Data.ByteString.Short (toShort)
 import qualified Data.Map as Map
-import Data.Maybe (fromMaybe)
 import Data.Set (Set)
 import qualified Data.Set as Set
 
@@ -36,7 +35,7 @@ data GenesisTx = GenesisTx
   }
   deriving (Eq, Ord, Show)
 
-computeGenesisBlock :: ByteString -> Byron.Config -> ShelleyGenesis (ShelleyEra StandardCrypto) -> GenesisBlock
+computeGenesisBlock :: ByteString -> Byron.Config -> ShelleyGenesis StandardCrypto -> GenesisBlock
 computeGenesisBlock genesisFileHash byronGenesis shelleyGenesis =
   GenesisBlock
     { genesisBlockHash = HeaderHash $ toShort genesisFileHash
@@ -66,7 +65,7 @@ fromByronBalance :: Byron.Address -> Byron.Lovelace -> GenesisTx
 fromByronBalance address lovelace =
   GenesisTx
     { genesisTxId =
-        fromMaybe (error "fromByronBalance") $
+        either (error . (<> "fromByronBalance: ") . show) id $
           deserialiseFromRawBytes AsTxId $
             abstractHashToBytes $
               serializeCborHash address
@@ -75,12 +74,12 @@ fromByronBalance address lovelace =
     }
 
 shelleyGenesisUTxOs
-  :: ShelleyGenesis (ShelleyEra StandardCrypto)
-  -> [(Shelley.TxIn StandardCrypto, Shelley.TxOut (ShelleyEra StandardCrypto))]
+  :: ShelleyGenesis StandardCrypto
+  -> [(Shelley.TxIn StandardCrypto, Core.TxOut (ShelleyEra StandardCrypto))]
 shelleyGenesisUTxOs = Map.toList . Shelley.unUTxO . Shelley.genesisUTxO
 
 fromShelleyBalance :: Shelley.TxIn StandardCrypto -> Core.TxOut (ShelleyEra StandardCrypto) -> GenesisTx
-fromShelleyBalance (Shelley.TxIn txId _) (Shelley.TxOut addr coin) =
+fromShelleyBalance (Shelley.TxIn txId _) (Shelley.ShelleyTxOut addr coin) =
   GenesisTx
     { genesisTxId = fromShelleyTxId txId
     , genesisTxLovelace = fromShelleyLovelace coin

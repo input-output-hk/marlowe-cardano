@@ -8,8 +8,9 @@ module Language.Marlowe.Runtime.Integration.Common where
 
 import Cardano.Api (
   AddressAny (AddressShelley),
+  AnyCardanoEra (..),
   AsType (..),
-  BabbageEra,
+  File (..),
   Key (verificationKeyHash),
   NetworkId (Testnet),
   NetworkMagic (NetworkMagic),
@@ -23,12 +24,11 @@ import Cardano.Api (
   getVerificationKey,
   makeShelleyAddress,
   signShelleyTransaction,
+  toLedgerEpochInfo,
  )
 import qualified Cardano.Api as C
 import Cardano.Api.Byron (deserialiseFromTextEnvelope)
-import Cardano.Api.Shelley (
-  ReferenceTxInsScriptsInlineDatumsSupportedInEra (ReferenceTxInsScriptsInlineDatumsInBabbageEra),
- )
+import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import qualified Cardano.Api.Shelley as C
 import Control.Concurrent (threadDelay)
 import Control.DeepSeq (NFData)
@@ -69,6 +69,7 @@ import Language.Marlowe.Runtime.Cardano.Api (
   toCardanoAddressInEra,
   toCardanoTxOut,
  )
+import Language.Marlowe.Runtime.Cardano.Feature (withShelleyBasedEra)
 import Language.Marlowe.Runtime.ChainSync.Api (
   Assets (..),
   BlockHeader (..),
@@ -102,6 +103,7 @@ import Language.Marlowe.Runtime.Core.Api (
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader (..))
 import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep (..))
 import Language.Marlowe.Runtime.Transaction.Api (
+  ContractCreated (..),
   ContractCreatedInEra (..),
   InputsApplied (..),
   InputsAppliedInEra (..),
@@ -109,10 +111,9 @@ import Language.Marlowe.Runtime.Transaction.Api (
   SubmitError,
   WalletAddresses (..),
   WithdrawTx (..),
-  WithdrawTxInEra,
  )
 import Network.Protocol.Job.Client (liftCommandWait)
-import qualified Plutus.V2.Ledger.Api as PV2
+import qualified PlutusLedgerApi.V2 as PV2
 import Servant.Client (ClientError)
 import Servant.Client.Streaming (ClientM)
 import System.Exit (ExitCode (..))
@@ -160,69 +161,115 @@ allocateWallet balances = do
       , signingKeys
       }
 
-submitBuilder :: Wallet -> TxBuilder a -> Integration (BlockHeader, a)
-submitBuilder wallet builder = mdo
-  -- Note - the txId is not evaluated yet - we're referring to it lazily.
-  (a, txOuts) <- runStateT (runReaderT builder txId) []
-  utxo <- getUTxO wallet
-  let txBodyContent =
-        TxBodyContent
-          { txIns =
-              (,C.BuildTxWith $ C.KeyWitness C.KeyWitnessForSpending) . fst
-                <$> Map.toList (C.unUTxO utxo)
-          , txInsCollateral = C.TxInsCollateralNone
-          , txInsReference = C.TxInsReferenceNone
-          , txOuts = fromJust . toCardanoTxOut C.MultiAssetInBabbageEra <$> reverse txOuts
-          , txTotalCollateral = C.TxTotalCollateralNone
-          , txReturnCollateral = C.TxReturnCollateralNone
-          , txFee = C.TxFeeExplicit C.TxFeesExplicitInBabbageEra 0
-          , txValidityRange = (C.TxValidityNoLowerBound, C.TxValidityNoUpperBound C.ValidityNoUpperBoundInBabbageEra)
-          , txMetadata = C.TxMetadataNone
-          , txAuxScripts = C.TxAuxScriptsNone
-          , txExtraKeyWits = C.TxExtraKeyWitnessesNone
-          , txProtocolParams = C.BuildTxWith Nothing
-          , txWithdrawals = C.TxWithdrawalsNone
-          , txCertificates = C.TxCertificatesNone
-          , txUpdateProposal = C.TxUpdateProposalNone
-          , txMintValue = C.TxMintNone
-          , txScriptValidity = C.TxScriptValidityNone
-          }
-  txBody <- balanceTx wallet utxo txBodyContent
-  let txId = fromCardanoTxId $ getTxId txBody
-  (,a) <$> submit wallet txBody
+submitBuilder :: forall a. Wallet -> TxBuilder a -> Integration (BlockHeader, a)
+submitBuilder wallet builder = withCurrentEra go
+  where
+    go :: forall era. C.ShelleyBasedEra era -> Integration (BlockHeader, a)
+    go era = mdo
+      -- Note - the txId is not evaluated yet - we're referring to it lazily.
+      (a, txOuts) <- runStateT (runReaderT builder txId) []
+      utxo <- getUTxO era wallet
+      multiAsset <-
+        expectRight ("multi asset not supported in " <> show era) $
+          C.multiAssetSupportedInEra $
+            C.shelleyBasedToCardanoEra era
+      txFeesExplicit <-
+        expectRight ("multi asset not supported in " <> show era) $
+          C.txFeesExplicitInEra $
+            C.shelleyBasedToCardanoEra era
+      validityNoUpperBound <-
+        expectJust ("multi asset not supported in " <> show era) $
+          C.validityNoUpperBoundSupportedInEra $
+            C.shelleyBasedToCardanoEra era
+      referenceScripts <-
+        expectJust @_ @(C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era)
+          ("reference scripts not supported in " <> show era)
+          case era of
+            C.ShelleyBasedEraShelley -> Nothing
+            C.ShelleyBasedEraAllegra -> Nothing
+            C.ShelleyBasedEraMary -> Nothing
+            C.ShelleyBasedEraAlonzo -> Nothing
+            C.ShelleyBasedEraBabbage -> Just C.ReferenceTxInsScriptsInlineDatumsInBabbageEra
+            C.ShelleyBasedEraConway -> Just C.ReferenceTxInsScriptsInlineDatumsInConwayEra
+      let txBodyContent =
+            TxBodyContent
+              { txIns =
+                  (,C.BuildTxWith $ C.KeyWitness C.KeyWitnessForSpending) . fst
+                    <$> Map.toList (C.unUTxO utxo)
+              , txInsCollateral = C.TxInsCollateralNone
+              , txInsReference = C.TxInsReferenceNone
+              , txOuts = fromJust . toCardanoTxOut multiAsset <$> reverse txOuts
+              , txTotalCollateral = C.TxTotalCollateralNone
+              , txReturnCollateral = C.TxReturnCollateralNone
+              , txFee = C.TxFeeExplicit txFeesExplicit 0
+              , txValidityRange = (C.TxValidityNoLowerBound, C.TxValidityNoUpperBound validityNoUpperBound)
+              , txMetadata = C.TxMetadataNone
+              , txAuxScripts = C.TxAuxScriptsNone
+              , txExtraKeyWits = C.TxExtraKeyWitnessesNone
+              , txProtocolParams = C.BuildTxWith Nothing
+              , txWithdrawals = C.TxWithdrawalsNone
+              , txCertificates = C.TxCertificatesNone
+              , txUpdateProposal = C.TxUpdateProposalNone
+              , txMintValue = C.TxMintNone
+              , txScriptValidity = C.TxScriptValidityNone
+              }
+      txBody <- balanceTx era wallet utxo txBodyContent
+      let txId = fromCardanoTxId $ getTxId txBody
+      (,a) <$> submit wallet referenceScripts txBody
 
-balanceTx :: Wallet -> C.UTxO BabbageEra -> TxBodyContent C.BuildTx BabbageEra -> Integration (TxBody BabbageEra)
-balanceTx (Wallet WalletAddresses{..} _) utxo txBodyContent = do
+withCurrentEra :: (forall era. C.ShelleyBasedEra era -> Integration a) -> Integration a
+withCurrentEra f = do
+  AnyCardanoEra era <- queryNode 0 $ C.QueryCurrentEra C.CardanoModeIsMultiEra
+  case era of
+    C.ByronEra -> fail "Still in byron"
+    C.ShelleyEra -> f C.ShelleyBasedEraShelley
+    C.AllegraEra -> f C.ShelleyBasedEraAllegra
+    C.MaryEra -> f C.ShelleyBasedEraMary
+    C.AlonzoEra -> f C.ShelleyBasedEraAlonzo
+    C.BabbageEra -> f C.ShelleyBasedEraBabbage
+    C.ConwayEra -> f C.ShelleyBasedEraConway
+
+balanceTx :: C.ShelleyBasedEra era -> Wallet -> C.UTxO era -> TxBodyContent C.BuildTx era -> Integration (TxBody era)
+balanceTx era (Wallet WalletAddresses{..} _) utxo txBodyContent = do
   start <- queryNode 0 C.QuerySystemStart
   history <- queryNode 0 $ C.QueryEraHistory C.CardanoModeIsMultiEra
-  protocol <- queryBabbage 0 $ C.QueryInShelleyBasedEra C.ShelleyBasedEraBabbage C.QueryProtocolParameters
-  changeAddr <- expectJust "Could not convert to Cardano address" $ toCardanoAddressInEra C.BabbageEra changeAddress
-  C.BalancedTxBody txBody _ _ <-
-    expectRight "Failed to balance Tx" $
-      C.makeTransactionBodyAutoBalance
-        C.BabbageEraInCardanoMode
-        start
-        history
-        protocol
-        mempty
-        utxo
-        txBodyContent
-        changeAddr
-        Nothing
+  protocol <- queryShelley era 0 $ C.QueryInShelleyBasedEra era C.QueryProtocolParameters
+  changeAddr <-
+    expectJust "Could not convert to Cardano address" $ toCardanoAddressInEra (C.shelleyBasedToCardanoEra era) changeAddress
+  C.BalancedTxBody _ txBody _ _ <-
+    withShelleyBasedEra era $
+      expectRight "Failed to balance Tx" $
+        C.makeTransactionBodyAutoBalance
+          start
+          (toLedgerEpochInfo history)
+          protocol
+          mempty
+          mempty
+          utxo
+          txBodyContent
+          changeAddr
+          Nothing
   pure txBody
 
-getUTxO :: Wallet -> Integration (C.UTxO BabbageEra)
-getUTxO (Wallet WalletAddresses{..} _) =
-  queryBabbage 0 $
-    C.QueryInShelleyBasedEra C.ShelleyBasedEraBabbage $
+getUTxO :: C.ShelleyBasedEra era -> Wallet -> Integration (C.UTxO era)
+getUTxO era (Wallet WalletAddresses{..} _) =
+  queryShelley era 0 $
+    C.QueryInShelleyBasedEra era $
       C.QueryUTxO $
         C.QueryUTxOByAddress $
           Set.insert (fromJust $ toCardanoAddressAny changeAddress) $
             Set.map (fromJust . toCardanoAddressAny) extraAddresses
 
-queryBabbage :: Int -> C.QueryInEra C.BabbageEra a -> Integration a
-queryBabbage nodeNum =
-  either (fail . show) pure <=< queryNode nodeNum . C.QueryInEra C.BabbageEraInCardanoMode
+queryShelley :: C.ShelleyBasedEra era -> Int -> C.QueryInEra era a -> Integration a
+queryShelley era nodeNum =
+  either (fail . show) pure
+    <=< queryNode nodeNum . C.QueryInEra case era of
+      C.ShelleyBasedEraShelley -> C.ShelleyEraInCardanoMode
+      C.ShelleyBasedEraAllegra -> C.AllegraEraInCardanoMode
+      C.ShelleyBasedEraMary -> C.MaryEraInCardanoMode
+      C.ShelleyBasedEraAlonzo -> C.AlonzoEraInCardanoMode
+      C.ShelleyBasedEraBabbage -> C.BabbageEraInCardanoMode
+      C.ShelleyBasedEraConway -> C.ConwayEraInCardanoMode
 
 queryNode :: Int -> C.QueryInMode C.CardanoMode a -> Integration a
 queryNode nodeNum query = do
@@ -233,7 +280,7 @@ nodeConnectInfo :: Int -> Integration (C.LocalNodeConnectInfo C.CardanoMode)
 nodeConnectInfo nodeNum = do
   LocalTestnet{..} <- testnet
   let SpoNode{..} = spoNodes !! nodeNum
-  C.LocalNodeConnectInfo (C.CardanoModeParams $ C.EpochSlots 21600) <$> networkId <*> pure socket
+  C.LocalNodeConnectInfo (C.CardanoModeParams $ C.EpochSlots 21600) <$> networkId <*> pure (File socket)
 
 networkId :: Integration NetworkId
 networkId = Testnet . NetworkMagic . fromIntegral . testnetMagic <$> testnet
@@ -350,17 +397,19 @@ getTip = do
 
 submit
   :: Wallet
-  -> TxBody BabbageEra
+  -> ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  -> TxBody era
   -> Integration BlockHeader
-submit wallet = expectRight "failed to submit tx" <=< submit' wallet
+submit era wallet = expectRight "failed to submit tx" <=< submit' era wallet
 
 submit'
   :: Wallet
-  -> TxBody BabbageEra
+  -> ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  -> TxBody era
   -> Integration (Either SubmitError BlockHeader)
-submit' Wallet{..} txBody = do
-  let tx = signShelleyTransaction txBody signingKeys
-  runMarloweTxClient $ liftCommandWait $ Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra tx
+submit' Wallet{..} era txBody = do
+  let tx = withShelleyBasedEra era $ signShelleyTransaction txBody signingKeys
+  runMarloweTxClient $ liftCommandWait $ Submit era tx
 
 deposit
   :: Wallet
@@ -369,7 +418,7 @@ deposit
   -> Party
   -> Token
   -> Integer
-  -> Integration (InputsAppliedInEra BabbageEra 'V1)
+  -> Integration (InputsApplied 'V1)
 deposit Wallet{..} contractId intoAccount fromParty ofToken quantity = do
   result <-
     applyInputs
@@ -378,9 +427,7 @@ deposit Wallet{..} contractId intoAccount fromParty ofToken quantity = do
       contractId
       emptyMarloweTransactionMetadata
       [NormalInput $ IDeposit intoAccount fromParty ofToken quantity]
-  InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra tx <-
-    expectRight "Failed to create deposit transaction" result
-  pure tx
+  expectRight "Failed to create deposit transaction" result
 
 choose
   :: Wallet
@@ -388,7 +435,7 @@ choose
   -> PV2.BuiltinByteString
   -> Party
   -> Integer
-  -> Integration (InputsAppliedInEra BabbageEra 'V1)
+  -> Integration (InputsApplied 'V1)
 choose Wallet{..} contractId choice party chosenNum = do
   result <-
     applyInputs
@@ -397,14 +444,12 @@ choose Wallet{..} contractId choice party chosenNum = do
       contractId
       emptyMarloweTransactionMetadata
       [NormalInput $ IChoice (ChoiceId choice party) chosenNum]
-  InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra tx <-
-    expectRight "Failed to create choice transaction" result
-  pure tx
+  expectRight "Failed to create choice transaction" result
 
 notify
   :: Wallet
   -> ContractId
-  -> Integration (InputsAppliedInEra BabbageEra 'V1)
+  -> Integration (InputsApplied 'V1)
 notify Wallet{..} contractId = do
   result <-
     applyInputs
@@ -413,19 +458,15 @@ notify Wallet{..} contractId = do
       contractId
       emptyMarloweTransactionMetadata
       [NormalInput INotify]
-  InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra tx <-
-    expectRight "Failed to create notify transaction" result
-  pure tx
+  expectRight "Failed to create notify transaction" result
 
 withdraw
   :: Wallet
   -> Set TxOutRef
-  -> Integration (WithdrawTxInEra BabbageEra 'V1)
+  -> Integration (WithdrawTx 'V1)
 withdraw Wallet{..} payouts = do
   result <- Client.withdraw MarloweV1 addresses payouts
-  WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra tx <-
-    expectRight "Failed to create withdraw transaction" result
-  pure tx
+  expectRight "Failed to create withdraw transaction" result
 
 timeout :: NominalDiffTime
 timeout = secondsToNominalDiffTime 2
@@ -433,8 +474,8 @@ timeout = secondsToNominalDiffTime 2
 retryDelayMicroSeconds :: Int
 retryDelayMicroSeconds = 100_000
 
-contractCreatedToCreateStep :: ContractCreatedInEra BabbageEra v -> CreateStep v
-contractCreatedToCreateStep ContractCreatedInEra{..} =
+contractCreatedToCreateStep :: ContractCreated v -> CreateStep v
+contractCreatedToCreateStep (ContractCreated _ ContractCreatedInEra{..}) =
   CreateStep
     { createOutput =
         TransactionScriptOutput
@@ -447,8 +488,8 @@ contractCreatedToCreateStep ContractCreatedInEra{..} =
     , payoutValidatorHash = payoutScriptHash
     }
 
-inputsAppliedToTransaction :: BlockHeader -> InputsAppliedInEra BabbageEra v -> Transaction v
-inputsAppliedToTransaction blockHeader InputsAppliedInEra{..} =
+inputsAppliedToTransaction :: BlockHeader -> InputsApplied v -> Transaction v
+inputsAppliedToTransaction blockHeader (InputsApplied _ InputsAppliedInEra{..}) =
   Transaction
     { transactionId = fromCardanoTxId $ getTxId txBody
     , contractId
@@ -460,8 +501,8 @@ inputsAppliedToTransaction blockHeader InputsAppliedInEra{..} =
     , output
     }
 
-contractCreatedToContractHeader :: BlockHeader -> ContractCreatedInEra BabbageEra v -> ContractHeader
-contractCreatedToContractHeader blockHeader ContractCreatedInEra{..} =
+contractCreatedToContractHeader :: BlockHeader -> ContractCreated v -> ContractHeader
+contractCreatedToContractHeader blockHeader (ContractCreated _ ContractCreatedInEra{..}) =
   ContractHeader
     { contractId
     , rolesCurrency

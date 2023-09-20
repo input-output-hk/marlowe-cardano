@@ -14,12 +14,12 @@ import Cardano.Api (
  )
 import Cardano.Api.Shelley (ShelleyLedgerEra, Tx (ShelleyTx), TxBody (ShelleyTxBody))
 import qualified Cardano.Ledger.Alonzo.Scripts
-import Cardano.Ledger.Alonzo.Tx (ValidatedTx (ValidatedTx))
+import Cardano.Ledger.Alonzo.Tx (AlonzoTx (..))
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
-import Cardano.Ledger.Alonzo.TxWitness (TxWitness (TxWitness))
+import Cardano.Ledger.Alonzo.TxWits (AlonzoTxWits (..))
 import Cardano.Ledger.BaseTypes (maybeToStrictMaybe)
 import qualified Cardano.Ledger.Core
-import Cardano.Ledger.Era (Era (Crypto))
+import Cardano.Ledger.Era (Era (EraCrypto))
 import Cardano.Ledger.Keys (KeyRole (Witness))
 import Cardano.Ledger.Shelley.TxBody (WitVKey)
 import Data.Set (Set)
@@ -38,13 +38,15 @@ applyRangeToAscList getField startFrom limit offset order =
       RangeAsc -> id
     . List.nubBy (on (==) getField)
 
-type WitVKeys era = Set (WitVKey 'Witness (Crypto (ShelleyLedgerEra era)))
+type WitVKeys era = Set (WitVKey 'Witness (EraCrypto (ShelleyLedgerEra era)))
 
 makeSignedTxWithWitnessKeys
-  :: ( ShelleyLedgerEra era ~ shelleyLedgerEra
+  :: forall era shelleyLedgerEra
+   . ( ShelleyLedgerEra era ~ shelleyLedgerEra
      , Cardano.Ledger.Era.Era shelleyLedgerEra
-     , Cardano.Ledger.Core.Tx shelleyLedgerEra ~ ValidatedTx shelleyLedgerEra
-     , Cardano.Ledger.Core.Script shelleyLedgerEra ~ Cardano.Ledger.Alonzo.Scripts.Script shelleyLedgerEra
+     , Cardano.Ledger.Core.TxWits shelleyLedgerEra ~ AlonzoTxWits shelleyLedgerEra
+     , Cardano.Ledger.Core.Tx shelleyLedgerEra ~ AlonzoTx shelleyLedgerEra
+     , Cardano.Ledger.Core.Script shelleyLedgerEra ~ Cardano.Ledger.Alonzo.Scripts.AlonzoScript shelleyLedgerEra
      )
   => TxBody era
   -> WitVKeys era
@@ -57,10 +59,10 @@ makeSignedTxWithWitnessKeys txBody wtKeys = do
         ScriptInvalid -> Alonzo.IsValid False
 
   case (txBody, makeSignedTransaction [] txBody) of
-    (ShelleyTxBody era txBody' _ _ txmetadata scriptValidity, ShelleyTx _ (ValidatedTx _ bkTxWitness _ _)) -> do
-      let TxWitness _ bkBoot bkScripts bkDats bkRdmrs = bkTxWitness
+    (ShelleyTxBody era txBody' _ _ txmetadata scriptValidity, ShelleyTx _ (AlonzoTx _ bkTxWitness _ _)) -> do
+      let AlonzoTxWits _ bkBoot bkScripts bkDats bkRdmrs = bkTxWitness
           wt' =
-            TxWitness
+            AlonzoTxWits @shelleyLedgerEra
               wtKeys
               bkBoot
               bkScripts
@@ -69,7 +71,7 @@ makeSignedTxWithWitnessKeys txBody wtKeys = do
 
       Just $
         ShelleyTx era $
-          ValidatedTx
+          AlonzoTx
             txBody'
             wt'
             (txScriptValidityToIsValid scriptValidity)

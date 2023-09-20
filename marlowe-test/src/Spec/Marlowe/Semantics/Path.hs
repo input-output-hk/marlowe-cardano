@@ -36,7 +36,7 @@ import Data.Bifunctor (bimap, first)
 import Data.Functor (($>), (<&>))
 import Data.Maybe (catMaybes)
 import Language.Marlowe.Core.V1.Semantics.Types
-import Plutus.V2.Ledger.Api (POSIXTime (..))
+import PlutusLedgerApi.V2 (POSIXTime (..))
 import qualified PlutusTx.AssocMap as AM
 import qualified PlutusTx.Eq
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryPositiveInteger)

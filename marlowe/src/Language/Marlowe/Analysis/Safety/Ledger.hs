@@ -48,7 +48,9 @@ module Language.Marlowe.Analysis.Safety.Ledger (
 import Data.Foldable (maximumBy, toList)
 import Data.Function (on)
 import Data.List (nub, (\\))
+import qualified Data.Map as M (keys)
 import Data.Maybe (fromJust)
+import qualified Data.Set as S (Set, filter, foldr, map, null, size, toList)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError (..), SafetyReport (..))
 import Language.Marlowe.Core.V1.Merkle (Continuations)
 import Language.Marlowe.Core.V1.Plate (
@@ -79,7 +81,8 @@ import Language.Marlowe.Core.V1.Semantics.Types.Address (
  )
 import Language.Marlowe.Scripts.Types (MarloweTxInput (..))
 import Numeric.Natural (Natural)
-import Plutus.V2.Ledger.Api (
+import qualified PlutusLedgerApi.V1.Value as V
+import PlutusLedgerApi.V2 (
   Credential (PubKeyCredential),
   CurrencySymbol (..),
   DatumHash (..),
@@ -92,13 +95,9 @@ import Plutus.V2.Ledger.Api (
   adaToken,
   toBuiltinData,
  )
-import PlutusTx.Builtins (serialiseData)
-
-import qualified Data.Map as M (keys)
-import qualified Data.Set as S (Set, filter, foldr, map, null, size, toList)
-import qualified Plutus.V1.Ledger.Value as V (singleton)
-import qualified Plutus.V2.Ledger.Api as P (Address (..), Value)
+import qualified PlutusLedgerApi.V2 as P (Address (..), Value)
 import qualified PlutusTx.AssocMap as AM (Map, fromList, keys, toList)
+import PlutusTx.Builtins (serialiseData)
 import qualified PlutusTx.Prelude as P (lengthOfByteString)
 
 -- | Check the safety of a Marlowe contract and state.
@@ -383,7 +382,7 @@ worstValueSize tokens =
       -- Number of bytes needed to store the token names.
       nNames = sum . fmap P.lengthOfByteString . toList $ S.map (\(Token _ (TokenName n)) -> n) tokens
       -- Round bytes up to whole words.
-      padWords x = maximum [(x + 7) `div` 8, 1]
+      padWords x = max ((x + 7) `div` 8) 1
    in -- This is the ledger formula for computing the size of a token bundle.
       -- See <https://github.com/input-output-hk/cardano-ledger/blob/863f1d2f53852369802f070e16509ba3c896b47a/doc/explanations/min-utxo-alonzo.rst>.
       fromInteger $ 8 * (6 + padWords (13 * nTokens + 29 * nPolicies + nNames))

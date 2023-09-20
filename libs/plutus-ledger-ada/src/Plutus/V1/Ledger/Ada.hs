@@ -38,8 +38,8 @@ import Codec.Serialise.Class (Serialise)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Tagged
 import GHC.Generics (Generic)
-import Plutus.V1.Ledger.Value (CurrencySymbol (..), TokenName (..), Value)
-import Plutus.V1.Ledger.Value qualified as TH
+import PlutusLedgerApi.V1 (CurrencySymbol (..), TokenName (..), Value)
+import PlutusLedgerApi.V1.Value qualified as Value
 import PlutusTx qualified
 import PlutusTx.Lift (makeLift)
 import PlutusTx.Prelude hiding (divide)
@@ -107,13 +107,13 @@ getAda (Lovelace i) = MkFixed i
 
 -- | Create a 'Value' containing only the given 'Ada'.
 toValue :: Ada -> Value
-toValue (Lovelace i) = TH.singleton adaSymbol adaToken i
+toValue (Lovelace i) = Value.singleton adaSymbol adaToken i
 
 {-# INLINEABLE fromValue #-}
 
 -- | Get the 'Ada' in the given 'Value'.
 fromValue :: Value -> Ada
-fromValue v = Lovelace (TH.valueOf v adaSymbol adaToken)
+fromValue v = Lovelace (Value.valueOf v adaSymbol adaToken)
 
 {-# INLINEABLE lovelaceOf #-}
 
@@ -133,7 +133,7 @@ adaOf (MkFixed x) = Lovelace x
 --
 --   @lovelaceValueOf == toValue . lovelaceOf@
 lovelaceValueOf :: Integer -> Value
-lovelaceValueOf = TH.singleton adaSymbol adaToken
+lovelaceValueOf = Value.singleton adaSymbol adaToken
 
 {-# INLINEABLE adaValueOf #-}
 
@@ -141,7 +141,7 @@ lovelaceValueOf = TH.singleton adaSymbol adaToken
 --
 --   @adaValueOf == toValue . adaOf@
 adaValueOf :: Micro -> Value
-adaValueOf (MkFixed x) = TH.singleton adaSymbol adaToken x
+adaValueOf (MkFixed x) = Value.singleton adaSymbol adaToken x
 
 {-# INLINEABLE divide #-}
 

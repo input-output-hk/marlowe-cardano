@@ -19,6 +19,7 @@ import Data.Binary (Put, getWord8, putWord8)
 import Data.Binary.Get (Get)
 import Data.Foldable (fold)
 import Data.Functor ((<&>))
+import Data.Kind (Type)
 import Data.List.NonEmpty
 import Data.Maybe (catMaybes)
 import Data.Proxy (Proxy (..))
@@ -45,13 +46,13 @@ data SomeTag cmd = forall status err result. SomeTag (Tag cmd status err result)
 
 -- | A class for commands. Defines associated types and conversion
 -- functions needed to run the protocol.
-class Command (cmd :: * -> * -> * -> *) where
+class Command (cmd :: Type -> Type -> Type -> Type) where
   -- | The type of job IDs for this command type.
-  data JobId cmd :: * -> * -> * -> *
+  data JobId cmd :: Type -> Type -> Type -> Type
 
   -- | The type of tags for this command type. Used exclusively for GADT
   -- pattern matching.
-  data Tag cmd :: * -> * -> * -> *
+  data Tag cmd :: Type -> Type -> Type -> Type
 
   -- | Obtain a token from a command.
   tagFromCommand :: cmd status err result -> Tag cmd status err result
@@ -79,7 +80,7 @@ class Command (cmd :: * -> * -> * -> *) where
   getResult :: Tag cmd status err result -> Get result
 
 -- | A state kind for the job protocol.
-data Job (cmd :: * -> * -> * -> *) where
+data Job (cmd :: Type -> Type -> Type -> Type) where
   -- | The initial state of the protocol.
   StInit :: Job cmd
   -- | In the 'StCmd' state, the server has agency. It is running a command

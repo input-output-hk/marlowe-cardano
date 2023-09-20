@@ -1,4 +1,4 @@
-cabal-version: 3.0
+cabal-version: 3.4
 name:          plutus-ledger-aeson
 version:       1.0.1
 license:       Apache-2.0
@@ -28,9 +28,9 @@ flag defer-plugin-errors
   manual:      True
 
 library
-  import:             lang
-  hs-source-dirs:     src
-  default-language:   Haskell2010
+  import:           lang
+  hs-source-dirs:   src
+  default-language: Haskell2010
   exposed-modules:
     Plutus.V1.Ledger.Aeson
     PlutusCore.Data.Aeson
@@ -40,9 +40,9 @@ library
   -- Other IOG dependencies
   --------------------------
   build-depends:
-    , plutus-core >=1.0.0
-    , plutus-ledger-api >=1.0.0
-    , plutus-tx >=1.0.0
+    , plutus-core ^>=1.5
+    , plutus-ledger-api ^>=1.5
+    , plutus-tx ^>=1.5
 
   ------------------------
   -- Non-IOG dependencies
@@ -53,19 +53,12 @@ library
     , base >=4.9 && <5
     , base16-aeson
     , bytestring
-    , cborg
-    , flat
     , hashable
-    , prettyprinter
     , scientific
     , serialise
-    , tagged
     , text
 
-  ghc-options:        -fprint-potential-instances
-  reexported-modules:
-    Plutus.V1.Ledger.Time as Ledger.Time,
-    Plutus.V1.Ledger.Value as Ledger.Value,
+  ghc-options:      -fprint-potential-instances
 
   if flag(defer-plugin-errors)
     ghc-options: -fplugin-opt PlutusTx.Plugin:defer-errors

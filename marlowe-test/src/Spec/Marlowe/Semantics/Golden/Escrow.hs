@@ -37,7 +37,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   Value (Constant),
  )
 import Language.Marlowe.Util ()
-import Plutus.V2.Ledger.Api (POSIXTime (..))
+import PlutusLedgerApi.V2 (POSIXTime (..))
 
 import qualified PlutusTx.AssocMap as AM (Map, fromList)
 
@@ -129,13 +129,13 @@ valids =
     ,
       [ TransactionInput
           { txInterval = (POSIXTime{getPOSIXTime = 0}, POSIXTime{getPOSIXTime = 0})
-          , txInputs = [NormalInput (IDeposit seller buyer ada 100000000)]
+          , txInputs = [NormalInput (IDeposit seller buyer ada 100_000_000)]
           }
       , TransactionInput{txInterval = (POSIXTime{getPOSIXTime = 20}, POSIXTime{getPOSIXTime = 20}), txInputs = []}
       ]
     , TransactionOutput
         { txOutWarnings = []
-        , txOutPayments = [Payment seller (Party seller) (Token "" "") 100000000]
+        , txOutPayments = [Payment seller (Party seller) (Token "" "") 100_000_000]
         , txOutState =
             State
               { accounts = toAM $ Map{unMap = []}
@@ -151,7 +151,7 @@ valids =
     ,
       [ TransactionInput
           { txInterval = (POSIXTime{getPOSIXTime = 0}, POSIXTime{getPOSIXTime = 0})
-          , txInputs = [NormalInput (IDeposit seller buyer ada 100000000)]
+          , txInputs = [NormalInput (IDeposit seller buyer ada 100_000_000)]
           }
       , TransactionInput
           { txInterval = (POSIXTime{getPOSIXTime = 0}, POSIXTime{getPOSIXTime = 0})
@@ -160,7 +160,7 @@ valids =
       ]
     , TransactionOutput
         { txOutWarnings = []
-        , txOutPayments = [Payment seller (Party seller) (Token "" "") 100000000]
+        , txOutPayments = [Payment seller (Party seller) (Token "" "") 100_000_000]
         , txOutState =
             State
               { accounts = toAM $ Map{unMap = []}
@@ -176,7 +176,7 @@ valids =
     ,
       [ TransactionInput
           { txInterval = (POSIXTime{getPOSIXTime = 0}, POSIXTime{getPOSIXTime = 0})
-          , txInputs = [NormalInput (IDeposit seller buyer ada 100000000)]
+          , txInputs = [NormalInput (IDeposit seller buyer ada 100_000_000)]
           }
       , TransactionInput
           { txInterval = (POSIXTime{getPOSIXTime = 0}, POSIXTime{getPOSIXTime = 0})
@@ -187,7 +187,7 @@ valids =
     , TransactionOutput
         { txOutWarnings = []
         , txOutPayments =
-            [Payment seller (Account buyer) (Token "" "") 100000000, Payment buyer (Party buyer) (Token "" "") 100000000]
+            [Payment seller (Account buyer) (Token "" "") 100_000_000, Payment buyer (Party buyer) (Token "" "") 100_000_000]
         , txOutState =
             State
               { accounts = toAM $ Map{unMap = []}
@@ -203,7 +203,7 @@ valids =
     ,
       [ TransactionInput
           { txInterval = (POSIXTime{getPOSIXTime = 0}, POSIXTime{getPOSIXTime = 0})
-          , txInputs = [NormalInput (IDeposit seller buyer ada 100000000)]
+          , txInputs = [NormalInput (IDeposit seller buyer ada 100_000_000)]
           }
       , TransactionInput
           { txInterval = (POSIXTime{getPOSIXTime = 0}, POSIXTime{getPOSIXTime = 0})
@@ -217,7 +217,7 @@ valids =
     , TransactionOutput
         { txOutWarnings = []
         , txOutPayments =
-            [Payment seller (Account buyer) (Token "" "") 100000000, Payment buyer (Party buyer) (Token "" "") 100000000]
+            [Payment seller (Account buyer) (Token "" "") 100_000_000, Payment buyer (Party buyer) (Token "" "") 100_000_000]
         , txOutState =
             State
               { accounts = toAM $ Map{unMap = []}
@@ -233,7 +233,7 @@ valids =
     ,
       [ TransactionInput
           { txInterval = (POSIXTime{getPOSIXTime = 0}, POSIXTime{getPOSIXTime = 0})
-          , txInputs = [NormalInput (IDeposit seller buyer ada 100000000)]
+          , txInputs = [NormalInput (IDeposit seller buyer ada 100_000_000)]
           }
       , TransactionInput
           { txInterval = (POSIXTime{getPOSIXTime = 0}, POSIXTime{getPOSIXTime = 0})
@@ -248,7 +248,7 @@ valids =
     , TransactionOutput
         { txOutWarnings = []
         , txOutPayments =
-            [Payment seller (Account buyer) (Token "" "") 100000000, Payment buyer (Party buyer) (Token "" "") 100000000]
+            [Payment seller (Account buyer) (Token "" "") 100_000_000, Payment buyer (Party buyer) (Token "" "") 100_000_000]
         , txOutState =
             State
               { accounts = toAM $ Map{unMap = []}
@@ -264,7 +264,7 @@ valids =
     ,
       [ TransactionInput
           { txInterval = (POSIXTime{getPOSIXTime = 0}, POSIXTime{getPOSIXTime = 0})
-          , txInputs = [NormalInput (IDeposit seller buyer ada 100000000)]
+          , txInputs = [NormalInput (IDeposit seller buyer ada 100_000_000)]
           }
       , TransactionInput
           { txInterval = (POSIXTime{getPOSIXTime = 0}, POSIXTime{getPOSIXTime = 0})
@@ -282,9 +282,9 @@ valids =
     , TransactionOutput
         { txOutWarnings = []
         , txOutPayments =
-            [ Payment seller (Account buyer) (Token "" "") 100000000
-            , Payment buyer (Account seller) (Token "" "") 100000000
-            , Payment seller (Party seller) (Token "" "") 100000000
+            [ Payment seller (Account buyer) (Token "" "") 100_000_000
+            , Payment buyer (Account seller) (Token "" "") 100_000_000
+            , Payment seller (Party seller) (Token "" "") 100_000_000
             ]
         , txOutState =
             State
@@ -306,7 +306,7 @@ valids =
     ,
       [ TransactionInput
           { txInterval = (POSIXTime{getPOSIXTime = 0}, POSIXTime{getPOSIXTime = 0})
-          , txInputs = [NormalInput (IDeposit seller buyer ada 100000000)]
+          , txInputs = [NormalInput (IDeposit seller buyer ada 100_000_000)]
           }
       , TransactionInput
           { txInterval = (POSIXTime{getPOSIXTime = 0}, POSIXTime{getPOSIXTime = 0})
@@ -324,7 +324,7 @@ valids =
     , TransactionOutput
         { txOutWarnings = []
         , txOutPayments =
-            [Payment seller (Account buyer) (Token "" "") 100000000, Payment buyer (Party buyer) (Token "" "") 100000000]
+            [Payment seller (Account buyer) (Token "" "") 100_000_000, Payment buyer (Party buyer) (Token "" "") 100_000_000]
         , txOutState =
             State
               { accounts = toAM $ Map{unMap = []}
@@ -366,13 +366,13 @@ invalids =
     ,
       [ TransactionInput
           { txInterval = (POSIXTime{getPOSIXTime = 0}, POSIXTime{getPOSIXTime = 0})
-          , txInputs = [NormalInput (IDeposit seller seller ada 100000000)]
+          , txInputs = [NormalInput (IDeposit seller seller ada 100_000_000)]
           }
       , TransactionInput{txInterval = (POSIXTime{getPOSIXTime = 20}, POSIXTime{getPOSIXTime = 20}), txInputs = []}
       ]
     , TransactionOutput
         { txOutWarnings = []
-        , txOutPayments = [Payment seller (Party seller) (Token "" "") 100000000]
+        , txOutPayments = [Payment seller (Party seller) (Token "" "") 100_000_000]
         , txOutState =
             State
               { accounts = toAM $ Map{unMap = []}
@@ -388,7 +388,7 @@ invalids =
     ,
       [ TransactionInput
           { txInterval = (POSIXTime{getPOSIXTime = 0}, POSIXTime{getPOSIXTime = 0})
-          , txInputs = [NormalInput (IDeposit seller buyer ada 100000001)]
+          , txInputs = [NormalInput (IDeposit seller buyer ada 100_000_001)]
           }
       , TransactionInput
           { txInterval = (POSIXTime{getPOSIXTime = 0}, POSIXTime{getPOSIXTime = 0})
@@ -397,7 +397,7 @@ invalids =
       ]
     , TransactionOutput
         { txOutWarnings = []
-        , txOutPayments = [Payment seller (Party seller) (Token "" "") 100000000]
+        , txOutPayments = [Payment seller (Party seller) (Token "" "") 100_000_000]
         , txOutState =
             State
               { accounts = toAM $ Map{unMap = []}
@@ -413,7 +413,7 @@ invalids =
     ,
       [ TransactionInput
           { txInterval = (POSIXTime{getPOSIXTime = 0}, POSIXTime{getPOSIXTime = 0})
-          , txInputs = [NormalInput (IDeposit seller buyer ada 100000000)]
+          , txInputs = [NormalInput (IDeposit seller buyer ada 100_000_000)]
           }
       , TransactionInput
           { txInterval = (POSIXTime{getPOSIXTime = 0}, POSIXTime{getPOSIXTime = 0})
@@ -424,7 +424,7 @@ invalids =
     , TransactionOutput
         { txOutWarnings = []
         , txOutPayments =
-            [Payment seller (Account buyer) (Token "" "") 100000000, Payment buyer (Party buyer) (Token "" "") 100000000]
+            [Payment seller (Account buyer) (Token "" "") 100_000_000, Payment buyer (Party buyer) (Token "" "") 100_000_000]
         , txOutState =
             State
               { accounts = toAM $ Map{unMap = []}
@@ -440,7 +440,7 @@ invalids =
     ,
       [ TransactionInput
           { txInterval = (POSIXTime{getPOSIXTime = 0}, POSIXTime{getPOSIXTime = 0})
-          , txInputs = [NormalInput (IDeposit seller buyer ada 100000000)]
+          , txInputs = [NormalInput (IDeposit seller buyer ada 100_000_000)]
           }
       , TransactionInput
           { txInterval = (POSIXTime{getPOSIXTime = 0}, POSIXTime{getPOSIXTime = 0})
@@ -454,7 +454,7 @@ invalids =
     , TransactionOutput
         { txOutWarnings = []
         , txOutPayments =
-            [Payment seller (Account buyer) (Token "" "") 100000000, Payment buyer (Party buyer) (Token "" "") 100000000]
+            [Payment seller (Account buyer) (Token "" "") 100_000_000, Payment buyer (Party buyer) (Token "" "") 100_000_000]
         , txOutState =
             State
               { accounts = toAM $ Map{unMap = []}
@@ -470,7 +470,7 @@ invalids =
     ,
       [ TransactionInput
           { txInterval = (POSIXTime{getPOSIXTime = 0}, POSIXTime{getPOSIXTime = 0})
-          , txInputs = [NormalInput (IDeposit buyer buyer ada 100000000)]
+          , txInputs = [NormalInput (IDeposit buyer buyer ada 100_000_000)]
           }
       , TransactionInput
           { txInterval = (POSIXTime{getPOSIXTime = 0}, POSIXTime{getPOSIXTime = 0})
@@ -485,7 +485,7 @@ invalids =
     , TransactionOutput
         { txOutWarnings = []
         , txOutPayments =
-            [Payment seller (Account buyer) (Token "" "") 100000000, Payment buyer (Party buyer) (Token "" "") 100000000]
+            [Payment seller (Account buyer) (Token "" "") 100_000_000, Payment buyer (Party buyer) (Token "" "") 100_000_000]
         , txOutState =
             State
               { accounts = toAM $ Map{unMap = []}

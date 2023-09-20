@@ -1,4 +1,4 @@
-cabal-version: 3.0
+cabal-version: 3.4
 name:          marlowe-runtime-web
 version:       0.0.4
 synopsis:      Web server for Marlowe Runtime on Cardano.
@@ -76,7 +76,7 @@ library
     , openapi3 >=3.2 && <4
     , parsec ^>=3.1.14
     , pipes ^>=4.3.16
-    , plutus-ledger-api ==1.0.0.1
+    , plutus-ledger-api ^>=1.5
     , servant ^>=0.19
     , servant-client ^>=0.19
     , servant-client-core ^>=0.19
@@ -84,7 +84,7 @@ library
     , servant-pagination >=2.5 && <3
     , servant-pipes ^>=0.15.3
     , servant-server ^>=0.19
-    , text >=1.2.4 && <2
+    , text ^>=1.2
     , time >=1.9 && <2
     , wai >=3.2 && <4
 
@@ -118,11 +118,11 @@ library server
     , async-components ==0.1.1.0
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
-    , cardano-api ==1.35.4
-    , cardano-binary ==1.5.0
-    , cardano-ledger-alonzo ==0.1.0.0
-    , cardano-ledger-core ==0.1.0.0
-    , cardano-ledger-shelley ==0.1.0.0
+    , cardano-api ^>=8.2
+    , cardano-ledger-alonzo ^>=1.2
+    , cardano-ledger-binary ^>=1.1
+    , cardano-ledger-core ^>=1.2
+    , cardano-ledger-shelley ^>=1.2
     , co-log >=0.5.0.0 && <0.6.0.0
     , containers ^>=0.6.5
     , errors >=2.3 && <3
@@ -142,7 +142,7 @@ library server
     , mtl >=2.2 && <3
     , openapi3 >=3.2 && <4
     , pipes ^>=4.3.16
-    , plutus-ledger-api ==1.0.0.1
+    , plutus-ledger-api ^>=1.5
     , servant ^>=0.19
     , servant-openapi3 ^>=2.0
     , servant-pagination >=2.5 && <3
@@ -151,9 +151,8 @@ library server
     , stm ^>=2.5
     , stm-delay ^>=0.1.1
     , string-conversions ^>=0.4
-    , text >=1.2.4 && <2
+    , text ^>=1.2
     , time >=1.9 && <2
-    , transformers ^>=0.5.6
     , transformers-base ^>=0.4
     , unliftio-core ^>=0.2
     , wai >=3.2 && <4
@@ -174,7 +173,6 @@ executable marlowe-web-server
     , co-log >=0.5.0.0 && <0.6.0.0
     , eventuo11y >=0.9 && <0.11
     , eventuo11y-otel ^>=0.1
-    , hs-opentelemetry-api ==0.0.3.6
     , hs-opentelemetry-sdk ==0.0.3.4
     , http-types
     , marlowe-client
@@ -184,7 +182,7 @@ executable marlowe-web-server
     , mtl >=2.2 && <3
     , network
     , optparse-applicative
-    , text >=1.2.4 && <2
+    , text ^>=1.2
     , unliftio ^>=0.2.1
     , wai >=3.2 && <4
     , warp
@@ -205,14 +203,14 @@ test-suite marlowe-runtime-web-test
     , marlowe-cardano ==0.1.2.0
     , marlowe-object:gen
     , marlowe-runtime-web
+    , marlowe-runtime:gen
     , marlowe-test
-    , network-arbitrary
     , openapi3 >=3.2 && <4
     , QuickCheck
     , quickcheck-instances
     , regex-posix
     , servant
     , servant-openapi3
-    , text >=1.2.4 && <2
+    , text ^>=1.2
 
   ghc-options:    -threaded

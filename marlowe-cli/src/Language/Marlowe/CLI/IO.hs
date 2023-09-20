@@ -56,6 +56,7 @@ import Cardano.Api (
   AsType (..),
   CardanoMode,
   ConsensusModeIsMultiEra (..),
+  File (..),
   FromSomeType (..),
   HasTextEnvelope,
   LocalNodeConnectInfo,
@@ -63,11 +64,11 @@ import Cardano.Api (
   NetworkMagic (..),
   QueryInEra (QueryInShelleyBasedEra),
   QueryInMode (..),
-  QueryInShelleyBasedEra (QueryProtocolParameters),
+  QueryInShelleyBasedEra (..),
   ScriptDataJsonSchema (..),
-  ShelleyWitnessSigningKey (..),
   TxMetadataInEra (..),
   TxMetadataJsonSchema (..),
+  getScriptData,
   getTxId,
   metadataFromJson,
   queryNodeLocalState,
@@ -79,13 +80,30 @@ import Cardano.Api (
   writeFileTextEnvelope,
  )
 import Cardano.Api.Shelley (ProtocolParameters (protocolParamProtocolVersion), toPlutusData)
+import Cardano.Api.Shelley qualified as C
 import Cardano.Ledger.Alonzo.Scripts (ExUnits (..))
+import Contrib.Cardano.TxBody qualified as T
+import Contrib.Cardano.UTxO qualified as U
+import Contrib.Control.Concurrent (threadDelay)
+import Control.Concurrent.STM (atomically, readTVar, readTVarIO, writeTVar)
+import Control.Error (note)
+import Control.Monad (when, (<=<))
 import Control.Monad.Except (MonadError (..), MonadIO, liftEither, liftIO)
+import Control.Monad.Reader (MonadReader)
 import Data.Aeson (FromJSON (..), ToJSON)
 import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.Bifunctor (first)
 import Data.ByteString qualified as BS (length)
+import Data.ByteString.Char8 qualified as BS8 (putStrLn)
+import Data.ByteString.Lazy qualified as LBS (writeFile)
+import Data.ByteString.Lazy.Char8 qualified as LBS8 (putStrLn)
+import Data.Functor ((<&>))
+import Data.Map.Strict qualified as Map
+import Data.Set qualified as Set
+import Data.Time.Units (Second, TimeUnit, toMicroseconds)
 import Data.Yaml as Yaml (decodeFileEither, encode, encodeFile)
+import GHC.Natural (naturalFromInteger)
+import Language.Marlowe.CLI.Cardano.Api (toPlutusProtocolVersion, withShelleyBasedEra)
 import Language.Marlowe.CLI.Types (
   CliEnv,
   CliError (..),
@@ -94,13 +112,14 @@ import Language.Marlowe.CLI.Types (
   Percent (..),
   QueryExecutionContext (..),
   SigningKeyFile (unSigningKeyFile),
-  SomePaymentSigningKey,
-  SomePaymentVerificationKey,
+  SomePaymentSigningKey (..),
+  SomePaymentVerificationKey (..),
   SubmitMode (..),
   TxBuildupContext (..),
   TxResourceUsage (..),
   askEra,
   asksEra,
+  somePaymentSigningKeyToTxWitness,
   toAddressAny',
   toEraInMode,
   toMultiAssetSupportedInEra,
@@ -108,35 +127,16 @@ import Language.Marlowe.CLI.Types (
   toTxMetadataSupportedInEra,
   withCardanoEra,
  )
-import Plutus.V1.Ledger.Api (BuiltinData)
-import PlutusTx (dataToBuiltinData)
-import System.Environment (lookupEnv)
-import Text.Read (readMaybe)
-
-import Cardano.Api.Shelley qualified as C
-import Contrib.Cardano.TxBody qualified as T
-import Contrib.Cardano.UTxO qualified as U
-import Contrib.Control.Concurrent (threadDelay)
-import Control.Concurrent.STM (atomically, readTVar, readTVarIO, writeTVar)
-import Control.Error (note)
-import Control.Monad (when, (<=<))
-import Control.Monad.Reader (MonadReader)
-import Data.ByteString.Char8 qualified as BS8 (putStrLn)
-import Data.ByteString.Lazy qualified as LBS (writeFile)
-import Data.ByteString.Lazy.Char8 qualified as LBS8 (putStrLn)
-import Data.Functor ((<&>))
-import Data.Map.Strict qualified as Map
-import Data.Set qualified as Set
-import Data.Time.Units (Second, TimeUnit, toMicroseconds)
-import GHC.Natural (naturalFromInteger)
-import Language.Marlowe.CLI.Cardano.Api (toPlutusProtocolVersion, withShelleyBasedEra)
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult (..))
-import Plutus.ApiCommon (ProtocolVersion)
-import Plutus.V1.Ledger.Api qualified as P
-import Plutus.V2.Ledger.Api (CostModelParams)
 import PlutusCore.Evaluation.Machine.ExBudgetingDefaults (defaultCostModelParams)
+import PlutusLedgerApi.Common (ProtocolVersion)
+import PlutusLedgerApi.V1 (BuiltinData)
+import PlutusLedgerApi.V2 (CostModelParams)
+import PlutusTx (dataToBuiltinData)
 import System.Directory.Internal.Prelude (fromMaybe)
+import System.Environment (lookupEnv)
 import System.IO (hPrint, hPutStrLn, stderr)
+import Text.Read (readMaybe)
 
 -- | Lift an 'Either' result into the CLI.
 liftCli
@@ -184,7 +184,7 @@ decodeFileStrict filePath =
     result <- liftIO $ Yaml.decodeFileEither filePath
     liftEither $ first (CliError . show) result
 
--- | Decode, in an error mondad, a JSON file containing built-in data.
+-- | Decode, in an error monad, a JSON file containing built-in data.
 decodeFileBuiltinData
   :: (MonadError CliError m)
   => (MonadIO m)
@@ -196,7 +196,7 @@ decodeFileBuiltinData file =
   do
     value <- decodeFileStrict file
     liftCli
-      . fmap (dataToBuiltinData . toPlutusData)
+      . fmap (dataToBuiltinData . toPlutusData . getScriptData)
       $ scriptDataFromJson ScriptDataJsonDetailedSchema value
 
 -- | Read a verification key.
@@ -210,9 +210,11 @@ readVerificationKey
 readVerificationKey =
   liftCliIO
     . readFileTextEnvelopeAnyOf
-      [ FromSomeType (AsVerificationKey AsPaymentKey) Left
-      , FromSomeType (AsVerificationKey AsPaymentExtendedKey) Right
+      [ FromSomeType (AsVerificationKey AsPaymentKey) SomePaymentVerificationKeyPayment
+      , FromSomeType (AsVerificationKey AsPaymentExtendedKey) SomePaymentVerificationKeyPaymentExtended
+      , FromSomeType (AsVerificationKey AsGenesisUTxOKey) SomePaymentVerificationKeyGenesisUTxO
       ]
+    . File
 
 -- | Read a signing key.
 readSigningKey
@@ -225,9 +227,11 @@ readSigningKey
 readSigningKey =
   liftCliIO
     . readFileTextEnvelopeAnyOf
-      [ FromSomeType (AsSigningKey AsPaymentKey) Left
-      , FromSomeType (AsSigningKey AsPaymentExtendedKey) Right
+      [ FromSomeType (AsSigningKey AsPaymentKey) SomePaymentSigningKeyPayment
+      , FromSomeType (AsSigningKey AsPaymentExtendedKey) SomePaymentSigningKeyPaymentExtended
+      , FromSomeType (AsSigningKey AsGenesisUTxOKey) SomePaymentSigningKeyGenesisUTxO
       ]
+    . File
     . unSigningKeyFile
 
 -- | Optionally write a text envelope file, otherwise write to standard output.
@@ -242,7 +246,7 @@ maybeWriteTextEnvelope
   -> m ()
   -- ^ Action for writing the file.
 maybeWriteTextEnvelope Nothing = liftIO . LBS8.putStrLn . encodePretty . serialiseToTextEnvelope Nothing
-maybeWriteTextEnvelope (Just outputFile) = liftCliIO . writeFileTextEnvelope outputFile Nothing
+maybeWriteTextEnvelope (Just outputFile) = liftCliIO . writeFileTextEnvelope (File outputFile) Nothing
 
 -- | Optional write a JSON file, otherwise write to standard output.
 maybeWriteJson
@@ -275,7 +279,7 @@ readMaybeMetadata
   -- ^ Action for reading the metadata.
 readMaybeMetadata file =
   do
-    metadata <- sequence $ decodeFileStrict <$> file
+    metadata <- mapM decodeFileStrict file
     era <- asksEra toTxMetadataSupportedInEra
     maybe
       (pure TxMetadataNone)
@@ -403,29 +407,13 @@ getPV2CostModelParams
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
   => QueryExecutionContext era
-  -> m P.CostModelParams
+  -> m [Integer]
 getPV2CostModelParams queryCtx = do
   protocolParams <- getProtocolParams queryCtx
   let pv2 = C.AnyPlutusScriptVersion C.PlutusScriptV2
   C.CostModel costModel <- do
     let costModels = C.protocolParamCostModels protocolParams
     liftCli $ note ("Missing PV2 cost model" :: String) $ Map.lookup pv2 costModels
-
-  defaultCostModel <- getDefaultCostModel
-  -- Let's compare keys - if they differ then throw an error:
-  let defaultModelKeys = Set.fromList $ Map.keys defaultCostModel
-      modelKeys = Set.fromList $ Map.keys costModel
-  when (defaultModelKeys /= modelKeys) $
-    liftCli $
-      Left $
-        "Provided cost model keys differ from default cost model keys - non common keys are: "
-          <> show (Set.toList $ Set.difference (Set.union defaultModelKeys modelKeys) (Set.intersection defaultModelKeys modelKeys))
-  -- Let's warn if the provided cost model is different (at this point it is value difference):
-  -- when (defaultCostModel /= costModel) $ liftIO do
-  --   hPutStrLn stderr
-  --     $ "Provided cost model values differs from default cost model:"
-  --     <> "\nDefault cost model: " <> show defaultCostModel
-  --     <> "\nProvided cost model: " <> show costModel
   pure costModel
 
 -- | Wait for transactions to be confirmed as UTxOs.
@@ -492,7 +480,7 @@ checkTxLimits
   -> Maybe ExecutionLimitsExceeded
   -- ^ The error if the transaction exceeds the limits.
 checkTxLimits era pp txBody = do
-  let -- we are not able to define this helper in the same `let` block belowe :-)
+  let -- we are not able to define this helper in the same `let` block below :-)
       unPercent' = unPercent . snd
   let usage = txResourceUsage era pp txBody
       TxResourceUsage
@@ -523,8 +511,7 @@ submitTxBody txBuildupContext txBody signings =
     let tx =
           withShelleyBasedEra era $
             signShelleyTransaction txBody $
-              either WitnessPaymentKey WitnessPaymentExtendedKey
-                <$> signings
+              somePaymentSigningKeyToTxWitness <$> signings
         txId = getTxId txBody
     case txBuildupContext of
       (NodeTxBuildup _ DontSubmit) -> pure txId
@@ -620,7 +607,7 @@ submitTxBody' txBuildupCtx body bodyContent changeAddress signingKeys = do
       (True, C.TxFeeExplicit feesInEra value) -> pure $ C.TxFeeExplicit feesInEra (value + feeBalancingMargin)
       _ -> throwError . CliError $ "Unable to adjust the change during resubmission attempt."
 
-    withCardanoEra era $ case C.makeTransactionBody (C.TxBodyContent{..}{C.txOuts = txOuts', C.txFee = txFee'}) of
+    withCardanoEra era $ case C.createAndValidateTransactionBody (C.TxBodyContent{..}{C.txOuts = txOuts', C.txFee = txFee'}) of
       Left err' -> throwError . CliError $ "Failure during reconstruction of the failing tx body: " <> show err'
       Right body' -> do
         txId <- submitTxBody txBuildupCtx body' signingKeys

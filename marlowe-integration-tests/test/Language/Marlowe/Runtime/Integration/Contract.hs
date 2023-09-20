@@ -6,7 +6,7 @@
 
 module Language.Marlowe.Runtime.Integration.Contract where
 
-import Cardano.Api.Byron (ScriptData (ScriptDataBytes), hashScriptData)
+import Cardano.Api (ScriptData (ScriptDataBytes), hashScriptDataBytes, unsafeHashableScriptData)
 import Colog (HasLog (..), LogAction, Message)
 import Control.Arrow (Arrow (..), returnA)
 import Control.Concurrent.Component
@@ -62,7 +62,7 @@ import Network.TypedProtocol (unsafeIntToNat)
 import Pipes (each, yield, (>->))
 import qualified Pipes.Internal as PI
 import qualified Pipes.Prelude as P
-import qualified Plutus.V2.Ledger.Api as PV2
+import qualified PlutusLedgerApi.V2 as PV2
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryNonnegativeInteger)
 import Spec.Marlowe.Semantics.Path (genContractPath, getContract, getInputs)
 import Test.Hspec
@@ -119,7 +119,8 @@ getContractSpec = describe "getContract" do
             }
 
   it "Fails to find a contract when not in the store" $ runContractTest do
-    result <- runQuery $ Api.getContract $ fromCardanoDatumHash $ hashScriptData $ ScriptDataBytes ""
+    result <-
+      runQuery $ Api.getContract $ fromCardanoDatumHash $ hashScriptDataBytes $ unsafeHashableScriptData $ ScriptDataBytes ""
     liftIO $ result `shouldBe` Nothing
 
   it "Finds a contract when in the store" $ runContractTest do
@@ -301,7 +302,7 @@ fromPlutusDatumHash :: PV2.DatumHash -> DatumHash
 fromPlutusDatumHash (PV2.DatumHash hash) = DatumHash $ PV2.fromBuiltin hash
 
 hashContract :: Contract -> DatumHash
-hashContract = fromCardanoDatumHash . hashScriptData . toCardanoScriptData . toDatum
+hashContract = fromCardanoDatumHash . hashScriptDataBytes . unsafeHashableScriptData . toCardanoScriptData . toDatum
 
 testContract :: Int -> Contract
 testContract size

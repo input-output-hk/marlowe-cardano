@@ -40,10 +40,10 @@ import qualified Cardano.Api as Cardano (
   anyAddressInShelleyBasedEra,
   calculateMinimumUTxO,
   makeShelleyAddress,
-  selectLovelace,
  )
-import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
+import Cardano.Api.Shelley (CardanoEra (..), ReferenceTxInsScriptsInlineDatumsSupportedInEra (..), bundleProtocolParams)
 import qualified Cardano.Api.Shelley as Shelley (ReferenceScript (..), StakeAddressReference (..))
+import Data.Either (fromRight)
 import Data.Foldable (for_)
 import qualified Data.Map.Strict as M (fromList, keys, lookup, mapKeys, toList)
 import Language.Marlowe.Core.V1.Merkle as V1 (MerkleizedContract (..), deepMerkleize, merkleizedContract)
@@ -65,7 +65,7 @@ import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain (
   TokenName (..),
   Tokens (..),
  )
-import qualified Plutus.V2.Ledger.Api as Plutus (
+import qualified PlutusLedgerApi.V2 as Plutus (
   Address (..),
   Credential (..),
   CurrencySymbol (..),
@@ -99,7 +99,7 @@ spec =
                     (Plutus.TokenName $ Plutus.toBuiltin n)
                 tokens = fmap toToken . M.keys $ Chain.unTokens tokens'
                 expected =
-                  either (const 0) Cardano.selectLovelace $
+                  fromRight 0 $
                     Cardano.calculateMinimumUTxO
                       Cardano.ShelleyBasedEraBabbage
                       ( Cardano.TxOut
@@ -108,7 +108,7 @@ spec =
                           (Cardano.TxOutDatumHash Cardano.ScriptDataInBabbageEra . fromJust $ Chain.toCardanoDatumHash hash)
                           Shelley.ReferenceScriptNone
                       )
-                      protocolTestnet
+                      <$> bundleProtocolParams BabbageEra protocolTestnet
                     :: Cardano.Lovelace
                 contract = foldr payToken V1.Close tokens -- The tokens just need to appear somewhere in the contract.
                 actual = fromJust $ minAdaUpperBound protocolTestnet version contract continuations :: Cardano.Lovelace

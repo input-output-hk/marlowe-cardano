@@ -41,7 +41,7 @@ import Language.Marlowe.Runtime.Core.Api (
   TransactionScriptOutput (..),
   emptyMarloweTransactionMetadata,
  )
-import qualified Plutus.V2.Ledger.Api as PV2
+import qualified PlutusLedgerApi.V2 as PV2
 import Prelude hiding (init)
 
 getContractState :: ContractId -> T.Transaction (Maybe SomeContractState)

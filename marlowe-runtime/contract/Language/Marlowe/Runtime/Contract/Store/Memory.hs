@@ -1,6 +1,5 @@
 module Language.Marlowe.Runtime.Contract.Store.Memory where
 
-import Cardano.Api (hashScriptData)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (except, runExceptT, throwE)
 import Control.Monad.Trans.Maybe (MaybeT (MaybeT), runMaybeT)
@@ -29,11 +28,11 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   State,
   getAction,
  )
-import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScriptData)
-import Language.Marlowe.Runtime.ChainSync.Api (DatumHash (..), toDatum)
+import Language.Marlowe.Runtime.ChainSync.Api (DatumHash (..))
 import Language.Marlowe.Runtime.Contract.Api hiding (getContract)
 import Language.Marlowe.Runtime.Contract.Store
-import qualified Plutus.V2.Ledger.Api as PV2
+import Language.Marlowe.Util (dataHash)
+import qualified PlutusLedgerApi.V2 as PV2
 import UnliftIO (STM, TVar, modifyTVar, newTVar, readTVar, writeTVar)
 
 -- | An in-memory implementation of ContractStore for use in testing and as a
@@ -69,7 +68,7 @@ createContractStoreInMemory = do
       pure
         ContractStagingArea
           { stageContract = \contract -> whenOpen do
-              let hash = fromCardanoDatumHash $ hashScriptData $ toCardanoScriptData $ toDatum contract
+              let hash = DatumHash $ PV2.fromBuiltin $ dataHash contract
               modifyTVar buffer $ Map.insert hash contract
               pure hash
           , flush
@@ -182,10 +181,7 @@ applyInputCases state env input = \case
             NotAppliedAction -> applyInputCases state env input cs
           MerkleizedInput content hash' contract -> case continuation of
             Right hash
-              | hash == hash' && hashContract contract == hash -> case applyAction env state content action of
+              | hash == hash' && dataHash contract == hash -> case applyAction env state content action of
                   AppliedAction _ state' -> pure (content, continuation, state')
                   NotAppliedAction -> applyInputCases state env input cs
             _ -> Left $ MerkleizeInputsApplyNoMatch input
-
-hashContract :: Contract -> PV2.BuiltinByteString
-hashContract = PV2.toBuiltin . unDatumHash . fromCardanoDatumHash . hashScriptData . toCardanoScriptData . toDatum

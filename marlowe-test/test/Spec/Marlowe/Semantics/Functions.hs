@@ -61,7 +61,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   Value (..),
  )
 import Language.Marlowe.FindInputs (getAllInputs)
-import Plutus.V2.Ledger.Api (POSIXTime (..))
+import PlutusLedgerApi.V2 (POSIXTime (..))
 import Spec.Marlowe.Semantics.Arbitrary (
   SemiArbitrary (semiArbitrary),
   arbitraryAssocMap,
@@ -163,7 +163,7 @@ tests =
         [ testProperty "No accounts" $ checkRefundOne (== 0)
         , testProperty "One account" $ checkRefundOne (== 1)
         , testProperty "Multiple accounts" $ checkRefundOne (>= 2)
-        , testProperty "Nonpositive account" checkRefundOneNotPositive
+        , testProperty "Non-positive account" checkRefundOneNotPositive
         ]
     , testProperty "moneyInAccount" checkMoneyInAccount
     , testProperty "updateMoneyInAccount" checkUpdateMoneyInAccount
@@ -254,7 +254,7 @@ checkFixInterval invalid inPast =
           not invalid
             && not inPast
             && timeInterval environment' == interval
-            && state' == state{minTime = maximum [minTime state, fst interval]}
+            && state' == state{minTime = max (minTime state) (fst interval)}
         IntervalError (InvalidInterval _) -> invalid
         IntervalError (IntervalInPastError _ _) -> not invalid && inPast
 
@@ -741,7 +741,7 @@ checkReduceContractStepPay =
     forAll' gen $ \(environment, state, account, payee, token, value, contract) ->
       let prior = fromMaybe 0 $ AM.lookup (account, token) (accounts state)
           request = evalValue environment state value
-          debit = minimum [prior, request]
+          debit = min prior request
           positiveAmount = debit > 0
           fullAmount = request == debit
           posterior = prior - debit

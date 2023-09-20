@@ -1,4 +1,4 @@
-cabal-version: 3.0
+cabal-version: 3.4
 name:          marlowe-protocols
 version:       0.2.0.0
 synopsis:      Protocol definitions for Marlowe
@@ -92,8 +92,8 @@ library
     , QuickCheck >=2.14 && <3
     , resourcet >=1.3 && <2
     , stm ^>=2.5
-    , text >=1.2.4 && <2
+    , text ^>=1.2
     , time >=1.9 && <2
     , transformers ^>=0.5.6
-    , typed-protocols ==0.1.0.0
+    , typed-protocols ^>=0.1
     , unliftio ^>=0.2.1

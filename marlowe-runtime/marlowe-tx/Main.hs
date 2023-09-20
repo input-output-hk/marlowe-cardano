@@ -14,10 +14,19 @@ import Control.Concurrent.Component.Run (AppM, runAppMTraced)
 import qualified Data.Text as T
 import Data.Time (NominalDiffTime)
 import Data.Version (showVersion)
-import Language.Marlowe.Runtime.ChainSync.Api (BlockNo (..), ChainSyncQuery (..), RuntimeChainSeekClient)
+import Language.Marlowe.Runtime.ChainSync.Api (
+  BlockNo (..),
+  ChainSyncQuery (..),
+  RuntimeChainSeekClient,
+ )
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
-import Language.Marlowe.Runtime.Transaction (MarloweTx (..), TransactionDependencies (..), transaction)
+import Language.Marlowe.Runtime.Transaction (
+  MarloweTx (..),
+  TransactionDependencies (..),
+  mkCommandLineRoleTokenMintingPolicy,
+  transaction,
+ )
 import qualified Language.Marlowe.Runtime.Transaction.Query as Query
 import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
 import Logging (RootSelector (..), renderRootSelectorOTel)
@@ -99,6 +108,7 @@ run Options{..} = flip runComponent_ () proc _ -> do
                 payouts
           , getCurrentScripts = ScriptRegistry.getCurrentScripts
           , analysisTimeout = analysisTimeout
+          , mkRoleTokenMintingPolicy = mkCommandLineRoleTokenMintingPolicy mintingPolicyCmd
           , ..
           }
 
@@ -123,6 +133,7 @@ data Options = Options
   , submitConfirmationBlocks :: BlockNo
   , analysisTimeout :: NominalDiffTime
   , httpPort :: PortNumber
+  , mintingPolicyCmd :: FilePath
   }
 
 getOptions :: IO Options
@@ -141,6 +152,7 @@ getOptions = execParser $ info (helper <*> parser) infoMod
         <*> submitConfirmationBlocksParser
         <*> analysisTimeoutParser
         <*> httpPortParser
+        <*> mintingPolicyCmdParser
 
     chainSeekPortParser =
       option auto $
@@ -231,6 +243,15 @@ getOptions = execParser $ info (helper <*> parser) infoMod
           , help "Port number to serve the http healthcheck API on"
           , value 8080
           , showDefault
+          ]
+
+    mintingPolicyCmdParser =
+      strOption $
+        mconcat
+          [ long "minting-policy-cmd"
+          , metavar "CMD"
+          , help
+              "A command which creates the role token minting policy for a contract. It should read the arguments via the command line and output the serialized script binary to stdout."
           ]
 
     submitConfirmationBlocksParser =

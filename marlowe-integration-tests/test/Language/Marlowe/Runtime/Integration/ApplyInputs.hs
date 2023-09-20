@@ -11,8 +11,6 @@ import Cardano.Api (
   TxBodyContent (..),
   TxOut (..),
   getTxId,
-  hashScriptData,
-  serialiseToRawBytes,
  )
 import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import Control.Monad.IO.Class (liftIO)
@@ -33,9 +31,9 @@ import Language.Marlowe.Runtime.Cardano.Api (
   fromCardanoAddressInEra,
   fromCardanoTxId,
   fromCardanoTxOutValue,
-  toCardanoScriptData,
  )
-import Language.Marlowe.Runtime.ChainSync.Api (AssetId (AssetId), Assets (Assets), TokenName, TxOutRef (..), toDatum)
+import Language.Marlowe.Runtime.Cardano.Feature (CardanoFeature (..))
+import Language.Marlowe.Runtime.ChainSync.Api (AssetId (AssetId), Assets (Assets), TokenName, TxOutRef (..))
 import Language.Marlowe.Runtime.Client (applyInputs, createContract)
 import Language.Marlowe.Runtime.Core.Api hiding (Contract)
 import Language.Marlowe.Runtime.Integration.Common (
@@ -52,7 +50,8 @@ import Language.Marlowe.Runtime.Integration.Common (
  )
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
 import Language.Marlowe.Runtime.Transaction.Api
-import Plutus.V2.Ledger.Api (POSIXTime (POSIXTime), toBuiltin)
+import Language.Marlowe.Util (dataHash)
+import PlutusLedgerApi.V2 (POSIXTime (POSIXTime))
 import Test.Hspec
 import Test.Integration.Marlowe (MarloweRuntime (..), withLocalMarloweRuntime)
 import UnliftIO (Concurrently (Concurrently, runConcurrently))
@@ -80,7 +79,7 @@ closedSpec = parallel $ describe "Closed contract" $ aroundAll setup do
     setup :: ActionWith (MarloweRuntime, ContractId) -> IO ()
     setup runTests = withLocalMarloweRuntime $ runIntegrationTest do
       wallet <- getGenesisWallet 0
-      ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra ContractCreatedInEra{txBody = createBody, contractId} <-
+      ContractCreated era0 ContractCreatedInEra{txBody = createBody, contractId} <-
         expectRight "Failed to create contract"
           =<< createContract
             Nothing
@@ -90,13 +89,14 @@ closedSpec = parallel $ describe "Closed contract" $ aroundAll setup do
             emptyMarloweTransactionMetadata
             2_000_000
             (Left Close)
-      _ <- submit wallet createBody
+      _ <- submit wallet era0 createBody
       applyInputs MarloweV1 (addresses wallet) contractId emptyMarloweTransactionMetadata []
         >>= expectRight "Failed to close contract"
-        >>= \(InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra InputsAppliedInEra{txBody = applyBody}) -> do
-          _ <- submit wallet applyBody
-          runtime <- ask
-          liftIO $ runTests (runtime, contractId)
+        >>= \case
+          (InputsApplied era1 InputsAppliedInEra{txBody = applyBody}) -> do
+            _ <- submit wallet era1 applyBody
+            runtime <- ask
+            liftIO $ runTests (runtime, contractId)
 
 -- Not to be confused with closedSpec - this one tests a Close contract that is
 -- still open.
@@ -121,9 +121,9 @@ closeSpec = parallel $ describe "Close contract" $ aroundAll setup do
     compare invalidHereafter now `shouldBe` GT
   it "should specify the correct inputs" $ runAsIntegration \(_, InputsApplied _ InputsAppliedInEra{..}) -> liftIO do
     inputs `shouldBe` []
-  it "should only output to the deposit address" $ runAsIntegration \(_, InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra InputsAppliedInEra{..}) -> do
+  it "should only output to the deposit address" $ runAsIntegration \(_, InputsApplied era InputsAppliedInEra{..}) -> do
     wallet <- getGenesisWallet 0
-    let getAddress (TxOut address _ _ _) = fromCardanoAddressInEra BabbageEra address
+    let getAddress (TxOut address _ _ _) = fromCardanoAddressInEra (cardanoEraOfFeature era) address
     let paidAddresses = case txBody of TxBody TxBodyContent{..} -> Set.fromList $ getAddress <$> txOuts
     liftIO $ paidAddresses `shouldBe` Set.singleton (changeAddress $ addresses wallet)
   where
@@ -139,8 +139,8 @@ closeSpec = parallel $ describe "Close contract" $ aroundAll setup do
         2_000_000
         (Left Close)
         >>= expectRight "Failed to create contract"
-        >>= \created@(ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra ContractCreatedInEra{txBody = createBody, contractId}) -> do
-          _ <- submit wallet createBody
+        >>= \created@(ContractCreated era0 ContractCreatedInEra{txBody = createBody, contractId}) -> do
+          _ <- submit wallet era0 createBody
           inputsApplied <-
             expectRight "Failed to close contract"
               =<< applyInputs
@@ -687,7 +687,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
     wallet <- getGenesisWallet 0
     wallet3 <- getGenesisWallet 2
     let address = Types.Address Address.testnet $ fromJust $ toPlutusAddress $ changeAddress $ addresses wallet3
-    InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra InputsAppliedInEra{txBody} <-
+    InputsApplied era InputsAppliedInEra{txBody} <-
       expectRight "Failed to apply inputs"
         =<< applyInputs
           MarloweV1
@@ -695,7 +695,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
           contractId
           emptyMarloweTransactionMetadata
           [NormalInput $ IDeposit address address ada 1_000_000]
-    SubmitFailed msg <- expectLeft "Expected a failure" =<< submit' wallet txBody
+    SubmitFailed msg <- expectLeft "Expected a failure" =<< submit' wallet era txBody
     liftIO $ msg `shouldContain` "MissingRequiredSigners"
   it "should accept the correct deposit from wallet 2" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
     wallet <- getGenesisWallet 1
@@ -722,7 +722,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
     wallet <- getGenesisWallet 1
     wallet3 <- getGenesisWallet 2
     let address = Types.Address Address.testnet $ fromJust $ toPlutusAddress $ changeAddress $ addresses wallet3
-    InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra InputsAppliedInEra{txBody} <-
+    InputsApplied era InputsAppliedInEra{txBody} <-
       expectRight "Failed to apply inputs"
         =<< applyInputs
           MarloweV1
@@ -730,7 +730,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
           contractId
           emptyMarloweTransactionMetadata
           [NormalInput $ IDeposit address address ada 1_000_000]
-    SubmitFailed msg <- expectLeft "Expected a failure" =<< submit' wallet txBody
+    SubmitFailed msg <- expectLeft "Expected a failure" =<< submit' wallet era txBody
     liftIO $ msg `shouldContain` "MissingRequiredSigners"
   it "should accept the correct deposit from wallet 3" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{contractId}) -> do
     wallet <- getGenesisWallet 2
@@ -789,7 +789,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
     wallet <- getGenesisWallet 0
     wallet3 <- getGenesisWallet 2
     let address = Types.Address Address.testnet $ fromJust $ toPlutusAddress $ changeAddress $ addresses wallet3
-    InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra InputsAppliedInEra{txBody} <-
+    InputsApplied era InputsAppliedInEra{txBody} <-
       expectRight "Failed to apply inputs"
         =<< applyInputs
           MarloweV1
@@ -797,7 +797,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
           contractId
           emptyMarloweTransactionMetadata
           [NormalInput $ IChoice (ChoiceId "choice3" address) 0]
-    SubmitFailed msg <- expectLeft "Expected a failure" =<< submit' wallet txBody
+    SubmitFailed msg <- expectLeft "Expected a failure" =<< submit' wallet era txBody
     liftIO $ msg `shouldContain` "MissingRequiredSigners"
   it "should accept the correct choice from wallet 2" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
     wallet <- getGenesisWallet 1
@@ -824,7 +824,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
     wallet <- getGenesisWallet 1
     wallet3 <- getGenesisWallet 2
     let address = Types.Address Address.testnet $ fromJust $ toPlutusAddress $ changeAddress $ addresses wallet3
-    InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra InputsAppliedInEra{txBody} <-
+    InputsApplied era InputsAppliedInEra{txBody} <-
       expectRight "Failed to apply inputs"
         =<< applyInputs
           MarloweV1
@@ -832,7 +832,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
           contractId
           emptyMarloweTransactionMetadata
           [NormalInput $ IChoice (ChoiceId "choice3" address) 0]
-    SubmitFailed msg <- expectLeft "Expected a failure" =<< submit' wallet txBody
+    SubmitFailed msg <- expectLeft "Expected a failure" =<< submit' wallet era txBody
     liftIO $ msg `shouldContain` "MissingRequiredSigners"
   it "should accept the correct choice from wallet 3" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{contractId}) -> do
     wallet <- getGenesisWallet 2
@@ -941,8 +941,8 @@ merkleizedSpec = parallel $ describe "Merkleized contracts" $ aroundAll setup do
           [MerkleizedInput INotify hash $ If TrueObs Close Close]
     liftIO $ msg `shouldContain` "TxBodyScriptExecutionError"
   where
-    hash = toBuiltin $ serialiseToRawBytes $ hashScriptData $ toCardanoScriptData $ toDatum Close
-    wrongHash = toBuiltin $ serialiseToRawBytes $ hashScriptData $ toCardanoScriptData $ toDatum $ If TrueObs Close Close
+    hash = dataHash Close
+    wrongHash = dataHash $ If TrueObs Close Close
 
     setup :: ActionWith (MarloweRuntime, ContractId) -> IO ()
     setup runTests = withLocalMarloweRuntime $ runIntegrationTest do
@@ -971,7 +971,7 @@ multiInputsSpec :: Spec
 multiInputsSpec = parallel $ describe "Multi inputs" $ aroundAll setup do
   it "should accept one input" $ runAsIntegration \(startTime, contractId) -> do
     wallet <- getGenesisWallet 0
-    InputsAppliedInEra{output} <- deposit wallet contractId (Role "role") (Role "role") ada 1_000_000
+    InputsApplied _ InputsAppliedInEra{output} <- deposit wallet contractId (Role "role") (Role "role") ada 1_000_000
     TransactionScriptOutput{..} <- expectJust "Expected an output" $ scriptOutput output
     liftIO $
       marloweContract datum
@@ -1040,7 +1040,7 @@ mkRoleTokens :: [(TokenName, Wallet)] -> RoleTokensConfig
 mkRoleTokens = RoleTokensMint . mkMint . (fmap . fmap) ((,Nothing) . changeAddress . addresses) . NE.fromList
 
 submitCreate :: Wallet -> ContractCreated 'V1 -> Integration ()
-submitCreate wallet (ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra ContractCreatedInEra{..}) = void $ submit wallet txBody
+submitCreate wallet (ContractCreated era ContractCreatedInEra{..}) = void $ submit wallet era txBody
 
 runAsIntegration :: (a -> Integration ()) -> ActionWith (MarloweRuntime, a)
 runAsIntegration action (runtime, a) = runIntegrationTest (action a) runtime

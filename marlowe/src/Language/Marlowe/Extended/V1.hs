@@ -44,8 +44,8 @@ import Language.Marlowe.Extended.V1.Metadata.Types (MetaData)
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
 import Language.Marlowe.Pretty (Pretty (..), pretty)
 import Language.Marlowe.Util (ada)
-import Plutus.V2.Ledger.Api (adaSymbol, adaToken)
-import qualified Plutus.V2.Ledger.Api as L
+import PlutusLedgerApi.V2 (adaSymbol, adaToken)
+import qualified PlutusLedgerApi.V2 as L
 import Text.PrettyPrint.Leijen (parens, text)
 
 data Timeout
@@ -68,9 +68,9 @@ instance Num Timeout where
   abs _ = error "Tried to calculate absolute value of template"
   signum (POSIXTime a) = POSIXTime (signum a)
   signum _ = error "Tried to calculate signum of template"
-  fromInteger x = POSIXTime x
   negate (POSIXTime x) = POSIXTime (-x)
   negate _ = error "Tried to negate a template"
+  fromInteger = POSIXTime
 
 instance Pretty Rational where
   prettyFragment r = text $ "(" ++ show r ++ ")"

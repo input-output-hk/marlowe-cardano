@@ -34,7 +34,7 @@ module Spec.Marlowe.Plutus.Lens (
 
 import Control.Lens (Lens', lens, use, (<>=))
 import Control.Monad.State (MonadState)
-import Plutus.V2.Ledger.Api (
+import PlutusLedgerApi.V2 (
   DCert,
   Datum,
   DatumHash,

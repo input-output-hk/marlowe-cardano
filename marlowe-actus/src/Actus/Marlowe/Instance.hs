@@ -23,7 +23,7 @@ import GHC.Real (Ratio (..))
 import qualified Language.Marlowe.Core.V1.Semantics as Core
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Core
 import Language.Marlowe.Extended.V1
-import qualified Plutus.V1.Ledger.Api as PV1
+import qualified PlutusLedgerApi.V1 as PV1
 import qualified PlutusTx.Builtins as Builtins
 
 {-# INLINEABLE division #-}
@@ -42,13 +42,13 @@ toMarloweFixedPoint = round <$> (fromIntegral marloweFixedPoint *)
 fromMarloweFixedPoint :: Integer -> Integer
 fromMarloweFixedPoint i = i `quot` marloweFixedPoint
 
--- In order to have manageble contract sizes, we need to reduce Value as
+-- In order to have manageable contract sizes, we need to reduce Value as
 -- good as possible.
 --
 -- Note:
 --
 
--- * This interfers with the semantics - ideally we would have formally
+-- * This interferes with the semantics - ideally we would have formally
 
 --   verified reduction semantics instead
 --
@@ -70,7 +70,7 @@ instance Num Value where
     where
       _max x y = Cond (ValueGT x y) x y
   fromInteger n = Constant $ n * marloweFixedPoint
-  negate a = NegValue a
+  negate = NegValue
   signum a =
     Cond (ValueLT a 0) (-1) $
       Cond (ValueGT a 0) 1 0
@@ -85,7 +85,7 @@ instance Fractional Value where
 
 -- | Division with financial rounding
 division :: Value -> Value -> Value
-division lhs rhs = fromMaybe (error "Value cannot be evaluted") $
+division lhs rhs = fromMaybe (error "Value cannot be evaluated") $
   do
     n <- evalVal lhs
     d <- evalVal rhs

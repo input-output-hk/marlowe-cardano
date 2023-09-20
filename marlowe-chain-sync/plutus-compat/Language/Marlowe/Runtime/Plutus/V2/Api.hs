@@ -12,7 +12,6 @@ module Language.Marlowe.Runtime.Plutus.V2.Api (
   toAssetId,
   toPlutusAddress,
   toPlutusCurrencySymbol,
-  toPlutusScript,
   toPlutusTokenName,
   toPlutusTxOutRef,
   toPlutusValidatorHash,
@@ -22,13 +21,10 @@ import qualified Cardano.Api as C
 import qualified Cardano.Api.Byron as C
 import qualified Cardano.Api.Shelley as C
 import Cardano.Chain.Common (addrToBase58)
-import Codec.Serialise (deserialise, serialise)
 import Control.Monad ((<=<), (>=>))
 import Data.Bifunctor (bimap)
-import Data.ByteString.Lazy (fromStrict, toStrict)
-import Data.ByteString.Short (ShortByteString, fromShort, toShort)
 import qualified Data.Map as Map
-import Language.Marlowe.Runtime.Cardano.Api (toCardanoAddressAny, toCardanoPlutusScript)
+import Language.Marlowe.Runtime.Cardano.Api (toCardanoAddressAny)
 import Language.Marlowe.Runtime.ChainSync.Api (
   Address,
   AssetId (..),
@@ -43,7 +39,8 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   TxIx (TxIx),
   TxOutRef (TxOutRef),
  )
-import qualified Plutus.V2.Ledger.Api as PV2
+import qualified PlutusLedgerApi.V2 as PV2
+import PlutusTx (CompiledCode)
 import qualified PlutusTx.AssocMap as AM
 
 toPlutusAddress :: Address -> Maybe PV2.Address
@@ -85,28 +82,18 @@ toPlutusAddress =
     fromCardanoKeyHash :: (C.SerialiseAsRawBytes (C.Hash keyRole)) => C.Hash keyRole -> PV2.PubKeyHash
     fromCardanoKeyHash keyHash = PV2.PubKeyHash $ PV2.toBuiltin $ C.serialiseToRawBytes keyHash
 
-    fromCardanoScriptHash :: C.ScriptHash -> PV2.ValidatorHash
-    fromCardanoScriptHash scriptHash = PV2.ValidatorHash $ PV2.toBuiltin $ C.serialiseToRawBytes scriptHash
+    fromCardanoScriptHash :: C.ScriptHash -> PV2.ScriptHash
+    fromCardanoScriptHash scriptHash = PV2.ScriptHash $ PV2.toBuiltin $ C.serialiseToRawBytes scriptHash
 
-fromPlutusValidatorHash :: PV2.ValidatorHash -> ScriptHash
-fromPlutusValidatorHash (PV2.ValidatorHash h) = ScriptHash . PV2.fromBuiltin $ h
+fromPlutusValidatorHash :: PV2.ScriptHash -> ScriptHash
+fromPlutusValidatorHash (PV2.ScriptHash h) = ScriptHash . PV2.fromBuiltin $ h
 
-toPlutusValidatorHash :: ScriptHash -> PV2.ValidatorHash
-toPlutusValidatorHash (ScriptHash h) = PV2.ValidatorHash . PV2.toBuiltin $ h
+toPlutusValidatorHash :: ScriptHash -> PV2.ScriptHash
+toPlutusValidatorHash (ScriptHash h) = PV2.ScriptHash . PV2.toBuiltin $ h
 
-fromPlutusScript :: PV2.Script -> PlutusScript
+fromPlutusScript :: CompiledCode a -> PlutusScript
 fromPlutusScript =
-  PlutusScript
-    . C.serialiseToRawBytes
-    . (C.PlutusScriptSerialised :: ShortByteString -> C.PlutusScript C.PlutusScriptV2)
-    . toShort
-    . toStrict
-    . serialise
-
-toPlutusScript :: PlutusScript -> Maybe PV2.Script
-toPlutusScript ps = do
-  (C.PlutusScriptSerialised script :: C.PlutusScript C.PlutusScriptV2) <- toCardanoPlutusScript ps
-  deserialise . fromStrict . fromShort $ script
+  PlutusScript . C.serialiseToRawBytes . C.PlutusScriptSerialised @C.PlutusScriptV2 . PV2.serialiseCompiledCode
 
 fromPlutusTxOutRef :: PV2.TxOutRef -> TxOutRef
 fromPlutusTxOutRef (PV2.TxOutRef (PV2.TxId txId) txIx) = TxOutRef (TxId . PV2.fromBuiltin $ txId) (TxIx . fromInteger $ txIx)

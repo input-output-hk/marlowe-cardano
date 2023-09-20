@@ -29,7 +29,7 @@ import Test.QuickCheck (Arbitrary (arbitrary), Gen, listOf, listOf1, shuffle, su
 
 import Data.List (nub)
 import Spec.Marlowe.Semantics.Next.Common.Tuple (uncurry3)
-import Spec.Marlowe.Semantics.Next.Contract (hasValidEnvironement, isIrreducible, isReducible, isReducibleToClose)
+import Spec.Marlowe.Semantics.Next.Contract (hasValidEnvironment, isIrreducible, isReducible, isReducibleToClose)
 import Spec.Marlowe.Semantics.Next.Contract.When.Deposit (hasNoIdenticalEvaluatedDeposits)
 
 anyReducibleContract :: Gen (Environment, State, Contract)
@@ -46,7 +46,7 @@ anyCloseOrReducedToAClose =
 
 anyContract :: Gen (Environment, State, Contract)
 anyContract =
-  arbitrary `suchThat` uncurry3 hasValidEnvironement
+  arbitrary `suchThat` uncurry3 hasValidEnvironment
 
 anyOnlyFalsifiedNotifies :: Gen (Environment, State, [Case Contract])
 anyOnlyFalsifiedNotifies =
@@ -75,7 +75,7 @@ anyCaseContractsWithChoiceOnlyNotShadowed =
   do
     (env, state) <- arbitrary
     choiceIds <- nub <$> listOf1 arbitrary
-    caseContracts <- sequence $ (\choiceId -> pure (Case (Choice choiceId [Bound 1 10])) <*> pure Close) <$> choiceIds
+    let caseContracts = flip Case Close . flip Choice [Bound 1 10] <$> choiceIds
     return (env, state, caseContracts)
 
 anyCaseContractsWithChoiceOnTheSameChoiceIdAndNonEmptyBounds :: Gen (Environment, State, [Case Contract])

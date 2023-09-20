@@ -16,8 +16,8 @@ module Spec.Marlowe.Plutus.Value (
 ) where
 
 import Data.List (union)
-import Plutus.V1.Ledger.Value (geq, leq, valueOf)
-import Plutus.V2.Ledger.Api (CurrencySymbol, TokenName, Value (..), singleton)
+import PlutusLedgerApi.V1.Value (geq, leq, valueOf)
+import PlutusLedgerApi.V2 (CurrencySymbol, TokenName, Value (..), singleton)
 import PlutusTx.Numeric (zero)
 import Spec.Marlowe.Plutus.Arbitrary ()
 import Test.Tasty (TestTree, testGroup)
@@ -37,7 +37,7 @@ tests =
     , testProperty "`(==)` detects equality" checkEq
     , testProperty "`leq` is partial order" checkLeq
     , testProperty "`geq` is partial order" checkGeq
-    , testProperty "`valueOf` extracts quanity" checkValueOf
+    , testProperty "`valueOf` extracts quantity" checkValueOf
     , testProperty "`singleton` creates a single token" checkSingleton
     , testProperty "`zero` has no value" checkZero
     ]

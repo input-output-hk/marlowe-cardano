@@ -84,8 +84,8 @@ import qualified Data.Map.Strict as M
 import Data.Maybe (catMaybes)
 import Data.Traversable (for)
 import Language.Marlowe (Input (..))
-import qualified Plutus.ApiCommon as P (LedgerPlutusVersion (PlutusV2), evaluateScriptCounting)
-import qualified Plutus.V2.Ledger.Api as P hiding (evaluateScriptCounting)
+import qualified PlutusLedgerApi.Common as P (PlutusLedgerLanguage (..), evaluateScriptCounting)
+import qualified PlutusLedgerApi.V2 as P hiding (evaluateScriptCounting)
 import qualified PlutusTx.AssocMap as AM
 import qualified PlutusTx.Builtins as P
 import qualified PlutusTx.Builtins.Class as P
@@ -161,7 +161,7 @@ executeTransaction evaluationContext semanticsValidator semanticsAddress payoutA
         findRole (IDeposit _ (Role role) _ _) = pure role
         findRole (IChoice (ChoiceId _ (Role role)) _) = pure role
         findRole _ = mempty
-        roles = fmap (flip (P.singleton rolesCurrency) 1) . foldMap findRole $ getInputContent <$> txInputs
+        roles = fmap (flip (P.singleton rolesCurrency) 1) (foldMap (findRole . getInputContent) txInputs)
         inRoles =
           uncurry (P.TxInInfo . P.TxOutRef "1111111111111111111111111111111111111111111111111111111111111111")
             <$> zip [1 ..] outRoles
@@ -203,7 +203,7 @@ executeTransaction evaluationContext semanticsValidator semanticsAddress payoutA
         findSignatory (IChoice (ChoiceId _ (Address _ (P.Address (P.PubKeyCredential pkh) _))) _) = pure pkh
         findSignatory _ = mempty
         txInfoSignatories =
-          (foldMap findSignatory $ getInputContent <$> txInputs)
+          foldMap (findSignatory . getInputContent) txInputs
             <> case creatorAddress of
               P.Address (P.PubKeyCredential pkh) _ -> pure pkh
               _ -> mempty
@@ -498,10 +498,10 @@ calcValidatorsExBudget evaluationContext creatorAddress txInSpecs txOutSpecs (in
     catMaybes <$> for txInSpecs \(TxInSpec addr _ _ possibleScriptEvalContext) -> runMaybeT $ do
       (_, _, _, UseReferenceInput useReferenceInput) <- MaybeT $ pure possibleScriptEvalContext
       guard useReferenceInput
-      let toValidatorHash :: P.Address -> Maybe P.ValidatorHash
+      let toValidatorHash :: P.Address -> Maybe P.ScriptHash
           toValidatorHash (P.Address (P.ScriptCredential k) _) = Just k
           toValidatorHash _ = Nothing
-          toScriptHash (P.ValidatorHash vh) = P.ScriptHash vh
+          toScriptHash (P.ScriptHash vh) = P.ScriptHash vh
       MaybeT $ for (toScriptHash <$> toValidatorHash addr) \validatorHash -> do
         referenceTxOutRef <- freshTxOutRef
         pure $ P.TxInInfo referenceTxOutRef (P.TxOut creatorAddress oneLovelace P.NoOutputDatum (Just validatorHash))
@@ -593,7 +593,7 @@ findTransactions'
   -> m [Transaction]
   -- ^ Action for computing the initial state, initial contract, perhaps-merkleized input, and the output for the transactions.
 findTransactions' requireContinuations mc@MerkleizedContract{..} =
-  let utxoCostPerByte = 4310
+  let utxoCostPerByte = 4_310
       creatorAddress =
         Address True $
           P.Address
@@ -659,7 +659,7 @@ findPaths
   -> MerkleizedContract
   -- ^ The bundle of contract information.
   -> m [(P.POSIXTime, [TransactionInput])]
-  -- ^ The paths throught the Marlowe contract.
+  -- ^ The paths through the Marlowe contract.
 findPaths requireContinuations creatorAddress minAda MerkleizedContract{..} =
   do
     let ada = Token P.adaSymbol P.adaToken

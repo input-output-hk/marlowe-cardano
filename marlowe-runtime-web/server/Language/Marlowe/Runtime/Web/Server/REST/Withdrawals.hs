@@ -6,10 +6,10 @@
 -- | This module defines a server for the /withdrawals REST API.
 module Language.Marlowe.Runtime.Web.Server.REST.Withdrawals where
 
-import Cardano.Api (BabbageEra, IsCardanoEra, TxBody, getTxId, makeSignedTransaction)
+import Cardano.Api (BabbageEra, ConwayEra, IsCardanoEra, TxBody, getTxId, makeSignedTransaction)
 import qualified Cardano.Api as Cardano
 import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
-import Cardano.Ledger.Alonzo.TxWitness
+import Cardano.Ledger.Alonzo.TxWits (AlonzoTxWits (..))
 import Data.Aeson (Value (..))
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
@@ -60,6 +60,7 @@ postCreateTxBody PostWithdrawalsRequest{..} changeAddressDTO mAddresses mCollate
   withdraw MarloweV1 WalletAddresses{..} payouts' >>= \case
     Left err -> throwDTOError err
     Right (WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra WithdrawTxInEra{txBody}) -> pure $ TxBodyInAnyEra txBody
+    Right (WithdrawTx ReferenceTxInsScriptsInlineDatumsInConwayEra WithdrawTxInEra{txBody}) -> pure $ TxBodyInAnyEra txBody
 
 postCreateTxBodyResponse
   :: PostWithdrawalsRequest
@@ -141,10 +142,27 @@ put withdrawalId body = do
       tx <- case req of
         Nothing -> throwError $ badRequest' "Invalid text envelope cbor value"
         Just (Left tx) -> pure tx
-        Just (Right (ShelleyTxWitness (TxWitness wtKeys _ _ _ _))) ->
+        Just (Right (ShelleyTxWitness (AlonzoTxWits wtKeys _ _ _ _))) ->
           case makeSignedTxWithWitnessKeys txBody wtKeys of
             Just tx -> pure tx
             Nothing -> throwError $ badRequest' "Invalid witness keys"
       submitWithdrawal withdrawalId' ReferenceTxInsScriptsInlineDatumsInBabbageEra tx >>= \case
+        Nothing -> pure NoContent
+        Just err -> throwError $ ApiError.toServerError $ ApiError (show err) "SubmissionError" Null 403
+    handleLoaded withdrawalId' ReferenceTxInsScriptsInlineDatumsInConwayEra txBody = do
+      (req :: Maybe (Either (Cardano.Tx ConwayEra) (ShelleyTxWitness ConwayEra))) <- case teType body of
+        "Tx ConwayEra" -> pure $ Left <$> fromDTO body
+        "ShelleyTxWitness ConwayEra" -> pure $ Right <$> fromDTO body
+        _ ->
+          throwError $ badRequest' "Unknown envelope type - allowed types are: \"Tx ConwayEra\", \"ShelleyTxWitness ConwayEra\""
+
+      tx <- case req of
+        Nothing -> throwError $ badRequest' "Invalid text envelope cbor value"
+        Just (Left tx) -> pure tx
+        Just (Right (ShelleyTxWitness (AlonzoTxWits wtKeys _ _ _ _))) ->
+          case makeSignedTxWithWitnessKeys txBody wtKeys of
+            Just tx -> pure tx
+            Nothing -> throwError $ badRequest' "Invalid witness keys"
+      submitWithdrawal withdrawalId' ReferenceTxInsScriptsInlineDatumsInConwayEra tx >>= \case
         Nothing -> pure NoContent
         Just err -> throwError $ ApiError.toServerError $ ApiError (show err) "SubmissionError" Null 403

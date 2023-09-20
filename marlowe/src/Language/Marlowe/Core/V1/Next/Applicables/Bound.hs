@@ -16,7 +16,7 @@ module Language.Marlowe.Core.V1.Next.Applicables.Bound (
 
 import Control.Monad (join)
 import Data.List (tails)
-import Data.Maybe (catMaybes)
+import Data.Maybe (mapMaybe)
 import qualified Data.Range as R
 import Language.Marlowe.Core.V1.Semantics.Types (Bound (..))
 import Prelude
@@ -46,7 +46,7 @@ toRange (Bound a b) | a == b = R.SingletonRange a
 toRange (Bound a b) = R.SpanRange (R.Bound a R.Inclusive) (R.Bound b R.Inclusive)
 
 toBounds :: [R.Range Integer] -> [Bound]
-toBounds xs = catMaybes $ toBound <$> xs
+toBounds = mapMaybe toBound
 
 toBound :: R.Range Integer -> Maybe Bound
 toBound (R.SpanRange (R.Bound a R.Inclusive) (R.Bound b R.Inclusive)) = mkBound a b

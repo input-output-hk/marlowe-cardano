@@ -41,8 +41,8 @@ import Test.QuickCheck (Arbitrary, Gen, arbitrary, oneof, shrink)
 
 data SomeTag q = forall err result. SomeTag (Tag q err result)
 
-class Query (q :: * -> * -> *) where
-  data Tag q :: * -> * -> *
+class Query (q :: Type -> Type -> Type) where
+  data Tag q :: Type -> Type -> Type
   tagFromQuery :: q err result -> Tag q err result
   tagEq :: Tag q err result -> Tag q err' result' -> Maybe (err :~: err', result :~: result')
   putTag :: Tag q err result -> Put

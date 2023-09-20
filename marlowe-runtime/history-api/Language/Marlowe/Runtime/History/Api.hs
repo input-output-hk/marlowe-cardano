@@ -32,7 +32,7 @@ import Network.Protocol.Codec.Spec (Variations (..))
 import Ouroboros.Consensus.BlockchainTime (SystemStart, fromRelativeTime)
 import Ouroboros.Consensus.HardFork.History (interpretQuery, slotToWallclock)
 import qualified Ouroboros.Network.Block as O
-import qualified Plutus.V2.Ledger.Api as PV2
+import qualified PlutusLedgerApi.V2 as PV2
 
 data ContractHistoryError
   = HansdshakeFailed

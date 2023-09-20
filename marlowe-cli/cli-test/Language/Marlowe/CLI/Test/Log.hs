@@ -27,6 +27,7 @@ module Language.Marlowe.CLI.Test.Log (
 )
 where
 
+import Cardano.Api (File (..))
 import Cardano.Api qualified as C
 import Contrib.Cardano.Debug as C.Debug
 import Control.Lens (Lens', view, (%=), (^.))
@@ -156,7 +157,7 @@ logTxBody l msg txBody jsonRewrite = do
           , ("resourceUsage", A.toJSON resourceUsage)
           ]
     liftIO $ writeFile jsonFile txJson
-    liftIO (C.writeFileTextEnvelope envelopeFile mempty txBody) >>= \case
+    liftIO (C.writeFileTextEnvelope (File envelopeFile) mempty txBody) >>= \case
       Left err -> throwLabeledError l $ TestExecutionFailed (show err) []
       Right () -> pure ()
     logStoreMsgWith l msg info

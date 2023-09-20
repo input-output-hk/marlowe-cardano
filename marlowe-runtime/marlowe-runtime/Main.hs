@@ -13,6 +13,7 @@ import Cardano.Api (
   ConsensusModeParams (..),
   EpochSlots (..),
   EraInMode (..),
+  File (..),
   GenesisParameters (..),
   LocalNodeConnectInfo (..),
   NetworkId (..),
@@ -70,6 +71,7 @@ import qualified Language.Marlowe.Runtime.Indexer.Database.PostgreSQL as Indexer
 import qualified Language.Marlowe.Runtime.Indexer.Party as Party
 import qualified Language.Marlowe.Runtime.Sync.Database as Sync
 import qualified Language.Marlowe.Runtime.Sync.Database.PostgreSQL as SyncPostgres
+import Language.Marlowe.Runtime.Transaction (mkCommandLineRoleTokenMintingPolicy)
 import Logging (RootSelector (..), renderRootSelectorOTel)
 import Network.Protocol.Driver (TcpServerDependencies (..), tcpServer)
 import Network.Protocol.Driver.Trace (tcpServerTraced)
@@ -115,7 +117,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
           { -- FIXME read from config - what is the appropriate value?
             localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
           , localNodeNetworkId = networkId
-          , localNodeSocketPath = nodeSocket
+          , localNodeSocketPath = File nodeSocket
           }
 
       genesisBlock = computeGenesisBlock (abstractHashToBytes hash) genesisConfig shelleyGenesis
@@ -174,6 +176,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
                   either throwIO pure =<< Pool.use pool do
                     connection <- ask
                     liftIO $ runInIO $ Party.indexParties connection
+              , mkRoleTokenMintingPolicy = mkCommandLineRoleTokenMintingPolicy mintingPolicyCmd
               }
 
       tcpServer "marlowe-runtime"
@@ -217,6 +220,7 @@ data Options = Options
   , lockingMicrosecondsBetweenRetries :: Word64
   , submitConfirmationBlocks :: BlockNo
   , httpPort :: PortNumber
+  , mintingPolicyCmd :: FilePath
   }
 
 getOptions :: IO Options
@@ -245,6 +249,7 @@ getOptions = do
         <*> lockingMicrosecondsBetweenRetriesParser lockingMicrosecondsBetweenRetries
         <*> submitConfirmationBlocksParser
         <*> httpPortParser
+        <*> mintingPolicyCmdParser
 
     databaseUriParser =
       strOption $
@@ -444,6 +449,15 @@ getOptions = do
           , help "Port number to serve the http healthcheck API on"
           , value 8080
           , showDefault
+          ]
+
+    mintingPolicyCmdParser =
+      strOption $
+        mconcat
+          [ long "minting-policy-cmd"
+          , metavar "CMD"
+          , help
+              "A command which creates the role token minting policy for a contract. It should read the arguments via the command line and output the serialized script binary to stdout."
           ]
 
     infoMod =

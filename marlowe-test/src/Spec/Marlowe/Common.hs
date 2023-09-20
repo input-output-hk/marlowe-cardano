@@ -81,7 +81,7 @@ import Language.Marlowe.Util (merkleizedCase)
 import Test.QuickCheck (Gen, choose, frequency, oneof, shrinkList, sized, vectorOf)
 
 import qualified Language.Marlowe.Extended.V1 as Extended
-import qualified Plutus.V2.Ledger.Api as Ledger
+import qualified PlutusLedgerApi.V2 as Ledger
 
 -- | A public key represented as a string.
 newtype PubKey = PubKey String

@@ -2,11 +2,9 @@
 
 module Language.Marlowe.Runtime.CLI.Command.Submit where
 
-import Cardano.Api (AsType (..), FromSomeType (..), Tx)
+import Cardano.Api (AsType (..), File (..), FromSomeType (..), Tx)
 import qualified Cardano.Api as C
-import Cardano.Api.Shelley (
-  ReferenceTxInsScriptsInlineDatumsSupportedInEra (ReferenceTxInsScriptsInlineDatumsInBabbageEra),
- )
+import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.Delay (newDelay, waitDelay)
 import Control.Monad.IO.Class (liftIO)
@@ -70,8 +68,9 @@ runSubmitCommand SubmitCommand{txFile} = runCLIExceptT do
         first (const TransactionDecodingFailed)
           <$> C.readFileTextEnvelopeAnyOf
             [ FromSomeType (AsTx AsBabbageEra) $ TxInEraWithReferenceScripts ReferenceTxInsScriptsInlineDatumsInBabbageEra
+            , FromSomeType (AsTx AsConwayEra) $ TxInEraWithReferenceScripts ReferenceTxInsScriptsInlineDatumsInConwayEra
             ]
-            txFile
+            (File txFile)
   let cmd = Submit era tx
       next =
         ClientStCmd

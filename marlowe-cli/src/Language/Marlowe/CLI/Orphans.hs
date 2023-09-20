@@ -20,7 +20,6 @@ import Cardano.Api (
   AsType (AsAddressAny),
   BlockHeader (..),
   BlockNo (..),
-  ChainPoint (..),
   SlotNo (..),
   deserialiseAddress,
   serialiseAddress,
@@ -30,7 +29,7 @@ import Data.Aeson (
   FromJSONKey,
   ToJSON (..),
   ToJSONKey,
-  Value (Null, String),
+  Value (..),
   object,
   withObject,
   withText,
@@ -54,11 +53,11 @@ import Data.String (IsString (..))
 import Data.Text qualified as T (unpack)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as E
-import Plutus.V1.Ledger.Api (TokenName (..), fromBuiltin)
-import Plutus.V1.Ledger.Api qualified as PV1
-import Plutus.V1.Ledger.Bytes qualified as Bytes
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
-import Plutus.V1.Ledger.Value (AssetClass, tokenName)
+import PlutusLedgerApi.V1 (TokenName (..), fromBuiltin)
+import PlutusLedgerApi.V1 qualified as PV1
+import PlutusLedgerApi.V1.Bytes qualified as Bytes
+import PlutusLedgerApi.V1.Value (AssetClass, tokenName)
 import PlutusTx.AssocMap qualified as Map
 
 {- note [Roundtripping token names]
@@ -147,14 +146,6 @@ instance FromJSON BlockHeader where
           <*> (o .: "hash")
           <*> (BlockNo <$> o .: "block")
 
-instance ToJSON ChainPoint where
-  toJSON ChainPointAtGenesis = Null
-  toJSON (ChainPoint slot blockHeader) =
-    object
-      [ "slot" .= slot
-      , "hash" .= blockHeader
-      ]
-
 encodeByteString :: BS.ByteString -> Text.Text
 encodeByteString = E.decodeUtf8 . Base16.encode
 
@@ -218,10 +209,10 @@ instance S.Serialise PV1.BuiltinData where
 
 deriving anyclass instance ToJSON SlotConfig
 deriving anyclass instance FromJSON SlotConfig
-deriving anyclass instance ToJSON PV1.ValidatorHash
-deriving anyclass instance FromJSON PV1.ValidatorHash
-deriving anyclass instance ToJSONKey PV1.ValidatorHash
-deriving anyclass instance FromJSONKey PV1.ValidatorHash
+deriving anyclass instance ToJSON PV1.ScriptHash
+deriving anyclass instance FromJSON PV1.ScriptHash
+deriving anyclass instance ToJSONKey PV1.ScriptHash
+deriving anyclass instance FromJSONKey PV1.ScriptHash
 deriving anyclass instance ToJSON PV1.PubKeyHash
 deriving anyclass instance FromJSON PV1.PubKeyHash
 deriving anyclass instance FromJSONKey PV1.PubKeyHash
@@ -238,10 +229,8 @@ deriving anyclass instance ToJSONKey PV1.DatumHash
 deriving anyclass instance FromJSONKey PV1.DatumHash
 deriving anyclass instance ToJSON PV1.Datum
 deriving anyclass instance FromJSON PV1.Datum
-deriving anyclass instance S.Serialise PV1.Datum
 deriving anyclass instance ToJSON PV1.Redeemer
 deriving anyclass instance FromJSON PV1.Redeemer
-deriving anyclass instance S.Serialise PV1.Redeemer
 deriving via (JSONViaSerialise PV1.Data) instance ToJSON PV1.Data
 deriving via (JSONViaSerialise PV1.Data) instance FromJSON PV1.Data
 

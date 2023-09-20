@@ -8,7 +8,7 @@ module Logging (
   renderRootSelectorOTel,
 ) where
 
-import Cardano.Api (CardanoMode, ConsensusModeParams (..), EpochSlots (..), LocalNodeConnectInfo (..))
+import Cardano.Api (CardanoMode, ConsensusModeParams (..), EpochSlots (..), File (..), LocalNodeConnectInfo (..))
 import Control.Monad.Event.Class (Inject (..))
 import Data.ByteString (ByteString)
 import Data.String (fromString)
@@ -120,8 +120,8 @@ renderRootSelectorOTel dbName dbUser host port = \case
       , renderField = \LocalNodeConnectInfo{..} ->
           [ ("net.transport", "ip_tcp")
           , ("net.protocol.name", "mux")
-          , ("net.sock.peer.name", fromString localNodeSocketPath)
-          , ("net.sock.peer.addr", fromString localNodeSocketPath)
+          , ("net.sock.peer.name", fromString $ unFile localNodeSocketPath)
+          , ("net.sock.peer.addr", fromString $ unFile localNodeSocketPath)
           , ("net.sock.family", "unix")
           ,
             ( "cardano.epoch_slots"

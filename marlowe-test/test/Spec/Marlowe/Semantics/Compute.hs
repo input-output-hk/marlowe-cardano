@@ -27,7 +27,7 @@ import Control.Applicative (liftA2)
 import Control.Lens.Getter (Getter, to, view)
 import Control.Monad.Except (MonadError (throwError), unless, when)
 import Control.Monad.Reader (ReaderT (runReaderT))
-import Data.Bifunctor (second)
+import Data.Bifunctor (Bifunctor (..), second)
 import Data.Default (Default (..))
 import Data.Function (on)
 import Data.List (sort)
@@ -67,7 +67,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   getInputContent,
  )
 import Language.Marlowe.FindInputs (getAllInputs)
-import Plutus.V2.Ledger.Api (CurrencySymbol, POSIXTime (..), TokenName, toBuiltinData)
+import PlutusLedgerApi.V2 (CurrencySymbol, POSIXTime (..), TokenName, toBuiltinData)
 import Spec.Marlowe.Semantics.Arbitrary (
   Context,
   SemiArbitrary (semiArbitrary),
@@ -320,11 +320,7 @@ makeInvalidInterval mc@MarloweContext{mcInput = mcInput@TransactionInput{txInter
 -- | Fetch the environment from an transaction context.
 environment :: Getter MarloweContext Environment
 environment =
-  to $ \MarloweContext{..} ->
-    Environment
-      ( maximum [minTime mcState, fst $ txInterval mcInput]
-      , snd $ txInterval mcInput
-      )
+  to $ \MarloweContext{..} -> Environment $ first (max (minTime mcState)) $ txInterval mcInput
 
 -- | Fetch the validity interval from a transaction context.
 validTimes :: Getter MarloweContext TimeInterval
@@ -340,7 +336,7 @@ latestTime = to $ snd . txInterval . mcInput
 
 -- | Fetch the minimum time of the state in a transaction context.
 minimumTime :: Getter MarloweContext POSIXTime
-minimumTime = to $ \MarloweContext{..} -> maximum [minTime mcState, fst $ txInterval mcInput]
+minimumTime = to $ \MarloweContext{..} -> max (minTime mcState) (fst $ txInterval mcInput)
 
 -- | Fetch the inputs in a transaction context.
 inputs :: Getter MarloweContext [Input]

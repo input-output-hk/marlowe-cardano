@@ -3,6 +3,7 @@
 let
   inherit (pkgs) z3 sqitchPg postgresql runCommand writeShellScriptBin writeText glibcLocales;
   network = inputs'.self.networks.preview;
+  inherit (inputs') marlowe-plutus;
 
   mkSqitchRunner = name: path: writeShellScriptBin name ''
     export PATH="$PATH:${l.makeBinPath [ sqitchPg postgresql ]}"
@@ -21,7 +22,7 @@ let
     cd /src
     # Hard-coding linux because this won't work on Mac anyway.
     # TODO find a setup that works on MacOS
-    BIN=./dist-newstyle/build/x86_64-linux/ghc-8.10.7/$PKG/x/$PROG/build/$PROG/$PROG
+    BIN=./dist-newstyle/build/x86_64-linux/ghc-9.2.0/$PKG/x/$PROG/build/$PROG/$PROG
     export PATH="$PATH:${l.makeBinPath [ sqitchPg postgresql ]}"
     export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
     cd marlowe-chain-sync
@@ -37,7 +38,7 @@ let
     cd /src
     # Hard-coding linux because this won't work on Mac anyway.
     # TODO find a setup that works on MacOS
-    BIN=./dist-newstyle/build/x86_64-linux/ghc-8.10.7/$PKG/x/$PROG/build/$PROG/$PROG
+    BIN=./dist-newstyle/build/x86_64-linux/ghc-9.2.0/$PKG/x/$PROG/build/$PROG/$PROG
     export PATH="$PATH:${l.makeBinPath [ sqitchPg postgresql ]}"
     export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
     cd marlowe-runtime/marlowe-indexer
@@ -48,13 +49,13 @@ let
 
   run-runtime = writeShellScriptBin "run-marlowe-runtime" ''
     set -e
-    export PATH="$PATH:${l.makeBinPath [ z3 ]}"
+    export PATH="$PATH:${l.makeBinPath [ z3 marlowe-plutus.packages.marlowe-minting-validator ]}"
     PROG=${l.escapeShellArg "marlowe-runtime"}
     PKG=${l.escapeShellArg "marlowe-runtime"}-${l.escapeShellArg marloweRuntimeVersion}
     cd /src
     # Hard-coding linux because this won't work on Mac anyway.
     # TODO find a setup that works on MacOS
-    BIN=./dist-newstyle/build/x86_64-linux/ghc-8.10.7/$PKG/x/$PROG/build/$PROG/$PROG
+    BIN=./dist-newstyle/build/x86_64-linux/ghc-9.2.0/$PKG/x/$PROG/build/$PROG/$PROG
     export PATH="$PATH:${l.makeBinPath [ sqitchPg postgresql ]}"
     export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
     cd marlowe-chain-sync
@@ -74,7 +75,7 @@ let
     cd /src
     # Hard-coding linux because this won't work on Mac anyway.
     # TODO find a setup that works on MacOS
-    BIN=./dist-newstyle/build/x86_64-linux/ghc-8.10.7/$PKG/x/$PROG/build/$PROG/$PROG
+    BIN=./dist-newstyle/build/x86_64-linux/ghc-9.2.0/$PKG/x/$PROG/build/$PROG/$PROG
     exec -a $PROG $BIN "$@"
   '';
 
@@ -96,7 +97,7 @@ let
   '';
 
   node-service = {
-    image = "inputoutput/cardano-node:1.35.4";
+    image = "inputoutput/cardano-node:8.1.2";
 
     environment = [
       "NETWORK=${network.name}"
@@ -301,6 +302,8 @@ let
       network.nodeConfig.ByronGenesisHash
       "--shelley-genesis-config-file"
       network.nodeConfig.ShelleyGenesisFile
+      "--minting-policy-cmd"
+      "marlowe-minting-validator"
     ];
     environment = [
       "TZ=UTC"

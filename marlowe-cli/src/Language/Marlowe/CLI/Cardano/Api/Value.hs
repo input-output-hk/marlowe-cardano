@@ -5,8 +5,7 @@ module Language.Marlowe.CLI.Cardano.Api.Value where
 import Cardano.Api qualified as C
 import Language.Marlowe.CLI.Orphans ()
 import Plutus.V1.Ledger.Ada qualified as PA
-import Plutus.V1.Ledger.Api qualified as P
-import Plutus.V1.Ledger.Value qualified as P
+import PlutusLedgerApi.V1 qualified as P
 import PlutusTx.Prelude qualified as PlutusTx
 
 txOutValue :: C.TxOut ctx era -> C.TxOutValue era
@@ -31,10 +30,7 @@ assetToValue C.AdaAssetId (C.Quantity quantity) =
   P.singleton P.adaSymbol P.adaToken quantity
 
 toCurrencySymbol :: C.PolicyId -> P.CurrencySymbol
-toCurrencySymbol = P.mpsSymbol . toMintingPolicyHash
-
-toMintingPolicyHash :: C.PolicyId -> P.MintingPolicyHash
-toMintingPolicyHash = P.MintingPolicyHash . P.toBuiltin . C.serialiseToRawBytes
+toCurrencySymbol = P.CurrencySymbol . P.toBuiltin . C.serialiseToRawBytes
 
 toTokenName :: C.AssetName -> P.TokenName
 toTokenName (C.AssetName bs) = P.TokenName $ PlutusTx.toBuiltin bs

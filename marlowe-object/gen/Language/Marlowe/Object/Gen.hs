@@ -9,11 +9,11 @@ import Control.Monad (replicateM)
 import qualified Data.ByteString as BS
 import Data.Foldable (Foldable (fold))
 import Data.Function ((&))
-import Gen.Cardano.Api.Typed (genAddressShelley)
 import Language.Marlowe.Object.Bundler (BundlerT (..))
 import Language.Marlowe.Object.Link
 import Language.Marlowe.Object.Types
 import Spec.Marlowe.Semantics.Arbitrary ()
+import Test.Gen.Cardano.Api.Typed (genAddressShelley)
 import Test.QuickCheck hiding (label)
 import Test.QuickCheck.Hedgehog (hedgehog)
 import Test.QuickCheck.Instances ()

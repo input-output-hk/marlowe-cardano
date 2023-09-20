@@ -60,8 +60,8 @@ import Marlowe.Contracts.ChunkedValueTransfer (chunkedValueTransfer)
 import Marlowe.Contracts.ChunkedValueTransfer qualified as ChunkedValueTransfer
 import Marlowe.Contracts.Raffle (raffle)
 import Marlowe.Contracts.Raffle qualified as Raffle
-import Plutus.V1.Ledger.Api (TokenName)
-import Plutus.V2.Ledger.Api qualified as Ledger
+import PlutusLedgerApi.V1 (TokenName)
+import PlutusLedgerApi.V2 qualified as Ledger
 
 -- | We encode `PartyRef` as `Party` so we can use role based contracts
 -- | without any change in the JSON structure.

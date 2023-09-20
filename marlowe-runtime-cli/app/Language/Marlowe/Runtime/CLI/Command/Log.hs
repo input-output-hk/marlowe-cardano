@@ -9,7 +9,7 @@ import Control.Monad (guard, when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT (..))
 import Data.ByteString.Base16
-import Data.Foldable (asum, for_, traverse_)
+import Data.Foldable (for_, traverse_)
 import qualified Data.Text as T
 import Language.Marlowe (pretty)
 import qualified Language.Marlowe.Core.V1.Semantics as V1

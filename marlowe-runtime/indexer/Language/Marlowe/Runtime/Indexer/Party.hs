@@ -36,7 +36,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party (..))
 import Language.Marlowe.Core.V1.Semantics.Types.Address (serialiseAddress)
 import Language.Marlowe.Runtime.ChainSync.Api (SlotNo (..), TxId (..), TxOutRef (..), fromDatum)
 import Language.Marlowe.Runtime.Core.Api (ContractId (..))
-import qualified Plutus.V2.Ledger.Api as PV2
+import qualified PlutusLedgerApi.V2 as PV2
 import UnliftIO (throwIO)
 
 indexParties :: (MonadIO m, WithLog env Message m) => Connection -> m ()

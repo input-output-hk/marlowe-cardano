@@ -23,6 +23,7 @@ import Control.Monad.Trans.Resource.Internal (MonadResource, ResourceT (..))
 import Control.Monad.With
 import Data.Functor (void)
 import Data.GeneralAllocate
+import Data.Kind (Type)
 import Observe.Event (Event, EventBackend, InjectSelector, NewEventArgs (..))
 import Observe.Event.Backend (
   Event (..),
@@ -40,7 +41,7 @@ class (MonadWithExceptable m) => MonadEvent r s m | m -> r s where
   askBackend :: m (EventBackend m r s)
   localBackend :: (forall t. EventBackend m r t -> EventBackend m r t) -> m a -> m a
 
-newtype NoopEventT r (s :: * -> *) m a = NoopEventT {runNoopEventT :: m a}
+newtype NoopEventT r (s :: Type -> Type) m a = NoopEventT {runNoopEventT :: m a}
   deriving newtype
     ( Functor
     , Applicative

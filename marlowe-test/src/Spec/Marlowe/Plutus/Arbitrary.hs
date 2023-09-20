@@ -16,7 +16,7 @@ module Spec.Marlowe.Plutus.Arbitrary (
 
 import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams (..))
 import Language.Marlowe.Scripts.Types (MarloweTxInput (..))
-import Plutus.V2.Ledger.Api (
+import PlutusLedgerApi.V2 (
   BuiltinData (..),
   Data (..),
   Datum (..),

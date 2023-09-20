@@ -27,8 +27,8 @@ import Language.Marlowe.Runtime.ChainSync.Api (DatumHash (..))
 import Language.Marlowe.Runtime.Contract.Api (ContractWithAdjacency (..))
 import Language.Marlowe.Runtime.Contract.Store (ContractStagingArea (..), ContractStore (..))
 import Network.Protocol.Connection (ServerSource (..), resourceTServerSource)
-import Plutus.V1.Ledger.Api (fromBuiltin)
-import qualified Plutus.V2.Ledger.Api as PV2
+import PlutusLedgerApi.V1 (fromBuiltin)
+import qualified PlutusLedgerApi.V2 as PV2
 import UnliftIO (MonadUnliftIO, pooledMapConcurrently)
 import UnliftIO.Resource (allocateU)
 

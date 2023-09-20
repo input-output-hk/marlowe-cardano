@@ -1,4 +1,4 @@
-cabal-version: 3.0
+cabal-version: 3.4
 name:          marlowe-integration
 version:       0.1.0.0
 synopsis:      Run integration tests in the context of a marlowe runtime
@@ -57,7 +57,7 @@ library
     , async-components
     , base >=4.9 && <5
     , bytestring
-    , cardano-api
+    , cardano-api ^>=8.2
     , cardano-crypto-wrapper
     , cardano-integration
     , cardano-ledger-byron
@@ -74,10 +74,9 @@ library
     , marlowe-cli
     , marlowe-protocols
     , marlowe-runtime-web:{marlowe-runtime-web, server}
-    , marlowe-runtime:{marlowe-runtime, contract, indexer, proxy-api, runtime, sync}
+    , marlowe-runtime:{marlowe-runtime, contract, indexer, proxy-api, runtime, sync, tx}
     , network
     , nonempty-containers
-    , ouroboros-network
     , postgresql-libpq
     , process
     , random
@@ -124,7 +123,7 @@ executable marlowe-integration-example
   build-depends:
     , aeson
     , base >=4.9 && <5
-    , cardano-api
+    , cardano-api ^>=8.2
     , marlowe-cardano
     , marlowe-chain-sync
     , marlowe-integration

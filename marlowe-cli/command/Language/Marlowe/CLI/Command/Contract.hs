@@ -38,10 +38,11 @@ import Language.Marlowe.CLI.Export (
  )
 import Language.Marlowe.CLI.Types (CliEnv, CliError)
 import Language.Marlowe.Client (defaultMarloweParams, marloweParams)
-import Plutus.V1.Ledger.Api (CurrencySymbol, ProtocolVersion)
+import PlutusLedgerApi.V1 (CurrencySymbol, ProtocolVersion)
 
 import Cardano.Api qualified as C
 import Control.Monad.Reader.Class (MonadReader)
+import Data.Map qualified as Map
 import Language.Marlowe.CLI.IO (getDefaultCostModel)
 import Options.Applicative qualified as O
 
@@ -133,7 +134,7 @@ runContractCommand command =
         exportMarlowe @_ @C.PlutusScriptV2
           marloweParams'
           protocolVersion
-          costModel
+          (Map.elems costModel)
           network'
           stake'
           contractFile
@@ -143,7 +144,14 @@ runContractCommand command =
           printStats
       ExportAddress{} -> exportMarloweAddress @_ @C.PlutusScriptV2 network' stake'
       ExportValidator{..} ->
-        exportMarloweValidator @_ @C.PlutusScriptV2 protocolVersion costModel network' stake' outputFile printHash printStats
+        exportMarloweValidator @_ @C.PlutusScriptV2
+          protocolVersion
+          (Map.elems costModel)
+          network'
+          stake'
+          outputFile
+          printHash
+          printStats
       ExportDatum{..} ->
         exportDatum
           marloweParams'

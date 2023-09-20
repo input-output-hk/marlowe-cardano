@@ -27,13 +27,13 @@ import Data.Bits ((.&.))
 import Data.ByteString (ByteString)
 import Data.List (find)
 import Data.Text (Text)
-import Plutus.V2.Ledger.Api (
+import PlutusLedgerApi.V2 (
   Address (Address),
   BuiltinByteString,
   Credential (PubKeyCredential, ScriptCredential),
   PubKeyHash (PubKeyHash),
+  ScriptHash (..),
   StakingCredential (StakingHash, StakingPtr),
-  ValidatorHash (ValidatorHash),
   fromBuiltin,
   toBuiltin,
  )
@@ -72,13 +72,13 @@ serialiseAddress network address =
    in fromBuiltin $
         case address of
           Address (PubKeyCredential (PubKeyHash pkh)) (Just (StakingHash (PubKeyCredential (PubKeyHash spkh)))) -> header 0x00 <> pkh <> spkh
-          Address (ScriptCredential (ValidatorHash vah)) (Just (StakingHash (PubKeyCredential (PubKeyHash spkh)))) -> header 0x10 <> vah <> spkh
-          Address (PubKeyCredential (PubKeyHash pkh)) (Just (StakingHash (ScriptCredential (ValidatorHash svah)))) -> header 0x20 <> pkh <> svah
-          Address (ScriptCredential (ValidatorHash vah)) (Just (StakingHash (ScriptCredential (ValidatorHash svah)))) -> header 0x30 <> vah <> svah
+          Address (ScriptCredential (ScriptHash vah)) (Just (StakingHash (PubKeyCredential (PubKeyHash spkh)))) -> header 0x10 <> vah <> spkh
+          Address (PubKeyCredential (PubKeyHash pkh)) (Just (StakingHash (ScriptCredential (ScriptHash svah)))) -> header 0x20 <> pkh <> svah
+          Address (ScriptCredential (ScriptHash vah)) (Just (StakingHash (ScriptCredential (ScriptHash svah)))) -> header 0x30 <> vah <> svah
           Address (PubKeyCredential (PubKeyHash pkh)) (Just (StakingPtr slot transaction certificate)) -> header 0x40 <> pkh <> encodeInteger slot <> encodeInteger transaction <> encodeInteger certificate
-          Address (ScriptCredential (ValidatorHash vah)) (Just (StakingPtr slot transaction certificate)) -> header 0x50 <> vah <> encodeInteger slot <> encodeInteger transaction <> encodeInteger certificate
+          Address (ScriptCredential (ScriptHash vah)) (Just (StakingPtr slot transaction certificate)) -> header 0x50 <> vah <> encodeInteger slot <> encodeInteger transaction <> encodeInteger certificate
           Address (PubKeyCredential (PubKeyHash pkh)) Nothing -> header 0x60 <> pkh
-          Address (ScriptCredential (ValidatorHash vah)) Nothing -> header 0x70 <> vah
+          Address (ScriptCredential (ScriptHash vah)) Nothing -> header 0x70 <> vah
 
 -- | Deserialize a Plutus network address from CIP-19 bytes.
 deserialiseAddress :: ByteString -> Maybe (Network, Address)
@@ -92,7 +92,7 @@ deserialiseAddress bs =
         guard1 f = guard (n == k) >> pure (f payload', Nothing)
         guard2 f g = guard (n == 2 * k) >> pure (f $ slice 0, Just . StakingHash . g $ slice 1)
         pkc = PubKeyCredential . PubKeyHash
-        scc = ScriptCredential . ValidatorHash
+        scc = ScriptCredential . ScriptHash
     network <- find ((fromEnum (header .&. 0x0F) ==) . fromEnum) [mainnet, testnet]
     (network,)
       . uncurry Address

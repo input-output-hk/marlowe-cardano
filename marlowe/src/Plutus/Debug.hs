@@ -14,7 +14,7 @@ module Plutus.Debug (
 ) where
 
 import Codec.Serialise (deserialise)
-import Plutus.V2.Ledger.Api (ToData (..), unsafeFromBuiltinData)
+import PlutusLedgerApi.V2 (ToData (..), unsafeFromBuiltinData)
 import PlutusTx (Data, FromData (..), fromData)
 import PlutusTx.Prelude (BuiltinString, decodeUtf8, encodeUtf8, error, fromBuiltin, trace)
 import Prelude hiding (error)

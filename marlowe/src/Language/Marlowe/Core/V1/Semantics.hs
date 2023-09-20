@@ -152,8 +152,8 @@ import Language.Marlowe.Core.V1.Semantics.Types (
  )
 import Language.Marlowe.ParserUtil (getInteger, withInteger)
 import Language.Marlowe.Pretty (Pretty (..))
-import Plutus.V2.Ledger.Api (CurrencySymbol (CurrencySymbol), POSIXTime (..), ValidatorHash (ValidatorHash))
-import qualified Plutus.V2.Ledger.Api as Val
+import PlutusLedgerApi.V2 (CurrencySymbol (CurrencySymbol), POSIXTime (..), ScriptHash (ScriptHash))
+import qualified PlutusLedgerApi.V2 as Val
 import PlutusTx (makeIsDataIndexed)
 import qualified PlutusTx.AssocMap as Map
 import qualified PlutusTx.Builtins as Builtins
@@ -163,12 +163,12 @@ import PlutusTx.Prelude (
   AdditiveSemigroup ((+)),
   Bool (..),
   Eq (..),
-  Foldable (foldMap),
   Integer,
   Maybe (..),
   MultiplicativeSemigroup ((*)),
   Ord (max, min, (<), (<=), (>), (>=)),
   all,
+  foldMap,
   foldr,
   fromBuiltin,
   fst,
@@ -386,14 +386,14 @@ instance FromJSON TransactionOutput where
          in asTransactionOutput <|> asError
 
 -- | Parse a validator hash from JSON.
-validatorHashFromJSON :: JSON.Value -> Parser ValidatorHash
+validatorHashFromJSON :: JSON.Value -> Parser ScriptHash
 validatorHashFromJSON v = do
   EncodeBase16 bs <- parseJSON v
-  return $ ValidatorHash $ toBuiltin bs
+  return $ ScriptHash $ toBuiltin bs
 
 -- | Serialise a validator hash as JSON.
-validatorHashToJSON :: ValidatorHash -> JSON.Value
-validatorHashToJSON (ValidatorHash h) = toJSON . EncodeBase16 . fromBuiltin $ h
+validatorHashToJSON :: ScriptHash -> JSON.Value
+validatorHashToJSON (ScriptHash h) = toJSON . EncodeBase16 . fromBuiltin $ h
 
 -- | Parse a currency symbol from JSON.
 currencySymbolFromJSON :: JSON.Value -> Parser CurrencySymbol
@@ -1017,11 +1017,11 @@ makeLift ''ReduceStepResult
 makeLift ''ReduceResult
 makeLift ''ApplyWarning
 makeLift ''ApplyResult
-makeLift ''ApplyAllResult
 makeLift ''TransactionWarning
+makeLift ''ApplyAllResult
 makeLift ''TransactionError
 makeLift ''TransactionOutput
+makeLift ''MarloweParams
 makeLift ''MarloweData
 makeIsDataIndexed ''MarloweParams [('MarloweParams, 0)]
 makeIsDataIndexed ''MarloweData [('MarloweData, 0)]
-makeLift ''MarloweParams

@@ -11,7 +11,7 @@ module Spec.Marlowe.Plutus.Prelude (
 ) where
 
 import Data.List (find)
-import Plutus.V2.Ledger.Api (DatumHash (..), TxId (..), TxOutRef (..), ValidatorHash (..))
+import PlutusLedgerApi.V2 (DatumHash (..), ScriptHash (..), TxId (..), TxOutRef (..))
 import PlutusTx.Builtins.Class (stringToBuiltinByteString)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck (
@@ -44,7 +44,7 @@ tests =
     , testProperty "`fromEnum` on `Bool`" checkBoolEnum
     , testProperty "`instance Eq (Maybe a)` matches standard prelude" checkEqMaybe
     , testProperty "`instance Eq DatumHash`" checkEqDatumHash
-    , testProperty "`instance Eq ValidatorHash`" checkEqValidatorHash
+    , testProperty "`instance Eq ScriptHash`" checkEqScriptHash
     , testProperty "`instance Eq TxOutRef`" checkEqTxOutRef
     ]
 
@@ -162,14 +162,14 @@ checkEqDatumHash =
           y' = DatumHash $ stringToBuiltinByteString y
        in (x' P.== y') == (x == y)
 
--- | Check `instance Eq ValidatorHash`.
-checkEqValidatorHash :: Property
-checkEqValidatorHash =
+-- | Check `instance Eq ScriptHash`.
+checkEqScriptHash :: Property
+checkEqScriptHash =
   property
     . forAll arbitrary
     $ \(x, y) ->
-      let x' = ValidatorHash $ stringToBuiltinByteString x
-          y' = ValidatorHash $ stringToBuiltinByteString y
+      let x' = ScriptHash $ stringToBuiltinByteString x
+          y' = ScriptHash $ stringToBuiltinByteString y
        in (x' P.== y') == (x == y)
 
 -- | Check `instance Eq TxOutRef`.

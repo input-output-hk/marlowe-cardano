@@ -116,6 +116,7 @@ withCardanoEra = \case
   MaryEra -> id
   AlonzoEra -> id
   BabbageEra -> id
+  ConwayEra -> id
 
 friendlyExtraKeyWits :: TxExtraKeyWitnesses era -> Aeson.Value
 friendlyExtraKeyWits = \case
@@ -172,12 +173,6 @@ friendlyStakeAddress (StakeAddress net cred) =
   , friendlyStakeCredential $ fromShelleyStakeCredential cred
   ]
 
---  data ByronEra
---  data ShelleyEra
---  data AllegraEra
---  data MaryEra
---  data AlonzoEra
-
 friendlyTxOut :: forall era. (IsCardanoEra era) => TxOut CtxTx era -> Aeson.Value
 friendlyTxOut (TxOut addr amount mdatum script) =
   object $
@@ -213,8 +208,6 @@ friendlyTxOut (TxOut addr amount mdatum script) =
     renderDatum (TxOutDatumInline _ sData) =
       A.object
         [("inline", scriptDataToJson ScriptDataJsonDetailedSchema sData)]
-
--- datum ShelleyBasedEraBabbage = panic "TODO: Babbage"
 
 friendlyStakeReference :: StakeAddressReference -> Aeson.Value
 friendlyStakeReference = \case
@@ -328,7 +321,7 @@ friendlyCertificate =
       StakeAddressDeregistrationCertificate credential ->
         "stake address deregistration"
           .= object [friendlyStakeCredential credential]
-      StakeAddressDelegationCertificate credential poolId ->
+      StakeAddressPoolDelegationCertificate credential poolId ->
         "stake address delegation"
           .= object [friendlyStakeCredential credential, "pool" .= poolId]
       -- Stake pool certificates

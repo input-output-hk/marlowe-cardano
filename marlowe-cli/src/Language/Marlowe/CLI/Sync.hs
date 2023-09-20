@@ -15,6 +15,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE ViewPatterns #-}
 
 -- | Chain-sync client for Cardano node.
 module Language.Marlowe.CLI.Sync (
@@ -86,6 +87,7 @@ import Cardano.Api (
   ValueNestedBundle (..),
   ValueNestedRep (..),
   connectToLocalNode,
+  getScriptData,
   getTxBody,
   getTxId,
   hashScript,
@@ -93,6 +95,7 @@ import Cardano.Api (
   txOutValueToValue,
   valueToNestedRep,
  )
+import Cardano.Api.Byron (Address (..))
 import Cardano.Api.ChainSync.Client (ChainSyncClient (..), ClientStIdle (..), ClientStIntersect (..), ClientStNext (..))
 import Cardano.Api.Shelley (
   Address (..),
@@ -105,20 +108,30 @@ import Cardano.Api.Shelley (
   fromShelleyStakeReference,
   toPlutusData,
  )
-import Cardano.Ledger.Alonzo.TxWitness (RdmrPtr (..), Redeemers (..), TxDats (..))
+import Cardano.Chain.Common (addrToBase58)
+import Cardano.Ledger.Alonzo.TxWits (RdmrPtr (..), Redeemers (..), TxDats (..))
+import Cardano.Ledger.Era (Era)
 import Codec.CBOR.Encoding (encodeBreak, encodeListLenIndef)
 import Codec.CBOR.JSON (encodeValue)
 import Codec.CBOR.Write (toStrictByteString)
 import Control.Monad (guard, when)
 import Control.Monad.Except (MonadError, MonadIO, liftIO)
 import Control.Monad.Extra (whenJust)
+import Control.Monad.Reader (MonadReader)
 import Data.Aeson (FromJSON, ToJSON (..), decodeFileStrict, encode, encodeFile)
+import Data.Aeson qualified as A (Value)
 import Data.Bifunctor (first)
+import Data.ByteArray qualified as BA (length)
+import Data.ByteString qualified as BS (hPutStr)
+import Data.ByteString.Lazy.Char8 qualified as LBS8 (hPutStrLn)
 import Data.Default (Default (..))
 import Data.IORef (IORef, newIORef, readIORef)
 import Data.List (nub)
 import Data.List.Extra (mconcatMap)
+import Data.Map.Strict qualified as M (elems, filter, null, toList)
 import Data.Maybe (catMaybes, fromMaybe, isJust)
+import Data.Set qualified as S (singleton, toList)
+import Language.Marlowe.CLI.Export (readMarloweValidator, readRolePayoutValidator)
 import Language.Marlowe.CLI.Sync.Types (
   MarloweAddress (..),
   MarloweEvent (..),
@@ -130,21 +143,23 @@ import Language.Marlowe.CLI.Transaction (querySlotConfig)
 import Language.Marlowe.CLI.Types (CliEnv, CliError (..))
 import Language.Marlowe.Client (marloweParams)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract (..), Input (..), TimeInterval)
-import Plutus.V1.Ledger.Api (
+import Language.Marlowe.Scripts.Types (MarloweInput, MarloweTxInput (..))
+import Language.Marlowe.Util (dataHash)
+import Plutus.V1.Ledger.Slot (Slot (..))
+import Plutus.V1.Ledger.SlotConfig (SlotConfig, slotRangeToPOSIXTimeRange)
+import PlutusLedgerApi.V1 (
   BuiltinByteString,
   CurrencySymbol (..),
   Extended (..),
   FromData,
   Interval (..),
   LowerBound (..),
-  MintingPolicyHash (..),
   TokenName (..),
   UpperBound (..),
   dataToBuiltinData,
   fromData,
  )
-import Plutus.V1.Ledger.Slot (Slot (..))
-import Plutus.V1.Ledger.SlotConfig (SlotConfig, slotRangeToPOSIXTimeRange)
+import PlutusLedgerApi.V1 qualified as PV1
 import System.Directory (doesFileExist, renameFile)
 import System.IO (
   BufferMode (LineBuffering),
@@ -156,21 +171,6 @@ import System.IO (
   stderr,
   stdout,
  )
-
-import Cardano.Api.Byron (Address (..))
-import Cardano.Chain.Common (addrToBase58)
-import Cardano.Ledger.Era (Era)
-import Control.Monad.Reader (MonadReader)
-import Data.Aeson qualified as A (Value)
-import Data.ByteArray qualified as BA (length)
-import Data.ByteString qualified as BS (hPutStr)
-import Data.ByteString.Lazy.Char8 qualified as LBS8 (hPutStrLn)
-import Data.Map.Strict qualified as M (elems, filter, null, toList)
-import Data.Set qualified as S (singleton, toList)
-import Language.Marlowe.CLI.Export (readMarloweValidator, readRolePayoutValidator)
-import Language.Marlowe.Scripts.Types (MarloweInput, MarloweTxInput (..))
-import Language.Marlowe.Util (dataHash)
-import Plutus.V1.Ledger.Api qualified as PV1
 
 -- | Record the point on the chain.
 type Recorder =
@@ -382,6 +382,7 @@ processChain
   -- ^ The chain tip.
   -> IO ()
   -- ^ Action to process transactions.
+processChain blockHandler txHandler (BlockInMode block ConwayEraInCardanoMode) = processChain' blockHandler txHandler block
 processChain blockHandler txHandler (BlockInMode block BabbageEraInCardanoMode) = processChain' blockHandler txHandler block
 processChain blockHandler txHandler (BlockInMode block AlonzoEraInCardanoMode) = processChain' blockHandler txHandler block
 processChain blockHandler txHandler (BlockInMode block MaryEraInCardanoMode) = processChain' blockHandler txHandler block
@@ -690,7 +691,7 @@ classifyOutput
   -> MarloweOut
   -- ^ The classified transaction output.
 classifyOutput moTxIn (TxOut address value datum _) = case datum of
-  TxOutDatumInTx _ datum' -> case (fromData $ toPlutusData datum', fromData $ toPlutusData datum') of
+  TxOutDatumInTx _ (getScriptData -> datum') -> case (fromData $ toPlutusData datum', fromData $ toPlutusData datum') of
     (Just moOutput, _) -> ApplicationOut{..}
     (_, Just name) ->
       if BA.length name <= 32
@@ -719,7 +720,7 @@ cardanoAddressCredential (AddressInEra _ (ShelleyAddress _ paymentCredential _))
           PV1.toBuiltin $
             serialiseToRawBytes paymentKeyHash
     PaymentCredentialByScript scriptHash ->
-      PV1.ScriptCredential $ scriptToValidatorHash scriptHash
+      PV1.ScriptCredential $ toPlutusScriptHash scriptHash
 
 cardanoStakingCredential :: AddressInEra era -> Maybe PV1.StakingCredential
 cardanoStakingCredential (AddressInEra ByronAddressInAnyEra _) = Nothing
@@ -736,10 +737,10 @@ cardanoStakingCredential (AddressInEra _ (ShelleyAddress _ _ stakeAddressReferen
         PV1.PubKeyHash $
           PV1.toBuiltin $
             serialiseToRawBytes stakeKeyHash
-    fromCardanoStakeCredential (StakeCredentialByScript scriptHash) = PV1.ScriptCredential (scriptToValidatorHash scriptHash)
+    fromCardanoStakeCredential (StakeCredentialByScript scriptHash) = PV1.ScriptCredential (toPlutusScriptHash scriptHash)
 
-scriptToValidatorHash :: ScriptHash -> PV1.ValidatorHash
-scriptToValidatorHash = PV1.ValidatorHash . PV1.toBuiltin . serialiseToRawBytes
+toPlutusScriptHash :: ScriptHash -> PV1.ScriptHash
+toPlutusScriptHash = PV1.ScriptHash . PV1.toBuiltin . serialiseToRawBytes
 
 -- | Extract metadata from a transaction.
 extractMetadata
@@ -768,7 +769,7 @@ makeParameters
   -- ^ The Marlowe event.
 makeParameters marloweValidatorHash rolePayoutValidatorHash meBlock meTxId meMetadata policy = Parameters{..}
   where
-    MintingPolicyHash currencyHash = PV1.MintingPolicyHash $ PV1.toBuiltin (serialiseToRawBytes policy)
+    currencyHash = PV1.toBuiltin (serialiseToRawBytes policy)
 
     meParams = marloweParams $ CurrencySymbol currencyHash
 
@@ -809,7 +810,7 @@ inDatums = \case
     inDatums' (TxBodyScriptData _ (TxDats datumMap) _) =
       catMaybes
         [ (dataHash $ dataToBuiltinData dat,) <$> fromData dat
-        | dat <- toPlutusData . fromAlonzoData <$> M.elems datumMap
+        | dat <- toPlutusData . getScriptData . fromAlonzoData <$> M.elems datumMap
         ]
     inDatums' _ = mempty
 
@@ -830,7 +831,7 @@ inRedeemers = \case
     inRedeemers' = \case
       TxBodyScriptData _ _ (Redeemers redeemerMap) ->
         catMaybes
-          [ (fromEnum i,) <$> fromData (toPlutusData $ fromAlonzoData dat)
+          [ (fromEnum i,) <$> fromData (toPlutusData . getScriptData $ fromAlonzoData dat)
           | (RdmrPtr _ i, (dat, _)) <- M.toList redeemerMap
           ]
       _ -> []

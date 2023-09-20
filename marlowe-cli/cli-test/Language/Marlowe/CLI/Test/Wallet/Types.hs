@@ -28,7 +28,6 @@ import Cardano.Api (
  )
 import Cardano.Api qualified as C
 import Contrib.Data.Foldable (foldMapFlipped)
-import Contrib.Data.List qualified as List
 import Control.Lens (Lens', makeLenses)
 import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO)
@@ -75,8 +74,8 @@ import Language.Marlowe.CLI.Test.Operation.Aeson (
  )
 import Language.Marlowe.CLI.Test.Operation.Aeson qualified as Operation
 import Language.Marlowe.CLI.Types (PrintStats, SomePaymentSigningKey, TxBuildupContext)
-import Plutus.V1.Ledger.Api (CurrencySymbol, TokenName)
-import Plutus.V1.Ledger.Value qualified as P
+import PlutusLedgerApi.V1 (CurrencySymbol, TokenName)
+import PlutusLedgerApi.V1 qualified as P
 import Text.Read (readMaybe)
 
 import Control.Lens.Getter (Getter)
@@ -130,14 +129,14 @@ data Wallet era = Wallet
 makeLenses ''Wallet
 
 emptyWallet :: AddressInEra era -> SomePaymentSigningKey -> Wallet era
-emptyWallet address signignKey = Wallet address mempty signignKey mempty mempty False -- mempty
+emptyWallet address signingKey = Wallet address mempty signingKey mempty mempty False -- mempty
 
 newtype IsExternalWallet = IsExternalWallet {unExternalWallet :: Bool}
 
 fromUTxO :: AddressInEra era -> SomePaymentSigningKey -> UTxO era -> IsExternalWallet -> Wallet era
-fromUTxO address signignKey (UTxO utxo) (IsExternalWallet isExternalWallet) = do
+fromUTxO address signingKey (UTxO utxo) (IsExternalWallet isExternalWallet) = do
   let total = foldMap (toPlutusValue . txOutValueValue) (Map.elems utxo)
-  Wallet address total signignKey mempty mempty isExternalWallet
+  Wallet address total signingKey mempty mempty isExternalWallet
 
 -- | In many contexts this defaults to the `RoleName` but at some
 -- | point we want to also support multiple marlowe contracts scenarios

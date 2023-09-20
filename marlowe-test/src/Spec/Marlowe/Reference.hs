@@ -40,7 +40,7 @@ import Language.Marlowe.Core.V1.Semantics (TransactionInput, TransactionOutput (
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party (Role), State (..), Token (..))
 import Language.Marlowe.FindInputs (getAllInputs)
 import Paths_marlowe_test (getDataDir)
-import Plutus.V2.Ledger.Api (POSIXTime)
+import PlutusLedgerApi.V2 (POSIXTime)
 import Spec.Marlowe.Semantics.Golden (GoldenTransaction)
 import System.Directory (listDirectory)
 import System.FilePath ((</>))
