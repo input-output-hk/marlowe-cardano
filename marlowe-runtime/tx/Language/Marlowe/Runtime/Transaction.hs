@@ -53,7 +53,7 @@ import OpenTelemetry.Trace.Core (SpanKind (Client, Internal), toAttribute)
 import qualified OpenTelemetry.Trace.Core as OTel
 import System.Exit (ExitCode (..))
 import System.IO (hGetContents)
-import UnliftIO (MonadUnliftIO, bracket, liftIO)
+import UnliftIO (MonadUnliftIO, bracket, hFlush, liftIO)
 import UnliftIO.Process (CreateProcess (..), StdStream (..), createProcess, terminateProcess, waitForProcess)
 import qualified UnliftIO.Process as P
 
@@ -252,6 +252,7 @@ mkCommandLineRoleTokenMintingPolicy cmd TxOutRef{..} roleTokens = bracket
               , "seedInputIx" .= txIx
               , "roleTokens" .= Map.mapKeys (encodeBase16 . unTokenName) roleTokens
               ]
+    hFlush stdIn
     exitCode <- waitForProcess handle
     liftIO case exitCode of
       ExitSuccess -> PlutusScript <$> BS.hGetContents stdOut
