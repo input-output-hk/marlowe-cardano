@@ -2230,21 +2230,6 @@ selectCoins queryCtx inputs outputs pay changeAddress CoinSelectionStrategy{..} 
         change =
           -- This is the change required to balance native tokens.
           deleteLovelace $ -- The lovelace are irrelevant because pure-lovelace change is handled during the final balancing.
-          -- The lovelace are irrelevant because pure-lovelace change is handled during the final balancing.
-          -- The lovelace are irrelevant because pure-lovelace change is handled during the final balancing.
-          -- The lovelace are irrelevant because pure-lovelace change is handled during the final balancing.
-          -- The lovelace are irrelevant because pure-lovelace change is handled during the final balancing.
-          -- The lovelace are irrelevant because pure-lovelace change is handled during the final balancing.
-          -- The lovelace are irrelevant because pure-lovelace change is handled during the final balancing.
-          -- The lovelace are irrelevant because pure-lovelace change is handled during the final balancing.
-          -- The lovelace are irrelevant because pure-lovelace change is handled during the final balancing.
-          -- The lovelace are irrelevant because pure-lovelace change is handled during the final balancing.
-          -- The lovelace are irrelevant because pure-lovelace change is handled during the final balancing.
-          -- The lovelace are irrelevant because pure-lovelace change is handled during the final balancing.
-          -- The lovelace are irrelevant because pure-lovelace change is handled during the final balancing.
-          -- The lovelace are irrelevant because pure-lovelace change is handled during the final balancing.
-          -- The lovelace are irrelevant because pure-lovelace change is handled during the final balancing.
-          -- The lovelace are irrelevant because pure-lovelace change is handled during the final balancing.
             (mconcat $ txOutToValue . snd <$> selection) -- The inputs selected by the algorithm for spending many include native tokens that weren't in the required `outputs`.
               <> negateValue incoming -- The tokens required by `outputs` (as represented in the `incoming` requirement) shouldn't be included as change.
               -- Compute the change that contains native tokens used for balancing, omitting ones explicitly specified in the outputs.

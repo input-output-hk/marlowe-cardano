@@ -19,8 +19,6 @@ index-state:
   , hackage.haskell.org      2023-05-26T00:00:00Z
   , cardano-haskell-packages 2023-05-26T00:00:00Z
 
--- with-compiler: ghc-8.10.7
-
 packages:
   async-components
   cardano-integration

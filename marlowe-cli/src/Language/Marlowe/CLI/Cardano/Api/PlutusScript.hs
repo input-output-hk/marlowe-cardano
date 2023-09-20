@@ -27,6 +27,7 @@ import Language.Marlowe.CLI.Orphans ()
 withPlutusScriptVersion :: PlutusScriptVersion lang -> ((IsPlutusScriptLanguage lang) => a) -> a
 withPlutusScriptVersion PlutusScriptV1 = id
 withPlutusScriptVersion PlutusScriptV2 = id
+-- FIXME update with next cardano-api
 withPlutusScriptVersion PlutusScriptV3 = const $ error "unsupported until cardano-api exposes PlutusScriptV3"
 
 class (IsScriptLanguage lang) => IsPlutusScriptLanguage lang where

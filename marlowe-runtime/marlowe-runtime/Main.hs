@@ -220,7 +220,7 @@ data Options = Options
   , lockingMicrosecondsBetweenRetries :: Word64
   , submitConfirmationBlocks :: BlockNo
   , httpPort :: PortNumber
-  , mintingPolicyCmd :: String
+  , mintingPolicyCmd :: FilePath
   }
 
 getOptions :: IO Options

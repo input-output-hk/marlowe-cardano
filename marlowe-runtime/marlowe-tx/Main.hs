@@ -133,7 +133,7 @@ data Options = Options
   , submitConfirmationBlocks :: BlockNo
   , analysisTimeout :: NominalDiffTime
   , httpPort :: PortNumber
-  , mintingPolicyCmd :: String
+  , mintingPolicyCmd :: FilePath
   }
 
 getOptions :: IO Options
