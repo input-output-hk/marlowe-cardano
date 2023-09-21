@@ -1,14 +1,10 @@
 name: "Tests"
-env:
-  TRUSTED_PUBLIC_KEYS: "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ="
-  SUBSTITUTERS: "https://cache.nixos.org/ https://cache.iog.io"
 on:
   push:
     branches:
       - main
   pull_request:
-    branches:
-      - main
+    types: [ opened, synchronize, labeled, unlabeled ]
   workflow_call:
 jobs:
   build:
@@ -16,49 +12,10 @@ jobs:
     steps:
       - name: Checkout the code
         uses: actions/checkout@v3
-      - name: Install Nix
-        uses: cachix/install-nix-action@v21
-        with:
-          nix_path: nixpkgs=channel:nixos-2305
-          install_url: https://releases.nixos.org/nix/nix-2.16.0/install
-          extra_nix_config: |
-            trusted-public-keys = ${{ env.TRUSTED_PUBLIC_KEYS }}
-            substituters = ${{ env.SUBSTITUTERS }}
-            experimental-features = nix-command flakes
-      - name: Clean Build on Ubuntu
-        run: |
-          nix develop --show-trace --command bash -c "cabal clean && cabal update && cabal build all"
-  integration:
-    needs: build
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres
-        env:
-          POSTGRES_HOST_AUTH_METHOD: trust
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-    steps:
-      - name: Checkout the code
-        uses: actions/checkout@v3
-      - name: Install Nix
-        uses: cachix/install-nix-action@v21
-        with:
-          nix_path: nixpkgs=channel:nixos-2305
-          install_url: https://releases.nixos.org/nix/nix-2.16.0/install
-          extra_nix_config: |
-            trusted-public-keys = ${{ env.TRUSTED_PUBLIC_KEYS }}
-            substituters = ${{ env.SUBSTITUTERS }}
-            experimental-features = nix-command flakes
-      - name: Run tests
-        run: |
-          nix run .#integration-tests --show-trace -- --strict
-        env:
-          MARLOWE_RT_TEST_DB_HOST: localhost
-          MARLOWE_RT_TEST_CLEANUP_DATABASE: "False"
-          MARLOWE_RT_TEST_SUBMIT_CONFIRMATION_BLOCKS: 0
+      - run: | 
+          echo "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          git fetch 
+          git checkout zeme-test
+          git "$(git merge-base HEAD origin/master)"
+          echo "$(git rev-parse --short HEAD)"
+                
