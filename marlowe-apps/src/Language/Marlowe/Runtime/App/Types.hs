@@ -25,7 +25,6 @@ module Language.Marlowe.Runtime.App.Types (
   MarloweResponse (..),
   PollingFrequency (..),
   RunClient,
-  Services (..),
   mkBody,
 ) where
 
@@ -35,7 +34,6 @@ import Control.Monad.Except (ExceptT)
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Control (MonadBaseControl)
-import Control.Monad.Trans.Reader (ReaderT (..))
 import Control.Monad.With (MonadWith (..))
 import Data.Default (Default (..))
 import Data.Functor ((<&>))
@@ -45,9 +43,7 @@ import Language.Marlowe (POSIXTime (..))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api (
   Address,
-  ChainSyncCommand,
   Lovelace (..),
-  RuntimeChainSeekClient,
   TokenName,
   TransactionMetadata,
   TxId,
@@ -82,7 +78,6 @@ import Language.Marlowe.Runtime.History.Api (
   CreateStep (..),
   RedeemStep (RedeemStep, datum, redeemingTx, utxo),
  )
-import Network.Protocol.Job.Client (JobClient)
 import Network.Socket (HostName, PortNumber)
 
 import Cardano.Api (AnyCardanoEra (..))
@@ -125,10 +120,7 @@ data TxInEraWithReferenceScripts where
 type App = ExceptT String IO
 
 data Config = Config
-  { chainSeekHost :: HostName
-  , chainSeekSyncPort :: PortNumber
-  , chainSeekCommandPort :: PortNumber
-  , runtimeHost :: HostName
+  { runtimeHost :: HostName
   , runtimePort :: PortNumber
   , timeoutSeconds :: Int
   , buildSeconds :: Int
@@ -141,10 +133,7 @@ data Config = Config
 instance Default Config where
   def =
     Config
-      { chainSeekHost = "127.0.0.1"
-      , chainSeekSyncPort = 3715
-      , chainSeekCommandPort = 3720
-      , runtimeHost = "127.0.0.1"
+      { runtimeHost = "127.0.0.1"
       , runtimePort = 3700
       , timeoutSeconds = 900
       , buildSeconds = 3
@@ -153,18 +142,13 @@ instance Default Config where
       , retryLimit = 5
       }
 
-data Services m = Services
-  { runChainSeekCommandClient :: RunClient m (JobClient ChainSyncCommand)
-  , runChainSeekSyncClient :: RunClient m RuntimeChainSeekClient
-  }
-
 -- | A monad type for Marlowe Runtime.Client programs.
-newtype Client a = Client {runClient :: MarloweT (ReaderT (Services IO) IO) a}
+newtype Client a = Client {runClient :: MarloweT IO a}
   deriving newtype
     (Alternative, Applicative, Functor, Monad, MonadBase IO, MonadBaseControl IO, MonadFail, MonadFix, MonadIO)
 
 instance MonadWith Client where
-  type WithException Client = WithException (MarloweT (ReaderT (Services IO) IO))
+  type WithException Client = WithException (MarloweT IO)
   stateThreadingGeneralWith
     :: forall a b releaseReturn
      . GeneralAllocate Client (WithException Client) releaseReturn b a
@@ -174,16 +158,8 @@ instance MonadWith Client where
     stateThreadingGeneralWith (GeneralAllocate allocA') $ runClient . go
     where
       allocA'
-        :: (forall x. MarloweT (ReaderT (Services IO) IO) x -> MarloweT (ReaderT (Services IO) IO) x)
-        -> MarloweT
-            (ReaderT (Services IO) IO)
-            ( GeneralAllocated
-                (MarloweT (ReaderT (Services IO) IO))
-                (WithException (MarloweT (ReaderT (Services IO) IO)))
-                releaseReturn
-                b
-                a
-            )
+        :: (forall x. MarloweT IO x -> MarloweT IO x)
+        -> MarloweT IO (GeneralAllocated (MarloweT IO) (WithException (MarloweT IO)) releaseReturn b a)
       allocA' restore =
         runClient (allocA restore') <&> \case
           GeneralAllocated a releaseA -> GeneralAllocated a $ runClient . releaseA

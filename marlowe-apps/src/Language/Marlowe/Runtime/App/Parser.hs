@@ -8,10 +8,8 @@ import Data.Default (def)
 import Language.Marlowe.Runtime.App.Types (
   Config (Config, buildSeconds, confirmSeconds, retryLimit, retrySeconds, timeoutSeconds),
  )
-import Language.Marlowe.Runtime.CLI.Option (CliOption, optParserWithEnvDefault)
+import Language.Marlowe.Runtime.CLI.Option (optParserWithEnvDefault)
 import Language.Marlowe.Runtime.ChainSync.Api (Address, fromBech32)
-import Network.Socket (HostName, PortNumber)
-import Text.Read (readMaybe)
 
 import qualified Data.Text as T (pack)
 import qualified Language.Marlowe.Runtime.CLI.Option as CLI
@@ -20,9 +18,6 @@ import qualified Options.Applicative as O
 getConfigParser :: IO (O.Parser Config)
 getConfigParser =
   do
-    chainSeekHostParser <- optParserWithEnvDefault chainSeekHost
-    chainSeekSyncPortParser <- optParserWithEnvDefault chainSeekSyncPort
-    chainSeekCommandPortParser <- optParserWithEnvDefault chainSeekCommandPort
     runtimeHostParser <- optParserWithEnvDefault CLI.runtimeHost
     runtimePortParser <- optParserWithEnvDefault CLI.runtimePort
     let timeoutSecondsParser =
@@ -66,65 +61,13 @@ getConfigParser =
                 "Maximum number of attempts for trying a failed transaction again. Each subsequent retry waits twice as long as the previous retry. No retries occur if a non-positive number of retries is specified."
     pure $
       Config
-        <$> chainSeekHostParser
-        <*> chainSeekSyncPortParser
-        <*> chainSeekCommandPortParser
-        <*> runtimeHostParser
+        <$> runtimeHostParser
         <*> runtimePortParser
         <*> timeoutSecondsParser
         <*> buildSecondsParser
         <*> confirmSecondsParser
         <*> retrySecondsParser
         <*> retryLimitParser
-
-host' :: String -> String -> HostName -> String -> CliOption O.OptionFields HostName
-host' optPrefix envPrefix defaultValue description =
-  CLI.CliOption
-    { CLI.env = env
-    , CLI.parseEnv = Just
-    , CLI.parser =
-        O.strOption
-          . (<>)
-            ( mconcat
-                [ O.long $ optPrefix <> "-host"
-                , O.value defaultValue
-                , O.metavar "HOST_NAME"
-                , O.help $ description <> " Can be set as the environment variable " <> env
-                , O.showDefault
-                ]
-            )
-    }
-  where
-    env = "MARLOWE_" <> envPrefix <> "_HOST"
-
-port' :: String -> String -> PortNumber -> String -> CliOption O.OptionFields PortNumber
-port' optPrefix envPrefix defaultValue description =
-  CLI.CliOption
-    { CLI.env = env
-    , CLI.parseEnv = readMaybe
-    , CLI.parser =
-        O.option O.auto
-          . (<>)
-            ( mconcat
-                [ O.long $ optPrefix <> "-port"
-                , O.value defaultValue
-                , O.metavar "PORT_NUMBER"
-                , O.help $ description <> " Can be set as the environment variable " <> env
-                , O.showDefault
-                ]
-            )
-    }
-  where
-    env = "MARLOWE_" <> envPrefix <> "_PORT"
-
-chainSeekHost :: CliOption O.OptionFields HostName
-chainSeekHost = host' "chain-sync" "CHAIN_SYNC" "127.0.0.1" "The hostname of the Marlowe Runtime chain-sync server."
-
-chainSeekSyncPort :: CliOption O.OptionFields PortNumber
-chainSeekSyncPort = port' "chain-sync" "CHAIN_SYNC" 3715 "The port number of the chain-sync server's synchronization API."
-
-chainSeekCommandPort :: CliOption O.OptionFields PortNumber
-chainSeekCommandPort = port' "chain-sync-command" "CHAIN_SYNC_COMMAND" 3720 "The port number of the chain-sync server's job API."
 
 addressParser :: O.ReadM Address
 addressParser = O.maybeReader $ fromBech32 . T.pack
