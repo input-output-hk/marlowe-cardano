@@ -87,8 +87,6 @@ import System.IO.Temp (emptySystemTempFile)
 data RuntimeConfig = RuntimeConfig
   { rcRuntimeHost :: String
   , rcRuntimePort :: PortNumber
-  , rcChainSeekSyncPort :: PortNumber
-  , rcChainSeekCommandPort :: PortNumber
   }
   deriving stock (Eq, Generic, Show)
 

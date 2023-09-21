@@ -433,11 +433,8 @@ setupTestInterpretEnv = do
                 Marlowe.Protocol.marloweRuntimeClientPeer
             config =
               Apps.Config
-                { Apps.chainSeekHost = rcRuntimeHost
-                , Apps.runtimeHost = rcRuntimeHost
+                { Apps.runtimeHost = rcRuntimeHost
                 , Apps.runtimePort = rcRuntimePort
-                , Apps.chainSeekSyncPort = rcChainSeekSyncPort
-                , Apps.chainSeekCommandPort = rcChainSeekCommandPort
                 , Apps.timeoutSeconds = 900
                 , Apps.buildSeconds = 3
                 , Apps.confirmSeconds = 3
