@@ -65,6 +65,7 @@ jobs:
             tagAndPush "marlowe-proxy"
             tagAndPush "marlowe-web-server"
           elif [[ "${{ github.ref }}" == "refs/tags/marlowe-apps@v"* ]]
+          then
             # Strip "marlowe-apps@v" prefix from tag name
             export TAG=$(echo "${{ github.ref_name }}" | sed -e "s/^marlowe-apps@v//")
             echo TAG=$TAG
@@ -73,6 +74,7 @@ jobs:
             tagAndPush "marlowe-oracle"
             tagAndPush "marlowe-finder"
           elif [[ "${{ github.ref }}" == "refs/heads/main" ]]
+          then
             export TAG=latest
             echo TAG=$TAG
             tagAndPush "marlowe-chain-indexer"
