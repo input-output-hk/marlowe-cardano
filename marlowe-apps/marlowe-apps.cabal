@@ -1,6 +1,6 @@
 cabal-version:      3.4
 name:               marlowe-apps
-version:            0.2.5.0
+version:            0.3.0.0
 synopsis:           Marlowe Runtimee applications
 license:            Apache-2.0
 license-file:       LICENSE
