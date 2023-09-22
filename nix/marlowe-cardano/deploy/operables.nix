@@ -151,7 +151,7 @@ let
     export RETRY_SECONDS="''${RETRY_SECONDS:-10}"
     export RETRY_LIMIT="''${RETRY_LIMIT:-5}"
 
-    ${wait-for-tcp}/bin/wait-for-tcp "$RUNTIME_HOST" "$RUNTIME_PORT"
+    ${wait-for-tcp}/bin/wait-for-tcp "$MARLOWE_RT_HOST" "$MARLOWE_RT_PORT"
 
     ${script}
   '';
