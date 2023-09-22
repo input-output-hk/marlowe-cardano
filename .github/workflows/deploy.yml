@@ -44,11 +44,11 @@ jobs:
       - name: Tag and push images
         run: |
           tagAndPush() {
-            IMAGE_ID=ghcr.io/${{ github.repository_owner }}/$2
+            IMAGE_ID=ghcr.io/${{ github.repository_owner }}/$1
             # Change all uppercase to lowercase
             IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
             echo IMAGE_ID=$IMAGE_ID
-            docker tag $2:latest $IMAGE_ID:$TAG
+            docker tag $1:latest $IMAGE_ID:$TAG
             docker push $IMAGE_ID:$TAG
           }
           if [[ "${{ github.ref }}" == "refs/tags/runtime@v"* ]]
