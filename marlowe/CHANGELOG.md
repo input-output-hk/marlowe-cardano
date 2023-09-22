@@ -1,4 +1,23 @@
 
+<a id='changelog-0.2.0.0'></a>
+# 0.2.0.0 — 2023-09-22
+
+## Removed
+
+- BREAKING Scripts moved to new package `marlowe-plutus`.
+- BREAKING `alternateMarloweValidator` removed.
+- BREAKING Usage of typed validators removed.
+
+## Added
+
+- Pre-compiled scripts available as data files.
+
+- GHC 9.2 support
+
+## Changed
+
+- Updated to Plutus 1.5
+
 <a id='changelog-0.1.2.0'></a>
 # 0.1.2.0 — 2023-08-10
 
