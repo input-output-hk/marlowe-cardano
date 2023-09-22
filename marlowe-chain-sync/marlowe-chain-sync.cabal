@@ -1,6 +1,6 @@
 cabal-version: 3.4
 name:          marlowe-chain-sync
-version:       0.0.4
+version:       0.0.5
 synopsis:      Cardano chain sync system for thee Marlowe Runtime
 description:
   Marlowe runtime component for Cardano node synchronization. Communicates with
@@ -112,7 +112,7 @@ library libchainsync
     , hasql-th ^>=0.4
     , hasql-transaction ^>=1
     , hs-opentelemetry-api >=0.0.3 && <0.0.4
-    , marlowe-chain-sync ==0.0.4
+    , marlowe-chain-sync ==0.0.5
     , marlowe-protocols ==0.2.1.0
     , nonempty-containers ^>=0.3.4
     , ouroboros-network-protocols ^>=0.5
@@ -180,7 +180,7 @@ library plutus-compat
     , cardano-api ^>=8.2
     , cardano-ledger-byron ^>=1.0
     , containers ^>=0.6.5
-    , marlowe-chain-sync ==0.0.4
+    , marlowe-chain-sync ==0.0.5
     , plutus-ledger-api ^>=1.5
     , plutus-tx ^>=1.5
 
@@ -196,7 +196,7 @@ library gen
     , cardano-api ^>=8.2
     , cardano-api-gen ^>=8.1
     , hedgehog-quickcheck ^>=0.1
-    , marlowe-chain-sync ==0.0.4
+    , marlowe-chain-sync ==0.0.5
     , marlowe-protocols ==0.2.1.0
     , nonempty-containers ^>=0.3.4
     , ouroboros-consensus ^>=0.7
@@ -216,7 +216,7 @@ test-suite marlowe-chain-sync-test
   build-depends:
     , base >=4.9 && <5
     , hspec >=2.10 && <3
-    , marlowe-chain-sync:{marlowe-chain-sync, gen} ==0.0.4
+    , marlowe-chain-sync:{marlowe-chain-sync, gen} ==0.0.5
     , marlowe-protocols ==0.2.1.0
 
   build-tool-depends: hspec-discover:hspec-discover
@@ -278,7 +278,7 @@ executable marlowe-chain-sync
     , hasql >=1.6 && <2
     , hasql-pool ^>=0.8
     , hs-opentelemetry-sdk ==0.0.3.4
-    , marlowe-chain-sync:{marlowe-chain-sync, libchainsync} ==0.0.4
+    , marlowe-chain-sync:{marlowe-chain-sync, libchainsync} ==0.0.5
     , marlowe-protocols ==0.2.1.0
     , mtl >=2.2 && <3
     , network >=3.1 && <4

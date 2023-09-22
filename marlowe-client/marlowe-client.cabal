@@ -1,6 +1,6 @@
 cabal-version: 3.4
 name:          marlowe-client
-version:       0.0.4
+version:       0.0.5
 synopsis:      A client library for the Marlowe Runtime.
 bug-reports:   https://github.com/input-output-hk/marlowe-marlowe/issues
 license:       Apache-2.0
@@ -61,10 +61,10 @@ library
     , eventuo11y-extras ==0.1.1.0
     , exceptions ^>=0.10
     , general-allocate ^>=0.2
-    , marlowe-chain-sync ==0.0.4
+    , marlowe-chain-sync ==0.0.5
     , marlowe-object ==0.2.0.0
     , marlowe-protocols ==0.2.1.0
-    , marlowe-runtime:{marlowe-runtime, contract-api, discovery-api, history-api, proxy-api, sync-api, tx-api} ==0.0.4
+    , marlowe-runtime:{marlowe-runtime, contract-api, discovery-api, history-api, proxy-api, sync-api, tx-api} ==0.0.5
     , monad-control ^>=1
     , mtl >=2.2 && <3
     , network >=3.1 && <4

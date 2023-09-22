@@ -1,4 +1,52 @@
 
+<a id='changelog-0.0.5'></a>
+# 0.0.5 — 2023-09-22
+
+## Added
+
+- New payouts API that supports:
+  - Querying payouts with filtering support for contract IDs, role tokens, and
+    claim status.
+  - Querying a single payout by its ID
+
+- New filters to `GetHeaders` query to allow filtering contract headers by party
+  (addresses and role tokens). Specifying parties in the filter will limit
+  results to contracts which (visibly) contain either the address or role token as a
+  party.
+  - Regarding "visibly contain": this applies to merkleized contract. A
+    merkleized contract visibly contains a party if the party can be extracted
+    from its on-chain history without having access to the continuations. This
+    means any parties contained in unexecuted paths of the contract are not
+    included, because they aren't visible.
+- New query parameters for `/contracts` endpoint `partyAddress` and `partyRole`.
+  These give REST API access to the party filtering functionality mentioned
+  above.
+
+- Added new validator scripts to script registry.
+
+- GHC 9.2 support
+
+## Changed
+
+- BREAKING: marlowe-tx: Create, ApplyInputs, and Withdraw now use the era reported by the node to build the TxBody.
+  - Era is queried from the node at the time of job execution.
+  - The era information is returned in the results of the jobs.
+  - If the era does not support reference scripts (i.e. prior to Babbage) the
+    command will fail wit an `EraUnsupported` error.
+- BREAKING: marlowe-tx: Submit now accepts transactions from any era that
+  supports reference scripts, not exclusively babbage. This is a breaking
+  change because the era information must now be included in the command.
+
+- BREAKING `Withdraw` now accepts a set of payout tx outs instead of a contract
+  ID and a role token. The old behaviour can be emulated via a query to fetch
+  unclaimed payouts for a contract.
+
+- Updated script hashes in script-registry test.
+
+- BREAKING: cardano-api, plutus, cardano-ledger dependencies track with cardano-api 8.2
+- BREAKING: `marlowe-tx` and `marlowe-runtime` now require a command line option for a program to generate the role token minting validator.
+- BREAKING: Requires cardano-node 8.1.2
+
 <a id='changelog-0.0.4'></a>
 # 0.0.4 — 2023-08-10
 

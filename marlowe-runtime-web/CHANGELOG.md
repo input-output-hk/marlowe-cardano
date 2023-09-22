@@ -1,4 +1,28 @@
 
+<a id='changelog-0.0.5'></a>
+# 0.0.5 — 2023-09-22
+
+## Added
+
+- Assets to several response schemas
+  - In `Payout` - shows the assets in the tx output corresponding to the payout.
+  - In `ContractState` - shows the assets in the current UTxO of the contract (the account balances). Empty if the contract has no UTxO (i.e. the contract is closed).
+  - In `Tx` - shows the assets in the marlowe script output of that transaction (the account balances). Empty if the transaction does not produce an output.
+- Payouts produced by a transaction are added to `Tx`
+
+## Changed
+
+- Custom error formatter for request body parsing failures
+- More details displayed about internal server errors
+
+- Tokens json objects are deserialized now without the `unTokens` field.
+
+- Use of generics for REST error reporting
+
+## Fixed
+
+- Serialization for Token Names containing "."
+
 <a id='changelog-0.0.4'></a>
 # 0.0.4 — 2023-08-10
 
