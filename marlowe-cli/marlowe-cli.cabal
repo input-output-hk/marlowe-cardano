@@ -249,7 +249,6 @@ library command
     , marlowe-contracts
     , marlowe-runtime:config
     , mtl
-    , network
     , optparse-applicative
     , plutus-ledger-ada
     , plutus-ledger-api ^>=1.5

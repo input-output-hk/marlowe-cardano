@@ -51,7 +51,6 @@ library
     , text
     , time
     , time-units
-    , transformers
     , transformers-base
 
   ghc-options:

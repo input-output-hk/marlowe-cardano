@@ -36,10 +36,8 @@ import Language.Marlowe.CLI.Types (CliEnv, CliError, askEra)
 
 import Control.Monad.Reader.Class (MonadReader)
 import Data.Time.Units (Second)
-import Language.Marlowe.Runtime.CLI.Option (CliOption, optParserWithEnvDefault, port)
+import Language.Marlowe.Runtime.CLI.Option (optParserWithEnvDefault)
 import Language.Marlowe.Runtime.CLI.Option qualified as Runtime.CLI.Option
-import Network.Socket (PortNumber)
-import Options.Applicative (OptionFields)
 import Options.Applicative qualified as O
 import Options.Applicative.Types (Parser (BindP))
 
@@ -78,23 +76,13 @@ mkParseTestCommand
   -> O.Mod O.OptionFields FilePath
   -> IO (O.Parser (TestCommand era))
 mkParseTestCommand network socket = do
-  let chainSeekSyncPort :: CliOption OptionFields PortNumber
-      chainSeekSyncPort = port "chain-seek-sync" "CHAIN_SEEK_SYNC" 3715 "The port number of the chain-seek server's synchronization API."
-
-      chainSeekCmdPort :: CliOption OptionFields PortNumber
-      chainSeekCmdPort = port "chain-seek-cmd" "CHAIN_SEEK_CMD" 3720 "The port number of the chain-seek server's command API."
-
   runtimePortParser <- optParserWithEnvDefault Runtime.CLI.Option.runtimePort
   runtimeHostParser <- optParserWithEnvDefault Runtime.CLI.Option.runtimeHost
-  chainSeekSyncPortParser <- optParserWithEnvDefault chainSeekSyncPort
-  chainSeekCmdPortParser <- optParserWithEnvDefault chainSeekCmdPort
 
   let runtimeConfigParser =
         RuntimeConfig
           <$> runtimeHostParser
           <*> runtimePortParser
-          <*> chainSeekSyncPortParser
-          <*> chainSeekCmdPortParser
 
       reportingStrategyParser = do
         let streamJsonOpt =

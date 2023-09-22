@@ -14,6 +14,7 @@ on:
       - main
     tags:
       - runtime@v*
+      - marlowe-apps@v*
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -43,25 +44,47 @@ jobs:
       - name: Tag and push images
         run: |
           tagAndPush() {
-            IMAGE_ID=ghcr.io/${{ github.repository_owner }}/$1
+            IMAGE_ID=ghcr.io/${{ github.repository_owner }}/$2
             # Change all uppercase to lowercase
             IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
-            # Strip git ref prefix from version
-            TAG=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
-            # Strip "runtime@v" prefix from tag name
-            [[ "${{ github.ref }}" == "refs/tags/"* ]] && TAG=$(echo $TAG | sed -e 's/^runtime@v//')
-            # Use Docker `latest` tag convention
-            [ "$TAG" == "main" ] && TAG=latest
             echo IMAGE_ID=$IMAGE_ID
-            echo TAG=$TAG
-            docker tag $1:latest $IMAGE_ID:$TAG
+            docker tag $2:latest $IMAGE_ID:$TAG
             docker push $IMAGE_ID:$TAG
           }
-          tagAndPush "marlowe-chain-indexer"
-          tagAndPush "marlowe-chain-sync"
-          tagAndPush "marlowe-indexer"
-          tagAndPush "marlowe-sync"
-          tagAndPush "marlowe-contract"
-          tagAndPush "marlowe-tx"
-          tagAndPush "marlowe-proxy"
-          tagAndPush "marlowe-web-server"
+          if [[ "${{ github.ref }}" == "refs/tags/runtime@v"* ]]
+          then
+            # Strip "runtime@v" prefix from tag name
+            export TAG=$(echo "${{ github.ref_name }}" | sed -e "s/^runtime@v//")
+            echo TAG=$TAG
+            tagAndPush "marlowe-chain-indexer"
+            tagAndPush "marlowe-chain-sync"
+            tagAndPush "marlowe-indexer"
+            tagAndPush "marlowe-sync"
+            tagAndPush "marlowe-contract"
+            tagAndPush "marlowe-tx"
+            tagAndPush "marlowe-proxy"
+            tagAndPush "marlowe-web-server"
+          elif [[ "${{ github.ref }}" == "refs/tags/marlowe-apps@v"* ]]
+            # Strip "marlowe-apps@v" prefix from tag name
+            export TAG=$(echo "${{ github.ref_name }}" | sed -e "s/^marlowe-apps@v//")
+            echo TAG=$TAG
+            tagAndPush "marlowe-pipe"
+            tagAndPush "marlowe-scaling"
+            tagAndPush "marlowe-oracle"
+            tagAndPush "marlowe-finder"
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]
+            export TAG=latest
+            echo TAG=$TAG
+            tagAndPush "marlowe-chain-indexer"
+            tagAndPush "marlowe-chain-sync"
+            tagAndPush "marlowe-indexer"
+            tagAndPush "marlowe-sync"
+            tagAndPush "marlowe-contract"
+            tagAndPush "marlowe-tx"
+            tagAndPush "marlowe-proxy"
+            tagAndPush "marlowe-web-server"
+            tagAndPush "marlowe-pipe"
+            tagAndPush "marlowe-scaling"
+            tagAndPush "marlowe-oracle"
+            tagAndPush "marlowe-finder"
+          fi
