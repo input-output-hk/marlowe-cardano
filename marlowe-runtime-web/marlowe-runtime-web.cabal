@@ -135,7 +135,7 @@ library server
     , marlowe-chain-sync ==0.0.4
     , marlowe-client ==0.0.4
     , marlowe-object ==0.1.0.0
-    , marlowe-protocols ==0.2.0.0
+    , marlowe-protocols ==0.2.1.0
     , marlowe-runtime-web ==0.0.4
     , marlowe-runtime:{marlowe-runtime, contract-api, discovery-api, proxy-api, sync-api, tx-api} ==0.0.4
     , monad-control ^>=1

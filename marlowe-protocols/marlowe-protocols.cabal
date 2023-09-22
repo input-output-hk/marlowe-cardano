@@ -1,6 +1,6 @@
 cabal-version: 3.4
 name:          marlowe-protocols
-version:       0.2.0.0
+version:       0.2.1.0
 synopsis:      Protocol definitions for Marlowe
 bug-reports:   https://github.com/input-output-hk/marlowe-cardano/issues
 license:       Apache-2.0
