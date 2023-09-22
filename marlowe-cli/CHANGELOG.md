@@ -1,4 +1,29 @@
 
+<a id='changelog-0.1.0.0'></a>
+# 0.1.0.0 — 2023-09-22
+
+## Removed
+
+- BREAKING inoperative chain sync connection options from `test` command removed.
+
+## Added
+
+- Format conversion with `marlowe-cli format`
+
+- Open role Plutus script which release role token on deposit.
+
+- Simulation mode to the testing DSL which maintains in memory UTxO set.
+
+- Extra safety analytical cases for accompaniaing scripts.
+
+## Changed
+
+- Print list of commands when marlowe-cli is invoked without a command
+
+- Pre-compiled scripts are used for all commands using validators.
+
+- BREAKING: Requires cardano-node 8.1.2
+
 <a id='changelog-0.0.12.0'></a>
 # 0.0.12.0 — 2023-08-11
 
