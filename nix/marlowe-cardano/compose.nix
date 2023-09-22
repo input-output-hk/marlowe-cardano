@@ -22,7 +22,7 @@ let
     cd /src
     # Hard-coding linux because this won't work on Mac anyway.
     # TODO find a setup that works on MacOS
-    BIN=./dist-newstyle/build/x86_64-linux/ghc-9.2.0/$PKG/x/$PROG/build/$PROG/$PROG
+    BIN=./dist-newstyle/build/x86_64-linux/ghc-9.2.8/$PKG/x/$PROG/build/$PROG/$PROG
     export PATH="$PATH:${l.makeBinPath [ sqitchPg postgresql ]}"
     export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
     cd marlowe-chain-sync
@@ -38,7 +38,7 @@ let
     cd /src
     # Hard-coding linux because this won't work on Mac anyway.
     # TODO find a setup that works on MacOS
-    BIN=./dist-newstyle/build/x86_64-linux/ghc-9.2.0/$PKG/x/$PROG/build/$PROG/$PROG
+    BIN=./dist-newstyle/build/x86_64-linux/ghc-9.2.8/$PKG/x/$PROG/build/$PROG/$PROG
     export PATH="$PATH:${l.makeBinPath [ sqitchPg postgresql ]}"
     export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
     cd marlowe-runtime/marlowe-indexer
@@ -55,7 +55,7 @@ let
     cd /src
     # Hard-coding linux because this won't work on Mac anyway.
     # TODO find a setup that works on MacOS
-    BIN=./dist-newstyle/build/x86_64-linux/ghc-9.2.0/$PKG/x/$PROG/build/$PROG/$PROG
+    BIN=./dist-newstyle/build/x86_64-linux/ghc-9.2.8/$PKG/x/$PROG/build/$PROG/$PROG
     export PATH="$PATH:${l.makeBinPath [ sqitchPg postgresql ]}"
     export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
     cd marlowe-chain-sync
@@ -75,7 +75,7 @@ let
     cd /src
     # Hard-coding linux because this won't work on Mac anyway.
     # TODO find a setup that works on MacOS
-    BIN=./dist-newstyle/build/x86_64-linux/ghc-9.2.0/$PKG/x/$PROG/build/$PROG/$PROG
+    BIN=./dist-newstyle/build/x86_64-linux/ghc-9.2.8/$PKG/x/$PROG/build/$PROG/$PROG
     exec -a $PROG $BIN "$@"
   '';
 
