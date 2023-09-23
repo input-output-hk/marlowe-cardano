@@ -185,6 +185,8 @@ runContractAction selectorName eventBackend runInput (RequeueFrequency requeueFr
               (Just _, Nothing, Just _, ContractStreamContinued{csContractStep = ApplyTransaction{}}) -> pure $ M.delete contractId lastSeen
               -- A payout was redeemed from the contract, so there is no need to update the map of most-recent information for contracts still open.
               (Just _, _, Just _, ContractStreamContinued{csContractStep = RedeemPayout{}}) -> pure lastSeen
+              -- A payout was redeemed from the contract after the contract closed, so there is no need to update the map of most-recent information for contracts still open.
+              (Nothing, _, Just _, ContractStreamContinued{csContractStep = RedeemPayout{}}) -> pure lastSeen
               -- FIXME: This should be impossible because a contract must either be created, continuing, closing or redeeming, but diagnose and remedy if this ever occurs.
               (seen, _, _, _) -> do
                 addField event $
