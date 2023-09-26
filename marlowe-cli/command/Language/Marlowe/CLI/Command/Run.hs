@@ -267,20 +267,20 @@ runRunCommand
 runRunCommand command =
   do
     let network' = network command
-        connection =
-          LocalNodeConnectInfo
-            { localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
-            , localNodeNetworkId = network'
-            , localNodeSocketPath = File $ socketPath command
-            }
         marloweParams' = maybe defaultMarloweParams marloweParams $ rolesCurrency command
         stake' = fromMaybe NoStakeAddress $ stake command
         printTxId = liftIO . putStrLn . ("TxId " <>) . show
         padTxOut (address, value) = (address, C.TxOutDatumNone, value)
         outputs' = padTxOut <$> outputs command
-    costModel <- getPV2CostModelParams (QueryNode connection)
     case command of
       Initialize{..} -> do
+        let connection =
+              LocalNodeConnectInfo
+                { localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
+                , localNodeNetworkId = network'
+                , localNodeSocketPath = File socketPath
+                }
+        costModel <- getPV2CostModelParams (QueryNode connection)
         slotConfig <- querySlotConfig connection
         protocolVersion <- getProtocolVersion (QueryNode connection)
         initializeTransaction
@@ -305,7 +305,13 @@ runRunCommand command =
           maximumTime
           outputFile
           printStats
-      Run{..} ->
+      Run{..} -> do
+        let connection =
+              LocalNodeConnectInfo
+                { localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
+                , localNodeNetworkId = network'
+                , localNodeSocketPath = File socketPath
+                }
         runTransaction
           connection
           marloweIn
@@ -320,7 +326,13 @@ runRunCommand command =
           printStats
           invalid
           >>= printTxId
-      Withdraw{..} ->
+      Withdraw{..} -> do
+        let connection =
+              LocalNodeConnectInfo
+                { localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
+                , localNodeNetworkId = network'
+                , localNodeSocketPath = File socketPath
+                }
         withdrawFunds
           connection
           marloweOut
@@ -336,7 +348,13 @@ runRunCommand command =
           printStats
           invalid
           >>= printTxId
-      AutoRun{..} ->
+      AutoRun{..} -> do
+        let connection =
+              LocalNodeConnectInfo
+                { localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
+                , localNodeNetworkId = network'
+                , localNodeSocketPath = File socketPath
+                }
         autoRunTransaction
           connection
           marloweIn'
@@ -349,7 +367,13 @@ runRunCommand command =
           printStats
           invalid
           >>= printTxId
-      AutoWithdraw{..} ->
+      AutoWithdraw{..} -> do
+        let connection =
+              LocalNodeConnectInfo
+                { localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
+                , localNodeNetworkId = network'
+                , localNodeSocketPath = File socketPath
+                }
         autoWithdrawFunds
           connection
           marloweOut
@@ -362,7 +386,13 @@ runRunCommand command =
           (PrintStats printStats)
           invalid
           >>= printTxId
-      Analyze{..} ->
+      Analyze{..} -> do
+        let connection =
+              LocalNodeConnectInfo
+                { localConsensusModeParams = CardanoModeParams $ EpochSlots 21600
+                , localNodeNetworkId = network'
+                , localNodeSocketPath = File socketPath
+                }
         analyze
           connection
           marloweOut
