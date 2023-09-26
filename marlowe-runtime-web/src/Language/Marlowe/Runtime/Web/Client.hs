@@ -164,11 +164,11 @@ postContractStatus
   -> PostContractsRequest
   -> ClientM (RuntimeStatus, CreateTxEnvelope CardanoTxBody)
 postContractStatus stakeAddress changeAddress otherAddresses collateralUtxos request = do
-  let (_ :<|> (postContractCreateTxBody' :<|> _) :<|> _) :<|> _ = client
+  let (_ :<|> getPost :<|> _) :<|> _ = client
+  let (postContractCreateTxBody' :<|> _) = getPost stakeAddress
   response <-
     postContractCreateTxBody'
       request
-      stakeAddress
       changeAddress
       (setToCommaList <$> otherAddresses)
       (setToCommaList <$> collateralUtxos)
@@ -192,11 +192,11 @@ postContractCreateTxStatus
   -> PostContractsRequest
   -> ClientM (RuntimeStatus, CreateTxEnvelope CardanoTx)
 postContractCreateTxStatus stakeAddress changeAddress otherAddresses collateralUtxos request = do
-  let (_ :<|> (_ :<|> postContractCreateTx') :<|> _) :<|> _ = client
+  let (_ :<|> getPost :<|> _) :<|> _ = client
+  let (_ :<|> postContractCreateTx') = getPost stakeAddress
   response <-
     postContractCreateTx'
       request
-      stakeAddress
       changeAddress
       (setToCommaList <$> otherAddresses)
       (setToCommaList <$> collateralUtxos)

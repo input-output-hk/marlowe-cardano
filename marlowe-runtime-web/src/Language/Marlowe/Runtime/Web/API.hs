@@ -214,6 +214,9 @@ type PayoutsAPI =
 -- | GET /contracts sub-API
 type GetContractsAPI =
   Summary "Get contracts"
+    :> Description
+        "Get contracts published on chain. \
+        \Results are returned in pages, with paging being specified by request headers."
     :> OperationId "getContracts"
     :> QueryParams "roleCurrency" PolicyId
     :> QueryParams "tag" Text
@@ -260,20 +263,32 @@ instance HasNamedLink (CreateTxEnvelope tx) API "contract" where
 -- | POST /contracts sub-API
 type PostContractsAPI =
   Summary "Create a new contract"
+    :> Description
+        "Build an unsigned (Cardano) transaction body which opens a new Marlowe contract. \
+        \This unsigned transaction must be signed by a wallet (such as a CIP-30 or CIP-45 wallet) before being submitted. \
+        \To submit the signed transaction, use the PUT /contracts/{contractId} endpoint."
     :> OperationId "createContract"
     :> RenameResponseSchema "CreateContractResponse"
-    :> ( ReqBody '[JSON] PostContractsRequest
-          :> Header "X-Stake-Address" StakeAddress
-          :> PostTxAPI (PostCreated '[JSON] (PostContractsResponse CardanoTxBody))
-          :<|> ReqBody '[JSON] PostContractsRequest
-            :> Header "X-Stake-Address" StakeAddress
-            :> PostTxAPI (PostCreated '[TxJSON ContractTx] (PostContractsResponse CardanoTx))
+    :> Header'
+        '[Optional, Strict, Description "Where to send staking rewards for the Marlowe script outputs of this contract."]
+        "X-Stake-Address"
+        StakeAddress
+    :> ( ReqBody '[JSON] PostContractsRequest :> PostTxAPI (PostCreated '[JSON] (PostContractsResponse CardanoTxBody))
+          :<|> ReqBody '[JSON] PostContractsRequest :> PostTxAPI (PostCreated '[TxJSON ContractTx] (PostContractsResponse CardanoTx))
        )
 
 -- | /contracts/:contractId sub-API
 type ContractAPI =
   GetContractAPI
-    :<|> Summary "Submit contract to chain" :> OperationId "submitContract" :> PutSignedTxAPI
+    :<|> Summary "Submit contract to chain"
+      :> Description
+          "Submit a signed (Cardano) transaction that opens a new Marlowe contract. \
+          \The transaction must have originally been created by the POST /contracts endpoint. \
+          \This endpoint will respond when the transaction is submitted successfully to the local node, which means \
+          \it will not wait for the transaction to be published in a block. \
+          \Use the GET /contracts/{contractId} endpoint to poll the on-chain status."
+      :> OperationId "submitContract"
+      :> PutSignedTxAPI
     :<|> "next" :> NextAPI
     :<|> "transactions" :> TransactionsAPI
 
@@ -297,9 +312,10 @@ type NextAPI = GETNextContinuationAPI
 -- | GET /contracts/:contractId/next/continuation sub-API
 type GETNextContinuationAPI =
   Summary "Get next contract steps"
+    :> Description "Get inputs which could be performed on a contract withing a time range by the requested parties."
     :> "getNextStepsForContract"
-    :> QueryParam' '[Required] "validityStart" UTCTime
-    :> QueryParam' '[Required] "validityEnd" UTCTime
+    :> QueryParam' '[Required, Description "The beginning of the validity range."] "validityStart" UTCTime
+    :> QueryParam' '[Required, Description "The end of the validity range."] "validityEnd" UTCTime
     :> QueryParams "party" Party
     :> Get '[JSON] Next
 
@@ -313,17 +329,24 @@ type ContractSourceAPI =
   GetContractSourceAPI
     :<|> "adjacency"
       :> Summary "Get adjacent contract source IDs by ID"
+      :> Description
+          "Get the contract source IDs which are adjacent to a contract source (they appear directly in the contract source)."
       :> OperationId "getContractSourceAdjacency"
       :> GetContractSourceIdsAPI
     :<|> "closure"
       :> Summary "Get contract source closure by ID"
+      :> Description
+          "Get the contract source IDs which appear in the full hierarchy of a contract source (including the ID of the contract source its self)."
       :> OperationId "getContractSourceClosure"
       :> GetContractSourceIdsAPI
 
 type PostContractSourcesAPI =
   Summary "Upload contract sources"
+    :> Description
+        "Upload a bundle of marlowe objects as contract sources. This API supports request body streaming, with newline \
+        \framing between request bundles."
     :> OperationId "createContractSources"
-    :> QueryParam' '[Required] "main" Label
+    :> QueryParam' '[Required, Description "The label of the top-level contract object in the bundle(s)."] "main" Label
     :> StreamBody NewlineFraming JSON (Producer ObjectBundle IO ())
     :> Post '[JSON] PostContractSourceResponse
 
@@ -355,6 +378,10 @@ instance MimeUnrender (TxJSON ApplyInputsTx) (PostTransactionsResponse CardanoTx
 -- | POST /contracts/:contractId/transactions sub-API
 type PostTransactionsAPI =
   Summary "Apply inputs to contract"
+    :> Description
+        "Build an unsigned (Cardano) transaction body which applies inputs to an open Marlowe contract. \
+        \This unsigned transaction must be signed by a wallet (such as a CIP-30 or CIP-45 wallet) before being submitted. \
+        \To submit the signed transaction, use the PUT /contracts/{contractId}/transactions/{transactionId} endpoint."
     :> OperationId "applyInputsToContract"
     :> RenameResponseSchema "ApplyInputsResponse"
     :> ( ReqBody '[JSON] PostTransactionsRequest :> PostTxAPI (PostCreated '[JSON] (PostTransactionsResponse CardanoTxBody))
@@ -377,6 +404,9 @@ instance HasNamedLink (ApplyInputsTxEnvelope tx) API "transaction" where
 -- | GET /contracts/:contractId/transactions sub-API
 type GetTransactionsAPI =
   Summary "Get transactions for contract"
+    :> Description
+        "Get published transactions for a contract. \
+        \Results are returned in pages, with paging being specified by request headers."
     :> OperationId "getTransactionsForContract"
     :> RenameResponseSchema "GetTransactionsResponse"
     :> PaginatedGet '["transactionId"] GetTransactionsResponse
@@ -396,7 +426,15 @@ instance HasNamedLink TxHeader API "transaction" where
 -- | /contracts/:contractId/transactions/:transactionId sub-API
 type TransactionAPI =
   GetTransactionAPI
-    :<|> Summary "Submit contract input application" :> OperationId "submitContractTransaction" :> PutSignedTxAPI
+    :<|> Summary "Submit contract input application"
+      :> Description
+          "Submit a signed (Cardano) transaction that applies inputs to an open Marlowe contract. \
+          \The transaction must have originally been created by the POST /contracts/{contractId}/transactions endpoint. \
+          \This endpoint will respond when the transaction is submitted successfully to the local node, which means \
+          \it will not wait for the transaction to be published in a block. \
+          \Use the GET /contracts/{contractId}/transactions/{transactionId} endpoint to poll the on-chain status."
+      :> OperationId "submitContractTransaction"
+      :> PutSignedTxAPI
 
 -- | GET /contracts/:contractId/transactions/:transactionId sub-API
 type GetTransactionAPI =
@@ -432,6 +470,9 @@ instance HasNamedLink Tx API "next" where
 -- | GET /contracts/:contractId/withdrawals sub-API
 type GetWithdrawalsAPI =
   Summary "Get withdrawals"
+    :> Description
+        "Get published withdrawal transactions. \
+        \Results are returned in pages, with paging being specified by request headers."
     :> OperationId "getWithdrawals"
     :> QueryParams "roleCurrency" PolicyId
     :> RenameResponseSchema "GetWithdrawalsResponse"
@@ -448,10 +489,16 @@ instance HasNamedLink WithdrawalHeader API "withdrawal" where
 -- | GET /payouts sub-API
 type GetPayoutsAPI =
   Summary "Get role payouts"
+    :> Description
+        "Get payouts to parties from role-based contracts. \
+        \Results are returned in pages, with paging being specified by request headers."
     :> OperationId "getPayouts"
     :> QueryParams "contractId" TxOutRef
     :> QueryParams "roleToken" AssetId
-    :> QueryParam "status" PayoutStatus
+    :> QueryParam'
+        '[Optional, Description "Whether to include available or withdrawn payouts in the results."]
+        "status"
+        PayoutStatus
     :> RenameResponseSchema "GetPayoutsResponse"
     :> PaginatedGet '["payoutId"] GetPayoutsResponse
 
@@ -496,6 +543,10 @@ instance HasNamedLink PayoutState API "withdrawal" where
 -- | POST /contracts sub-API
 type PostWithdrawalsAPI =
   Summary "Withdraw payouts"
+    :> Description
+        "Build an unsigned (Cardano) transaction body which withdraws available payouts from a role payout validator. \
+        \This unsigned transaction must be signed by a wallet (such as a CIP-30 or CIP-45 wallet) before being submitted. \
+        \To submit the signed transaction, use the PUT /withdrawals/{withdrawalId} endpoint."
     :> OperationId "withdrawPayouts"
     :> RenameResponseSchema "WithdrawPayoutsResponse"
     :> ( ReqBody '[JSON] PostWithdrawalsRequest :> PostTxAPI (PostCreated '[JSON] (PostWithdrawalsResponse CardanoTxBody))
@@ -525,7 +576,15 @@ instance HasNamedLink (WithdrawTxEnvelope tx) API "withdrawal" where
 -- | /contracts/:contractId/withdrawals/:withdrawalId sub-API
 type WithdrawalAPI =
   GetWithdrawalAPI
-    :<|> Summary "Submit payout withdrawal" :> OperationId "submitWithdrawal" :> PutSignedTxAPI
+    :<|> Summary "Submit payout withdrawal"
+      :> Description
+          "Submit a signed (Cardano) transaction that withdraws available payouts from a role payout validator. \
+          \The transaction must have originally been created by the POST /withdrawals endpoint. \
+          \This endpoint will respond when the transaction is submitted successfully to the local node, which means \
+          \it will not wait for the transaction to be published in a block. \
+          \Use the GET /withdrawals/{withdrawalId} endpoint to poll the on-chain status."
+      :> OperationId "submitWithdrawal"
+      :> PutSignedTxAPI
 
 -- | GET /contracts/:contractId/withdrawals/:withdrawalId sub-API
 type GetWithdrawalAPI =
