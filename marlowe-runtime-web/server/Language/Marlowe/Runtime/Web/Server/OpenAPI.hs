@@ -10,8 +10,11 @@ module Language.Marlowe.Runtime.Web.Server.OpenAPI where
 import Control.Lens
 import Data.OpenApi hiding (Server)
 import Data.String (fromString)
+import qualified Data.Text as T
+import Data.Version (showVersion)
 import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
 import qualified Language.Marlowe.Runtime.Web as Web
+import qualified Paths_marlowe_runtime_web
 import Servant
 import Servant.OpenApi (toOpenApi)
 import Servant.Pagination
@@ -49,4 +52,16 @@ instance (KnownSymbolList ss, KnownSymbol s) => KnownSymbolList (s ': ss) where
 type API = "openapi.json" :> Get '[JSON] OpenApi
 
 server :: (Applicative m) => ServerT API m
-server = pure $ toOpenApi Web.api
+server =
+  pure $
+    toOpenApi Web.api
+      & info
+        %~ (title .~ "Marlowe Runtime REST API")
+          . (version .~ T.pack (showVersion Paths_marlowe_runtime_web.version))
+          . (description ?~ "REST API for Marlowe Runtime")
+          . ( license
+                ?~ License
+                  { _licenseName = "Apache 2.0"
+                  , _licenseUrl = Just $ URL "https://www.apache.org/licenses/LICENSE-2.0.html"
+                  }
+            )
