@@ -84,6 +84,15 @@ data WithRuntimeStatus api
 
 data OperationId (name :: Symbol)
 
+data RenameResponseSchema (name :: Symbol)
+
+data RenameSchema (name :: Symbol) a
+
+instance (KnownSymbol name, ToSchema a) => ToSchema (RenameSchema name a) where
+  declareNamedSchema _ = do
+    NamedSchema _ schema <- declareNamedSchema $ Proxy @a
+    pure $ NamedSchema (Just $ T.pack $ symbolVal $ Proxy @name) schema
+
 instance (HasServer sub ctx) => HasServer (OperationId name :> sub) ctx where
   type ServerT (OperationId name :> sub) m = ServerT sub m
   route _ = route $ Proxy @sub
@@ -98,6 +107,19 @@ instance (KnownSymbol name, HasOpenApi api) => HasOpenApi (OperationId name :> a
   toOpenApi _ =
     toOpenApi (Proxy @api)
       & allOperations . operationId ?~ T.pack (symbolVal $ Proxy @name)
+
+instance (HasServer sub ctx) => HasServer (RenameResponseSchema name :> sub) ctx where
+  type ServerT (RenameResponseSchema name :> sub) m = ServerT sub m
+  route _ = route $ Proxy @sub
+  hoistServerWithContext _ = hoistServerWithContext $ Proxy @sub
+
+instance (HasClient m api) => HasClient m (RenameResponseSchema name :> api) where
+  type Client m (RenameResponseSchema name :> api) = Client m api
+  clientWithRoute m _ = clientWithRoute m $ Proxy @api
+  hoistClientMonad m _ = hoistClientMonad m $ Proxy @api
+
+instance (KnownSymbol name, HasOpenApi (AddRenameSchema name api)) => HasOpenApi (RenameResponseSchema name :> api) where
+  toOpenApi _ = toOpenApi $ Proxy @(AddRenameSchema name api)
 
 type instance IsElem' e (WithRuntimeStatus api) = IsElem e api
 
@@ -144,6 +166,16 @@ type family AddStatusHeaders api where
     Stream method status framing ct (Headers (AppendStatusHeaders hs) a)
   AddStatusHeaders (Stream cTypes status framing ct a) = Stream cTypes status framing ct (Headers StatusHeaders a)
 
+type family AddRenameSchema name api where
+  AddRenameSchema name (path :> api) = path :> AddRenameSchema name api
+  AddRenameSchema name (a :<|> b) = AddRenameSchema name a :<|> AddRenameSchema name b
+  AddRenameSchema name (Verb method cTypes status (Headers hs a)) =
+    Verb method cTypes status (Headers hs (RenameSchema name a))
+  AddRenameSchema name (Verb method cTypes status a) = Verb method cTypes status (RenameSchema name a)
+  AddRenameSchema name (Stream method status framing ct (Headers hs a)) =
+    Stream method status framing ct (Headers hs (RenameSchema name a))
+  AddRenameSchema name (Stream cTypes status framing ct a) = Stream cTypes status framing ct (RenameSchema name a)
+
 instance (RunClient m, HasClient m (AddStatusHeaders api)) => HasClient m (WithRuntimeStatus api) where
   type Client m (WithRuntimeStatus api) = Client m (AddStatusHeaders api)
   clientWithRoute m _ = clientWithRoute m $ Proxy @(AddStatusHeaders api)
@@ -187,6 +219,7 @@ type GetContractsAPI =
     :> QueryParams "tag" Text
     :> QueryParams "partyAddress" Address
     :> QueryParams "partyRole" AssetId
+    :> RenameResponseSchema "GetContractsResponse"
     :> PaginatedGet '["contractId"] GetContractsResponse
 
 type GetContractsResponse = WithLink "transactions" (WithLink "contract" ContractHeader)
@@ -228,6 +261,7 @@ instance HasNamedLink (CreateTxEnvelope tx) API "contract" where
 type PostContractsAPI =
   Summary "Create a new contract"
     :> OperationId "createContract"
+    :> RenameResponseSchema "CreateContractResponse"
     :> ( ReqBody '[JSON] PostContractsRequest
           :> Header "X-Stake-Address" StakeAddress
           :> PostTxAPI (PostCreated '[JSON] (PostContractsResponse CardanoTxBody))
@@ -247,6 +281,7 @@ type ContractAPI =
 type GetContractAPI =
   Summary "Get contract by ID"
     :> OperationId "getContractById"
+    :> RenameResponseSchema "GetContractResponse"
     :> Get '[JSON] GetContractResponse
 
 type GetContractResponse = WithLink "transactions" ContractState
@@ -298,7 +333,7 @@ type GetContractSourceAPI =
     :> QueryFlag "expand"
     :> Get '[JSON] Contract
 
-type GetContractSourceIdsAPI = Get '[JSON] (ListObject ContractSourceId)
+type GetContractSourceIdsAPI = RenameResponseSchema "ContractSourceIds" :> Get '[JSON] (ListObject ContractSourceId)
 
 -- | /contracts/:contractId/transactions sub-API
 type TransactionsAPI =
@@ -321,6 +356,7 @@ instance MimeUnrender (TxJSON ApplyInputsTx) (PostTransactionsResponse CardanoTx
 type PostTransactionsAPI =
   Summary "Apply inputs to contract"
     :> OperationId "applyInputsToContract"
+    :> RenameResponseSchema "ApplyInputsResponse"
     :> ( ReqBody '[JSON] PostTransactionsRequest :> PostTxAPI (PostCreated '[JSON] (PostTransactionsResponse CardanoTxBody))
           :<|> ReqBody '[JSON] PostTransactionsRequest
             :> PostTxAPI (PostCreated '[TxJSON ApplyInputsTx] (PostTransactionsResponse CardanoTx))
@@ -342,6 +378,7 @@ instance HasNamedLink (ApplyInputsTxEnvelope tx) API "transaction" where
 type GetTransactionsAPI =
   Summary "Get transactions for contract"
     :> OperationId "getTransactionsForContract"
+    :> RenameResponseSchema "GetTransactionsResponse"
     :> PaginatedGet '["transactionId"] GetTransactionsResponse
 
 type GetTransactionsResponse = WithLink "transaction" TxHeader
@@ -365,6 +402,7 @@ type TransactionAPI =
 type GetTransactionAPI =
   Summary "Get contract transaction by ID"
     :> OperationId "getContractTransactionById"
+    :> RenameResponseSchema "GetTransactionResponse"
     :> Get '[JSON] GetTransactionResponse
 
 type GetTransactionResponse = WithLink "previous" (WithLink "next" Tx)
@@ -396,6 +434,7 @@ type GetWithdrawalsAPI =
   Summary "Get withdrawals"
     :> OperationId "getWithdrawals"
     :> QueryParams "roleCurrency" PolicyId
+    :> RenameResponseSchema "GetWithdrawalsResponse"
     :> PaginatedGet '["withdrawalId"] GetWithdrawalsResponse
 
 type GetWithdrawalsResponse = WithLink "withdrawal" WithdrawalHeader
@@ -413,6 +452,7 @@ type GetPayoutsAPI =
     :> QueryParams "contractId" TxOutRef
     :> QueryParams "roleToken" AssetId
     :> QueryParam "status" PayoutStatus
+    :> RenameResponseSchema "GetPayoutsResponse"
     :> PaginatedGet '["payoutId"] GetPayoutsResponse
 
 type GetPayoutsResponse = WithLink "payout" PayoutHeader
@@ -426,6 +466,7 @@ instance HasNamedLink PayoutHeader API "payout" where
 type GetPayoutAPI =
   Summary "Get payout by ID"
     :> OperationId "getPayoutById"
+    :> RenameResponseSchema "GetPayoutResponse"
     :> Get '[JSON] GetPayoutResponse
 
 type GetPayoutResponse = WithLink "contract" (WithLink "transaction" (WithLink "withdrawal" PayoutState))
@@ -456,6 +497,7 @@ instance HasNamedLink PayoutState API "withdrawal" where
 type PostWithdrawalsAPI =
   Summary "Withdraw payouts"
     :> OperationId "withdrawPayouts"
+    :> RenameResponseSchema "WithdrawPayoutsResponse"
     :> ( ReqBody '[JSON] PostWithdrawalsRequest :> PostTxAPI (PostCreated '[JSON] (PostWithdrawalsResponse CardanoTxBody))
           :<|> ReqBody '[JSON] PostWithdrawalsRequest
             :> PostTxAPI (PostCreated '[TxJSON WithdrawTx] (PostWithdrawalsResponse CardanoTx))
@@ -494,6 +536,7 @@ type GetWithdrawalAPI =
 -- | Helper type for defining generic paginated GET endpoints
 type PaginatedGet rangeFields resource =
   Header "Range" (Ranges rangeFields resource)
+    :> RenameResponseSchema "GetContractsResponse"
     :> GetPartialContent '[JSON] (PaginatedResponse rangeFields resource)
 
 -- | Helper type for describing the response type of generic paginated APIs
@@ -562,6 +605,13 @@ instance (HasLink sub) => HasLink (OperationId name :> sub) where
   toLink f _ = toLink f $ Proxy @sub
 
 instance (HasLinkParser sub) => HasLinkParser (OperationId name :> sub) where
+  linkParser isStart _ = linkParser isStart $ Proxy @sub
+
+instance (HasLink sub) => HasLink (RenameResponseSchema name :> sub) where
+  type MkLink (RenameResponseSchema name :> sub) link = MkLink sub link
+  toLink f _ = toLink f $ Proxy @sub
+
+instance (HasLinkParser sub) => HasLinkParser (RenameResponseSchema name :> sub) where
   linkParser isStart _ = linkParser isStart $ Proxy @sub
 
 instance
