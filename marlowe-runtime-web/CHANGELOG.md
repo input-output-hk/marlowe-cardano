@@ -19,6 +19,8 @@
 
 - Use of generics for REST error reporting
 
+- Improved quality of generated Open API documentation
+
 ## Fixed
 
 - Serialization for Token Names containing "."
