@@ -132,6 +132,7 @@ library server
     , exceptions >=0.10 && <0.12
     , http-media ^>=0.8
     , lens >=5.2 && <6
+    , lens-aeson ^>=1.2
     , marlowe-cardano ==0.2.0.0
     , marlowe-chain-sync ==0.0.5
     , marlowe-client ==0.0.5

@@ -7,7 +7,10 @@
 -- specification.
 module Language.Marlowe.Runtime.Web.Server.OpenAPI where
 
+import Control.Applicative ((<|>))
 import Control.Lens
+import Data.Aeson
+import Data.Aeson.Lens
 import Data.OpenApi hiding (Server)
 import Data.String (fromString)
 import qualified Data.Text as T
@@ -49,19 +52,34 @@ instance KnownSymbolList '[] where
 instance (KnownSymbolList ss, KnownSymbol s) => KnownSymbolList (s ': ss) where
   symbolListVal _ = symbolVal (Proxy @s) : symbolListVal (Proxy @ss)
 
-type API = "openapi.json" :> Get '[JSON] OpenApi
+newtype OpenApiWithEmptySecurity = OpenApiWithEmptySecurity OpenApi
+
+instance ToJSON OpenApiWithEmptySecurity where
+  toJSON (OpenApiWithEmptySecurity openApi) =
+    openApi
+      & toJSON
+      & key "paths" . members . members . atKey "security" %~ (<|> Just (Array mempty))
+
+type API = "openapi.json" :> Get '[JSON] OpenApiWithEmptySecurity
 
 server :: (Applicative m) => ServerT API m
 server =
   pure $
-    toOpenApi Web.api
-      & info
-        %~ (title .~ "Marlowe Runtime REST API")
-          . (version .~ T.pack (showVersion Paths_marlowe_runtime_web.version))
-          . (description ?~ "REST API for Marlowe Runtime")
-          . ( license
-                ?~ License
-                  { _licenseName = "Apache 2.0"
-                  , _licenseUrl = Just $ URL "https://www.apache.org/licenses/LICENSE-2.0.html"
-                  }
-            )
+    OpenApiWithEmptySecurity $
+      toOpenApi Web.api
+        & info
+          %~ (title .~ "Marlowe Runtime REST API")
+            . (version .~ T.pack (showVersion Paths_marlowe_runtime_web.version))
+            . (description ?~ "REST API for Marlowe Runtime")
+            . ( license
+                  ?~ License
+                    { _licenseName = "Apache 2.0"
+                    , _licenseUrl = Just $ URL "https://www.apache.org/licenses/LICENSE-2.0.html"
+                    }
+              )
+        & servers
+          .~ [ "https://marlowe-runtime-preprod-web.scdev.aws.iohkdev.io"
+             , "https://marlowe-runtime-preview-web.scdev.aws.iohkdev.io"
+             , "https://marlowe-runtime-mainnet-web.scdev.aws.iohkdev.io"
+             , "http://localhost:3780"
+             ]
