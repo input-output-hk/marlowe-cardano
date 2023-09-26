@@ -34,8 +34,10 @@ import Data.OpenApi (
   Referenced (..),
   Schema,
   ToSchema,
+  allOperations,
   declareNamedSchema,
   declareSchemaRef,
+  operationId,
   properties,
   required,
   type_,
@@ -79,6 +81,45 @@ api :: Proxy API
 api = Proxy
 
 data WithRuntimeStatus api
+
+data OperationId (name :: Symbol)
+
+data RenameResponseSchema (name :: Symbol)
+
+data RenameSchema (name :: Symbol) a
+
+instance (KnownSymbol name, ToSchema a) => ToSchema (RenameSchema name a) where
+  declareNamedSchema _ = do
+    NamedSchema _ schema <- declareNamedSchema $ Proxy @a
+    pure $ NamedSchema (Just $ T.pack $ symbolVal $ Proxy @name) schema
+
+instance (HasServer sub ctx) => HasServer (OperationId name :> sub) ctx where
+  type ServerT (OperationId name :> sub) m = ServerT sub m
+  route _ = route $ Proxy @sub
+  hoistServerWithContext _ = hoistServerWithContext $ Proxy @sub
+
+instance (HasClient m api) => HasClient m (OperationId name :> api) where
+  type Client m (OperationId name :> api) = Client m api
+  clientWithRoute m _ = clientWithRoute m $ Proxy @api
+  hoistClientMonad m _ = hoistClientMonad m $ Proxy @api
+
+instance (KnownSymbol name, HasOpenApi api) => HasOpenApi (OperationId name :> api) where
+  toOpenApi _ =
+    toOpenApi (Proxy @api)
+      & allOperations . operationId ?~ T.pack (symbolVal $ Proxy @name)
+
+instance (HasServer sub ctx) => HasServer (RenameResponseSchema name :> sub) ctx where
+  type ServerT (RenameResponseSchema name :> sub) m = ServerT sub m
+  route _ = route $ Proxy @sub
+  hoistServerWithContext _ = hoistServerWithContext $ Proxy @sub
+
+instance (HasClient m api) => HasClient m (RenameResponseSchema name :> api) where
+  type Client m (RenameResponseSchema name :> api) = Client m api
+  clientWithRoute m _ = clientWithRoute m $ Proxy @api
+  hoistClientMonad m _ = hoistClientMonad m $ Proxy @api
+
+instance (KnownSymbol name, HasOpenApi (AddRenameSchema name api)) => HasOpenApi (RenameResponseSchema name :> api) where
+  toOpenApi _ = toOpenApi $ Proxy @(AddRenameSchema name api)
 
 type instance IsElem' e (WithRuntimeStatus api) = IsElem e api
 
@@ -125,6 +166,16 @@ type family AddStatusHeaders api where
     Stream method status framing ct (Headers (AppendStatusHeaders hs) a)
   AddStatusHeaders (Stream cTypes status framing ct a) = Stream cTypes status framing ct (Headers StatusHeaders a)
 
+type family AddRenameSchema name api where
+  AddRenameSchema name (path :> api) = path :> AddRenameSchema name api
+  AddRenameSchema name (a :<|> b) = AddRenameSchema name a :<|> AddRenameSchema name b
+  AddRenameSchema name (Verb method cTypes status (Headers hs a)) =
+    Verb method cTypes status (Headers hs (RenameSchema name a))
+  AddRenameSchema name (Verb method cTypes status a) = Verb method cTypes status (RenameSchema name a)
+  AddRenameSchema name (Stream method status framing ct (Headers hs a)) =
+    Stream method status framing ct (Headers hs (RenameSchema name a))
+  AddRenameSchema name (Stream cTypes status framing ct a) = Stream cTypes status framing ct (RenameSchema name a)
+
 instance (RunClient m, HasClient m (AddStatusHeaders api)) => HasClient m (WithRuntimeStatus api) where
   type Client m (WithRuntimeStatus api) = Client m (AddStatusHeaders api)
   clientWithRoute m _ = clientWithRoute m $ Proxy @(AddStatusHeaders api)
@@ -162,10 +213,16 @@ type PayoutsAPI =
 
 -- | GET /contracts sub-API
 type GetContractsAPI =
-  QueryParams "roleCurrency" PolicyId
+  Summary "Get contracts"
+    :> Description
+        "Get contracts published on chain. \
+        \Results are returned in pages, with paging being specified by request headers."
+    :> OperationId "getContracts"
+    :> QueryParams "roleCurrency" PolicyId
     :> QueryParams "tag" Text
     :> QueryParams "partyAddress" Address
     :> QueryParams "partyRole" AssetId
+    :> RenameResponseSchema "GetContractsResponse"
     :> PaginatedGet '["contractId"] GetContractsResponse
 
 type GetContractsResponse = WithLink "transactions" (WithLink "contract" ContractHeader)
@@ -205,22 +262,42 @@ instance HasNamedLink (CreateTxEnvelope tx) API "contract" where
 
 -- | POST /contracts sub-API
 type PostContractsAPI =
-  ReqBody '[JSON] PostContractsRequest
-    :> Header "X-Stake-Address" StakeAddress
-    :> PostTxAPI (PostCreated '[JSON] (PostContractsResponse CardanoTxBody))
-    :<|> ReqBody '[JSON] PostContractsRequest
-      :> Header "X-Stake-Address" StakeAddress
-      :> PostTxAPI (PostCreated '[TxJSON ContractTx] (PostContractsResponse CardanoTx))
+  Summary "Create a new contract"
+    :> Description
+        "Build an unsigned (Cardano) transaction body which opens a new Marlowe contract. \
+        \This unsigned transaction must be signed by a wallet (such as a CIP-30 or CIP-45 wallet) before being submitted. \
+        \To submit the signed transaction, use the PUT /contracts/{contractId} endpoint."
+    :> OperationId "createContract"
+    :> RenameResponseSchema "CreateContractResponse"
+    :> Header'
+        '[Optional, Strict, Description "Where to send staking rewards for the Marlowe script outputs of this contract."]
+        "X-Stake-Address"
+        StakeAddress
+    :> ( ReqBody '[JSON] PostContractsRequest :> PostTxAPI (PostCreated '[JSON] (PostContractsResponse CardanoTxBody))
+          :<|> ReqBody '[JSON] PostContractsRequest :> PostTxAPI (PostCreated '[TxJSON ContractTx] (PostContractsResponse CardanoTx))
+       )
 
 -- | /contracts/:contractId sub-API
 type ContractAPI =
   GetContractAPI
-    :<|> PutSignedTxAPI
+    :<|> Summary "Submit contract to chain"
+      :> Description
+          "Submit a signed (Cardano) transaction that opens a new Marlowe contract. \
+          \The transaction must have originally been created by the POST /contracts endpoint. \
+          \This endpoint will respond when the transaction is submitted successfully to the local node, which means \
+          \it will not wait for the transaction to be published in a block. \
+          \Use the GET /contracts/{contractId} endpoint to poll the on-chain status."
+      :> OperationId "submitContract"
+      :> PutSignedTxAPI
     :<|> "next" :> NextAPI
     :<|> "transactions" :> TransactionsAPI
 
 -- | GET /contracts/:contractId sub-API
-type GetContractAPI = Get '[JSON] GetContractResponse
+type GetContractAPI =
+  Summary "Get contract by ID"
+    :> OperationId "getContractById"
+    :> RenameResponseSchema "GetContractResponse"
+    :> Get '[JSON] GetContractResponse
 
 type GetContractResponse = WithLink "transactions" ContractState
 
@@ -234,8 +311,11 @@ type NextAPI = GETNextContinuationAPI
 
 -- | GET /contracts/:contractId/next/continuation sub-API
 type GETNextContinuationAPI =
-  QueryParam' '[Required] "validityStart" UTCTime
-    :> QueryParam' '[Required] "validityEnd" UTCTime
+  Summary "Get next contract steps"
+    :> Description "Get inputs which could be performed on a contract withing a time range by the requested parties."
+    :> "getNextStepsForContract"
+    :> QueryParam' '[Required, Description "The beginning of the validity range."] "validityStart" UTCTime
+    :> QueryParam' '[Required, Description "The end of the validity range."] "validityEnd" UTCTime
     :> QueryParams "party" Party
     :> Get '[JSON] Next
 
@@ -247,19 +327,36 @@ type ContractSourcesAPI =
 -- | /contracts/sources/:contractSourceId sub-API
 type ContractSourceAPI =
   GetContractSourceAPI
-    :<|> "adjacency" :> GetContractSourceIdsAPI
-    :<|> "closure" :> GetContractSourceIdsAPI
+    :<|> "adjacency"
+      :> Summary "Get adjacent contract source IDs by ID"
+      :> Description
+          "Get the contract source IDs which are adjacent to a contract source (they appear directly in the contract source)."
+      :> OperationId "getContractSourceAdjacency"
+      :> GetContractSourceIdsAPI
+    :<|> "closure"
+      :> Summary "Get contract source closure by ID"
+      :> Description
+          "Get the contract source IDs which appear in the full hierarchy of a contract source (including the ID of the contract source its self)."
+      :> OperationId "getContractSourceClosure"
+      :> GetContractSourceIdsAPI
 
 type PostContractSourcesAPI =
-  QueryParam' '[Required] "main" Label
+  Summary "Upload contract sources"
+    :> Description
+        "Upload a bundle of marlowe objects as contract sources. This API supports request body streaming, with newline \
+        \framing between request bundles."
+    :> OperationId "createContractSources"
+    :> QueryParam' '[Required, Description "The label of the top-level contract object in the bundle(s)."] "main" Label
     :> StreamBody NewlineFraming JSON (Producer ObjectBundle IO ())
     :> Post '[JSON] PostContractSourceResponse
 
 type GetContractSourceAPI =
-  QueryFlag "expand"
+  Summary "Get contract source by ID"
+    :> OperationId "getContractSourceById"
+    :> QueryFlag "expand"
     :> Get '[JSON] Contract
 
-type GetContractSourceIdsAPI = Get '[JSON] (ListObject ContractSourceId)
+type GetContractSourceIdsAPI = RenameResponseSchema "ContractSourceIds" :> Get '[JSON] (ListObject ContractSourceId)
 
 -- | /contracts/:contractId/transactions sub-API
 type TransactionsAPI =
@@ -280,9 +377,17 @@ instance MimeUnrender (TxJSON ApplyInputsTx) (PostTransactionsResponse CardanoTx
 
 -- | POST /contracts/:contractId/transactions sub-API
 type PostTransactionsAPI =
-  ReqBody '[JSON] PostTransactionsRequest :> PostTxAPI (PostCreated '[JSON] (PostTransactionsResponse CardanoTxBody))
-    :<|> ReqBody '[JSON] PostTransactionsRequest
-      :> PostTxAPI (PostCreated '[TxJSON ApplyInputsTx] (PostTransactionsResponse CardanoTx))
+  Summary "Apply inputs to contract"
+    :> Description
+        "Build an unsigned (Cardano) transaction body which applies inputs to an open Marlowe contract. \
+        \This unsigned transaction must be signed by a wallet (such as a CIP-30 or CIP-45 wallet) before being submitted. \
+        \To submit the signed transaction, use the PUT /contracts/{contractId}/transactions/{transactionId} endpoint."
+    :> OperationId "applyInputsToContract"
+    :> RenameResponseSchema "ApplyInputsResponse"
+    :> ( ReqBody '[JSON] PostTransactionsRequest :> PostTxAPI (PostCreated '[JSON] (PostTransactionsResponse CardanoTxBody))
+          :<|> ReqBody '[JSON] PostTransactionsRequest
+            :> PostTxAPI (PostCreated '[TxJSON ApplyInputsTx] (PostTransactionsResponse CardanoTx))
+       )
 
 type PostTransactionsResponse tx = WithLink "transaction" (ApplyInputsTxEnvelope tx)
 
@@ -297,7 +402,14 @@ instance HasNamedLink (ApplyInputsTxEnvelope tx) API "transaction" where
   namedLink _ _ mkLink ApplyInputsTxEnvelope{..} = Just $ mkLink contractId transactionId
 
 -- | GET /contracts/:contractId/transactions sub-API
-type GetTransactionsAPI = PaginatedGet '["transactionId"] GetTransactionsResponse
+type GetTransactionsAPI =
+  Summary "Get transactions for contract"
+    :> Description
+        "Get published transactions for a contract. \
+        \Results are returned in pages, with paging being specified by request headers."
+    :> OperationId "getTransactionsForContract"
+    :> RenameResponseSchema "GetTransactionsResponse"
+    :> PaginatedGet '["transactionId"] GetTransactionsResponse
 
 type GetTransactionsResponse = WithLink "transaction" TxHeader
 
@@ -314,10 +426,22 @@ instance HasNamedLink TxHeader API "transaction" where
 -- | /contracts/:contractId/transactions/:transactionId sub-API
 type TransactionAPI =
   GetTransactionAPI
-    :<|> PutSignedTxAPI
+    :<|> Summary "Submit contract input application"
+      :> Description
+          "Submit a signed (Cardano) transaction that applies inputs to an open Marlowe contract. \
+          \The transaction must have originally been created by the POST /contracts/{contractId}/transactions endpoint. \
+          \This endpoint will respond when the transaction is submitted successfully to the local node, which means \
+          \it will not wait for the transaction to be published in a block. \
+          \Use the GET /contracts/{contractId}/transactions/{transactionId} endpoint to poll the on-chain status."
+      :> OperationId "submitContractTransaction"
+      :> PutSignedTxAPI
 
 -- | GET /contracts/:contractId/transactions/:transactionId sub-API
-type GetTransactionAPI = Get '[JSON] GetTransactionResponse
+type GetTransactionAPI =
+  Summary "Get contract transaction by ID"
+    :> OperationId "getContractTransactionById"
+    :> RenameResponseSchema "GetTransactionResponse"
+    :> Get '[JSON] GetTransactionResponse
 
 type GetTransactionResponse = WithLink "previous" (WithLink "next" Tx)
 
@@ -345,7 +469,13 @@ instance HasNamedLink Tx API "next" where
 
 -- | GET /contracts/:contractId/withdrawals sub-API
 type GetWithdrawalsAPI =
-  QueryParams "roleCurrency" PolicyId
+  Summary "Get withdrawals"
+    :> Description
+        "Get published withdrawal transactions. \
+        \Results are returned in pages, with paging being specified by request headers."
+    :> OperationId "getWithdrawals"
+    :> QueryParams "roleCurrency" PolicyId
+    :> RenameResponseSchema "GetWithdrawalsResponse"
     :> PaginatedGet '["withdrawalId"] GetWithdrawalsResponse
 
 type GetWithdrawalsResponse = WithLink "withdrawal" WithdrawalHeader
@@ -358,9 +488,18 @@ instance HasNamedLink WithdrawalHeader API "withdrawal" where
 
 -- | GET /payouts sub-API
 type GetPayoutsAPI =
-  QueryParams "contractId" TxOutRef
+  Summary "Get role payouts"
+    :> Description
+        "Get payouts to parties from role-based contracts. \
+        \Results are returned in pages, with paging being specified by request headers."
+    :> OperationId "getPayouts"
+    :> QueryParams "contractId" TxOutRef
     :> QueryParams "roleToken" AssetId
-    :> QueryParam "status" PayoutStatus
+    :> QueryParam'
+        '[Optional, Description "Whether to include available or withdrawn payouts in the results."]
+        "status"
+        PayoutStatus
+    :> RenameResponseSchema "GetPayoutsResponse"
     :> PaginatedGet '["payoutId"] GetPayoutsResponse
 
 type GetPayoutsResponse = WithLink "payout" PayoutHeader
@@ -371,7 +510,11 @@ instance HasNamedLink PayoutHeader API "payout" where
       "payouts" :> Capture "payoutId" TxOutRef :> GetPayoutAPI
   namedLink _ _ mkLink PayoutHeader{..} = Just $ mkLink payoutId
 
-type GetPayoutAPI = Get '[JSON] GetPayoutResponse
+type GetPayoutAPI =
+  Summary "Get payout by ID"
+    :> OperationId "getPayoutById"
+    :> RenameResponseSchema "GetPayoutResponse"
+    :> Get '[JSON] GetPayoutResponse
 
 type GetPayoutResponse = WithLink "contract" (WithLink "transaction" (WithLink "withdrawal" PayoutState))
 
@@ -399,9 +542,17 @@ instance HasNamedLink PayoutState API "withdrawal" where
 
 -- | POST /contracts sub-API
 type PostWithdrawalsAPI =
-  ReqBody '[JSON] PostWithdrawalsRequest :> PostTxAPI (PostCreated '[JSON] (PostWithdrawalsResponse CardanoTxBody))
-    :<|> ReqBody '[JSON] PostWithdrawalsRequest
-      :> PostTxAPI (PostCreated '[TxJSON WithdrawTx] (PostWithdrawalsResponse CardanoTx))
+  Summary "Withdraw payouts"
+    :> Description
+        "Build an unsigned (Cardano) transaction body which withdraws available payouts from a role payout validator. \
+        \This unsigned transaction must be signed by a wallet (such as a CIP-30 or CIP-45 wallet) before being submitted. \
+        \To submit the signed transaction, use the PUT /withdrawals/{withdrawalId} endpoint."
+    :> OperationId "withdrawPayouts"
+    :> RenameResponseSchema "WithdrawPayoutsResponse"
+    :> ( ReqBody '[JSON] PostWithdrawalsRequest :> PostTxAPI (PostCreated '[JSON] (PostWithdrawalsResponse CardanoTxBody))
+          :<|> ReqBody '[JSON] PostWithdrawalsRequest
+            :> PostTxAPI (PostCreated '[TxJSON WithdrawTx] (PostWithdrawalsResponse CardanoTx))
+       )
 
 type PostWithdrawalsResponse tx = WithLink "withdrawal" (WithdrawTxEnvelope tx)
 
@@ -425,14 +576,26 @@ instance HasNamedLink (WithdrawTxEnvelope tx) API "withdrawal" where
 -- | /contracts/:contractId/withdrawals/:withdrawalId sub-API
 type WithdrawalAPI =
   GetWithdrawalAPI
-    :<|> PutSignedTxAPI
+    :<|> Summary "Submit payout withdrawal"
+      :> Description
+          "Submit a signed (Cardano) transaction that withdraws available payouts from a role payout validator. \
+          \The transaction must have originally been created by the POST /withdrawals endpoint. \
+          \This endpoint will respond when the transaction is submitted successfully to the local node, which means \
+          \it will not wait for the transaction to be published in a block. \
+          \Use the GET /withdrawals/{withdrawalId} endpoint to poll the on-chain status."
+      :> OperationId "submitWithdrawal"
+      :> PutSignedTxAPI
 
 -- | GET /contracts/:contractId/withdrawals/:withdrawalId sub-API
-type GetWithdrawalAPI = Get '[JSON] Withdrawal
+type GetWithdrawalAPI =
+  Summary "Get withdrawal by ID"
+    :> OperationId "getWithdrawalById"
+    :> Get '[JSON] Withdrawal
 
 -- | Helper type for defining generic paginated GET endpoints
 type PaginatedGet rangeFields resource =
   Header "Range" (Ranges rangeFields resource)
+    :> RenameResponseSchema "GetContractsResponse"
     :> GetPartialContent '[JSON] (PaginatedResponse rangeFields resource)
 
 -- | Helper type for describing the response type of generic paginated APIs
@@ -488,6 +651,26 @@ instance HasLinkParser (Verb m s ct a) where
   linkParser _ _ = eof $> id
 
 instance (HasLinkParser sub) => HasLinkParser (Header' mods sym a :> sub) where
+  linkParser isStart _ = linkParser isStart $ Proxy @sub
+
+instance (HasLinkParser sub) => HasLinkParser (Summary summary :> sub) where
+  linkParser isStart _ = linkParser isStart $ Proxy @sub
+
+instance (HasLinkParser sub) => HasLinkParser (Description desc :> sub) where
+  linkParser isStart _ = linkParser isStart $ Proxy @sub
+
+instance (HasLink sub) => HasLink (OperationId name :> sub) where
+  type MkLink (OperationId name :> sub) link = MkLink sub link
+  toLink f _ = toLink f $ Proxy @sub
+
+instance (HasLinkParser sub) => HasLinkParser (OperationId name :> sub) where
+  linkParser isStart _ = linkParser isStart $ Proxy @sub
+
+instance (HasLink sub) => HasLink (RenameResponseSchema name :> sub) where
+  type MkLink (RenameResponseSchema name :> sub) link = MkLink sub link
+  toLink f _ = toLink f $ Proxy @sub
+
+instance (HasLinkParser sub) => HasLinkParser (RenameResponseSchema name :> sub) where
   linkParser isStart _ = linkParser isStart $ Proxy @sub
 
 instance

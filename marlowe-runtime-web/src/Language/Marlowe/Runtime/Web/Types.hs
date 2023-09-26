@@ -165,7 +165,7 @@ instance ToParamSchema Address where
   toParamSchema _ =
     mempty
       & type_ ?~ OpenApiString
-      & OpenApi.description ?~ "A cardano address"
+      & OpenApi.description ?~ "A cardano address, in Bech32 format"
       & example ?~ "addr1w94f8ywk4fg672xasahtk4t9k6w3aql943uxz5rt62d4dvq8evxaf"
 
 newtype StakeAddress = StakeAddress {unStakeAddress :: T.Text}
@@ -179,7 +179,7 @@ instance ToParamSchema StakeAddress where
   toParamSchema _ =
     mempty
       & type_ ?~ OpenApiString
-      & OpenApi.description ?~ "A cardano stake address"
+      & OpenApi.description ?~ "A cardano stake address, in Bech32 format"
       & example ?~ "stake1ux7lyy9nhecm033qsmel9awnr22up6jadlzkrxufr78w82gsfsn0d"
 
 newtype CommaList a = CommaList {unCommaList :: [a]}

@@ -111,6 +111,7 @@ library server
     Language.Marlowe.Runtime.Web.Server.REST.Withdrawals
     Language.Marlowe.Runtime.Web.Server.SyncClient
     Language.Marlowe.Runtime.Web.Server.TxClient
+    Paths_marlowe_runtime_web
 
   build-depends:
     , aeson >=2 && <3
@@ -131,6 +132,7 @@ library server
     , exceptions >=0.10 && <0.12
     , http-media ^>=0.8
     , lens >=5.2 && <6
+    , lens-aeson ^>=1.2
     , marlowe-cardano ==0.2.0.0
     , marlowe-chain-sync ==0.0.5
     , marlowe-client ==0.0.5
@@ -159,14 +161,13 @@ library server
     , wai-cors ^>=0.2
 
 executable marlowe-web-server
-  import:          lang
-  hs-source-dirs:  app
-  main-is:         Main.hs
+  import:         lang
+  hs-source-dirs: app
+  main-is:        Main.hs
   other-modules:
     Options
     Paths_marlowe_runtime_web
 
-  autogen-modules: Paths_marlowe_runtime_web
   build-depends:
     , async-components ==0.1.1.0
     , base >=4.9 && <5
@@ -187,14 +188,13 @@ executable marlowe-web-server
     , wai >=3.2 && <4
     , warp
 
-  ghc-options:     -threaded
+  ghc-options:    -threaded
 
 test-suite marlowe-runtime-web-test
   import:         lang
   hs-source-dirs: test
   type:           exitcode-stdio-1.0
   main-is:        Spec.hs
-  other-modules:  Paths_marlowe_runtime_web
   build-depends:
     , aeson >=2 && <3
     , base >=4.9 && <5

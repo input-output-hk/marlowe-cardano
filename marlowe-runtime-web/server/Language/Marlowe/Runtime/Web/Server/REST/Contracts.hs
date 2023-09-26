@@ -54,7 +54,7 @@ import Servant.Pagination
 server :: ServerT ContractsAPI ServerM
 server =
   get
-    :<|> (postCreateTxBodyResponse :<|> postCreateTxResponse)
+    :<|> (\stakeAddress -> postCreateTxBodyResponse stakeAddress :<|> postCreateTxResponse stakeAddress)
     :<|> contractServer
     :<|> ContractSources.server
 
@@ -97,13 +97,13 @@ postCreateTxBody PostContractsRequest{..} stakeAddressDTO changeAddressDTO mAddr
         (ContractCreated ReferenceTxInsScriptsInlineDatumsInConwayEra ContractCreatedInEra{contractId, txBody, safetyErrors}) -> pure (contractId, TxBodyInAnyEra txBody, safetyErrors)
 
 postCreateTxBodyResponse
-  :: PostContractsRequest
-  -> Maybe StakeAddress
+  :: Maybe StakeAddress
+  -> PostContractsRequest
   -> Address
   -> Maybe (CommaList Address)
   -> Maybe (CommaList TxOutRef)
   -> ServerM (PostContractsResponse CardanoTxBody)
-postCreateTxBodyResponse req stakeAddressDTO changeAddressDTO mAddresses mCollateralUtxos = do
+postCreateTxBodyResponse stakeAddressDTO req changeAddressDTO mAddresses mCollateralUtxos = do
   (contractId, TxBodyInAnyEra txBody, safetyErrors) <-
     postCreateTxBody req stakeAddressDTO changeAddressDTO mAddresses mCollateralUtxos
   let (contractId', txBody') = toDTO (contractId, txBody)
@@ -111,13 +111,13 @@ postCreateTxBodyResponse req stakeAddressDTO changeAddressDTO mAddresses mCollat
   pure $ IncludeLink (Proxy @"contract") body
 
 postCreateTxResponse
-  :: PostContractsRequest
-  -> Maybe StakeAddress
+  :: Maybe StakeAddress
+  -> PostContractsRequest
   -> Address
   -> Maybe (CommaList Address)
   -> Maybe (CommaList TxOutRef)
   -> ServerM (PostContractsResponse CardanoTx)
-postCreateTxResponse req stakeAddressDTO changeAddressDTO mAddresses mCollateralUtxos = do
+postCreateTxResponse stakeAddressDTO req changeAddressDTO mAddresses mCollateralUtxos = do
   (contractId, TxBodyInAnyEra txBody, safetyErrors) <-
     postCreateTxBody req stakeAddressDTO changeAddressDTO mAddresses mCollateralUtxos
   let tx = makeSignedTransaction [] txBody
