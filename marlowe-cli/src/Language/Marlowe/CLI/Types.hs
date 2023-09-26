@@ -451,6 +451,7 @@ instance (IsPlutusScriptLanguage lang, IsShelleyBasedEra era) => ToJSON (Marlowe
     object
       [ "marloweValidator" .= toJSON mtValidator
       , "rolesValidator" .= toJSON mtRoleValidator
+      , "openRolesValidator" .= toJSON mtOpenRoleValidator
       , "roles" .= toJSON mtRolesCurrency
       , "state" .= toJSON mtState
       , "contract" .= toJSON mtContract
