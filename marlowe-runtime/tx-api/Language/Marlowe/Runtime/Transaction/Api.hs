@@ -23,6 +23,8 @@ module Language.Marlowe.Runtime.Transaction.Api (
   LoadMarloweContextError (..),
   MarloweTxCommand (..),
   Mint (unMint),
+  Destination (..),
+  HelperScript (..),
   NFTMetadataFile (..),
   RoleTokenMetadata (..),
   RoleTokensConfig (..),
@@ -263,18 +265,30 @@ encodeRoleTokenMetadata = encodeNFTMetadataDetails
     encodeText :: Text -> Metadata
     encodeText = MetadataList . fmap MetadataText . Text.chunksOf 64
 
+data HelperScript = OpenRoleScript
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving anyclass (Binary, ToJSON, Variations)
+
+data Destination
+  = ToAddress Address
+  | ToSelf
+  | ToScript HelperScript
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving anyclass (Binary, ToJSON, Variations)
+
 -- | Non empty mint request.
-newtype Mint = Mint {unMint :: Map TokenName (Address, Maybe RoleTokenMetadata)}
+newtype Mint = Mint {unMint :: Map TokenName (Destination, Maybe RoleTokenMetadata)}
   deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (Binary, Semigroup, Monoid, ToJSON, Variations)
 
-mkMint :: NonEmpty (TokenName, (Address, Maybe RoleTokenMetadata)) -> Mint
+mkMint :: NonEmpty (TokenName, (Destination, Maybe RoleTokenMetadata)) -> Mint
 mkMint = Mint . Map.fromList . NonEmpty.toList
 
 data RoleTokensConfig
   = RoleTokensNone
   | RoleTokensUsePolicy PolicyId
   | RoleTokensMint Mint
+  | RoleTokensUsePolicyWithOpenRoles PolicyId [TokenName]
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary, ToJSON, Variations)
 

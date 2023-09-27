@@ -86,6 +86,7 @@ import Language.Marlowe.Runtime.Transaction.Api (
   ApplyInputsError (..),
   CreateBuildupError (AddressDecodingFailed, MintingScriptDecodingFailed, MintingUtxoSelectionFailed),
   CreateError (..),
+  Destination (..),
   Mint (unMint),
   RoleTokensConfig (..),
   WithdrawError (..),
@@ -251,6 +252,7 @@ buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx roles metadata m
     mintRoleTokens :: TxConstraintsBuilderM CreateError era 'V1 m PolicyId
     mintRoleTokens = case roles of
       RoleTokensUsePolicy policyId -> pure policyId
+      RoleTokensUsePolicyWithOpenRoles policyId _ -> pure policyId
       RoleTokensMint (unMint -> minting) -> do
         let WalletContext{availableUtxos} = walletCtx
             txLovelaceRequirementEstimate =
@@ -285,8 +287,11 @@ buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx roles metadata m
                 (C.ExecutionUnits 0 0)
             policyId = PolicyId . unScriptHash $ scriptHash
 
-        for_ (Map.toList minting) \(tokenName, (address, _)) ->
-          tell $ mustMintRoleToken txOutRef witness (AssetId policyId tokenName) address
+        for_ (Map.toList minting) \(tokenName, (destination, _)) ->
+          case destination of
+            ToAddress address -> tell $ mustMintRoleToken txOutRef witness (AssetId policyId tokenName) address
+            ToSelf -> pure ()
+            ToScript _ -> pure ()
         pure policyId
       RoleTokensNone -> do
         let -- We use ADA currency symbol as a placeholder which
