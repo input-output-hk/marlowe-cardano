@@ -35,19 +35,19 @@ showStatement :: String -> Statement a b -> String
 showStatement title (Statement sql _ _ _) = title <> ": " <> T.unpack (decodeUtf8 sql)
 
 removeDuplicateWithdrawnSets :: Set QueryModifications -> Bool
-removeDuplicateWithdrawnSets mods = not $ Set.member SetIsWithdrawnFalse mods && Set.member SetIsWithdrawnTrue mods
+removeDuplicateWithdrawnSets mods = not $ Set.member Available mods && Set.member Withdrawn mods
 
 modificationsToPayoutFilterAndRange :: Set QueryModifications -> (PayoutFilter, Range TxOutRef)
 modificationsToPayoutFilterAndRange = foldr modifyPayoutFilterAndRange defaultPayoutAndRange
 
 modifyPayoutFilterAndRange :: QueryModifications -> (PayoutFilter, Range TxOutRef) -> (PayoutFilter, Range TxOutRef)
 modifyPayoutFilterAndRange = \case
-  SetIsWithdrawnFalse -> first \pFilter -> pFilter{isWithdrawn = Just False}
-  SetIsWithdrawnTrue -> first \pFilter -> pFilter{isWithdrawn = Just True}
-  SpecifyContractId -> first \pFilter -> pFilter{contractIds = Set.singleton "#1"}
-  SpecifyRoleToken -> first \pFilter -> pFilter{roleTokens = Set.singleton $ AssetId "" ""}
-  SetRangeStart -> fmap \range -> range{rangeStart = Just "#2"}
-  SetRangeAscending -> fmap \range -> range{rangeDirection = Ascending}
+  Available -> first \pFilter -> pFilter{isWithdrawn = Just False}
+  Withdrawn -> first \pFilter -> pFilter{isWithdrawn = Just True}
+  ContractId -> first \pFilter -> pFilter{contractIds = Set.singleton "#1"}
+  RoleToken -> first \pFilter -> pFilter{roleTokens = Set.singleton $ AssetId "" ""}
+  RangeStart -> fmap \range -> range{rangeStart = Just "#2"}
+  RangeAscending -> fmap \range -> range{rangeDirection = Ascending}
 
 defaultPayoutAndRange :: (PayoutFilter, Range TxOutRef)
 defaultPayoutAndRange =
@@ -56,10 +56,10 @@ defaultPayoutAndRange =
   )
 
 data QueryModifications
-  = SetIsWithdrawnFalse
-  | SetIsWithdrawnTrue
-  | SpecifyContractId
-  | SpecifyRoleToken
-  | SetRangeStart
-  | SetRangeAscending
+  = Available
+  | Withdrawn
+  | ContractId
+  | RoleToken
+  | RangeStart
+  | RangeAscending
   deriving (Eq, Show, Ord, Enum, Bounded)

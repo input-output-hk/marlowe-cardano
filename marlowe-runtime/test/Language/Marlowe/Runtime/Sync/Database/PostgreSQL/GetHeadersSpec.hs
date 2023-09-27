@@ -41,12 +41,12 @@ modificationsToContractFilterAndRange = foldr modifyContractFilterAndRange defau
 modifyContractFilterAndRange
   :: QueryModifications -> (ContractFilter, Range ContractId) -> (ContractFilter, Range ContractId)
 modifyContractFilterAndRange = \case
-  SpecifyRolesCurrency -> first \cFilter -> cFilter{roleCurrencies = Set.singleton ""}
-  SpecifyTag -> first \cFilter -> cFilter{tags = Set.singleton $ MarloweMetadataTag ""}
-  SpecifyPartyRole -> first \cFilter -> cFilter{partyRoles = Set.singleton $ AssetId "" ""}
-  SpecifyPartyAddress -> first \cFilter -> cFilter{partyAddresses = Set.singleton $ Address ""}
-  SetRangeStart -> fmap \range -> range{rangeStart = Just "#2"}
-  SetRangeAscending -> fmap \range -> range{rangeDirection = Ascending}
+  RolesCurrency -> first \cFilter -> cFilter{roleCurrencies = Set.singleton ""}
+  Tag -> first \cFilter -> cFilter{tags = Set.singleton $ MarloweMetadataTag ""}
+  PartyRole -> first \cFilter -> cFilter{partyRoles = Set.singleton $ AssetId "" ""}
+  PartyAddress -> first \cFilter -> cFilter{partyAddresses = Set.singleton $ Address ""}
+  RangeStart -> fmap \range -> range{rangeStart = Just "#2"}
+  RangeAscending -> fmap \range -> range{rangeDirection = Ascending}
 
 defaultContractAndRange :: (ContractFilter, Range ContractId)
 defaultContractAndRange =
@@ -55,10 +55,10 @@ defaultContractAndRange =
   )
 
 data QueryModifications
-  = SpecifyRolesCurrency
-  | SpecifyTag
-  | SpecifyPartyRole
-  | SpecifyPartyAddress
-  | SetRangeStart
-  | SetRangeAscending
+  = RolesCurrency
+  | Tag
+  | PartyRole
+  | PartyAddress
+  | RangeStart
+  | RangeAscending
   deriving (Eq, Show, Ord, Enum, Bounded)
