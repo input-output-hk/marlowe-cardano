@@ -47,6 +47,7 @@ import Language.Marlowe.Runtime.Transaction.Api (
   ApplyInputsConstraintsBuildupError (..),
   ApplyInputsError (..),
   CreateError,
+  Destination (ToAddress),
   RoleTokensConfig (..),
   mkMint,
   unMint,
@@ -89,6 +90,7 @@ import Test.QuickCheck (
   discard,
   elements,
   forAllShrink,
+  frequency,
   genericShrink,
   listOf,
   listOf1,
@@ -126,7 +128,10 @@ createSpec = Hspec.describe "buildCreateConstraints" do
   Hspec.QuickCheck.prop "sends minted role tokens" \(SomeCreateArgs args) ->
     case roleTokensConfig args of
       RoleTokensMint mint ->
-        let result = extractSentRoleTokens <$> runBuildCreateConstraints args
+        let result =
+              -- FIXME: PLT-7111
+              Map.map Transaction.Api.ToAddress . extractSentRoleTokens
+                <$> runBuildCreateConstraints args
             expected = fst <$> unMint mint
          in case version args of
               MarloweV1 -> result === Right expected
@@ -246,15 +251,17 @@ instance Arbitrary WalletContext where
 
 instance Arbitrary RoleTokensConfig where
   arbitrary =
-    oneof
-      [ pure RoleTokensNone
-      , RoleTokensUsePolicy . Chain.PolicyId <$> byteStringGen
-      , RoleTokensMint . mkMint . NE.fromList <$> listOf1 ((,) <$> genRole <*> ((,Nothing) <$> arbitrary))
+    frequency
+      [ (10, pure RoleTokensNone)
+      , (10, RoleTokensUsePolicy . Chain.PolicyId <$> byteStringGen)
+      , (10, RoleTokensMint . mkMint . NE.fromList <$> listOf1 ((,) <$> genRole <*> ((,Nothing) . ToAddress <$> arbitrary)))
+      , (1, RoleTokensUsePolicyWithOpenRoles . Chain.PolicyId <$> byteStringGen <*> arbitrary)
       ]
   shrink = \case
     RoleTokensNone -> []
     RoleTokensUsePolicy _ -> [RoleTokensNone]
     RoleTokensMint _ -> [RoleTokensNone]
+    RoleTokensUsePolicyWithOpenRoles _ _ -> [RoleTokensNone]
 
 notEmptyWalletContext :: WalletContext -> Bool
 notEmptyWalletContext WalletContext{..} = not $ null $ toUTxOsList availableUtxos

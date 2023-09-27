@@ -791,6 +791,7 @@ instance FromDTO Tx.RoleTokensConfig where
   fromDTO = \case
     Nothing -> pure Tx.RoleTokensNone
     Just (Web.UsePolicy policy) -> Tx.RoleTokensUsePolicy <$> fromDTO policy
+    Just (Web.UsePolicyWithOpenRoles policy openRoleNames) -> Tx.RoleTokensUsePolicyWithOpenRoles <$> fromDTO policy <*> fromDTO openRoleNames
     Just (Web.Mint mint) -> Tx.RoleTokensMint <$> fromDTO mint
 
 instance HasDTO Tx.Mint where
@@ -804,11 +805,13 @@ instance FromDTO Tx.Mint where
         . Map.toList
     where
       convertConfig = \case
-        Web.RoleTokenSimple address -> (,Nothing) <$> fromDTO address
+        Web.RoleTokenSimple address -> (,Nothing) . Tx.ToAddress <$> fromDTO address
         Web.RoleTokenAdvanced address metadata ->
-          curry (second Just)
+          curry (second Just) . Tx.ToAddress
             <$> fromDTO address
             <*> fromDTO metadata
+        Web.OpenRoleTokenSimple -> pure (Tx.ToScript Tx.OpenRoleScript, Nothing)
+        Web.OpenRoleTokenAdvanced metadata -> (Tx.ToScript Tx.OpenRoleScript,) . Just <$> fromDTO metadata
 
 instance HasDTO Tx.RoleTokenMetadata where
   type DTO Tx.RoleTokenMetadata = Web.TokenMetadata
