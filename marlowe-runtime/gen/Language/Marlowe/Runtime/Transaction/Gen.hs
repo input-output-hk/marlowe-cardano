@@ -102,16 +102,32 @@ instance Arbitrary RoleTokenMetadata where
       <*> arbitrary
   shrink = genericShrink
 
+instance Arbitrary HelperScript where
+  arbitrary = pure OpenRoleScript
+  shrink = genericShrink
+
+instance Arbitrary Destination where
+  arbitrary =
+    frequency
+      [ (30, ToAddress <$> arbitrary)
+      , (2, pure ToSelf)
+      , (1, ToScript <$> arbitrary)
+      ]
+  shrink (ToAddress address) = ToAddress <$> genericShrink address
+  shrink ToSelf = []
+  shrink (ToScript script) = ToScript <$> genericShrink script
+
 instance Arbitrary Mint where
   arbitrary = mkMint <$> arbitrary
   shrink = genericShrink
 
 instance Arbitrary RoleTokensConfig where
   arbitrary =
-    oneof
-      [ pure RoleTokensNone
-      , RoleTokensUsePolicy <$> arbitrary
-      , RoleTokensMint <$> arbitrary
+    frequency
+      [ (10, pure RoleTokensNone)
+      , (10, RoleTokensUsePolicy <$> arbitrary)
+      , (10, RoleTokensMint <$> arbitrary)
+      , (1, RoleTokensUsePolicyWithOpenRoles <$> arbitrary <*> arbitrary)
       ]
   shrink = genericShrink
 
