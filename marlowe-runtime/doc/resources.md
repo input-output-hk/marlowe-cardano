@@ -15,16 +15,25 @@ The table below provides guidance on the memory and CPU resources required for M
 
 | Service                 | Memory  | CPU (cores) |
 |-------------------------|--------:|------------:|
-| `marlowe-chain-indexer` | 4000 MB |       150 % |
-| `marlowe-chain-sync`    |  150 MB |        25 % |
-| `marlowe-indexer`       |  100 MB |       125 % |
+| `marlowe-chain-indexer` | 4000 MB |       100 % |
+| `marlowe-chain-sync`    | 2500 MB |        25 % |
+| `marlowe-indexer`       | 2000 MB |       100 % |
 | `marlowe-sync`          |   50 MB |        25 % |
-| `marlowe-contract`      |   25 MB |         5 % |
+| `marlowe-contract`      |   25 MB |        50 % |
 | `marlowe-tx`            | 1000 MB |       100 % |
 | `marlowe-proxy`         |  100 MB |        50 % |
-| `marlowe-web-server`    |   50 MB |         5 % |
-| `otel-collector`        |  100 MB |        50 % |
-| Total                   | 6000 MB |       500 % |
+| `marlowe-web-server`    |   50 MB |        10 % |
+| Total                   | 9000 MB |       500 % |
+
+
+## Sync times
+
+On a 32-core Intel i9 with 4000 MHz dual-channel DDRS memory and 7000 MB/s SSDs, the following times for syncing the Marlowe schemas from genesis were observed.
+
+| Service                 | Mainnet | Preprod | Preview |
+|-------------------------|--------:|--------:|--------:|
+| `marlowe-chain-indexer` | 510 min |   7 min |  16 min |
+| `marlowe-indexer`       |   3 min |   1 min |   2 min |
 
 
 ## PostgreSQL
