@@ -19,7 +19,7 @@ The table below provides guidance on the memory and CPU resources required for M
 | `marlowe-chain-sync`    | 2500 MB |        25 % |
 | `marlowe-indexer`       | 2000 MB |       100 % |
 | `marlowe-sync`          |   50 MB |        25 % |
-| `marlowe-contract`      |   25 MB |        10 % |
+| `marlowe-contract`      |   25 MB |        50 % |
 | `marlowe-tx`            | 1000 MB |       100 % |
 | `marlowe-proxy`         |  100 MB |        50 % |
 | `marlowe-web-server`    |   50 MB |        10 % |
