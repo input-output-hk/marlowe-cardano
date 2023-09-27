@@ -16,14 +16,14 @@ import Cardano.Api.Shelley (
  )
 import Control.Applicative (Alternative)
 import Control.Arrow (Arrow ((&&&), (***)))
-import Control.Error (note)
+import Control.Error (catMaybes, note)
 import Control.Monad (guard)
 import Data.Bifunctor (Bifunctor (..))
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.Either (fromLeft, isRight)
 import Data.Foldable (fold)
-import Data.Functor ((<&>))
+import Data.Functor (($>), (<&>))
 import Data.List (find, isPrefixOf)
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -1167,6 +1167,7 @@ mustSpendRoleTokenViolations MarloweV1 utxos TxConstraints{..} TxBodyContent{..}
     passThroughUtxo = case roleTokenConstraints of
       SpendRoleTokens roleTokens -> do
         roleToken <- Set.toList roleTokens
+        guard $ roleToken /= Chain.AssetId "" ""
         (("roleToken: " <> show roleToken <> ": ") <>) <$> do
           let isMatch (_, Chain.TransactionOutput{assets = Chain.Assets{tokens = Chain.Tokens tokens}}) =
                 Map.member roleToken tokens
@@ -1410,11 +1411,11 @@ genV1MarloweConstraints = sized \n ->
   frequency
     [ (n, resize (n `div` 2) $ (<>) <$> genV1MarloweConstraints <*> genV1MarloweConstraints)
     , (1, pure mempty)
-    , (1, mustMintRoleToken <$> arbitrary <*> genMintScriptWitness <*> genRoleToken <*> arbitrary)
-    , (1, mustSpendRoleToken <$> genRoleToken)
+    , (1, mustMintRoleToken <$> arbitrary <*> genMintScriptWitness <*> genRoleToken False <*> arbitrary)
+    , (1, mustSpendRoleToken <$> genRoleToken True)
     , (1, mustPayToAddress <$> arbitrary <*> arbitrary)
     , (1, mustSendMarloweOutput <$> arbitrary <*> genDatum)
-    , (1, mustPayToRole <$> arbitrary <*> genRoleToken)
+    , (1, mustPayToRole <$> arbitrary <*> genRoleToken True)
     , (1, uncurry mustConsumeMarloweOutput <$> genValidityInterval <*> genInputs)
     , (1, requiresSignature <$> arbitrary)
     , (1, requiresMetadata <$> arbitrary)
@@ -1425,7 +1426,7 @@ genV1PayoutConstraints = sized \n ->
   frequency
     [ (n, resize (n `div` 2) $ (<>) <$> genV1PayoutConstraints <*> genV1PayoutConstraints)
     , (1, pure mempty)
-    , (1, mustSpendRoleToken <$> genRoleToken)
+    , (1, mustSpendRoleToken <$> genRoleToken True)
     , (1, mustPayToAddress <$> arbitrary <*> arbitrary)
     , (1, mustConsumePayout <$> arbitrary)
     , (1, requiresSignature <$> arbitrary)
@@ -1465,11 +1466,16 @@ genMintScriptWitness =
         <*> (ExecutionUnits <$> (fromIntegral @Word32 <$> arbitrary) <*> (fromIntegral @Word32 <$> arbitrary))
     ]
 
-genRoleToken :: Gen Chain.AssetId
-genRoleToken =
-  Chain.AssetId
-    <$> (hedgehog $ fromCardanoPolicyId . PolicyId <$> genScriptHash)
-    <*> genRole
+genRoleToken :: Bool -> Gen Chain.AssetId
+genRoleToken includeAda =
+  oneof $
+    catMaybes
+      [ pure $
+          Chain.AssetId
+            <$> (hedgehog $ fromCardanoPolicyId . PolicyId <$> genScriptHash)
+            <*> genRole
+      , guard includeAda $> pure (Chain.AssetId "" "")
+      ]
 
 -- NOTE just a random list of names that won't conflict with anything generated
 -- by Gen.Cardano.Api.Typed
@@ -1549,7 +1555,8 @@ genPayoutOutputs scriptAddresses TxConstraints{..} = (<>) <$> required <*> arbit
   where
     required =
       Map.fromList <$> for (Set.toList payoutInputConstraints) \payout ->
-        (payout,) <$> genTransactionOutput (elements scriptAddresses) (Just . toChainPayoutDatum MarloweV1 <$> genRoleToken)
+        (payout,)
+          <$> genTransactionOutput (elements scriptAddresses) (Just . toChainPayoutDatum MarloweV1 <$> genRoleToken True)
 
 genReferenceScriptUtxo :: Chain.Address -> Gen ReferenceScriptUtxo
 genReferenceScriptUtxo address =
