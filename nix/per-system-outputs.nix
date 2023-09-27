@@ -8,6 +8,7 @@ let
   staticPkgs = inputs'.self.packages.marlowe-apps-exe-marlowe-finder.project.projectCross.musl64.hsPkgs;
 
 in
+rec
 {
   operables = nix.marlowe-cardano.deploy.operables;
 
@@ -21,6 +22,11 @@ in
       staticPkgs.marlowe-cli.components.exes //
       staticPkgs.marlowe-runtime-cli.components.exes
     );
+
+  allStatic = pkgs.runCommand "all-statics" { } ''
+    mkdir -p $out
+    ${l.concatMapStringsSep "\n" (drv: "cp ${drv}/bin/* $out") (l.attrValues static)}
+  '';
 
   nomadTasks = nix.marlowe-cardano.deploy.nomadTasks;
 
