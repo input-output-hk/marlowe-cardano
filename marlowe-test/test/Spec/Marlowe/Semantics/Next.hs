@@ -40,7 +40,7 @@ import Spec.Marlowe.Semantics.Next.Contract.Generator (
 import Spec.Marlowe.Semantics.Next.Contract.When.Choice (onlyIndexedChoices)
 import Spec.Marlowe.Semantics.Next.Contract.When.Deposit (evaluateDeposits, hasNoIdenticalEvaluatedDeposits)
 import Spec.Marlowe.Semantics.Next.Contract.When.Notify (firstNotifyTrueIndex)
-import Test.QuickCheck (Arbitrary (..), forAllShrink, withMaxSuccess)
+import Test.QuickCheck (Arbitrary (..), forAllShrink, withMaxSuccess, (===))
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck (testProperty)
 
@@ -54,12 +54,12 @@ tests =
             "Can Reduce when contract is reducible"
             $ forAllSuchThat (getAll . on (<>) (fmap All . uncurry3) hasValidEnvironment isReducible)
             $ \(environment', state, contract) ->
-              Right (coerce True) == (canReduce <$> next environment' state contract)
+              Right (coerce True) === (canReduce <$> next environment' state contract)
         , testProperty
             "Can't Reduce when the contract provided is irreducible"
             $ forAllSuchThat (getAll . on (<>) (fmap All . uncurry3) hasValidEnvironment isIrreducible)
             $ \(environment', state, contract) ->
-              Right (coerce False) == (canReduce <$> next environment' state contract)
+              Right (coerce False) === (canReduce <$> next environment' state contract)
         ]
     , testGroup
         "Applicability"
@@ -67,7 +67,7 @@ tests =
             "\"Close\" is not applicable"
             $ forAllSuchThat (getAll . on (<>) (fmap All . uncurry3) hasValidEnvironment isReducibleToClose)
             $ \(environment', state, contract) ->
-              Right emptyApplicables == (applicables <$> next environment' state contract)
+              Right emptyApplicables === (applicables <$> next environment' state contract)
         , testGroup
             "Notify"
             [ testProperty
@@ -80,7 +80,7 @@ tests =
                 $ forAllShrink anyWithAtLeastOneNotifyTrue (filter (uncurry3 atLeastOneTrueNotify) . shrink)
                 $ \(environment', state, caseContracts) -> do
                   let expectedCaseIndex = fromJust . firstNotifyTrueIndex environment' state $ caseContracts
-                  Just expectedCaseIndex == ((getCaseIndex <$>) . notifyMaybe . mkApplicablesWhen environment' state $ caseContracts)
+                  Just expectedCaseIndex === ((getCaseIndex <$>) . notifyMaybe . mkApplicablesWhen environment' state $ caseContracts)
             ]
         , testGroup
             "Deposit"
@@ -89,14 +89,14 @@ tests =
                 $ forAllSuchThat (uncurry3 hasNoIdenticalEvaluatedDeposits)
                 $ \(environment', state, caseContracts) -> do
                   let evaluatedDeposits = evaluateDeposits environment' state caseContracts
-                  evaluatedDeposits == (to . deposits . mkApplicablesWhen environment' state $ caseContracts)
+                  evaluatedDeposits === (to . deposits . mkApplicablesWhen environment' state $ caseContracts)
             , testProperty
                 "Shadowing : Following Identical Evaluated Deposits are not applicable"
                 $ forAllShrink anyCaseContractsWithIdenticalEvaluatedDeposits (filter (uncurry3 hasDuplicateDeposits) . shrink)
                 $ \(environment', state, caseContracts) -> do
                   let evaluatedDeposits = evaluateDeposits environment' state caseContracts
                       canDeposits = to . deposits . mkApplicablesWhen environment' state $ caseContracts
-                  canDeposits == nubBy sameIndexedValue evaluatedDeposits
+                  canDeposits === nubBy sameIndexedValue evaluatedDeposits
             ]
         , testGroup
             "Choice"
@@ -120,7 +120,7 @@ tests =
                     $ forAllShrink anyCaseContractsWithChoiceOnlyNotShadowed shrink
                     $ \(environment', state, caseContracts) -> do
                       let indexedChoices = onlyIndexedChoices environment' state caseContracts
-                      indexedChoices == (to . choices . mkApplicablesWhen environment' state $ caseContracts)
+                      indexedChoices === (to . choices . mkApplicablesWhen environment' state $ caseContracts)
                 , testProperty
                     "\"[Indexed CanChoose]\" and [Choice] on the same id have the same merged Bounds "
                     $ withMaxSuccess 50
@@ -128,7 +128,7 @@ tests =
                     $ \(environment', state, caseContracts) -> do
                       let indexedChoices = to . onlyIndexedChoices environment' state $ caseContracts
                           canChooseList = choices . mkApplicablesWhen environment' state $ caseContracts
-                      compactAdjoinedBounds indexedChoices == compactAdjoinedBounds canChooseList
+                      compactAdjoinedBounds indexedChoices === compactAdjoinedBounds canChooseList
                 ]
             ]
         ]
