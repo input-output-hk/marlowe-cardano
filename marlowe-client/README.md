@@ -21,7 +21,7 @@ main = connectToMarloweRuntime "localhost" 3700 do
   _ <- runMarloweQueryClient $ getContractHeaders Nothing
 
   -- Interact with contracts
-  contractCreated <- createContract Nothing MarloweV1 wallet roleTokens mempty minAdaDeposit myContract
+  contractCreated <- createContract Nothing MarloweV1 wallet roleTokens mempty Nothing myContract
   -- Sign with method of choice
   submitAndWait $ signTx $ case contractCreated of ContractCreated{..} -> txBody
 

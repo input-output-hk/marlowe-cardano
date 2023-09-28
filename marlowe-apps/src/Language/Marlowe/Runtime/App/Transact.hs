@@ -53,7 +53,7 @@ run
   -> C.SigningKey C.PaymentExtendedKey
   -> Contract
   -> [[Input]]
-  -> Lovelace
+  -> Maybe Lovelace
   -> App ContractId
 run = runWithEvents unitEventBackend
 
@@ -64,7 +64,7 @@ runWithEvents
   -> C.SigningKey C.PaymentExtendedKey
   -> Contract
   -> [[Input]]
-  -> Lovelace
+  -> Maybe Lovelace
   -> App ContractId
 runWithEvents backend config address key contract inputs minUtxo =
   do
@@ -78,7 +78,7 @@ create
   -> Address
   -> C.SigningKey C.PaymentExtendedKey
   -> Contract
-  -> Lovelace
+  -> Maybe Lovelace
   -> App ContractId
 create = createWithEvents unitEventBackend
 
@@ -88,7 +88,7 @@ createWithEvents
   -> Address
   -> C.SigningKey C.PaymentExtendedKey
   -> Contract
-  -> Lovelace
+  -> Maybe Lovelace
   -> App ContractId
 createWithEvents backend config address key contract minUtxo =
   transactWithEvents' backend config key $

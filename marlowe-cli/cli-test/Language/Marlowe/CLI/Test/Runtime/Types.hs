@@ -209,7 +209,7 @@ data RuntimeOperation
       { roContractNickname :: Maybe ContractNickname
       , roSubmitter :: Maybe WalletNickname
       -- ^ A wallet which gonna submit the initial transaction.
-      , roMinLovelace :: Word64
+      , roMinLovelace :: Maybe Word64
       , roRoleCurrency :: Maybe CurrencyNickname
       -- ^ If contract uses roles then currency is required.
       , roContractSource :: Contract.Source

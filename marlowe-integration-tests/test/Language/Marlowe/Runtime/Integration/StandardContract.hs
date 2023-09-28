@@ -134,7 +134,7 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
                       }
               }
       )
-      2_000_000
+      Nothing
       (Right contractHash)
   contractCreated@(ContractCreated era0 ContractCreatedInEra{contractId, txBody = createTxBody}) <-
     expectRight "failed to create standard contract" result

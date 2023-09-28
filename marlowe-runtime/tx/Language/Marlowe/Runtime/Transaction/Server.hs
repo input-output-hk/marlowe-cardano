@@ -46,7 +46,7 @@ import Control.Concurrent.STM (STM, modifyTVar, newEmptyTMVar, newTVar, putTMVar
 import Control.Error (MaybeT (..))
 import Control.Error.Util (hush, note, noteT)
 import Control.Exception (Exception (..), SomeException)
-import Control.Monad (guard, (<=<))
+import Control.Monad (guard, unless, (<=<))
 import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Trans.Class (lift)
@@ -56,7 +56,7 @@ import Data.Foldable (foldl')
 import Data.List (find)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, fromMaybe)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Time (NominalDiffTime, UTCTime, nominalDiffTimeToSeconds)
@@ -65,6 +65,7 @@ import Language.Marlowe.Analysis.Safety.Types (SafetyError (SafetyAnalysisTimeou
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import Language.Marlowe.Runtime.Cardano.Api (
   fromCardanoAddressInEra,
+  fromCardanoLovelace,
   fromCardanoTxId,
   fromCardanoTxOutDatum,
   fromCardanoTxOutValue,
@@ -129,7 +130,13 @@ import Language.Marlowe.Runtime.Transaction.Query (
   lookupMarloweScriptUtxo,
   lookupPayoutScriptUtxo,
  )
-import Language.Marlowe.Runtime.Transaction.Safety (Continuations, checkContract, checkTransactions, noContinuations)
+import Language.Marlowe.Runtime.Transaction.Safety (
+  Continuations,
+  checkContract,
+  checkTransactions,
+  minAdaUpperBound,
+  noContinuations,
+ )
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob (..), SubmitJobStatus (..))
 import Network.Protocol.Connection (Connector, ServerSource (..), runConnector)
 import Network.Protocol.Job.Server (
@@ -293,11 +300,11 @@ execCreate
   -> WalletAddresses
   -> RoleTokensConfig
   -> MarloweTransactionMetadata
-  -> Chain.Lovelace
+  -> Maybe Chain.Lovelace
   -> Either (Contract v) DatumHash
   -> NominalDiffTime
   -> m (ServerStCmd MarloweTxCommand Void CreateError (ContractCreated v) m ())
-execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts solveConstraints protocolParameters loadWalletContext networkId mStakeCredential version addresses roleTokens metadata minAda contract analysisTimeout = execExceptT do
+execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts solveConstraints protocolParameters loadWalletContext networkId mStakeCredential version addresses roleTokens metadata optMinAda contract analysisTimeout = execExceptT do
   referenceInputsSupported <- referenceInputsSupportedInEra (CreateEraUnsupported $ AnyCardanoEra era) era
   walletContext <- lift $ loadWalletContext addresses
   (contract', continuations) <- case contract of
@@ -308,6 +315,12 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
         (c :: Contract v,) <$> foldMapM (fmap singletonContinuations . getContract') (Set.delete hash closure)
     Left c -> pure (c, noContinuations version)
   mCardanoStakeCredential <- except $ traverse (note CreateToCardanoError . toCardanoStakeCredential) mStakeCredential
+  computedMinAdaDeposit <-
+    except $
+      note ProtocolParamNoUTxOCostPerByte $
+        fromCardanoLovelace <$> minAdaUpperBound protocolParameters version contract' continuations
+  let minAda = fromMaybe computedMinAdaDeposit optMinAda
+  unless (minAda >= computedMinAdaDeposit) $ throwE $ InsufficientMinAdaDeposit computedMinAdaDeposit
   ((datum, assets, rolesCurrency), constraints) <-
     ExceptT $
       buildCreateConstraints

@@ -66,7 +66,7 @@ data CreateCommand = CreateCommand
   , stakeCredential :: Maybe StakeCredential
   , roles :: Maybe RolesConfig
   , contractFiles :: ContractFiles
-  , minUTxO :: Lovelace
+  , minUTxO :: Maybe Lovelace
   }
 
 data RoleConfig = RoleConfig
@@ -221,12 +221,13 @@ createCommandParser = info (txCommandParser True parser) $ progDesc "Create a ne
           ]
     integerParser = maybe (Left "Invalid Integer value") Right . readMaybe
     minUTxOParser =
-      option (Lovelace <$> auto) $
-        mconcat
-          [ long "min-utxo"
-          , help "An amount which should be used as min ADA requirement for the Contract UTxO."
-          , metavar "LOVELACE"
-          ]
+      optional $
+        option (Lovelace <$> auto) $
+          mconcat
+            [ long "min-utxo"
+            , help "The amount of ADA to deposit into the contract to ensure the contract output satisfies min ADA requirements."
+            , metavar "LOVELACE"
+            ]
 
 runCreateCommand :: TxCommand CreateCommand -> CLI ()
 runCreateCommand TxCommand{walletAddresses, signingMethod, tagsFile, metadataFile, subCommand = CreateCommand{..}} = case marloweVersion of

@@ -186,7 +186,7 @@ data MarloweRequest v
   | Create
       { reqContract :: Contract v
       , reqRoles :: M.Map TokenName Address
-      , reqMinUtxo :: Lovelace
+      , reqMinUtxo :: Maybe Lovelace
       , --  , reqStakeAddress :: Maybe StakeCredential
         reqMetadata :: TransactionMetadata
       , reqAddresses :: [Address]
@@ -244,7 +244,7 @@ instance A.FromJSON (MarloweRequest 'V1) where
             "create" -> do
               reqContract <- o A..: "contract"
               reqRoles <- M.mapKeys fromString . M.map fromString <$> (o A..: "roles" :: A.Parser (M.Map String String))
-              reqMinUtxo <- Lovelace <$> o A..: "minUtxo"
+              reqMinUtxo <- fmap Lovelace <$> o A..:? "minUtxo"
               reqMetadata <- metadataFromJSON =<< o A..: "metadata"
               reqAddresses <- mapM addressFromJSON =<< o A..: "addresses"
               reqChange <- addressFromJSON =<< o A..: "change"
@@ -328,7 +328,7 @@ instance A.ToJSON (MarloweRequest 'V1) where
       [ "request" A..= ("create" :: String)
       , "contract" A..= reqContract
       , "roles" A..= M.mapKeys show reqRoles
-      , "minUtxo" A..= unLovelace reqMinUtxo
+      , "minUtxo" A..= fmap unLovelace reqMinUtxo
       , "metadata" A..= reqMetadata
       , "addresses" A..= fmap addressToJSON reqAddresses
       , "change" A..= addressToJSON reqChange

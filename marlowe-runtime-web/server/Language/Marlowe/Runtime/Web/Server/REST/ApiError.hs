@@ -136,6 +136,8 @@ instance ToDTO CreateError where
     CreateToCardanoError -> ApiError "Internal error" "CreateToCardanoError" Null 400
     CreateSafetyAnalysisError _ -> ApiError "Safety analysis failed" "SafetyAnalysisFailed" Null 400
     CreateContractNotFound -> ApiError "Contract not found" "Not found" Null 404
+    ProtocolParamNoUTxOCostPerByte -> ApiError "Unable to compute min Ada deposit bound" "Internal error" Null 500
+    InsufficientMinAdaDeposit required -> ApiError "Min Ada deposit insufficient." "Bad Request" (object ["minimumRequiredDeposit" .= required]) 400
 
 instance HasDTO ApplyInputsError where
   type DTO ApplyInputsError = ApiError

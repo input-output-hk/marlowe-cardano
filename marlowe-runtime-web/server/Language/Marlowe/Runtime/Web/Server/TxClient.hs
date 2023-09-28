@@ -78,7 +78,7 @@ type CreateContract m =
   -> WalletAddresses
   -> RoleTokensConfig
   -> MarloweTransactionMetadata
-  -> Lovelace
+  -> Maybe Lovelace
   -> Either (Contract v) DatumHash
   -> m (Either CreateError (ContractCreated v))
 

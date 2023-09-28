@@ -87,7 +87,7 @@ postCreateTxBody PostContractsRequest{..} stakeAddressDTO changeAddressDTO mAddr
     WalletAddresses{..}
     roles'
     MarloweTransactionMetadata{..}
-    (Lovelace minUTxODeposit)
+    (Lovelace <$> minUTxODeposit)
     (DatumHash . unContractSourceId <$> contract')
     >>= \case
       Left err -> throwDTOError err

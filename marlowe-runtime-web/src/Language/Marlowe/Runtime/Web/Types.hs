@@ -773,7 +773,7 @@ data PostContractsRequest = PostContractsRequest
   , version :: MarloweVersion
   , roles :: Maybe RolesConfig
   , contract :: ContractOrSourceId
-  , minUTxODeposit :: Word64
+  , minUTxODeposit :: Maybe Word64
   }
   deriving (Show, Eq, Ord, Generic)
 

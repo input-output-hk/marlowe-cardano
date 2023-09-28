@@ -47,7 +47,7 @@ spec = describe "Valid POST /contracts" do
             , version = Web.V1
             , roles = Just $ Web.Mint $ Map.singleton "PartyA" $ Web.RoleTokenSimple partyAWebChangeAddress
             , contract = ContractOrSourceId $ Left contract
-            , minUTxODeposit = 2_000_000
+            , minUTxODeposit = Nothing
             , tags = mempty
             }
     case result of

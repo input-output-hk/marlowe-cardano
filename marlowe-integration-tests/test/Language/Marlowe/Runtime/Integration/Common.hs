@@ -480,7 +480,7 @@ contractCreatedToCreateStep (ContractCreated _ ContractCreatedInEra{..}) =
     { createOutput =
         TransactionScriptOutput
           { address = marloweScriptAddress
-          , assets = Assets 2_000_000 mempty
+          , assets
           , utxo = unContractId contractId
           , datum
           }

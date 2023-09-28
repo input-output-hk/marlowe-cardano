@@ -21,6 +21,7 @@ import Data.Foldable (for_)
 import Data.Function (on)
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Maybe (maybeToList)
 import qualified Data.Maybe as Maybe
 import qualified Data.Set as Set
 import Data.String (fromString)
@@ -117,10 +118,12 @@ serializeAddress = Text.unpack . Maybe.fromJust . ChainSync.Api.toBech32
 
 toCliArgs :: MarloweTxCommand Void err result -> [String]
 toCliArgs = \case
-  Create _ MarloweV1 WalletAddresses{changeAddress, extraAddresses} _ _ (ChainSync.Api.Lovelace minUTXO) _ ->
+  Create _ MarloweV1 WalletAddresses{changeAddress, extraAddresses} _ _ minAdaDeposit _ ->
     ["create", "--change-address", serializeAddress changeAddress]
       <> do address <- Set.toList extraAddresses; ["--address", serializeAddress address]
-      <> ["--min-utxo", show minUTXO]
+      <> do
+        minAda <- maybeToList minAdaDeposit
+        ["--min-utxo", show minAda]
   ApplyInputs MarloweV1 WalletAddresses{changeAddress, extraAddresses} contractId _metadata _ _ inputs ->
     let tokenNotAda :: V1.Token -> Maybe (PlutusLedgerApi.V2.CurrencySymbol, PlutusLedgerApi.V2.TokenName)
         tokenNotAda = \case V1.Token "" "" -> Nothing; V1.Token a b -> Just (a, b)
@@ -267,7 +270,7 @@ createSpec = describe "create" $
             addresses
             Runtime.Transaction.Api.RoleTokensNone
             md
-            (ChainSync.Api.Lovelace 2_000_000)
+            Nothing
             (Left contract)
 
     expectSameResultFromCLIAndJobClient "create-tx-body.json" extraCliArgs extractCreateTxBody creationCommand
@@ -301,7 +304,7 @@ depositSpec = describe "deposit" $
                 pure ("Party A", (changeAddress $ addresses partyAWallet, Nothing))
           )
           (standardMetadata tags)
-          2_000_000
+          Nothing
           (Left contract)
 
     _ <- Runtime.Integration.Common.submit partyAWallet era txBody
@@ -356,7 +359,7 @@ chooseSpec = describe "choose" $
                 pure ("Party A", (changeAddress $ addresses partyAWallet, Nothing))
           )
           (standardMetadata tags)
-          2_000_000
+          Nothing
           (Left contract)
 
     _ <- Runtime.Integration.Common.submit partyAWallet era txBody
@@ -408,7 +411,7 @@ notifySpec = describe "notify" $
                 pure ("Party A", (changeAddress $ addresses partyAWallet, Nothing))
           )
           (standardMetadata tags)
-          2_000_000
+          Nothing
           (Left contract)
 
     _ <- Runtime.Integration.Common.submit partyAWallet era txBody
@@ -483,7 +486,7 @@ applySpec = describe "apply" $
                 pure ("Party A", (changeAddress $ addresses partyAWallet, Nothing))
           )
           (standardMetadata tags)
-          2_000_000
+          Nothing
           (Left contract)
 
     _ <- Runtime.Integration.Common.submit partyAWallet era txBody
@@ -542,7 +545,7 @@ withdrawSpec = describe "withdraw" $
                 pure ("Party A", (changeAddress $ addresses partyAWallet, Nothing))
           )
           (standardMetadata tags)
-          2_000_000
+          Nothing
           (Left contract)
 
     _ <- Runtime.Integration.Common.submit partyAWallet era0 txBody
