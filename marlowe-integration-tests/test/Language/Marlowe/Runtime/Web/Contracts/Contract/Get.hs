@@ -38,7 +38,6 @@ getsFirstContractValidSpec = it "returns the first contract" \MarloweWebTestData
 
     liftIO do
       contractId `shouldBe` expectedContractId1
-      assets `shouldBe` Web.Assets{lovelace = 2_000_000, tokens = Web.Tokens mempty}
 
 getsSecondContractValidSpec :: SpecWith MarloweWebTestData
 getsSecondContractValidSpec = it "returns the second contract" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
@@ -47,7 +46,6 @@ getsSecondContractValidSpec = it "returns the second contract" \MarloweWebTestDa
 
     liftIO do
       contractId `shouldBe` expectedContractId2
-      assets `shouldBe` Web.Assets{lovelace = 2_000_000, tokens = Web.Tokens mempty}
 
 getsThirdContractValidSpec :: SpecWith MarloweWebTestData
 getsThirdContractValidSpec = it "returns the third contract" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
@@ -56,7 +54,6 @@ getsThirdContractValidSpec = it "returns the third contract" \MarloweWebTestData
 
     liftIO do
       contractId `shouldBe` expectedContractId3
-      assets `shouldBe` Web.Assets{lovelace = 2_000_000, tokens = Web.Tokens mempty}
 
 invalidTxIdSpec :: SpecWith MarloweWebTestData
 invalidTxIdSpec = it "returns not found for invalid contract id" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do

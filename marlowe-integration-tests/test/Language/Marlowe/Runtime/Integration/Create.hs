@@ -322,6 +322,7 @@ addNFTMetadata ContractCreatedInEra{..} = \case
 
 minLovelaceSpec :: MinLovelaceCase -> Maybe (SpecWith (TestData, ContractCreated v))
 minLovelaceSpec = \case
+  MinLovelaceOmitted -> Just $ pure ()
   MinLovelaceSufficient -> Just $ pure ()
   MinLovelaceInsufficient -> Nothing
 
@@ -424,10 +425,11 @@ mkExtraMetadata (ExtraMetadataCase extraRandomMetadata extraMarloweMetadata extr
         , guard extraNFTMetadata $> (721, MetadataNumber 721)
         ]
 
-mkMinLovelace :: MinLovelaceCase -> Lovelace
+mkMinLovelace :: MinLovelaceCase -> Maybe Lovelace
 mkMinLovelace = \case
-  MinLovelaceSufficient -> 5_000_000
-  MinLovelaceInsufficient -> 500_000
+  MinLovelaceOmitted -> Nothing
+  MinLovelaceSufficient -> Just 5_000_000
+  MinLovelaceInsufficient -> Just 500_000
 
 mkContract :: RoleTokenCase -> V1.Contract
 mkContract = \case
@@ -503,6 +505,7 @@ data ExtraMetadataCase = ExtraMetadataCase Bool Bool Bool
   deriving (Show, Eq)
 
 data MinLovelaceCase
-  = MinLovelaceSufficient
+  = MinLovelaceOmitted
+  | MinLovelaceSufficient
   | MinLovelaceInsufficient
   deriving (Show, Eq, Enum, Bounded)

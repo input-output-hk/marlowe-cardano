@@ -59,7 +59,7 @@ main = withLocalMarloweRuntime \MarloweRuntime{..} -> do
           , version = Web.V1
           , roles = Nothing
           , contract = ContractOrSourceId $ Left V1.Close
-          , minUTxODeposit = 2_000_000
+          , minUTxODeposit = Nothing
           }
 
     liftIO $ print CreateTxEnvelope{txEnvelope = createTxBody, ..}

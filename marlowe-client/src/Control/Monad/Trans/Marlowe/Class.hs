@@ -213,8 +213,8 @@ createContract
   -- ^ How to initialize role tokens
   -> MarloweTransactionMetadata
   -- ^ Optional metadata to attach to the transaction
-  -> Lovelace
-  -- ^ Min Lovelace which should be used for the contract output.
+  -> Maybe Lovelace
+  -- ^ Optional min Lovelace deposit which should be stored in the contract's accounts.
   -> Either (Contract v) DatumHash
   -- ^ The contract to run, or the hash of the contract to look up in the store.
   -> m (Either CreateError (ContractCreated v))

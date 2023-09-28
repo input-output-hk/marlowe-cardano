@@ -476,7 +476,7 @@ interpret ro@RuntimeCreateContract{..} = do
            in (c, Just cnt)
 
   result <- liftIO $ flip runMarloweT connector do
-    let minLovelace = ChainSync.Lovelace roMinLovelace
+    let minLovelace = ChainSync.Lovelace <$> roMinLovelace
         walletAddresses =
           WalletAddresses
             { changeAddress = changeAddress

@@ -619,8 +619,8 @@ data MarloweTxCommand status err result where
     -- ^ How to initialize role tokens
     -> MarloweTransactionMetadata
     -- ^ Optional metadata to attach to the transaction
-    -> Lovelace
-    -- ^ Min Lovelace which should be used for the contract output.
+    -> Maybe Lovelace
+    -- ^ Optional min Lovelace deposit which should be used for the contract output.
     -> Either (Contract v) DatumHash
     -- ^ The contract to run, or the hash of the contract to load from the store.
     -> MarloweTxCommand Void CreateError (ContractCreated v)
@@ -897,6 +897,8 @@ data CreateError
   | CreateToCardanoError
   | CreateSafetyAnalysisError String -- FIXME: This is a placeholder, pending design of error handling for safety analysis.
   | CreateContractNotFound
+  | ProtocolParamNoUTxOCostPerByte
+  | InsufficientMinAdaDeposit Lovelace
   deriving (Generic)
 
 deriving instance Eq CreateError

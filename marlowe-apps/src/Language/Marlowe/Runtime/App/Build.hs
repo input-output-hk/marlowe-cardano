@@ -45,7 +45,7 @@ buildCreation
   :: MarloweVersion v
   -> Contract v
   -> M.Map TokenName Address
-  -> Lovelace
+  -> Maybe Lovelace
   -> MarloweTransactionMetadata
   -> [Address]
   -> Address

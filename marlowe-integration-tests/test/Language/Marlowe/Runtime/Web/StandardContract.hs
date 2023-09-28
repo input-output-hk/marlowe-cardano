@@ -107,7 +107,7 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
         , version = Web.V1
         , roles = Just $ Web.Mint $ Map.singleton "Party A" $ RoleTokenSimple partyAWebChangeAddress
         , contract = ContractOrSourceId $ Right contractSourceId
-        , minUTxODeposit = 2_000_000
+        , minUTxODeposit = Nothing
         , tags = tags
         }
 

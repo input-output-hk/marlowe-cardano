@@ -50,7 +50,7 @@ spec = describe "POST /contracts/{contractId}/transactions" do
             , version = Web.V1
             , roles = Just $ Web.Mint $ Map.singleton "Party A" $ RoleTokenSimple partyAWebChangeAddress
             , contract = ContractOrSourceId $ Left contract
-            , minUTxODeposit = 2_000_000
+            , minUTxODeposit = Nothing
             , tags = mempty
             }
 

@@ -102,7 +102,7 @@ runScenario
   -> [InputContent]
   -> App ContractId
 runScenario backend config address key contract inputs =
-  runWithEvents backend config address key contract (pure . NormalInput <$> inputs) 1_500_000
+  runWithEvents backend config address key contract (pure . NormalInput <$> inputs) Nothing
 
 currentTime :: (MonadIO m) => m POSIXTime
 currentTime = POSIXTime . floor . (* 1_000) . nominalDiffTimeToSeconds <$> liftIO P.getPOSIXTime
