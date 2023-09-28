@@ -1,18 +1,18 @@
 module Spec.Marlowe.Semantics.Next.Common.QuickCheck (
-  forAll',
+  forAllSuchThat,
 ) where
 
-import Test.QuickCheck (Arbitrary (shrink), Gen, Property, Testable, forAllShrink)
+import Test.QuickCheck (Arbitrary (..), Property, Testable, forAllShrink, suchThat)
 
--- | Test properties with shrinkage.
-forAll'
+-- | Test properties with shrinkage, applying a predicate to the generator and the shrink.
+forAllSuchThat
   :: (Arbitrary a)
   => (Show a)
   => (Testable prop)
-  => Gen a
-  -- ^ The test-case generator.
+  => (a -> Bool)
+  -- ^ The test-case predicate.
   -> (a -> prop)
   -- ^ The test.
   -> Property
   -- ^ The result of multiple applications of the test.
-forAll' = flip forAllShrink shrink
+forAllSuchThat p = forAllShrink (arbitrary `suchThat` p) (filter p . shrink)
