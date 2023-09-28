@@ -992,7 +992,8 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
       SpendRoleTokens roleTokens -> do
         let availTuples = map toUTxOTuple . toUTxOsList $ availableUtxos
         txIns <-
-          nub <$> forM (Set.toList roleTokens) \token -> do
+          -- Filter out Ada because we don't need to specifically select an input for an Ada role token.
+          nub <$> forM (filter (not . isAda) $ Set.toList roleTokens) \token -> do
             -- Find an element from availTuples where 'token' is in the assets.
             let containsToken :: Chain.TransactionOutput -> Bool
                 containsToken = Map.member token . Chain.unTokens . Chain.tokens . Chain.assets
@@ -1152,7 +1153,9 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
             Nothing
       SpendRoleTokens roleTokens -> do
         let availTuples = map toUTxOTuple . toUTxOsList $ availableUtxos
-        nub <$> forM (Set.toList roleTokens) \token -> do
+        -- Ignore ada role tokens because we don't specifically select an input for it, and balancing will refund all
+        -- spent Ada.
+        nub <$> forM (filter (not . isAda) $ Set.toList roleTokens) \token -> do
           -- Find an element from availTuples where 'token' is in the assets.
           let containsToken :: Chain.TransactionOutput -> Bool
               containsToken = Map.member token . Chain.unTokens . Chain.tokens . Chain.assets
@@ -1230,3 +1233,7 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
             C.BuildTxWith $
               Map.fromSet (const witness) policyIds
       _ -> pure C.TxMintNone
+
+isAda :: Chain.AssetId -> Bool
+isAda (Chain.AssetId "" "") = True
+isAda _ = False
