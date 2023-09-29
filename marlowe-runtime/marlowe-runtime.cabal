@@ -326,6 +326,8 @@ library sync-api
   hs-source-dirs:  sync-api
   visibility:      public
   exposed-modules:
+    Language.Marlowe.Protocol.BulkSync.Client
+    Language.Marlowe.Protocol.BulkSync.Server
     Language.Marlowe.Protocol.BulkSync.Types
     Language.Marlowe.Protocol.Query.Client
     Language.Marlowe.Protocol.Query.Server
@@ -337,7 +339,6 @@ library sync-api
     , binary ^>=0.8.8
     , cardano-api ^>=8.2
     , containers ^>=0.6.5
-    , hs-opentelemetry-api ==0.0.3.6
     , marlowe-chain-sync ==0.0.5
     , marlowe-protocols ==0.2.1.0
     , marlowe-runtime:{marlowe-runtime, discovery-api, history-api} ==0.0.5

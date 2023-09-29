@@ -39,13 +39,13 @@ instance Protocol MarloweBulkSync where
   data Message MarloweBulkSync st st' where
     MsgRequestNext :: Message MarloweBulkSync 'StIdle 'StNext
     MsgRollForward :: MarloweBlock -> BlockHeader -> Message MarloweBulkSync 'StNext 'StIdle
-    MsgRollBackward :: MarloweBlock -> MarloweBlock -> Message MarloweBulkSync 'StNext 'StIdle
+    MsgRollBackward :: ChainPoint -> ChainPoint -> Message MarloweBulkSync 'StNext 'StIdle
     MsgWait :: Message MarloweBulkSync 'StNext 'StPoll
     MsgPoll :: Message MarloweBulkSync 'StPoll 'StNext
     MsgCancel :: Message MarloweBulkSync 'StPoll 'StIdle
     MsgIntersect :: [BlockHeader] -> Message MarloweBulkSync 'StIdle 'StIntersect
     MsgIntersectFound :: BlockHeader -> BlockHeader -> Message MarloweBulkSync 'StIntersect 'StIdle
-    MsgIntersectNotFound :: BlockHeader -> Message MarloweBulkSync 'StIntersect 'StIdle
+    MsgIntersectNotFound :: ChainPoint -> Message MarloweBulkSync 'StIntersect 'StIdle
     MsgDone :: Message MarloweBulkSync 'StIdle 'StDone
 
   data ClientHasAgency st where
