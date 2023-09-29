@@ -6,10 +6,8 @@
 module Language.Marlowe.Protocol.BulkSync.Types where
 
 import Control.Monad (join)
-import Data.Aeson (Value (..), object, (.=))
 import Data.Binary (Binary (..), getWord8, putWord8)
 import qualified Data.List.NonEmpty as NE
-import Data.String (IsString (..))
 import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.History.Api (
   MarloweBlock,
@@ -24,11 +22,8 @@ import Network.Protocol.Codec.Spec (
   varyAp,
  )
 import Network.Protocol.Handshake.Types (HasSignature (..))
-import Network.Protocol.Peer.Trace (MessageAttributes (..), OTelProtocol (..))
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency (..))
-import Observe.Event.Network.Protocol (MessageToJSON (..))
-import OpenTelemetry.Attributes (PrimitiveAttribute (..))
 
 data MarloweBulkSync where
   StIdle :: MarloweBulkSync
@@ -166,23 +161,6 @@ instance MessageVariations MarloweBulkSync where
           , SomeMessage . MsgIntersectNotFound <$> variations
           ]
 
-instance MessageToJSON MarloweBulkSync where
-  messageToJSON = \case
-    ClientAgency TokIdle -> \case
-      MsgDone -> String "done"
-      MsgRequestNext -> String "request-next"
-      MsgIntersect headers -> object ["intersect" .= headers]
-    ClientAgency TokPoll -> \case
-      MsgPoll -> String "poll"
-      MsgCancel -> String "cancel"
-    ServerAgency TokNext -> \case
-      MsgRollForward block tip -> object ["roll-forward" .= object ["block" .= block, "tip" .= tip]]
-      MsgRollBackward block tip -> object ["roll-backward" .= object ["block" .= block, "tip" .= tip]]
-      MsgWait -> String "wait"
-    ServerAgency TokIntersect -> \case
-      MsgIntersectFound block tip -> object ["intersect-found" .= object ["block" .= block, "tip" .= tip]]
-      MsgIntersectNotFound tip -> object ["intersect-not-found" .= object ["tip" .= tip]]
-
 instance MessageEq MarloweBulkSync where
   messageEq (AnyMessageAndAgency _ msg1) (AnyMessageAndAgency _ msg2) = case msg1 of
     MsgIntersect{} -> case msg2 of
@@ -215,71 +193,5 @@ instance MessageEq MarloweBulkSync where
     MsgIntersectNotFound{} -> case msg2 of
       MsgIntersectNotFound{} -> msg1 == msg2
       _ -> False
-
-instance OTelProtocol MarloweBulkSync where
-  protocolName _ = "marlowe_header_sync"
-  messageAttributes = \case
-    ClientAgency tok -> case tok of
-      TokIdle -> \case
-        MsgRequestNext ->
-          MessageAttributes
-            { messageType = "request_next"
-            , messageParameters = []
-            }
-        MsgIntersect blocks ->
-          MessageAttributes
-            { messageType = "intersect"
-            , messageParameters = TextAttribute . fromString . show <$> blocks
-            }
-        MsgDone ->
-          MessageAttributes
-            { messageType = "done"
-            , messageParameters = []
-            }
-      TokPoll -> \case
-        MsgPoll ->
-          MessageAttributes
-            { messageType = "poll"
-            , messageParameters = []
-            }
-        MsgCancel ->
-          MessageAttributes
-            { messageType = "cancel"
-            , messageParameters = []
-            }
-    ServerAgency tok -> case tok of
-      TokNext -> \case
-        MsgRollForward block tip ->
-          MessageAttributes
-            { messageType = "request_next/roll_forward"
-            , messageParameters =
-                TextAttribute
-                  <$> [fromString $ show block, fromString $ show tip]
-            }
-        MsgRollBackward block tip ->
-          MessageAttributes
-            { messageType = "request_next/roll_backward"
-            , messageParameters =
-                TextAttribute
-                  <$> [fromString $ show block, fromString $ show tip]
-            }
-        MsgWait ->
-          MessageAttributes
-            { messageType = "request_next/wait"
-            , messageParameters = []
-            }
-      TokIntersect -> \case
-        MsgIntersectFound block tip ->
-          MessageAttributes
-            { messageType = "intersect/found"
-            , messageParameters =
-                TextAttribute
-                  <$> [fromString $ show block, fromString $ show tip]
-            }
-        MsgIntersectNotFound tip ->
-          MessageAttributes
-            { messageType = "intersect/not_found"
-            , messageParameters = TextAttribute <$> [fromString $ show tip]
-            }
 
 instance ShowProtocol MarloweBulkSync

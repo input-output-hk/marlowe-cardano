@@ -13,7 +13,6 @@
 module Network.Protocol.Handshake.Types where
 
 import Control.Monad (unless)
-import Data.Aeson (Value (..), object, (.=))
 import Data.Binary (get, getWord8, put, putWord8)
 import Data.Proxy (Proxy (..))
 import Data.Text (Text)
@@ -24,7 +23,6 @@ import Network.Protocol.Codec.Spec (ArbitraryMessage (..), MessageEq (..), ShowP
 import Network.Protocol.Peer.Trace (MessageAttributes (..), OTelProtocol (..))
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency (..))
-import Observe.Event.Network.Protocol (MessageToJSON (..))
 import OpenTelemetry.Attributes (toPrimitiveAttribute)
 import Test.QuickCheck (Arbitrary (arbitrary), oneof, shrink)
 
@@ -221,16 +219,3 @@ instance (BinaryMessage ps) => BinaryMessage (Handshake ps) where
     ServerAgency (TokLiftServer tok) -> do
       SomeMessage msg <- getMessage $ ServerAgency tok
       pure $ SomeMessage $ MsgLift msg
-
-instance (MessageToJSON ps) => MessageToJSON (Handshake ps) where
-  messageToJSON = \case
-    ClientAgency TokInit -> \case
-      MsgHandshake sig -> object ["handshake" .= sig]
-    ClientAgency (TokLiftClient tok) -> \case
-      MsgLift msg -> object ["lift" .= messageToJSON (ClientAgency tok) msg]
-    ServerAgency TokHandshake ->
-      String . \case
-        MsgAccept -> "accept"
-        MsgReject -> "reject"
-    ServerAgency (TokLiftServer tok) -> \case
-      MsgLift msg -> object ["lift" .= messageToJSON (ServerAgency tok) msg]

@@ -5,7 +5,6 @@
 module Language.Marlowe.Protocol.Sync.Types where
 
 import Control.Monad (join)
-import Data.Aeson (Key, ToJSON, Value (..), object, (.=))
 import Data.Binary (get, getWord8, put, putWord8)
 import qualified Data.List.NonEmpty as NE
 import Data.String (IsString (fromString))
@@ -33,7 +32,6 @@ import Network.Protocol.Handshake.Types (HasSignature (..))
 import Network.Protocol.Peer.Trace
 import Network.TypedProtocol (PeerHasAgency (..), Protocol (..), SomeMessage (..))
 import Network.TypedProtocol.Codec (AnyMessageAndAgency (AnyMessageAndAgency))
-import Observe.Event.Network.Protocol (MessageToJSON (..))
 import OpenTelemetry.Attributes
 
 data MarloweSync where
@@ -304,49 +302,6 @@ instance MessageVariations MarloweSync where
           [ SomeMessage . MsgIntersectFound <$> variations
           , pure $ SomeMessage MsgIntersectNotFound
           ]
-
-instance MessageToJSON MarloweSync where
-  messageToJSON = \case
-    ClientAgency TokInit -> \case
-      MsgFollowContract contractId -> msgObject "follow-contract" contractId
-      MsgIntersect contractId MarloweV1 headers ->
-        msgObject "intersect" $
-          object
-            [ "contract-id" .= contractId
-            , "version" .= String "v1"
-            , "block-headers" .= headers
-            ]
-    ClientAgency (TokIdle _) -> \case
-      MsgDone -> String "done"
-      MsgRequestNext -> String "request-next"
-    ClientAgency (TokWait _) -> \case
-      MsgPoll -> String "poll"
-      MsgCancel -> String "cancel"
-    ServerAgency TokFollow -> \case
-      MsgContractNotFound -> String "contract-not-found"
-      MsgContractFound blockHeader MarloweV1 createStep ->
-        msgObject "contract-found" $
-          object
-            [ "block-header" .= blockHeader
-            , "version" .= String "v1"
-            , "create-step" .= createStep
-            ]
-    ServerAgency (TokNext MarloweV1) -> \case
-      MsgRollForward blockHeader steps ->
-        msgObject "roll-forward" $
-          object
-            [ "block-header" .= blockHeader
-            , "steps" .= steps
-            ]
-      MsgRollBackward blockHeader -> msgObject "roll-backward" blockHeader
-      MsgRollBackCreation -> String "roll-back-creation"
-      MsgWait -> String "wait"
-    ServerAgency (TokIntersect _) -> \case
-      MsgIntersectFound blockHeader -> msgObject "intersect-found" blockHeader
-      MsgIntersectNotFound -> String "intersect-not-found"
-
-msgObject :: (ToJSON a) => Key -> a -> Value
-msgObject key a = object [key .= a]
 
 instance MessageEq MarloweSync where
   messageEq = \case
