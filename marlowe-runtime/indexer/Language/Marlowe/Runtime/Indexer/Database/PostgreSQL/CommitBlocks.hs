@@ -32,7 +32,14 @@ import Language.Marlowe.Runtime.Core.Api (
   transactionMetadata,
  )
 import qualified Language.Marlowe.Runtime.Core.Api as Core
-import Language.Marlowe.Runtime.History.Api (CreateStep (..), SomeCreateStep (..))
+import Language.Marlowe.Runtime.History.Api (
+  CreateStep (..),
+  MarloweApplyInputsTransaction (..),
+  MarloweCreateTransaction (..),
+  MarloweWithdrawTransaction (..),
+  SomeCreateStep (..),
+  UnspentContractOutput (..),
+ )
 import Language.Marlowe.Runtime.Indexer.Party (ContractTxOutParty (ContractTxOutParty), commitParties)
 import Language.Marlowe.Runtime.Indexer.Types
 import PlutusLedgerApi.V2 (CurrencySymbol (..), fromBuiltin)

@@ -14,6 +14,7 @@ import Hasql.TH (vectorStatement)
 import qualified Hasql.Transaction as H
 import Language.Marlowe.Runtime.ChainSync.Api
 import qualified Language.Marlowe.Runtime.Core.Api as Core
+import Language.Marlowe.Runtime.History.Api (UnspentContractOutput (..))
 import Language.Marlowe.Runtime.Indexer.Types
 
 getMarloweUTxO :: BlockHeader -> H.Transaction MarloweUTxO

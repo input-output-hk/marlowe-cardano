@@ -26,9 +26,7 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Tuple (swap)
 import GHC.Generics (Generic)
-import GHC.Show (showSpace)
 import Language.Marlowe.Runtime.ChainSync.Api (
-  Address,
   BlockHeader,
   Credential (..),
   ScriptHash,
@@ -36,17 +34,19 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   TransactionInput (..),
   TransactionOutput (..),
   TxId,
-  TxIx,
   TxOutRef (..),
   paymentCredential,
  )
 import Language.Marlowe.Runtime.Core.Api (ContractId (..))
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.History.Api (
-  CreateStep (..),
   ExtractCreationError (NotCreationTransaction),
   ExtractMarloweTransactionError (MultipleContractInputs),
-  SomeCreateStep (..),
+  MarloweApplyInputsTransaction (..),
+  MarloweCreateTransaction (..),
+  MarloweWithdrawTransaction (..),
+  UnspentContractOutput (..),
+  createStepToUnspentContractOutput,
   extractCreation,
   extractMarloweTransaction,
  )
@@ -66,41 +66,6 @@ data MarloweTransaction
   | InvalidApplyInputsTransaction TxId (Set TxOutRef) ExtractMarloweTransactionError
   deriving (Eq, Show, Generic)
 
-data MarloweCreateTransaction = MarloweCreateTransaction
-  { txId :: TxId
-  , newContracts :: Map TxIx SomeCreateStep
-  }
-  deriving (Eq, Show, Generic)
-
-data MarloweApplyInputsTransaction = forall v.
-  MarloweApplyInputsTransaction
-  { marloweVersion :: Core.MarloweVersion v
-  , marloweInput :: UnspentContractOutput
-  , marloweTransaction :: Core.Transaction v
-  }
-
-instance Eq MarloweApplyInputsTransaction where
-  MarloweApplyInputsTransaction Core.MarloweV1 inpA txA == MarloweApplyInputsTransaction Core.MarloweV1 inpB txB = txA == txB && inpA == inpB
-
-instance Show MarloweApplyInputsTransaction where
-  showsPrec p (MarloweApplyInputsTransaction Core.MarloweV1 inp tx) =
-    showParen
-      (p >= 11)
-      ( showString "MarloweApplyInputsTransaction"
-          . showSpace
-          . showsPrec 11 Core.MarloweV1
-          . showSpace
-          . showsPrec 11 inp
-          . showSpace
-          . showsPrec 11 tx
-      )
-
-data MarloweWithdrawTransaction = MarloweWithdrawTransaction
-  { consumedPayouts :: Map ContractId (Set TxOutRef)
-  , consumingTx :: TxId
-  }
-  deriving (Eq, Show, Generic)
-
 -- | The global Marlowe UTxO set
 data MarloweUTxO = MarloweUTxO
   { unspentContractOutputs :: Map ContractId UnspentContractOutput
@@ -111,41 +76,6 @@ data MarloweUTxO = MarloweUTxO
   deriving (Eq, Show, Generic)
 
 instance ToJSON MarloweUTxO
-
--- | Information about an unspent contract transaction output.
-data UnspentContractOutput = UnspentContractOutput
-  { marloweVersion :: Core.SomeMarloweVersion
-  -- ^ The version of the contract.
-  , txOutRef :: TxOutRef
-  -- ^ The unspent output.
-  , marloweAddress :: Address
-  -- ^ The address of the marlowe validator.
-  , payoutValidatorHash :: ScriptHash
-  -- ^ The hash of the payout validator.
-  }
-  deriving (Generic)
-
-instance ToJSON UnspentContractOutput
-
-instance Eq UnspentContractOutput where
-  UnspentContractOutput (Core.SomeMarloweVersion Core.MarloweV1) refA addrA pHashA
-    == UnspentContractOutput (Core.SomeMarloweVersion Core.MarloweV1) refB addrB pHashB =
-      refA == refB && addrA == addrB && pHashA == pHashB
-
-instance Show UnspentContractOutput where
-  showsPrec p (UnspentContractOutput (Core.SomeMarloweVersion Core.MarloweV1) ref addr pHash) =
-    showParen
-      (p >= 11)
-      ( showString "UnspentContractOutput"
-          . showSpace
-          . showsPrec 11 Core.MarloweV1
-          . showSpace
-          . showsPrec 11 ref
-          . showSpace
-          . showsPrec 11 addr
-          . showSpace
-          . showsPrec 11 pHash
-      )
 
 -- Extracts a MarloweBlock from Cardano Block information. Returns an updated
 -- MarloweUTxO.
@@ -226,14 +156,6 @@ extractCreateTx marloweScriptHashes Transaction{..} = do
     isMarloweInput TransactionInput{address} = case paymentCredential address of
       Just (ScriptCredential scriptHash) -> Set.member scriptHash marloweScriptHashes
       _ -> False
-
-createStepToUnspentContractOutput :: SomeCreateStep -> UnspentContractOutput
-createStepToUnspentContractOutput (SomeCreateStep version CreateStep{..}) =
-  let Core.TransactionScriptOutput{..} = createOutput
-      txOutRef = utxo
-      marloweAddress = address
-      marloweVersion = Core.SomeMarloweVersion version
-   in UnspentContractOutput{..}
 
 -- | Extracts a ContractId from a transaction output if it is a Marlowe contract output.
 extractContractId

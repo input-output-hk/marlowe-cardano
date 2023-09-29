@@ -170,6 +170,7 @@ common lang
     LambdaCase
     NamedFieldPuns
     NumericUnderscores
+    OverloadedRecordDot
     OverloadedStrings
     RecordWildCards
     ScopedTypeVariables
@@ -325,6 +326,7 @@ library sync-api
   hs-source-dirs:  sync-api
   visibility:      public
   exposed-modules:
+    Language.Marlowe.Protocol.BulkSync.Types
     Language.Marlowe.Protocol.Query.Client
     Language.Marlowe.Protocol.Query.Server
     Language.Marlowe.Protocol.Query.Types
@@ -335,11 +337,13 @@ library sync-api
     , binary ^>=0.8.8
     , cardano-api ^>=8.2
     , containers ^>=0.6.5
+    , hs-opentelemetry-api ==0.0.3.6
     , marlowe-chain-sync ==0.0.5
     , marlowe-protocols ==0.2.1.0
-    , marlowe-runtime:{marlowe-runtime, discovery-api} ==0.0.5
+    , marlowe-runtime:{marlowe-runtime, discovery-api, history-api} ==0.0.5
     , ouroboros-consensus ^>=0.7
     , time >=1.9 && <2
+    , typed-protocols ^>=0.1
     , unliftio ^>=0.2.1
 
 library contract-api
