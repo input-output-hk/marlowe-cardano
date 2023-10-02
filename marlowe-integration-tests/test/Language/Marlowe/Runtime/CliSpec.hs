@@ -60,6 +60,7 @@ import Language.Marlowe.Runtime.Integration.Common (
  )
 import qualified Language.Marlowe.Runtime.Integration.Common as Runtime.Integration.Common
 import Language.Marlowe.Runtime.Transaction.Api (
+  Destination (ToAddress),
   InputsApplied (..),
   InputsAppliedInEra (..),
   MarloweTxCommand (..),
@@ -301,7 +302,7 @@ depositSpec = describe "deposit" $
           (addresses partyAWallet)
           ( Runtime.Transaction.Api.RoleTokensMint $
               Runtime.Transaction.Api.mkMint $
-                pure ("Party A", (changeAddress $ addresses partyAWallet, Nothing))
+                pure ("Party A", (ToAddress . changeAddress $ addresses partyAWallet, Nothing))
           )
           (standardMetadata tags)
           Nothing
@@ -356,7 +357,7 @@ chooseSpec = describe "choose" $
           (addresses partyAWallet)
           ( Runtime.Transaction.Api.RoleTokensMint $
               Runtime.Transaction.Api.mkMint $
-                pure ("Party A", (changeAddress $ addresses partyAWallet, Nothing))
+                pure ("Party A", (ToAddress . changeAddress $ addresses partyAWallet, Nothing))
           )
           (standardMetadata tags)
           Nothing
@@ -408,7 +409,7 @@ notifySpec = describe "notify" $
           (addresses partyAWallet)
           ( Runtime.Transaction.Api.RoleTokensMint $
               Runtime.Transaction.Api.mkMint $
-                pure ("Party A", (changeAddress $ addresses partyAWallet, Nothing))
+                pure ("Party A", (ToAddress . changeAddress $ addresses partyAWallet, Nothing))
           )
           (standardMetadata tags)
           Nothing
@@ -483,7 +484,7 @@ applySpec = describe "apply" $
           (addresses partyAWallet)
           ( Runtime.Transaction.Api.RoleTokensMint $
               Runtime.Transaction.Api.mkMint $
-                pure ("Party A", (changeAddress $ addresses partyAWallet, Nothing))
+                pure ("Party A", (ToAddress . changeAddress $ addresses partyAWallet, Nothing))
           )
           (standardMetadata tags)
           Nothing
@@ -542,7 +543,7 @@ withdrawSpec = describe "withdraw" $
           (addresses partyAWallet)
           ( Runtime.Transaction.Api.RoleTokensMint $
               Runtime.Transaction.Api.mkMint $
-                pure ("Party A", (changeAddress $ addresses partyAWallet, Nothing))
+                pure ("Party A", (ToAddress . changeAddress $ addresses partyAWallet, Nothing))
           )
           (standardMetadata tags)
           Nothing

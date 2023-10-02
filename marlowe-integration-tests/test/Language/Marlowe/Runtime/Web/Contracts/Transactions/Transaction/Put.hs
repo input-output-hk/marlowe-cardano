@@ -54,6 +54,7 @@ spec = describe "PUT /contracts/{contractId}/transactions/{transaction}" do
             { metadata = mempty
             , version = Web.V1
             , roles = Just $ Web.Mint $ Map.singleton "Party A" $ RoleTokenSimple partyAWebChangeAddress
+            , threadTokenName = Nothing
             , contract = ContractOrSourceId $ Left contract
             , minUTxODeposit = Nothing
             , tags = mempty
