@@ -4,6 +4,7 @@
 
 module Language.Marlowe.Protocol.BulkSync.Server where
 
+import Data.Word (Word8)
 import Language.Marlowe.Protocol.BulkSync.Types
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint)
 import Language.Marlowe.Runtime.History.Api
@@ -14,7 +15,7 @@ newtype MarloweBulkSyncServer m a = MarloweBulkSyncServer {runMarloweBulkSyncSer
   deriving (Functor)
 
 data ServerStIdle m a = ServerStIdle
-  { recvMsgRequestNext :: m (ServerStNext m a)
+  { recvMsgRequestNext :: Word8 -> m (ServerStNext m a)
   , recvMsgIntersect :: [BlockHeader] -> m (ServerStIntersect m a)
   , recvMsgDone :: m a
   }
@@ -27,7 +28,7 @@ data ServerStIntersect m a where
 deriving instance (Functor m) => Functor (ServerStIntersect m)
 
 data ServerStNext m a where
-  SendMsgRollForward :: MarloweBlock -> BlockHeader -> ServerStIdle m a -> ServerStNext m a
+  SendMsgRollForward :: [MarloweBlock] -> BlockHeader -> ServerStIdle m a -> ServerStNext m a
   SendMsgRollBackward :: ChainPoint -> ChainPoint -> ServerStIdle m a -> ServerStNext m a
   SendMsgWait :: ServerStPoll m a -> ServerStNext m a
 
@@ -50,7 +51,7 @@ hoistMarloweBulkSyncServer nat = MarloweBulkSyncServer . nat . fmap hoistIdle . 
     hoistIdle :: ServerStIdle m a -> ServerStIdle n a
     hoistIdle ServerStIdle{..} =
       ServerStIdle
-        { recvMsgRequestNext = nat $ fmap hoistNext recvMsgRequestNext
+        { recvMsgRequestNext = nat . fmap hoistNext . recvMsgRequestNext
         , recvMsgIntersect = nat . fmap hoistIntersect . recvMsgIntersect
         , recvMsgDone = nat recvMsgDone
         }
@@ -62,7 +63,7 @@ hoistMarloweBulkSyncServer nat = MarloweBulkSyncServer . nat . fmap hoistIdle . 
 
     hoistNext :: ServerStNext m a -> ServerStNext n a
     hoistNext = \case
-      SendMsgRollForward block tip idle -> SendMsgRollForward block tip $ hoistIdle idle
+      SendMsgRollForward blocks tip idle -> SendMsgRollForward blocks tip $ hoistIdle idle
       SendMsgRollBackward block tip idle -> SendMsgRollBackward block tip $ hoistIdle idle
       SendMsgWait wait -> SendMsgWait $ hoistWait wait
 
@@ -84,7 +85,7 @@ marloweBulkSyncServerPeer = EffectTraced . fmap peerIdle . runMarloweBulkSyncSer
     peerIdle ServerStIdle{..} = AwaitTraced (ClientAgency TokIdle) \case
       MsgDone -> Closed TokDone recvMsgDone
       MsgIntersect blocks -> Respond (ServerAgency TokIntersect) $ peerIntersect <$> recvMsgIntersect blocks
-      MsgRequestNext -> Respond (ServerAgency TokNext) $ peerNext <$> recvMsgRequestNext
+      MsgRequestNext batchSize -> Respond (ServerAgency TokNext) $ peerNext <$> recvMsgRequestNext batchSize
 
     peerIntersect
       :: ServerStIntersect m a
@@ -99,8 +100,8 @@ marloweBulkSyncServerPeer = EffectTraced . fmap peerIdle . runMarloweBulkSyncSer
       :: ServerStNext m a
       -> Response MarloweBulkSync 'AsServer 'StNext m a
     peerNext = \case
-      SendMsgRollForward block tip idle ->
-        Response (MsgRollForward block tip) $ peerIdle idle
+      SendMsgRollForward blocks tip idle ->
+        Response (MsgRollForward blocks tip) $ peerIdle idle
       SendMsgRollBackward block tip idle ->
         Response (MsgRollBackward block tip) $ peerIdle idle
       SendMsgWait wait ->

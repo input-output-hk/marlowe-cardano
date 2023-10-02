@@ -49,6 +49,14 @@ syncHeaderPort =
     3725
     "The port number of the marlowe-sync server's header synchronization API."
 
+syncBulkPort :: CliOption OptionFields PortNumber
+syncBulkPort =
+  port
+    "marlowe-bulk"
+    "SYNC_MARLOWE_BULK"
+    3730
+    "The port number of the marlowe-sync server's bulk synchronization API."
+
 syncQueryPort :: CliOption OptionFields PortNumber
 syncQueryPort = port "marlowe-query" "SYNC_MARLOWE_QUERY" 3726 "The port number of the marlowe-sync server's query API."
 

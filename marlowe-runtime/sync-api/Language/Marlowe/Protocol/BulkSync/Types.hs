@@ -8,6 +8,8 @@ module Language.Marlowe.Protocol.BulkSync.Types where
 import Control.Monad (join)
 import Data.Binary (Binary (..), getWord8, putWord8)
 import qualified Data.List.NonEmpty as NE
+import Data.String (IsString (..))
+import Data.Word (Word8)
 import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.History.Api (
   MarloweBlock,
@@ -22,6 +24,7 @@ import Network.Protocol.Codec.Spec (
   varyAp,
  )
 import Network.Protocol.Handshake.Types (HasSignature (..))
+import Network.Protocol.Peer.Trace (MessageAttributes (..), OTelProtocol (..))
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency (..))
 
@@ -37,8 +40,8 @@ instance HasSignature MarloweBulkSync where
 
 instance Protocol MarloweBulkSync where
   data Message MarloweBulkSync st st' where
-    MsgRequestNext :: Message MarloweBulkSync 'StIdle 'StNext
-    MsgRollForward :: MarloweBlock -> BlockHeader -> Message MarloweBulkSync 'StNext 'StIdle
+    MsgRequestNext :: Word8 -> Message MarloweBulkSync 'StIdle 'StNext
+    MsgRollForward :: [MarloweBlock] -> BlockHeader -> Message MarloweBulkSync 'StNext 'StIdle
     MsgRollBackward :: ChainPoint -> ChainPoint -> Message MarloweBulkSync 'StNext 'StIdle
     MsgWait :: Message MarloweBulkSync 'StNext 'StPoll
     MsgPoll :: Message MarloweBulkSync 'StPoll 'StNext
@@ -67,7 +70,9 @@ instance Protocol MarloweBulkSync where
 instance BinaryMessage MarloweBulkSync where
   putMessage = \case
     ClientAgency TokIdle -> \case
-      MsgRequestNext -> putWord8 0x01
+      MsgRequestNext batchSize -> do
+        putWord8 0x01
+        put batchSize
       MsgIntersect blocks -> putWord8 0x02 *> put blocks
       MsgDone -> putWord8 0x03
     ServerAgency TokNext -> \case
@@ -96,7 +101,7 @@ instance BinaryMessage MarloweBulkSync where
     tag <- getWord8
     case tag of
       0x01 -> case tok of
-        ClientAgency TokIdle -> pure $ SomeMessage MsgRequestNext
+        ClientAgency TokIdle -> SomeMessage . MsgRequestNext <$> get
         _ -> fail "Invalid protocol state for MsgRequestNext"
       0x02 -> case tok of
         ClientAgency TokIdle -> SomeMessage . MsgIntersect <$> get
@@ -145,7 +150,12 @@ instance MessageVariations MarloweBulkSync where
       , SomePeerHasAgency $ ServerAgency TokIntersect
       ]
   messageVariations = \case
-    ClientAgency TokIdle -> NE.fromList [SomeMessage MsgDone, SomeMessage MsgRequestNext]
+    ClientAgency TokIdle ->
+      join $
+        NE.fromList
+          [ pure $ SomeMessage MsgDone
+          , SomeMessage . MsgRequestNext <$> variations
+          ]
     ClientAgency TokPoll -> NE.fromList [SomeMessage MsgPoll, SomeMessage MsgCancel]
     ServerAgency TokNext ->
       join $
@@ -169,8 +179,8 @@ instance MessageEq MarloweBulkSync where
     MsgDone -> case msg2 of
       MsgDone -> True
       _ -> False
-    MsgRequestNext -> case msg2 of
-      MsgRequestNext -> True
+    MsgRequestNext{} -> case msg2 of
+      MsgRequestNext{} -> msg1 == msg2
       _ -> False
     MsgRollForward{} -> case msg2 of
       MsgRollForward{} -> msg1 == msg2
@@ -195,3 +205,63 @@ instance MessageEq MarloweBulkSync where
       _ -> False
 
 instance ShowProtocol MarloweBulkSync
+
+instance OTelProtocol MarloweBulkSync where
+  protocolName _ = "marlowe_bulk_sync"
+  messageAttributes = \case
+    ClientAgency tok -> case tok of
+      TokIdle -> \case
+        MsgRequestNext batchSize ->
+          MessageAttributes
+            { messageType = "request_next"
+            , messageParameters = fromString <$> [show batchSize]
+            }
+        MsgIntersect blocks ->
+          MessageAttributes
+            { messageType = "intersect"
+            , messageParameters = fromString . show <$> blocks
+            }
+        MsgDone ->
+          MessageAttributes
+            { messageType = "done"
+            , messageParameters = []
+            }
+      TokPoll -> \case
+        MsgPoll ->
+          MessageAttributes
+            { messageType = "poll"
+            , messageParameters = []
+            }
+        MsgCancel ->
+          MessageAttributes
+            { messageType = "cancel"
+            , messageParameters = []
+            }
+    ServerAgency tok -> case tok of
+      TokNext -> \case
+        MsgRollForward block headers ->
+          MessageAttributes
+            { messageType = "request_next/new_headers"
+            , messageParameters = fromString <$> [show block, show headers]
+            }
+        MsgRollBackward block tip ->
+          MessageAttributes
+            { messageType = "request_next/roll_backward"
+            , messageParameters = fromString <$> [show block, show tip]
+            }
+        MsgWait ->
+          MessageAttributes
+            { messageType = "request_next/wait"
+            , messageParameters = []
+            }
+      TokIntersect -> \case
+        MsgIntersectFound block tip ->
+          MessageAttributes
+            { messageType = "intersect/found"
+            , messageParameters = fromString <$> [show block, show tip]
+            }
+        MsgIntersectNotFound tip ->
+          MessageAttributes
+            { messageType = "intersect/not_found"
+            , messageParameters = fromString <$> [show tip]
+            }

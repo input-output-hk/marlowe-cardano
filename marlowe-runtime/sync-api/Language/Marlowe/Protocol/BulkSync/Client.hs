@@ -5,6 +5,7 @@
 module Language.Marlowe.Protocol.BulkSync.Client where
 
 import Control.Monad (join)
+import Data.Word (Word8)
 import Language.Marlowe.Protocol.BulkSync.Server
 import Language.Marlowe.Protocol.BulkSync.Types
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint)
@@ -16,7 +17,7 @@ newtype MarloweBulkSyncClient m a = MarloweBulkSyncClient {runMarloweBulkSyncCli
   deriving (Functor)
 
 data ClientStIdle m a where
-  SendMsgRequestNext :: ClientStNext m a -> ClientStIdle m a
+  SendMsgRequestNext :: Word8 -> ClientStNext m a -> ClientStIdle m a
   SendMsgIntersect :: [BlockHeader] -> ClientStIntersect m a -> ClientStIdle m a
   SendMsgDone :: a -> ClientStIdle m a
 
@@ -29,7 +30,7 @@ data ClientStIntersect m a = ClientStIntersect
   deriving (Functor)
 
 data ClientStNext m a = ClientStNext
-  { recvMsgRollForward :: MarloweBlock -> BlockHeader -> m (ClientStIdle m a)
+  { recvMsgRollForward :: [MarloweBlock] -> BlockHeader -> m (ClientStIdle m a)
   , recvMsgRollBackward :: ChainPoint -> ChainPoint -> m (ClientStIdle m a)
   , recvMsgWait :: m (ClientStPoll m a)
   }
@@ -51,7 +52,7 @@ hoistMarloweBulkSyncClient nat = MarloweBulkSyncClient . nat . fmap hoistIdle . 
   where
     hoistIdle :: ClientStIdle m a -> ClientStIdle n a
     hoistIdle = \case
-      SendMsgRequestNext next -> SendMsgRequestNext $ hoistNext next
+      SendMsgRequestNext batchSize next -> SendMsgRequestNext batchSize $ hoistNext next
       SendMsgIntersect blocks intersect -> SendMsgIntersect blocks $ hoistIntersect intersect
       SendMsgDone a -> SendMsgDone a
 
@@ -91,8 +92,8 @@ marloweBulkSyncClientPeer = EffectTraced . fmap peerIdle . runMarloweBulkSyncCli
         YieldTraced (ClientAgency TokIdle) (MsgIntersect blocks) $
           Call (ServerAgency TokIntersect) $
             peerIntersect intersect
-      SendMsgRequestNext next ->
-        YieldTraced (ClientAgency TokIdle) MsgRequestNext $
+      SendMsgRequestNext batchSize next ->
+        YieldTraced (ClientAgency TokIdle) (MsgRequestNext batchSize) $
           Call (ServerAgency TokNext) $
             peerNext next
 
@@ -142,7 +143,7 @@ serveMarloweBulkSyncClient MarloweBulkSyncServer{..} MarloweBulkSyncClient{..} =
 
     serveIdle :: ServerStIdle m a -> ClientStIdle m b -> m (a, b)
     serveIdle ServerStIdle{..} = \case
-      SendMsgRequestNext next -> serveNext next =<< recvMsgRequestNext
+      SendMsgRequestNext batchSize next -> serveNext next =<< recvMsgRequestNext batchSize
       SendMsgIntersect blocks intersect -> serveIntersect intersect =<< recvMsgIntersect blocks
       SendMsgDone b -> (,b) <$> recvMsgDone
 

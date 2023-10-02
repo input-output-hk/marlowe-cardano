@@ -4,6 +4,12 @@
 
 module Language.Marlowe.Protocol.Client where
 
+import Language.Marlowe.Protocol.BulkSync.Client (
+  MarloweBulkSyncClient,
+  hoistMarloweBulkSyncClient,
+  marloweBulkSyncClientPeer,
+ )
+import Language.Marlowe.Protocol.BulkSync.Types (MarloweBulkSync)
 import Language.Marlowe.Protocol.HeaderSync.Client (
   MarloweHeaderSyncClient,
   hoistMarloweHeaderSyncClient,
@@ -35,6 +41,7 @@ import Network.TypedProtocol (PeerHasAgency (..), PeerRole (..))
 data MarloweRuntimeClient m a
   = RunMarloweSyncClient (MarloweSyncClient m a)
   | RunMarloweHeaderSyncClient (MarloweHeaderSyncClient m a)
+  | RunMarloweBulkSyncClient (MarloweBulkSyncClient m a)
   | RunMarloweQueryClient (MarloweQueryClient m a)
   | RunMarloweLoadClient (MarloweLoadClient m a)
   | RunMarloweTransferClient (MarloweTransferClient m a)
@@ -47,6 +54,7 @@ hoistMarloweRuntimeClient
 hoistMarloweRuntimeClient f = \case
   RunMarloweSyncClient client -> RunMarloweSyncClient $ hoistMarloweSyncClient f client
   RunMarloweHeaderSyncClient client -> RunMarloweHeaderSyncClient $ hoistMarloweHeaderSyncClient f client
+  RunMarloweBulkSyncClient client -> RunMarloweBulkSyncClient $ hoistMarloweBulkSyncClient f client
   RunMarloweQueryClient client -> RunMarloweQueryClient $ hoistQueryClient f client
   RunMarloweLoadClient client -> RunMarloweLoadClient $ hoistMarloweLoadClient f client
   RunMarloweTransferClient client -> RunMarloweTransferClient $ hoistMarloweTransferClient f client
@@ -68,6 +76,11 @@ marloweRuntimeClientPeer = \case
       Cast $
         liftPeerTraced liftMarloweHeaderSync $
           marloweHeaderSyncClientPeer client
+  RunMarloweBulkSyncClient client ->
+    YieldTraced (ClientAgency TokInit) MsgRunMarloweBulkSync $
+      Cast $
+        liftPeerTraced liftMarloweBulkSync $
+          marloweBulkSyncClientPeer client
   RunMarloweQueryClient client ->
     YieldTraced (ClientAgency TokInit) MsgRunMarloweQuery $ Cast $ liftPeerTraced liftMarloweQuery $ queryClientPeer client
   RunMarloweLoadClient client ->
@@ -94,6 +107,10 @@ liftMarloweSync =
 liftMarloweHeaderSync :: LiftProtocol MarloweHeaderSync MarloweRuntime 'StMarloweHeaderSync
 liftMarloweHeaderSync =
   LiftProtocol TokClientMarloweHeaderSync TokServerMarloweHeaderSync TokNobodyMarloweHeaderSync MsgMarloweHeaderSync \(MsgMarloweHeaderSync msg) -> SomeSubMessage msg
+
+liftMarloweBulkSync :: LiftProtocol MarloweBulkSync MarloweRuntime 'StMarloweBulkSync
+liftMarloweBulkSync =
+  LiftProtocol TokClientMarloweBulkSync TokServerMarloweBulkSync TokNobodyMarloweBulkSync MsgMarloweBulkSync \(MsgMarloweBulkSync msg) -> SomeSubMessage msg
 
 liftMarloweQuery :: LiftProtocol MarloweQuery MarloweRuntime 'StMarloweQuery
 liftMarloweQuery =
