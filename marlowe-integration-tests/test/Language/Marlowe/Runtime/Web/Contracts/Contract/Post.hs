@@ -46,6 +46,7 @@ spec = describe "Valid POST /contracts" do
             { metadata = mempty
             , version = Web.V1
             , roles = Just $ Web.Mint $ Map.singleton "PartyA" $ Web.RoleTokenSimple partyAWebChangeAddress
+            , threadTokenName = Nothing
             , contract = ContractOrSourceId $ Left contract
             , minUTxODeposit = Nothing
             , tags = mempty
