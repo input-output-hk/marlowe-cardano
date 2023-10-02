@@ -365,13 +365,13 @@ mkRoleTokensConfig TestData{..} = \case
     RoleTokensMint $
       mkMint $
         NE.fromList
-          [ ("Role", (changeAddress singleAddressInsufficientBalanceWallet, Nothing))
+          [ ("Role", (ToAddress $ changeAddress singleAddressInsufficientBalanceWallet, Nothing))
           ]
   MintRoleTokensMetadata ->
     RoleTokensMint $
       mkMint $
         NE.fromList
-          [ ("Role", (changeAddress singleAddressInsufficientBalanceWallet, Just testNftMetadata))
+          [ ("Role", (ToAddress $ changeAddress singleAddressInsufficientBalanceWallet, Just testNftMetadata))
           ]
 
 testNftMetadata :: RoleTokenMetadata

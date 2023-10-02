@@ -70,6 +70,7 @@ createCloseContract Wallet{..} = do
         { metadata = mempty
         , version = Web.V1
         , roles = Nothing
+        , threadTokenName = Nothing
         , contract = ContractOrSourceId $ Left V1.Close
         , minUTxODeposit = Nothing
         , tags = mempty

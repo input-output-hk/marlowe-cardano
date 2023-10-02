@@ -106,6 +106,7 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
         { metadata = mempty
         , version = Web.V1
         , roles = Just $ Web.Mint $ Map.singleton "Party A" $ RoleTokenSimple partyAWebChangeAddress
+        , threadTokenName = Nothing
         , contract = ContractOrSourceId $ Right contractSourceId
         , minUTxODeposit = Nothing
         , tags = tags

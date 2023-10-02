@@ -46,6 +46,7 @@ import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
 import Language.Marlowe.Runtime.Transaction.Api (
   ContractCreated (..),
   ContractCreatedInEra (..),
+  Destination (ToAddress),
   InputsApplied (..),
   InputsAppliedInEra (..),
   RoleTokensConfig (..),
@@ -121,7 +122,7 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
       Nothing
       MarloweV1
       (addresses partyAWallet)
-      (RoleTokensMint $ mkMint $ pure ("Party A", (changeAddress $ addresses partyAWallet, Nothing)))
+      (RoleTokensMint $ mkMint $ pure ("Party A", (ToAddress . changeAddress $ addresses partyAWallet, Nothing)))
       ( if Set.null tags
           then emptyMarloweTransactionMetadata
           else
