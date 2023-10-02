@@ -16,6 +16,7 @@ import Data.Coerce (coerce)
 import Data.Foldable (asum)
 import Data.Set (Set)
 import Data.Time (UTCTime)
+import Language.Marlowe.Protocol.BulkSync.Client (MarloweBulkSyncClient)
 import Language.Marlowe.Protocol.Client (MarloweRuntimeClient (..), hoistMarloweRuntimeClient)
 import Language.Marlowe.Protocol.HeaderSync.Client (MarloweHeaderSyncClient)
 import Language.Marlowe.Protocol.Load.Client (MarloweLoadClient, pushContract)
@@ -173,6 +174,10 @@ runMarloweSyncClient = runMarloweRuntimeClient . RunMarloweSyncClient
 -- transactions.
 runMarloweHeaderSyncClient :: (MonadMarlowe m) => MarloweHeaderSyncClient m a -> m a
 runMarloweHeaderSyncClient = runMarloweRuntimeClient . RunMarloweHeaderSyncClient
+
+-- | Run a MarloweBulkSyncClient. Used to synchronize with contract transactions.
+runMarloweBulkSyncClient :: (MonadMarlowe m) => MarloweBulkSyncClient m a -> m a
+runMarloweBulkSyncClient = runMarloweRuntimeClient . RunMarloweBulkSyncClient
 
 -- | Run a MarloweQueryClient.
 runMarloweQueryClient :: (MonadMarlowe m) => MarloweQueryClient m a -> m a
