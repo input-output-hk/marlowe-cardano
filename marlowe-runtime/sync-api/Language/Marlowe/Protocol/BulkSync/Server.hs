@@ -85,7 +85,7 @@ marloweBulkSyncServerPeer = EffectTraced . fmap peerIdle . runMarloweBulkSyncSer
     peerIdle ServerStIdle{..} = AwaitTraced (ClientAgency TokIdle) \case
       MsgDone -> Closed TokDone recvMsgDone
       MsgIntersect blocks -> Respond (ServerAgency TokIntersect) $ peerIntersect <$> recvMsgIntersect blocks
-      MsgRequestNext batchSize -> Respond (ServerAgency TokNext) $ peerNext <$> recvMsgRequestNext batchSize
+      MsgRequestNext extraBlockCount -> Respond (ServerAgency TokNext) $ peerNext <$> recvMsgRequestNext extraBlockCount
 
     peerIntersect
       :: ServerStIntersect m a

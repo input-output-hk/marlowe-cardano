@@ -9,7 +9,7 @@ module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetNextBlocks (
 
 import Control.Arrow (Arrow (..))
 import Control.Monad (join)
-import Data.Bifunctor (Bifunctor (..))
+import qualified Data.Bifunctor as Bifunctor
 import Data.Binary (Binary (..))
 import Data.Binary.Get (runGet)
 import Data.ByteString (ByteString, fromStrict)
@@ -59,12 +59,12 @@ import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTransaction (decodeT
 import Prelude hiding (init)
 
 getNextBlocks :: Word8 -> ChainPoint -> T.Transaction (Next MarloweBlock)
-getNextBlocks batchSize point = do
+getNextBlocks extraBlockCount point = do
   orient point >>= \case
     RolledBack toPoint tip -> pure $ Rollback toPoint tip
     AtTip -> pure Wait
     BeforeTip tip -> do
-      blocks <- getNextBlockHeaders batchSize point
+      blocks <- getNextBlockHeaders extraBlockCount point
       createTransactionsByBlock <- getNewContracts blocks
       applyInputsTransactionsByBlock <- getApplyInputsTransactions blocks
       withdrawTransactionsByBlock <- getWithdrawTransactions blocks
@@ -79,18 +79,18 @@ getNextBlocks batchSize point = do
             }
 
 getNextBlockHeaders :: Word8 -> ChainPoint -> T.Transaction [BlockHeader]
-getNextBlockHeaders batchSize Genesis =
-  T.statement batchSize do
-    dimap fromIntegral (V.toList . fmap (uncurry3 decodeBlockHeader)) do
+getNextBlockHeaders extraBlockCount Genesis =
+  T.statement (fromIntegral extraBlockCount + 1) do
+    fmap (V.toList . fmap (uncurry3 decodeBlockHeader)) do
       [vectorStatement|
         SELECT block.slotNo :: bigint, block.id :: bytea, block.blockNo :: bigint
         FROM marlowe.block
         ORDER BY slotNo
         LIMIT $1 :: int
       |]
-getNextBlockHeaders batchSize (At BlockHeader{..}) =
-  T.statement (slotNo, batchSize) do
-    dimap (bimap fromIntegral fromIntegral) (V.toList . fmap (uncurry3 decodeBlockHeader)) do
+getNextBlockHeaders extraBlockCount (At BlockHeader{..}) =
+  T.statement (slotNo, fromIntegral extraBlockCount + 1) do
+    dimap (Bifunctor.first fromIntegral) (V.toList . fmap (uncurry3 decodeBlockHeader)) do
       [vectorStatement|
         SELECT block.slotNo :: bigint, block.id :: bytea, block.blockNo :: bigint
         FROM marlowe.block

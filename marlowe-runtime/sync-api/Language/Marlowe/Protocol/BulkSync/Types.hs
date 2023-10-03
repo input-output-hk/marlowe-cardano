@@ -70,9 +70,9 @@ instance Protocol MarloweBulkSync where
 instance BinaryMessage MarloweBulkSync where
   putMessage = \case
     ClientAgency TokIdle -> \case
-      MsgRequestNext batchSize -> do
+      MsgRequestNext extraBlockCount -> do
         putWord8 0x01
-        put batchSize
+        put extraBlockCount
       MsgIntersect blocks -> putWord8 0x02 *> put blocks
       MsgDone -> putWord8 0x03
     ServerAgency TokNext -> \case
@@ -211,10 +211,10 @@ instance OTelProtocol MarloweBulkSync where
   messageAttributes = \case
     ClientAgency tok -> case tok of
       TokIdle -> \case
-        MsgRequestNext batchSize ->
+        MsgRequestNext extraBlockCount ->
           MessageAttributes
             { messageType = "request_next"
-            , messageParameters = fromString <$> [show batchSize]
+            , messageParameters = fromString <$> [show extraBlockCount]
             }
         MsgIntersect blocks ->
           MessageAttributes

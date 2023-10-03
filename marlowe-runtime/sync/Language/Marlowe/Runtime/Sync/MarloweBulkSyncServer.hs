@@ -33,14 +33,14 @@ marloweBulkSyncServer MarloweBulkSyncServerDependencies{..} = ServerSource $ pur
         , recvMsgDone = pure ()
         }
       where
-        recvMsgRequestNext batchSize = do
-          results <- getNextBlocks batchSize clientPos
+        recvMsgRequestNext extraBlockCount = do
+          results <- getNextBlocks extraBlockCount clientPos
           pure case results of
             Rollback targetPoint tip -> SendMsgRollBackward targetPoint tip $ serverIdle targetPoint
             Wait ->
               SendMsgWait
                 ServerStPoll
-                  { recvMsgPoll = recvMsgRequestNext batchSize
+                  { recvMsgPoll = recvMsgRequestNext extraBlockCount
                   , recvMsgCancel = pure $ serverIdle clientPos
                   }
             Next newPos tip blocks -> SendMsgRollForward blocks tip $ serverIdle $ At newPos

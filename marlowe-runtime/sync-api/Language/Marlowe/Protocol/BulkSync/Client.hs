@@ -52,7 +52,7 @@ hoistMarloweBulkSyncClient nat = MarloweBulkSyncClient . nat . fmap hoistIdle . 
   where
     hoistIdle :: ClientStIdle m a -> ClientStIdle n a
     hoistIdle = \case
-      SendMsgRequestNext batchSize next -> SendMsgRequestNext batchSize $ hoistNext next
+      SendMsgRequestNext extraBlockCount next -> SendMsgRequestNext extraBlockCount $ hoistNext next
       SendMsgIntersect blocks intersect -> SendMsgIntersect blocks $ hoistIntersect intersect
       SendMsgDone a -> SendMsgDone a
 
@@ -92,8 +92,8 @@ marloweBulkSyncClientPeer = EffectTraced . fmap peerIdle . runMarloweBulkSyncCli
         YieldTraced (ClientAgency TokIdle) (MsgIntersect blocks) $
           Call (ServerAgency TokIntersect) $
             peerIntersect intersect
-      SendMsgRequestNext batchSize next ->
-        YieldTraced (ClientAgency TokIdle) (MsgRequestNext batchSize) $
+      SendMsgRequestNext extraBlockCount next ->
+        YieldTraced (ClientAgency TokIdle) (MsgRequestNext extraBlockCount) $
           Call (ServerAgency TokNext) $
             peerNext next
 
@@ -143,7 +143,7 @@ serveMarloweBulkSyncClient MarloweBulkSyncServer{..} MarloweBulkSyncClient{..} =
 
     serveIdle :: ServerStIdle m a -> ClientStIdle m b -> m (a, b)
     serveIdle ServerStIdle{..} = \case
-      SendMsgRequestNext batchSize next -> serveNext next =<< recvMsgRequestNext batchSize
+      SendMsgRequestNext extraBlockCount next -> serveNext next =<< recvMsgRequestNext extraBlockCount
       SendMsgIntersect blocks intersect -> serveIntersect intersect =<< recvMsgIntersect blocks
       SendMsgDone b -> (,b) <$> recvMsgDone
 
