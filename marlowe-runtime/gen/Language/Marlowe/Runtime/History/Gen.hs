@@ -1,9 +1,11 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Marlowe.Runtime.History.Gen where
 
 import Language.Marlowe.Runtime.ChainSync.Gen ()
+import Language.Marlowe.Runtime.Core.Api (MarloweVersion (..))
 import Language.Marlowe.Runtime.Core.Gen (ArbitraryMarloweVersion)
 import Language.Marlowe.Runtime.History.Api
 import Spec.Marlowe.Semantics.Arbitrary ()
@@ -67,3 +69,29 @@ instance (ArbitraryMarloweVersion v) => Arbitrary (ContractStep v) where
       , RedeemPayout <$> arbitrary
       ]
   shrink = const []
+
+instance Arbitrary MarloweBlock where
+  arbitrary = MarloweBlock <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+  shrink = genericShrink
+
+instance Arbitrary MarloweCreateTransaction where
+  arbitrary = MarloweCreateTransaction <$> arbitrary <*> arbitrary
+  shrink = genericShrink
+
+instance Arbitrary SomeCreateStep where
+  arbitrary = SomeCreateStep MarloweV1 <$> arbitrary
+  shrink (SomeCreateStep MarloweV1 step) = SomeCreateStep MarloweV1 <$> shrink step
+
+instance Arbitrary MarloweApplyInputsTransaction where
+  arbitrary = MarloweApplyInputsTransaction MarloweV1 <$> arbitrary <*> arbitrary
+  shrink (MarloweApplyInputsTransaction MarloweV1 input tx) =
+    (MarloweApplyInputsTransaction MarloweV1 <$> shrink input <*> pure tx)
+      <> (MarloweApplyInputsTransaction MarloweV1 input <$> shrink tx)
+
+instance Arbitrary UnspentContractOutput where
+  arbitrary = UnspentContractOutput <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+  shrink = genericShrink
+
+instance Arbitrary MarloweWithdrawTransaction where
+  arbitrary = MarloweWithdrawTransaction <$> arbitrary <*> arbitrary
+  shrink = genericShrink
