@@ -251,11 +251,12 @@ checkTransaction protocolParameters era version@MarloweV1 marloweContext@Marlowe
               intervalEnd
               txInputs
     let walletContext = walletForConstraints version marloweContext changeAddress constraints
+    let helperContext = undefined
     pure
       . either
         (pure . TransactionValidationError transaction . show)
         (const $ TransactionWarning transaction <$> V1.txOutWarnings txOutput)
-      $ solveConstraints' era version (Left marloweContext') walletContext constraints
+      $ solveConstraints' era version (Left marloweContext') walletContext helperContext constraints
 
 -- | Create a wallet context that will satisfy the given constraints.
 walletForConstraints

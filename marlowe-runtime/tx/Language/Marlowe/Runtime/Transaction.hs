@@ -41,7 +41,12 @@ import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Language.Marlowe.Runtime.Transaction.BuildConstraints (MkRoleTokenMintingPolicy)
 import Language.Marlowe.Runtime.Transaction.Chain
 import Language.Marlowe.Runtime.Transaction.Constraints (MarloweContext (..), PayoutContext (..), WalletContext (..))
-import Language.Marlowe.Runtime.Transaction.Query (LoadMarloweContext, LoadPayoutContext, LoadWalletContext)
+import Language.Marlowe.Runtime.Transaction.Query (
+  LoadHelperContext,
+  LoadMarloweContext,
+  LoadPayoutContext,
+  LoadWalletContext,
+ )
 import qualified Language.Marlowe.Runtime.Transaction.Query as Q
 import Language.Marlowe.Runtime.Transaction.Server
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob)
@@ -63,6 +68,7 @@ data TransactionDependencies m = TransactionDependencies
   , loadWalletContext :: LoadWalletContext m
   , loadPayoutContext :: LoadPayoutContext m
   , loadMarloweContext :: LoadMarloweContext m
+  , loadHelperContext :: LoadHelperContext m
   , chainSyncQueryConnector :: Connector (QueryClient ChainSyncQuery) m
   , contractQueryConnector :: Connector (QueryClient ContractRequest) m
   , getCurrentScripts :: forall v. MarloweVersion v -> MarloweScripts

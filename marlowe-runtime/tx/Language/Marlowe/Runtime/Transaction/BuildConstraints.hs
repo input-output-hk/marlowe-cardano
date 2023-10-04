@@ -34,6 +34,7 @@ import qualified Data.Set as Set
 import Data.Time (UTCTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
 import Data.Traversable (for)
+import Debug.Trace
 import GHC.Base (Alternative ((<|>)))
 import Language.Marlowe.Core.V1.Semantics (TransactionInput)
 import qualified Language.Marlowe.Core.V1.Semantics as V1
@@ -57,6 +58,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   ScriptHash (..),
   SlotNo,
   TokenName (..),
+  Tokens (Tokens),
   TransactionMetadata (..),
   TransactionOutput (..),
   TxOutRef,
@@ -87,6 +89,7 @@ import Language.Marlowe.Runtime.Transaction.Api (
   CreateBuildupError (AddressDecodingFailed, MintingScriptDecodingFailed, MintingUtxoSelectionFailed),
   CreateError (..),
   Destination (..),
+  HelperScript (..),
   Mint (unMint),
   RoleTokensConfig (..),
   WithdrawError (..),
@@ -99,6 +102,7 @@ import Language.Marlowe.Runtime.Transaction.Constraints (
   mustMintRoleToken,
   mustPayToAddress,
   mustPayToRole,
+  mustSendHelperOutput,
   mustSendMarloweOutput,
   mustSpendRoleToken,
   requiresMetadata,
@@ -194,6 +198,10 @@ buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx roles metadata m
   -- Marlowe script output.
   (datum, assets) <- sendMarloweOutput policyId
 
+  -- Open-role script output.
+  when hasOpenRoles $
+    sendOpenRoleOutputs policyId
+
   pure (datum, assets, policyId)
   where
     nftsMetadata (PolicyId policyId) = case roles of
@@ -213,11 +221,45 @@ buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx roles metadata m
 
     liftMaybe err = lift . except . note (CreateBuildupFailed err)
 
+    roleNamesForDestination destination =
+      case (destination, roles) of
+        (_, RoleTokensMint (unMint -> minting)) -> fmap fst $ filter ((== destination) . fst . snd) $ Map.toList minting
+        (ToSelf, RoleTokensUsePolicyWithOpenRoles _ selfName _) -> pure selfName
+        (ToScript OpenRoleScript, RoleTokensUsePolicyWithOpenRoles _ _ openRoleNames) -> openRoleNames
+        _ -> mempty
+
+    -- In principal, there may be use cases involving multiple thread tokens.
+    threadTokenNames = roleNamesForDestination ToSelf
+
+    hasOpenRoles =
+      case roles of
+        RoleTokensUsePolicyWithOpenRoles{} -> True
+        RoleTokensMint (unMint -> minting) -> any ((== ToScript OpenRoleScript) . fst . snd) $ Map.toList minting
+        _ -> False
+
     sendMarloweOutput policyId = do
       datum <- mkMarloweDatum policyId
-      let assets = adaAsset minAda
+      let assets =
+            Assets (minAda + fromIntegral (length threadTokenNames) * minAdaPerTokenOutput) . Tokens . Map.fromList $
+              (,1) . AssetId policyId <$> threadTokenNames
       tell $ mustSendMarloweOutput assets datum
       pure (datum, assets)
+
+    sendOpenRoleOutputs policyId = do
+      threadTokenName <-
+        case threadTokenNames of
+          [name] -> pure name
+          _ -> lift $ trace "HERE" $ throwE RequiresSingleThreadToken
+      mapM_ (sendOpenRoleOutput policyId threadTokenName)
+        . roleNamesForDestination
+        $ ToScript OpenRoleScript
+
+    sendOpenRoleOutput policyId threadTokenName openRoleName =
+      let assets =
+            Assets (minAda + minAdaPerTokenOutput) . Tokens $
+              Map.fromList [(AssetId policyId openRoleName, 1)]
+          datum = CS.B $ unTokenName threadTokenName
+       in tell $ mustSendHelperOutput OpenRoleScript assets datum
 
     mkMarloweDatum :: PolicyId -> TxConstraintsBuilderM CreateError era 'V1 m (Datum 'V1)
     mkMarloweDatum policyId = do
@@ -252,7 +294,7 @@ buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx roles metadata m
     mintRoleTokens :: TxConstraintsBuilderM CreateError era 'V1 m PolicyId
     mintRoleTokens = case roles of
       RoleTokensUsePolicy policyId -> pure policyId
-      RoleTokensUsePolicyWithOpenRoles policyId _ -> pure policyId
+      RoleTokensUsePolicyWithOpenRoles policyId _ _ -> pure policyId
       RoleTokensMint (unMint -> minting) -> do
         let WalletContext{availableUtxos} = walletCtx
             txLovelaceRequirementEstimate =
@@ -288,10 +330,7 @@ buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx roles metadata m
             policyId = PolicyId . unScriptHash $ scriptHash
 
         for_ (Map.toList minting) \(tokenName, (destination, _)) ->
-          case destination of
-            ToAddress address -> tell $ mustMintRoleToken txOutRef witness (AssetId policyId tokenName) address
-            ToSelf -> pure ()
-            ToScript _ -> pure ()
+          tell $ mustMintRoleToken txOutRef witness (AssetId policyId tokenName) destination
         pure policyId
       RoleTokensNone -> do
         let -- We use ADA currency symbol as a placeholder which

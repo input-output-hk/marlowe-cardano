@@ -139,6 +139,9 @@ run Options{..} = flip runComponent_ () proc _ -> do
                 (runConnector chainSyncQueryConnector . request . GetUTxOs)
                 v
                 payouts
+          , loadHelperContext = \v -> do
+              networkId <- runConnector chainSyncQueryConnector $ request GetNetworkId
+              Query.loadHelperContext ScriptRegistry.getScripts networkId v
           , getCurrentScripts = ScriptRegistry.getCurrentScripts
           , analysisTimeout = analysisTimeout
           , mkRoleTokenMintingPolicy = mkCommandLineRoleTokenMintingPolicy mintingPolicyCmd

@@ -90,7 +90,6 @@ import Test.QuickCheck (
   discard,
   elements,
   forAllShrink,
-  frequency,
   genericShrink,
   listOf,
   listOf1,
@@ -128,10 +127,7 @@ createSpec = Hspec.describe "buildCreateConstraints" do
   Hspec.QuickCheck.prop "sends minted role tokens" \(SomeCreateArgs args) ->
     case roleTokensConfig args of
       RoleTokensMint mint ->
-        let result =
-              -- FIXME: PLT-7111
-              Map.map Transaction.Api.ToAddress . extractSentRoleTokens
-                <$> runBuildCreateConstraints args
+        let result = extractSentRoleTokens <$> runBuildCreateConstraints args
             expected = fst <$> unMint mint
          in case version args of
               MarloweV1 -> result === Right expected
@@ -193,7 +189,7 @@ extractMarloweDatum TxConstraints{..} = case marloweOutputConstraints of
   MarloweOutput _ datum -> Just datum
   _ -> Nothing
 
-extractSentRoleTokens :: TxConstraints BabbageEra v -> Map Chain.TokenName Chain.Address
+extractSentRoleTokens :: TxConstraints BabbageEra v -> Map Chain.TokenName Destination
 extractSentRoleTokens TxConstraints{..} = case roleTokenConstraints of
   MintRoleTokens _ _ distribution -> Map.mapKeys Chain.tokenName distribution
   _ -> mempty
@@ -251,17 +247,16 @@ instance Arbitrary WalletContext where
 
 instance Arbitrary RoleTokensConfig where
   arbitrary =
-    frequency
-      [ (10, pure RoleTokensNone)
-      , (10, RoleTokensUsePolicy . Chain.PolicyId <$> byteStringGen)
-      , (10, RoleTokensMint . mkMint . NE.fromList <$> listOf1 ((,) <$> genRole <*> ((,Nothing) . ToAddress <$> arbitrary)))
-      , (1, RoleTokensUsePolicyWithOpenRoles . Chain.PolicyId <$> byteStringGen <*> arbitrary)
+    oneof
+      [ pure RoleTokensNone
+      , RoleTokensUsePolicy . Chain.PolicyId <$> byteStringGen
+      , RoleTokensMint . mkMint . NE.fromList <$> listOf1 ((,) <$> genRole <*> ((,Nothing) . ToAddress <$> arbitrary))
       ]
   shrink = \case
     RoleTokensNone -> []
     RoleTokensUsePolicy _ -> [RoleTokensNone]
     RoleTokensMint _ -> [RoleTokensNone]
-    RoleTokensUsePolicyWithOpenRoles _ _ -> [RoleTokensNone]
+    RoleTokensUsePolicyWithOpenRoles{} -> [RoleTokensNone]
 
 notEmptyWalletContext :: WalletContext -> Bool
 notEmptyWalletContext WalletContext{..} = not $ null $ toUTxOsList availableUtxos
@@ -297,6 +292,7 @@ withdrawSpec = Hspec.describe "buildWithdrawConstraints" do
                 , payToAddresses = Map.empty
                 , payToRoles = Map.empty
                 , marloweOutputConstraints = TxConstraints.MarloweOutputConstraintsNone
+                , helperOutputConstraints = mempty
                 , signatureConstraints = Set.empty
                 , metadataConstraints = emptyMarloweTransactionMetadata
                 }
