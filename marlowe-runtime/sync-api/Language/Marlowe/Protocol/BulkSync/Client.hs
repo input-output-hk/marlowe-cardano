@@ -13,35 +13,70 @@ import Language.Marlowe.Runtime.History.Api
 import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
 
+-- | A CPS-style client of the bulk sync protocol.
 newtype MarloweBulkSyncClient m a = MarloweBulkSyncClient {runMarloweBulkSyncClient :: m (ClientStIdle m a)}
   deriving (Functor)
 
+-- | An action a client can take from the idle state.
 data ClientStIdle m a where
-  SendMsgRequestNext :: Word8 -> ClientStNext m a -> ClientStIdle m a
-  SendMsgIntersect :: [BlockHeader] -> ClientStIntersect m a -> ClientStIdle m a
-  SendMsgDone :: a -> ClientStIdle m a
+  -- | Request the next batch of blocks from the server.
+  SendMsgRequestNext
+    :: Word8
+    -- ^ The number of *extra* blocks to fetch (0 = fetch one block).
+    -> ClientStNext m a
+    -- ^ Handler functions for the possible responses from the server.
+    -> ClientStIdle m a
+  -- | Intersect the client's chain with the server's by finding the latest common point.
+  SendMsgIntersect
+    :: [BlockHeader]
+    -- ^ Points from the client's chain to try to intersect with the server.
+    -> ClientStIntersect m a
+    -- ^ Handler functions for the possible responses from the server.
+    -> ClientStIdle m a
+  -- | End the session.
+  SendMsgDone
+    :: a
+    -- ^ The result of running the client.
+    -> ClientStIdle m a
 
 deriving instance (Functor m) => Functor (ClientStIdle m)
 
+-- | Responses the server can send from the intersect state.
 data ClientStIntersect m a = ClientStIntersect
   { recvMsgIntersectFound :: BlockHeader -> BlockHeader -> m (ClientStIdle m a)
+  -- ^ A common point was found between the client and the server. Syncing will begin from this point.
   , recvMsgIntersectNotFound :: ChainPoint -> m (ClientStIdle m a)
+  -- ^ No common points were found. Syncing will resume from the client's previous point.
   }
   deriving (Functor)
 
+-- | Responses the server can send from the next state.
 data ClientStNext m a = ClientStNext
   { recvMsgRollForward :: [MarloweBlock] -> BlockHeader -> m (ClientStIdle m a)
+  -- ^ Handle new blocks from the server.
   , recvMsgRollBackward :: ChainPoint -> ChainPoint -> m (ClientStIdle m a)
+  -- ^ Handle a rollback.
   , recvMsgWait :: m (ClientStPoll m a)
+  -- ^ Enter a polling loop.
   }
   deriving (Functor)
 
+-- | An action a client can take from the poll state.
 data ClientStPoll m a where
-  SendMsgPoll :: ClientStNext m a -> ClientStPoll m a
-  SendMsgCancel :: ClientStIdle m a -> ClientStPoll m a
+  -- | Poll for new headers.
+  SendMsgPoll
+    :: ClientStNext m a
+    -- ^ Handler functions for the possible responses from the server.
+    -> ClientStPoll m a
+  -- | Exit the polling loop.
+  SendMsgCancel
+    :: ClientStIdle m a
+    -- ^ The next action to perform.
+    -> ClientStPoll m a
 
 deriving instance (Functor m) => Functor (ClientStPoll m)
 
+-- | Hoist a natural transformation over a client's base monad.
 hoistMarloweBulkSyncClient
   :: forall m n a
    . (Functor m)
@@ -76,6 +111,7 @@ hoistMarloweBulkSyncClient nat = MarloweBulkSyncClient . nat . fmap hoistIdle . 
       SendMsgPoll next -> SendMsgPoll $ hoistNext next
       SendMsgCancel idle -> SendMsgCancel $ hoistIdle idle
 
+-- | Transform a bulk sync client to a type-indexed peer.
 marloweBulkSyncClientPeer
   :: forall m a
    . (Functor m)
@@ -127,6 +163,7 @@ marloweBulkSyncClientPeer = EffectTraced . fmap peerIdle . runMarloweBulkSyncCli
           Cast $
             peerIdle idle
 
+-- | Eliminate a client and a server pair by serving the client.
 serveMarloweBulkSyncClient
   :: forall m a b
    . (Monad m)

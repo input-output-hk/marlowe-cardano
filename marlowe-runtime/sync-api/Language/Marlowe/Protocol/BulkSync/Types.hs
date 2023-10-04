@@ -3,6 +3,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
 
+-- | Defines the marlowe bulk sync protocol, which is a protocol for clients to synchronize with blocks of
+-- marlowe-specific transaction information.
 module Language.Marlowe.Protocol.BulkSync.Types where
 
 import Control.Monad (join)
@@ -28,27 +30,69 @@ import Network.Protocol.Peer.Trace (MessageAttributes (..), OTelProtocol (..))
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency (..))
 
+-- | The states of the marlowe bulk sync client. This type is intended to be used as a kind.
 data MarloweBulkSync where
+  -- | The idle state, from which a client can request the next batch of blocks from the server, intersect, or terminate
+  -- the session.
   StIdle :: MarloweBulkSync
+  -- | The intersect state, during which the server is responding to an intersect request from the client.
   StIntersect :: MarloweBulkSync
+  -- | The next state, during which the server is fetching the next batch of blocks for the client/
   StNext :: MarloweBulkSync
+  -- | The poll state, when the client has reached the tip. The client can poll for new marlowe blocks in this state.
   StPoll :: MarloweBulkSync
+  -- | The done state, when the session is done.
   StDone :: MarloweBulkSync
 
 instance HasSignature MarloweBulkSync where
   signature _ = "MarloweBulkSync"
 
 instance Protocol MarloweBulkSync where
+  -- The messages that transition protocol states in the bulk sync protocol.
   data Message MarloweBulkSync st st' where
-    MsgRequestNext :: Word8 -> Message MarloweBulkSync 'StIdle 'StNext
-    MsgRollForward :: [MarloweBlock] -> BlockHeader -> Message MarloweBulkSync 'StNext 'StIdle
-    MsgRollBackward :: ChainPoint -> ChainPoint -> Message MarloweBulkSync 'StNext 'StIdle
+    -- Request the next batch of blocks from the server.
+    MsgRequestNext
+      -- The number of *extra* blocks to fetch (0 = fetch one block).
+      :: Word8
+      -> Message MarloweBulkSync 'StIdle 'StNext
+    -- Send more blocks to the client.
+    MsgRollForward
+      -- The blocks, ordered by block number.
+      :: [MarloweBlock]
+      -- The current tip.
+      -> BlockHeader
+      -> Message MarloweBulkSync 'StNext 'StIdle
+    -- Roll the client back to a previous point in the chain.
+    MsgRollBackward
+      -- The client's new point in the chain.
+      :: ChainPoint
+      -- The current tip.
+      -> ChainPoint
+      -> Message MarloweBulkSync 'StNext 'StIdle
+    -- Inform the client they have reached the tip and should poll to receive new blocks.
     MsgWait :: Message MarloweBulkSync 'StNext 'StPoll
+    -- Ask the server if more blocks are available yet.
     MsgPoll :: Message MarloweBulkSync 'StPoll 'StNext
+    -- Cancel the poll, returning to the idle state.
     MsgCancel :: Message MarloweBulkSync 'StPoll 'StIdle
-    MsgIntersect :: [BlockHeader] -> Message MarloweBulkSync 'StIdle 'StIntersect
-    MsgIntersectFound :: BlockHeader -> BlockHeader -> Message MarloweBulkSync 'StIntersect 'StIdle
-    MsgIntersectNotFound :: ChainPoint -> Message MarloweBulkSync 'StIntersect 'StIdle
+    -- Intersect the client's chain with the server's by finding the latest common point.
+    MsgIntersect
+      -- Points from the client's chain to try to intersect with the server.
+      :: [BlockHeader]
+      -> Message MarloweBulkSync 'StIdle 'StIntersect
+    -- A common point was found between the client and the server. Syncing will begin from this point.
+    MsgIntersectFound
+      -- The point that was found.
+      :: BlockHeader
+      -- The current tip.
+      -> BlockHeader
+      -> Message MarloweBulkSync 'StIntersect 'StIdle
+    -- No common points were found. Syncing will resume from the client's previous point.
+    MsgIntersectNotFound
+      -- The current tip.
+      :: ChainPoint
+      -> Message MarloweBulkSync 'StIntersect 'StIdle
+    -- End the session.
     MsgDone :: Message MarloweBulkSync 'StIdle 'StDone
 
   data ClientHasAgency st where
