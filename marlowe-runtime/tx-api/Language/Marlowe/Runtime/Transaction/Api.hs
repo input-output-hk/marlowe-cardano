@@ -21,6 +21,7 @@ module Language.Marlowe.Runtime.Transaction.Api (
   InputsAppliedInEra (..),
   JobId (..),
   LoadMarloweContextError (..),
+  LoadHelperContextError (..),
   MarloweTxCommand (..),
   Mint (unMint),
   Destination (..),
@@ -60,7 +61,7 @@ import qualified Cardano.Api as C
 import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import qualified Cardano.Api.Shelley as CS
 import Control.Applicative ((<|>))
-import Data.Aeson (ToJSON (..), Value (..), object, (.!=), (.:!), (.=))
+import Data.Aeson (FromJSON, FromJSONKey, ToJSON (..), ToJSONKey, Value (..), object, (.!=), (.:!), (.=))
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as Aeson.KeyMap
 import Data.Aeson.Types ((.:))
@@ -266,8 +267,8 @@ encodeRoleTokenMetadata = encodeNFTMetadataDetails
     encodeText = MetadataList . fmap MetadataText . Text.chunksOf 64
 
 data HelperScript = OpenRoleScript
-  deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON, Variations)
+  deriving stock (Show, Bounded, Enum, Eq, Ord, Generic)
+  deriving anyclass (Binary, FromJSON, FromJSONKey, ToJSON, ToJSONKey, Variations)
 
 data Destination
   = ToAddress Address
@@ -288,7 +289,7 @@ data RoleTokensConfig
   = RoleTokensNone
   | RoleTokensUsePolicy PolicyId
   | RoleTokensMint Mint
-  | RoleTokensUsePolicyWithOpenRoles PolicyId [TokenName]
+  | RoleTokensUsePolicyWithOpenRoles PolicyId TokenName [TokenName]
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary, ToJSON, Variations)
 
@@ -894,6 +895,7 @@ data ConstraintError
   | PayoutOutputInWithdraw
   | PayoutInputInCreateOrApply
   | UnknownPayoutScript ScriptHash
+  | HelperScriptNotFound HelperScript
   deriving (Generic)
 
 deriving instance Eq ConstraintError
@@ -907,12 +909,14 @@ data CreateError
   = CreateEraUnsupported AnyCardanoEra
   | CreateConstraintError ConstraintError
   | CreateLoadMarloweContextFailed LoadMarloweContextError
+  | CreateLoadHelperContextFailed LoadHelperContextError
   | CreateBuildupFailed CreateBuildupError
   | CreateToCardanoError
   | CreateSafetyAnalysisError String -- FIXME: This is a placeholder, pending design of error handling for safety analysis.
   | CreateContractNotFound
   | ProtocolParamNoUTxOCostPerByte
   | InsufficientMinAdaDeposit Lovelace
+  | RequiresSingleThreadToken
   deriving (Generic)
 
 deriving instance Eq CreateError
@@ -934,6 +938,7 @@ data ApplyInputsError
   | ApplyInputsConstraintError ConstraintError
   | ScriptOutputNotFound
   | ApplyInputsLoadMarloweContextFailed LoadMarloweContextError
+  | ApplyInputsLoadHelperContextFailed LoadHelperContextError
   | ApplyInputsConstraintsBuildupFailed ApplyInputsConstraintsBuildupError
   | SlotConversionFailed String
   | TipAtGenesis
@@ -956,6 +961,7 @@ data WithdrawError
   = WithdrawEraUnsupported AnyCardanoEra
   | WithdrawConstraintError ConstraintError
   | EmptyPayouts
+  | WithdrawLoadHelperContextFailed LoadHelperContextError
   deriving (Generic)
 
 deriving instance Eq WithdrawError
@@ -972,6 +978,11 @@ data LoadMarloweContextError
   | PayoutScriptNotPublished ScriptHash
   | ExtractCreationError ExtractCreationError
   | ExtractMarloweTransactionError ExtractMarloweTransactionError
+  deriving (Eq, Show, Ord, Generic)
+  deriving anyclass (Binary, ToJSON, Variations)
+
+newtype LoadHelperContextError
+  = HelperScriptNotFoundInRegistry HelperScript
   deriving (Eq, Show, Ord, Generic)
   deriving anyclass (Binary, ToJSON, Variations)
 

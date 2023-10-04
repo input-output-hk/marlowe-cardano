@@ -818,7 +818,7 @@ instance ToSchema ContractOrSourceId where
 
 data RolesConfig
   = UsePolicy PolicyId
-  | UsePolicyWithOpenRoles PolicyId [Text]
+  | UsePolicyWithOpenRoles PolicyId Text [Text]
   | Mint (Map Text RoleTokenConfig)
   deriving (Show, Eq, Ord, Generic)
 
@@ -833,17 +833,18 @@ instance FromJSON RolesConfig where
                 do
                   script <- obj .: "script"
                   guard $ script == ("OpenRole" :: String)
-                  UsePolicyWithOpenRoles <$> obj .: "policyId" <*> obj .: "openRoleNames"
+                  UsePolicyWithOpenRoles <$> obj .: "policyId" <*> obj .: "threadRoleName" <*> obj .: "openRoleNames"
            in parseOpen <|> parseMint
       )
       value
 
 instance ToJSON RolesConfig where
   toJSON (UsePolicy policy) = toJSON policy
-  toJSON (UsePolicyWithOpenRoles policy openRoleNames) =
+  toJSON (UsePolicyWithOpenRoles policy threadRoleName openRoleNames) =
     object
       [ "script" .= ("OpenRole" :: String)
       , "policyId" .= policy
+      , "threadRoleName" .= threadRoleName
       , "openRoleNames" .= openRoleNames
       ]
   toJSON (Mint configs) = toJSON configs

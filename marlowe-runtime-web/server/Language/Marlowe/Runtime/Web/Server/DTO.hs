@@ -791,7 +791,7 @@ instance FromDTO Tx.RoleTokensConfig where
   fromDTO = \case
     Nothing -> pure Tx.RoleTokensNone
     Just (Web.UsePolicy policy) -> Tx.RoleTokensUsePolicy <$> fromDTO policy
-    Just (Web.UsePolicyWithOpenRoles policy openRoleNames) -> Tx.RoleTokensUsePolicyWithOpenRoles <$> fromDTO policy <*> fromDTO openRoleNames
+    Just (Web.UsePolicyWithOpenRoles policy threadRoleName openRoleNames) -> Tx.RoleTokensUsePolicyWithOpenRoles <$> fromDTO policy <*> fromDTO threadRoleName <*> fromDTO openRoleNames
     Just (Web.Mint mint) -> Tx.RoleTokensMint <$> fromDTO mint
 
 instance HasDTO Tx.Mint where

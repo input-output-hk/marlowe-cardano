@@ -59,6 +59,7 @@ import Language.Marlowe.Runtime.Transaction.Query (
   LoadMarloweContextSelector,
   LoadPayoutContextSelector,
   LoadWalletContextSelector,
+  loadHelperContext,
   loadMarloweContext,
   loadPayoutContext,
   loadWalletContext,
@@ -203,6 +204,7 @@ marloweRuntime = proc MarloweRuntimeDependencies{..} -> do
           , loadWalletContext = loadWalletContext $ runConnector chainSyncQueryConnector . request . GetUTxOs
           , loadMarloweContext = loadMarloweContext getScripts networkId chainSyncConnector chainSyncQueryConnector
           , loadPayoutContext = loadPayoutContext getScripts networkId $ runConnector chainSyncQueryConnector . request . GetUTxOs
+          , loadHelperContext = loadHelperContext getScripts networkId
           , analysisTimeout = 15 -- seconds
           , ..
           }

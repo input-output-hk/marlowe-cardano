@@ -103,7 +103,7 @@ instance Arbitrary RoleTokenMetadata where
   shrink = genericShrink
 
 instance Arbitrary HelperScript where
-  arbitrary = pure OpenRoleScript
+  arbitrary = elements [minBound .. maxBound]
   shrink = genericShrink
 
 instance Arbitrary Destination where
@@ -127,7 +127,7 @@ instance Arbitrary RoleTokensConfig where
       [ (10, pure RoleTokensNone)
       , (10, RoleTokensUsePolicy <$> arbitrary)
       , (10, RoleTokensMint <$> arbitrary)
-      , (1, RoleTokensUsePolicyWithOpenRoles <$> arbitrary <*> arbitrary)
+      , (1, RoleTokensUsePolicyWithOpenRoles <$> arbitrary <*> arbitrary <*> arbitrary)
       ]
   shrink = genericShrink
 
@@ -146,6 +146,10 @@ instance Arbitrary LoadMarloweContextError where
       , ExtractCreationError <$> arbitrary
       , ExtractMarloweTransactionError <$> arbitrary
       ]
+  shrink = genericShrink
+
+instance Arbitrary LoadHelperContextError where
+  arbitrary = HelperScriptNotFoundInRegistry <$> arbitrary
   shrink = genericShrink
 
 instance Arbitrary ConstraintError where
@@ -185,6 +189,7 @@ instance Arbitrary CreateError where
       , CreateLoadMarloweContextFailed <$> arbitrary
       , CreateBuildupFailed <$> arbitrary
       , pure CreateToCardanoError
+      , pure RequiresSingleThreadToken
       ]
   shrink = genericShrink
 
@@ -203,6 +208,7 @@ instance Arbitrary ApplyInputsError where
       , ApplyInputsConstraintError <$> arbitrary
       , pure ScriptOutputNotFound
       , ApplyInputsLoadMarloweContextFailed <$> arbitrary
+      , ApplyInputsLoadHelperContextFailed <$> arbitrary
       , ApplyInputsConstraintsBuildupFailed <$> arbitrary
       , SlotConversionFailed <$> arbitrary
       , pure TipAtGenesis
@@ -215,6 +221,7 @@ instance Arbitrary WithdrawError where
     oneof
       [ WithdrawConstraintError <$> arbitrary
       , WithdrawEraUnsupported <$> arbitrary
+      , WithdrawLoadHelperContextFailed <$> arbitrary
       , pure EmptyPayouts
       ]
   shrink = genericShrink

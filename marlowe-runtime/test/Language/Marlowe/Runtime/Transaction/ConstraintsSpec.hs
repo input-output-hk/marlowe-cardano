@@ -63,6 +63,7 @@ import Language.Marlowe.Runtime.Core.Api (
  )
 import qualified Language.Marlowe.Runtime.Core.Gen ()
 import Language.Marlowe.Runtime.Core.ScriptRegistry (ReferenceScriptUtxo (..))
+import Language.Marlowe.Runtime.Transaction.Api (Destination (ToAddress))
 import Language.Marlowe.Runtime.Transaction.Constraints
 import qualified Language.Marlowe.Scripts.Types as V1
 import Ouroboros.Consensus.BlockchainTime (RelativeTime (..), mkSlotLength)
@@ -125,6 +126,7 @@ spec = do
               marloweVersion
               scriptCtx
               walletContext
+              undefined
               constraints
           mViolations = violations marloweVersion scriptCtx utxos constraints <$> result
           theProperty :: Property
@@ -1137,7 +1139,7 @@ mustMintRoleTokenViolations MarloweV1 TxConstraints{..} TxBodyContent{..} =
                     (selectAsset value cardanoAssetId == 1)
                     ("Output quantity for token expected to equal 1, was: " <> show (selectAsset value cardanoAssetId))
                 , check
-                    (fromCardanoAddressInEra BabbageEra outAddress == address)
+                    (ToAddress (fromCardanoAddressInEra BabbageEra outAddress) == address)
                     ("Output sent to wrong address: " <> show outAddress)
                 ]
             [] -> pure "No outputs contain role token"
@@ -1411,7 +1413,7 @@ genV1MarloweConstraints = sized \n ->
   frequency
     [ (n, resize (n `div` 2) $ (<>) <$> genV1MarloweConstraints <*> genV1MarloweConstraints)
     , (1, pure mempty)
-    , (1, mustMintRoleToken <$> arbitrary <*> genMintScriptWitness <*> genRoleToken False <*> arbitrary)
+    , (1, mustMintRoleToken <$> arbitrary <*> genMintScriptWitness <*> genRoleToken False <*> (ToAddress <$> arbitrary))
     , (1, mustSpendRoleToken <$> genRoleToken True)
     , (1, mustPayToAddress <$> arbitrary <*> arbitrary)
     , (1, mustSendMarloweOutput <$> arbitrary <*> genDatum)
