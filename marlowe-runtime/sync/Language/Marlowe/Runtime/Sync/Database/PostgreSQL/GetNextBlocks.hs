@@ -127,6 +127,7 @@ getNewContracts blocks =
         JOIN marlowe.txOut USING (txId, txIx)
         LEFT JOIN marlowe.txOutAsset USING (txId, txIx)
         GROUP BY txId, txIx
+        ORDER BY (ARRAY_AGG(createTxOut.blockId))[1], createTxOut.txId, createTxOut.txIx
       |]
 
 type CreateTransactionRow =
@@ -251,6 +252,7 @@ getApplyInputsTransactions blocks = do
           ON applyTx.txId = txOutAsset.txId
             AND applyTx.outputTxIx = txOutAsset.txIx
         GROUP BY applyTx.txId
+        ORDER BY (ARRAY_AGG(applyTx.blockId))[1]
       |]
   payoutsByTxId <- T.statement txs do
     dimap encodeIds decodePayouts do
@@ -416,6 +418,7 @@ getWithdrawTransactions blocks =
         FROM marlowe.withdrawalTxIn
         JOIN (SELECT UNNEST($1 :: bytea[]) AS blockId) as blockId USING (blockId)
         GROUP BY txId
+        ORDER BY (ARRAY_AGG(withdrawalTxIn.blockId))[1]
       |]
 
 type WithdrawTransactionRow =
