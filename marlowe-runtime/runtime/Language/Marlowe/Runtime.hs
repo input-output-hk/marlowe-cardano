@@ -24,6 +24,7 @@ import Data.Set.NonEmpty (NESet)
 import Data.String (fromString)
 import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
 import Data.Version (Version)
+import Language.Marlowe.Protocol.BulkSync.Client (serveMarloweBulkSyncClient)
 import Language.Marlowe.Protocol.Server (MarloweRuntimeServerDirect)
 import Language.Marlowe.Runtime.ChainIndexer (ChainIndexerDependencies (..), chainIndexer)
 import qualified Language.Marlowe.Runtime.ChainIndexer.Database as ChainIndexer
@@ -184,6 +185,7 @@ marloweRuntime = proc MarloweRuntimeDependencies{..} -> do
   let marloweSyncServerSource = unnestServerSource $ MarloweSync.syncServerSource <$> mMarloweSync
   let marloweHeaderSyncServerSource = unnestServerSource $ MarloweSync.headerSyncServerSource <$> mMarloweSync
   let marloweBulkSyncServerSource = unnestServerSource $ MarloweSync.bulkSyncServerSource <$> mMarloweSync
+  let marloweBulkSyncConnector = directConnector serveMarloweBulkSyncClient marloweBulkSyncServerSource
   let marloweQueryServerSource = unnestServerSource $ MarloweSync.queryServerSource <$> mMarloweSync
 
   mMarloweContract <- supervisor "marlowe-contract" contract -< ContractDependencies{..}
