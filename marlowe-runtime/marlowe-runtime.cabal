@@ -380,6 +380,7 @@ library contract
   hs-source-dirs:  contract
   visibility:      public
   exposed-modules:
+    Data.Marlowe.LiveContracts
     Language.Marlowe.Runtime.Contract
     Language.Marlowe.Runtime.Contract.GarbageCollector
     Language.Marlowe.Runtime.Contract.LoadServer
