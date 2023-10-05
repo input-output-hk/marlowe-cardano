@@ -63,12 +63,12 @@ marloweSyncServer MarloweSyncServerDependencies{..} = ServerSource $ pure server
         recvMsgRequestNext = do
           nextSteps <- getNextSteps version contractId clientPos
           pure case nextSteps of
-            Rollback Genesis -> SendMsgRollBackCreation ()
-            Rollback (At targetBlock)
+            Rollback Genesis _ -> SendMsgRollBackCreation ()
+            Rollback (At targetBlock) _
               | targetBlock < createBlock -> SendMsgRollBackCreation ()
               | otherwise -> SendMsgRollBackward targetBlock $ nextIdle $ At targetBlock
             Wait -> SendMsgWait serverWait
-            Next nextBlock steps -> SendMsgRollForward nextBlock steps $ nextIdle $ At nextBlock
+            Next nextBlock _ steps -> SendMsgRollForward nextBlock steps $ nextIdle $ At nextBlock
 
         serverWait :: ServerStWait v m ()
         serverWait =

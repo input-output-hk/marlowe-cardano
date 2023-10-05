@@ -10,6 +10,7 @@ module Language.Marlowe.Runtime.Sync.Database where
 
 import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
 import Data.Aeson (ToJSON)
+import Data.Word (Word8)
 import GHC.Generics (Generic)
 import Language.Marlowe.Protocol.Query.Types (
   ContractFilter,
@@ -27,7 +28,7 @@ import Language.Marlowe.Protocol.Query.Types (
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, TxId, TxOutRef)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion (..), SomeMarloweVersion)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
-import Language.Marlowe.Runtime.History.Api (ContractStep, SomeCreateStep)
+import Language.Marlowe.Runtime.History.Api (ContractStep, MarloweBlock, SomeCreateStep)
 import Observe.Event (addField)
 
 data DatabaseSelector f where
@@ -38,6 +39,7 @@ data DatabaseSelector f where
     :: DatabaseSelector (QueryField GetIntersectionForContractArguments (Maybe GetIntersectionForContractResult))
   GetIntersection :: DatabaseSelector (QueryField [BlockHeader] (Maybe BlockHeader))
   GetNextHeaders :: DatabaseSelector (QueryField ChainPoint (Next ContractHeader))
+  GetNextBlocks :: DatabaseSelector (QueryField (Word8, ChainPoint) (Next MarloweBlock))
   GetNextSteps :: MarloweVersion v -> DatabaseSelector (QueryField (GetNextStepsArguments v) (Next (ContractStep v)))
   GetHeaders :: DatabaseSelector (QueryField GetHeadersArguments (Maybe (Page ContractId ContractHeader)))
   GetContractState :: DatabaseSelector (QueryField ContractId (Maybe SomeContractState))
@@ -135,6 +137,11 @@ logDatabaseQueries DatabaseQueries{..} =
         result <- getNextHeaders fromPoint
         addField ev $ Result result
         pure result
+    , getNextBlocks = \batchSize fromPoint -> withEvent GetNextBlocks \ev -> do
+        addField ev $ Arguments (batchSize, fromPoint)
+        result <- getNextBlocks batchSize fromPoint
+        addField ev $ Result result
+        pure result
     , getNextSteps = \version contractId fromPoint -> withEvent (GetNextSteps version) \ev -> do
         addField ev $ Arguments $ GetNextStepsArguments{..}
         result <- getNextSteps version contractId fromPoint
@@ -191,6 +198,7 @@ hoistDatabaseQueries f DatabaseQueries{..} =
     , getIntersectionForContract = fmap f . getIntersectionForContract
     , getIntersection = f . getIntersection
     , getNextHeaders = f . getNextHeaders
+    , getNextBlocks = fmap f . getNextBlocks
     , getNextSteps = (fmap . fmap) f . getNextSteps
     , getHeaders = fmap f . getHeaders
     , getContractState = f . getContractState
@@ -209,6 +217,7 @@ data DatabaseQueries m = DatabaseQueries
   , getIntersection :: [BlockHeader] -> m (Maybe BlockHeader)
   , getIntersectionForContract :: ContractId -> [BlockHeader] -> m (Maybe (BlockHeader, SomeMarloweVersion))
   , getNextHeaders :: ChainPoint -> m (Next ContractHeader)
+  , getNextBlocks :: Word8 -> ChainPoint -> m (Next MarloweBlock)
   , getNextSteps :: forall v. MarloweVersion v -> ContractId -> ChainPoint -> m (Next (ContractStep v))
   , getHeaders :: ContractFilter -> Range ContractId -> m (Maybe (Page ContractId ContractHeader))
   , getContractState :: ContractId -> m (Maybe SomeContractState)
@@ -221,8 +230,8 @@ data DatabaseQueries m = DatabaseQueries
   }
 
 data Next a
-  = Rollback ChainPoint
+  = Rollback ChainPoint ChainPoint
   | Wait
-  | Next BlockHeader [a]
+  | Next BlockHeader BlockHeader [a]
   deriving stock (Generic, Functor)
   deriving anyclass (ToJSON)

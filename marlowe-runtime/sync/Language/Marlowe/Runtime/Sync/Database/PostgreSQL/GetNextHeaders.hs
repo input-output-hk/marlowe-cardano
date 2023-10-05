@@ -38,11 +38,11 @@ import Prelude hiding (init)
 getNextHeaders :: ChainPoint -> T.Transaction (Next ContractHeader)
 getNextHeaders point = do
   orient point >>= \case
-    RolledBack toPoint -> pure $ Rollback toPoint
+    RolledBack toPoint tip -> pure $ Rollback toPoint tip
     AtTip -> pure Wait
-    BeforeTip ->
+    BeforeTip tip ->
       T.statement fromSlot $
-        decodeResult . V.toList
+        decodeResult tip . V.toList
           <$> [vectorStatement|
         SELECT
           createTxOut.slotNo :: bigint,
@@ -70,10 +70,10 @@ getNextHeaders point = do
       Genesis -> -1
       At BlockHeader{..} -> fromIntegral slotNo
 
-    decodeResult [] = Wait
-    decodeResult (row : rows) =
+    decodeResult _ [] = Wait
+    decodeResult tip (row : rows) =
       let blockHeader = decodeBlockHeader row
-       in Next blockHeader $ decodeContractHeader blockHeader <$> row : rows
+       in Next blockHeader tip $ decodeContractHeader blockHeader <$> row : rows
 
     decodeBlockHeader
       ( slot

@@ -36,14 +36,14 @@ marloweHeaderSyncServer MarloweHeaderSyncServerDependencies{..} = ServerSource $
         recvMsgRequestNext = do
           nextHeaders <- getNextHeaders clientPos
           pure case nextHeaders of
-            Rollback targetPoint -> SendMsgRollBackward targetPoint $ serverIdle targetPoint
+            Rollback targetPoint _ -> SendMsgRollBackward targetPoint $ serverIdle targetPoint
             Wait ->
               SendMsgWait
                 ServerStWait
                   { recvMsgPoll = recvMsgRequestNext
                   , recvMsgCancel = pure $ serverIdle clientPos
                   }
-            Next nextBlock headers -> SendMsgNewHeaders nextBlock headers $ serverIdle $ At nextBlock
+            Next nextBlock _ headers -> SendMsgNewHeaders nextBlock headers $ serverIdle $ At nextBlock
 
         recvMsgIntersect :: [BlockHeader] -> m (ServerStIntersect m ())
         recvMsgIntersect points = do

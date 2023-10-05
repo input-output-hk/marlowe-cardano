@@ -9,6 +9,8 @@ import Data.Foldable (fold)
 import Data.List (intersperse)
 import Data.Proxy (Proxy (..))
 import GHC.Show (showSpace)
+import Language.Marlowe.Protocol.BulkSync.Types (MarloweBulkSync)
+import qualified Language.Marlowe.Protocol.BulkSync.Types as MarloweBulkSync
 import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
 import qualified Language.Marlowe.Protocol.HeaderSync.Types as MarloweHeaderSync
 import Language.Marlowe.Protocol.Load.Types (MarloweLoad)
@@ -34,6 +36,7 @@ data MarloweRuntime where
   StInit :: MarloweRuntime
   StMarloweSync :: MarloweSync -> MarloweRuntime
   StMarloweHeaderSync :: MarloweHeaderSync -> MarloweRuntime
+  StMarloweBulkSync :: MarloweBulkSync -> MarloweRuntime
   StMarloweQuery :: MarloweQuery -> MarloweRuntime
   StTxJob :: Job MarloweTxCommand -> MarloweRuntime
   StMarloweLoad :: MarloweLoad -> MarloweRuntime
@@ -44,6 +47,7 @@ instance Protocol MarloweRuntime where
   data Message MarloweRuntime st st' where
     MsgRunMarloweSync :: Message MarloweRuntime 'StInit ('StMarloweSync 'MarloweSync.StInit)
     MsgRunMarloweHeaderSync :: Message MarloweRuntime 'StInit ('StMarloweHeaderSync 'MarloweHeaderSync.StIdle)
+    MsgRunMarloweBulkSync :: Message MarloweRuntime 'StInit ('StMarloweBulkSync 'MarloweBulkSync.StIdle)
     MsgRunMarloweQuery :: Message MarloweRuntime 'StInit ('StMarloweQuery 'Query.StReq)
     MsgRunMarloweLoad :: Message MarloweRuntime 'StInit ('StMarloweLoad ('MarloweLoad.StProcessing 'MarloweLoad.RootNode))
     MsgRunMarloweTransfer :: Message MarloweRuntime 'StInit ('StMarloweTransfer 'MarloweTransfer.StIdle)
@@ -52,6 +56,8 @@ instance Protocol MarloweRuntime where
     MsgMarloweSync :: Message MarloweSync st st' -> Message MarloweRuntime ('StMarloweSync st) ('StMarloweSync st')
     MsgMarloweHeaderSync
       :: Message MarloweHeaderSync st st' -> Message MarloweRuntime ('StMarloweHeaderSync st) ('StMarloweHeaderSync st')
+    MsgMarloweBulkSync
+      :: Message MarloweBulkSync st st' -> Message MarloweRuntime ('StMarloweBulkSync st) ('StMarloweBulkSync st')
     MsgMarloweQuery :: Message MarloweQuery st st' -> Message MarloweRuntime ('StMarloweQuery st) ('StMarloweQuery st')
     MsgMarloweLoad :: Message MarloweLoad st st' -> Message MarloweRuntime ('StMarloweLoad st) ('StMarloweLoad st')
     MsgMarloweTransfer
@@ -64,6 +70,7 @@ instance Protocol MarloweRuntime where
     TokInit :: ClientHasAgency 'StInit
     TokClientMarloweSync :: MarloweSync.ClientHasAgency st -> ClientHasAgency ('StMarloweSync st)
     TokClientMarloweHeaderSync :: MarloweHeaderSync.ClientHasAgency st -> ClientHasAgency ('StMarloweHeaderSync st)
+    TokClientMarloweBulkSync :: MarloweBulkSync.ClientHasAgency st -> ClientHasAgency ('StMarloweBulkSync st)
     TokClientMarloweQuery :: Query.ClientHasAgency st -> ClientHasAgency ('StMarloweQuery st)
     TokClientMarloweLoad :: MarloweLoad.ClientHasAgency st -> ClientHasAgency ('StMarloweLoad st)
     TokClientMarloweTransfer :: MarloweTransfer.ClientHasAgency st -> ClientHasAgency ('StMarloweTransfer st)
@@ -73,6 +80,7 @@ instance Protocol MarloweRuntime where
   data ServerHasAgency st where
     TokServerMarloweSync :: MarloweSync.ServerHasAgency st -> ServerHasAgency ('StMarloweSync st)
     TokServerMarloweHeaderSync :: MarloweHeaderSync.ServerHasAgency st -> ServerHasAgency ('StMarloweHeaderSync st)
+    TokServerMarloweBulkSync :: MarloweBulkSync.ServerHasAgency st -> ServerHasAgency ('StMarloweBulkSync st)
     TokServerMarloweQuery :: Query.ServerHasAgency st -> ServerHasAgency ('StMarloweQuery st)
     TokServerMarloweLoad :: MarloweLoad.ServerHasAgency st -> ServerHasAgency ('StMarloweLoad st)
     TokServerMarloweTransfer :: MarloweTransfer.ServerHasAgency st -> ServerHasAgency ('StMarloweTransfer st)
@@ -82,6 +90,7 @@ instance Protocol MarloweRuntime where
   data NobodyHasAgency st where
     TokNobodyMarloweSync :: MarloweSync.NobodyHasAgency st -> NobodyHasAgency ('StMarloweSync st)
     TokNobodyMarloweHeaderSync :: MarloweHeaderSync.NobodyHasAgency st -> NobodyHasAgency ('StMarloweHeaderSync st)
+    TokNobodyMarloweBulkSync :: MarloweBulkSync.NobodyHasAgency st -> NobodyHasAgency ('StMarloweBulkSync st)
     TokNobodyMarloweQuery :: Query.NobodyHasAgency st -> NobodyHasAgency ('StMarloweQuery st)
     TokNobodyMarloweLoad :: MarloweLoad.NobodyHasAgency st -> NobodyHasAgency ('StMarloweLoad st)
     TokNobodyMarloweTransfer :: MarloweTransfer.NobodyHasAgency st -> NobodyHasAgency ('StMarloweTransfer st)
@@ -94,6 +103,8 @@ instance Protocol MarloweRuntime where
       TokServerMarloweSync tok' -> exclusionLemma_ClientAndServerHaveAgency tok tok'
     TokClientMarloweHeaderSync tok -> \case
       TokServerMarloweHeaderSync tok' -> exclusionLemma_ClientAndServerHaveAgency tok tok'
+    TokClientMarloweBulkSync tok -> \case
+      TokServerMarloweBulkSync tok' -> exclusionLemma_ClientAndServerHaveAgency tok tok'
     TokClientMarloweQuery tok -> \case
       TokServerMarloweQuery tok' -> exclusionLemma_ClientAndServerHaveAgency tok tok'
     TokClientMarloweLoad tok -> \case
@@ -110,6 +121,8 @@ instance Protocol MarloweRuntime where
       TokClientMarloweSync tok' -> exclusionLemma_NobodyAndClientHaveAgency tok tok'
     TokNobodyMarloweHeaderSync tok -> \case
       TokClientMarloweHeaderSync tok' -> exclusionLemma_NobodyAndClientHaveAgency tok tok'
+    TokNobodyMarloweBulkSync tok -> \case
+      TokClientMarloweBulkSync tok' -> exclusionLemma_NobodyAndClientHaveAgency tok tok'
     TokNobodyMarloweQuery tok -> \case
       TokClientMarloweQuery tok' -> exclusionLemma_NobodyAndClientHaveAgency tok tok'
     TokNobodyMarloweLoad tok -> \case
@@ -126,6 +139,8 @@ instance Protocol MarloweRuntime where
       TokServerMarloweSync tok' -> exclusionLemma_NobodyAndServerHaveAgency tok tok'
     TokNobodyMarloweHeaderSync tok -> \case
       TokServerMarloweHeaderSync tok' -> exclusionLemma_NobodyAndServerHaveAgency tok tok'
+    TokNobodyMarloweBulkSync tok -> \case
+      TokServerMarloweBulkSync tok' -> exclusionLemma_NobodyAndServerHaveAgency tok tok'
     TokNobodyMarloweQuery tok -> \case
       TokServerMarloweQuery tok' -> exclusionLemma_NobodyAndServerHaveAgency tok tok'
     TokNobodyMarloweLoad tok -> \case
@@ -141,6 +156,7 @@ instance ShowProtocol MarloweRuntime where
   showsPrecMessage p tok = \case
     MsgRunMarloweSync -> showString "MsgRunMarloweSync"
     MsgRunMarloweHeaderSync -> showString "MsgRunMarloweHeaderSync"
+    MsgRunMarloweBulkSync -> showString "MsgRunMarloweBulkSync"
     MsgRunMarloweQuery -> showString "MsgRunMarloweQuery"
     MsgRunMarloweLoad -> showString "MsgRunMarloweLoad"
     MsgRunMarloweTransfer -> showString "MsgRunMarloweTransfer"
@@ -163,6 +179,15 @@ instance ShowProtocol MarloweRuntime where
             . case tok of
               ClientAgency (TokClientMarloweHeaderSync tok') -> showsPrecMessage p (ClientAgency tok') msg
               ServerAgency (TokServerMarloweHeaderSync tok') -> showsPrecMessage p (ServerAgency tok') msg
+        )
+    MsgMarloweBulkSync msg ->
+      showParen
+        (p >= 11)
+        ( showString "MsgMarloweBulkSync"
+            . showSpace
+            . case tok of
+              ClientAgency (TokClientMarloweBulkSync tok') -> showsPrecMessage p (ClientAgency tok') msg
+              ServerAgency (TokServerMarloweBulkSync tok') -> showsPrecMessage p (ServerAgency tok') msg
         )
     MsgMarloweQuery msg ->
       showParen
@@ -225,6 +250,13 @@ instance ShowProtocol MarloweRuntime where
             . showSpace
             . showsPrecServerHasAgency 11 tok
         )
+    TokServerMarloweBulkSync tok ->
+      showParen
+        (p >= 11)
+        ( showString "TokServerMarloweBulkSync"
+            . showSpace
+            . showsPrecServerHasAgency 11 tok
+        )
     TokServerMarloweQuery tok ->
       showParen
         (p >= 11)
@@ -277,6 +309,13 @@ instance ShowProtocol MarloweRuntime where
             . showSpace
             . showsPrecClientHasAgency 11 tok
         )
+    TokClientMarloweBulkSync tok ->
+      showParen
+        (p >= 11)
+        ( showString "TokClientMarloweBulkSync"
+            . showSpace
+            . showsPrecClientHasAgency 11 tok
+        )
     TokClientMarloweQuery tok ->
       showParen
         (p >= 11)
@@ -326,6 +365,11 @@ instance OTelProtocol MarloweRuntime where
         { messageType = "run_marlowe_header_sync"
         , messageParameters = []
         }
+    MsgRunMarloweBulkSync ->
+      MessageAttributes
+        { messageType = "run_marlowe_bulk_sync"
+        , messageParameters = []
+        }
     MsgRunMarloweQuery ->
       MessageAttributes
         { messageType = "run_marlowe_query"
@@ -361,6 +405,11 @@ instance OTelProtocol MarloweRuntime where
         subMessageAttributes "marlowe_header_sync" $ messageAttributes (ClientAgency tok') msg
       ServerAgency (TokServerMarloweHeaderSync tok') ->
         subMessageAttributes "marlowe_header_sync" $ messageAttributes (ServerAgency tok') msg
+    MsgMarloweBulkSync msg -> case tok of
+      ClientAgency (TokClientMarloweBulkSync tok') ->
+        subMessageAttributes "marlowe_Bulk_sync" $ messageAttributes (ClientAgency tok') msg
+      ServerAgency (TokServerMarloweBulkSync tok') ->
+        subMessageAttributes "marlowe_Bulk_sync" $ messageAttributes (ServerAgency tok') msg
     MsgMarloweQuery msg -> case tok of
       ClientAgency (TokClientMarloweQuery tok') ->
         subMessageAttributes "marlowe_query" $ messageAttributes (ClientAgency tok') msg
@@ -397,6 +446,7 @@ instance BinaryMessage MarloweRuntime where
     ClientAgency TokInit -> \case
       MsgRunMarloweSync -> putWord8 0x00
       MsgRunMarloweHeaderSync -> putWord8 0x01
+      MsgRunMarloweBulkSync -> putWord8 0x07
       MsgRunMarloweQuery -> putWord8 0x02
       MsgRunTxJob -> putWord8 0x03
       MsgRunMarloweLoad -> putWord8 0x04
@@ -406,6 +456,8 @@ instance BinaryMessage MarloweRuntime where
       MsgMarloweSync msg -> putMessage (ClientAgency tok) msg
     ClientAgency (TokClientMarloweHeaderSync tok) -> \case
       MsgMarloweHeaderSync msg -> putMessage (ClientAgency tok) msg
+    ClientAgency (TokClientMarloweBulkSync tok) -> \case
+      MsgMarloweBulkSync msg -> putMessage (ClientAgency tok) msg
     ClientAgency (TokClientMarloweQuery tok) -> \case
       MsgMarloweQuery msg -> putMessage (ClientAgency tok) msg
     ClientAgency (TokClientMarloweLoad tok) -> \case
@@ -420,6 +472,8 @@ instance BinaryMessage MarloweRuntime where
       MsgMarloweSync msg -> putMessage (ServerAgency tok) msg
     ServerAgency (TokServerMarloweHeaderSync tok) -> \case
       MsgMarloweHeaderSync msg -> putMessage (ServerAgency tok) msg
+    ServerAgency (TokServerMarloweBulkSync tok) -> \case
+      MsgMarloweBulkSync msg -> putMessage (ServerAgency tok) msg
     ServerAgency (TokServerMarloweQuery tok) -> \case
       MsgMarloweQuery msg -> putMessage (ServerAgency tok) msg
     ServerAgency (TokServerMarloweLoad tok) -> \case
@@ -441,6 +495,7 @@ instance BinaryMessage MarloweRuntime where
         0x04 -> pure $ SomeMessage MsgRunMarloweLoad
         0x05 -> pure $ SomeMessage MsgRunContractQuery
         0x06 -> pure $ SomeMessage MsgRunMarloweTransfer
+        0x07 -> pure $ SomeMessage MsgRunMarloweBulkSync
         tag -> fail $ "invalid message tag " <> show tag
     ClientAgency (TokClientMarloweSync tok) -> do
       SomeMessage msg <- getMessage (ClientAgency tok)
@@ -448,6 +503,9 @@ instance BinaryMessage MarloweRuntime where
     ClientAgency (TokClientMarloweHeaderSync tok) -> do
       SomeMessage msg <- getMessage (ClientAgency tok)
       pure $ SomeMessage $ MsgMarloweHeaderSync msg
+    ClientAgency (TokClientMarloweBulkSync tok) -> do
+      SomeMessage msg <- getMessage (ClientAgency tok)
+      pure $ SomeMessage $ MsgMarloweBulkSync msg
     ClientAgency (TokClientMarloweQuery tok) -> do
       SomeMessage msg <- getMessage (ClientAgency tok)
       pure $ SomeMessage $ MsgMarloweQuery msg
@@ -469,6 +527,9 @@ instance BinaryMessage MarloweRuntime where
     ServerAgency (TokServerMarloweHeaderSync tok) -> do
       SomeMessage msg <- getMessage (ServerAgency tok)
       pure $ SomeMessage $ MsgMarloweHeaderSync msg
+    ServerAgency (TokServerMarloweBulkSync tok) -> do
+      SomeMessage msg <- getMessage (ServerAgency tok)
+      pure $ SomeMessage $ MsgMarloweBulkSync msg
     ServerAgency (TokServerMarloweQuery tok) -> do
       SomeMessage msg <- getMessage (ServerAgency tok)
       pure $ SomeMessage $ MsgMarloweQuery msg
@@ -493,6 +554,7 @@ instance HasSignature MarloweRuntime where
         [ "MarloweRuntime"
         , signature $ Proxy @MarloweSync
         , signature $ Proxy @MarloweHeaderSync
+        , signature $ Proxy @MarloweBulkSync
         , signature $ Proxy @MarloweQuery
         , signature $ Proxy @MarloweLoad
         , signature $ Proxy @MarloweTransfer

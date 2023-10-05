@@ -45,6 +45,7 @@ import Language.Marlowe.Runtime.Core.Api (
  )
 import Language.Marlowe.Runtime.History.Api (ContractStep (..), RedeemStep (..))
 import Language.Marlowe.Runtime.Sync.Database (Next (..))
+import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTip (getTip)
 import qualified PlutusLedgerApi.V2 as PV2
 import Witherable (catMaybes, mapMaybe)
 import Prelude hiding (init)
@@ -52,47 +53,57 @@ import Prelude hiding (init)
 getNextSteps :: MarloweVersion v -> ContractId -> ChainPoint -> T.Transaction (Next (ContractStep v))
 getNextSteps MarloweV1 contractId point = do
   orient point >>= \case
-    RolledBack toPoint -> pure $ Rollback toPoint
+    RolledBack toPoint tip -> pure $ Rollback toPoint tip
     AtTip -> pure Wait
-    BeforeTip ->
+    BeforeTip tip ->
       getNextTxIds contractId point >>= \case
         Nothing -> pure Wait
         Just NextTxIds{..} -> do
           applySteps <- getApplySteps nextBlock contractId nextApplyTxIds
           redeemSteps <- getRedeemSteps nextWithdrawalTxIds
-          pure $ Next nextBlock $ (ApplyTransaction <$> applySteps) <> (RedeemPayout <$> redeemSteps)
+          pure $ Next nextBlock tip $ (ApplyTransaction <$> applySteps) <> (RedeemPayout <$> redeemSteps)
 
 data Orientation
-  = BeforeTip
+  = BeforeTip BlockHeader
   | AtTip
-  | RolledBack ChainPoint
+  | RolledBack ChainPoint ChainPoint
 
 orient :: ChainPoint -> T.Transaction Orientation
-orient Genesis = pure BeforeTip
-orient (At BlockHeader{..}) =
-  T.statement (unBlockHeaderHash headerHash) $
-    decodeResult
-      <$> [maybeStatement|
-    SELECT
-      block.slotNo :: bigint,
-      block.id :: bytea,
-      block.blockNo :: bigint
-    FROM marlowe.rollbackBlock
-    JOIN marlowe.block ON block.id = rollbackBlock.toBlock
-    WHERE rollbackBlock.fromBlock = $1 :: bytea
-  |]
+orient pos = do
+  tip <- getTip
+  case (pos, tip) of
+    (Genesis, Genesis) -> pure AtTip
+    (Genesis, At tip') -> pure $ BeforeTip tip'
+    (_, Genesis) -> pure $ RolledBack Genesis Genesis
+    (At pos', At tip')
+      | pos' == tip' -> pure AtTip
+      | otherwise -> do
+          let BlockHeader{..} = pos'
+          T.statement (unBlockHeaderHash headerHash) $
+            decodeResult tip'
+              <$> [maybeStatement|
+            SELECT
+              block.slotNo :: bigint,
+              block.id :: bytea,
+              block.blockNo :: bigint
+            FROM marlowe.rollbackBlock
+            JOIN marlowe.block ON block.id = rollbackBlock.toBlock
+            WHERE rollbackBlock.fromBlock = $1 :: bytea
+          |]
   where
-    decodeResult Nothing = BeforeTip
-    decodeResult (Just (slot, hash, block))
-      | slot < 0 || block < 0 = RolledBack Genesis
+    decodeResult tip Nothing = BeforeTip tip
+    decodeResult tip (Just (slot, hash, block))
+      | slot < 0 || block < 0 = RolledBack Genesis $ At tip
       | otherwise =
-          RolledBack $
-            At
-              BlockHeader
-                { slotNo = fromIntegral slot
-                , headerHash = BlockHeaderHash hash
-                , blockNo = fromIntegral block
-                }
+          RolledBack
+            ( At
+                BlockHeader
+                  { slotNo = fromIntegral slot
+                  , headerHash = BlockHeaderHash hash
+                  , blockNo = fromIntegral block
+                  }
+            )
+            $ At tip
 
 data NextTxIds = NextTxIds
   { nextBlock :: BlockHeader

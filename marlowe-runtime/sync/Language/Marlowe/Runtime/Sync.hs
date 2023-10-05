@@ -13,6 +13,7 @@ import Data.String (fromString)
 import Data.Text (Text)
 import Data.Text.Encoding (decodeUtf8)
 import Data.Version (Version)
+import Language.Marlowe.Protocol.BulkSync.Server (MarloweBulkSyncServer)
 import Language.Marlowe.Protocol.HeaderSync.Server (MarloweHeaderSyncServer)
 import Language.Marlowe.Protocol.Query.Server (MarloweQueryServer)
 import Language.Marlowe.Protocol.Sync.Server (MarloweSyncServer)
@@ -29,6 +30,10 @@ import Language.Marlowe.Runtime.Sync.Database (
   QueryField (..),
  )
 import qualified Language.Marlowe.Runtime.Sync.Database as Sync
+import Language.Marlowe.Runtime.Sync.MarloweBulkSyncServer (
+  MarloweBulkSyncServerDependencies (..),
+  marloweBulkSyncServer,
+ )
 import Language.Marlowe.Runtime.Sync.MarloweHeaderSyncServer
 import Language.Marlowe.Runtime.Sync.MarloweSyncServer
 import Language.Marlowe.Runtime.Sync.QueryServer
@@ -49,6 +54,7 @@ data SyncDependencies m = SyncDependencies
 data MarloweSync m = MarloweSync
   { syncServerSource :: ServerSource MarloweSyncServer m ()
   , headerSyncServerSource :: ServerSource MarloweHeaderSyncServer m ()
+  , bulkSyncServerSource :: ServerSource MarloweBulkSyncServer m ()
   , queryServerSource :: ServerSource MarloweQueryServer m ()
   , probes :: Probes
   }
@@ -58,6 +64,7 @@ sync = arr \SyncDependencies{..} ->
   MarloweSync
     { syncServerSource = marloweSyncServer MarloweSyncServerDependencies{..}
     , headerSyncServerSource = marloweHeaderSyncServer MarloweHeaderSyncServerDependencies{..}
+    , bulkSyncServerSource = marloweBulkSyncServer MarloweBulkSyncServerDependencies{..}
     , queryServerSource = queryServer QueryServerDependencies{..}
     , probes =
         Probes
@@ -88,6 +95,7 @@ renderDatabaseSelectorOTel dbName dbUser host port = \case
     renderQuerySelectorOTel "get_intersection" $
       Just . toAttribute . fmap (fromString @Text . show)
   GetNextHeaders -> renderQuerySelectorOTel "get_next_headers" $ Just . fromString . show
+  GetNextBlocks -> renderQuerySelectorOTel "get_next_blocks" $ Just . fromString . show
   GetNextSteps MarloweV1 -> renderQuerySelectorOTel "get_next_steps" \case
     GetNextStepsArguments{..} ->
       Just $

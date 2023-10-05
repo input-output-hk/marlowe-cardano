@@ -15,6 +15,9 @@ import Control.Monad.Event.Class (MonadEvent, localBackend)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Resource.Internal (ResourceT (..))
 import Data.Proxy (Proxy (..))
+import Language.Marlowe.Protocol.BulkSync.Server (MarloweBulkSyncServer, hoistMarloweBulkSyncServer)
+import Language.Marlowe.Protocol.BulkSync.Types (MarloweBulkSync)
+import qualified Language.Marlowe.Protocol.BulkSync.Types as Bulk
 import Language.Marlowe.Protocol.HeaderSync.Server (MarloweHeaderSyncServer, hoistMarloweHeaderSyncServer)
 import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
 import qualified Language.Marlowe.Protocol.HeaderSync.Types as Header
@@ -90,6 +93,7 @@ proxy = arr \router ->
 data Router r m = Router
   { connectMarloweSync :: m (Channel (Handshake MarloweSync) 'AsClient ('Handshake.StInit 'Sync.StInit) m, r)
   , connectMarloweHeaderSync :: m (Channel (Handshake MarloweHeaderSync) 'AsClient ('Handshake.StInit 'Header.StIdle) m, r)
+  , connectMarloweBulkSync :: m (Channel (Handshake MarloweBulkSync) 'AsClient ('Handshake.StInit 'Bulk.StIdle) m, r)
   , connectMarloweQuery :: m (Channel (Handshake MarloweQuery) 'AsClient ('Handshake.StInit 'Query.StReq) m, r)
   , connectMarloweLoad
       :: m (Channel (Handshake MarloweLoad) 'AsClient ('Handshake.StInit ('Load.StProcessing 'Load.RootNode)) m, r)
@@ -102,6 +106,7 @@ data Router r m = Router
 data RouterInProc m = RouterInProc
   { marloweSyncServerSource :: ServerSource MarloweSyncServer m ()
   , marloweHeaderSyncServerSource :: ServerSource MarloweHeaderSyncServer m ()
+  , marloweBulkSyncServerSource :: ServerSource MarloweBulkSyncServer m ()
   , marloweQueryServerSource :: ServerSource MarloweQueryServer m ()
   , marloweLoadServerSource :: ServerSource MarloweLoadServer m ()
   , marloweTransferServerSource :: ServerSource MarloweTransferServer m ()
@@ -119,6 +124,8 @@ server useOpenRefAsParent Router{..} =
     { recvMsgRunMarloweSync = withHandshake useOpenRefAsParent (ClientAgency Sync.TokInit) connectMarloweSync marloweSyncNext
     , recvMsgRunMarloweHeaderSync =
         withHandshake useOpenRefAsParent (ClientAgency Header.TokIdle) connectMarloweHeaderSync marloweHeaderSyncNext
+    , recvMsgRunMarloweBulkSync =
+        withHandshake useOpenRefAsParent (ClientAgency Bulk.TokIdle) connectMarloweBulkSync marloweBulkSyncNext
     , recvMsgRunMarloweQuery = withHandshake useOpenRefAsParent (ClientAgency Query.TokReq) connectMarloweQuery queryNext
     , recvMsgRunMarloweLoad =
         withHandshake useOpenRefAsParent (ServerAgency $ Load.TokProcessing Load.SRootNode) connectMarloweLoad loadNext
@@ -136,6 +143,7 @@ serverInProc RouterInProc{..} =
   MarloweRuntimeServerDirect
     { recvMsgRunMarloweSync = useServerSource hoistMarloweSyncServer marloweSyncServerSource
     , recvMsgRunMarloweHeaderSync = useServerSource hoistMarloweHeaderSyncServer marloweHeaderSyncServerSource
+    , recvMsgRunMarloweBulkSync = useServerSource hoistMarloweBulkSyncServer marloweBulkSyncServerSource
     , recvMsgRunMarloweQuery = useServerSource hoistQueryServer marloweQueryServerSource
     , recvMsgRunMarloweLoad = useServerSource hoistMarloweLoadServer marloweLoadServerSource
     , recvMsgRunMarloweTransfer = useServerSource hoistMarloweTransferServer marloweTransferServerSource
@@ -190,6 +198,22 @@ marloweHeaderSyncNext = \case
     Header.MsgNewHeaders{} -> NextReceive $ ClientAgency Header.TokIdle
     Header.MsgRollBackward{} -> NextReceive $ ClientAgency Header.TokIdle
     Header.MsgWait{} -> NextReceive $ ClientAgency Header.TokWait
+
+marloweBulkSyncNext
+  :: PeerHasAgency pr st -> Message MarloweBulkSync st st' -> NextAgency MarloweBulkSync pr st st'
+marloweBulkSyncNext = \case
+  ClientAgency _ -> \case
+    Bulk.MsgIntersect _ -> NextCall $ ServerAgency Bulk.TokIntersect
+    Bulk.MsgRequestNext{} -> NextCall $ ServerAgency Bulk.TokNext
+    Bulk.MsgDone -> NextClose Bulk.TokDone
+    Bulk.MsgPoll -> NextCall $ ServerAgency Bulk.TokNext
+    Bulk.MsgCancel -> NextCast $ ClientAgency Bulk.TokIdle
+  ServerAgency _ -> \case
+    Bulk.MsgIntersectNotFound{} -> NextReceive $ ClientAgency Bulk.TokIdle
+    Bulk.MsgIntersectFound{} -> NextReceive $ ClientAgency Bulk.TokIdle
+    Bulk.MsgRollForward{} -> NextReceive $ ClientAgency Bulk.TokIdle
+    Bulk.MsgRollBackward{} -> NextReceive $ ClientAgency Bulk.TokIdle
+    Bulk.MsgWait{} -> NextReceive $ ClientAgency Bulk.TokPoll
 
 queryNext
   :: (Query.Request req) => PeerHasAgency pr st -> Message (Query req) st st' -> NextAgency (Query req) pr st st'

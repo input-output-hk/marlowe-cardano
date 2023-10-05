@@ -183,6 +183,7 @@ marloweRuntime = proc MarloweRuntimeDependencies{..} -> do
 
   let marloweSyncServerSource = unnestServerSource $ MarloweSync.syncServerSource <$> mMarloweSync
   let marloweHeaderSyncServerSource = unnestServerSource $ MarloweSync.headerSyncServerSource <$> mMarloweSync
+  let marloweBulkSyncServerSource = unnestServerSource $ MarloweSync.bulkSyncServerSource <$> mMarloweSync
   let marloweQueryServerSource = unnestServerSource $ MarloweSync.queryServerSource <$> mMarloweSync
 
   mMarloweContract <- supervisor "marlowe-contract" contract -< ContractDependencies{..}

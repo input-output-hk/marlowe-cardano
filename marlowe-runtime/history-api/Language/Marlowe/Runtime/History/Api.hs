@@ -22,13 +22,23 @@ import Data.Maybe (mapMaybe)
 import Data.Set (Set)
 import Data.Traversable (for)
 import GHC.Generics (Generic)
+import GHC.Show (showSpace)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
-import Language.Marlowe.Runtime.ChainSync.Api (ScriptHash, TxError, TxId, TxOutRef (..), UTxOError)
+import Language.Marlowe.Runtime.ChainSync.Api (
+  Address,
+  BlockHeader,
+  ScriptHash,
+  TxError,
+  TxId,
+  TxIx,
+  TxOutRef (..),
+  UTxOError,
+ )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Language.Marlowe.Runtime.Core.Api
+import Language.Marlowe.Runtime.Core.Api hiding (marloweVersion)
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts (..), getMarloweVersion)
 import qualified Language.Marlowe.Scripts.Types as V1
-import Network.Protocol.Codec.Spec (Variations (..))
+import Network.Protocol.Codec.Spec (Variations (..), varyAp)
 import Ouroboros.Consensus.BlockchainTime (SystemStart, fromRelativeTime)
 import Ouroboros.Consensus.HardFork.History (interpretQuery, slotToWallclock)
 import qualified Ouroboros.Network.Block as O
@@ -85,6 +95,89 @@ instance Variations (CreateStep 'V1)
 
 data SomeCreateStep = forall v. SomeCreateStep (MarloweVersion v) (CreateStep v)
 
+data MarloweCreateTransaction = MarloweCreateTransaction
+  { txId :: TxId
+  , newContracts :: Map TxIx SomeCreateStep
+  }
+  deriving (Eq, Show, Generic)
+  deriving anyclass (Binary, Variations, ToJSON)
+
+-- | Information about an unspent contract transaction output.
+data UnspentContractOutput = UnspentContractOutput
+  { marloweVersion :: SomeMarloweVersion
+  -- ^ The version of the contract.
+  , txOutRef :: TxOutRef
+  -- ^ The unspent output.
+  , marloweAddress :: Address
+  -- ^ The address of the marlowe validator.
+  , payoutValidatorHash :: ScriptHash
+  -- ^ The hash of the payout validator.
+  }
+  deriving (Show, Eq, Generic)
+  deriving anyclass (Binary, Variations)
+
+instance ToJSON UnspentContractOutput
+
+data MarloweApplyInputsTransaction = forall v.
+  MarloweApplyInputsTransaction
+  { marloweVersion :: MarloweVersion v
+  , marloweInput :: UnspentContractOutput
+  , marloweTransaction :: Transaction v
+  }
+
+instance Eq MarloweApplyInputsTransaction where
+  MarloweApplyInputsTransaction MarloweV1 inpA txA == MarloweApplyInputsTransaction MarloweV1 inpB txB = txA == txB && inpA == inpB
+
+instance Show MarloweApplyInputsTransaction where
+  showsPrec p (MarloweApplyInputsTransaction MarloweV1 inp tx) =
+    showParen
+      (p >= 11)
+      ( showString "MarloweApplyInputsTransaction"
+          . showSpace
+          . showsPrec 11 MarloweV1
+          . showSpace
+          . showsPrec 11 inp
+          . showSpace
+          . showsPrec 11 tx
+      )
+
+instance ToJSON MarloweApplyInputsTransaction where
+  toJSON (MarloweApplyInputsTransaction MarloweV1 input tx) =
+    object
+      [ "marloweVersion" .= SomeMarloweVersion MarloweV1
+      , "marloweInput" .= input
+      , "marloweTransaction" .= tx
+      ]
+
+instance Variations MarloweApplyInputsTransaction where
+  variations = MarloweApplyInputsTransaction MarloweV1 <$> variations `varyAp` variations
+
+instance Binary MarloweApplyInputsTransaction where
+  put (MarloweApplyInputsTransaction MarloweV1 input tx) = do
+    put $ SomeMarloweVersion MarloweV1
+    put input
+    put tx
+  get =
+    get >>= \case
+      SomeMarloweVersion MarloweV1 ->
+        MarloweApplyInputsTransaction MarloweV1 <$> get <*> get
+
+data MarloweWithdrawTransaction = MarloweWithdrawTransaction
+  { consumedPayouts :: Map ContractId (Set TxOutRef)
+  , consumingTx :: TxId
+  }
+  deriving (Eq, Show, Generic)
+  deriving anyclass (Binary, Variations, ToJSON)
+
+data MarloweBlock = MarloweBlock
+  { blockHeader :: BlockHeader
+  , createTransactions :: [MarloweCreateTransaction]
+  , applyInputsTransactions :: [MarloweApplyInputsTransaction]
+  , withdrawTransactions :: [MarloweWithdrawTransaction]
+  }
+  deriving (Eq, Show, Generic)
+  deriving anyclass (Binary, Variations, ToJSON)
+
 instance Eq SomeCreateStep where
   SomeCreateStep MarloweV1 a == SomeCreateStep MarloweV1 b = a == b
 
@@ -104,6 +197,15 @@ instance Variations SomeCreateStep where
       NE.fromList
         [ SomeCreateStep MarloweV1 <$> variations
         ]
+
+instance Binary SomeCreateStep where
+  put (SomeCreateStep MarloweV1 createStep) = do
+    put $ SomeMarloweVersion MarloweV1
+    put createStep
+  get =
+    get >>= \case
+      SomeMarloweVersion MarloweV1 ->
+        SomeCreateStep MarloweV1 <$> get
 
 instance Binary (CreateStep 'V1) where
   put CreateStep{..} = do
@@ -258,3 +360,11 @@ isToAddress toAddress Chain.TransactionOutput{..} = address == toAddress
 consumesUTxO :: TxOutRef -> Chain.TransactionInput -> Bool
 consumesUTxO TxOutRef{..} Chain.TransactionInput{txId = txInId, txIx = txInIx} =
   txId == txInId && txIx == txInIx
+
+createStepToUnspentContractOutput :: SomeCreateStep -> UnspentContractOutput
+createStepToUnspentContractOutput (SomeCreateStep version CreateStep{..}) =
+  let TransactionScriptOutput{..} = createOutput
+      txOutRef = utxo
+      marloweAddress = address
+      marloweVersion = SomeMarloweVersion version
+   in UnspentContractOutput{..}

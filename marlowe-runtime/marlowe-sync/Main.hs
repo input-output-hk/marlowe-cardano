@@ -20,6 +20,7 @@ import Data.Version (showVersion)
 import qualified Database.PostgreSQL.LibPQ as PQ
 import Hasql.Connection (withLibPQConnection)
 import qualified Hasql.Pool as Pool
+import Language.Marlowe.Protocol.BulkSync.Server (marloweBulkSyncServerPeer)
 import Language.Marlowe.Protocol.HeaderSync.Server (marloweHeaderSyncServerPeer)
 import Language.Marlowe.Protocol.Sync.Server (marloweSyncServerPeer)
 import Language.Marlowe.Runtime.Sync (MarloweSync (..), SyncDependencies (..), sync)
@@ -101,6 +102,15 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
             , serverSource = headerSyncServerSource
             }
 
+      tcpServerTraced "marlowe-bulk-sync" (injectSelector MarloweBulkSyncServer)
+        -<
+          TcpServerDependencies
+            { host
+            , port = marloweBulkSyncPort
+            , toPeer = marloweBulkSyncServerPeer
+            , serverSource = bulkSyncServerSource
+            }
+
       tcpServerTraced "sync-query" (injectSelector MarloweQueryServer)
         -<
           TcpServerDependencies
@@ -122,6 +132,7 @@ data Options = Options
   { databaseUri :: String
   , marloweSyncPort :: PortNumber
   , marloweHeaderSyncPort :: PortNumber
+  , marloweBulkSyncPort :: PortNumber
   , queryPort :: PortNumber
   , host :: HostName
   , chainSyncHost :: HostName
@@ -137,6 +148,7 @@ getOptions = execParser $ info (helper <*> parser) infoMod
         <$> databaseUriParser
         <*> marloweSyncPortParser
         <*> marloweHeaderSyncPortParser
+        <*> marloweBulkSyncPortParser
         <*> queryPort
         <*> hostParser
         <*> chainSyncHostParser
@@ -169,6 +181,16 @@ getOptions = execParser $ info (helper <*> parser) infoMod
           , value 3725
           , metavar "PORT_NUMBER"
           , help "The port number to run the header sync protocol on."
+          , showDefault
+          ]
+
+    marloweBulkSyncPortParser =
+      option auto $
+        mconcat
+          [ long "bulk-sync-port"
+          , value 3730
+          , metavar "PORT_NUMBER"
+          , help "The port number to run the bulk sync protocol on."
           , showDefault
           ]
 

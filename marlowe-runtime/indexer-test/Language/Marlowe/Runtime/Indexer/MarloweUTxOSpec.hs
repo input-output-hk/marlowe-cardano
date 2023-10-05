@@ -45,7 +45,12 @@ import Language.Marlowe.Runtime.History.Api (
   CreateStep (..),
   ExtractCreationError (..),
   ExtractMarloweTransactionError,
+  MarloweApplyInputsTransaction (..),
+  MarloweCreateTransaction (..),
+  MarloweWithdrawTransaction (..),
   SomeCreateStep (..),
+  UnspentContractOutput (..),
+  createStepToUnspentContractOutput,
  )
 import Language.Marlowe.Runtime.Indexer.Types
 import Language.Marlowe.Runtime.Plutus.V2.Api (fromPlutusCurrencySymbol, fromPlutusTokenName, toPlutusCurrencySymbol)

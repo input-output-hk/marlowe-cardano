@@ -1,76 +1,106 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Main (
   main,
 ) where
 
-import Data.Text (Text)
 import Language.Marlowe.Runtime.App.Parser (getConfigParser)
-import Language.Marlowe.Runtime.App.Stream (ContractStream (..), TChanEOF)
 import Language.Marlowe.Runtime.App.Types (
   Config,
-  FinishOnClose (FinishOnClose),
-  FinishOnWait (FinishOnWait),
-  PollingFrequency (PollingFrequency),
+  FinishOnWait (..),
  )
-import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersionTag (V1))
-import Observe.Event (EventBackend, addField)
-import Observe.Event.Dynamic (DynamicEventSelector (..))
-import Observe.Event.Render.JSON (DefaultRenderSelectorJSON (defaultRenderSelectorJSON))
-import Observe.Event.Render.JSON.Handle (simpleJsonStderrBackend)
-import Observe.Event.Syntax ((≔))
 
-import Data.Time.Units (Second)
-import Language.Marlowe.Runtime.App.Channel (RequeueFrequency (RequeueFrequency))
-import qualified Language.Marlowe.Runtime.App.Channel as App (
-  LastSeen (..),
-  runContractAction,
-  runDetection,
-  runDiscovery',
+import Control.Concurrent (threadDelay)
+import Control.Monad.IO.Class (MonadIO (..))
+import Data.Aeson (ToJSON (..))
+import Data.Foldable (fold, for_)
+import qualified Data.Map as Map
+import Data.Time.Units (Second, TimeUnit (toMicroseconds))
+import Language.Marlowe.Protocol.BulkSync.Client hiding (runMarloweBulkSyncClient)
+import Language.Marlowe.Runtime.App.Run (runClientWithConfig)
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader (..), TxOutRef (..))
+import Language.Marlowe.Runtime.Client (runMarloweBulkSyncClient)
+import Language.Marlowe.Runtime.Core.Api (MarloweVersion (..), Transaction (..))
+import Language.Marlowe.Runtime.History.Api (
+  CreateStep (..),
+  MarloweApplyInputsTransaction (..),
+  MarloweBlock (..),
+  MarloweCreateTransaction (..),
+  MarloweWithdrawTransaction (..),
+  SomeCreateStep (..),
  )
+import Observe.Event.Dynamic
+import Observe.Event.Explicit (addField, withEvent)
+import Observe.Event.Render.JSON (DefaultRenderSelectorJSON (defaultRenderSelectorJSON), SomeJSONException)
+import Observe.Event.Render.JSON.Handle (jsonHandleBackend)
 import qualified Options.Applicative as O
-
-runDetection
-  :: EventBackend IO r DynamicEventSelector
-  -> Config
-  -> PollingFrequency
-  -> TChanEOF ContractId
-  -> IO (TChanEOF (ContractStream 'V1))
-runDetection eventBackend config pollingFrequency = do
-  let finishOnWait = FinishOnWait True
-      finishOnClose = FinishOnClose True
-  App.runDetection (const True) eventBackend config pollingFrequency finishOnClose finishOnWait
-
-runFinder
-  :: EventBackend IO r DynamicEventSelector
-  -> RequeueFrequency
-  -> FinishOnWait
-  -> TChanEOF (ContractStream 'V1)
-  -> TChanEOF ContractId
-  -> IO ()
-runFinder eventBackend =
-  App.runContractAction "FinderProcess" eventBackend $
-    \event App.LastSeen{..} ->
-      addField event $ ("transactionId" :: Text) ≔ lastTxId
+import System.IO (stdout)
 
 main :: IO ()
-main =
-  do
-    Command{..} <- O.execParser =<< commandParser
-    let pollingFrequency' = PollingFrequency pollingFrequency
-        requeueFrequency' = RequeueFrequency requeueFrequency
-    eventBackend <- simpleJsonStderrBackend defaultRenderSelectorJSON
-    discoveryChannel <- App.runDiscovery' eventBackend config pollingFrequency' endOnWait
-    detectionChannel <- runDetection eventBackend config pollingFrequency' discoveryChannel
-    runFinder eventBackend requeueFrequency' endOnWait detectionChannel discoveryChannel
+main = commandParser >>= O.execParser >>= runFinder
+
+runFinder :: Command -> IO ()
+runFinder Command{..} = do
+  backend <- jsonHandleBackend stdout (toJSON @SomeJSONException) defaultRenderSelectorJSON
+  let idle = SendMsgRequestNext 255 next
+      next =
+        ClientStNext
+          { recvMsgRollForward = \blocks tip -> do
+              for_ blocks \MarloweBlock{..} -> liftIO do
+                let BlockHeader{..} = blockHeader
+                withEvent backend (DynamicEventSelector "NewBlock") \ev -> do
+                  addField ev $ DynamicField "blockNo" $ toJSON blockNo
+                  addField ev $ DynamicField "slotNo" $ toJSON slotNo
+                  addField ev $ DynamicField "blockHeaderHash" $ toJSON headerHash
+                  addField ev $ DynamicField "tip" $ toJSON tip
+                for_ createTransactions \MarloweCreateTransaction{..} ->
+                  for_ @_ @_ @_ @() (Map.toAscList newContracts) \(txIx, SomeCreateStep MarloweV1 CreateStep{..}) ->
+                    withEvent backend (DynamicEventSelector "NewContract") \ev -> do
+                      addField ev $ DynamicField "contractId" $ toJSON $ TxOutRef txId txIx
+                      addField ev $ DynamicField "marloweVersion" $ toJSON MarloweV1
+                      addField ev $ DynamicField "marloweOutput" $ toJSON createOutput
+                      addField ev $ DynamicField "metadata" $ toJSON metadata
+                      addField ev $ DynamicField "payoutValidatorHash" $ toJSON payoutValidatorHash
+                for_ @_ @_ @_ @() applyInputsTransactions \MarloweApplyInputsTransaction{..} -> do
+                  MarloweV1 <- pure marloweVersion
+                  let Transaction{blockHeader = _, ..} = marloweTransaction
+                  withEvent backend (DynamicEventSelector "InputsApplied") \ev -> do
+                    addField ev $ DynamicField "contractId" $ toJSON contractId
+                    addField ev $ DynamicField "marloweVersion" $ toJSON MarloweV1
+                    addField ev $ DynamicField "transactionId" $ toJSON transactionId
+                    addField ev $ DynamicField "metadata" $ toJSON metadata
+                    addField ev $ DynamicField "validityLowerBound" $ toJSON validityLowerBound
+                    addField ev $ DynamicField "validityUpperBound" $ toJSON validityUpperBound
+                    addField ev $ DynamicField "previousOutput" $ toJSON marloweInput
+                    addField ev $ DynamicField "inputs" $ toJSON inputs
+                    addField ev $ DynamicField "output" $ toJSON output
+                for_ withdrawTransactions \MarloweWithdrawTransaction{..} ->
+                  withEvent backend (DynamicEventSelector "PayoutsWithdrawn") \ev -> do
+                    addField ev $ DynamicField "transactionId" $ toJSON consumingTx
+                    addField ev $ DynamicField "payoutsWithdrawn" $ toJSON $ fold consumedPayouts
+              pure idle
+          , recvMsgRollBackward = \point tip -> liftIO do
+              withEvent backend (DynamicEventSelector "RolledBack") \ev -> do
+                addField ev $ DynamicField "newPoint" $ toJSON point
+                addField ev $ DynamicField "tip" $ toJSON tip
+              pure idle
+          , recvMsgWait =
+              if unFinishOnWait endOnWait
+                then pure $ SendMsgCancel $ SendMsgDone ()
+                else liftIO do
+                  threadDelay $ fromIntegral $ toMicroseconds pollingFrequency
+                  pure $ SendMsgPoll next
+          }
+  runClientWithConfig config $ runMarloweBulkSyncClient $ MarloweBulkSyncClient $ pure idle
 
 data Command = Command
   { config :: Config
   , pollingFrequency :: Second
-  , requeueFrequency :: Second
   , endOnWait :: FinishOnWait
   }
   deriving (Show)
@@ -88,24 +118,14 @@ commandParser =
                   O.auto
                   (O.long "polling" <> O.value 5 <> O.metavar "SECONDS" <> O.help "The polling frequency for waiting on Marlowe Runtime.")
               )
-            <*> fmap
-              fromInteger
-              ( O.option
-                  O.auto
-                  ( O.long "requeue"
-                      <> O.value 20
-                      <> O.metavar "SECONDS"
-                      <> O.help "The requeuing frequency for reviewing the progress of contracts on Marlowe Runtime."
-                  )
-              )
             <*> O.flag
               (FinishOnWait False)
               (FinishOnWait True)
               (O.long "end-at-tip" <> O.help "Stop the process when the tip of all contracts has been reached.")
     pure $
       O.info
-        (O.helper {- <*> O.versionOption -} <*> commandOptions)
+        (O.helper <*> commandOptions)
         ( O.fullDesc
-            <> O.progDesc "This command-line tool watches the blockchain for Marlowe contracts for active Marlowe contracts."
-            <> O.header "marlowe-finder : find active Marlowe contracts"
+            <> O.progDesc "This command-line tool watches the blockchain for Marlowe contract transactions."
+            <> O.header "marlowe-finder : find Marlowe contract transactions"
         )

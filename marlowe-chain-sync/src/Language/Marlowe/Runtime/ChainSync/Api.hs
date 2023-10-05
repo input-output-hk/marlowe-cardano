@@ -471,7 +471,7 @@ newtype TxId = TxId {unTxId :: ByteString}
 
 newtype TxIx = TxIx {unTxIx :: Word16}
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON, Variations, Hashable)
+  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON, ToJSONKey, Variations, Hashable)
 
 newtype CertIx = CertIx {unCertIx :: Word64}
   deriving stock (Show, Eq, Ord, Generic)

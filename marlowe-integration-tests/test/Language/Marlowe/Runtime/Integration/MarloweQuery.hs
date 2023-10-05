@@ -9,6 +9,7 @@ import Cardano.Api (getTxId)
 import Control.Monad (guard)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader.Class
+import Control.Monad.Trans.Class (lift)
 import Data.Bifunctor (bimap)
 import Data.Foldable (Foldable (fold), foldl', for_)
 import Data.Functor (void)
@@ -20,6 +21,13 @@ import Data.Maybe (fromJust, isNothing)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Text as T
+import Data.Word (Word8)
+import Language.Marlowe.Protocol.BulkSync.Client (
+  ClientStIdle (..),
+  ClientStNext (..),
+  ClientStPoll (..),
+  MarloweBulkSyncClient (MarloweBulkSyncClient),
+ )
 import Language.Marlowe.Protocol.Query.Client (
   MarloweQueryClient,
   getContractHeaders,
@@ -33,7 +41,7 @@ import Language.Marlowe.Protocol.Query.Client (
 import Language.Marlowe.Protocol.Query.Types
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api (Address, AssetId (..), BlockHeader, PolicyId, TxId, TxOutRef (..))
-import Language.Marlowe.Runtime.Client (runMarloweQueryClient)
+import Language.Marlowe.Runtime.Client (runMarloweBulkSyncClient, runMarloweQueryClient)
 import Language.Marlowe.Runtime.Core.Api (
   ContractId (..),
   MarloweMetadataTag (..),
@@ -45,6 +53,13 @@ import Language.Marlowe.Runtime.Core.Api (
  )
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
+import Language.Marlowe.Runtime.History.Api (MarloweBlock (..), MarloweWithdrawTransaction (..))
+import Language.Marlowe.Runtime.Integration.Basic (
+  contractCreatedToMarloweCreateTransaction,
+  contractCreatedToUnspentContractOutput,
+  inputsAppliedToMarloweApplyInputsTransaction,
+  inputsAppliedToUnspentContractOutput,
+ )
 import Language.Marlowe.Runtime.Integration.Common
 import Language.Marlowe.Runtime.Integration.StandardContract
 import Language.Marlowe.Runtime.Transaction.Api (
@@ -68,6 +83,7 @@ spec = describe "MarloweQuery" $ aroundAll setup do
   describe "GetWithdrawals" $ paginatedQuerySpec GetWithdrawals runMarloweQueryIntegrationTest
   getWithdrawalSpec
   describe "GetPayouts" $ paginatedQuerySpec GetPayouts runMarloweQueryIntegrationTest
+  bulkSyncTest
 
 data GetHeaders = GetHeaders
 data GetWithdrawals = GetWithdrawals
@@ -807,3 +823,264 @@ runMarloweQueryIntegrationTest
   :: (MarloweQueryTestData -> MarloweQueryClient Integration a) -> ActionWith MarloweQueryTestData
 runMarloweQueryIntegrationTest test testData@MarloweQueryTestData{..} =
   void $ runIntegrationTest (runMarloweQueryClient $ test testData) runtime
+
+bulkSyncTest :: SpecWith MarloweQueryTestData
+bulkSyncTest = describe "MarloweBulkSync" do
+  for_ [0 .. 4] \batchSize ->
+    it ("Returns all marlowe blocks when fetching " <> show (batchSize + 1) <> " blocks at a time") do
+      runMarloweQueryIntegrationTest \MarloweQueryTestData{..} -> do
+        actual <- lift $ getMarloweBlocksFromBulkSync batchSize
+        let expected =
+              [ let blockHeader = createdBlock contract1
+                 in MarloweBlock
+                      { blockHeader
+                      , createTransactions =
+                          [ contractCreatedToMarloweCreateTransaction $ contractCreated contract1
+                          ]
+                      , applyInputsTransactions = []
+                      , withdrawTransactions = []
+                      }
+              , let blockHeader = initialDepositBlock contract1Step1
+                 in MarloweBlock
+                      { blockHeader
+                      , createTransactions = []
+                      , applyInputsTransactions =
+                          [ inputsAppliedToMarloweApplyInputsTransaction
+                              blockHeader
+                              (contractCreatedToUnspentContractOutput $ contractCreated contract1)
+                              (initialFundsDeposited contract1Step1)
+                          ]
+                      , withdrawTransactions = []
+                      }
+              , let blockHeader = choiceBlock contract1Step2
+                 in MarloweBlock
+                      { blockHeader
+                      , createTransactions = []
+                      , applyInputsTransactions =
+                          [ inputsAppliedToMarloweApplyInputsTransaction
+                              blockHeader
+                              ( inputsAppliedToUnspentContractOutput
+                                  (contractCreated contract1)
+                                  (initialFundsDeposited contract1Step1)
+                              )
+                              (gimmeTheMoneyChosen contract1Step2)
+                          ]
+                      , withdrawTransactions = []
+                      }
+              , let blockHeader = createdBlock contract2
+                 in MarloweBlock
+                      { blockHeader
+                      , createTransactions =
+                          [ contractCreatedToMarloweCreateTransaction $ contractCreated contract2
+                          ]
+                      , applyInputsTransactions = []
+                      , withdrawTransactions = []
+                      }
+              , let blockHeader = notifiedBlock contract1Step3
+                 in MarloweBlock
+                      { blockHeader
+                      , createTransactions = []
+                      , applyInputsTransactions =
+                          [ inputsAppliedToMarloweApplyInputsTransaction
+                              blockHeader
+                              ( inputsAppliedToUnspentContractOutput
+                                  (contractCreated contract1)
+                                  (gimmeTheMoneyChosen contract1Step2)
+                              )
+                              (notified contract1Step3)
+                          ]
+                      , withdrawTransactions = []
+                      }
+              , let blockHeader = returnDepositBlock contract1Step4
+                 in MarloweBlock
+                      { blockHeader
+                      , createTransactions = []
+                      , applyInputsTransactions =
+                          [ inputsAppliedToMarloweApplyInputsTransaction
+                              blockHeader
+                              ( inputsAppliedToUnspentContractOutput
+                                  (contractCreated contract1)
+                                  (notified contract1Step3)
+                              )
+                              (returnDeposited contract1Step4)
+                          ]
+                      , withdrawTransactions = []
+                      }
+              , let blockHeader = snd contract1Step5
+                 in case fst contract1Step5 of
+                      WithdrawTx _ WithdrawTxInEra{txBody} ->
+                        MarloweBlock
+                          { blockHeader
+                          , createTransactions = []
+                          , applyInputsTransactions = []
+                          , withdrawTransactions =
+                              [ MarloweWithdrawTransaction
+                                  { consumingTx = fromCardanoTxId $ getTxId txBody
+                                  , consumedPayouts = Map.singleton (standardContractId contract1) case returnDeposited contract1Step4 of
+                                      InputsApplied _ InputsAppliedInEra{output = TransactionOutput{payouts}} ->
+                                        Map.keysSet payouts
+                                  }
+                              ]
+                          }
+              , let blockHeader = initialDepositBlock contract2Step1
+                 in MarloweBlock
+                      { blockHeader
+                      , createTransactions = []
+                      , applyInputsTransactions =
+                          [ inputsAppliedToMarloweApplyInputsTransaction
+                              blockHeader
+                              (contractCreatedToUnspentContractOutput $ contractCreated contract2)
+                              (initialFundsDeposited contract2Step1)
+                          ]
+                      , withdrawTransactions = []
+                      }
+              , let blockHeader = createdBlock contract3
+                 in MarloweBlock
+                      { blockHeader
+                      , createTransactions =
+                          [ contractCreatedToMarloweCreateTransaction $ contractCreated contract3
+                          ]
+                      , applyInputsTransactions = []
+                      , withdrawTransactions = []
+                      }
+              , let blockHeader = createdBlock contract4
+                 in MarloweBlock
+                      { blockHeader
+                      , createTransactions =
+                          [ contractCreatedToMarloweCreateTransaction $ contractCreated contract4
+                          ]
+                      , applyInputsTransactions = []
+                      , withdrawTransactions = []
+                      }
+              , let blockHeader = choiceBlock contract2Step2
+                 in MarloweBlock
+                      { blockHeader
+                      , createTransactions = []
+                      , applyInputsTransactions =
+                          [ inputsAppliedToMarloweApplyInputsTransaction
+                              blockHeader
+                              ( inputsAppliedToUnspentContractOutput
+                                  (contractCreated contract2)
+                                  (initialFundsDeposited contract2Step1)
+                              )
+                              (gimmeTheMoneyChosen contract2Step2)
+                          ]
+                      , withdrawTransactions = []
+                      }
+              , let blockHeader = notifiedBlock contract2Step3
+                 in MarloweBlock
+                      { blockHeader
+                      , createTransactions = []
+                      , applyInputsTransactions =
+                          [ inputsAppliedToMarloweApplyInputsTransaction
+                              blockHeader
+                              ( inputsAppliedToUnspentContractOutput
+                                  (contractCreated contract2)
+                                  (gimmeTheMoneyChosen contract2Step2)
+                              )
+                              (notified contract2Step3)
+                          ]
+                      , withdrawTransactions = []
+                      }
+              , let blockHeader = returnDepositBlock contract2Step4
+                 in MarloweBlock
+                      { blockHeader
+                      , createTransactions = []
+                      , applyInputsTransactions =
+                          [ inputsAppliedToMarloweApplyInputsTransaction
+                              blockHeader
+                              ( inputsAppliedToUnspentContractOutput
+                                  (contractCreated contract2)
+                                  (notified contract2Step3)
+                              )
+                              (returnDeposited contract2Step4)
+                          ]
+                      , withdrawTransactions = []
+                      }
+              , let blockHeader = snd contract2Step5
+                 in case fst contract2Step5 of
+                      WithdrawTx _ WithdrawTxInEra{txBody} ->
+                        MarloweBlock
+                          { blockHeader
+                          , createTransactions = []
+                          , applyInputsTransactions = []
+                          , withdrawTransactions =
+                              [ MarloweWithdrawTransaction
+                                  { consumingTx = fromCardanoTxId $ getTxId txBody
+                                  , consumedPayouts = Map.singleton (standardContractId contract2) case returnDeposited contract2Step4 of
+                                      InputsApplied _ InputsAppliedInEra{output = TransactionOutput{payouts}} ->
+                                        Map.keysSet payouts
+                                  }
+                              ]
+                          }
+              , let blockHeader = initialDepositBlock contract3Step1
+                 in MarloweBlock
+                      { blockHeader
+                      , createTransactions = []
+                      , applyInputsTransactions =
+                          [ inputsAppliedToMarloweApplyInputsTransaction
+                              blockHeader
+                              (contractCreatedToUnspentContractOutput $ contractCreated contract3)
+                              (initialFundsDeposited contract3Step1)
+                          ]
+                      , withdrawTransactions = []
+                      }
+              , let blockHeader = choiceBlock contract3Step2
+                 in MarloweBlock
+                      { blockHeader
+                      , createTransactions = []
+                      , applyInputsTransactions =
+                          [ inputsAppliedToMarloweApplyInputsTransaction
+                              blockHeader
+                              ( inputsAppliedToUnspentContractOutput
+                                  (contractCreated contract3)
+                                  (initialFundsDeposited contract3Step1)
+                              )
+                              (gimmeTheMoneyChosen contract3Step2)
+                          ]
+                      , withdrawTransactions = []
+                      }
+              , let blockHeader = notifiedBlock contract3Step3
+                 in MarloweBlock
+                      { blockHeader
+                      , createTransactions = []
+                      , applyInputsTransactions =
+                          [ inputsAppliedToMarloweApplyInputsTransaction
+                              blockHeader
+                              ( inputsAppliedToUnspentContractOutput
+                                  (contractCreated contract3)
+                                  (gimmeTheMoneyChosen contract3Step2)
+                              )
+                              (notified contract3Step3)
+                          ]
+                      , withdrawTransactions = []
+                      }
+              , let blockHeader = returnDepositBlock contract3Step4
+                 in MarloweBlock
+                      { blockHeader
+                      , createTransactions = []
+                      , applyInputsTransactions =
+                          [ inputsAppliedToMarloweApplyInputsTransaction
+                              blockHeader
+                              ( inputsAppliedToUnspentContractOutput
+                                  (contractCreated contract3)
+                                  (notified contract3Step3)
+                              )
+                              (returnDeposited contract3Step4)
+                          ]
+                      , withdrawTransactions = []
+                      }
+              ]
+        liftIO $ actual `shouldBe` expected
+
+getMarloweBlocksFromBulkSync :: Word8 -> Integration [MarloweBlock]
+getMarloweBlocksFromBulkSync batchSize = runMarloweBulkSyncClient $ MarloweBulkSyncClient $ pure $ idle []
+  where
+    idle acc =
+      SendMsgRequestNext
+        batchSize
+        ClientStNext
+          { recvMsgRollForward = \blocks _ -> pure $ idle $ acc <> blocks
+          , recvMsgRollBackward = \_ _ -> fail "Unexpected rollback"
+          , recvMsgWait = pure $ SendMsgCancel $ SendMsgDone acc
+          }

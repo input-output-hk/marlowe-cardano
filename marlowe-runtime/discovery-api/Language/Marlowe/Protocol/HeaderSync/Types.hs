@@ -5,7 +5,6 @@
 module Language.Marlowe.Protocol.HeaderSync.Types where
 
 import Control.Monad (join)
-import Data.Aeson (Value (..), object, (.=))
 import Data.Binary (get, put, putWord8)
 import Data.Binary.Get (getWord8)
 import qualified Data.List.NonEmpty as NE
@@ -26,7 +25,6 @@ import Network.Protocol.Handshake.Types (HasSignature (..))
 import Network.Protocol.Peer.Trace
 import Network.TypedProtocol (PeerHasAgency (..), Protocol (..))
 import Network.TypedProtocol.Codec (AnyMessageAndAgency (AnyMessageAndAgency), SomeMessage (..))
-import Observe.Event.Network.Protocol (MessageToJSON (..))
 import OpenTelemetry.Attributes
 
 data MarloweHeaderSync where
@@ -200,30 +198,6 @@ instance MessageVariations MarloweHeaderSync where
           [ SomeMessage . MsgIntersectFound <$> variations
           , pure $ SomeMessage MsgIntersectNotFound
           ]
-
-instance MessageToJSON MarloweHeaderSync where
-  messageToJSON = \case
-    ClientAgency TokIdle -> \case
-      MsgDone -> String "done"
-      MsgRequestNext -> String "request-next"
-      MsgIntersect headers -> object ["intersect" .= headers]
-    ClientAgency TokWait -> \case
-      MsgPoll -> String "poll"
-      MsgCancel -> String "cancel"
-    ServerAgency TokNext -> \case
-      MsgNewHeaders blockHeader headers ->
-        object
-          [ "new-headers"
-              .= object
-                [ "block-header" .= blockHeader
-                , "contract-headers" .= headers
-                ]
-          ]
-      MsgRollBackward blockHeader -> object ["roll-backward" .= blockHeader]
-      MsgWait -> String "wait"
-    ServerAgency TokIntersect -> \case
-      MsgIntersectFound blockHeader -> object ["intersect-found" .= blockHeader]
-      MsgIntersectNotFound -> String "intersect-not-found"
 
 instance MessageEq MarloweHeaderSync where
   messageEq = \case

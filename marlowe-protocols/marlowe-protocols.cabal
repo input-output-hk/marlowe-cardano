@@ -69,10 +69,8 @@ library
     Network.Protocol.Query.Client
     Network.Protocol.Query.Server
     Network.Protocol.Query.Types
-    Observe.Event.Network.Protocol
 
   build-depends:
-    , aeson >=2 && <3
     , async-components ==0.1.1.0
     , base >=4.9 && <5
     , base16 ^>=0.3.2

@@ -9,6 +9,7 @@ module Logging (
 
 import Control.Monad.Event.Class (Inject (..))
 import Data.ByteString (ByteString)
+import Language.Marlowe.Protocol.BulkSync.Types (MarloweBulkSync)
 import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
@@ -31,6 +32,7 @@ data RootSelector f where
   ChainSyncQueryClient :: TcpClientSelector (Handshake (Query ChainSyncQuery)) f -> RootSelector f
   MarloweSyncServer :: TcpServerSelector (Handshake MarloweSync) f -> RootSelector f
   MarloweHeaderSyncServer :: TcpServerSelector (Handshake MarloweHeaderSync) f -> RootSelector f
+  MarloweBulkSyncServer :: TcpServerSelector (Handshake MarloweBulkSync) f -> RootSelector f
   MarloweQueryServer :: TcpServerSelector (Handshake MarloweQuery) f -> RootSelector f
   Database :: DatabaseSelector f -> RootSelector f
 
@@ -50,5 +52,6 @@ renderRootSelectorOTel dbName dbUser host port = \case
   ChainSyncQueryClient sel -> renderTcpClientSelectorOTel sel
   MarloweSyncServer sel -> renderTcpServerSelectorOTel sel
   MarloweHeaderSyncServer sel -> renderTcpServerSelectorOTel sel
+  MarloweBulkSyncServer sel -> renderTcpServerSelectorOTel sel
   MarloweQueryServer sel -> renderTcpServerSelectorOTel sel
   Database sel -> renderDatabaseSelectorOTel dbName dbUser host port sel

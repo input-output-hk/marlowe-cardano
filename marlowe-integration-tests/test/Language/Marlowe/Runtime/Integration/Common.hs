@@ -57,9 +57,10 @@ import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text.Encoding as T
 import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime, secondsToNominalDiffTime)
 import Data.Traversable (for)
-import Data.Word (Word64)
+import Data.Word (Word64, Word8)
 import GHC.Generics (Generic)
 import Language.Marlowe (ChoiceId (..), Input (..), InputContent (..), Party, Token)
+import qualified Language.Marlowe.Protocol.BulkSync.Client as BulkSync
 import qualified Language.Marlowe.Protocol.HeaderSync.Client as HeaderSync
 import qualified Language.Marlowe.Protocol.Sync.Client as MarloweSync
 import Language.Marlowe.Runtime.Cardano.Api (
@@ -101,7 +102,7 @@ import Language.Marlowe.Runtime.Core.Api (
   emptyMarloweTransactionMetadata,
  )
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader (..))
-import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep (..))
+import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep (..), MarloweBlock)
 import Language.Marlowe.Runtime.Transaction.Api (
   ContractCreated (..),
   ContractCreatedInEra (..),
@@ -526,6 +527,36 @@ headerSyncRequestNextExpectWait
   -> HeaderSync.ClientStIdle m a
 headerSyncRequestNextExpectWait = HeaderSync.SendMsgRequestNext . headerSyncExpectWait
 
+bulkSyncRequestNextExpectWait
+  :: (MonadFail m)
+  => m (BulkSync.ClientStPoll m a)
+  -> BulkSync.ClientStIdle m a
+bulkSyncRequestNextExpectWait = BulkSync.SendMsgRequestNext 0 . bulkSyncExpectWait
+
+bulkSyncPollExpectWait
+  :: (MonadFail m)
+  => m (BulkSync.ClientStPoll m a)
+  -> BulkSync.ClientStPoll m a
+bulkSyncPollExpectWait = BulkSync.SendMsgPoll . bulkSyncExpectWait
+
+bulkSyncRequestNextExpectRollForward
+  :: (MonadFail m, MonadIO m)
+  => [MarloweBlock]
+  -> m (BulkSync.ClientStIdle m a)
+  -> m (BulkSync.ClientStIdle m a)
+bulkSyncRequestNextExpectRollForward = bulkSyncRequestNextNExpectRollForward 0
+
+bulkSyncRequestNextNExpectRollForward
+  :: (MonadFail m, MonadIO m)
+  => Word8
+  -> [MarloweBlock]
+  -> m (BulkSync.ClientStIdle m a)
+  -> m (BulkSync.ClientStIdle m a)
+bulkSyncRequestNextNExpectRollForward extraBlockCount blocks next =
+  BulkSync.SendMsgRequestNext extraBlockCount <$> bulkSyncExpectRollForward \blocks' _ -> do
+    liftIO $ blocks' `shouldBe` blocks
+    next
+
 headerSyncPollExpectNewHeaders
   :: (MonadFail m, MonadIO m)
   => BlockHeader
@@ -550,6 +581,16 @@ headerSyncRequestNextExpectNewHeaders block headers next =
     liftIO $ headers' `shouldBe` headers
     next
 
+bulkSyncPollExpectRollForward
+  :: (MonadFail m, MonadIO m)
+  => [MarloweBlock]
+  -> m (BulkSync.ClientStIdle m a)
+  -> m (BulkSync.ClientStPoll m a)
+bulkSyncPollExpectRollForward blocks next =
+  BulkSync.SendMsgPoll <$> bulkSyncExpectRollForward \blocks' _ -> do
+    liftIO $ blocks' `shouldBe` blocks
+    next
+
 headerSyncExpectWait
   :: (MonadFail m)
   => m (HeaderSync.ClientStWait m a)
@@ -558,6 +599,17 @@ headerSyncExpectWait action =
   HeaderSync.ClientStNext
     { recvMsgNewHeaders = \_ _ -> fail "Expected wait, got new headers"
     , recvMsgRollBackward = \_ -> fail "Expected wait, got roll backward"
+    , recvMsgWait = action
+    }
+
+bulkSyncExpectWait
+  :: (MonadFail m)
+  => m (BulkSync.ClientStPoll m a)
+  -> BulkSync.ClientStNext m a
+bulkSyncExpectWait action =
+  BulkSync.ClientStNext
+    { recvMsgRollForward = \_ _ -> fail "Expected wait, got roll forward"
+    , recvMsgRollBackward = \_ _ -> fail "Expected wait, got roll backward"
     , recvMsgWait = action
     }
 
@@ -578,6 +630,26 @@ headerSyncExpectNewHeaders recvMsgNewHeaders = do
                 else do
                   liftIO $ threadDelay retryDelayMicroSeconds
                   pure $ HeaderSync.SendMsgPoll next
+          }
+  pure next
+
+bulkSyncExpectRollForward
+  :: (MonadIO m, MonadFail m)
+  => ([MarloweBlock] -> Chain.BlockHeader -> m (BulkSync.ClientStIdle m a))
+  -> m (BulkSync.ClientStNext m a)
+bulkSyncExpectRollForward recvMsgRollForward = do
+  startTime <- liftIO getCurrentTime
+  let next =
+        BulkSync.ClientStNext
+          { recvMsgRollForward
+          , recvMsgRollBackward = \_ _ -> fail "Expected new headers, got roll backward"
+          , recvMsgWait = do
+              time <- liftIO getCurrentTime
+              if (time `diffUTCTime` startTime) > timeout
+                then fail "Expected new headers, got wait"
+                else do
+                  liftIO $ threadDelay retryDelayMicroSeconds
+                  pure $ BulkSync.SendMsgPoll next
           }
   pure next
 

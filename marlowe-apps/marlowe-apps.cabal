@@ -157,14 +157,16 @@ executable marlowe-finder
   main-is:          Main.hs
   hs-source-dirs:   finder
   build-depends:
+    , aeson
     , base >=4.9 && <5
+    , containers
     , eventuo11y >=0.9 && <0.11
-    , eventuo11y-dsl ^>=0.2
     , eventuo11y-json ^>=0.3
     , marlowe-apps
-    , marlowe-runtime
+    , marlowe-chain-sync
+    , marlowe-client
+    , marlowe-runtime:{marlowe-runtime, history-api, sync-api}
     , optparse-applicative
-    , text
     , time-units
 
   ghc-options:
