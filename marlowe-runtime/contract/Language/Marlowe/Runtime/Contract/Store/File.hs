@@ -6,7 +6,7 @@ module Language.Marlowe.Runtime.Contract.Store.File (
 
 import Codec.Compression.GZip (compress, decompress)
 import Control.Applicative (liftA2)
-import Control.Monad (guard, unless)
+import Control.Monad (guard, unless, when)
 import Control.Monad.Catch (MonadMask)
 import Control.Monad.Trans.Maybe (MaybeT (runMaybeT))
 import Data.Binary (Word64, get, put)
@@ -23,6 +23,7 @@ import Data.Maybe (catMaybes)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.String (fromString)
+import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime)
 import Data.UUID.V4 (nextRandom)
 import GHC.IO (mkUserError)
 import Language.Marlowe (Case (..), Contract (..))
@@ -42,6 +43,7 @@ import UnliftIO.Directory (
   createDirectory,
   createDirectoryIfMissing,
   doesFileExist,
+  getModificationTime,
   getTemporaryDirectory,
   getXdgDirectory,
   listDirectory,
@@ -56,6 +58,8 @@ data ContractStoreOptions = ContractStoreOptions
   , contractStoreStagingDirectory :: FilePath
   -- ^ The directory to create staging areas
   , lockingMicrosecondsBetweenRetries :: Word64
+  , minContractAge :: NominalDiffTime
+  -- ^ The minimum age of a contract before it is allowed to be deleted
   }
 
 -- | Default options. uses $XDG_DATA/marlowe/runtime/marlowe-contract/store for the
@@ -66,6 +70,7 @@ defaultContractStoreOptions =
     <$> getXdgDirectory XdgData ("marlowe" </> "runtime" </> "marlowe-contract" </> "store")
     <*> getTemporaryDirectory
     <*> pure 500_000
+    <*> pure (24 * 60 * 60)
 
 -- | Create a contract store that uses the file system.
 --
@@ -92,6 +97,19 @@ createContractStore ContractStoreOptions{..} = do
               hash
               state
               input
+      , getHashes = do
+          files <- filter ((/= "lockfile") . takeBaseName) <$> listDirectory contractStoreDirectory
+          pure $ Set.fromList $ fromString . takeBaseName <$> files
+      , deleteContracts =
+          withLockFile lockingParameters lockfile . mapConcurrently_ \hash -> do
+            let mkFilePath = (contractStoreDirectory </>) . (read (show hash) <.>)
+            let contractFilename = mkFilePath "contract"
+            lastModified <- getModificationTime contractFilename
+            now <- liftIO getCurrentTime
+            when (now `diffUTCTime` lastModified > minContractAge) do
+              removeFile $ mkFilePath "contract"
+              removeFile $ mkFilePath "adjacency"
+              removeFile $ mkFilePath "closure"
       }
   where
     lockingParameters =

@@ -15,8 +15,11 @@ import Control.Monad.Event.Class
 import qualified Data.Text as T
 import Data.Version (showVersion)
 import Data.Word (Word64)
+import Language.Marlowe.Protocol.BulkSync.Client (marloweBulkSyncClientPeer)
 import Language.Marlowe.Protocol.Load.Server (marloweLoadServerPeer)
 import Language.Marlowe.Protocol.Transfer.Server (marloweTransferServerPeer)
+import Language.Marlowe.Runtime.CLI.Option (optParserWithEnvDefault)
+import qualified Language.Marlowe.Runtime.CLI.Option as O
 import Language.Marlowe.Runtime.Contract
 import Language.Marlowe.Runtime.Contract.Store (traceContractStore)
 import Language.Marlowe.Runtime.Contract.Store.File (
@@ -26,10 +29,12 @@ import Language.Marlowe.Runtime.Contract.Store.File (
  )
 import Logging (RootSelector (..), renderRootSelectorOTel)
 import Network.Protocol.Driver (TcpServerDependencies (..))
-import Network.Protocol.Driver.Trace (tcpServerTraced)
+import Network.Protocol.Driver.Trace (tcpClientTraced, tcpServerTraced)
+import Network.Protocol.Query.Client (queryClientPeer)
 import Network.Protocol.Query.Server (queryServerPeer)
 import Network.Socket (HostName, PortNumber)
 import Network.TypedProtocol (unsafeIntToNat)
+import Observe.Event (injectSelector)
 import OpenTelemetry.Trace
 import Options.Applicative (
   auto,
@@ -67,12 +72,28 @@ run Options{..} = do
     traceContractStore inject
       <$> createContractStore ContractStoreOptions{..}
   flip runComponent_ () proc _ -> do
+    let chainSyncQueryConnector =
+          tcpClientTraced
+            (injectSelector ChainSyncQueryClient)
+            chainSyncHost
+            chainSyncQueryPort
+            queryClientPeer
+
+        marloweBulkSyncConnector =
+          tcpClientTraced
+            (injectSelector MarloweBulkSyncClient)
+            marloweSyncHost
+            marloweSyncBulkSyncPort
+            marloweBulkSyncClientPeer
+
     MarloweContract{..} <-
       contract
         -<
           ContractDependencies
             { contractStore
             , batchSize = unsafeIntToNat bufferSize
+            , marloweBulkSyncConnector
+            , chainSyncQueryConnector
             }
 
     tcpServerTraced "contract-load" inject
@@ -108,6 +129,10 @@ data Options = Options
   , port :: PortNumber
   , queryPort :: PortNumber
   , transferPort :: PortNumber
+  , chainSyncHost :: HostName
+  , chainSyncQueryPort :: PortNumber
+  , marloweSyncHost :: HostName
+  , marloweSyncBulkSyncPort :: PortNumber
   , bufferSize :: Int
   , contractStoreDirectory :: FilePath
   , contractStoreStagingDirectory :: FilePath
@@ -118,6 +143,8 @@ data Options = Options
 getOptions :: IO Options
 getOptions = do
   ContractStoreOptions{..} <- defaultContractStoreOptions
+  marloweSyncHostParser <- optParserWithEnvDefault O.syncHost
+  marloweSyncBulkSyncPortParser <- optParserWithEnvDefault O.syncBulkPort
   execParser $
     info
       ( helper
@@ -126,6 +153,10 @@ getOptions = do
                   <*> portParser
                   <*> queryPortParser
                   <*> transferPortParser
+                  <*> chainSyncHostParser
+                  <*> chainSyncQueryPortParser
+                  <*> marloweSyncHostParser
+                  <*> marloweSyncBulkSyncPortParser
                   <*> bufferSizeParser
                   <*> contractStoreDirectoryParser contractStoreDirectory
                   <*> contractStoreStagingDirectoryParser contractStoreStagingDirectory
@@ -174,6 +205,26 @@ getOptions = do
           , value 3729
           , metavar "PORT_NUMBER"
           , help "The port number to run the transfer server on."
+          , showDefault
+          ]
+
+    chainSyncHostParser =
+      strOption $
+        mconcat
+          [ long "chain-sync-host"
+          , value "127.0.0.1"
+          , metavar "HOST_NAME"
+          , help "The host name of the chain sync server."
+          , showDefault
+          ]
+
+    chainSyncQueryPortParser =
+      option auto $
+        mconcat
+          [ long "chain-sync-query-port"
+          , value 3716
+          , metavar "PORT_NUMBER"
+          , help "The chain sync server's query protocol port."
           , showDefault
           ]
 

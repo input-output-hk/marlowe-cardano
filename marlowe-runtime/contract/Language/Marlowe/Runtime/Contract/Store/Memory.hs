@@ -48,6 +48,8 @@ createContractStoreInMemory = do
           merkleizeInputsDefault $
             (fmap . fmap) (\ContractWithAdjacency{..} -> contract)
               . getContract store
+      , getHashes = Map.keysSet <$> readTVar store
+      , deleteContracts = modifyTVar store . flip Map.withoutKeys
       }
   where
     createContractStagingAreaInMemory store = do

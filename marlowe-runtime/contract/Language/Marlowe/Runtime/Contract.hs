@@ -1,27 +1,35 @@
+{-# LANGUAGE Arrows #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 
 module Language.Marlowe.Runtime.Contract where
 
-import Control.Arrow (arr)
+import Colog (Message, WithLog)
+import Control.Arrow (returnA)
 import Control.Concurrent.Component (Component)
 import Control.Concurrent.Component.Probes
 import Data.Aeson.Text (encodeToLazyText)
 import Data.Set (toList)
+import qualified Data.Set as Set
 import Data.String (fromString)
+import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Lazy (toStrict)
 import Data.Void (absurd)
 import Language.Marlowe (TransactionInput (..))
+import Language.Marlowe.Protocol.BulkSync.Client (MarloweBulkSyncClient)
 import Language.Marlowe.Protocol.Load.Server (MarloweLoadServer)
 import Language.Marlowe.Protocol.Transfer.Server (MarloweTransferServer)
+import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery)
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
+import Language.Marlowe.Runtime.Contract.GarbageCollector (GarbageCollectorDependencies (..), garbageCollector)
 import Language.Marlowe.Runtime.Contract.LoadServer
 import Language.Marlowe.Runtime.Contract.QueryServer
 import Language.Marlowe.Runtime.Contract.Store
 import Language.Marlowe.Runtime.Contract.TransferServer (TransferServerDependencies (..), transferServer)
-import Network.Protocol.Connection (ServerSource)
+import Network.Protocol.Connection (Connector, ServerSource)
+import Network.Protocol.Query.Client (QueryClient)
 import Network.Protocol.Query.Server (QueryServer)
 import Network.TypedProtocol
 import Observe.Event.Render.OpenTelemetry (OTelRendered (..), RenderSelectorOTel)
@@ -32,6 +40,8 @@ import UnliftIO (MonadUnliftIO)
 data ContractDependencies n m = ContractDependencies
   { batchSize :: Nat ('S n)
   , contractStore :: ContractStore m
+  , marloweBulkSyncConnector :: Connector MarloweBulkSyncClient m
+  , chainSyncQueryConnector :: Connector (QueryClient ChainSyncQuery) m
   }
 
 data MarloweContract m = MarloweContract
@@ -41,19 +51,24 @@ data MarloweContract m = MarloweContract
   , probes :: Probes
   }
 
-contract :: (MonadUnliftIO m, MonadFail m) => Component m (ContractDependencies n m) (MarloweContract m)
-contract = arr \ContractDependencies{..} ->
-  MarloweContract
-    { loadServerSource = loadServer LoadServerDependencies{..}
-    , queryServerSource = queryServer QueryServerDependencies{..}
-    , transferServerSource = transferServer TransferServerDependencies{..}
-    , probes =
-        Probes
-          { liveness = pure True
-          , readiness = pure True
-          , startup = pure True
-          }
-    }
+contract
+  :: (WithLog env Colog.Message m, MonadUnliftIO m, MonadFail m)
+  => Component m (ContractDependencies n m) (MarloweContract m)
+contract = proc ContractDependencies{..} -> do
+  garbageCollector -< GarbageCollectorDependencies{..}
+  returnA
+    -<
+      MarloweContract
+        { loadServerSource = loadServer LoadServerDependencies{..}
+        , queryServerSource = queryServer QueryServerDependencies{..}
+        , transferServerSource = transferServer TransferServerDependencies{..}
+        , probes =
+            Probes
+              { liveness = pure True
+              , readiness = pure True
+              , startup = pure True
+              }
+        }
 
 renderContractStoreSelectorOTel :: RenderSelectorOTel ContractStoreSelector
 renderContractStoreSelectorOTel = \case
@@ -86,6 +101,18 @@ renderContractStoreSelectorOTel = \case
             [("error", fromString $ show err)]
           MerkleizeInputsResult (Right TransactionInput{..}) ->
             [("marlowe.inputs", toAttribute $ toStrict . encodeToLazyText <$> txInputs)]
+      }
+  GetHashes ->
+    OTelRendered
+      { eventName = "marlowe/contract/get_hashes"
+      , eventKind = Client
+      , renderField = \results -> [("results", toAttribute $ read @Text . show <$> Set.toList results)]
+      }
+  DeleteContracts ->
+    OTelRendered
+      { eventName = "marlowe/contract/delete_contracts"
+      , eventKind = Client
+      , renderField = \hashes -> [("marlowe.contract_hashes", toAttribute $ read @Text . show <$> Set.toList hashes)]
       }
 
 renderContractStagingAreaSelectorOTel :: RenderSelectorOTel ContractStagingAreaSelector

@@ -6,12 +6,19 @@
 module Logging where
 
 import Control.Monad.Event.Class
+import Language.Marlowe.Protocol.BulkSync.Types (MarloweBulkSync)
 import Language.Marlowe.Protocol.Load.Types (MarloweLoad)
 import Language.Marlowe.Protocol.Transfer.Types (MarloweTransfer)
+import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery)
 import Language.Marlowe.Runtime.Contract (renderContractStoreSelectorOTel)
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Contract.Store (ContractStoreSelector (..))
-import Network.Protocol.Driver.Trace (TcpServerSelector, renderTcpServerSelectorOTel)
+import Network.Protocol.Driver.Trace (
+  TcpClientSelector,
+  TcpServerSelector,
+  renderTcpClientSelectorOTel,
+  renderTcpServerSelectorOTel,
+ )
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Query.Types (Query)
 import Observe.Event.Explicit (injectSelector)
@@ -22,6 +29,8 @@ data RootSelector f where
   MarloweLoadServer :: TcpServerSelector (Handshake MarloweLoad) f -> RootSelector f
   MarloweTransferServer :: TcpServerSelector (Handshake MarloweTransfer) f -> RootSelector f
   QueryServer :: TcpServerSelector (Handshake (Query ContractRequest)) f -> RootSelector f
+  ChainSyncQueryClient :: TcpClientSelector (Handshake (Query ChainSyncQuery)) f -> RootSelector f
+  MarloweBulkSyncClient :: TcpClientSelector (Handshake MarloweBulkSync) f -> RootSelector f
 
 instance Inject (TcpServerSelector (Handshake (Query ContractRequest))) RootSelector where
   inject = injectSelector QueryServer
@@ -41,3 +50,5 @@ renderRootSelectorOTel = \case
   MarloweTransferServer sel -> renderTcpServerSelectorOTel sel
   QueryServer sel -> renderTcpServerSelectorOTel sel
   ContractStoreSelector sel -> renderContractStoreSelectorOTel sel
+  ChainSyncQueryClient sel -> renderTcpClientSelectorOTel sel
+  MarloweBulkSyncClient sel -> renderTcpClientSelectorOTel sel
