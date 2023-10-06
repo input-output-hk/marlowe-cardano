@@ -11,15 +11,20 @@ import Control.Concurrent.Component (Component, component_)
 import Control.Monad (when)
 import Data.Foldable (Foldable (..))
 import qualified Data.Marlowe.LiveContracts as LiveContracts
+import qualified Data.Set as Set
+import Language.Marlowe.Core.V1.Plate (Extract (..))
+import Language.Marlowe.Core.V1.Semantics.Types (Case (..), Contract)
 import Language.Marlowe.Protocol.BulkSync.Client
 import Language.Marlowe.Runtime.ChainSync.Api (
   BlockHeader (..),
   ChainSyncQuery (..),
+  DatumHash (..),
  )
 import Language.Marlowe.Runtime.Contract.Api (ContractWithAdjacency (..))
 import Language.Marlowe.Runtime.Contract.Store (ContractStore (..))
 import Network.Protocol.Connection (Connector, runConnector)
 import Network.Protocol.Query.Client (QueryClient, request)
+import PlutusLedgerApi.V1 (fromBuiltin)
 import UnliftIO (MonadUnliftIO)
 import UnliftIO.Concurrent (threadDelay)
 
@@ -49,14 +54,29 @@ garbageCollector = component_ "garbage-collector" run
         rollForward liveContracts blocks tip =
           pure $ idle $ foldl' (flip $ LiveContracts.rollForward $ blockNo tip) liveContracts blocks
 
-        rollBackward liveContracts point _ =
-          pure $ idle $ LiveContracts.rollBackward point liveContracts
+        rollBackward liveContracts point tip =
+          pure $ idle $ LiveContracts.rollBackward (blockNo <$> point) (blockNo <$> tip) liveContracts
 
         wait gcOnWait liveContracts = do
           when gcOnWait do
             storeHashes <- getHashes contractStore
             let getClosure = fmap (foldMap closure) . getContract contractStore
-            garbage <- LiveContracts.collectGarbage storeHashes getClosure liveContracts
+            -- Collect the garbage collection roots of the live contracts.
+            let getCaseRoots = \case
+                  MerkleizedCase _ hash -> Set.singleton $ DatumHash $ fromBuiltin hash
+                  _ -> mempty
+                getContractRoots = foldMap getCaseRoots . extractAll @(Case Contract)
+                liveRoots =
+                  -- Only consider roots also found in the store to avoid wasteful file system access
+                  Set.intersection storeHashes $
+                    foldMap getContractRoots $
+                      LiveContracts.allContracts liveContracts
+
+                foldMapM f = foldl' (\mb a -> (<>) <$> mb <*> f a) $ pure mempty
+            -- Get all live store hashes by taking the union of the closures of the live roots.
+            liveHashes <- foldMapM getClosure liveRoots
+            -- All store hashes that are not alive are garbage.
+            let garbage = Set.difference storeHashes liveHashes
             deleteContracts contractStore garbage
           poll liveContracts
 
