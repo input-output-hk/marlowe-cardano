@@ -820,6 +820,7 @@ test-suite marlowe-runtime-test
   type:               exitcode-stdio-1.0
   main-is:            Spec.hs
   other-modules:
+    Data.Marlowe.LiveContractsSpec
     Language.Marlowe.Protocol.BulkSyncSpec
     Language.Marlowe.Protocol.HeaderSyncSpec
     Language.Marlowe.Protocol.LoadSpec
@@ -855,7 +856,7 @@ test-suite marlowe-runtime-test
     , marlowe-chain-sync:{marlowe-chain-sync, gen, plutus-compat} ==0.0.5
     , marlowe-object:gen
     , marlowe-protocols ==0.2.1.0
-    , marlowe-runtime:{marlowe-runtime, contract-api, discovery-api, gen, history-api, sync, sync-api, tx, tx-api} ==0.0.5
+    , marlowe-runtime:{marlowe-runtime, contract, contract-api, discovery-api, gen, history-api, sync, sync-api, tx, tx-api} ==0.0.5
     , marlowe-test ==0.2.0.0
     , network-uri >=2.6 && <3
     , ouroboros-consensus ^>=0.7
