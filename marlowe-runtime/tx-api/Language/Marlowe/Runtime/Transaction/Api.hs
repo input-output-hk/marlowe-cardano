@@ -21,7 +21,7 @@ module Language.Marlowe.Runtime.Transaction.Api (
   InputsAppliedInEra (..),
   JobId (..),
   LoadMarloweContextError (..),
-  LoadHelperContextError (..),
+  LoadHelpersContextError (..),
   MarloweTxCommand (..),
   Mint (unMint),
   Destination (..),
@@ -267,7 +267,7 @@ encodeRoleTokenMetadata = encodeNFTMetadataDetails
     encodeText = MetadataList . fmap MetadataText . Text.chunksOf 64
 
 data HelperScript = OpenRoleScript
-  deriving stock (Show, Bounded, Enum, Eq, Ord, Generic)
+  deriving stock (Read, Show, Bounded, Enum, Eq, Ord, Generic)
   deriving anyclass (Binary, FromJSON, FromJSONKey, ToJSON, ToJSONKey, Variations)
 
 data Destination
@@ -895,7 +895,7 @@ data ConstraintError
   | PayoutOutputInWithdraw
   | PayoutInputInCreateOrApply
   | UnknownPayoutScript ScriptHash
-  | HelperScriptNotFound HelperScript
+  | HelperScriptNotFound Chain.TokenName
   deriving (Generic)
 
 deriving instance Eq ConstraintError
@@ -909,7 +909,7 @@ data CreateError
   = CreateEraUnsupported AnyCardanoEra
   | CreateConstraintError ConstraintError
   | CreateLoadMarloweContextFailed LoadMarloweContextError
-  | CreateLoadHelperContextFailed LoadHelperContextError
+  | CreateLoadHelpersContextFailed LoadHelpersContextError
   | CreateBuildupFailed CreateBuildupError
   | CreateToCardanoError
   | CreateSafetyAnalysisError String -- FIXME: This is a placeholder, pending design of error handling for safety analysis.
@@ -938,7 +938,7 @@ data ApplyInputsError
   | ApplyInputsConstraintError ConstraintError
   | ScriptOutputNotFound
   | ApplyInputsLoadMarloweContextFailed LoadMarloweContextError
-  | ApplyInputsLoadHelperContextFailed LoadHelperContextError
+  | ApplyInputsLoadHelpersContextFailed LoadHelpersContextError
   | ApplyInputsConstraintsBuildupFailed ApplyInputsConstraintsBuildupError
   | SlotConversionFailed String
   | TipAtGenesis
@@ -961,7 +961,7 @@ data WithdrawError
   = WithdrawEraUnsupported AnyCardanoEra
   | WithdrawConstraintError ConstraintError
   | EmptyPayouts
-  | WithdrawLoadHelperContextFailed LoadHelperContextError
+  | WithdrawLoadHelpersContextFailed LoadHelpersContextError
   deriving (Generic)
 
 deriving instance Eq WithdrawError
@@ -981,8 +981,13 @@ data LoadMarloweContextError
   deriving (Eq, Show, Ord, Generic)
   deriving anyclass (Binary, ToJSON, Variations)
 
-newtype LoadHelperContextError
+data LoadHelpersContextError
   = HelperScriptNotFoundInRegistry HelperScript
+  | LoadHelpersContextErrorNotFound TxId
+  | LoadHelpersContextErrorVersionMismatch SomeMarloweVersion
+  | ContractNotExtractedError ExtractCreationError
+  | RollForwardToGenesisError
+  | LoadHelpersContextTxOutRefNotFoundError TxOutRef
   deriving (Eq, Show, Ord, Generic)
   deriving anyclass (Binary, ToJSON, Variations)
 

@@ -40,6 +40,7 @@ import Language.Marlowe.Runtime.Core.Api (
 import Language.Marlowe.Runtime.Transaction.Api (Mint (..), RoleTokensConfig (..))
 import Language.Marlowe.Runtime.Transaction.BuildConstraints (buildApplyInputsConstraints)
 import Language.Marlowe.Runtime.Transaction.Constraints (
+  HelpersContext (..),
   MarloweContext (..),
   MarloweOutputConstraints (..),
   RoleTokenConstraints (..),
@@ -251,12 +252,12 @@ checkTransaction protocolParameters era version@MarloweV1 marloweContext@Marlowe
               intervalEnd
               txInputs
     let walletContext = walletForConstraints version marloweContext changeAddress constraints
-    let helperContext = undefined
+    let helpersContext = HelpersContext mempty "" mempty
     pure
       . either
         (pure . TransactionValidationError transaction . show)
         (const $ TransactionWarning transaction <$> V1.txOutWarnings txOutput)
-      $ solveConstraints' era version (Left marloweContext') walletContext helperContext constraints
+      $ solveConstraints' era version (Left marloweContext') walletContext helpersContext constraints
 
 -- | Create a wallet context that will satisfy the given constraints.
 walletForConstraints

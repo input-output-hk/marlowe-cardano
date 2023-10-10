@@ -40,7 +40,7 @@ scriptSetSpec marloweVersion = do
       Right marloweScriptBytes <- readFileTextEnvelope (AsScript AsPlutusScriptV2) $ File marloweScriptPath
       let payoutScript = fromCardanoScriptHash $ hashScript payoutScriptBytes
       let marloweScript = fromCardanoScriptHash $ hashScript marloweScriptBytes
-      let helperScript = mempty
+      let helperScripts = mempty
       let marloweScriptUTxOs = mempty
       let payoutScriptUTxOs = mempty
       let helperScriptUTxOs = mempty

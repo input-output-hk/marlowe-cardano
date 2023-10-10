@@ -456,7 +456,7 @@ toMarloweScripts testnetMagic MarloweScriptsRefs{..} = MarloweScripts{..}
     payoutTxOutRef = fromCardanoTxIn $ fst $ unAnUTxO $ fst mrRolePayoutValidator
     refScriptPublisher (AnUTxO (_, Cardano.TxOut addr _ _ _), _) = addr
     refScriptValue (AnUTxO (_, Cardano.TxOut _ value _ _), _) = Cardano.txOutValueToValue value
-    helperScript = undefined
+    helperScripts = undefined
     helperScriptUTxOs = undefined
 
     marloweReferenceScriptUTxO =
