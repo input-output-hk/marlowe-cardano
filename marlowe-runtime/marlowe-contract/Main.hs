@@ -13,6 +13,7 @@ import Control.Concurrent.Component.Run (AppM, runAppMTraced)
 import Control.Monad (when)
 import Control.Monad.Event.Class
 import qualified Data.Text as T
+import Data.Time (NominalDiffTime)
 import Data.Version (showVersion)
 import Data.Word (Word64)
 import Language.Marlowe.Protocol.BulkSync.Client (marloweBulkSyncClientPeer)
@@ -138,6 +139,7 @@ data Options = Options
   , contractStoreStagingDirectory :: FilePath
   , lockingMicrosecondsBetweenRetries :: Word64
   , httpPort :: PortNumber
+  , minContractAge :: NominalDiffTime
   }
 
 getOptions :: IO Options
@@ -162,6 +164,7 @@ getOptions = do
                   <*> contractStoreStagingDirectoryParser contractStoreStagingDirectory
                   <*> lockingMicrosecondsBetweenRetriesParser lockingMicrosecondsBetweenRetries
                   <*> httpPortParser
+                  <*> minContractAgeParser minContractAge
               )
       )
       infoMod
@@ -283,6 +286,16 @@ getOptions = do
           , metavar "PORT_NUMBER"
           , help "Port number to serve the http healthcheck API on"
           , value 8080
+          , showDefault
+          ]
+
+    minContractAgeParser def =
+      option auto $
+        mconcat
+          [ long "min-contract-age"
+          , metavar "MINUTES"
+          , help "The minimum age contracts in the store must reach before they can be garbage collected."
+          , value def
           , showDefault
           ]
 

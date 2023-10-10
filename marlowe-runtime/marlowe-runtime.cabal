@@ -749,6 +749,7 @@ executable marlowe-contract
     , network >=3.1 && <4
     , optparse-applicative ^>=0.17
     , text ^>=1.2
+    , time
     , typed-protocols ^>=0.1
 
   ghc-options:     -threaded
@@ -809,6 +810,7 @@ executable marlowe-runtime
     , optparse-applicative ^>=0.17
     , postgresql-libpq ^>=0.9
     , text ^>=1.2
+    , time
     , typed-protocols ^>=0.1
     , unliftio ^>=0.2.1
 

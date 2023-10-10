@@ -42,6 +42,7 @@ import qualified Data.Set.NonEmpty as NESet
 import Data.String (fromString)
 import Data.Text (Text, unpack)
 import qualified Data.Text as T
+import Data.Time (NominalDiffTime)
 import Data.Version (showVersion)
 import Data.Word (Word64)
 import qualified Database.PostgreSQL.LibPQ as PQ
@@ -221,6 +222,7 @@ data Options = Options
   , submitConfirmationBlocks :: BlockNo
   , httpPort :: PortNumber
   , mintingPolicyCmd :: FilePath
+  , minContractAge :: NominalDiffTime
   }
 
 getOptions :: IO Options
@@ -250,6 +252,7 @@ getOptions = do
         <*> submitConfirmationBlocksParser
         <*> httpPortParser
         <*> mintingPolicyCmdParser
+        <*> minContractAgeParser minContractAge
 
     databaseUriParser =
       strOption $
@@ -458,6 +461,16 @@ getOptions = do
           , metavar "CMD"
           , help
               "A command which creates the role token minting policy for a contract. It should read the arguments via the command line and output the serialized script binary to stdout."
+          ]
+
+    minContractAgeParser def =
+      option auto $
+        mconcat
+          [ long "min-contract-age"
+          , metavar "MINUTES"
+          , help "The minimum age contracts in the store must reach before they can be garbage collected."
+          , value def
+          , showDefault
           ]
 
     infoMod =
