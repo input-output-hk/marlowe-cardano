@@ -366,7 +366,7 @@ runContractTest test = runResourceT do
         { contractStoreDirectory = resolveWorkspacePath workspace "contract-store"
         , contractStoreStagingDirectory = resolveWorkspacePath workspace "staging-areas"
         , lockingMicrosecondsBetweenRetries = 100_000
-        , minContractAge = 60
+        , minContractAge = 60 -- In seconds
         }
   let testComponent = proc contractDeps -> do
         Contract.MarloweContract{..} <- Contract.contract -< contractDeps
