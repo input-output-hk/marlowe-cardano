@@ -45,7 +45,7 @@ import Language.Marlowe.Runtime.Core.Api (
   TransactionScriptOutput (..),
  )
 import qualified Language.Marlowe.Runtime.Core.Api as Core
-import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts (..), ReferenceScriptUtxo, getCurrentScripts)
+import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts (..), ReferenceScriptUtxo)
 import Language.Marlowe.Runtime.History.Api (
   CreateStep (..),
   ExtractCreationError,
@@ -312,35 +312,3 @@ lookupMarloweScriptUtxo networkId MarloweScripts{..} = note (MarloweScriptNotPub
 
 lookupPayoutScriptUtxo :: NetworkId -> MarloweScripts -> Either LoadMarloweContextError ReferenceScriptUtxo
 lookupPayoutScriptUtxo networkId MarloweScripts{..} = note (PayoutScriptNotPublished payoutScript) $ Map.lookup networkId payoutScriptUTxOs
-
-type LoadHelperContext m = forall v. MarloweVersion v -> m (Either LoadHelperContextError HelperContext)
-
-loadHelperContext
-  :: ( Applicative m {- forall m r s
-                     . (MonadUnliftIO m, MonadInjectEvent r LoadMarloweContextSelector s m) -}
-     )
-  => (forall v. MarloweVersion v -> Set MarloweScripts)
-  -> C.NetworkId
-  -> LoadHelperContext m
-loadHelperContext _getScripts networkId version =
-  pure $ getCurrentHelperContext (getCurrentScripts version) networkId
-
-getCurrentHelperContext
-  :: MarloweScripts
-  -> C.NetworkId
-  -> Either LoadHelperContextError HelperContext
-getCurrentHelperContext MarloweScripts{helperScript, helperScriptUTxOs} networkId =
-  let lookupHelper helper =
-        case (show helper `Map.lookup` helperScript, (show helper, networkId) `Map.lookup` helperScriptUTxOs) of
-          (Just helperScriptHash, Just helperScriptUTxO) ->
-            let helperAddress =
-                  fromCardanoAddressInEra C.BabbageEra $
-                    C.AddressInEra (C.ShelleyAddressInEra C.ShelleyBasedEraBabbage) $
-                      C.makeShelleyAddress
-                        networkId
-                        (C.PaymentCredentialByScript $ fromJust $ toCardanoScriptHash helperScriptHash)
-                        C.NoStakeAddress
-             in Right (helper, HelperScriptInfo{..})
-          _ -> Left $ HelperScriptNotFoundInRegistry helper
-   in HelperContext . Map.fromList
-        <$> mapM lookupHelper ([minBound .. maxBound] :: [HelperScript])

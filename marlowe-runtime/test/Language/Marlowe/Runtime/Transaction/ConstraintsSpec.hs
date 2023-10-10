@@ -126,7 +126,7 @@ spec = do
               marloweVersion
               scriptCtx
               walletContext
-              undefined
+              (HelpersContext mempty "" mempty)
               constraints
           mViolations = violations marloweVersion scriptCtx utxos constraints <$> result
           theProperty :: Property

@@ -148,7 +148,7 @@ instance Arbitrary LoadMarloweContextError where
       ]
   shrink = genericShrink
 
-instance Arbitrary LoadHelperContextError where
+instance Arbitrary LoadHelpersContextError where
   arbitrary = HelperScriptNotFoundInRegistry <$> arbitrary
   shrink = genericShrink
 
@@ -208,7 +208,7 @@ instance Arbitrary ApplyInputsError where
       , ApplyInputsConstraintError <$> arbitrary
       , pure ScriptOutputNotFound
       , ApplyInputsLoadMarloweContextFailed <$> arbitrary
-      , ApplyInputsLoadHelperContextFailed <$> arbitrary
+      , ApplyInputsLoadHelpersContextFailed <$> arbitrary
       , ApplyInputsConstraintsBuildupFailed <$> arbitrary
       , SlotConversionFailed <$> arbitrary
       , pure TipAtGenesis
@@ -221,7 +221,7 @@ instance Arbitrary WithdrawError where
     oneof
       [ WithdrawConstraintError <$> arbitrary
       , WithdrawEraUnsupported <$> arbitrary
-      , WithdrawLoadHelperContextFailed <$> arbitrary
+      , WithdrawLoadHelpersContextFailed <$> arbitrary
       , pure EmptyPayouts
       ]
   shrink = genericShrink
