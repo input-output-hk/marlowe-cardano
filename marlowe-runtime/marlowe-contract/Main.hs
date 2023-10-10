@@ -140,6 +140,7 @@ data Options = Options
   , lockingMicrosecondsBetweenRetries :: Word64
   , httpPort :: PortNumber
   , minContractAge :: NominalDiffTime
+  , maxStoreSize :: Integer
   }
 
 getOptions :: IO Options
@@ -165,6 +166,7 @@ getOptions = do
                   <*> lockingMicrosecondsBetweenRetriesParser lockingMicrosecondsBetweenRetries
                   <*> httpPortParser
                   <*> minContractAgeParser minContractAge
+                  <*> maxStoreSizeParser maxStoreSize
               )
       )
       infoMod
@@ -295,6 +297,16 @@ getOptions = do
           [ long "min-contract-age"
           , metavar "MINUTES"
           , help "The minimum age contracts in the store must reach before they can be garbage collected."
+          , value def
+          , showDefault
+          ]
+
+    maxStoreSizeParser def =
+      option auto $
+        mconcat
+          [ long "max-store-size"
+          , metavar "BYTES"
+          , help "The maximum allowed size of the contract store, in bytes."
           , value def
           , showDefault
           ]

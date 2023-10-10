@@ -265,6 +265,7 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
           , contractStoreStagingDirectory = resolveWorkspacePath workspace "contract-staging-area"
           , lockingMicrosecondsBetweenRetries = 100_000
           , minContractAge = 60 -- In seconds
+          , maxStoreSize = 4 * 1024 * 1024 * 1024 -- 4 GB
           }
 
     let baseUrl = BaseUrl Http "localhost" webPort ""

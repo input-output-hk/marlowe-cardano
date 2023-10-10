@@ -223,6 +223,7 @@ data Options = Options
   , httpPort :: PortNumber
   , mintingPolicyCmd :: FilePath
   , minContractAge :: NominalDiffTime
+  , maxStoreSize :: Integer
   }
 
 getOptions :: IO Options
@@ -253,6 +254,7 @@ getOptions = do
         <*> httpPortParser
         <*> mintingPolicyCmdParser
         <*> minContractAgeParser minContractAge
+        <*> maxStoreSizeParser maxStoreSize
 
     databaseUriParser =
       strOption $
@@ -469,6 +471,16 @@ getOptions = do
           [ long "min-contract-age"
           , metavar "MINUTES"
           , help "The minimum age contracts in the store must reach before they can be garbage collected."
+          , value def
+          , showDefault
+          ]
+
+    maxStoreSizeParser def =
+      option auto $
+        mconcat
+          [ long "max-store-size"
+          , metavar "BYTES"
+          , help "The maximum allowed size of the contract store, in bytes."
           , value def
           , showDefault
           ]

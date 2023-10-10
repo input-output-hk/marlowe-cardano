@@ -102,17 +102,11 @@ renderContractStoreSelectorOTel = \case
           MerkleizeInputsResult (Right TransactionInput{..}) ->
             [("marlowe.inputs", toAttribute $ toStrict . encodeToLazyText <$> txInputs)]
       }
-  GetHashes ->
+  SetGCRoots ->
     OTelRendered
-      { eventName = "marlowe/contract/get_hashes"
+      { eventName = "marlowe/contract/set_gc_roots"
       , eventKind = Client
-      , renderField = \results -> [("results", toAttribute $ read @Text . show <$> Set.toList results)]
-      }
-  DeleteContracts ->
-    OTelRendered
-      { eventName = "marlowe/contract/delete_contracts"
-      , eventKind = Client
-      , renderField = \hashes -> [("marlowe.contract_hashes", toAttribute $ read @Text . show <$> Set.toList hashes)]
+      , renderField = \roots -> [("root_hashes", toAttribute $ read @Text . show <$> Set.toList roots)]
       }
 
 renderContractStagingAreaSelectorOTel :: RenderSelectorOTel ContractStagingAreaSelector
