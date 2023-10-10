@@ -42,12 +42,13 @@ import Language.Marlowe.Runtime.Transaction.BuildConstraints (MkRoleTokenMinting
 import Language.Marlowe.Runtime.Transaction.Chain
 import Language.Marlowe.Runtime.Transaction.Constraints (MarloweContext (..), PayoutContext (..), WalletContext (..))
 import Language.Marlowe.Runtime.Transaction.Query (
-  LoadHelperContext,
   LoadMarloweContext,
   LoadPayoutContext,
   LoadWalletContext,
  )
 import qualified Language.Marlowe.Runtime.Transaction.Query as Q
+import Language.Marlowe.Runtime.Transaction.Query.Helper (LoadHelpersContext)
+import qualified Language.Marlowe.Runtime.Transaction.Query.Helper as QH
 import Language.Marlowe.Runtime.Transaction.Server
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob)
 import Network.Protocol.Connection (Connector, ServerSource)
@@ -68,7 +69,7 @@ data TransactionDependencies m = TransactionDependencies
   , loadWalletContext :: LoadWalletContext m
   , loadPayoutContext :: LoadPayoutContext m
   , loadMarloweContext :: LoadMarloweContext m
-  , loadHelperContext :: LoadHelperContext m
+  , loadHelpersContext :: LoadHelpersContext m
   , chainSyncQueryConnector :: Connector (QueryClient ChainSyncQuery) m
   , contractQueryConnector :: Connector (QueryClient ContractRequest) m
   , getCurrentScripts :: forall v. MarloweVersion v -> MarloweScripts
@@ -241,6 +242,57 @@ renderLoadMarloweContextSelectorOTel = \case
             , Just ("marlowe.marlowe_script_hash", fromString $ show marloweScriptHash)
             , Just ("marlowe.payout_script_hash", fromString $ show payoutScriptHash)
             ]
+      }
+
+renderLoadHelpersContextSelectorOTel :: RenderSelectorOTel QH.LoadHelpersContextSelector
+renderLoadHelpersContextSelectorOTel = \case
+  QH.LoadHelpersContext ->
+    OTelRendered
+      { eventName = "marlowe_tx/load_helpers_context/load_helpers_context"
+      , eventKind = Internal
+      , renderField = \contractId -> [("marlowe.contract_id", fromString . show $ contractId)]
+      }
+  QH.ContractNotFound ->
+    OTelRendered
+      { eventName = "marlowe_tx/load_helpers_context/contract_not_found"
+      , eventKind = Internal
+      , renderField = mempty
+      }
+  QH.ContractNotExtracted ->
+    OTelRendered
+      { eventName = "marlowe_tx/load_helpers_context/contract_not_extracted"
+      , eventKind = Internal
+      , renderField = \e -> [("marlowe.extract_creation_error", fromString . show $ e)]
+      }
+  QH.ContractFound ->
+    OTelRendered
+      { eventName = "marlowe_tx/load_helpers_context/contract_found"
+      , eventKind = Internal
+      , renderField = \contractId -> [("marlowe.contract_id", fromString . show $ contractId)]
+      }
+  QH.RollForwardToGenesis ->
+    OTelRendered
+      { eventName = "marlowe_tx/load_helpers_context/roll_forward_to_genesis"
+      , eventKind = Internal
+      , renderField = mempty
+      }
+  QH.TxOutRefConsumed ->
+    OTelRendered
+      { eventName = "marlowe_tx/load_helpers_context/tx_out_ref_consumed"
+      , eventKind = Internal
+      , renderField = \txOutRef -> [("marlowe.tx_out_ref", fromString . show $ txOutRef)]
+      }
+  QH.TxOutRefNotConsumed ->
+    OTelRendered
+      { eventName = "marlowe_tx/load_helpers_context/tx_out_ref_not_consumed"
+      , eventKind = Internal
+      , renderField = \txOutRef -> [("marlowe.tx_out_ref", fromString . show $ txOutRef)]
+      }
+  QH.LoadHelpersContextTxOutRefNotFound ->
+    OTelRendered
+      { eventName = "marlowe_tx/load_helpers_context/load_helpers_context_tx_out_ref_not_found"
+      , eventKind = Internal
+      , renderField = \txOutRef -> [("marlowe.tx_out_ref", fromString . show $ txOutRef)]
       }
 
 mkCommandLineRoleTokenMintingPolicy :: (MonadUnliftIO m, MonadFail m) => String -> MkRoleTokenMintingPolicy m

@@ -8,7 +8,8 @@ module Language.Marlowe.Runtime.Transaction.Constraints (
   ConstraintError (..),
   MarloweContext (..),
   PayoutContext (..),
-  HelperContext (..),
+  HelpersContext (..),
+  HelperScriptState (..),
   HelperScriptInfo (..),
   MarloweInputConstraints (..),
   MarloweOutputConstraints (..),
@@ -182,7 +183,7 @@ instance Monoid (MarloweOutputConstraints v) where
   mempty = MarloweOutputConstraintsNone
 
 data HelperOutputConstraints
-  = HelperOutput HelperScript Chain.Assets Chain.Datum
+  = HelperOutput Chain.TokenName Chain.Assets Chain.Datum
 
 deriving instance Show HelperOutputConstraints
 deriving instance Eq HelperOutputConstraints
@@ -217,7 +218,8 @@ mustSendMarloweOutput :: (Core.IsMarloweVersion v) => Chain.Assets -> Core.Datum
 mustSendMarloweOutput assets datum =
   mempty{marloweOutputConstraints = MarloweOutput assets datum}
 
-mustSendHelperOutput :: (Core.IsMarloweVersion v) => HelperScript -> Chain.Assets -> Chain.Datum -> TxConstraints era v
+mustSendHelperOutput
+  :: (Core.IsMarloweVersion v) => Chain.TokenName -> Chain.Assets -> Chain.Datum -> TxConstraints era v
 mustSendHelperOutput helper assets datum =
   mempty{helperOutputConstraints = pure $ HelperOutput helper assets datum}
 
@@ -372,14 +374,32 @@ data PayoutContext = PayoutContext
   deriving (Generic, Show, Eq)
 
 -- Data from Helper Scripts needed to solve the constraints.
-newtype HelperContext = HelperContext {helperScriptInfo :: Map HelperScript HelperScriptInfo}
+data HelpersContext = HelpersContext
+  { currentHelperScripts :: Map HelperScript HelperScriptInfo
+  -- ^ The current version of the helper scripts.
+  , helperPolicyId :: Chain.PolicyId
+  -- ^ The datum that created the contract.
+  , helperScriptStates :: Map Chain.TokenName HelperScriptState
+  -- ^ Map of which scripts play which role.
+  }
   deriving (Generic)
 
-deriving instance Show HelperContext
-deriving anyclass instance ToJSON HelperContext
+deriving instance Show HelpersContext
+deriving anyclass instance ToJSON HelpersContext
+
+data HelperScriptState = HelperScriptState
+  { helperScriptInfo :: HelperScriptInfo
+  , helperTxOutRef :: Chain.TxOutRef
+  , helperTransactionOutput :: Chain.TransactionOutput
+  }
+  deriving (Generic)
+
+deriving instance Show HelperScriptState
+deriving instance ToJSON HelperScriptState
 
 data HelperScriptInfo = HelperScriptInfo
-  { helperAddress :: Chain.Address
+  { helperScript :: HelperScript
+  , helperAddress :: Chain.Address
   , helperScriptUTxO :: ReferenceScriptUtxo
   , helperScriptHash :: Chain.ScriptHash
   }
@@ -394,7 +414,7 @@ type SolveConstraints =
   -> Core.MarloweVersion v
   -> Either (MarloweContext v) PayoutContext
   -> WalletContext
-  -> HelperContext
+  -> HelpersContext
   -> TxConstraints era v
   -> Either ConstraintError (C.TxBody era)
 
@@ -951,10 +971,10 @@ solveInitialTxBodyContent
   -> Core.MarloweVersion v
   -> Either (MarloweContext v) PayoutContext
   -> WalletContext
-  -> HelperContext
+  -> HelpersContext
   -> TxConstraints era v
   -> Either ConstraintError (C.TxBodyContent C.BuildTx era)
-solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..} HelperContext{helperScriptInfo} TxConstraints{..} = do
+solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..} HelpersContext{helperScriptStates} TxConstraints{..} = do
   (txIns, requiredPayoutScriptHashes) <- solveTxIns
   txInsReference <- solveTxInsReference requiredPayoutScriptHashes
   txOuts <- solveTxOuts
@@ -1168,10 +1188,10 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
     getHelperOutputs = mapM getHelperOutput helperOutputConstraints
 
     getHelperOutput :: HelperOutputConstraints -> Either ConstraintError Chain.TransactionOutput
-    getHelperOutput (HelperOutput helperScript assets datum) =
-      case helperScript `Map.lookup` helperScriptInfo of
+    getHelperOutput (HelperOutput helperRole assets datum) =
+      case helperScriptInfo <$> helperRole `Map.lookup` helperScriptStates of
         Just HelperScriptInfo{..} -> Right $ Chain.TransactionOutput helperAddress assets Nothing $ Just datum
-        Nothing -> Left $ HelperScriptNotFound helperScript
+        Nothing -> Left $ HelperScriptNotFound helperRole
 
     getMerkleizedContinuationOutputs :: [Chain.TransactionOutput]
     getMerkleizedContinuationOutputs = case marloweInputConstraints of

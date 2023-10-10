@@ -120,7 +120,7 @@ instance ToDTO WithdrawError where
     WithdrawEraUnsupported era -> ApiError ("Current network era not supported: " <> show era) "WithdrawEraUnsupported" Null 503
     WithdrawConstraintError err -> apiError' err statusCodeConstraintError
     EmptyPayouts -> ApiError "Empty payouts" "EmptyPayouts" Null 400
-    WithdrawLoadHelperContextFailed err -> ApiError ("Failed to load helper-script context: " <> show err) "WithdrawLoadHelperContextFailed" Null 503
+    WithdrawLoadHelpersContextFailed err -> ApiError ("Failed to load helper-script context: " <> show err) "WithdrawLoadHelperContextFailed" Null 503
 
 instance HasDTO CreateError where
   type DTO CreateError = ApiError
@@ -140,7 +140,7 @@ instance ToDTO CreateError where
     ProtocolParamNoUTxOCostPerByte -> ApiError "Unable to compute min Ada deposit bound" "Internal error" Null 500
     InsufficientMinAdaDeposit required -> ApiError "Min Ada deposit insufficient." "Bad Request" (object ["minimumRequiredDeposit" .= required]) 400
     RequiresSingleThreadToken -> ApiError "Exactly one thread token name is required." "RequiresSingleThreadToken" Null 400
-    CreateLoadHelperContextFailed err -> ApiError ("Failed to load helper-script context: " <> show err) "CreateLoadHelperContextFailed" Null 503
+    CreateLoadHelpersContextFailed err -> ApiError ("Failed to load helper-script context: " <> show err) "CreateLoadHelperContextFailed" Null 503
 
 instance HasDTO ApplyInputsError where
   type DTO ApplyInputsError = ApiError
@@ -155,7 +155,7 @@ instance ToDTO ApplyInputsError where
     SlotConversionFailed _ -> ApiError "Slot conversion failed" "SlotConversionFailed" Null 400
     TipAtGenesis -> ApiError "Internal error" "TipAtGenesis" Null 500
     ValidityLowerBoundTooHigh _ _ -> ApiError "Validity lower bound too high" "ValidityLowerBoundTooHigh" Null 400
-    ApplyInputsLoadHelperContextFailed err -> ApiError ("Failed to load helper-script context: " <> show err) "ApplyInputsLoadHelperContextFailed" Null 503
+    ApplyInputsLoadHelpersContextFailed err -> ApiError ("Failed to load helper-script context: " <> show err) "ApplyInputsLoadHelperContextFailed" Null 503
 
 statusCodeConstraintError :: ConstraintError -> Int
 statusCodeConstraintError = \case
