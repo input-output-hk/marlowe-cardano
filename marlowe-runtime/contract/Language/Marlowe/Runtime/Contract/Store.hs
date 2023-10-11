@@ -19,6 +19,7 @@ data ContractStoreSelector f where
   ContractStagingAreaSelector :: ContractStagingAreaSelector f -> ContractStoreSelector f
   GetContract :: DatumHash -> ContractStoreSelector ContractWithAdjacency
   MerkleizeInputs :: ContractStoreSelector MerkleizeInputsField
+  SetGCRoots :: ContractStoreSelector (Set DatumHash)
 
 data MerkleizeInputsField
   = MerkleizeInputsContract Contract
@@ -30,6 +31,7 @@ data ContractStore m = ContractStore
   { createContractStagingArea :: m (ContractStagingArea m)
   , getContract :: DatumHash -> m (Maybe ContractWithAdjacency)
   , merkleizeInputs :: Contract -> State -> TransactionInput -> m (Either MerkleizeInputsError TransactionInput)
+  , setGCRoots :: Set DatumHash -> m ()
   }
 
 hoistContractStore
@@ -42,6 +44,7 @@ hoistContractStore f ContractStore{..} =
     { createContractStagingArea = f $ hoistContractStagingArea f <$> createContractStagingArea
     , getContract = f . getContract
     , merkleizeInputs = (fmap . fmap) f . merkleizeInputs
+    , setGCRoots = f . setGCRoots
     }
 
 traceContractStore
@@ -66,6 +69,9 @@ traceContractStore inj ContractStore{..} =
         result <- merkleizeInputs contract state input
         addField ev $ MerkleizeInputsResult result
         pure result
+    , setGCRoots = \roots -> withInjectEvent inj SetGCRoots \ev -> do
+        addField ev roots
+        setGCRoots roots
     }
 
 data ContractStagingAreaSelector f where

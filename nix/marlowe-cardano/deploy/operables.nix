@@ -327,7 +327,7 @@ in
       # REQUIRED VARS #
       #################
       # MARLOWE_CHAIN_SYNC_HOST, MARLOWE_CHAIN_SYNC_QUERY_PORT: connection info to marlowe-chain-sync
-      # HOST, MARLOWE_SYNC_PORT, MARLOWE_HEADER_SYNC_PORT, MARLOWE_QUERY_PORT: network binding
+      # HOST, MARLOWE_SYNC_PORT, MARLOWE_BULK_SYNC_PORT,MARLOWE_HEADER_SYNC_PORT, MARLOWE_QUERY_PORT: network binding
       # DB_NAME, DB_USER, DB_PASS, DB_HOST,
       # HTTP_PORT: port number for the HTTP healthcheck server
 
@@ -340,6 +340,7 @@ in
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_SYNC_PORT:-}" ] && echo "MARLOWE_SYNC_PORT env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_HEADER_SYNC_PORT:-}" ] && echo "MARLOWE_HEADER_SYNC_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${MARLOWE_BULK_SYNC_PORT:-}" ] && echo "MARLOWE_BULK_SYNC_PORT env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_QUERY_PORT:-}" ] && echo "MARLOWE_QUERY_PORT env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_CHAIN_SYNC_HOST:-}" ] && echo "MARLOWE_CHAIN_SYNC_HOST env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_CHAIN_SYNC_QUERY_PORT:-}" ] && echo "MARLOWE_CHAIN_SYNC_QUERY_PORT env var must be set -- aborting" && exit 1
@@ -359,6 +360,7 @@ in
         --host "$HOST" \
         --sync-port "$MARLOWE_SYNC_PORT" \
         --header-sync-port "$MARLOWE_HEADER_SYNC_PORT" \
+        --bulk-sync-port "$MARLOWE_BULK_SYNC_PORT" \
         --query-port "$MARLOWE_QUERY_PORT" \
         --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
         --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
@@ -420,6 +422,8 @@ in
       # REQUIRED VARS #
       #################
       # HOST, PORT, QUERY_PORT, TRANSFER_PORT: network binding
+      # MARLOWE_CHAIN_SYNC_HOST, MARLOWE_CHAIN_SYNC_QUERY_PORT: connection info to marlowe-chain-sync
+      # SYNC_HOST, MARLOWE_BULK_SYNC_PORT, connection info to marlowe-sync
       # STORE_DIR: location of the contract store directory
       # HTTP_PORT: port number for the HTTP healthcheck server
 
@@ -428,6 +432,8 @@ in
       #################
       # OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
       # OTEL_SERVICE_NAME: The name of the open telemetry service
+      # MAX_STORE_SIZE: the maximum size of the contract store, in bytes
+      # MIN_CONTRACT_AGE: the minimum age of contracts in the store before they can be garbage collected, in seconds.
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
@@ -435,18 +441,30 @@ in
       [ -z "''${TRANSFER_PORT:-}" ] && echo "TRANSFER_PORT env var must be set -- aborting" && exit 1
       [ -z "''${STORE_DIR:-}" ] && echo "STORE_DIR env var must be set -- aborting" && exit 1
       [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${MARLOWE_CHAIN_SYNC_HOST:-}" ] && echo "MARLOWE_CHAIN_SYNC_HOST env var must be set -- aborting" && exit 1
+      [ -z "''${MARLOWE_CHAIN_SYNC_QUERY_PORT:-}" ] && echo "MARLOWE_CHAIN_SYNC_QUERY_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${SYNC_HOST:-}" ] && echo "SYNC_HOST env var must be set -- aborting" && exit 1
+      [ -z "''${MARLOWE_BULK_SYNC_PORT:-}" ] && echo "MARLOWE_BULK_SYNC_PORT env var must be set -- aborting" && exit 1
 
       mkdir -p /tmp /store
 
       export OTEL_SERVICE_NAME="''${OTEL_SERVICE_NAME:-marlowe-contract}"
+      export MAX_STORE_SIZE="''${MAX_STORE_SIZE:8589934592}" # 8 GB
+      export MIN_CONTRACT_AGE="''${MIN_CONTRACT_AGE:86400}" # 1 day in seconds
 
       ${marlowe-contract}/bin/marlowe-contract \
         --host "$HOST" \
         --port "$PORT" \
         --query-port "$QUERY_PORT" \
         --transfer-port "$TRANSFER_PORT" \
+        --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
+        --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
+        --marlowe-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
+        --marlowe-bulk-port "$MARLOWE_BULK_SYNC_PORT" \
         --store-dir "$STORE_DIR" \
-        --http-port "$HTTP_PORT"
+        --http-port "$HTTP_PORT" \
+        --min-contract-age "$MIN_CONTRACT_AGE" \
+        --max-store-size "$MAX_STORE_SIZE"
     '';
   };
 
@@ -458,7 +476,7 @@ in
       #################
       # HOST, PORT, TRACED_PORT: network binding
       # TX_HOST, TX_PORT: connection info to marlowe-tx
-      # SYNC_HOST, MARLOWE_SYNC_PORT, MARLOWE_HEADER_SYNC_PORT, MARLOWE_QUERY_PORT: connection info to marlowe-sync
+      # SYNC_HOST, MARLOWE_SYNC_PORT, MARLOWE_BULK_SYNC_PORT, MARLOWE_HEADER_SYNC_PORT, MARLOWE_QUERY_PORT: connection info to marlowe-sync
       # CONTRACT_HOST, LOAD_PORT, CONTRACT_QUERY_PORT, TRANSFER_PORT: connection info to marlowe-contract
       # HTTP_PORT: port number for the HTTP healthcheck server
 
@@ -480,6 +498,7 @@ in
       [ -z "''${SYNC_HOST:-}" ] && echo "SYNC_HOST env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_SYNC_PORT:-}" ] && echo "MARLOWE_SYNC_PORT env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_HEADER_SYNC_PORT:-}" ] && echo "MARLOWE_HEADER_SYNC_PORT env var must be set -- aborting" && exit 1
+      [ -z "''${MARLOWE_BULK_SYNC_PORT:-}" ] && echo "MARLOWE_BULK_SYNC_PORT env var must be set -- aborting" && exit 1
       [ -z "''${MARLOWE_QUERY_PORT:-}" ] && echo "MARLOWE_QUERY_PORT env var must be set -- aborting" && exit 1
       [ -z "''${HTTP_PORT:-}" ] && echo "HTTP_PORT env var must be set -- aborting" && exit 1
 
@@ -496,6 +515,7 @@ in
         --marlowe-sync-host "$SYNC_HOST" \
         --marlowe-sync-port "$MARLOWE_SYNC_PORT" \
         --marlowe-header-port "$MARLOWE_HEADER_SYNC_PORT" \
+        --marlowe-bulk-port "$MARLOWE_BULK_SYNC_PORT" \
         --marlowe-query-port "$MARLOWE_QUERY_PORT" \
         --marlowe-contract-host "$CONTRACT_HOST" \
         --marlowe-load-port "$LOAD_PORT" \
@@ -525,6 +545,8 @@ in
       #################
       # OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
       # OTEL_SERVICE_NAME: The name of the open telemetry service
+      # MAX_STORE_SIZE: the maximum size of the contract store, in bytes
+      # MIN_CONTRACT_AGE: the minimum age of contracts in the store before they can be garbage collected, in seconds.
 
       [ -z "''${HOST:-}" ] && echo "HOST env var must be set -- aborting" && exit 1
       [ -z "''${PORT:-}" ] && echo "PORT env var must be set -- aborting" && exit 1
@@ -567,6 +589,8 @@ in
       ${wait-for-socket}/bin/wait-for-socket "$CARDANO_NODE_SOCKET_PATH"
 
       export OTEL_SERVICE_NAME="''${OTEL_SERVICE_NAME:-marlowe-runtime}"
+      export MAX_STORE_SIZE="''${MAX_STORE_SIZE:8589934592}" # 8 GB
+      export MIN_CONTRACT_AGE="''${MIN_CONTRACT_AGE:86400}" # 1 day in seconds
 
       ${marlowe-runtime}/bin/marlowe-runtime \
         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
@@ -579,7 +603,9 @@ in
         --port "$PORT" \
         --port-traced "$TRACED_PORT" \
         --http-port "$HTTP_PORT" \
-        --minting-policy-cmd marlowe-minting-validator
+        --minting-policy-cmd marlowe-minting-validator \
+        --min-contract-age "$MIN_CONTRACT_AGE" \
+        --max-store-size "$MAX_STORE_SIZE"
 
     '';
   };
@@ -720,8 +746,7 @@ in
         --confirm-seconds "$CONFIRM_SECONDS" \
         --retry-seconds "$RETRY_SECONDS" \
         --retry-limit "$RETRY_LIMIT" \
-        --polling "''${POLLING_FREQUENCY:-5}" \
-        --requeue "''${REQUEUING_FREQUENCY:-20}"
+        --polling "''${POLLING_FREQUENCY:-5}"
     '';
   };
 }

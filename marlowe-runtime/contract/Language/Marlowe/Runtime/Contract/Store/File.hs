@@ -6,12 +6,13 @@ module Language.Marlowe.Runtime.Contract.Store.File (
 
 import Codec.Compression.GZip (compress, decompress)
 import Control.Applicative (liftA2)
-import Control.Monad (guard, unless)
+import Control.Monad (guard, unless, when)
 import Control.Monad.Catch (MonadMask)
-import Control.Monad.Trans.Maybe (MaybeT (runMaybeT))
+import Control.Monad.Trans.Maybe (MaybeT (..))
 import Data.Binary (Word64, get, put)
 import Data.Binary.Get (runGet)
 import Data.Binary.Put (runPut)
+import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Foldable (fold, foldl')
 import Data.Function (on)
@@ -23,6 +24,9 @@ import Data.Maybe (catMaybes)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.String (fromString)
+import qualified Data.Text as T
+import Data.Text.Encoding (encodeUtf8)
+import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime)
 import Data.UUID.V4 (nextRandom)
 import GHC.IO (mkUserError)
 import Language.Marlowe (Case (..), Contract (..))
@@ -42,6 +46,8 @@ import UnliftIO.Directory (
   createDirectory,
   createDirectoryIfMissing,
   doesFileExist,
+  getFileSize,
+  getModificationTime,
   getTemporaryDirectory,
   getXdgDirectory,
   listDirectory,
@@ -56,6 +62,10 @@ data ContractStoreOptions = ContractStoreOptions
   , contractStoreStagingDirectory :: FilePath
   -- ^ The directory to create staging areas
   , lockingMicrosecondsBetweenRetries :: Word64
+  , minContractAge :: NominalDiffTime
+  -- ^ The minimum age of a contract before it is allowed to be deleted
+  , maxStoreSize :: Integer
+  -- ^ The maximum size, in bytes, of the contract store.
   }
 
 -- | Default options. uses $XDG_DATA/marlowe/runtime/marlowe-contract/store for the
@@ -66,6 +76,8 @@ defaultContractStoreOptions =
     <$> getXdgDirectory XdgData ("marlowe" </> "runtime" </> "marlowe-contract" </> "store")
     <*> getTemporaryDirectory
     <*> pure 500_000
+    <*> pure (24 * 60 * 60) -- 1 day min contract age
+    <*> pure (32 * 1024 * 1024 * 1024) -- 32 GB max store size
 
 -- | Create a contract store that uses the file system.
 --
@@ -81,9 +93,10 @@ createContractStore ContractStoreOptions{..} = do
   createDirectoryIfMissing True contractStoreStagingDirectory
   -- Used to obtain exclusive write access to the store.
   let lockfile = contractStoreDirectory </> "lockfile"
+  gcRootsVar <- newTVarIO Nothing
   pure
     ContractStore
-      { createContractStagingArea = createContractStagingArea lockfile
+      { createContractStagingArea = createContractStagingArea gcRootsVar lockfile
       , getContract = getContract True lockfile
       , merkleizeInputs = \hash state input ->
           withLockFile lockingParameters lockfile $
@@ -92,6 +105,7 @@ createContractStore ContractStoreOptions{..} = do
               hash
               state
               input
+      , setGCRoots = atomically . writeTVar gcRootsVar . Just
       }
   where
     lockingParameters =
@@ -99,6 +113,37 @@ createContractStore ContractStoreOptions{..} = do
         { sleepBetweenRetries = lockingMicrosecondsBetweenRetries
         , retryToAcquireLock = NumberOfTimes 20
         }
+
+    getStoreSize = do
+      -- get the file names from the store
+      storeFiles <- listDirectory contractStoreDirectory
+      -- concurrently get the size of all files from the store
+      sum <$> pooledMapConcurrently (getFileSize . (contractStoreDirectory </>)) storeFiles
+
+    -- Try to free space by deleting dead contract files.
+    freeSpace availableSpace requiredSpace gcRootsVar = do
+      gcRoots <- atomically do
+        roots <- readTVar gcRootsVar
+        maybe retrySTM pure roots
+      let getClosure (DatumHash hash) = runMaybeT do
+            let path = contractStoreDirectory </> (T.unpack $ encodeBase16 hash) <.> "closure"
+            guard =<< doesFileExist path
+            liftIO $ Set.fromList . runGet get <$> LBS.readFile path
+      liveContracts <- foldMap fold <$> pooledMapConcurrently getClosure (Set.toList @DatumHash gcRoots)
+      storeFiles <- listDirectory contractStoreDirectory
+      freedSpace <-
+        sum . catMaybes <$> pooledForConcurrently storeFiles \file -> runMaybeT do
+          let path = contractStoreDirectory </> file
+          fileHash <- MaybeT $ pure $ either (const Nothing) Just $ decodeBase16 $ encodeUtf8 $ T.pack $ takeBaseName path
+          lastModified <- getModificationTime path
+          now <- liftIO getCurrentTime
+          guard $ now `diffUTCTime` lastModified >= minContractAge
+          guard $ not $ Set.member (DatumHash fileHash) liveContracts
+          fileSize <- liftIO $ getFileSize path
+          liftIO $ removeFile path
+          pure fileSize
+      when (availableSpace + freedSpace < requiredSpace) do
+        throwIO $ mkUserError "Unable to free enough space in contract store."
 
     getContract lock lockfile contractHash
       | contractHash == closeHash =
@@ -111,7 +156,7 @@ createContractStore ContractStoreOptions{..} = do
                 , closure = Set.singleton closeHash
                 }
       | otherwise = (if lock then withLockFile lockingParameters lockfile else id) $ runMaybeT do
-          let mkFilePath = (contractStoreDirectory </>) . (read (show contractHash) <.>)
+          let mkFilePath = (contractStoreDirectory </>) . (T.unpack (encodeBase16 $ unDatumHash contractHash) <.>)
           let contractFilePath = mkFilePath "contract"
           let adjacencyFilePath = mkFilePath "adjacency"
           let closureFilePath = mkFilePath "closure"
@@ -128,7 +173,7 @@ createContractStore ContractStoreOptions{..} = do
           let closure = Set.fromList $ runGet get closureBytes
           pure ContractWithAdjacency{..}
 
-    createContractStagingArea storeLockfile = do
+    createContractStagingArea gcRootsVar storeLockfile = do
       -- Use a UUID as the staging area directory name.
       uuid <- liftIO nextRandom
       let directory = contractStoreStagingDirectory </> "staging-area-" <> show uuid
@@ -161,7 +206,7 @@ createContractStore ContractStoreOptions{..} = do
           -- Returns a list of file-writing actions to save the contents of a
           -- contract record.
           flushContractRecord ContractRecord{..} =
-            let basePath = directory </> read (show hash)
+            let basePath = directory </> T.unpack (encodeBase16 $ unDatumHash hash)
                 writeIndex name hashes = do
                   let filePath = basePath <.> name
                   -- Do not compress the index files for speed.
@@ -221,6 +266,11 @@ createContractStore ContractStoreOptions{..} = do
                 files <- listDirectory directory
                 -- lock the store
                 withLockFile lockingParameters storeLockfile do
+                  -- concurrently get the size of all files from the staging area
+                  requiredSpace <- sum <$> pooledMapConcurrently (getFileSize . (directory </>)) files
+                  storeSize <- getStoreSize
+                  let availableSpace = maxStoreSize - storeSize
+                  when (availableSpace < requiredSpace) $ freeSpace availableSpace requiredSpace gcRootsVar
                   -- concurrently move all files from the staging area to the store
                   results <- pooledMapConcurrently moveStagingFile files
                   -- Extract the hashes which were moved.
@@ -238,7 +288,7 @@ createContractStore ContractStoreOptions{..} = do
                 if HashMap.member hash buffer
                   then pure True
                   else do
-                    let contractFileName = read (show hash) <.> ".contract"
+                    let contractFileName = T.unpack (encodeBase16 $ unDatumHash hash) <.> ".contract"
                     let stagingAreaPath = directory </> contractFileName
                     let storePath = contractStoreDirectory </> contractFileName
                     on (liftA2 (||)) doesFileExist stagingAreaPath storePath

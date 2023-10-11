@@ -39,6 +39,8 @@ spec:
           value: "3724"
         - name: MARLOWE_HEADER_SYNC_PORT
           value: "3725"
+        - name: MARLOWE_BULK_SYNC_PORT
+          value: "3730"
         - name: MARLOWE_QUERY_PORT
           value: "3726"
         - name: HTTP_PORT

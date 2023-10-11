@@ -8,6 +8,7 @@ module Language.Marlowe.Runtime.Integration.Contract where
 
 import Cardano.Api (ScriptData (ScriptDataBytes), hashScriptDataBytes, unsafeHashableScriptData)
 import Colog (HasLog (..), LogAction, Message)
+import Control.Applicative (Applicative (..))
 import Control.Arrow (Arrow (..), returnA)
 import Control.Concurrent.Component
 import Control.Monad (foldM, unless)
@@ -34,6 +35,8 @@ import Language.Marlowe.Object.Types (
   ObjectType (..),
   fromCoreContract,
  )
+import Language.Marlowe.Protocol.BulkSync.Client (serveMarloweBulkSyncClient)
+import Language.Marlowe.Protocol.BulkSync.Server
 import Language.Marlowe.Protocol.Load.Client (MarloweLoadClient, pushContract, serveMarloweLoadClient)
 import Language.Marlowe.Protocol.Transfer.Client (
   MarloweTransferClient (..),
@@ -41,7 +44,12 @@ import Language.Marlowe.Protocol.Transfer.Client (
   serveMarloweTransferClient,
  )
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScriptData)
-import Language.Marlowe.Runtime.ChainSync.Api (DatumHash (..), toDatum)
+import Language.Marlowe.Runtime.ChainSync.Api (
+  ChainSyncQuery (..),
+  DatumHash (..),
+  WithGenesis (..),
+  toDatum,
+ )
 import Language.Marlowe.Runtime.Client (
   exportContract,
   exportIncremental,
@@ -58,6 +66,7 @@ import Network.Protocol.Connection
 import Network.Protocol.Driver.Trace (HasSpanContext (..))
 import Network.Protocol.Peer.Trace (defaultSpanContext)
 import Network.Protocol.Query.Client (QueryClient, serveQueryClient)
+import Network.Protocol.Query.Server (respond)
 import Network.TypedProtocol (unsafeIntToNat)
 import Pipes (each, yield, (>->))
 import qualified Pipes.Internal as PI
@@ -72,8 +81,8 @@ import Test.QuickCheck (Gen, chooseInt, counterexample, forAll)
 import UnliftIO (
   Concurrently (..),
   atomically,
-  concurrently,
   liftIO,
+  race,
   throwIO,
  )
 
@@ -357,6 +366,8 @@ runContractTest test = runResourceT do
         { contractStoreDirectory = resolveWorkspacePath workspace "contract-store"
         , contractStoreStagingDirectory = resolveWorkspacePath workspace "staging-areas"
         , lockingMicrosecondsBetweenRetries = 100_000
+        , minContractAge = 60 -- In seconds
+        , maxStoreSize = 4 * 1024 * 1024 * 1024 -- 4 GB
         }
   let testComponent = proc contractDeps -> do
         Contract.MarloweContract{..} <- Contract.contract -< contractDeps
@@ -375,9 +386,27 @@ runContractTest test = runResourceT do
         Contract.ContractDependencies
           { batchSize = unsafeIntToNat 10
           , contractStore
+          , marloweBulkSyncConnector = directConnector serveMarloweBulkSyncClient $ ServerSource do
+              let idle =
+                    ServerStIdle
+                      { recvMsgRequestNext = \_ -> pure $ SendMsgWait poll
+                      , recvMsgIntersect = \_ -> pure $ SendMsgIntersectNotFound Genesis idle
+                      , recvMsgDone = pure ()
+                      }
+                  poll =
+                    ServerStPoll
+                      { recvMsgPoll = pure $ SendMsgWait poll
+                      , recvMsgCancel = pure idle
+                      }
+              pure $ MarloweBulkSyncServer $ pure idle
+          , chainSyncQueryConnector = directConnector serveQueryClient $ ServerSource $ pure $ respond (liftA2 (,)) \case
+              GetSecurityParameter -> pure 1
+              req -> fail $ "Request not mocked: " <> show req
           }
-  (a, _) <- runNoopEventT $ flip runReaderT testHandle $ concurrently test runTestComponent
-  pure a
+  result <- runNoopEventT $ flip runReaderT testHandle $ race test runTestComponent
+  case result of
+    Left a -> pure a
+    Right _ -> fail "contract component finished before test could finish"
 
 type TestM = ReaderT TestHandle (NoopEventT TestRef AnySelector (ResourceT IO))
 

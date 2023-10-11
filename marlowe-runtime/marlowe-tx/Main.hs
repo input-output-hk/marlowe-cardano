@@ -66,7 +66,7 @@ main = do
   where
     instrumentationLibrary =
       InstrumentationLibrary
-        { libraryName = "marlowe-proxy"
+        { libraryName = "marlowe-tx"
         , libraryVersion = T.pack $ showVersion version
         }
 

@@ -48,6 +48,7 @@ createContractStoreInMemory = do
           merkleizeInputsDefault $
             (fmap . fmap) (\ContractWithAdjacency{..} -> contract)
               . getContract store
+      , setGCRoots = const $ pure ()
       }
   where
     createContractStagingAreaInMemory store = do

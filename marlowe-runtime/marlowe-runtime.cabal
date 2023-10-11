@@ -380,7 +380,9 @@ library contract
   hs-source-dirs:  contract
   visibility:      public
   exposed-modules:
+    Data.Marlowe.LiveContracts
     Language.Marlowe.Runtime.Contract
+    Language.Marlowe.Runtime.Contract.GarbageCollector
     Language.Marlowe.Runtime.Contract.LoadServer
     Language.Marlowe.Runtime.Contract.QueryServer
     Language.Marlowe.Runtime.Contract.Store
@@ -392,8 +394,10 @@ library contract
     , aeson >=2 && <3
     , async-components ==0.1.1.0
     , base >=4.9 && <5
+    , base16 ^>=0.3.2
     , binary ^>=0.8.8
     , bytestring >=0.10.12 && <0.12
+    , co-log >=0.5.0.0 && <0.6.0.0
     , containers ^>=0.6.5
     , dlist ^>=1.0
     , eventuo11y >=0.9 && <0.11
@@ -407,10 +411,11 @@ library contract
     , marlowe-chain-sync ==0.0.5
     , marlowe-object ==0.2.0.0
     , marlowe-protocols ==0.2.1.0
-    , marlowe-runtime:{marlowe-runtime, contract-api} ==0.0.5
+    , marlowe-runtime:{marlowe-runtime, contract-api, history-api, sync-api} ==0.0.5
     , plutus-ledger-api ^>=1.5
     , resourcet >=1.3 && <2
     , text ^>=1.2
+    , time >=1.9 && <2
     , transformers ^>=0.5.6
     , typed-protocols ^>=0.1
     , unliftio ^>=0.2.1
@@ -613,7 +618,7 @@ library runtime
     , eventuo11y-extras ==0.1.1.0
     , marlowe-chain-sync:{marlowe-chain-sync, chain-indexer, libchainsync} ==0.0.5
     , marlowe-protocols ==0.2.1.0
-    , marlowe-runtime:{marlowe-runtime, contract, indexer, proxy, proxy-api, sync, tx} ==0.0.5
+    , marlowe-runtime:{marlowe-runtime, contract, indexer, proxy, proxy-api, sync, sync-api, tx} ==0.0.5
     , nonempty-containers ^>=0.3.4
     , random ^>=1.2.1
     , time >=1.9 && <2
@@ -739,11 +744,13 @@ executable marlowe-contract
     , eventuo11y-extras ==0.1.1.0
     , eventuo11y-otel ^>=0.1
     , hs-opentelemetry-sdk ==0.0.3.4
+    , marlowe-chain-sync ==0.0.5
     , marlowe-protocols ==0.2.1.0
-    , marlowe-runtime:{contract, contract-api} ==0.0.5
+    , marlowe-runtime:{config, contract, contract-api, sync-api} ==0.0.5
     , network >=3.1 && <4
     , optparse-applicative ^>=0.17
     , text ^>=1.2
+    , time
     , typed-protocols ^>=0.1
 
   ghc-options:     -threaded
@@ -804,6 +811,7 @@ executable marlowe-runtime
     , optparse-applicative ^>=0.17
     , postgresql-libpq ^>=0.9
     , text ^>=1.2
+    , time
     , typed-protocols ^>=0.1
     , unliftio ^>=0.2.1
 
@@ -815,6 +823,7 @@ test-suite marlowe-runtime-test
   type:               exitcode-stdio-1.0
   main-is:            Spec.hs
   other-modules:
+    Data.Marlowe.LiveContractsSpec
     Language.Marlowe.Protocol.BulkSyncSpec
     Language.Marlowe.Protocol.HeaderSyncSpec
     Language.Marlowe.Protocol.LoadSpec
@@ -850,7 +859,7 @@ test-suite marlowe-runtime-test
     , marlowe-chain-sync:{marlowe-chain-sync, gen, plutus-compat} ==0.0.5
     , marlowe-object:gen
     , marlowe-protocols ==0.2.1.0
-    , marlowe-runtime:{marlowe-runtime, contract-api, discovery-api, gen, history-api, sync, sync-api, tx, tx-api} ==0.0.5
+    , marlowe-runtime:{marlowe-runtime, contract, contract-api, discovery-api, gen, history-api, sync, sync-api, tx, tx-api} ==0.0.5
     , marlowe-test ==0.2.0.0
     , network-uri >=2.6 && <3
     , ouroboros-consensus ^>=0.7

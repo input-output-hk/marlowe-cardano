@@ -56,9 +56,12 @@ jobs:
             ~/integration-tests.log
             ~/integration-tests.status
       - if: ${{ steps.cache-results.outputs.cache-hit != 'true' }}
+        name: Build tests
+        run: nix build .#integration-tests --show-trace
+      - if: ${{ steps.cache-results.outputs.cache-hit != 'true' }}
         name: Run tests
         run: |
-          nix run .#integration-tests --show-trace -- --strict > ~/integration-tests.log
+          result/bin/marlowe-integration-tests --strict > ~/integration-tests.log
           echo $? > ~/integration-tests.status
           exit $?
         env:

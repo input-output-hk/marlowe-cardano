@@ -12,6 +12,8 @@ Pre-submit checklist:
     - [ ] Key commits have useful messages
     - [ ] Relevant tickets are mentioned in commit messages
     - [ ] Formatting, PNG optimization, etc. are updated
+    - [ ] Operables are updated with changes to executable command line options.
+    - [ ] Deploy charts updated with changes to operables.
 - PR
     - [ ] Self-reviewed the diff
     - [ ] Useful pull request description
