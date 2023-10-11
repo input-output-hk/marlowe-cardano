@@ -298,27 +298,34 @@ worstMaximumValue =
 
 -- | Find a representative value with worst-case size.
 worstValue
-  :: Contract
+  :: Maybe State
+  -- ^ The initial state.
+  -> Contract
   -- ^ The contract.
   -> Continuations
   -- ^ The merkleized continuations.
   -> P.Value
   -- ^ The value.
-worstValue contract continuations =
+worstValue state contract continuations =
   let tokens = extractAllWithContinuations contract continuations
       representativeValue (Token currency name) = V.singleton currency name big
-   in V.singleton adaSymbol adaToken big
-        <> foldMap representativeValue tokens
+   in foldMap representativeValue tokens
+        <> maybe
+          (V.singleton adaSymbol adaToken big)
+          (foldMap (\((_, Token cs tn), i) -> V.singleton cs tn i) . AM.toList . accounts)
+          state
 
 -- | Find a representative transaction output with worst-case size.
 worstTxOut
-  :: Contract
+  :: Maybe State
+  -- ^ The initial state.
+  -> Contract
   -- ^ The contract.
   -> Continuations
   -- ^ The merkleized continuations.
   -> TxOut
   -- ^ The transaction output.
-worstTxOut contract continuations =
+worstTxOut state contract continuations =
   TxOut
     { txOutAddress =
         P.Address
@@ -326,7 +333,7 @@ worstTxOut contract continuations =
           , addressStakingCredential =
               Just . StakingHash $ PubKeyCredential "99999999999999999999999999999999999999999999999999999999"
           }
-    , txOutValue = worstValue contract continuations
+    , txOutValue = worstValue state contract continuations
     , txOutDatum = OutputDatumHash "5555555555555555555555555555555555555555555555555555555555555555"
     , txOutReferenceScript = Nothing
     }

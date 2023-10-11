@@ -122,7 +122,7 @@ createSpec = Hspec.describe "buildCreateConstraints" do
   Hspec.QuickCheck.prop "sends the minAda deposit to the marlowe output" \(SomeCreateArgs args) ->
     let result = extractMarloweAssets <$> runBuildCreateConstraints args
      in case version args of
-          MarloweV1 -> result === (Right $ Just $ Chain.Assets (minAda args) mempty)
+          MarloweV1 -> result === (Right $ Just $ Chain.Assets (max 2_000_000 $ minAda args) mempty)
           :: Property
   Hspec.QuickCheck.prop "sends minted role tokens" \(SomeCreateArgs args) ->
     case roleTokensConfig args of
@@ -212,6 +212,7 @@ runBuildCreateConstraints CreateArgs{..} =
           roleTokensConfig
           metadata
           minAda
+          (\(Chain.Assets ada tokens) -> Chain.Assets (max 2_000_000 ada) tokens)
           contract
       )
 
