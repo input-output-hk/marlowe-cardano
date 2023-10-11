@@ -9,6 +9,7 @@ module Network.Protocol.Driver where
 import qualified Colog as C
 import Colog.Monad (WithLog)
 import Control.Concurrent.Component
+import Control.Monad (void)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Resource (runResourceT)
@@ -16,6 +17,7 @@ import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Proxy (Proxy (Proxy))
 import Data.Text (Text)
+import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TLE
@@ -43,13 +45,14 @@ import Network.TypedProtocol (Message, PeerHasAgency, PeerRole (..), SomeMessage
 import Network.TypedProtocol.Codec (Codec (..), DecodeStep (..))
 import Network.TypedProtocol.Driver (Driver (..))
 import UnliftIO (
-  Exception (displayException),
+  Exception (..),
   MonadIO,
   MonadUnliftIO,
   SomeException (..),
   catch,
   finally,
   throwIO,
+  try,
   withRunInIO,
  )
 
@@ -58,7 +61,11 @@ newtype PeerCrashedException = PeerCrashedException
   }
   deriving (Show)
 
-instance Exception PeerCrashedException
+instance Exception PeerCrashedException where
+  displayException (PeerCrashedException message) =
+    unlines $
+      "Remote peer crashed. Upstream error:"
+        : (T.unpack . ("  " <>) <$> T.lines message)
 
 mkDriver
   :: forall ps m
@@ -131,7 +138,7 @@ tcpServer name = component_ (name <> "-tcp-server") \TcpServerDependencies{..} -
       catch
         (fst <$> runPeerWithDriver driver peer (startDState driver))
         ( \(SomeException ex) -> do
-            send channel $ Frame ErrorStatus $ TLE.encodeUtf8 $ TL.pack $ displayException ex
+            void $ try @_ @SomeException $ send channel $ Frame ErrorStatus $ TLE.encodeUtf8 $ TL.pack $ displayException ex
             throwIO ex
         )
 
@@ -161,7 +168,7 @@ tcpClient host port toPeer = Connector $ liftIO $ do
           catch
             (fst <$> runPeerWithDriver driver peer (startDState driver) `finally` liftIO (close socket))
             ( \(SomeException ex) -> do
-                send channel $ Frame ErrorStatus $ TLE.encodeUtf8 $ TL.pack $ displayException ex
+                void $ try @_ @SomeException $ send channel $ Frame ErrorStatus $ TLE.encodeUtf8 $ TL.pack $ displayException ex
                 throwIO ex
             )
       }

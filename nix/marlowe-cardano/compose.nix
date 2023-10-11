@@ -69,7 +69,7 @@ let
 
   run-local-service = project: version: prog: writeShellScriptBin "run-${prog}" ''
     set -e
-    export PATH="$PATH:${l.makeBinPath [ z3 ]}"
+    export PATH="$PATH:${l.makeBinPath [ z3 marlowe-plutus.packages.marlowe-minting-validator ]}"
     PROG=${l.escapeShellArg prog}
     PKG=${l.escapeShellArg project}-${l.escapeShellArg version}
     cd /src
@@ -80,7 +80,7 @@ let
   '';
 
   # We assume that all the components are versioned together.
-  marloweRuntimeVersion = "0.0.4";
+  marloweRuntimeVersion = "0.0.5";
   symlinks = runCommand "symlinks" { } ''
     mkdir -p $out
     ln -sv ${run-sqitch}/bin/run-sqitch $out
@@ -221,7 +221,7 @@ let
 
   sync-service = dev-service {
     ports = [ 3724 3725 3726 ];
-    depends_on = [ "postgres" ];
+    depends_on = [ "postgres" "marlowe-chain-sync" ];
     command = [
       "/exec/run-marlowe-sync"
       "--database-uri"
@@ -236,12 +236,17 @@ let
 
   contract-service = dev-service {
     ports = [ 3727 3728 ];
+    depends_on = [ "marlowe-chain-sync" "marlowe-sync" ];
     command = [
       "/exec/run-marlowe-contract"
       "--store-dir"
       "/store"
       "--host"
       "0.0.0.0"
+      "--chain-sync-host"
+      "marlowe-chain-sync"
+      "--marlowe-sync-host"
+      "marlowe-sync"
     ];
     volumes = [
       "marlowe-contract-store:/store"
@@ -260,6 +265,8 @@ let
       "marlowe-contract"
       "--host"
       "0.0.0.0"
+      "--minting-policy-cmd"
+      "marlowe-minting-validator"
     ];
     environment = [ "OTEL_SERVICE_NAME=marlowe-tx" ];
   };
@@ -316,7 +323,7 @@ let
 
   web-service = dev-service {
     ports = [ 8080 ];
-    depends_on = [ "marlowe-runtime" ];
+    depends_on = [ "marlowe-proxy" ];
     command = [
       "/exec/run-marlowe-web-server"
       "--marlowe-runtime-host"

@@ -12,7 +12,7 @@ module Network.Protocol.Driver.Trace where
 import Colog (WithLog)
 import qualified Colog as C
 import Control.Concurrent.Component
-import Control.Monad (join, replicateM)
+import Control.Monad (join, replicateM, void)
 import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Class (lift)
@@ -79,7 +79,7 @@ import Observe.Event.Render.OpenTelemetry
 import OpenTelemetry.Trace.Core
 import OpenTelemetry.Trace.Id (SpanId, TraceId, bytesToSpanId, bytesToTraceId, spanIdBytes, traceIdBytes)
 import OpenTelemetry.Trace.TraceState (Key (..), TraceState, Value (..), empty, insert, toList)
-import UnliftIO (Exception (..), MonadUnliftIO, mask, throwIO, try, withRunInIO)
+import UnliftIO (Exception (..), MonadUnliftIO, SomeException, mask, throwIO, try, withRunInIO)
 
 data DriverTraced ps dState r m = DriverTraced
   { sendMessageTraced
@@ -258,7 +258,7 @@ tcpServerTraced name inj = component_ (name <> "-tcp-server") \TcpServerDependen
             case result of
               Left ex -> do
                 finalize ev' $ Just ex
-                send channel $ Frame ErrorStatus $ TLE.encodeUtf8 $ TL.pack $ displayException ex
+                void $ try @_ @SomeException $ send channel $ Frame ErrorStatus $ TLE.encodeUtf8 $ TL.pack $ displayException ex
                 throwIO ex
               Right a -> pure a
 
@@ -310,7 +310,7 @@ tcpClientTraced inj host port toPeer = Connector $
                 case result of
                   Left ex -> do
                     finalize ev' $ Just ex
-                    send channel $ Frame ErrorStatus $ TLE.encodeUtf8 $ TL.pack $ displayException ex
+                    void $ try @_ @SomeException $ send channel $ Frame ErrorStatus $ TLE.encodeUtf8 $ TL.pack $ displayException ex
                     throwIO ex
                   Right a -> pure a
         }
