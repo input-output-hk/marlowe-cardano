@@ -8,6 +8,7 @@ module Language.Marlowe.Runtime.Transaction.Safety (
   checkTransactions,
   makeSystemHistory,
   minAdaUpperBound,
+  mkAdjustMinimumUtxo,
   noContinuations,
 ) where
 
@@ -27,7 +28,7 @@ import Language.Marlowe.Analysis.Safety.Ledger (
   checkNetworks,
   checkRoleNames,
   checkTokens,
-  worstMinimumUtxo',
+  worstValue,
  )
 import Language.Marlowe.Analysis.Safety.Transaction (findTransactions)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError (..), Transaction (..))
@@ -49,7 +50,7 @@ import Language.Marlowe.Runtime.Transaction.Constraints (
   solveConstraints,
  )
 
-import qualified Cardano.Api as Cardano (Lovelace, NetworkId (Mainnet))
+import qualified Cardano.Api as Cardano
 import qualified Cardano.Api.Shelley as C
 import qualified Cardano.Api.Shelley as Shelley (
   CardanoMode,
@@ -73,6 +74,7 @@ import qualified Language.Marlowe.Core.V1.Semantics as V1 (
  )
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1 (Party (Address), State (..), Token (..))
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1 (deserialiseAddress)
+import qualified Language.Marlowe.Runtime.Cardano.Api as Chain (assetsToCardanoValue)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain (
   Address (..),
   AssetId (..),
@@ -87,6 +89,7 @@ import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain (
   TxOutRef,
   UTxOs (..),
  )
+import qualified Language.Marlowe.Runtime.Plutus.V2.Api as Chain (fromPlutusValue)
 import qualified Ouroboros.Consensus.BlockchainTime as Ouroboros (RelativeTime (..), mkSlotLength, toRelativeTime)
 import qualified Ouroboros.Consensus.HardFork.History as Ouroboros (
   Bound (..),
@@ -125,17 +128,86 @@ remapContinuations
   -> M.Map Plutus.DatumHash contract
 remapContinuations = M.mapKeys $ Plutus.DatumHash . Plutus.toBuiltin . Chain.unDatumHash
 
--- | Compute a worst-case bound on the minimum UTxO value for a contract, assuming that the contract does not pay from the account in the initial state and that account only contains lovelace.
+-- | Compute a worst-case bound on the minimum UTxO value for a contract, assuming that the contract does not pay
+--   from the account in the initial state and that account only contains lovelace. Assume that a datum hash is
+--   present in the TxOut and that the address contains a stake credential.
 minAdaUpperBound
-  :: Shelley.ProtocolParameters
+  :: forall era v
+   . C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  -> Shelley.ProtocolParameters
   -> MarloweVersion v
+  -> V1.State
   -> Contract v
   -> Continuations v
   -> Maybe Cardano.Lovelace
-minAdaUpperBound Shelley.ProtocolParameters{protocolParamUTxOCostPerByte} MarloweV1 contract continuations =
-  fromInteger
-    . (\utxoCostPerByte -> worstMinimumUtxo' (toInteger utxoCostPerByte) contract $ remapContinuations continuations)
-    <$> protocolParamUTxOCostPerByte
+minAdaUpperBound era pps MarloweV1 state contract continuations =
+  minAdaBound era pps MarloweV1
+    . Chain.fromPlutusValue
+    . worstValue (Just state) contract
+    $ remapContinuations continuations
+
+-- | Adjust the ada in a TxOut upwards, if needed to satisfy the minimum UTxO ledger rule. Assume that a datum hash is
+-- present in the TxOut and that the address contains a stake credential.
+mkAdjustMinimumUtxo
+  :: forall era v
+   . C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  -> Shelley.ProtocolParameters
+  -> MarloweVersion v
+  -> Chain.Assets
+  -> Chain.Assets
+mkAdjustMinimumUtxo era pps MarloweV1 assets@Chain.Assets{ada, tokens} =
+  let minLovelace =
+        maybe 30_000_000 toInteger $ -- Safe for all UTxOs.
+          minAdaBound era pps MarloweV1 assets
+   in if minLovelace > toInteger ada
+        then Chain.Assets (fromInteger minLovelace) tokens
+        else assets
+
+-- | Compute a worst-case bound on the minimum TxOut value for assets. Assume that a datum hash is present in the
+--   TxOut and that the address contains a stake credential.
+minAdaBound
+  :: forall era v
+   . C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  -> Shelley.ProtocolParameters
+  -> MarloweVersion v
+  -> Chain.Assets
+  -> Maybe Cardano.Lovelace
+minAdaBound era pps MarloweV1 assets =
+  do
+    let -- Ugh, the era handling can be done much better, but this is how it's done elsewhere in the codebase.
+        multiAssetSupported :: C.MultiAssetSupportedInEra era
+        multiAssetSupported = case era of
+          C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.MultiAssetInBabbageEra
+          C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.MultiAssetInConwayEra
+        scriptDataSupported :: C.ScriptDataSupportedInEra era
+        scriptDataSupported = case era of
+          C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.ScriptDataInBabbageEra
+          C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.ScriptDataInConwayEra
+        shelleyBasedEra = case era of
+          C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.ShelleyBasedEraBabbage
+          C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.ShelleyBasedEraConway
+        cardanoEra = case era of
+          C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.BabbageEra
+          C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.ConwayEra
+    address <-
+      case era of
+        C.ReferenceTxInsScriptsInlineDatumsInBabbageEra ->
+          C.deserialiseAddress
+            (C.AsAddressInEra C.AsBabbageEra)
+            "addr1x8ur42seq20ytdzm33fhjf3c2pxskxf3gzxq706qk7p5muhc824pjq57gk69hrzn0ynrs5zdpvvnzsyvpul5pdurfheq28w2dx"
+        C.ReferenceTxInsScriptsInlineDatumsInConwayEra ->
+          C.deserialiseAddress
+            (C.AsAddressInEra C.AsConwayEra)
+            "addr1x8ur42seq20ytdzm33fhjf3c2pxskxf3gzxq706qk7p5muhc824pjq57gk69hrzn0ynrs5zdpvvnzsyvpul5pdurfheq28w2dx"
+    value <- Chain.assetsToCardanoValue assets
+    let txOut =
+          Cardano.TxOut
+            address
+            (Cardano.TxOutValue multiAssetSupported value)
+            (Cardano.TxOutDatumHash scriptDataSupported "45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0")
+            C.ReferenceScriptNone
+    bpps <- either (const Nothing) Just $ C.bundleProtocolParams cardanoEra pps
+    pure $ Cardano.calculateMinimumUTxO shelleyBasedEra txOut bpps
 
 -- | Check a contract for design errors and ledger violations.
 checkContract

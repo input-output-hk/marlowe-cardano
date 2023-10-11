@@ -111,7 +111,16 @@ spec =
                       <$> bundleProtocolParams BabbageEra protocolTestnet
                     :: Cardano.Lovelace
                 contract = foldr payToken V1.Close tokens -- The tokens just need to appear somewhere in the contract.
-                actual = fromJust $ minAdaUpperBound protocolTestnet version contract continuations :: Cardano.Lovelace
+                actual =
+                  fromJust $
+                    minAdaUpperBound
+                      ReferenceTxInsScriptsInlineDatumsInBabbageEra
+                      protocolTestnet
+                      version
+                      (V1.emptyState 0)
+                      contract
+                      continuations
+                    :: Cardano.Lovelace
             counterexample ("Expected minUTxO = " <> show expected) $
               counterexample ("Actual minUTxO = " <> show actual) $
                 actual >= expected
@@ -290,7 +299,15 @@ spec =
           overspent _ = False
       for_ referenceContracts \(name, contract) -> it ("Passes for reference contract " <> name) do
         (policy, address) <- generate arbitrary
-        let minAda = maybe 0 toInteger $ minAdaUpperBound protocolTestnet version contract continuations
+        let minAda =
+              maybe 1_500_000 toInteger $
+                minAdaUpperBound
+                  ReferenceTxInsScriptsInlineDatumsInBabbageEra
+                  protocolTestnet
+                  version
+                  (V1.emptyState 0)
+                  contract
+                  mempty
         actual <-
           checkTransactions
             protocolTestnet

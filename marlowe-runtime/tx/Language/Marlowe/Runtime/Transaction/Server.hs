@@ -120,6 +120,7 @@ import Language.Marlowe.Runtime.Transaction.BuildConstraints (
   buildApplyInputsConstraints,
   buildCreateConstraints,
   buildWithdrawConstraints,
+  initialMarloweState,
  )
 import Language.Marlowe.Runtime.Transaction.Constraints (MarloweContext (..), SolveConstraints, TxConstraints)
 import qualified Language.Marlowe.Runtime.Transaction.Constraints as Constraints
@@ -136,6 +137,7 @@ import Language.Marlowe.Runtime.Transaction.Safety (
   checkContract,
   checkTransactions,
   minAdaUpperBound,
+  mkAdjustMinimumUtxo,
   noContinuations,
  )
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob (..), SubmitJobStatus (..))
@@ -312,8 +314,18 @@ execCreate
   -> m (ServerStCmd MarloweTxCommand Void CreateError (ContractCreated v) m ())
 execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts solveConstraints protocolParameters loadWalletContext loadHelpersContext networkId mStakeCredential version addresses roleTokens metadata optMinAda contract analysisTimeout = execExceptT do
   referenceInputsSupported <- referenceInputsSupportedInEra (CreateEraUnsupported $ AnyCardanoEra era) era
+  let adjustMinUtxo = mkAdjustMinimumUtxo referenceInputsSupported protocolParameters version
   walletContext <- lift $ loadWalletContext addresses
   helpersContext <- withExceptT CreateLoadHelpersContextFailed $ ExceptT $ loadHelpersContext version Nothing
+  (_, dummyState) <-
+    except $
+      initialMarloweState
+        adjustMinUtxo
+        version
+        roleTokens
+        "00000000000000000000000000000000000000000000000000000000"
+        (fromMaybe 0 optMinAda)
+        walletContext
   (contract', continuations) <- case contract of
     Right hash -> case version of
       MarloweV1 -> noteT CreateContractNotFound do
@@ -325,7 +337,8 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
   computedMinAdaDeposit <-
     except $
       note ProtocolParamNoUTxOCostPerByte $
-        fromCardanoLovelace <$> minAdaUpperBound protocolParameters version contract' continuations
+        fromCardanoLovelace
+          <$> minAdaUpperBound referenceInputsSupported protocolParameters version dummyState contract' continuations
   let minAda = fromMaybe computedMinAdaDeposit optMinAda
   unless (minAda >= computedMinAdaDeposit) $ throwE $ InsufficientMinAdaDeposit computedMinAdaDeposit
   ((datum, assets, rolesCurrency), constraints) <-
@@ -338,6 +351,7 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
         roleTokens
         metadata
         minAda
+        adjustMinUtxo
         contract'
   let scripts@MarloweScripts{..} = getCurrentScripts version
       stakeReference = maybe NoStakeAddress StakeAddressByValue mCardanoStakeCredential
