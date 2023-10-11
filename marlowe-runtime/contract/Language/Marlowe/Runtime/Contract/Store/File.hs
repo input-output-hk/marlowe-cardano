@@ -118,7 +118,7 @@ createContractStore ContractStoreOptions{..} = do
       -- get the file names from the store
       storeFiles <- listDirectory contractStoreDirectory
       -- concurrently get the size of all files from the store
-      sum <$> pooledMapConcurrently getFileSize storeFiles
+      sum <$> pooledMapConcurrently (getFileSize . (contractStoreDirectory </>)) storeFiles
 
     -- Try to free space by deleting dead contract files.
     freeSpace availableSpace requiredSpace gcRootsVar = do
@@ -133,13 +133,14 @@ createContractStore ContractStoreOptions{..} = do
       storeFiles <- listDirectory contractStoreDirectory
       freedSpace <-
         sum . catMaybes <$> pooledForConcurrently storeFiles \file -> runMaybeT do
-          fileHash <- MaybeT $ pure $ either (const Nothing) Just $ decodeBase16 $ encodeUtf8 $ T.pack $ takeBaseName file
-          lastModified <- getModificationTime file
+          let path = contractStoreDirectory </> file
+          fileHash <- MaybeT $ pure $ either (const Nothing) Just $ decodeBase16 $ encodeUtf8 $ T.pack $ takeBaseName path
+          lastModified <- getModificationTime path
           now <- liftIO getCurrentTime
           guard $ now `diffUTCTime` lastModified >= minContractAge
           guard $ not $ Set.member (DatumHash fileHash) liveContracts
-          fileSize <- liftIO $ getFileSize file
-          liftIO $ removeFile file
+          fileSize <- liftIO $ getFileSize path
+          liftIO $ removeFile path
           pure fileSize
       when (availableSpace + freedSpace < requiredSpace) do
         throwIO $ mkUserError "Unable to free enough space in contract store."
@@ -266,7 +267,7 @@ createContractStore ContractStoreOptions{..} = do
                 -- lock the store
                 withLockFile lockingParameters storeLockfile do
                   -- concurrently get the size of all files from the staging area
-                  requiredSpace <- sum <$> pooledMapConcurrently getFileSize files
+                  requiredSpace <- sum <$> pooledMapConcurrently (getFileSize . (directory </>)) files
                   storeSize <- getStoreSize
                   let availableSpace = maxStoreSize - storeSize
                   when (availableSpace < requiredSpace) $ freeSpace availableSpace requiredSpace gcRootsVar
