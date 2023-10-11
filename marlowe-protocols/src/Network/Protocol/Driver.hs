@@ -13,8 +13,13 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Resource (runResourceT)
 import Data.ByteString.Lazy (ByteString)
+import qualified Data.ByteString.Lazy as LBS
 import Data.Proxy (Proxy (Proxy))
-import Network.Channel (Channel (..), socketAsChannel)
+import Data.Text (Text)
+import Data.Text.Encoding (decodeUtf8)
+import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Lazy.Encoding as TLE
+import Network.Channel (Channel (..), Frame (..), FrameStatus (..), socketAsChannel)
 import Network.Protocol.Codec (BinaryMessage, DeserializeError, binaryCodec)
 import Network.Protocol.Connection (Connection (..), Connector (..), ServerSource (..), ToPeer)
 import Network.Protocol.Handshake.Client (handshakeClientPeer, simpleHandshakeClient)
@@ -37,12 +42,28 @@ import Network.Socket (
 import Network.TypedProtocol (Message, PeerHasAgency, PeerRole (..), SomeMessage (..), runPeerWithDriver)
 import Network.TypedProtocol.Codec (Codec (..), DecodeStep (..))
 import Network.TypedProtocol.Driver (Driver (..))
-import UnliftIO (MonadIO, MonadUnliftIO, finally, throwIO, withRunInIO)
+import UnliftIO (
+  Exception (displayException),
+  MonadIO,
+  MonadUnliftIO,
+  SomeException (..),
+  catch,
+  finally,
+  throwIO,
+  withRunInIO,
+ )
+
+newtype PeerCrashedException = PeerCrashedException
+  { message :: Text
+  }
+  deriving (Show)
+
+instance Exception PeerCrashedException
 
 mkDriver
   :: forall ps m
    . (MonadIO m, BinaryMessage ps)
-  => Channel m ByteString
+  => Channel m Frame
   -> Driver ps (Maybe ByteString) m
 mkDriver Channel{..} = Driver{..}
   where
@@ -52,7 +73,7 @@ mkDriver Channel{..} = Driver{..}
        . PeerHasAgency pr st
       -> Message ps st st'
       -> m ()
-    sendMessage tok = send . encode tok
+    sendMessage tok = send . Frame OkStatus . encode tok
 
     recvMessage
       :: forall (pr :: PeerRole) (st :: ps)
@@ -67,7 +88,12 @@ mkDriver Channel{..} = Driver{..}
       -> m (a, Maybe ByteString)
     decodeChannel _ (DecodeDone a trailing) = pure (a, trailing)
     decodeChannel _ (DecodeFail failure) = throwIO failure
-    decodeChannel Nothing (DecodePartial next) = recv >>= next >>= decodeChannel Nothing
+    decodeChannel Nothing (DecodePartial next) = do
+      bytes <-
+        recv >>= traverse \Frame{..} -> case frameStatus of
+          OkStatus -> pure frameContents
+          ErrorStatus -> throwIO $ PeerCrashedException $ decodeUtf8 $ LBS.toStrict frameContents
+      next bytes >>= decodeChannel Nothing
     decodeChannel trailing (DecodePartial next) = next trailing >>= decodeChannel Nothing
 
     startDState :: Maybe ByteString
@@ -97,10 +123,17 @@ tcpServer
 tcpServer name = component_ (name <> "-tcp-server") \TcpServerDependencies{..} ->
   withRunInIO \runInIO -> runTCPServer (Just host) (show port) $ runComponent_ $ hoistComponent runInIO $ component_ (name <> "-tcp-worker") \socket -> runResourceT do
     server <- getServer serverSource
-    let driver = mkDriver $ socketAsChannel socket
+    let channel = socketAsChannel socket
+    let driver = mkDriver channel
     let handshakeServer = simpleHandshakeServer (signature $ Proxy @ps) server
     let peer = peerTracedToPeer $ handshakeServerPeer toPeer handshakeServer
-    lift $ fst <$> runPeerWithDriver driver peer (startDState driver)
+    lift $
+      catch
+        (fst <$> runPeerWithDriver driver peer (startDState driver))
+        ( \(SomeException ex) -> do
+            send channel $ Frame ErrorStatus $ TLE.encodeUtf8 $ TL.pack $ displayException ex
+            throwIO ex
+        )
 
 tcpClient
   :: forall client ps st m
@@ -121,8 +154,14 @@ tcpClient host port toPeer = Connector $ liftIO $ do
   pure
     Connection
       { runConnection = \client -> do
-          let driver = mkDriver $ socketAsChannel socket
+          let channel = socketAsChannel socket
+          let driver = mkDriver channel
           let handshakeClient = simpleHandshakeClient (signature $ Proxy @ps) client
           let peer = peerTracedToPeer $ handshakeClientPeer toPeer handshakeClient
-          fst <$> runPeerWithDriver driver peer (startDState driver) `finally` liftIO (close socket)
+          catch
+            (fst <$> runPeerWithDriver driver peer (startDState driver) `finally` liftIO (close socket))
+            ( \(SomeException ex) -> do
+                send channel $ Frame ErrorStatus $ TLE.encodeUtf8 $ TL.pack $ displayException ex
+                throwIO ex
+            )
       }

@@ -31,7 +31,9 @@ import Data.Proxy
 import Data.String (fromString)
 import Data.Text (Text)
 import qualified Data.Text as T
+import Data.Text.Encoding (decodeUtf8)
 import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Lazy.Encoding as TLE
 import Data.Void (Void)
 import Network.Channel hiding (close)
 import Network.Protocol.Codec (BinaryMessage, DeserializeError, decodeGet, getMessage, putMessage)
@@ -44,7 +46,7 @@ import Network.Protocol.Connection (
   ServerSource (..),
   ToPeer,
  )
-import Network.Protocol.Driver (TcpServerDependencies (..))
+import Network.Protocol.Driver (PeerCrashedException (..), TcpServerDependencies (..))
 import Network.Protocol.Handshake.Client (handshakeClientPeer, simpleHandshakeClient)
 import Network.Protocol.Handshake.Server (handshakeServerPeer, simpleHandshakeServer)
 import Network.Protocol.Handshake.Types (Handshake, HasSignature, signature)
@@ -77,7 +79,7 @@ import Observe.Event.Render.OpenTelemetry
 import OpenTelemetry.Trace.Core
 import OpenTelemetry.Trace.Id (SpanId, TraceId, bytesToSpanId, bytesToTraceId, spanIdBytes, traceIdBytes)
 import OpenTelemetry.Trace.TraceState (Key (..), TraceState, Value (..), empty, insert, toList)
-import UnliftIO (MonadUnliftIO, mask, throwIO, try, withRunInIO)
+import UnliftIO (Exception (..), MonadUnliftIO, mask, throwIO, try, withRunInIO)
 
 data DriverTraced ps dState r m = DriverTraced
   { sendMessageTraced
@@ -239,10 +241,8 @@ tcpServerTraced name inj = component_ (name <> "-tcp-server") \TcpServerDependen
       let closeArgs = (simpleNewEventArgs CloseServer){newEventParent = Just parentRef}
       server <- getServer serverSource
       lift $ localBackend (setAncestorEventBackend parentRef) do
-        let driver =
-              mkDriverTraced
-                (composeInjectSelector inj $ injectSelector $ ServerDriver addr pName)
-                (socketAsChannel socket)
+        let channel = socketAsChannel socket
+            driver = mkDriverTraced (composeInjectSelector inj $ injectSelector $ ServerDriver addr pName) channel
             handshakeServer = simpleHandshakeServer (signature $ Proxy @ps) server
             peer = handshakeServerPeer toPeer handshakeServer
         mask \restore -> do
@@ -258,6 +258,7 @@ tcpServerTraced name inj = component_ (name <> "-tcp-server") \TcpServerDependen
             case result of
               Left ex -> do
                 finalize ev' $ Just ex
+                send channel $ Frame ErrorStatus $ TLE.encodeUtf8 $ TL.pack $ displayException ex
                 throwIO ex
               Right a -> pure a
 
@@ -291,10 +292,8 @@ tcpClientTraced inj host port toPeer = Connector $
     pure
       Connection
         { runConnection = \client -> localBackend (setAncestorEventBackend $ reference ev) do
-            let driver =
-                  mkDriverTraced
-                    (composeInjectSelector inj $ injectSelector $ ClientDriver addr)
-                    (socketAsChannel socket)
+            let channel = socketAsChannel socket
+                driver = mkDriverTraced (composeInjectSelector inj $ injectSelector $ ClientDriver addr) channel
                 handshakeClient = simpleHandshakeClient (signature $ Proxy @ps) client
                 peer = handshakeClientPeer toPeer handshakeClient
             mask \restore -> do
@@ -311,6 +310,7 @@ tcpClientTraced inj host port toPeer = Connector $
                 case result of
                   Left ex -> do
                     finalize ev' $ Just ex
+                    send channel $ Frame ErrorStatus $ TLE.encodeUtf8 $ TL.pack $ displayException ex
                     throwIO ex
                   Right a -> pure a
         }
@@ -331,7 +331,7 @@ mkDriverTraced
   :: forall ps r s m
    . (MonadIO m, BinaryMessage ps, HasSpanContext r, MonadEvent r s m)
   => InjectSelector (DriverSelector ps) s
-  -> Channel m ByteString
+  -> Channel m Frame
   -> DriverTraced ps (Maybe ByteString) r m
 mkDriverTraced inj Channel{..} = DriverTraced{..}
   where
@@ -343,7 +343,7 @@ mkDriverTraced inj Channel{..} = DriverTraced{..}
       -> m ()
     sendMessageTraced r tok msg = withInjectEventFields inj (SendMessage tok msg) [()] \ev -> do
       spanContext <- context r
-      addField ev =<< send (runPut $ put spanContext *> putMessage tok msg)
+      addField ev =<< send (Frame OkStatus $ runPut $ put spanContext *> putMessage tok msg)
 
     recvMessageTraced
       :: forall (pr :: PeerRole) (st :: ps)
@@ -385,7 +385,10 @@ mkDriverTraced inj Channel{..} = DriverTraced{..}
             pure (a, Just trailing')
           DecodeFail failure -> throwIO failure
           DecodePartial next -> do
-            mBytes <- recv
+            mBytes <-
+              recv >>= traverse \Frame{..} -> case frameStatus of
+                OkStatus -> pure frameContents
+                ErrorStatus -> throwIO $ PeerCrashedException $ decodeUtf8 $ LBS.toStrict frameContents
             nextStep <- next mBytes
             go nextStep
 
