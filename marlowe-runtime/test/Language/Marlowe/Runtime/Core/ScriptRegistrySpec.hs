@@ -5,6 +5,7 @@ module Language.Marlowe.Runtime.Core.ScriptRegistrySpec (
 import Cardano.Api (AsType (..), File (..), hashScript, readFileTextEnvelope)
 import Control.Monad (unless)
 import Data.Foldable (traverse_)
+import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Language.Marlowe.Runtime.ChainSync.Api (fromCardanoScriptHash)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion, withSomeMarloweVersion)
@@ -23,6 +24,7 @@ scriptSetSpec marloweVersion = do
           (getCurrentScripts marloweVersion)
             { marloweScriptUTxOs = mempty
             , payoutScriptUTxOs = mempty
+            , helperScriptUTxOs = mempty
             }
     let scripts = getScripts marloweVersion
     it "Contains the current scripts in its script set." do
@@ -36,11 +38,13 @@ scriptSetSpec marloweVersion = do
     it "Should specify the correct current scripts" do
       payoutScriptPath <- getDataFileName $ "scripts" </> "marlowe-rolepayout.plutus"
       marloweScriptPath <- getDataFileName $ "scripts" </> "marlowe-semantics.plutus"
+      openRoleScriptPath <- getDataFileName $ "scripts" </> "open-role.plutus"
       Right payoutScriptBytes <- readFileTextEnvelope (AsScript AsPlutusScriptV2) $ File payoutScriptPath
       Right marloweScriptBytes <- readFileTextEnvelope (AsScript AsPlutusScriptV2) $ File marloweScriptPath
+      Right openRoleScriptBytes <- readFileTextEnvelope (AsScript AsPlutusScriptV2) $ File openRoleScriptPath
       let payoutScript = fromCardanoScriptHash $ hashScript payoutScriptBytes
       let marloweScript = fromCardanoScriptHash $ hashScript marloweScriptBytes
-      let helperScripts = mempty
+      let helperScripts = Map.singleton "OpenRoleScript" . fromCardanoScriptHash $ hashScript openRoleScriptBytes
       let marloweScriptUTxOs = mempty
       let payoutScriptUTxOs = mempty
       let helperScriptUTxOs = mempty
