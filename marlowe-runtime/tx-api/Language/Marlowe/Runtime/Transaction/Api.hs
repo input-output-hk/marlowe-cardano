@@ -886,6 +886,7 @@ data ConstraintError
   | MissingMarloweInput
   | PayoutNotFound TxOutRef
   | InvalidPayoutDatum TxOutRef (Maybe Chain.Datum)
+  | InvalidHelperDatum TxOutRef (Maybe Chain.Datum)
   | InvalidPayoutScriptAddress TxOutRef Address
   | CalculateMinUtxoFailed String
   | CoinSelectionFailed String

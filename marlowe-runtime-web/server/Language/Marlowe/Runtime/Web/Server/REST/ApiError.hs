@@ -166,6 +166,7 @@ statusCodeConstraintError = \case
   ToCardanoError -> 500
   MissingMarloweInput -> 500
   InvalidPayoutDatum _ _ -> 500
+  InvalidHelperDatum _ _ -> 500
   InvalidPayoutScriptAddress _ _ -> 500
   CalculateMinUtxoFailed _ -> 500
   BalancingError _ -> 500
