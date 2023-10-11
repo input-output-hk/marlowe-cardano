@@ -243,7 +243,13 @@ buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx roles metadata m
       RoleTokensUsePolicyWithOpenRoles policyId _ _ -> pure policyId
       RoleTokensMint (unMint -> minting) -> do
         let WalletContext{availableUtxos} = walletCtx
-            txLovelaceRequirementEstimate = adaAsset . adjustMinUtxo . Assets safeLovelace . Tokens . Map.fromList $ (,1) . AssetId "" <$> Map.keys minting
+            txLovelaceRequirementEstimate =
+              adaAsset
+                . adjustMinUtxo
+                . Assets safeLovelace
+                . Tokens
+                . Map.fromList
+                $ (,1) . AssetId "" <$> Map.keys minting
             utxoAssets UTxO{transactionOutput = TransactionOutput{assets}} = assets
             possibleInput =
               ( find ((<) txLovelaceRequirementEstimate . utxoAssets) . sortBy (compare `on` utxoAssets) . toUTxOsList $ availableUtxos
