@@ -3,26 +3,25 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Network.Protocol.Driver where
 
 import qualified Colog as C
 import Colog.Monad (WithLog)
 import Control.Concurrent.Component
-import Control.Monad (void)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Resource (runResourceT)
+import qualified Data.ByteString as BS
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Proxy (Proxy (Proxy))
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
-import qualified Data.Text.Lazy as TL
-import qualified Data.Text.Lazy.Encoding as TLE
-import Network.Channel (Channel (..), Frame (..), FrameStatus (..), socketAsChannel)
-import Network.Protocol.Codec (BinaryMessage, DeserializeError, binaryCodec)
+import Network.Channel (Channel (..), Frame (..), FrameStatus (..), withSocketChannel)
+import Network.Protocol.Codec (BinaryMessage, DeserializeError (..), binaryCodec)
 import Network.Protocol.Connection (Connection (..), Connector (..), ServerSource (..), ToPeer)
 import Network.Protocol.Handshake.Client (handshakeClientPeer, simpleHandshakeClient)
 import Network.Protocol.Handshake.Server (handshakeServerPeer, simpleHandshakeServer)
@@ -33,6 +32,7 @@ import Network.Socket (
   AddrInfo (..),
   HostName,
   PortNumber,
+  Socket,
   SocketType (..),
   addrAddress,
   close,
@@ -41,24 +41,19 @@ import Network.Socket (
   getAddrInfo,
   openSocket,
  )
-import Network.TypedProtocol (Message, PeerHasAgency, PeerRole (..), SomeMessage (..), runPeerWithDriver)
+import Network.TypedProtocol (Message, Peer, PeerHasAgency, PeerRole (..), SomeMessage (..), runPeerWithDriver)
 import Network.TypedProtocol.Codec (Codec (..), DecodeStep (..))
 import Network.TypedProtocol.Driver (Driver (..))
 import UnliftIO (
   Exception (..),
   MonadIO,
   MonadUnliftIO,
-  SomeException (..),
-  catch,
   finally,
   throwIO,
-  try,
   withRunInIO,
  )
 
-newtype PeerCrashedException = PeerCrashedException
-  { message :: Text
-  }
+newtype PeerCrashedException = PeerCrashedException Text
   deriving (Show)
 
 instance Exception PeerCrashedException where
@@ -66,6 +61,21 @@ instance Exception PeerCrashedException where
     unlines $
       "Remote peer crashed. Upstream error:"
         : (T.unpack . ("  " <>) <$> T.lines message)
+
+data PeerDisconnectedException = PeerDisconnectedException
+  deriving (Show)
+
+instance Exception PeerDisconnectedException where
+  displayException PeerDisconnectedException = "Remote peer disconnected unexpectedly."
+
+newtype PeerSentInvalidMessageBytesException = PeerSentInvalidMessageBytesException DeserializeError
+  deriving (Show)
+
+instance Exception PeerSentInvalidMessageBytesException where
+  displayException (PeerSentInvalidMessageBytesException err) =
+    unlines $
+      "Remote peer send invalid message bytes."
+        : (("  " <>) <$> lines (displayException err))
 
 mkDriver
   :: forall ps m
@@ -94,7 +104,7 @@ mkDriver Channel{..} = Driver{..}
       -> DecodeStep ByteString DeserializeError m a
       -> m (a, Maybe ByteString)
     decodeChannel _ (DecodeDone a trailing) = pure (a, trailing)
-    decodeChannel _ (DecodeFail failure) = throwIO failure
+    decodeChannel _ (DecodeFail err) = rethrowDeserializeError err
     decodeChannel Nothing (DecodePartial next) = do
       bytes <-
         recv >>= traverse \Frame{..} -> case frameStatus of
@@ -105,6 +115,10 @@ mkDriver Channel{..} = Driver{..}
 
     startDState :: Maybe ByteString
     startDState = Nothing
+
+rethrowDeserializeError :: (MonadIO m) => DeserializeError -> m a
+rethrowDeserializeError (DeserializeError _ 0 (BS.length -> 0)) = throwIO PeerDisconnectedException
+rethrowDeserializeError err = throwIO $ PeerSentInvalidMessageBytesException err
 
 hoistDriver :: (forall x. m x -> n x) -> Driver ps dState m -> Driver ps dState n
 hoistDriver f Driver{..} =
@@ -130,17 +144,9 @@ tcpServer
 tcpServer name = component_ (name <> "-tcp-server") \TcpServerDependencies{..} ->
   withRunInIO \runInIO -> runTCPServer (Just host) (show port) $ runComponent_ $ hoistComponent runInIO $ component_ (name <> "-tcp-worker") \socket -> runResourceT do
     server <- getServer serverSource
-    let channel = socketAsChannel socket
-    let driver = mkDriver channel
     let handshakeServer = simpleHandshakeServer (signature $ Proxy @ps) server
     let peer = peerTracedToPeer $ handshakeServerPeer toPeer handshakeServer
-    lift $
-      catch
-        (fst <$> runPeerWithDriver driver peer (startDState driver))
-        ( \(SomeException ex) -> do
-            void $ try @_ @SomeException $ send channel $ Frame ErrorStatus $ TLE.encodeUtf8 $ TL.pack $ displayException ex
-            throwIO ex
-        )
+    lift $ runPeerOverSocket socket peer
 
 tcpClient
   :: forall client ps st m
@@ -161,14 +167,17 @@ tcpClient host port toPeer = Connector $ liftIO $ do
   pure
     Connection
       { runConnection = \client -> do
-          let channel = socketAsChannel socket
-          let driver = mkDriver channel
           let handshakeClient = simpleHandshakeClient (signature $ Proxy @ps) client
           let peer = peerTracedToPeer $ handshakeClientPeer toPeer handshakeClient
-          catch
-            (fst <$> runPeerWithDriver driver peer (startDState driver) `finally` liftIO (close socket))
-            ( \(SomeException ex) -> do
-                void $ try @_ @SomeException $ send channel $ Frame ErrorStatus $ TLE.encodeUtf8 $ TL.pack $ displayException ex
-                throwIO ex
-            )
+          runPeerOverSocket socket peer `finally` liftIO (close socket)
       }
+
+runPeerOverSocket
+  :: (MonadUnliftIO m, BinaryMessage ps, MonadFail m)
+  => Socket
+  -> Peer ps pr st m a
+  -> m a
+runPeerOverSocket socket peer =
+  withSocketChannel socket \channel -> do
+    let driver = mkDriver channel
+    fst <$> runPeerWithDriver driver peer (startDState driver)

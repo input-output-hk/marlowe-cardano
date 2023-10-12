@@ -4,13 +4,15 @@
 
 module Network.Protocol.Codec where
 
-import Control.Exception (Exception)
+import Control.Exception (Exception (..))
 import Control.Monad (mfilter)
 import Data.Binary
 import Data.Binary.Get
 import Data.Binary.Put (runPut)
 import qualified Data.ByteString as BS
+import Data.ByteString.Base16 (encodeBase16)
 import qualified Data.ByteString.Lazy as LBS
+import qualified Data.Text as T
 import Network.TypedProtocol (Message, Protocol)
 import Network.TypedProtocol.Codec
 
@@ -25,7 +27,13 @@ data DeserializeError = DeserializeError
   }
   deriving (Show)
 
-instance Exception DeserializeError
+instance Exception DeserializeError where
+  displayException (DeserializeError{..}) =
+    unlines
+      [ "Offset: " <> show offset
+      , "Message: " <> message
+      , "Unconsumed Input: " <> T.unpack (encodeBase16 unconsumedInput)
+      ]
 
 binaryCodec :: (Applicative m, BinaryMessage ps) => Codec ps DeserializeError m LBS.ByteString
 binaryCodec = Codec (encodePut . putMessage) (decodeGet . getMessage)
