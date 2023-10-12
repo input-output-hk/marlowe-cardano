@@ -27,12 +27,11 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Type.Equality (type (:~:) (Refl))
 import GHC.Show (showSpace)
-import Network.Protocol.Codec (BinaryMessage (..))
+import Network.Protocol.Codec (BinaryMessage (..), ShowProtocol (..))
 import Network.Protocol.Codec.Spec (
   ArbitraryMessage (..),
   MessageEq (..),
   MessageVariations (..),
-  ShowProtocol (..),
   SomePeerHasAgency (..),
  )
 import Network.Protocol.Handshake.Types (HasSignature (..))

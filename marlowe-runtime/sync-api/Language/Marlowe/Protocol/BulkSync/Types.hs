@@ -16,11 +16,10 @@ import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.History.Api (
   MarloweBlock,
  )
-import Network.Protocol.Codec (BinaryMessage (..))
+import Network.Protocol.Codec (BinaryMessage (..), ShowProtocol)
 import Network.Protocol.Codec.Spec (
   MessageEq (..),
   MessageVariations (..),
-  ShowProtocol,
   SomePeerHasAgency (..),
   Variations (..),
   varyAp,

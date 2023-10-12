@@ -21,7 +21,7 @@ import GHC.Show (showSpace)
 import Language.Marlowe.Core.V1.Semantics.Types
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash)
 import Language.Marlowe.Runtime.Core.Api ()
-import Network.Protocol.Codec (BinaryMessage (..))
+import Network.Protocol.Codec (BinaryMessage (..), ShowProtocol (..))
 import Network.Protocol.Codec.Spec hiding (SomePeerHasAgency)
 import qualified Network.Protocol.Codec.Spec as Codec
 import Network.Protocol.Handshake.Types (HasSignature (..))

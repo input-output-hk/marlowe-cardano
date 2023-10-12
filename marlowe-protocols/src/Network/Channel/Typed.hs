@@ -16,8 +16,9 @@ import Control.Monad.Trans.Resource (ResourceT)
 import Data.Binary (put)
 import Data.Binary.Put (runPut)
 import qualified Data.ByteString.Lazy as LBS
+import Data.Data (Typeable)
 import Network.Channel (socketAsChannel)
-import Network.Protocol.Codec (BinaryMessage)
+import Network.Protocol.Codec (BinaryMessage, ShowProtocol)
 import Network.Protocol.Driver.Trace
 import Network.Protocol.Peer.Trace
 import Network.Socket (
@@ -304,7 +305,7 @@ driverToChannel inj driver = go $ startDStateTraced driver
           }
 
 tcpClientChannel
-  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, BinaryMessage ps)
+  :: (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, BinaryMessage ps, ShowProtocol ps, Typeable ps)
   => InjectSelector (TcpClientSelector ps) s
   -> HostName
   -> PortNumber

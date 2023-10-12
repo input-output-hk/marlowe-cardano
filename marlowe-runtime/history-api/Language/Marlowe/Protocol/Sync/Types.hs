@@ -19,11 +19,10 @@ import Language.Marlowe.Runtime.Core.Api (
  )
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.History.Api
-import Network.Protocol.Codec (BinaryMessage (..))
+import Network.Protocol.Codec (BinaryMessage (..), ShowProtocol (..))
 import Network.Protocol.Codec.Spec (
   MessageEq (..),
   MessageVariations (..),
-  ShowProtocol (..),
   SomePeerHasAgency (SomePeerHasAgency),
   Variations (..),
   varyAp,

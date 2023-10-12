@@ -23,12 +23,11 @@ import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import qualified Data.Text as T
 import GHC.Show (showList__, showSpace)
-import Network.Protocol.Codec (BinaryMessage (..))
+import Network.Protocol.Codec (BinaryMessage (..), ShowProtocol (..))
 import Network.Protocol.Codec.Spec (
   ArbitraryMessage (..),
   MessageEq (..),
   MessageVariations (..),
-  ShowProtocol (..),
   SomePeerHasAgency (..),
   Variations (..),
  )

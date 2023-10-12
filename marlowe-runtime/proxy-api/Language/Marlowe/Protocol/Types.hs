@@ -23,7 +23,6 @@ import qualified Language.Marlowe.Protocol.Transfer.Types as MarloweTransfer
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Network.Protocol.Codec
-import Network.Protocol.Codec.Spec (ShowProtocol (..))
 import Network.Protocol.Handshake.Types (HasSignature (..))
 import Network.Protocol.Job.Types (Job)
 import qualified Network.Protocol.Job.Types as Job
