@@ -8,6 +8,7 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Language.Marlowe.Runtime.ChainIndexer.NodeClient (CostModel (..))
 import qualified Options.Applicative as O
+import Prettyprinter
 import System.Environment (lookupEnv)
 import Text.Read (readMaybe)
 
@@ -209,6 +210,30 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri version = O.i
     infoMod =
       mconcat
         [ O.fullDesc
-        , O.progDesc "Chain indexer for Marlowe Runtime."
-        , O.header "marlowe-chain-indexer : a chain indexer for the Marlowe Runtime."
+        , O.progDescDoc $ Just description
+        , O.header "marlowe-chain-indexer: Chain indexer for the Marlowe Runtime."
         ]
+
+description :: Doc ann
+description =
+  concatWith
+    (\a b -> a <> line <> line <> b)
+    [ vcat
+        [ "The chain indexer for the Marlowe Runtime. This component connects to a local"
+        , "Cardano Node and follows the chain. It copies a subset of the information"
+        , "contained in every block to a postgresql database. This database can be queried"
+        , "by downstream components, such as marlowe-chain-sync."
+        ]
+    , vcat
+        [ "There should only be one instance of marlowe-chain-indexer writing data to a"
+        , "given chain database. There is no need to run multiple indexers. If you would"
+        , "like to scale runtime services, it is recommended to deploy a postgres replica"
+        , "cluster, run one indexer to populate it, and as many marlowe-chain-sync"
+        , "instances as required to read from it."
+        ]
+    , vcat
+        [ "Before running the indexer, the database must be created and migrated using"
+        , "sqitch. The migration plan and SQL scripts are included in the source code"
+        , "folder for marlowe-chain-indexer."
+        ]
+    ]
