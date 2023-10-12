@@ -449,8 +449,8 @@ in
       mkdir -p /tmp /store
 
       export OTEL_SERVICE_NAME="''${OTEL_SERVICE_NAME:-marlowe-contract}"
-      export MAX_STORE_SIZE="''${MAX_STORE_SIZE:8589934592}" # 8 GB
-      export MIN_CONTRACT_AGE="''${MIN_CONTRACT_AGE:86400}" # 1 day in seconds
+      export MAX_STORE_SIZE="''${MAX_STORE_SIZE:-8589934592}" # 8 GB
+      export MIN_CONTRACT_AGE="''${MIN_CONTRACT_AGE:-86400}" # 1 day in seconds
 
       ${marlowe-contract}/bin/marlowe-contract \
         --host "$HOST" \
@@ -589,8 +589,8 @@ in
       ${wait-for-socket}/bin/wait-for-socket "$CARDANO_NODE_SOCKET_PATH"
 
       export OTEL_SERVICE_NAME="''${OTEL_SERVICE_NAME:-marlowe-runtime}"
-      export MAX_STORE_SIZE="''${MAX_STORE_SIZE:8589934592}" # 8 GB
-      export MIN_CONTRACT_AGE="''${MIN_CONTRACT_AGE:86400}" # 1 day in seconds
+      export MAX_STORE_SIZE="''${MAX_STORE_SIZE:-8589934592}" # 8 GB
+      export MIN_CONTRACT_AGE="''${MIN_CONTRACT_AGE:-86400}" # 1 day in seconds
 
       ${marlowe-runtime}/bin/marlowe-runtime \
         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
