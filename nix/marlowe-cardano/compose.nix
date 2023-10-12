@@ -321,9 +321,9 @@ let
     ];
   };
 
-  web-service = dev-service {
+  web-service = dep: dev-service {
     ports = [ 8080 ];
-    depends_on = [ "marlowe-proxy" ];
+    depends_on = [ dep ];
     command = [
       "/exec/run-marlowe-web-server"
       "--marlowe-runtime-host"
@@ -406,15 +406,17 @@ let
 
     volumes.postgres = null;
 
-    services.marlowe-chain-indexer = chain-indexer-service;
-    services.marlowe-chain-sync = marlowe-chain-sync-service;
-    services.marlowe-tx = tx-service;
-    services.marlowe-proxy = proxy-service;
-    services.web = web-service;
-    services.marlowe-indexer = marlowe-indexer-service;
-    services.marlowe-sync = sync-service;
-    services.marlowe-contract = contract-service;
-    # services.marlowe-runtime = runtime-service;
+    # services.marlowe-chain-indexer = chain-indexer-service;
+    # services.marlowe-chain-sync = marlowe-chain-sync-service;
+    # services.marlowe-tx = tx-service;
+    # services.marlowe-proxy = proxy-service;
+    # services.marlowe-indexer = marlowe-indexer-service;
+    # services.marlowe-sync = sync-service;
+    # services.marlowe-contract = contract-service;
+    # services.web = web-service "marlowe-proxy";
+
+    services.marlowe-runtime = runtime-service;
+    services.web = web-service "marlowe-runtime";
 
     services.node = node-service;
     volumes.shared = null;
