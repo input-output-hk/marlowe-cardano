@@ -16,11 +16,10 @@ import Language.Marlowe.Object.Link (LinkError)
 import Language.Marlowe.Object.Types
 import Language.Marlowe.Protocol.Load.Types (jsonToPrimitiveAttribute)
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash)
-import Network.Protocol.Codec (BinaryMessage (..))
+import Network.Protocol.Codec (BinaryMessage (..), ShowProtocol (..))
 import Network.Protocol.Codec.Spec (
   MessageEq (..),
   MessageVariations (..),
-  ShowProtocol (..),
   SomePeerHasAgency (..),
   Variations (..),
  )
