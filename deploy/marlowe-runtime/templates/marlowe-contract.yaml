@@ -34,9 +34,9 @@ spec:
         - name: STORE_DIR
           value: /store
         - name: MAX_STORE_SIZE
-          value: 214748364800 # 200 GB
+          value: "214748364800" # 200 GB
         - name: MIN_CONTRACT_AGE
-          value: 1800 # 30 minutes
+          value: "1800" # 30 minutes
         - name: HTTP_PORT
           value: "3787"
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
