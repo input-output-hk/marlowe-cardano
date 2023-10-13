@@ -1,4 +1,4 @@
-{ inputs', pkgs, ... }:
+{ inputs, pkgs, ... }:
 
 let
   inherit (pkgs.cardanoLib) environments mkEdgeTopology;
@@ -14,11 +14,11 @@ in
   testnet = mkNetwork environments.testnet // {
     magic = 1097911063;
   };
-  preview = mkNetwork inputs'.cardano-world.cardano.environments.preview // {
+  preview = mkNetwork inputs.cardano-world.cardano.environments.preview // {
     name = "preview";
     magic = 2;
   };
-  preprod = mkNetwork inputs'.cardano-world.cardano.environments.preprod // {
+  preprod = mkNetwork inputs.cardano-world.cardano.environments.preprod // {
     name = "preprod";
     magic = 1;
   };

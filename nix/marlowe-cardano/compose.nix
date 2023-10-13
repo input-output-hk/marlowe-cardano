@@ -1,12 +1,12 @@
-{ inputs', pkgs, l, ... }:
+{ inputs, pkgs, lib, ... }:
 
 let
   inherit (pkgs) z3 sqitchPg postgresql runCommand writeShellScriptBin writeText glibcLocales;
-  network = inputs'.self.networks.preview;
-  inherit (inputs') marlowe-plutus;
+  network = inputs.self.networks.preview;
+  inherit (inputs) marlowe-plutus;
 
   mkSqitchRunner = name: path: writeShellScriptBin name ''
-    export PATH="$PATH:${l.makeBinPath [ sqitchPg postgresql ]}"
+    export PATH="$PATH:${lib.makeBinPath [ sqitchPg postgresql ]}"
     export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
     cd ${path}
     exec sqitch deploy "$@"
@@ -17,13 +17,13 @@ let
 
   run-chain-indexer = writeShellScriptBin "run-marlowe-chain-indexer" ''
     set -e
-    PROG=${l.escapeShellArg "marlowe-chain-indexer"}
-    PKG=${l.escapeShellArg "marlowe-chain-sync"}-${l.escapeShellArg marloweRuntimeVersion}
+    PROG=${lib.escapeShellArg "marlowe-chain-indexer"}
+    PKG=${lib.escapeShellArg "marlowe-chain-sync"}-${lib.escapeShellArg marloweRuntimeVersion}
     cd /src
     # Hard-coding linux because this won't work on Mac anyway.
     # TODO find a setup that works on MacOS
     BIN=./dist-newstyle/build/x86_64-linux/ghc-9.2.8/$PKG/x/$PROG/build/$PROG/$PROG
-    export PATH="$PATH:${l.makeBinPath [ sqitchPg postgresql ]}"
+    export PATH="$PATH:${lib.makeBinPath [ sqitchPg postgresql ]}"
     export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
     cd marlowe-chain-sync
     sqitch deploy -h postgres
@@ -33,13 +33,13 @@ let
 
   run-indexer = writeShellScriptBin "run-marlowe-indexer" ''
     set -e
-    PROG=${l.escapeShellArg "marlowe-indexer"}
-    PKG=${l.escapeShellArg "marlowe-runtime"}-${l.escapeShellArg marloweRuntimeVersion}
+    PROG=${lib.escapeShellArg "marlowe-indexer"}
+    PKG=${lib.escapeShellArg "marlowe-runtime"}-${lib.escapeShellArg marloweRuntimeVersion}
     cd /src
     # Hard-coding linux because this won't work on Mac anyway.
     # TODO find a setup that works on MacOS
     BIN=./dist-newstyle/build/x86_64-linux/ghc-9.2.8/$PKG/x/$PROG/build/$PROG/$PROG
-    export PATH="$PATH:${l.makeBinPath [ sqitchPg postgresql ]}"
+    export PATH="$PATH:${lib.makeBinPath [ sqitchPg postgresql ]}"
     export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
     cd marlowe-runtime/marlowe-indexer
     sqitch deploy -h postgres
@@ -49,14 +49,14 @@ let
 
   run-runtime = writeShellScriptBin "run-marlowe-runtime" ''
     set -e
-    export PATH="$PATH:${l.makeBinPath [ z3 marlowe-plutus.packages.marlowe-minting-validator ]}"
-    PROG=${l.escapeShellArg "marlowe-runtime"}
-    PKG=${l.escapeShellArg "marlowe-runtime"}-${l.escapeShellArg marloweRuntimeVersion}
+    export PATH="$PATH:${lib.makeBinPath [ z3 marlowe-plutus.packages.marlowe-minting-validator ]}"
+    PROG=${lib.escapeShellArg "marlowe-runtime"}
+    PKG=${lib.escapeShellArg "marlowe-runtime"}-${lib.escapeShellArg marloweRuntimeVersion}
     cd /src
     # Hard-coding linux because this won't work on Mac anyway.
     # TODO find a setup that works on MacOS
     BIN=./dist-newstyle/build/x86_64-linux/ghc-9.2.8/$PKG/x/$PROG/build/$PROG/$PROG
-    export PATH="$PATH:${l.makeBinPath [ sqitchPg postgresql ]}"
+    export PATH="$PATH:${lib.makeBinPath [ sqitchPg postgresql ]}"
     export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
     cd marlowe-chain-sync
     sqitch deploy -h postgres
@@ -69,9 +69,9 @@ let
 
   run-local-service = project: version: prog: writeShellScriptBin "run-${prog}" ''
     set -e
-    export PATH="$PATH:${l.makeBinPath [ z3 marlowe-plutus.packages.marlowe-minting-validator ]}"
-    PROG=${l.escapeShellArg prog}
-    PKG=${l.escapeShellArg project}-${l.escapeShellArg version}
+    export PATH="$PATH:${lib.makeBinPath [ z3 marlowe-plutus.packages.marlowe-minting-validator ]}"
+    PROG=${lib.escapeShellArg prog}
+    PKG=${lib.escapeShellArg project}-${lib.escapeShellArg version}
     cd /src
     # Hard-coding linux because this won't work on Mac anyway.
     # TODO find a setup that works on MacOS
@@ -134,7 +134,7 @@ let
       timeout = "5s";
       retries = 5;
     };
-    depends_on = l.genAttrs depends_on (_: { condition = "service_healthy"; });
+    depends_on = lib.genAttrs depends_on (_: { condition = "service_healthy"; });
     environment = [
       "OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318"
     ] ++ environment;

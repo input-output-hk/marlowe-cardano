@@ -1,8 +1,8 @@
-{ nix, inputs', pkgs, ... }:
+{ repoRoot, inputs, pkgs, ... }:
 
 let
 
-  compose-spec = nix.marlowe-cardano.compose;
+  compose-spec = repoRoot.nix.marlowe-cardano.compose;
 
   mkCabalExeScript = target: ''
     cd `${pkgs.git}/bin/git rev-parse --show-toplevel`
@@ -25,7 +25,7 @@ in
   refresh-validators = ''
     cd $(git rev-parse --show-toplevel)
     mkdir -p marlowe/scripts
-    cp ${inputs'.marlowe-plutus.packages.validators}/* marlowe/scripts
+    cp ${inputs.marlowe-plutus.packages.validators}/* marlowe/scripts
     chmod u+w marlowe/scripts/*
   '';
 
