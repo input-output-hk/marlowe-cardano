@@ -24,8 +24,6 @@
       inputs.CHaP.follows = "CHaP";
     };
 
-    nixpkgs.follows = "haskell-nix/nixpkgs";
-
     hackage = {
       url = "github:input-output-hk/hackage.nix";
       flake = false;

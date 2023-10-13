@@ -5,7 +5,7 @@ let
   cabalProject = pkgs.haskell-nix.cabalProject'
     ({ config, pkgs, ... }:
       let
-        mkIfDarwin = l.mkIf pkgs.stdenv.hostPlatform.isDarwin;
+        mkIfDarwin = lib.mkIf pkgs.stdenv.hostPlatform.isDarwin;
       in
       {
         name = "marlowe-cardano";
@@ -85,8 +85,8 @@ let
             marlowe-test.ghcOptions = [ "-Werror" ];
           };
         }];
-      };
-    );
+      });
+
 
   project = lib.iogx.mkHaskellProject {
     inherit cabalProject;
