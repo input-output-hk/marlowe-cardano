@@ -1,4 +1,5 @@
-{{- range .Values.networks }}
+{{- range $instanceName, $instance := .Values.instances }}
+{{- range $.Values.networks }}
 ---
 apiVersion: core.oam.dev/v1beta1
 kind: Application
@@ -38,7 +39,7 @@ spec:
         - name: OTEL_SERVICE_NAME
           value: marlowe-tx-{{ . }}
         cpu: "0.5"
-        image: {{ $.Values.images.repo }}/{{ $.Values.images.org }}/marlowe-tx:{{ $.Values.images.tag }}
+        image: {{ $instance.repo }}/{{ $instance.org }}/marlowe-tx:{{ $instance.tag }}
         imagePullPolicy: Always
         memory: 1024Mi
         ports:
@@ -67,4 +68,5 @@ spec:
         policies:
         - local-{{ $.Values.namespace }}
       type: deploy
+{{- end }}
 {{- end }}

@@ -1,4 +1,5 @@
-{{- range .Values.networks }}
+{{- range $instanceName, $instance := .Values.instances }}
+{{- range $.Values.networks }}
 ---
 apiVersion: core.oam.dev/v1beta1
 kind: Application
@@ -50,14 +51,14 @@ spec:
         - name: OTEL_SERVICE_NAME
           value: marlowe-proxy-{{ . }}
         cpu: "0.5"
-        image: {{ $.Values.images.repo }}/{{ $.Values.images.org }}/marlowe-proxy:{{ $.Values.images.tag }}
+        image: {{ $instance.repo }}/{{ $instance.org }}/marlowe-proxy:{{ $instance.tag }}
         imagePullPolicy: Always
         memory: 1024Mi
       traits:
       - type: expose
         properties:
           annotations:
-            "external-dns.alpha.kubernetes.io/hostname": "marlowe-runtime-{{ . }}.scdev.aws.iohkdev.io"
+            "external-dns.alpha.kubernetes.io/hostname": "marlowe-runtime-{{ . }}.{{ $instance.parentDomain }}"
           type: LoadBalancer
           ports:
           - port: 3700
@@ -84,4 +85,5 @@ spec:
         policies:
         - local-{{ $.Values.namespace }}
       type: deploy
+{{- end }}
 {{- end }}

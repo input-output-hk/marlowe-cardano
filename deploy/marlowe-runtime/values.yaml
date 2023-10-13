@@ -3,10 +3,12 @@ networks:
   - preview
   - mainnet
 
-images:
-  tag: latest
-  repo: ghcr.io
-  org: input-output-hk
+instances:
+  qa:
+    parentDomain: scdev.aws.iohkdev.io
+    tag: latest
+    repo: ghcr.io
+    org: input-output-hk
 
 namespace: marlowe-staging
 

@@ -1,4 +1,5 @@
-{{- range .Values.networks }}
+{{- range $instanceName, $instance := .Values.instances }}
+{{- range $.Values.networks }}
 ---
 apiVersion: core.oam.dev/v1beta1
 kind: Application
@@ -26,7 +27,7 @@ spec:
         - name: OTEL_SERVICE_NAME
           value: marlowe-web-server-{{ . }}
         cpu: "0.5"
-        image: {{ $.Values.images.repo }}/{{ $.Values.images.org }}/marlowe-web-server:{{ $.Values.images.tag }}
+        image: {{ $instance.repo }}/{{ $instance.org }}/marlowe-web-server:{{ $instance.tag }}
         imagePullPolicy: Always
         memory: 1024Mi
         ports:
@@ -37,7 +38,7 @@ spec:
       - type: https-route
         properties:
           domains:
-          - marlowe-runtime-{{ . }}-web.scdev.aws.iohkdev.io
+          - marlowe-runtime-{{ . }}-web.{{ $instance.parentDomain }}
           rules:
           - port: 3780
       - type: opentelemetry-collector
@@ -80,4 +81,5 @@ spec:
         policies:
         - local-{{ $.Values.namespace }}
       type: deploy
+{{- end }}
 {{- end }}

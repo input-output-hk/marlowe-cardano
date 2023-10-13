@@ -1,4 +1,5 @@
-{{- range .Values.networks }}
+{{- range $instanceName, $instance := .Values.instances }}
+{{- range $.Values.networks }}
 ---
 apiVersion: core.oam.dev/v1beta1
 kind: Application
@@ -46,7 +47,7 @@ spec:
       - name: OTEL_SERVICE_NAME
         value: marlowe-indexer-{{ . }}
       cpu: "0.5"
-      image: {{ $.Values.images.repo }}/{{ $.Values.images.org }}/marlowe-indexer:{{ $.Values.images.tag }}
+      image: {{ $instance.repo }}/{{ $instance.org }}/marlowe-indexer:{{ $instance.tag }}
       imagePullPolicy: Always
       memory: 4096Mi
       ports:
@@ -73,4 +74,5 @@ spec:
         - local-{{ $.Values.namespace }}
       type: deploy
 
+{{- end }}
 {{- end }}
