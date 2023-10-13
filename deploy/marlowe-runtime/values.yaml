@@ -9,6 +9,11 @@ instances:
     tag: latest
     repo: ghcr.io
     org: input-output-hk
+  demo:
+    parentDomain: demo.scdev.aws.iohkdev.io
+    tag: 0.0.5
+    repo: ghcr.io
+    org: input-output-hk
 
 namespace: marlowe-staging
 
