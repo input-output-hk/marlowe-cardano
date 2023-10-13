@@ -12,7 +12,7 @@ metadata:
     meta.helm.sh/release-namespace: {{ $.Values.namespace }}
 spec:
   components:
-  - name: marlowe-indexer-{{ . }}
+  - name: marlowe-indexer-{{ . }}-{{ $instanceName }}
     type: webservice
     properties:
       env:
@@ -33,7 +33,7 @@ spec:
             name: chainsync-{{ . }}-owner-user.{{ $.Values.databaseName }}.credentials.postgresql.acid.zalan.do
             namespace: {{ $.Values.namespace }}
       - name: MARLOWE_CHAIN_SYNC_HOST
-        value: chain-sync-{{ . }}.{{ $.Values.namespace }}
+        value: chain-sync-{{ . }}-{{ $instanceName }}.{{ $.Values.namespace }}
       - name: MARLOWE_CHAIN_SYNC_PORT
         value: "3715"
       - name: MARLOWE_CHAIN_SYNC_QUERY_PORT
@@ -45,7 +45,7 @@ spec:
       - name: OTEL_EXPORTER_OTLP_ENDPOINT
         value: http://grafana-agent.grafana-agent:4318
       - name: OTEL_SERVICE_NAME
-        value: marlowe-indexer-{{ . }}
+        value: marlowe-indexer-{{ . }}-{{ $instanceName }}
       cpu: "0.5"
       image: {{ $instance.repo }}/{{ $instance.org }}/marlowe-indexer:{{ $instance.tag }}
       imagePullPolicy: Always

@@ -12,7 +12,7 @@ metadata:
     meta.helm.sh/release-namespace: {{ $.Values.namespace }}
 spec:
   components:
-  - name: chain-sync-{{ $network }}
+  - name: chain-sync-{{ $network }}-{{ $instanceName }}
     type: webservice
     properties:
       env:
@@ -29,7 +29,7 @@ spec:
       - name: OTEL_EXPORTER_OTLP_ENDPOINT
         value: http://grafana-agent.grafana-agent:4318
       - name: OTEL_SERVICE_NAME
-        value: marlowe-chain-sync-{{ $network }}
+        value: marlowe-chain-sync-{{ $network }}-{{ $instanceName }}
       - name: CARDANO_NODE_SOCKET_PATH
         value: /ipc/node.socket
       - name: NODE_CONFIG

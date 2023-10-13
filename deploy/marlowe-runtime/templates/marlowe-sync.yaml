@@ -12,7 +12,7 @@ metadata:
     meta.helm.sh/release-namespace: {{ $.Values.namespace }}
 spec:
   components:
-  - name: marlowe-sync-{{ $network }}
+  - name: marlowe-sync-{{ $network }}-{{ $instanceName }}
     type: webservice
     properties:
       env:
@@ -27,11 +27,11 @@ spec:
       - name: MARLOWE_QUERY_PORT
         value: "3726"
       - name: MARLOWE_CHAIN_SYNC_HOST
-        value: chain-sync-{{ $network }}.{{ $.Values.namespace }}
+        value: chain-sync-{{ $network }}-{{ $instanceName }}.{{ $.Values.namespace }}
       - name: MARLOWE_CHAIN_SYNC_QUERY_PORT
         value: "3716"
       - name: DB_NAME
-        value: chainsync_{{ $network }}
+        value: chainsync_{{ $network }}-{{ $instanceName }}
       - name: DB_USER
         valueFrom:
           secretKeyRef:
@@ -51,7 +51,7 @@ spec:
       - name: OTEL_EXPORTER_OTLP_ENDPOINT
         value: http://grafana-agent.grafana-agent:4318
       - name: OTEL_SERVICE_NAME
-        value: marlowe-sync-{{ $network }}
+        value: marlowe-sync-{{ $network }}-{{ $instanceName }}
       cpu: "0.5"
       image: {{ $instance.repo }}/{{ $instance.org }}/marlowe-sync:{{ $instance.tag }}
       imagePullPolicy: Always

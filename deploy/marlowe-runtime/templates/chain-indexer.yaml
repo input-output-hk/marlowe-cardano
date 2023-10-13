@@ -12,7 +12,7 @@ metadata:
     meta.helm.sh/release-namespace: {{ $.Values.namespace }}
 spec:
   components:
-  - name: chain-indexer-{{ $network }}
+  - name: chain-indexer-{{ $network }}-{{ $instanceName }}
     type: webservice
     properties:
       cpu: "0.5"
@@ -42,7 +42,7 @@ spec:
       - name: OTEL_EXPORTER_OTLP_ENDPOINT
         value: http://grafana-agent.grafana-agent:4318
       - name: OTEL_SERVICE_NAME
-        value: marlowe-chain-indexer-{{ $network }}
+        value: marlowe-chain-indexer-{{ $network }}-{{ $instanceName }}
       image: {{ $instance.repo }}/{{ $instance.org }}/marlowe-chain-indexer:{{ $instance.tag }}
       imagePullPolicy: Always
       memory: 8Gi

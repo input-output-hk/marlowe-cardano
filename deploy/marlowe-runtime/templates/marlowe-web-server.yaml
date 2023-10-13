@@ -12,20 +12,20 @@ metadata:
     meta.helm.sh/release-namespace: {{ $.Values.namespace }}
 spec:
   components:
-    - name: marlowe-web-server-{{ . }}
+    - name: marlowe-web-server-{{ . }}-{{ $instanceName }}
       type: webservice
       properties:
         env:
         - name: PORT
           value: "3780"
         - name: RUNTIME_HOST
-          value: marlowe-proxy-{{ . }}.{{ $.Values.namespace }}
+          value: marlowe-proxy-{{ . }}-{{ $instanceName }}.{{ $.Values.namespace }}
         - name: RUNTIME_PORT
           value: "3701"
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
           value: http://grafana-agent.grafana-agent:4318
         - name: OTEL_SERVICE_NAME
-          value: marlowe-web-server-{{ . }}
+          value: marlowe-web-server-{{ . }}-{{ $instanceName }}
         cpu: "0.5"
         image: {{ $instance.repo }}/{{ $instance.org }}/marlowe-web-server:{{ $instance.tag }}
         imagePullPolicy: Always

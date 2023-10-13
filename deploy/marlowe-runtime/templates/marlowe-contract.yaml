@@ -12,7 +12,7 @@ metadata:
     meta.helm.sh/release-namespace: {{ $.Values.namespace }}
 spec:
   components:
-    - name: marlowe-contract-{{ . }}
+    - name: marlowe-contract-{{ . }}-{{ $instanceName }}
       type: webservice
       properties:
         env:
@@ -25,11 +25,11 @@ spec:
         - name: TRANSFER_PORT
           value: "3729"
         - name: MARLOWE_CHAIN_SYNC_HOST
-          value: chain-sync-{{ . }}.{{ $.Values.namespace }}
+          value: chain-sync-{{ . }}-{{ $instanceName }}.{{ $.Values.namespace }}
         - name: MARLOWE_CHAIN_SYNC_QUERY_PORT
           value: "3716"
         - name: SYNC_HOST
-          value: marlowe-sync-{{ . }}.{{ $.Values.namespace }}
+          value: marlowe-sync-{{ . }}-{{ $instanceName }}.{{ $.Values.namespace }}
         - name: MARLOWE_BULK_SYNC_PORT
           value: "3730"
         - name: STORE_DIR
@@ -43,7 +43,7 @@ spec:
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
           value: http://grafana-agent.grafana-agent:4318
         - name: OTEL_SERVICE_NAME
-          value: marlowe-contract-{{ . }}
+          value: marlowe-contract-{{ . }}-{{ $instanceName }}
         cpu: "0.5"
         image: {{ $instance.repo }}/{{ $instance.org }}/marlowe-contract:{{ $instance.tag }}
         imagePullPolicy: Always
@@ -62,7 +62,7 @@ spec:
       - type: storage
         properties:
           pvc:
-          - name: store-dir-{{ . }}
+          - name: store-dir-{{ . }}-{{ $instanceName }}
             mountPath: /store
             storageClassName: ebs-sc
             resources:

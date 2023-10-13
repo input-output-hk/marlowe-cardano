@@ -12,7 +12,7 @@ metadata:
     meta.helm.sh/release-namespace: {{ $.Values.namespace }}
 spec:
   components:
-    - name: marlowe-tx-{{ . }}
+    - name: marlowe-tx-{{ . }}-{{ $instanceName }}
       type: webservice
       properties:
         env:
@@ -21,7 +21,7 @@ spec:
         - name: PORT
           value: "3723"
         - name: MARLOWE_CHAIN_SYNC_HOST
-          value: chain-sync-{{ . }}.{{ $.Values.namespace }}
+          value: chain-sync-{{ . }}-{{ $instanceName }}.{{ $.Values.namespace }}
         - name: MARLOWE_CHAIN_SYNC_PORT
           value: "3715"
         - name: MARLOWE_CHAIN_SYNC_QUERY_PORT
@@ -29,7 +29,7 @@ spec:
         - name: MARLOWE_CHAIN_SYNC_COMMAND_PORT
           value: "3720"
         - name: CONTRACT_HOST
-          value: marlowe-contract-{{ . }}.{{ $.Values.namespace }}
+          value: marlowe-contract-{{ . }}-{{ $instanceName }}.{{ $.Values.namespace }}
         - name: CONTRACT_QUERY_PORT
           value: "3728"
         - name: HTTP_PORT
@@ -37,7 +37,7 @@ spec:
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
           value: http://grafana-agent.grafana-agent:4318
         - name: OTEL_SERVICE_NAME
-          value: marlowe-tx-{{ . }}
+          value: marlowe-tx-{{ . }}-{{ $instanceName }}
         cpu: "0.5"
         image: {{ $instance.repo }}/{{ $instance.org }}/marlowe-tx:{{ $instance.tag }}
         imagePullPolicy: Always
