@@ -31,7 +31,7 @@ spec:
       - name: MARLOWE_CHAIN_SYNC_QUERY_PORT
         value: "3716"
       - name: DB_NAME
-        value: chainsync_{{ $network }}-{{ $instanceName }}
+        value: chainsync_{{ $network }}
       - name: DB_USER
         valueFrom:
           secretKeyRef:
