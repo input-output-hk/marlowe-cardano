@@ -7,7 +7,6 @@ metadata:
   name: marlowe-indexer-{{ . }}-{{ $instanceName }}
   namespace: {{ $.Values.namespace }}
   annotations:
-    app.oam.dev/publishVersion: {{ $.Chart.AppVersion }}
     meta.helm.sh/release-name: {{ $.Values.releaseName }}
     meta.helm.sh/release-namespace: {{ $.Values.namespace }}
 spec:
