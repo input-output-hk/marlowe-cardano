@@ -16,7 +16,7 @@ spec:
     properties:
       env:
       - name: DB_NAME
-        value: chainsync_{{ . }}
+        value: chainsync_{{ $instanceName }}_{{ . }}
       - name: DB_HOST
         value: {{ $.Values.databaseHost }}:5432
       - name: DB_USER
