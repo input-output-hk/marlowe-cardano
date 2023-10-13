@@ -24,7 +24,7 @@ spec:
         - name: TRANSFER_PORT
           value: "3729"
         - name: MARLOWE_CHAIN_SYNC_HOST
-          value: chain-sync-{{ $network }}.{{ $.Values.namespace }}
+          value: chain-sync-{{ . }}.{{ $.Values.namespace }}
         - name: MARLOWE_CHAIN_SYNC_QUERY_PORT
           value: "3716"
         - name: SYNC_HOST
