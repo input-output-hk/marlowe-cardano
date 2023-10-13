@@ -67,6 +67,9 @@ spec:
         port: 3726
         protocol: TCP
       - expose: true
+        port: 3730
+        protocol: TCP
+      - expose: true
         port: 3784
         protocol: TCP
   policies:
