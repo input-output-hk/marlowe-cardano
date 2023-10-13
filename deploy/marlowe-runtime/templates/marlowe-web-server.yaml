@@ -4,7 +4,7 @@
 apiVersion: core.oam.dev/v1beta1
 kind: Application
 metadata:
-  name: marlowe-web-server-{{ . }}
+  name: marlowe-web-server-{{ . }}-{{ $instanceName }}
   namespace: {{ $.Values.namespace }}
   annotations:
     app.oam.dev/publishVersion: {{ $.Chart.AppVersion }}
