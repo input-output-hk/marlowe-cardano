@@ -275,8 +275,7 @@ driverToChannel inj driver = go $ startDStateTraced driver
             sendMessageTraced driver (reference ev) tok msg
         }
 
-    goInbound
-      :: dState -> PeerHasAgency (FlipAgency pr) st' -> m (InboundChannel ps pr st' m)
+    goInbound :: dState -> PeerHasAgency (FlipAgency pr) st' -> m (InboundChannel ps pr st' m)
     goInbound dState tok = do
       (sendRef, SomeMessage message, dState') <- recvMessageTraced driver tok dState
       let receiveArgs =
