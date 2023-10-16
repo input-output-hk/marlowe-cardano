@@ -43,7 +43,6 @@ in
 
     hydraJobs.operables = repoRoot.nix.marlowe-cardano.deploy.operables;
     hydraJobs.oci-images = repoRoot.nix.marlowe-cardano.deploy.oci-images;
-    hydraJobs.nomadTasks = repoRoot.nix.marlowe-cardano.deploy.nomadTasks;
   }
 
   # hydraJobs for linux only
