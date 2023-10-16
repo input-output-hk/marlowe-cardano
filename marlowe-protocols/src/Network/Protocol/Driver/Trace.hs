@@ -42,7 +42,7 @@ import Network.Protocol.Connection (
   ServerSource (..),
   ToPeer,
  )
-import Network.Protocol.Driver (TcpServerDependencies (..))
+import Network.Protocol.Driver (TcpServerDependencies (..), rethrowErrors)
 import qualified Network.Protocol.Driver.Untyped as Untyped
 import Network.Protocol.Handshake.Client (handshakeClientPeer, simpleHandshakeClient)
 import Network.Protocol.Handshake.Server (handshakeServerPeer, simpleHandshakeServer)
@@ -246,11 +246,12 @@ tcpServerTraced name inj = component_ (name <> "-tcp-server") \TcpServerDependen
           result <-
             restore $
               try $
-                runPeerWithDriverTraced
-                  (composeInjectSelector inj $ injectSelector $ ServerPeer addr pName)
-                  driver
-                  peer
-                  (startDStateTraced driver)
+                rethrowErrors untypedDriver $
+                  runPeerWithDriverTraced
+                    (composeInjectSelector inj $ injectSelector $ ServerPeer addr pName)
+                    driver
+                    peer
+                    (startDStateTraced driver)
           withInjectEventArgs inj closeArgs \ev' -> do
             case result of
               Left ex -> do
@@ -296,11 +297,12 @@ tcpClientTraced inj host port toPeer = Connector $
               result <-
                 restore $
                   try $
-                    runPeerWithDriverTraced
-                      (composeInjectSelector inj $ injectSelector $ ClientPeer addr)
-                      driver
-                      peer
-                      (startDStateTraced driver)
+                    rethrowErrors untypedDriver $
+                      runPeerWithDriverTraced
+                        (composeInjectSelector inj $ injectSelector $ ClientPeer addr)
+                        driver
+                        peer
+                        (startDStateTraced driver)
               withInjectEventArgs inj closeArgs \ev' -> do
                 liftIO $ close socket
                 case result of

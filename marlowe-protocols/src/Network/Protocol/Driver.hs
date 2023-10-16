@@ -14,6 +14,7 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Resource (runResourceT)
 import Data.ByteString (ByteString)
 import Data.Proxy (Proxy (Proxy))
+import qualified Data.Text as T
 import Network.Channel (socketAsChannel)
 import Network.Protocol.Codec (BinaryMessage (..))
 import Network.Protocol.Connection (Connection (..), Connector (..), ServerSource (..), ToPeer)
@@ -37,7 +38,7 @@ import Network.Socket (
  )
 import Network.TypedProtocol (Message, PeerHasAgency, PeerRole (..), SomeMessage (..), runPeerWithDriver)
 import Network.TypedProtocol.Driver (Driver (..))
-import UnliftIO (MonadIO, MonadUnliftIO, finally, throwIO, withRunInIO)
+import UnliftIO (Exception (..), MonadIO, MonadUnliftIO, SomeException (..), catch, finally, throwIO, withRunInIO)
 
 mkDriver
   :: forall ps m
@@ -91,7 +92,7 @@ tcpServer name = component_ (name <> "-tcp-server") \TcpServerDependencies{..} -
     let peer = peerTracedToPeer $ handshakeServerPeer toPeer handshakeServer
     let untypedDriver = Untyped.mkDriver $ socketAsChannel socket
     let driver = mkDriver untypedDriver
-    lift $ fst <$> runPeerWithDriver driver peer (startDState driver)
+    lift $ rethrowErrors untypedDriver $ fst <$> runPeerWithDriver driver peer (startDState driver)
 
 tcpClient
   :: forall client ps st m
@@ -118,3 +119,8 @@ tcpClient host port toPeer = Connector $ liftIO $ do
           let peer = peerTracedToPeer $ handshakeClientPeer toPeer handshakeClient
           fst <$> runPeerWithDriver driver peer (startDState driver) `finally` liftIO (close socket)
       }
+
+rethrowErrors :: (MonadUnliftIO m) => Untyped.Driver m -> m a -> m a
+rethrowErrors Untyped.Driver{..} = flip catch \(SomeException ex) -> do
+  catch (sendFailureMessage $ T.pack $ displayException ex) \SomeException{} -> pure ()
+  throwIO ex
