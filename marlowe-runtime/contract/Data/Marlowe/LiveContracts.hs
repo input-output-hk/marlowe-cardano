@@ -201,15 +201,23 @@ rollBackward (At blockNo) (At tip) LiveContracts{..}
                     prevHistory
               | blockNo > prevBlockNo ->
                   error "rollBackward: new point is ahead of current point"
-              | otherwise -> case fmap Map.maxViewWithKey
-                  . trimHistory securityParameter tip initial
-                  . Map.filterWithKey (\k _ -> k <= blockNo)
-                  . Map.insert prevBlockNo prevSnapshot
-                  $ prevHistory of
-                  (initial', Nothing) -> NonEmptyHistory initial' blockNo initial' tip mempty
-                  (initial', Just ((k, v), m)) -> NonEmptyHistory initial' k v tip m
+              | otherwise -> case rollbackHistory $ Map.insert prevBlockNo prevSnapshot prevHistory of
+                  Nothing -> NonEmptyHistory initial blockNo initial tip mempty
+                  Just ((newRollbackBlock, newSnapshot), newHistory) ->
+                    NonEmptyHistory
+                      initial
+                      newRollbackBlock
+                      newSnapshot
+                      tip
+                      newHistory
         , ..
         }
+  where
+    rollbackHistory snapshots = do
+      ((latestBlockNo, snapshot), snapshots') <- Map.maxViewWithKey snapshots
+      if latestBlockNo <= blockNo
+        then pure ((latestBlockNo, snapshot), snapshots')
+        else rollbackHistory snapshots'
 
 -- | For testing
 validate :: LiveContracts -> IO ()
@@ -250,18 +258,23 @@ shrinkLiveContracts shrinkContractMap LiveContracts{..} = maybe id (:) shrunkByS
           EmptyHistory (At tip)
             : fold
               [ [NonEmptyHistory initial' blockNo snapshot tip snapshots | initial' <- shrinkContractMap initial]
-              , do
-                  blockNo' <- shrinkBlockNo blockNo
-                  let snapshots' = Map.insert blockNo' snapshot $ Map.filterWithKey (\k _ -> k < blockNo') snapshots
-                  pure case Map.maxViewWithKey <$> trimHistory securityParameter tip initial snapshots' of
-                    (initial', Nothing) -> NonEmptyHistory initial' blockNo' initial' tip mempty
-                    (initial', Just ((k, v), m)) -> NonEmptyHistory initial' k v tip m
+              , [ NonEmptyHistory
+                  initial
+                  blockNo'
+                  snapshot
+                  tip
+                  (Map.filterWithKey (\k _ -> k < blockNo') snapshots)
+                | blockNo' <- shrinkBlockNo blockNo
+                ]
               , [NonEmptyHistory initial blockNo snapshot' tip snapshots | snapshot' <- shrinkContractMap snapshot]
-              , do
-                  tip' <- shrinkBlockNo tip
-                  pure case Map.maxViewWithKey $ Map.filterWithKey (\k _ -> k <= tip') $ Map.insert blockNo snapshot snapshots of
-                    Nothing -> NonEmptyHistory initial (min tip' blockNo) initial tip' mempty
-                    Just ((k, v), m) -> NonEmptyHistory initial k v tip' m
+              , [ NonEmptyHistory
+                  initial
+                  (min blockNo tip')
+                  snapshot
+                  tip'
+                  (Map.filterWithKey (\k _ -> k < min blockNo tip') snapshots)
+                | tip' <- shrinkBlockNo tip
+                ]
               , [ case trimHistory securityParameter tip initial snapshots' of
                   (initial', snapshots'') ->
                     NonEmptyHistory
