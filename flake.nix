@@ -18,8 +18,6 @@
 
     cardano-world.url = "github:input-output-hk/cardano-world/d22f50fc77d23e2612ca2b313a098dd0b48834d4";
 
-    # cardano-wallet.url = "github:cardano-foundation/cardano-wallet?ref=v2023-07-18";
-
     iogx = {
       url = "github:input-output-hk/iogx?ref=v4";
       inputs.hackage.follows = "hackage";
