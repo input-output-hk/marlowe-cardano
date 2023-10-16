@@ -10,6 +10,7 @@ import Data.Binary.Get (getInt64be, runGet)
 import Data.Binary.Put (putInt64be, runPut)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Functor (($>))
+import Data.Int (Int64)
 import GHC.Generics (Generic)
 import GHC.IO (mkUserError)
 import Network.Socket (Socket)
@@ -48,6 +49,12 @@ data FrameStatus
   = OkStatus
   | ErrorStatus
   deriving stock (Show, Read, Eq, Ord, Bounded, Enum, Generic)
+
+data FrameHeader = FrameHeader
+  { frameHeaderStatus :: FrameStatus
+  , frameHeaderLength :: Int64
+  }
+  deriving stock (Show, Read, Eq, Ord, Generic)
 
 data Frame = Frame
   { frameStatus :: FrameStatus
