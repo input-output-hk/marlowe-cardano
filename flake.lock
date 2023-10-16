@@ -5524,11 +5524,11 @@
         "iogx": "iogx_2"
       },
       "locked": {
-        "lastModified": 1697459475,
-        "narHash": "sha256-UmrponoLaCPa7S9itrhb3JVFAjIiupfzfq/k/p8Ewfk=",
+        "lastModified": 1697464937,
+        "narHash": "sha256-N+l8vOatRd5I4kENJes2YeW/XwWg4FaB6kNi053+XUM=",
         "owner": "input-output-hk",
         "repo": "marlowe-plutus",
-        "rev": "dda9bd0ef48e4c3afac217731bb30642aa55c0d0",
+        "rev": "c260846c12232bfdaef46cc8fd65cdad32547123",
         "type": "github"
       },
       "original": {

@@ -1,7 +1,7 @@
 { inputs, pkgs, lib, ... }:
 
 let
-  cabalProject = inputs.self.project.cabalProject;
+  cabalProject = inputs.self.cabalProject;
 
   cardano-cli = inputs.cardano-node.packages.cardano-cli;
   cardano-node = inputs.cardano-node.packages.cardano-node;

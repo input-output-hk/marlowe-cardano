@@ -22,6 +22,9 @@ let
 
         modules = [{
 
+          # This reduces the shell size by 600MB
+          dontStrip = false;
+
           packages = {
             # Fix missing executables on the paths of the test runners. This is arguably
             # a bug, and the fix is a bit of a hack.
