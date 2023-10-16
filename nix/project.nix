@@ -17,16 +17,12 @@ let
         shell.withHoogle = false;
 
         inputMap = {
-          "https://input-output-hk.github.io/cardano-haskell-packages" = inputs.CHaP;
+          "https://input-output-hk.github.io/cardano-haskell-packages" = inputs.iogx.inputs.CHaP;
         };
 
         modules = [{
-          packages = {
-            # # See https://github.com/input-output-hk/plutus/issues/1213 and
-            # # https://github.com/input-output-hk/plutus/pull/2865.
-            # marlowe.doHaddock = meta.enableHaddock;
-            # marlowe.flags.defer-plugin-errors = meta.enableHaddock;
 
+          packages = {
             # Fix missing executables on the paths of the test runners. This is arguably
             # a bug, and the fix is a bit of a hack.
             marlowe.components.tests.marlowe-test.preCheck = ''
