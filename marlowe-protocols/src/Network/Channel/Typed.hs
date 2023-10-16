@@ -19,6 +19,7 @@ import qualified Data.ByteString.Lazy as LBS
 import Network.Channel (socketAsChannel)
 import Network.Protocol.Codec (BinaryMessage)
 import Network.Protocol.Driver.Trace
+import qualified Network.Protocol.Driver.Untyped as Untyped
 import Network.Protocol.Peer.Trace
 import Network.Socket (
   AddrInfo (addrSocketType),
@@ -274,7 +275,8 @@ driverToChannel inj driver = go $ startDStateTraced driver
             sendMessageTraced driver (reference ev) tok msg
         }
 
-    goInbound :: dState -> PeerHasAgency (FlipAgency pr) st' -> m (InboundChannel ps pr st' m)
+    goInbound
+      :: dState -> PeerHasAgency (FlipAgency pr) st' -> m (InboundChannel ps pr st' m)
     goInbound dState tok = do
       (sendRef, SomeMessage message, dState') <- recvMessageTraced driver tok dState
       let receiveArgs =
@@ -331,7 +333,7 @@ tcpClientChannel inj host port = withInjectEvent inj Connect \ev -> do
   let driver =
         mkDriverTraced
           (composeInjectSelector inj $ injectSelector $ ClientDriver addr)
-          (socketAsChannel socket)
+          (Untyped.mkDriver $ socketAsChannel socket)
   pure
     ( driverToChannel (composeInjectSelector inj $ injectSelector $ ClientPeer addr) driver
     , reference ev
