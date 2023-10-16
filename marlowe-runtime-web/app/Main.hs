@@ -18,13 +18,11 @@ import Data.String (IsString (fromString))
 import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
 import Data.Version (showVersion)
-import Language.Marlowe.Protocol.Types (MarloweRuntime)
 import Language.Marlowe.Runtime.Client (connectToMarloweRuntimeTraced)
 import Language.Marlowe.Runtime.Web.Server
 import Network.HTTP.Types
-import Network.Protocol.Driver (PeerCrashedException, PeerDisconnectedException, PeerSentInvalidMessageBytesException)
+import Network.Protocol.Codec (DeserializeError (DeserializeError))
 import Network.Protocol.Driver.Trace (TcpClientSelector, renderTcpClientSelectorOTel, sockAddrToAttributes)
-import Network.Protocol.Handshake.Types (Handshake)
 import Network.Socket (PortNumber)
 import Network.Wai
 import Network.Wai.Handler.Warp (
@@ -66,17 +64,7 @@ main = do
         , libraryVersion = fromString $ showVersion version
         }
     onExceptionResponse e
-      | Just _ <- fromException @(PeerCrashedException (Handshake MarloweRuntime)) e =
-          responseLBS
-            badGateway502
-            [(hContentType, "text/plain; charset=utf-8")]
-            ("Bad Gateway / " <> (fromString $ show e))
-      | Just _ <- fromException @(PeerDisconnectedException (Handshake MarloweRuntime)) e =
-          responseLBS
-            badGateway502
-            [(hContentType, "text/plain; charset=utf-8")]
-            ("Bad Gateway / " <> (fromString $ show e))
-      | Just _ <- fromException @(PeerSentInvalidMessageBytesException (Handshake MarloweRuntime)) e =
+      | Just DeserializeError{} <- fromException e =
           responseLBS
             badGateway502
             [(hContentType, "text/plain; charset=utf-8")]

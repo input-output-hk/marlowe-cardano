@@ -179,7 +179,7 @@ executable marlowe-web-server
     , marlowe-client
     , marlowe-protocols
     , marlowe-runtime-web:server
-    , marlowe-runtime:{config, proxy-api}
+    , marlowe-runtime:config
     , mtl >=2.2 && <3
     , network
     , optparse-applicative

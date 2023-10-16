@@ -4,20 +4,15 @@
 module Network.Channel where
 
 import Control.Concurrent.STM (STM, newTChan, readTChan, writeTChan)
-import Control.Exception (Exception (..))
-import Control.Monad ((>=>))
-import Control.Monad.Trans.Maybe (MaybeT (..))
-import Data.Binary.Get (getInt64be, runGet)
-import Data.Binary.Put (putInt64be, runPut)
+import Control.Monad (mfilter, (>=>))
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import Data.Functor (($>))
-import qualified Data.Text.Lazy as TL
-import qualified Data.Text.Lazy.Encoding as TLE
-import GHC.Generics (Generic)
-import GHC.IO (mkUserError)
+import Data.Text.Internal.Lazy (smallChunkSize)
 import Network.Socket (Socket)
 import qualified Network.Socket.ByteString.Lazy as Socket
-import UnliftIO (MonadIO, MonadUnliftIO, SomeException (..), catch, liftIO, mask, throwIO, try)
+import qualified System.IO as IO
+import UnliftIO (MonadIO, liftIO)
 
 data Channel m a = Channel
   { send :: a -> m ()
@@ -47,61 +42,36 @@ hoistChannel nat Channel{..} =
     , recv = nat recv
     }
 
-data FrameStatus
-  = OkStatus
-  | ErrorStatus
-  deriving stock (Show, Read, Eq, Ord, Bounded, Enum, Generic)
+handlesAsChannel
+  :: forall m
+   . (MonadIO m)
+  => IO.Handle
+  -- ^ Read handle
+  -> IO.Handle
+  -- ^ Write handle
+  -> Channel m LBS.ByteString
+handlesAsChannel hread hwrite = Channel{..}
+  where
+    send :: LBS.ByteString -> m ()
+    send chunk = liftIO do
+      LBS.hPut hwrite chunk
+      IO.hFlush hwrite
 
-data Frame = Frame
-  { frameStatus :: FrameStatus
-  , frameContents :: LBS.ByteString
-  }
+    recv :: m (Maybe LBS.ByteString)
+    recv = liftIO do
+      eof <- IO.hIsEOF hread
+      if eof
+        then pure Nothing
+        else Just . LBS.fromStrict <$> BS.hGetSome hread smallChunkSize
 
-socketAsChannel :: forall m. (MonadIO m) => Socket -> Channel m Frame
+socketAsChannel :: forall m. (MonadIO m) => Socket -> Channel m LBS.ByteString
 socketAsChannel sock = Channel{..}
   where
-    send :: Frame -> m ()
-    send Frame{..} = liftIO do
-      let headerBytes =
-            LBS.cons
-              ( case frameStatus of
-                  OkStatus -> 0
-                  ErrorStatus -> 1
-              )
-              (runPut $ putInt64be $ LBS.length frameContents)
-      Socket.sendAll sock $ headerBytes <> frameContents
+    send :: LBS.ByteString -> m ()
+    send = liftIO . Socket.sendAll sock
 
-    recv :: m (Maybe Frame)
-    recv = runMaybeT do
-      headerBytes <- liftIO $ Socket.recv sock 9
-      (statusByte, sizeBytes) <- MaybeT $ pure $ LBS.uncons headerBytes
-      frameStatus <- case statusByte of
-        0 -> pure OkStatus
-        1 -> pure ErrorStatus
-        _ -> throwIO $ mkUserError $ "Invalid status byte: " <> show statusByte
-      let contentLength = runGet getInt64be sizeBytes
-      frameContents <- liftIO $ Socket.recv sock contentLength
-      pure Frame{..}
-
-withSocketChannel
-  :: (MonadUnliftIO m, MonadFail m)
-  => Socket
-  -> (Channel m Frame -> m a)
-  -> m a
-withSocketChannel socket f = do
-  let channel = socketAsChannel socket
-  mask \restore -> do
-    result <- try $ restore $ f channel
-    case result of
-      Left (SomeException ex) -> do
-        let errorFrame = Frame ErrorStatus $ TLE.encodeUtf8 $ TL.pack $ displayException ex
-        -- Ignore any errors sending the error to the peer. For example, if we're throwing
-        -- an exception because the peer failed, we would end up writing to a broken pipe.
-        -- Additionally, we don't really care if this succeeds or not from the point of view
-        -- of this peer's next steps - which should always be to re-throw the exception.
-        send channel errorFrame `catch` \SomeException{} -> pure ()
-        throwIO ex
-      Right a -> pure a
+    recv :: m (Maybe LBS.ByteString)
+    recv = liftIO $ mfilter (not . LBS.null) . pure <$> Socket.recv sock (fromIntegral smallChunkSize)
 
 effectChannel
   :: (Monad m)

@@ -18,8 +18,8 @@ import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import qualified Data.Text as T
 import GHC.Show (showSpace)
-import Network.Protocol.Codec (BinaryMessage (..), ShowProtocol (..))
-import Network.Protocol.Codec.Spec (ArbitraryMessage (..), MessageEq (..))
+import Network.Protocol.Codec (BinaryMessage (..))
+import Network.Protocol.Codec.Spec (ArbitraryMessage (..), MessageEq (..), ShowProtocol (..))
 import Network.Protocol.Peer.Trace (MessageAttributes (..), OTelProtocol (..))
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency (..))

@@ -12,10 +12,11 @@ import Data.String (fromString)
 import GHC.Show (showSpace)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint)
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
-import Network.Protocol.Codec (BinaryMessage (..), ShowProtocol (..))
+import Network.Protocol.Codec (BinaryMessage (..))
 import Network.Protocol.Codec.Spec (
   MessageEq (..),
   MessageVariations (..),
+  ShowProtocol (..),
   SomePeerHasAgency (..),
   Variations (..),
   varyAp,
