@@ -4,20 +4,17 @@
 module Network.Channel where
 
 import Control.Concurrent.STM (STM, newTChan, readTChan, writeTChan)
-import Control.Exception (Exception (..))
 import Control.Monad ((>=>))
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import Data.Binary.Get (getInt64be, runGet)
 import Data.Binary.Put (putInt64be, runPut)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Functor (($>))
-import qualified Data.Text.Lazy as TL
-import qualified Data.Text.Lazy.Encoding as TLE
 import GHC.Generics (Generic)
 import GHC.IO (mkUserError)
 import Network.Socket (Socket)
 import qualified Network.Socket.ByteString.Lazy as Socket
-import UnliftIO (MonadIO, MonadUnliftIO, SomeException (..), catch, liftIO, mask, throwIO, try)
+import UnliftIO (MonadIO, liftIO, throwIO)
 
 data Channel m a = Channel
   { send :: a -> m ()
@@ -82,26 +79,6 @@ socketAsChannel sock = Channel{..}
       let contentLength = runGet getInt64be sizeBytes
       frameContents <- liftIO $ Socket.recv sock contentLength
       pure Frame{..}
-
-withSocketChannel
-  :: (MonadUnliftIO m, MonadFail m)
-  => Socket
-  -> (Channel m Frame -> m a)
-  -> m a
-withSocketChannel socket f = do
-  let channel = socketAsChannel socket
-  mask \restore -> do
-    result <- try $ restore $ f channel
-    case result of
-      Left (SomeException ex) -> do
-        let errorFrame = Frame ErrorStatus $ TLE.encodeUtf8 $ TL.pack $ displayException ex
-        -- Ignore any errors sending the error to the peer. For example, if we're throwing
-        -- an exception because the peer failed, we would end up writing to a broken pipe.
-        -- Additionally, we don't really care if this succeeds or not from the point of view
-        -- of this peer's next steps - which should always be to re-throw the exception.
-        send channel errorFrame `catch` \SomeException{} -> pure ()
-        throwIO ex
-      Right a -> pure a
 
 effectChannel
   :: (Monad m)

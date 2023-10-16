@@ -12,7 +12,7 @@ module Network.Protocol.Driver.Trace where
 import Colog (WithLog)
 import qualified Colog as C
 import Control.Concurrent.Component
-import Control.Monad (join, replicateM)
+import Control.Monad (join, replicateM, void)
 import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Class (lift)
@@ -25,7 +25,6 @@ import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as LBS
 import Data.ByteString.Lazy.Base16 (encodeBase16)
 import Data.Foldable (traverse_)
-import Data.Functor (void)
 import Data.Int (Int64)
 import Data.List (intercalate)
 import Data.Proxy
@@ -34,9 +33,10 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
 import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Lazy.Encoding as TLE
 import Data.Void (Void)
 import Network.Channel hiding (close)
-import Network.Protocol.Codec (BinaryMessage, DeserializeError (..), decodeGet, getMessage, putMessage)
+import Network.Protocol.Codec (BinaryMessage, DeserializeError, decodeGet, getMessage, putMessage)
 import Network.Protocol.Codec.Spec (ShowProtocol (..))
 import Network.Protocol.Connection (
   Connection (..),
@@ -46,11 +46,7 @@ import Network.Protocol.Connection (
   ServerSource (..),
   ToPeer,
  )
-import Network.Protocol.Driver (
-  PeerCrashedException (..),
-  TcpServerDependencies (..),
-  rethrowDeserializeError,
- )
+import Network.Protocol.Driver (PeerCrashedException (..), TcpServerDependencies (..))
 import Network.Protocol.Handshake.Client (handshakeClientPeer, simpleHandshakeClient)
 import Network.Protocol.Handshake.Server (handshakeServerPeer, simpleHandshakeServer)
 import Network.Protocol.Handshake.Types (Handshake, HasSignature, signature)
@@ -62,7 +58,6 @@ import Network.Socket (
   HostName,
   PortNumber,
   SockAddr (..),
-  Socket,
   SocketType (..),
   addrAddress,
   close,
@@ -84,7 +79,7 @@ import Observe.Event.Render.OpenTelemetry
 import OpenTelemetry.Trace.Core
 import OpenTelemetry.Trace.Id (SpanId, TraceId, bytesToSpanId, bytesToTraceId, spanIdBytes, traceIdBytes)
 import OpenTelemetry.Trace.TraceState (Key (..), TraceState, Value (..), empty, insert, toList)
-import UnliftIO (MonadUnliftIO, mask, throwIO, try, withRunInIO)
+import UnliftIO (Exception (..), MonadUnliftIO, SomeException, mask, throwIO, try, withRunInIO)
 
 data DriverTraced ps dState r m = DriverTraced
   { sendMessageTraced
@@ -228,7 +223,9 @@ tcpServerTraced
   -> Component m (TcpServerDependencies ps server m) ()
 tcpServerTraced name inj = component_ (name <> "-tcp-server") \TcpServerDependencies{..} -> do
   withRunInIO \runInIO -> runTCPServer (Just host) (show port) $ runComponent_ $ hoistComponent runInIO $ component_ (name <> "-tcp-worker") \socket -> runResourceT do
-    (parentRef, sendAck) <- liftIO $ serverHandshake socket
+    spanContextLength <- liftIO $ runGet get <$> Socket.recv socket 8
+    spanContext <- liftIO $ runGet get <$> Socket.recv socket spanContextLength
+    let parentRef = wrapContext spanContext
     withInjectEventArgs inj (simpleNewEventArgs Connected){newEventParent = Just parentRef} \ev -> do
       addr <-
         liftIO $
@@ -240,28 +237,30 @@ tcpServerTraced name inj = component_ (name <> "-tcp-server") \TcpServerDependen
       addField ev $ ConnectedAddr addr
       pName <- liftIO $ getPeerName socket
       addField ev $ ConnectedPeer pName
-      _ <- liftIO sendAck
+      _ <- liftIO $ Socket.sendAll socket $ LBS.pack [0]
       let closeArgs = (simpleNewEventArgs CloseServer){newEventParent = Just parentRef}
       server <- getServer serverSource
       lift $ localBackend (setAncestorEventBackend parentRef) do
-        let handshakeServer = simpleHandshakeServer (signature $ Proxy @ps) server
-        let peer = handshakeServerPeer toPeer handshakeServer
-        runPeerTracedOverSocket
-          inj
-          (injectSelector $ ServerDriver addr pName)
-          (injectSelector $ ServerPeer addr pName)
-          closeArgs
-          socket
-          peer
-  where
-    serverHandshake socket = do
-      -- Expect the client to send the number of bytes in the initial span context.
-      spanContextLength <- runGet get <$> Socket.recv socket 8
-      -- Expect the client to send the initial span context.
-      spanContext <- runGet get <$> Socket.recv socket spanContextLength
-      -- Wrap the parent context in a ref, and return an action to send a one byte ack to the client
-      -- That tells them we are ready to interact.
-      pure (wrapContext spanContext, void $ Socket.sendAll socket $ LBS.pack [0])
+        let channel = socketAsChannel socket
+            driver = mkDriverTraced (composeInjectSelector inj $ injectSelector $ ServerDriver addr pName) channel
+            handshakeServer = simpleHandshakeServer (signature $ Proxy @ps) server
+            peer = handshakeServerPeer toPeer handshakeServer
+        mask \restore -> do
+          result <-
+            restore $
+              try $
+                runPeerWithDriverTraced
+                  (composeInjectSelector inj $ injectSelector $ ServerPeer addr pName)
+                  driver
+                  peer
+                  (startDStateTraced driver)
+          withInjectEventArgs inj closeArgs \ev' -> do
+            case result of
+              Left ex -> do
+                finalize ev' $ Just ex
+                void $ try @_ @SomeException $ send channel $ Frame ErrorStatus $ TLE.encodeUtf8 $ TL.pack $ displayException ex
+                throwIO ex
+              Right a -> pure a
 
 tcpClientTraced
   :: forall r s m ps st client
@@ -283,62 +282,38 @@ tcpClientTraced inj host port toPeer = Connector $
     addField ev addr
     socket <- liftIO $ openSocket addr
     liftIO $ connect socket $ addrAddress addr
-    initialSpanContext <- context $ reference ev
-    liftIO $ clientHandshake socket initialSpanContext
+    spanContext <- context $ reference ev
+    let spanContextBytes = runPut $ put spanContext
+    let spanContextLength = LBS.length spanContextBytes
+    liftIO $ Socket.sendAll socket $ runPut $ put spanContextLength
+    liftIO $ Socket.sendAll socket spanContextBytes
+    _ <- liftIO $ Socket.recv socket 1
     let closeArgs = (simpleNewEventArgs CloseClient){newEventParent = Just $ reference ev}
     pure
       Connection
         { runConnection = \client -> localBackend (setAncestorEventBackend $ reference ev) do
-            let handshakeClient = simpleHandshakeClient (signature $ Proxy @ps) client
-            let peer = handshakeClientPeer toPeer handshakeClient
-            runPeerTracedOverSocket
-              inj
-              (injectSelector $ ClientDriver addr)
-              (injectSelector $ ClientPeer addr)
-              closeArgs
-              socket
-              peer
+            let channel = socketAsChannel socket
+                driver = mkDriverTraced (composeInjectSelector inj $ injectSelector $ ClientDriver addr) channel
+                handshakeClient = simpleHandshakeClient (signature $ Proxy @ps) client
+                peer = handshakeClientPeer toPeer handshakeClient
+            mask \restore -> do
+              result <-
+                restore $
+                  try $
+                    runPeerWithDriverTraced
+                      (composeInjectSelector inj $ injectSelector $ ClientPeer addr)
+                      driver
+                      peer
+                      (startDStateTraced driver)
+              withInjectEventArgs inj closeArgs \ev' -> do
+                liftIO $ close socket
+                case result of
+                  Left ex -> do
+                    finalize ev' $ Just ex
+                    void $ try @_ @SomeException $ send channel $ Frame ErrorStatus $ TLE.encodeUtf8 $ TL.pack $ displayException ex
+                    throwIO ex
+                  Right a -> pure a
         }
-  where
-    clientHandshake socket initialSpanContext = do
-      let spanContextBytes = runPut $ put initialSpanContext
-      let spanContextLength = LBS.length spanContextBytes
-      -- Send the length of the initial span context in bytes.
-      Socket.sendAll socket $ runPut $ put spanContextLength
-      -- Send the initial span context.
-      Socket.sendAll socket spanContextBytes
-      -- Wait to receive the 1-byte ack from the server.
-      void $ Socket.recv socket 1
-
-runPeerTracedOverSocket
-  :: forall r sel s ps pr st m a
-   . (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, BinaryMessage ps, MonadFail m)
-  => InjectSelector (sel ps) s
-  -> InjectSelector (DriverSelector ps) (sel ps)
-  -> InjectSelector (TypedProtocolsSelector ps) (sel ps)
-  -> NewEventArgs r (sel ps) Void
-  -> Socket
-  -> PeerTraced ps pr st m a
-  -> m a
-runPeerTracedOverSocket inj injDriver injProtocol closeArgs socket peer =
-  withSocketChannel socket \channel -> do
-    let driver = mkDriverTraced (composeInjectSelector inj injDriver) channel
-    mask \restore -> do
-      result <-
-        restore $
-          try $
-            runPeerWithDriverTraced
-              (composeInjectSelector inj injProtocol)
-              driver
-              peer
-              (startDStateTraced driver)
-      withInjectEventArgs inj closeArgs \ev' -> do
-        liftIO $ close socket
-        case result of
-          Left ex -> do
-            finalize ev' $ Just ex
-            throwIO ex
-          Right a -> pure a
 
 class HasSpanContext r where
   context :: (MonadIO m) => r -> m SpanContext
@@ -398,15 +373,17 @@ mkDriverTraced inj Channel{..} = DriverTraced{..}
       -> DecodeStep ByteString DeserializeError m a
       -> m (a, Maybe ByteString)
     decodeChannel trailing (DecodeDone a _) = pure (a, trailing)
-    decodeChannel _ (DecodeFail err) = rethrowDeserializeError err
+    decodeChannel _ (DecodeFail failure) = throwIO failure
     decodeChannel trailing (DecodePartial p) =
       case trailing of
         Nothing -> go $ DecodePartial p
         Just trailing' -> go =<< p (Just trailing')
       where
         go = \case
-          DecodeDone a trailing' -> pure (a, trailing')
-          DecodeFail err -> rethrowDeserializeError err
+          DecodeDone a Nothing -> pure (a, Nothing)
+          DecodeDone a (Just trailing') -> do
+            pure (a, Just trailing')
+          DecodeFail failure -> throwIO failure
           DecodePartial next -> do
             mBytes <-
               recv >>= traverse \Frame{..} -> case frameStatus of
