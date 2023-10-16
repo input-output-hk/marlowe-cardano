@@ -1,4 +1,4 @@
-{ inputs, pkgs, l, ... }:
+{ inputs, pkgs, lib, ... }:
 
 let
   cabalProject = inputs.self.project.cabalProject;
@@ -24,7 +24,7 @@ let
 
 in
 pkgs.writeScriptBin "marlowe-integration-tests" ''
-  export PATH="${l.makeBinPath runtimeInputs}:$PATH"
+  export PATH="${lib.makeBinPath runtimeInputs}:$PATH"
   export PGUSER=postgres
   ${marlowe-integration-tests}/bin/marlowe-integration-tests "$@"
 ''

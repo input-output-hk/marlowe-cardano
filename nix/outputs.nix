@@ -19,9 +19,6 @@ let
     ${lib.concatMapStringsSep "\n" (drv: "cp ${drv}/bin/* $out") (lib.attrValues static)}
   '';
 
-
-  inherit (repoRoot.nix.marlowe-cardano.deploy) operables oci-images nomadTasks;
-
 in
 
 [
@@ -32,14 +29,26 @@ in
 
   # Extra flake outputs
   {
-    inherit static allStatic operables oci-images nomadTasks;
+    inherit static allStatic;
+
+    operables = repoRoot.nix.marlowe-cardano.deploy.operables;
+    oci-images = repoRoot.nix.marlowe-cardano.deploy.oci-images;
+    nomadTasks = repoRoot.nix.marlowe-cardano.deploy.nomadTasks;
+
     networks = repoRoot.nix.marlowe-cardano.networks;
+
     packages.integration-tests = repoRoot.nix.marlowe-cardano.integration-tests;
+
     checks.check-validators = repoRoot.nix.marlowe-cardano.check-validators;
+
+    hydraJobs.operables = repoRoot.nix.marlowe-cardano.deploy.operables;
+    hydraJobs.oci-images = repoRoot.nix.marlowe-cardano.deploy.oci-images;
+    hydraJobs.nomadTasks = repoRoot.nix.marlowe-cardano.deploy.nomadTasks;
   }
 
   # hydraJobs for linux only
   (lib.optionalAttrs pkgs.stdenv.isLinux {
-    hydraJobs = { inherit static allStatic operables oci-images; };
+    hydraJobs.static = static;
+    hydraJobs.allStatic = allStatic;
   })
 ]
