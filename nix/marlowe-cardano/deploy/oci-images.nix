@@ -162,7 +162,6 @@ let
     {
       name = "marlowe-chain-indexer";
       labels.description = "A Cardano chain indexer for the Marlowe Runtime";
-      package = marlowe-chain-indexer;
       runtimeInputs = [ jq sqitchPg postgresql coreutils ];
       runtimeScript = ''
         #################
@@ -223,7 +222,6 @@ let
     {
       name = "marlowe-chain-sync";
       labels.description = "A Cardano chain sync and query service for the Marlowe Runtime.";
-      package = marlowe-chain-sync;
       runtimeInputs = [ jq coreutils ];
       runtimeScript = ''
         #################
@@ -277,7 +275,6 @@ let
     {
       name = "marlowe-indexer";
       labels.description = "A Marlowe contract indexing service for the Marlowe Runtime.";
-      package = marlowe-indexer;
       runtimeInputs = [ sqitchPg postgresql coreutils ];
       runtimeScript = ''
         #################
@@ -327,7 +324,6 @@ let
     {
       name = "marlowe-sync";
       labels.description = "A Marlowe contract synchronization and query service for the Marlowe Runtime.";
-      package = marlowe-sync;
       runtimeInputs = [ coreutils ];
       runtimeScript = ''
         #################
@@ -377,7 +373,6 @@ let
     {
       name = "marlowe-tx";
       labels.description = "A Marlowe transaction creation service for the Marlowe Runtime.";
-      package = marlowe-tx;
       runtimeInputs = [ z3 marlowe-plutus.packages.marlowe-minting-validator ];
       runtimeScript = ''
         #################
@@ -424,7 +419,6 @@ let
     {
       name = "marlowe-contract";
       labels.description = "A content-addressable contract store service for the Marlowe runtime.";
-      package = marlowe-contract;
       runtimeInputs = [ coreutils ];
       runtimeScript = ''
         #################
@@ -479,7 +473,6 @@ let
     {
       name = "marlowe-proxy";
       labels.description = "An API Gateway service for the Marlowe Runtime.";
-      package = marlowe-proxy;
       runtimeScript = ''
         #################
         # REQUIRED VARS #
@@ -539,7 +532,6 @@ let
     {
       name = "marlowe-runtime";
       labels.description = "Application backend for Marlowe smart contracts.";
-      package = marlowe-runtime;
       runtimeInputs = [ z3 marlowe-plutus.packages.marlowe-minting-validator ];
       runtimeScript = ''
         #################
@@ -625,7 +617,6 @@ let
     {
       name = "marlowe-web-server";
       labels.description = "An HTTP server for the Marlowe Runtime, exposing a REST API.";
-      package = marlowe-web-server;
       runtimeScript = ''
         #################
         # REQUIRED VARS #
@@ -676,7 +667,6 @@ let
     {
       name = "marlowe-pipe";
       labels.description = "A streaming command processor for the Marlowe Runtime.";
-      package = marlowe-pipe;
       runtimeScript = mkMarloweAppScript ''
         ${marlowe-pipe}/bin/marlowe-pipe \
           --timeout-seconds "$TIMEOUT_SECONDS" \
@@ -689,7 +679,6 @@ let
     {
       name = "marlowe-scaling";
       labels.description = "A scale-testing client for the Marlowe Runtime.";
-      package = marlowe-scaling;
       runtimeScript = mkMarloweAppScript ''
         #################
         # REQUIRED VARS #
@@ -718,7 +707,6 @@ let
     {
       name = "marlowe-oracle";
       labels.description = "A general-purpose oracle for Marlowe contracts.";
-      package = marlowe-oracle;
       runtimeScript = mkMarloweAppScript ''
         #################
         # REQUIRED VARS #
@@ -750,7 +738,6 @@ let
     {
       name = "marlowe-finder";
       labels.description = "Streams contract events in real-time from the chain.";
-      package = marlowe-finder;
       runtimeScript = mkMarloweAppScript ''
         #################
         # OPTIONAL VARS #
