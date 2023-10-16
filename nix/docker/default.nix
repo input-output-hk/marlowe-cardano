@@ -22,7 +22,6 @@ let
     { name
 
       # Formally from mkOperable
-    , package
     , runtimeScript
     , runtimeInputs ? [ ]
     , livenessProbe ? null
@@ -37,7 +36,9 @@ let
 
       operable = std.lib.ops.mkOperable
         {
-          inherit package runtimeInputs runtimeScript;
+          inherit runtimeInputs runtimeScript;
+          # NOTE: Fake package to get around std artificial requirements
+          package = { inherit name; };
         }
       // l.optionalAttrs (livenessProbe != null) {
         livenessProbe = std.lib.ops.writeScript livenessProbe;
