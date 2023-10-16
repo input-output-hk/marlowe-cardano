@@ -16,19 +16,12 @@ import Control.Monad.Trans.Resource (runResourceT)
 import qualified Data.ByteString as BS
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as LBS
-import Data.Data (Typeable)
 import Data.Proxy (Proxy (Proxy))
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
 import Network.Channel (Channel (..), Frame (..), FrameStatus (..), withSocketChannel)
-import Network.Protocol.Codec (
-  BinaryMessage,
-  DeserializeError (..),
-  ShowPeerHasAgencyViaShowProtocol (ShowPeerHasAgencyViaShowProtocol),
-  ShowProtocol,
-  binaryCodec,
- )
+import Network.Protocol.Codec (BinaryMessage, DeserializeError (..), binaryCodec)
 import Network.Protocol.Connection (Connection (..), Connector (..), ServerSource (..), ToPeer)
 import Network.Protocol.Handshake.Client (handshakeClientPeer, simpleHandshakeClient)
 import Network.Protocol.Handshake.Server (handshakeServerPeer, simpleHandshakeServer)
@@ -60,32 +53,25 @@ import UnliftIO (
   withRunInIO,
  )
 
-data PeerCrashedException ps
-  = forall pr (st :: ps).
-    PeerCrashedException (ShowPeerHasAgencyViaShowProtocol pr st) Text
-
-deriving instance (ShowProtocol ps) => Show (PeerCrashedException ps)
-
-instance (Typeable ps, ShowProtocol ps) => Exception (PeerCrashedException ps) where
-  displayException (PeerCrashedException state message) =
-    unlines $
-      "Remote peer crashed."
-        : ("Protocol state: " <> show state)
-        : (("  " <>) <$> "Upstream error:" : (T.unpack . ("  " <>) <$> T.lines message))
-
-data PeerDisconnectedException ps
-  = forall pr (st :: ps).
-    PeerDisconnectedException (ShowPeerHasAgencyViaShowProtocol pr st)
-
-deriving instance (ShowProtocol ps) => Show (PeerDisconnectedException ps)
-
-instance (Typeable ps, ShowProtocol ps) => Exception (PeerDisconnectedException ps) where
-  displayException (PeerDisconnectedException state) = "Remote peer disconnected unexpectedly. Protocol State: " <> show state
-
-newtype PeerSentInvalidMessageBytesException ps = PeerSentInvalidMessageBytesException (DeserializeError ps)
+newtype PeerCrashedException = PeerCrashedException Text
   deriving (Show)
 
-instance (Typeable ps, ShowProtocol ps) => Exception (PeerSentInvalidMessageBytesException ps) where
+instance Exception PeerCrashedException where
+  displayException (PeerCrashedException message) =
+    unlines $
+      "Remote peer crashed. Upstream error:"
+        : (T.unpack . ("  " <>) <$> T.lines message)
+
+data PeerDisconnectedException = PeerDisconnectedException
+  deriving (Show)
+
+instance Exception PeerDisconnectedException where
+  displayException PeerDisconnectedException = "Remote peer disconnected unexpectedly."
+
+newtype PeerSentInvalidMessageBytesException = PeerSentInvalidMessageBytesException DeserializeError
+  deriving (Show)
+
+instance Exception PeerSentInvalidMessageBytesException where
   displayException (PeerSentInvalidMessageBytesException err) =
     unlines $
       "Remote peer send invalid message bytes."
@@ -93,7 +79,7 @@ instance (Typeable ps, ShowProtocol ps) => Exception (PeerSentInvalidMessageByte
 
 mkDriver
   :: forall ps m
-   . (MonadIO m, BinaryMessage ps, Typeable ps, ShowProtocol ps)
+   . (MonadIO m, BinaryMessage ps)
   => Channel m Frame
   -> Driver ps (Maybe ByteString) m
 mkDriver Channel{..} = Driver{..}
@@ -111,28 +97,27 @@ mkDriver Channel{..} = Driver{..}
        . PeerHasAgency pr st
       -> Maybe ByteString
       -> m (SomeMessage st, Maybe ByteString)
-    recvMessage tok trailing = decodeChannel tok trailing =<< decode tok
+    recvMessage tok trailing = decodeChannel trailing =<< decode tok
 
     decodeChannel
-      :: PeerHasAgency pr (st :: ps)
-      -> Maybe ByteString
-      -> DecodeStep ByteString (DeserializeError ps) m a
+      :: Maybe ByteString
+      -> DecodeStep ByteString DeserializeError m a
       -> m (a, Maybe ByteString)
-    decodeChannel _ _ (DecodeDone a trailing) = pure (a, trailing)
-    decodeChannel _ _ (DecodeFail err) = rethrowDeserializeError err
-    decodeChannel tok Nothing (DecodePartial next) = do
+    decodeChannel _ (DecodeDone a trailing) = pure (a, trailing)
+    decodeChannel _ (DecodeFail err) = rethrowDeserializeError err
+    decodeChannel Nothing (DecodePartial next) = do
       bytes <-
         recv >>= traverse \Frame{..} -> case frameStatus of
           OkStatus -> pure frameContents
-          ErrorStatus -> throwIO $ PeerCrashedException (ShowPeerHasAgencyViaShowProtocol tok) $ decodeUtf8 $ LBS.toStrict frameContents
-      next bytes >>= decodeChannel tok Nothing
-    decodeChannel tok trailing (DecodePartial next) = next trailing >>= decodeChannel tok Nothing
+          ErrorStatus -> throwIO $ PeerCrashedException $ decodeUtf8 $ LBS.toStrict frameContents
+      next bytes >>= decodeChannel Nothing
+    decodeChannel trailing (DecodePartial next) = next trailing >>= decodeChannel Nothing
 
     startDState :: Maybe ByteString
     startDState = Nothing
 
-rethrowDeserializeError :: (MonadIO m, Typeable ps, ShowProtocol ps) => DeserializeError ps -> m a
-rethrowDeserializeError (DeserializeError _ 0 (BS.length -> 0) state) = throwIO $ PeerDisconnectedException state
+rethrowDeserializeError :: (MonadIO m) => DeserializeError -> m a
+rethrowDeserializeError (DeserializeError _ 0 (BS.length -> 0)) = throwIO PeerDisconnectedException
 rethrowDeserializeError err = throwIO $ PeerSentInvalidMessageBytesException err
 
 hoistDriver :: (forall x. m x -> n x) -> Driver ps dState m -> Driver ps dState n
@@ -153,7 +138,7 @@ data TcpServerDependencies ps server m = forall (st :: ps).
 
 tcpServer
   :: forall m ps env server
-   . (MonadUnliftIO m, BinaryMessage ps, HasSignature ps, MonadFail m, WithLog env C.Message m, Typeable ps, ShowProtocol ps)
+   . (MonadUnliftIO m, BinaryMessage ps, HasSignature ps, MonadFail m, WithLog env C.Message m)
   => String
   -> Component m (TcpServerDependencies ps server m) ()
 tcpServer name = component_ (name <> "-tcp-server") \TcpServerDependencies{..} ->
@@ -165,7 +150,7 @@ tcpServer name = component_ (name <> "-tcp-server") \TcpServerDependencies{..} -
 
 tcpClient
   :: forall client ps st m
-   . (MonadUnliftIO m, BinaryMessage ps, MonadFail m, HasSignature ps, Typeable ps, ShowProtocol ps)
+   . (MonadUnliftIO m, BinaryMessage ps, MonadFail m, HasSignature ps)
   => HostName
   -> PortNumber
   -> ToPeer client ps 'AsClient st m
@@ -188,7 +173,7 @@ tcpClient host port toPeer = Connector $ liftIO $ do
       }
 
 runPeerOverSocket
-  :: (MonadUnliftIO m, BinaryMessage ps, MonadFail m, Typeable ps, ShowProtocol ps)
+  :: (MonadUnliftIO m, BinaryMessage ps, MonadFail m)
   => Socket
   -> Peer ps pr st m a
   -> m a

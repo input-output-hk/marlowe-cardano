@@ -24,7 +24,6 @@ import qualified Data.ByteString as B
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as LBS
 import Data.ByteString.Lazy.Base16 (encodeBase16)
-import Data.Data (Typeable)
 import Data.Foldable (traverse_)
 import Data.Functor (void)
 import Data.Int (Int64)
@@ -37,15 +36,8 @@ import Data.Text.Encoding (decodeUtf8)
 import qualified Data.Text.Lazy as TL
 import Data.Void (Void)
 import Network.Channel hiding (close)
-import Network.Protocol.Codec (
-  BinaryMessage,
-  DeserializeError (..),
-  ShowPeerHasAgencyViaShowProtocol (..),
-  ShowProtocol (..),
-  decodeGet,
-  getMessage,
-  putMessage,
- )
+import Network.Protocol.Codec (BinaryMessage, DeserializeError (..), decodeGet, getMessage, putMessage)
+import Network.Protocol.Codec.Spec (ShowProtocol (..))
 import Network.Protocol.Connection (
   Connection (..),
   Connector (..),
@@ -230,8 +222,6 @@ tcpServerTraced
      , MonadFail m
      , HasSignature ps
      , WithLog env C.Message m
-     , Typeable ps
-     , ShowProtocol ps
      )
   => String
   -> InjectSelector (TcpServerSelector (Handshake ps)) s
@@ -275,15 +265,7 @@ tcpServerTraced name inj = component_ (name <> "-tcp-server") \TcpServerDependen
 
 tcpClientTraced
   :: forall r s m ps st client
-   . ( MonadUnliftIO m
-     , MonadEvent r s m
-     , HasSpanContext r
-     , BinaryMessage ps
-     , MonadFail m
-     , HasSignature ps
-     , Typeable ps
-     , ShowProtocol ps
-     )
+   . (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, BinaryMessage ps, MonadFail m, HasSignature ps)
   => InjectSelector (TcpClientSelector (Handshake ps)) s
   -> HostName
   -> PortNumber
@@ -330,7 +312,7 @@ tcpClientTraced inj host port toPeer = Connector $
 
 runPeerTracedOverSocket
   :: forall r sel s ps pr st m a
-   . (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, BinaryMessage ps, MonadFail m, Typeable ps, ShowProtocol ps)
+   . (MonadUnliftIO m, MonadEvent r s m, HasSpanContext r, BinaryMessage ps, MonadFail m)
   => InjectSelector (sel ps) s
   -> InjectSelector (DriverSelector ps) (sel ps)
   -> InjectSelector (TypedProtocolsSelector ps) (sel ps)
@@ -372,7 +354,7 @@ instance (Monoid b, HasSpanContext a) => HasSpanContext (a, b) where
 
 mkDriverTraced
   :: forall ps r s m
-   . (Typeable ps, ShowProtocol ps, MonadIO m, BinaryMessage ps, HasSpanContext r, MonadEvent r s m)
+   . (MonadIO m, BinaryMessage ps, HasSpanContext r, MonadEvent r s m)
   => InjectSelector (DriverSelector ps) s
   -> Channel m Frame
   -> DriverTraced ps (Maybe ByteString) r m
@@ -395,7 +377,7 @@ mkDriverTraced inj Channel{..} = DriverTraced{..}
       -> m (r, SomeMessage st, Maybe ByteString)
     recvMessageTraced tok trailing = do
       let
-      (ctx, trailing') <- decodeChannel tok trailing =<< decodeGet tok get
+      (ctx, trailing') <- decodeChannel trailing =<< decodeGet get
       let r = wrapContext ctx
       let args =
             (simpleNewEventArgs $ RecvMessage tok)
@@ -406,19 +388,18 @@ mkDriverTraced inj Channel{..} = DriverTraced{..}
                   ]
               }
       withInjectEventArgs inj args \ev -> do
-        (SomeMessage msg, trailing'') <- decodeChannel tok trailing' =<< decodeGet tok (getMessage tok)
+        (SomeMessage msg, trailing'') <- decodeChannel trailing' =<< decodeGet (getMessage tok)
         addField ev $ RecvMessageStateAfterMessage trailing''
         addField ev $ RecvMessageMessage msg
         pure (r, SomeMessage msg, trailing'')
 
     decodeChannel
-      :: PeerHasAgency pr (st :: ps)
-      -> Maybe ByteString
-      -> DecodeStep ByteString (DeserializeError ps) m a
+      :: Maybe ByteString
+      -> DecodeStep ByteString DeserializeError m a
       -> m (a, Maybe ByteString)
-    decodeChannel _ trailing (DecodeDone a _) = pure (a, trailing)
-    decodeChannel _ _ (DecodeFail err) = rethrowDeserializeError err
-    decodeChannel tok trailing (DecodePartial p) =
+    decodeChannel trailing (DecodeDone a _) = pure (a, trailing)
+    decodeChannel _ (DecodeFail err) = rethrowDeserializeError err
+    decodeChannel trailing (DecodePartial p) =
       case trailing of
         Nothing -> go $ DecodePartial p
         Just trailing' -> go =<< p (Just trailing')
@@ -430,11 +411,7 @@ mkDriverTraced inj Channel{..} = DriverTraced{..}
             mBytes <-
               recv >>= traverse \Frame{..} -> case frameStatus of
                 OkStatus -> pure frameContents
-                ErrorStatus ->
-                  throwIO $
-                    PeerCrashedException (ShowPeerHasAgencyViaShowProtocol tok) $
-                      decodeUtf8 $
-                        LBS.toStrict frameContents
+                ErrorStatus -> throwIO $ PeerCrashedException $ decodeUtf8 $ LBS.toStrict frameContents
             nextStep <- next mBytes
             go nextStep
 
