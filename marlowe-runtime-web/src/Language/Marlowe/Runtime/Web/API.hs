@@ -190,7 +190,12 @@ type API =
     ( "contracts" :> ContractsAPI
         :<|> "withdrawals" :> WithdrawalsAPI
         :<|> "payouts" :> PayoutsAPI
-        :<|> "healthcheck" :> Get '[JSON] NoContent
+        :<|> "healthcheck"
+          :> ( Summary "Test server status"
+                :> Description "Check if the server is running and ready to respond to requests."
+                :> OperationId "healthcheck"
+                :> Get '[JSON] NoContent
+             )
     )
 
 -- | /contracts sub-API

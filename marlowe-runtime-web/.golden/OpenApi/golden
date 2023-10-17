@@ -5362,6 +5362,8 @@
         },
         "/healthcheck": {
             "get": {
+                "description": "Check if the server is running and ready to respond to requests.",
+                "operationId": "healthcheck",
                 "responses": {
                     "200": {
                         "content": {
@@ -5493,7 +5495,8 @@
                         }
                     }
                 },
-                "security": []
+                "security": [],
+                "summary": "Test server status"
             }
         },
         "/payouts": {
