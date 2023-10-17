@@ -313,7 +313,7 @@ type NextAPI = GETNextContinuationAPI
 type GETNextContinuationAPI =
   Summary "Get next contract steps"
     :> Description "Get inputs which could be performed on a contract withing a time range by the requested parties."
-    :> "getNextStepsForContract"
+    :> OperationId "getNextStepsForContract"
     :> QueryParam' '[Required, Description "The beginning of the validity range."] "validityStart" UTCTime
     :> QueryParam' '[Required, Description "The end of the validity range."] "validityEnd" UTCTime
     :> QueryParams "party" Party
