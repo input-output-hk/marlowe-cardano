@@ -44,56 +44,27 @@ jobs:
 
       - name: Tag and push images
         run: |
-          tagAndPush() {
-            IMAGE_ID=ghcr.io/${{ github.repository_owner }}/$1
-            # Change all uppercase to lowercase
-            IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
-            echo IMAGE_ID=$IMAGE_ID
-            docker tag $1:latest $IMAGE_ID:$TAG
-            docker push $IMAGE_ID:$TAG
-          }
           if [[ "${{ github.ref }}" == "refs/tags/runtime@v"* ]]
           then
             # Strip "runtime@v" prefix from tag name
             export TAG=$(echo "${{ github.ref_name }}" | sed -e "s/^runtime@v//")
             echo TAG=$TAG
-            tagAndPush "marlowe-chain-indexer"
-            tagAndPush "marlowe-chain-sync"
-            tagAndPush "marlowe-indexer"
-            tagAndPush "marlowe-sync"
-            tagAndPush "marlowe-contract"
-            tagAndPush "marlowe-tx"
-            tagAndPush "marlowe-proxy"
-            tagAndPush "marlowe-web-server"
+            nix run .#oci-images.x86_64-linux.runtime-images.all.publish $TAG
           elif [[ "${{ github.ref }}" == "refs/tags/marlowe-apps@v"* ]]
           then
             # Strip "marlowe-apps@v" prefix from tag name
             export TAG=$(echo "${{ github.ref_name }}" | sed -e "s/^marlowe-apps@v//")
             echo TAG=$TAG
-            tagAndPush "marlowe-pipe"
-            tagAndPush "marlowe-scaling"
-            tagAndPush "marlowe-oracle"
-            tagAndPush "marlowe-finder"
+            nix run .#oci-images.x86_64-linux.marlowe-apps-images.all.publish $TAG
           elif [[ "${{ github.ref }}" == "refs/heads/main" ]]
           then
             export TAG=latest
             echo TAG=$TAG
-            tagAndPush "marlowe-chain-indexer"
-            tagAndPush "marlowe-chain-sync"
-            tagAndPush "marlowe-indexer"
-            tagAndPush "marlowe-sync"
-            tagAndPush "marlowe-contract"
-            tagAndPush "marlowe-tx"
-            tagAndPush "marlowe-proxy"
-            tagAndPush "marlowe-web-server"
-            tagAndPush "marlowe-pipe"
-            tagAndPush "marlowe-scaling"
-            tagAndPush "marlowe-oracle"
-            tagAndPush "marlowe-finder"
+            nix run .#oci-images.x86_64-linux.all.publish $TAG
           elif [[ "${{ github.ref }}" == "refs/tags/marlowe-runtime-web@v"* ]]
           then
             # Strip "marlowe-runtime-web@v" prefix from tag name
             export TAG=$(echo "${{ github.ref_name }}" | sed -e "s/^marlowe-runtime-web@v//")
             echo TAG=$TAG
-            tagAndPush "marlowe-web-server"
+            nix run .#oci-images.x86_64-linux.marlowe-web-server.passthru.publish $TAG
           fi
