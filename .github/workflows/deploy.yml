@@ -14,6 +14,7 @@ on:
       - main
     tags:
       - runtime@v*
+      - marlowe-runtime-web@v*
       - marlowe-apps@v*
 jobs:
   publish:
@@ -89,4 +90,10 @@ jobs:
             tagAndPush "marlowe-scaling"
             tagAndPush "marlowe-oracle"
             tagAndPush "marlowe-finder"
+          elif [[ "${{ github.ref }}" == "refs/tags/marlowe-runtime-web@v"* ]]
+          then
+            # Strip "marlowe-runtime-web@v" prefix from tag name
+            export TAG=$(echo "${{ github.ref_name }}" | sed -e "s/^marlowe-runtime-web@v//")
+            echo TAG=$TAG
+            tagAndPush "marlowe-web-server"
           fi

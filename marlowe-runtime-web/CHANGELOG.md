@@ -1,4 +1,11 @@
 
+<a id='changelog-0.0.5.1'></a>
+# 0.0.5.1 — 2023-10-17
+
+## Fixed
+
+- `/next` endpoint broken with added `/getNextStepsForContract` path segment.
+
 <a id='changelog-0.0.5'></a>
 # 0.0.5 — 2023-09-22
 
