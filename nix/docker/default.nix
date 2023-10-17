@@ -11,17 +11,17 @@ let
         (_: imageConfig: mkImage (lib.recursiveUpdate imageConfig defaultImageAttrs))
         images;
 
-      forAllImages = f: lib.concatMapStrings (s: s + "\n") (lib.mapAttrsToList f builtImageSet);
+      allFunctions = [
+        "copyToDockerDaemon"
+        "copyToRegistry"
+        "copyTo"
+        "copyToPodman"
+      ];
     in
     builtImageSet // {
-      all = {
-        copyToDockerDaemon = std.lib.ops.writeScript {
-          name = "copy-to-docker-daemon";
-          text = forAllImages (name: img:
-            "${n2c.packages.skopeo-nix2container}/bin/skopeo --insecure-policy copy nix:${img} docker-daemon:${name}:latest"
-          );
-        };
-      };
+      all = lib.genAttrs
+        allFunctions
+        (mkFuctionCallForImages (lib.attrValues builtImageSet));
     };
 
   mkImage =
@@ -52,6 +52,14 @@ let
         readinessProbe = std.lib.ops.writeScript readinessProbe;
       };
     };
+
+  mkFuctionCallForImages = builtImages: functionName: pkgs.writeShellScriptBin
+    "${functionName}-set"
+    (lib.concatMapStringsSep
+      "\n"
+      (img: "${lib.getExe img.passthru.${functionName}} \"$@\"")
+      builtImages
+    );
 in
 {
   inherit mkOciImages;
