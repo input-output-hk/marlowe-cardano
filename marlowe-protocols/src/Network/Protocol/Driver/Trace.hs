@@ -21,9 +21,8 @@ import Data.Binary (Binary, get, getWord8, put)
 import Data.Binary.Get (runGet)
 import Data.Binary.Put (putWord8, runPut)
 import qualified Data.ByteString as B
-import Data.ByteString.Lazy (ByteString)
+import Data.ByteString.Base16 (encodeBase16)
 import qualified Data.ByteString.Lazy as LBS
-import Data.ByteString.Lazy.Base16 (encodeBase16)
 import Data.Foldable (traverse_)
 import Data.Int (Int64)
 import Data.List (intercalate)
@@ -31,10 +30,9 @@ import Data.Proxy
 import Data.String (fromString)
 import Data.Text (Text)
 import qualified Data.Text as T
-import qualified Data.Text.Lazy as TL
 import Data.Void (Void)
 import Network.Channel hiding (close)
-import Network.Protocol.Codec (BinaryMessage, DeserializeError, decodeGet, getMessage, putMessage)
+import Network.Protocol.Codec (BinaryMessage, getMessage, putMessage)
 import Network.Protocol.Codec.Spec (ShowProtocol (..))
 import Network.Protocol.Connection (
   Connection (..),
@@ -44,7 +42,8 @@ import Network.Protocol.Connection (
   ServerSource (..),
   ToPeer,
  )
-import Network.Protocol.Driver (TcpServerDependencies (..))
+import Network.Protocol.Driver (TcpServerDependencies (..), rethrowErrors)
+import qualified Network.Protocol.Driver.Untyped as Untyped
 import Network.Protocol.Handshake.Client (handshakeClientPeer, simpleHandshakeClient)
 import Network.Protocol.Handshake.Server (handshakeServerPeer, simpleHandshakeServer)
 import Network.Protocol.Handshake.Types (Handshake, HasSignature, signature)
@@ -239,21 +238,20 @@ tcpServerTraced name inj = component_ (name <> "-tcp-server") \TcpServerDependen
       let closeArgs = (simpleNewEventArgs CloseServer){newEventParent = Just parentRef}
       server <- getServer serverSource
       lift $ localBackend (setAncestorEventBackend parentRef) do
-        let driver =
-              mkDriverTraced
-                (composeInjectSelector inj $ injectSelector $ ServerDriver addr pName)
-                (socketAsChannel socket)
-            handshakeServer = simpleHandshakeServer (signature $ Proxy @ps) server
-            peer = handshakeServerPeer toPeer handshakeServer
+        let handshakeServer = simpleHandshakeServer (signature $ Proxy @ps) server
+        let peer = handshakeServerPeer toPeer handshakeServer
+        let untypedDriver = Untyped.mkDriver $ socketAsChannel socket
+        let driver = mkDriverTraced (composeInjectSelector inj $ injectSelector $ ServerDriver addr pName) untypedDriver
         mask \restore -> do
           result <-
             restore $
               try $
-                runPeerWithDriverTraced
-                  (composeInjectSelector inj $ injectSelector $ ServerPeer addr pName)
-                  driver
-                  peer
-                  (startDStateTraced driver)
+                rethrowErrors untypedDriver $
+                  runPeerWithDriverTraced
+                    (composeInjectSelector inj $ injectSelector $ ServerPeer addr pName)
+                    driver
+                    peer
+                    (startDStateTraced driver)
           withInjectEventArgs inj closeArgs \ev' -> do
             case result of
               Left ex -> do
@@ -291,21 +289,20 @@ tcpClientTraced inj host port toPeer = Connector $
     pure
       Connection
         { runConnection = \client -> localBackend (setAncestorEventBackend $ reference ev) do
-            let driver =
-                  mkDriverTraced
-                    (composeInjectSelector inj $ injectSelector $ ClientDriver addr)
-                    (socketAsChannel socket)
-                handshakeClient = simpleHandshakeClient (signature $ Proxy @ps) client
-                peer = handshakeClientPeer toPeer handshakeClient
+            let untypedDriver = Untyped.mkDriver $ socketAsChannel socket
+            let driver = mkDriverTraced (composeInjectSelector inj $ injectSelector $ ClientDriver addr) untypedDriver
+            let handshakeClient = simpleHandshakeClient (signature $ Proxy @ps) client
+            let peer = handshakeClientPeer toPeer handshakeClient
             mask \restore -> do
               result <-
                 restore $
                   try $
-                    runPeerWithDriverTraced
-                      (composeInjectSelector inj $ injectSelector $ ClientPeer addr)
-                      driver
-                      peer
-                      (startDStateTraced driver)
+                    rethrowErrors untypedDriver $
+                      runPeerWithDriverTraced
+                        (composeInjectSelector inj $ injectSelector $ ClientPeer addr)
+                        driver
+                        peer
+                        (startDStateTraced driver)
               withInjectEventArgs inj closeArgs \ev' -> do
                 liftIO $ close socket
                 case result of
@@ -331,9 +328,9 @@ mkDriverTraced
   :: forall ps r s m
    . (MonadIO m, BinaryMessage ps, HasSpanContext r, MonadEvent r s m)
   => InjectSelector (DriverSelector ps) s
-  -> Channel m ByteString
-  -> DriverTraced ps (Maybe ByteString) r m
-mkDriverTraced inj Channel{..} = DriverTraced{..}
+  -> Untyped.Driver m
+  -> DriverTraced ps (Maybe B.ByteString) r m
+mkDriverTraced inj Untyped.Driver{..} = DriverTraced{..}
   where
     sendMessageTraced
       :: forall (pr :: PeerRole) (st :: ps) (st' :: ps)
@@ -343,16 +340,17 @@ mkDriverTraced inj Channel{..} = DriverTraced{..}
       -> m ()
     sendMessageTraced r tok msg = withInjectEventFields inj (SendMessage tok msg) [()] \ev -> do
       spanContext <- context r
-      addField ev =<< send (runPut $ put spanContext *> putMessage tok msg)
+      addField ev ()
+      sendSuccessMessage $ put spanContext
+      sendSuccessMessage $ putMessage tok msg
 
     recvMessageTraced
       :: forall (pr :: PeerRole) (st :: ps)
        . PeerHasAgency pr st
-      -> Maybe ByteString
-      -> m (r, SomeMessage st, Maybe ByteString)
+      -> Maybe B.ByteString
+      -> m (r, SomeMessage st, Maybe B.ByteString)
     recvMessageTraced tok trailing = do
-      let
-      (ctx, trailing') <- decodeChannel trailing =<< decodeGet get
+      (ctx, trailing') <- either throwIO pure =<< recvMessageUntyped trailing get
       let r = wrapContext ctx
       let args =
             (simpleNewEventArgs $ RecvMessage tok)
@@ -363,33 +361,12 @@ mkDriverTraced inj Channel{..} = DriverTraced{..}
                   ]
               }
       withInjectEventArgs inj args \ev -> do
-        (SomeMessage msg, trailing'') <- decodeChannel trailing' =<< decodeGet (getMessage tok)
+        (SomeMessage msg, trailing'') <- either throwIO pure =<< recvMessageUntyped trailing' (getMessage tok)
         addField ev $ RecvMessageStateAfterMessage trailing''
         addField ev $ RecvMessageMessage msg
         pure (r, SomeMessage msg, trailing'')
 
-    decodeChannel
-      :: Maybe ByteString
-      -> DecodeStep ByteString DeserializeError m a
-      -> m (a, Maybe ByteString)
-    decodeChannel trailing (DecodeDone a _) = pure (a, trailing)
-    decodeChannel _ (DecodeFail failure) = throwIO failure
-    decodeChannel trailing (DecodePartial p) =
-      case trailing of
-        Nothing -> go $ DecodePartial p
-        Just trailing' -> go =<< p (Just trailing')
-      where
-        go = \case
-          DecodeDone a Nothing -> pure (a, Nothing)
-          DecodeDone a (Just trailing') -> do
-            pure (a, Just trailing')
-          DecodeFail failure -> throwIO failure
-          DecodePartial next -> do
-            mBytes <- recv
-            nextStep <- next mBytes
-            go nextStep
-
-    startDStateTraced :: Maybe ByteString
+    startDStateTraced :: Maybe B.ByteString
     startDStateTraced = Nothing
 
 instance Binary TraceFlags where
@@ -522,10 +499,10 @@ renderDriverSelectorOTel = \case
                   ClientAgency tok' -> showsPrecClientHasAgency 0 tok' ""
                   ServerAgency tok' -> showsPrecServerHasAgency 0 tok' ""
               )
-            , ("typed-protocols.driver_state_before_span", toAttribute $ TL.toStrict $ foldMap encodeBase16 state)
+            , ("typed-protocols.driver_state_before_span", toAttribute $ foldMap encodeBase16 state)
             ]
-          RecvMessageStateBeforeMessage state -> [("typed-protocols.driver_state_before_message", toAttribute $ TL.toStrict $ foldMap encodeBase16 state)]
-          RecvMessageStateAfterMessage state -> [("typed-protocols.driver_state_after_message", toAttribute $ TL.toStrict $ foldMap encodeBase16 state)]
+          RecvMessageStateBeforeMessage state -> [("typed-protocols.driver_state_before_message", toAttribute $ foldMap encodeBase16 state)]
+          RecvMessageStateAfterMessage state -> [("typed-protocols.driver_state_after_message", toAttribute $ foldMap encodeBase16 state)]
           RecvMessageMessage msg -> messageToAttributes $ AnyMessageAndAgency tok msg
       }
 

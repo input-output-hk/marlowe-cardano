@@ -7,7 +7,7 @@ module Network.Protocol.Connection where
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Resource (runResourceT, transResourceT)
 import Control.Monad.Trans.Resource.Internal (ResourceT (..))
-import Data.ByteString.Lazy (ByteString)
+import Data.ByteString (ByteString)
 import Network.Protocol.Peer.Trace
 import Network.TypedProtocol (Message, PeerHasAgency)
 import UnliftIO (MonadUnliftIO)

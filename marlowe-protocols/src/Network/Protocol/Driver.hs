@@ -12,11 +12,13 @@ import Control.Concurrent.Component
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Resource (runResourceT)
-import Data.ByteString.Lazy (ByteString)
+import Data.ByteString (ByteString)
 import Data.Proxy (Proxy (Proxy))
-import Network.Channel (Channel (..), socketAsChannel)
-import Network.Protocol.Codec (BinaryMessage, DeserializeError, binaryCodec)
+import qualified Data.Text as T
+import Network.Channel (socketAsChannel)
+import Network.Protocol.Codec (BinaryMessage (..))
 import Network.Protocol.Connection (Connection (..), Connector (..), ServerSource (..), ToPeer)
+import qualified Network.Protocol.Driver.Untyped as Untyped
 import Network.Protocol.Handshake.Client (handshakeClientPeer, simpleHandshakeClient)
 import Network.Protocol.Handshake.Server (handshakeServerPeer, simpleHandshakeServer)
 import Network.Protocol.Handshake.Types (HasSignature, signature)
@@ -35,40 +37,29 @@ import Network.Socket (
   openSocket,
  )
 import Network.TypedProtocol (Message, PeerHasAgency, PeerRole (..), SomeMessage (..), runPeerWithDriver)
-import Network.TypedProtocol.Codec (Codec (..), DecodeStep (..))
 import Network.TypedProtocol.Driver (Driver (..))
-import UnliftIO (MonadIO, MonadUnliftIO, finally, throwIO, withRunInIO)
+import UnliftIO (Exception (..), MonadIO, MonadUnliftIO, SomeException (..), catch, finally, throwIO, withRunInIO)
 
 mkDriver
   :: forall ps m
    . (MonadIO m, BinaryMessage ps)
-  => Channel m ByteString
+  => Untyped.Driver m
   -> Driver ps (Maybe ByteString) m
-mkDriver Channel{..} = Driver{..}
+mkDriver Untyped.Driver{..} = Driver{..}
   where
-    Codec{..} = binaryCodec
     sendMessage
       :: forall (pr :: PeerRole) (st :: ps) (st' :: ps)
        . PeerHasAgency pr st
       -> Message ps st st'
       -> m ()
-    sendMessage tok = send . encode tok
+    sendMessage = fmap sendSuccessMessage . putMessage
 
     recvMessage
       :: forall (pr :: PeerRole) (st :: ps)
        . PeerHasAgency pr st
       -> Maybe ByteString
       -> m (SomeMessage st, Maybe ByteString)
-    recvMessage tok trailing = decodeChannel trailing =<< decode tok
-
-    decodeChannel
-      :: Maybe ByteString
-      -> DecodeStep ByteString DeserializeError m a
-      -> m (a, Maybe ByteString)
-    decodeChannel _ (DecodeDone a trailing) = pure (a, trailing)
-    decodeChannel _ (DecodeFail failure) = throwIO failure
-    decodeChannel Nothing (DecodePartial next) = recv >>= next >>= decodeChannel Nothing
-    decodeChannel trailing (DecodePartial next) = next trailing >>= decodeChannel Nothing
+    recvMessage tok trailing = either throwIO pure =<< recvMessageUntyped trailing (getMessage tok)
 
     startDState :: Maybe ByteString
     startDState = Nothing
@@ -97,10 +88,11 @@ tcpServer
 tcpServer name = component_ (name <> "-tcp-server") \TcpServerDependencies{..} ->
   withRunInIO \runInIO -> runTCPServer (Just host) (show port) $ runComponent_ $ hoistComponent runInIO $ component_ (name <> "-tcp-worker") \socket -> runResourceT do
     server <- getServer serverSource
-    let driver = mkDriver $ socketAsChannel socket
     let handshakeServer = simpleHandshakeServer (signature $ Proxy @ps) server
     let peer = peerTracedToPeer $ handshakeServerPeer toPeer handshakeServer
-    lift $ fst <$> runPeerWithDriver driver peer (startDState driver)
+    let untypedDriver = Untyped.mkDriver $ socketAsChannel socket
+    let driver = mkDriver untypedDriver
+    lift $ rethrowErrors untypedDriver $ fst <$> runPeerWithDriver driver peer (startDState driver)
 
 tcpClient
   :: forall client ps st m
@@ -121,8 +113,14 @@ tcpClient host port toPeer = Connector $ liftIO $ do
   pure
     Connection
       { runConnection = \client -> do
-          let driver = mkDriver $ socketAsChannel socket
+          let untypedDriver = Untyped.mkDriver $ socketAsChannel socket
+          let driver = mkDriver untypedDriver
           let handshakeClient = simpleHandshakeClient (signature $ Proxy @ps) client
           let peer = peerTracedToPeer $ handshakeClientPeer toPeer handshakeClient
           fst <$> runPeerWithDriver driver peer (startDState driver) `finally` liftIO (close socket)
       }
+
+rethrowErrors :: (MonadUnliftIO m) => Untyped.Driver m -> m a -> m a
+rethrowErrors Untyped.Driver{..} = flip catch \(SomeException ex) -> do
+  catch (sendFailureMessage $ T.pack $ displayException ex) \SomeException{} -> pure ()
+  throwIO ex
