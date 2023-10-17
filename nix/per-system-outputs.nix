@@ -10,7 +10,7 @@ let
 in
 rec
 {
-  operables = nix.marlowe-cardano.deploy.operables;
+  docker-tools = nix.docker.default;
 
   oci-images =
     l.optionalAttrs pkgs.stdenv.hostPlatform.isLinux
