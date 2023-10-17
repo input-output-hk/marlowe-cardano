@@ -31,6 +31,8 @@ in
   {
     inherit static allStatic;
 
+    docker-tools = repoRoot.nix.docker.default;
+
     operables = repoRoot.nix.marlowe-cardano.deploy.operables;
     oci-images = repoRoot.nix.marlowe-cardano.deploy.oci-images;
     nomadTasks = repoRoot.nix.marlowe-cardano.deploy.nomadTasks;
