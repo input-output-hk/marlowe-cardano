@@ -769,6 +769,24 @@ let
     }
   ];
 
+  marloweRuntimeImages = [
+    "marlowe-chain-indexer"
+    "marlowe-chain-sync"
+    "marlowe-indexer"
+    "marlowe-sync"
+    "marlowe-contract"
+    "marlowe-tx"
+    "marlowe-proxy"
+    "marlowe-web-server"
+  ];
+
+  marloweAppsImages = [
+    "marlowe-pipe"
+    "marlowe-scaling"
+    "marlowe-oracle"
+    "marlowe-finder"
+  ];
+
 in
 mkOciImages
 {
@@ -783,6 +801,16 @@ mkOciImages
     labels = {
       source = "https://github.com/input-output-hk/marlowe-cardano";
       license = "Apache-2.0";
+    };
+  };
+
+  selections = {
+    runtime-images = {
+      selector = (n: _: lib.elem n marloweRuntimeImages);
+    };
+
+    marlowe-apps-images =  {
+      selector = (n: _: lib.elem n marloweAppsImages);
     };
   };
 

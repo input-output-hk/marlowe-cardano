@@ -4,13 +4,13 @@ let
 
   mkOciImages =
     { defaultImageAttrs ? { }
+    , selections ? { }
     , images
     }:
     assert lib.assertMsg (lib.isList images) "images must be a list of images.";
     let
-      builtImageSet = lib.mapAttrs
-        (_: imageConfig: mkImage (lib.recursiveUpdate imageConfig defaultImageAttrs))
-        (buildSetWith
+      mkImageConfigSet =
+        buildSetWith
           (imageConfig:
             # TODO: If the user sees this error they will have no clue where
             # it is comming from. We need to aid the user with attributing
@@ -22,9 +22,7 @@ let
             #    (Probably more difficult).
             assert lib.assertMsg (imageConfig ? name) "Attribute \"name\" is missing.";
             imageConfig.name
-          )
-          images
-        );
+          );
 
       allFunctions = [
         "copyToDockerDaemon"
@@ -32,12 +30,34 @@ let
         "copyTo"
         "copyToPodman"
       ];
+
+      mkHelpers = builtImageSet:
+        {
+          all = lib.genAttrs
+            allFunctions
+            (mkFuctionCallForImages (lib.attrValues builtImageSet));
+        };
+
+      mkSelections = imageConfigSet:
+        mapAttrsValues
+          ({ config ? { }, selector }: extenedWith mkHelpers (
+            lib.mapAttrs
+              (_: imageConfig:
+                # NOTE: Selection config overrides all config
+                mkImage (lib.recursiveUpdate imageConfig config)
+              )
+              (lib.filterAttrs selector imageConfigSet)
+          ))
+          selections;
     in
-    builtImageSet // {
-      all = lib.genAttrs
-        allFunctions
-        (mkFuctionCallForImages (lib.attrValues builtImageSet));
-    };
+    let
+      imageConfigSet = mapAttrsValues
+        (lib.recursiveUpdate defaultImageAttrs)
+        (mkImageConfigSet images);
+
+      builtImageSet = lib.mapAttrs (_: mkImage) imageConfigSet;
+    in
+    builtImageSet // (mkHelpers builtImageSet) // (mkSelections imageConfigSet);
 
   mkImage =
     { name
@@ -99,6 +119,10 @@ let
       (img: "${lib.getExe img.passthru.${functionName}} \"$@\"")
       builtImages
     );
+
+  extenedWith = f: attrs: attrs // f attrs;
+
+  mapAttrsValues = f: lib.mapAttrs (_: f);
 in
 {
   inherit mkOciImages;
