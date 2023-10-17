@@ -66,10 +66,12 @@ library
     Network.Protocol.Job.Server
     Network.Protocol.Job.Types
     Network.Protocol.Peer
+    Network.Protocol.Peer.Monad
     Network.Protocol.Peer.Trace
     Network.Protocol.Query.Client
     Network.Protocol.Query.Server
     Network.Protocol.Query.Types
+    Network.Protocol.Singleton
 
   build-depends:
     , async-components ==0.1.1.0
@@ -82,14 +84,17 @@ library
     , eventuo11y >=0.9 && <0.11
     , eventuo11y-extras ==0.1.1.0
     , eventuo11y-otel ^>=0.1
+    , general-allocate ^>=0.2
     , hs-opentelemetry-api ==0.0.3.6
     , hspec >=2.10 && <3
     , hspec-golden ^>=0.2
+    , mtl >=2.2 && <3
     , network >=3.1 && <4
     , network-run ^>=0.2.4
     , nonempty-containers ^>=0.3.4
     , QuickCheck >=2.14 && <3
     , resourcet >=1.3 && <2
+    , singletons
     , stm ^>=2.5
     , text ^>=1.2
     , time >=1.9 && <2
