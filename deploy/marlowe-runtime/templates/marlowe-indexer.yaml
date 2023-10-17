@@ -1,5 +1,6 @@
 {{- range $instanceName, $instance := .Values.instances }}
 {{- range $.Values.networks }}
+{{- if not (and (eq $instanceName "qa") (eq . "mainnet")) }}
 ---
 apiVersion: core.oam.dev/v1beta1
 kind: Application
@@ -73,5 +74,6 @@ spec:
         - local-{{ $.Values.namespace }}
       type: deploy
 
+{{- end }}
 {{- end }}
 {{- end }}
