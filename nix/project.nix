@@ -83,8 +83,7 @@ let
           marlowe-test.ghcOptions = [ "-Werror" ];
         };
       }];
-    }
-  );
+    });
 
 
   project = lib.iogx.mkHaskellProject {
