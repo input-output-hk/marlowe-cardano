@@ -55,31 +55,33 @@ instance (KnownSymbolList ss, KnownSymbol s) => KnownSymbolList (s ': ss) where
 newtype OpenApiWithEmptySecurity = OpenApiWithEmptySecurity OpenApi
 
 instance ToJSON OpenApiWithEmptySecurity where
-  toJSON (OpenApiWithEmptySecurity openApi) =
-    openApi
+  toJSON (OpenApiWithEmptySecurity oa) =
+    oa
       & toJSON
       & key "paths" . members . members . atKey "security" %~ (<|> Just (Array mempty))
 
 type API = "openapi.json" :> Get '[JSON] OpenApiWithEmptySecurity
 
+openApi :: OpenApiWithEmptySecurity
+openApi =
+  OpenApiWithEmptySecurity $
+    toOpenApi Web.api
+      & info
+        %~ (title .~ "Marlowe Runtime REST API")
+          . (version .~ T.pack (showVersion Paths_marlowe_runtime_web.version))
+          . (description ?~ "REST API for Marlowe Runtime")
+          . ( license
+                ?~ License
+                  { _licenseName = "Apache 2.0"
+                  , _licenseUrl = Just $ URL "https://www.apache.org/licenses/LICENSE-2.0.html"
+                  }
+            )
+      & servers
+        .~ [ "https://marlowe-runtime-preprod-web.scdev.aws.iohkdev.io"
+           , "https://marlowe-runtime-preview-web.scdev.aws.iohkdev.io"
+           , "https://marlowe-runtime-mainnet-web.scdev.aws.iohkdev.io"
+           , "http://localhost:3780"
+           ]
+
 server :: (Applicative m) => ServerT API m
-server =
-  pure $
-    OpenApiWithEmptySecurity $
-      toOpenApi Web.api
-        & info
-          %~ (title .~ "Marlowe Runtime REST API")
-            . (version .~ T.pack (showVersion Paths_marlowe_runtime_web.version))
-            . (description ?~ "REST API for Marlowe Runtime")
-            . ( license
-                  ?~ License
-                    { _licenseName = "Apache 2.0"
-                    , _licenseUrl = Just $ URL "https://www.apache.org/licenses/LICENSE-2.0.html"
-                    }
-              )
-        & servers
-          .~ [ "https://marlowe-runtime-preprod-web.scdev.aws.iohkdev.io"
-             , "https://marlowe-runtime-preview-web.scdev.aws.iohkdev.io"
-             , "https://marlowe-runtime-mainnet-web.scdev.aws.iohkdev.io"
-             , "http://localhost:3780"
-             ]
+server = pure openApi

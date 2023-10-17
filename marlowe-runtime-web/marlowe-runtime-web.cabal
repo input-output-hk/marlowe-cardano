@@ -12,6 +12,8 @@ license-files:
   LICENSE
   NOTICE
 
+data-files:    .golden/OpenApi/golden
+
 source-repository head
   type:     git
   location: https://github.com/input-output-hk/marlowe-cardano
@@ -96,11 +98,11 @@ library server
     Language.Marlowe.Runtime.Web.Server
     Language.Marlowe.Runtime.Web.Server.DTO
     Language.Marlowe.Runtime.Web.Server.Monad
+    Language.Marlowe.Runtime.Web.Server.OpenAPI
     Language.Marlowe.Runtime.Web.Server.Util
 
   other-modules:
     Language.Marlowe.Runtime.Web.Server.ContractClient
-    Language.Marlowe.Runtime.Web.Server.OpenAPI
     Language.Marlowe.Runtime.Web.Server.REST
     Language.Marlowe.Runtime.Web.Server.REST.ApiError
     Language.Marlowe.Runtime.Web.Server.REST.Contracts
@@ -197,12 +199,14 @@ test-suite marlowe-runtime-web-test
   main-is:        Spec.hs
   build-depends:
     , aeson >=2 && <3
+    , aeson-pretty
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
     , hspec
+    , hspec-golden
     , marlowe-cardano ==0.2.0.0
     , marlowe-object:gen
-    , marlowe-runtime-web
+    , marlowe-runtime-web:{marlowe-runtime-web, server}
     , marlowe-runtime:gen
     , marlowe-test
     , openapi3 >=3.2 && <4

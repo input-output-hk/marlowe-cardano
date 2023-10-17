@@ -10,6 +10,7 @@ module Main where
 
 import Control.Monad (replicateM)
 import Data.Aeson (ToJSON, Value (Null))
+import Data.Aeson.Encode.Pretty (encodePrettyToTextBuilder)
 import qualified Data.ByteString as BS
 import Data.Data (Typeable)
 import Data.Kind (Type)
@@ -17,17 +18,21 @@ import Data.OpenApi hiding (version)
 import Data.Proxy
 import Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text.Internal.Builder as TB
+import qualified Data.Text.Lazy as TL
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics (Input (..))
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Object.Gen ()
 import Language.Marlowe.Runtime.Transaction.Gen ()
 import Language.Marlowe.Runtime.Web (ContractOrSourceId (..), WithRuntimeStatus)
 import qualified Language.Marlowe.Runtime.Web as Web
+import Language.Marlowe.Runtime.Web.Server.OpenAPI (openApi)
 import Servant.API
 import Servant.OpenApi
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Spec.Marlowe.Semantics.Next.Arbitrary ()
-import Test.Hspec (Spec, describe, hspec)
+import Test.Hspec (Spec, describe, hspec, it)
+import Test.Hspec.Golden (defaultGolden)
 import Test.QuickCheck (Arbitrary (..), Gen, elements, genericShrink, listOf, oneof, resize, suchThat)
 import Test.QuickCheck.Instances ()
 import Text.Regex.Posix ((=~))
@@ -37,7 +42,13 @@ main = hspec do
   describe "OpenAPI" openAPISpec
 
 openAPISpec :: Spec
-openAPISpec = validateEveryToJSONWithPatternChecker patternChecker (Proxy @(WrapContractBodies (RetractRuntimeStatus Web.API)))
+openAPISpec = do
+  validateEveryToJSONWithPatternChecker patternChecker (Proxy @(WrapContractBodies (RetractRuntimeStatus Web.API)))
+  it "Should match the golden test" do
+    defaultGolden "OpenApi" $
+      TL.unpack $
+        TB.toLazyText $
+          encodePrettyToTextBuilder openApi
 
 type family RetractRuntimeStatus api where
   RetractRuntimeStatus (WithRuntimeStatus api) = api
