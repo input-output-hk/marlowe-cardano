@@ -4,6 +4,7 @@ let
 
   mkImages =
     { mkPublishDestinationFn ? null
+    , filterSet ? { }
     }:
     images:
     let
@@ -39,12 +40,17 @@ let
         "copyToPodman"
       ] ++ l.optional (mkPublishDestinationFn != null) "publish";
 
+      addHelpers = imageSet:
+        imageSet // {
+          all = l.genAttrs
+            allFunctions
+            (mkFuctionCallForImages (l.attrValues imageSet));
+        };
+
+      mkImageSetWithFiltedSets = imageSet: addHelpers imageSet
+        // (l.mapAttrs (_: f: addHelpers (l.filterAttrs f imageSet)) filterSet);
     in
-    imageSet // {
-      all = l.genAttrs
-        allFunctions
-        (mkFuctionCallForImages (l.attrValues imageSet));
-    };
+    mkImageSetWithFiltedSets imageSet;
 
   mkImage =
     { name

@@ -771,9 +771,31 @@ let
     }
   ];
 
+  marloweRuntimeImages = [
+    "marlowe-chain-indexer"
+    "marlowe-chain-sync"
+    "marlowe-indexer"
+    "marlowe-sync"
+    "marlowe-contract"
+    "marlowe-tx"
+    "marlowe-proxy"
+    "marlowe-web-server"
+  ];
+
+  marloweAppsImages = [
+    "marlowe-pipe"
+    "marlowe-scaling"
+    "marlowe-oracle"
+    "marlowe-finder"
+  ];
+
 in
 mkImages
 {
   mkPublishDestinationFn = name: ''docker://ghcr.io/rosario/marlowe-cardano/${name}:"$1"'';
+  filterSet = {
+    runtime-images = (n: _: l.elem n marloweRuntimeImages);
+    marlowe-apps-images = (n: _: l.elem n marloweAppsImages);
+  };
 }
   (map (recursiveUpdate defaultImageAttrs) images)
