@@ -90,7 +90,7 @@ jobs:
             tagAndPush "marlowe-scaling"
             tagAndPush "marlowe-oracle"
             tagAndPush "marlowe-finder"
-          if [[ "${{ github.ref }}" == "refs/tags/marlowe-runtime-web@v"* ]]
+          elif [[ "${{ github.ref }}" == "refs/tags/marlowe-runtime-web@v"* ]]
           then
             # Strip "marlowe-runtime-web@v" prefix from tag name
             export TAG=$(echo "${{ github.ref_name }}" | sed -e "s/^marlowe-runtime-web@v//")

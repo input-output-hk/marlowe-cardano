@@ -6,11 +6,13 @@ networks:
 instances:
   qa:
     parentDomain: scdev.aws.iohkdev.io
+    webTag: latest
     tag: latest
     repo: ghcr.io
     org: input-output-hk
   demo:
     parentDomain: demo.scdev.aws.iohkdev.io
+    webTag: 0.0.5.1
     tag: 0.0.5
     repo: ghcr.io
     org: input-output-hk
