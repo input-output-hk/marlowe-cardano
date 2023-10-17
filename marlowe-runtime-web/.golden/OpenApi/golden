@@ -1982,8 +1982,7 @@
                     "tags",
                     "metadata",
                     "version",
-                    "contract",
-                    "minUTxODeposit"
+                    "contract"
                 ],
                 "type": "object"
             },
