@@ -2,10 +2,20 @@
 let
   inherit (inputs') std n2c;
 
-  mkImages = images:
+  mkImages =
+    { mkPublishDestinationFn ? null
+    }:
+    images:
     let
       imageSet = l.mapAttrs
-        (_: mkImage)
+        (n: i:
+          let
+            i' = mkImage i;
+          in
+          l.recursiveUpdate i' (l.optionalAttrs (mkPublishDestinationFn != null) {
+            passthru.publish = mkPublish i' (mkPublishDestinationFn n);
+          })
+        )
         (buildSetWith
           (attr:
             # TODO: If the user sees this error they will have no clue where
@@ -27,7 +37,7 @@ let
         "copyToRegistry"
         "copyTo"
         "copyToPodman"
-      ];
+      ] ++ l.optional (mkPublishDestinationFn != null) "publish";
 
     in
     imageSet // {
@@ -97,6 +107,12 @@ let
       (img: "${l.getExe img.passthru.${functionName}} \"$@\"")
       images
     );
+
+  mkPublish = image: destinationString: pkgs.writeShellScriptBin "publish"
+    ''
+      echo Publishing ${image} to ${destinationString}
+      ${l.getExe image.passthru.copyTo} ${destinationString}
+    '';
 in
 {
   inherit mkImage mkImages;

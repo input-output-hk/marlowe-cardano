@@ -772,4 +772,8 @@ let
   ];
 
 in
-mkImages (map (recursiveUpdate defaultImageAttrs) images)
+mkImages
+{
+  mkPublishDestinationFn = name: ''docker://ghcr.io/rosario/marlowe-cardano/${name}:"$1"'';
+}
+  (map (recursiveUpdate defaultImageAttrs) images)
