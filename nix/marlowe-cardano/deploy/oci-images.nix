@@ -802,6 +802,8 @@ mkOciImages
       source = "https://github.com/input-output-hk/marlowe-cardano";
       license = "Apache-2.0";
     };
+
+    mkPublishDestinationFn = name: ''docker://ghcr.io/rosario/marlowe-cardano/${name}:"$1"'';
   };
 
   selections = {

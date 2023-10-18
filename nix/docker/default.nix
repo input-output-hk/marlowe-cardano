@@ -73,20 +73,28 @@ let
     , uid ? "65534"
     , gid ? "65534"
     , labels ? { }
-    }: std.lib.ops.mkStandardOCI {
-      inherit name tag uid gid labels;
 
-      operable = std.lib.ops.mkOperable
-        {
-          inherit package runtimeInputs runtimeScript;
+    , mkPublishDestinationFn ? null
+    }:
+    let
+      builtImage = std.lib.ops.mkStandardOCI {
+        inherit name tag uid gid labels;
+
+        operable = std.lib.ops.mkOperable
+          {
+            inherit package runtimeInputs runtimeScript;
+          }
+        // lib.optionalAttrs (livenessProbe != null) {
+          livenessProbe = std.lib.ops.writeScript livenessProbe;
         }
-      // lib.optionalAttrs (livenessProbe != null) {
-        livenessProbe = std.lib.ops.writeScript livenessProbe;
-      }
-      // lib.optionalAttrs (readinessProbe != null) {
-        readinessProbe = std.lib.ops.writeScript readinessProbe;
+        // lib.optionalAttrs (readinessProbe != null) {
+          readinessProbe = std.lib.ops.writeScript readinessProbe;
+        };
       };
-    };
+    in
+      lib.recursiveUpdate builtImage (lib.optionalAttrs (mkPublishDestinationFn != null) {
+        passthru.publish = mkPublish builtImage (mkPublishDestinationFn name);
+      });
 
   /*
     Builds an attribute set from a list using a selector function to generate
@@ -123,6 +131,12 @@ let
   extenedWith = f: attrs: attrs // f attrs;
 
   mapAttrsValues = f: lib.mapAttrs (_: f);
+
+  mkPublish = builtImage: destinationString: pkgs.writeShellScriptBin "publish"
+    ''
+      echo Publishing ${builtImage} to ${destinationString}
+      ${lib.getExe builtImage.passthru.copyTo} ${destinationString}
+    '';
 in
 {
   inherit mkOciImages;
