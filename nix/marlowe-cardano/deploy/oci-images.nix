@@ -158,8 +158,8 @@ let
     ${script}
   '';
 
-  images = {
-    marlowe-chain-indexer = withProbes {
+  images = (map withProbes [
+    {
       name = "marlowe-chain-indexer";
       labels.description = "A Cardano chain indexer for the Marlowe Runtime";
       package = marlowe-chain-indexer;
@@ -219,8 +219,8 @@ let
           --genesis-config-file-hash "$BYRON_GENESIS_HASH" \
           --http-port "$HTTP_PORT"
       '';
-    };
-    marlowe-chain-sync = withProbes {
+    }
+    {
       name = "marlowe-chain-sync";
       labels.description = "A Cardano chain sync and query service for the Marlowe Runtime.";
       package = marlowe-chain-sync;
@@ -273,8 +273,8 @@ let
           --database-uri  "$DATABASE_URI" \
           --http-port "$HTTP_PORT"
       '';
-    };
-    marlowe-indexer = withProbes {
+    }
+    {
       name = "marlowe-indexer";
       labels.description = "A Marlowe contract indexing service for the Marlowe Runtime.";
       package = marlowe-indexer;
@@ -323,8 +323,8 @@ let
           --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
           --http-port "$HTTP_PORT"
       '';
-    };
-    marlowe-sync = withProbes {
+    }
+    {
       name = "marlowe-sync";
       labels.description = "A Marlowe contract synchronization and query service for the Marlowe Runtime.";
       package = marlowe-sync;
@@ -373,8 +373,8 @@ let
           --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
           --http-port "$HTTP_PORT"
       '';
-    };
-    marlowe-tx = withProbes {
+    }
+    {
       name = "marlowe-tx";
       labels.description = "A Marlowe transaction creation service for the Marlowe Runtime.";
       package = marlowe-tx;
@@ -420,8 +420,8 @@ let
           --http-port "$HTTP_PORT" \
           --minting-policy-cmd marlowe-minting-validator
       '';
-    };
-    marlowe-contract = withProbes {
+    }
+    {
       name = "marlowe-contract";
       labels.description = "A content-addressable contract store service for the Marlowe runtime.";
       package = marlowe-contract;
@@ -475,8 +475,8 @@ let
           --min-contract-age "$MIN_CONTRACT_AGE" \
           --max-store-size "$MAX_STORE_SIZE"
       '';
-    };
-    marlowe-proxy = withProbes {
+    }
+    {
       name = "marlowe-proxy";
       labels.description = "An API Gateway service for the Marlowe Runtime.";
       package = marlowe-proxy;
@@ -535,8 +535,8 @@ let
           --tx-command-port "$TX_PORT" \
           --http-port "$HTTP_PORT"
       '';
-    };
-    marlowe-runtime = withProbes {
+    }
+    {
       name = "marlowe-runtime";
       labels.description = "Application backend for Marlowe smart contracts.";
       package = marlowe-runtime;
@@ -619,8 +619,10 @@ let
           --max-store-size "$MAX_STORE_SIZE"
 
       '';
-    };
-    marlowe-web-server = {
+    }
+  ])
+  ++ [
+    {
       name = "marlowe-web-server";
       labels.description = "An HTTP server for the Marlowe Runtime, exposing a REST API.";
       package = marlowe-web-server;
@@ -670,8 +672,8 @@ let
           curl -f "http://localhost:$PORT/healthcheck"
         '';
       };
-    };
-    marlowe-pipe = {
+    }
+    {
       name = "marlowe-pipe";
       labels.description = "A streaming command processor for the Marlowe Runtime.";
       package = marlowe-pipe;
@@ -683,8 +685,8 @@ let
           --retry-seconds "$RETRY_SECONDS" \
           --retry-limit "$RETRY_LIMIT"
       '';
-    };
-    marlowe-scaling = {
+    }
+    {
       name = "marlowe-scaling";
       labels.description = "A scale-testing client for the Marlowe Runtime.";
       package = marlowe-scaling;
@@ -712,8 +714,8 @@ let
           "$CONTRACTS_PER_PARTY" \
           "''${args[@]}"
       '';
-    };
-    marlowe-oracle = {
+    }
+    {
       name = "marlowe-oracle";
       labels.description = "A general-purpose oracle for Marlowe contracts.";
       package = marlowe-oracle;
@@ -744,8 +746,8 @@ let
           "$ADDRESS" \
           "$KEYFILE"
       '';
-    };
-    marlowe-finder = {
+    }
+    {
       name = "marlowe-finder";
       labels.description = "Streams contract events in real-time from the chain.";
       package = marlowe-finder;
@@ -764,8 +766,8 @@ let
           --retry-limit "$RETRY_LIMIT" \
           --polling "''${POLLING_FREQUENCY:-5}"
       '';
-    };
-  };
+    }
+  ];
 
 in
 mkOciImages
