@@ -32,16 +32,18 @@ import Options.Applicative (
   help,
   helper,
   info,
+  infoOption,
   long,
   metavar,
   option,
-  progDesc,
+  progDescDoc,
   short,
   showDefault,
   strOption,
   value,
  )
 import Paths_marlowe_runtime
+import Prettyprinter
 
 main :: IO ()
 main = do
@@ -123,6 +125,7 @@ getOptions = do
   execParser $
     info
       ( helper
+          <*> versionOption
           <*> ( Options
                   <$> hostParser
                   <*> portParser
@@ -143,6 +146,11 @@ getOptions = do
       )
       infoMod
   where
+    versionOption =
+      infoOption
+        ("marlowe-proxy " <> showVersion version)
+        (long "version" <> help "Show version.")
+
     hostParser =
       strOption $
         mconcat
@@ -188,6 +196,19 @@ getOptions = do
     infoMod =
       mconcat
         [ fullDesc
-        , progDesc "API proxy service for Marlowe Runtime"
-        , header "marlowe-proxy : an API proxy service for the Marlowe Runtime."
+        , progDescDoc $ Just description
+        , header "marlowe-proxy: The API gateway server for the Marlowe Runtime."
         ]
+
+description :: Doc ann
+description =
+  concatWith
+    (\a b -> a <> line <> line <> b)
+    [ vcat
+        [ "The API gateway server for the Marlowe Runtime. It exposes all the public protocols of the"
+        , "Marlowe runtime as a single multiplexed protocol: marlowe sync, marlowe header sync, marlowe"
+        , "bulk sync, marlowe query, marlowe transaction job, marlowe load, marlowe transfer, and contract"
+        , "store query. Please consult the help text for the individual services for detailed descriptions"
+        , "of these individual protocols."
+        ]
+    ]

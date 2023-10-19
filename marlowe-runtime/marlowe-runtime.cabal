@@ -816,7 +816,6 @@ executable marlowe-runtime
     , nonempty-containers ^>=0.3.4
     , optparse-applicative ^>=0.17
     , postgresql-libpq ^>=0.9
-    , prettyprinter
     , text ^>=1.2
     , time
     , typed-protocols ^>=0.1
