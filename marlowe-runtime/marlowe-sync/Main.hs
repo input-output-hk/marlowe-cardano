@@ -42,6 +42,7 @@ import Options.Applicative (
   help,
   helper,
   info,
+  infoOption,
   long,
   metavar,
   option,
@@ -142,7 +143,7 @@ data Options = Options
   }
 
 getOptions :: IO Options
-getOptions = execParser $ info (helper <*> parser) infoMod
+getOptions = execParser $ info (helper <*> versionOption <*> parser) infoMod
   where
     parser =
       Options
@@ -155,6 +156,11 @@ getOptions = execParser $ info (helper <*> parser) infoMod
         <*> chainSyncHostParser
         <*> chainQueryPortParser
         <*> httpPortParser
+
+    versionOption =
+      infoOption
+        ("marlowe-chain-sync " <> showVersion version)
+        (long "version" <> help "Show version.")
 
     databaseUriParser =
       strOption $
