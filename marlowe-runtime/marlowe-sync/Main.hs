@@ -45,13 +45,14 @@ import Options.Applicative (
   long,
   metavar,
   option,
-  progDesc,
+  progDescDoc,
   short,
   showDefault,
   strOption,
   value,
  )
 import Paths_marlowe_runtime (version)
+import Prettyprinter
 import UnliftIO (liftIO, throwIO)
 
 main :: IO ()
@@ -248,6 +249,50 @@ getOptions = execParser $ info (helper <*> parser) infoMod
     infoMod =
       mconcat
         [ fullDesc
-        , progDesc "Contract synchronization and query service for Marlowe Runtime"
-        , header "marlowe-sync : a contract synchronization and query service for the Marlowe Runtime."
+        , progDescDoc $ Just description
+        , header "marlowe-sync: Contract synchronization and query service for the Marlowe Runtime."
         ]
+
+description :: Doc ann
+description =
+  concatWith
+    (\a b -> a <> line <> line <> b)
+    [ vcat
+        [ "The contract query engine for the Marlowe Runtime. This component exposes four"
+        , "protocols through which downstream components can interact with the blockchain."
+        , "These are: marlowe sync, marlowe header sync, marlowe bulk sync, and marlowe query."
+        ]
+    , vcat
+        [ "The marlowe sync protocol is a synchronization protocol which follows the history"
+        , "of a specific marlowe contract."
+        ]
+    , vcat
+        [ "The marlowe header sync protocol is a synchronization protocol which scans the chain"
+        , "for new Marlowe contracts and presents them as a compact summary called a header."
+        ]
+    , vcat
+        [ "The marlowe bulk sync protocol is a synchronization protocol which combines the"
+        , "capabilities of marlowe header sync and marlowe sync. It presents a stream of blocks"
+        , "which contain a combination of all three contract transaction types: creation, input"
+        , "application, and payout withdrawal."
+        ]
+    , vcat
+        [ "The marlowe query protocol supports multiple queries that allow clients to fetch"
+        , "data about marlowe contracts as of the current blockchain tip. This means that it"
+        , "cannot guarantee consistent results between different queries, because the chain could"
+        , "update in between queries, changing the result of queries. If consistency is needed,"
+        , "use one of the sync protocols."
+        ]
+    , vcat
+        [ "marlowe-sync relies on the connected database being migrated and populated by a"
+        , "marlowe-indexer instance. While marlowe-sync can operate without marlowe-indexer running,"
+        , "The sqitch migrations must first be performed in order to create the expected tables, and"
+        , "marlowe-indexer must be running to keep the database up-to-date."
+        ]
+    , vcat
+        [ "marlowe-sync is designed to scale horizontally. That is to say, multiple instances can run"
+        , "in parallel to scale with demand. A typical setup for this would involve running multiple"
+        , "marlowe-sync instances in front of a load balancer against a scalable postgres replica"
+        , "cluster being populated by a single marlowe-indexer."
+        ]
+    ]
