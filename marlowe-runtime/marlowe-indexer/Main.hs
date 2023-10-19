@@ -132,7 +132,7 @@ getOptions = execParser $ info (helper <*> versionOption <*> parser) infoMod
 
     versionOption =
       infoOption
-        ("marlowe-chain-sync " <> showVersion version)
+        ("marlowe-indexer " <> showVersion version)
         (long "version" <> help "Show version.")
 
     chainSeekPortParser =
