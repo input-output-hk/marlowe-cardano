@@ -1,28 +1,30 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE EmptyCase #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE QuantifiedConstraints #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 -- | The type of the chain sync protocol.
 module Network.Protocol.ChainSeek.Types where
 
 import Control.Monad (join, replicateM)
 import Data.Binary (Binary (..), Get, Put, getWord8, putWord8)
-import Data.Data (type (:~:) (Refl))
+import Data.Data (Proxy (..), type (:~:) (Refl))
 import Data.Foldable (fold, for_)
+import Data.Function (on)
 import Data.Functor ((<&>))
 import Data.Kind (Type)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Maybe (catMaybes)
-import Data.Proxy (Proxy (..))
-import Data.Text (Text)
 import qualified Data.Text as T
-import GHC.Show (showList__, showSpace)
+import Data.Type.Equality (TestEquality (testEquality))
 import Network.Protocol.Codec (BinaryMessage (..))
 import Network.Protocol.Codec.Spec (
   ArbitraryMessage (..),
@@ -30,249 +32,221 @@ import Network.Protocol.Codec.Spec (
   MessageVariations (..),
   ShowProtocol (..),
   SomePeerHasAgency (..),
+  TestMessageEquality (..),
   Variations (..),
  )
 import Network.Protocol.Handshake.Types (HasSignature (..))
-import Network.Protocol.Peer.Trace (MessageAttributes (..), OTelProtocol (..))
+import Network.Protocol.Singleton
 import Network.TypedProtocol (PeerHasAgency (..), Protocol (..), SomeMessage (SomeMessage))
 import Network.TypedProtocol.Codec (AnyMessageAndAgency (..))
-import OpenTelemetry.Attributes (ToPrimitiveAttribute (toPrimitiveAttribute))
-import Test.QuickCheck (Arbitrary, Gen, arbitrary, oneof, shrink)
+import Test.QuickCheck (Arbitrary, Gen, arbitrary, listOf, oneof, shrink, shrinkList)
 
-data SomeTag q = forall err result. SomeTag (Tag q err result)
+data SomeTag k where
+  SomeTag :: Tag (t :: k) -> SomeTag k
 
-class Query (q :: Type -> Type -> Type) where
-  data Tag q :: Type -> Type -> Type
-  tagFromQuery :: q err result -> Tag q err result
-  tagEq :: Tag q err result -> Tag q err' result' -> Maybe (err :~: err', result :~: result')
-  putTag :: Tag q err result -> Put
-  getTag :: Get (SomeTag q)
-  putQuery :: q err result -> Put
-  getQuery :: Tag q err result -> Get (q err result)
-  putErr :: Tag q err result -> err -> Put
-  getErr :: Tag q err result -> Get err
-  putResult :: Tag q err result -> result -> Put
-  getResult :: Tag q err result -> Get result
+class TagKind k where
+  data Tag :: k -> Type
+  data Move :: k -> Type
+  data SeekResult :: k -> Type
+  data SeekError :: k -> Type
+  withSingTag :: Tag (t :: k) -> ((SingTag t) => a) -> a
+  moveTag :: Move (t :: k) -> Tag t
+  fromTag :: Tag (t :: k) -> k
+  toTag :: k -> SomeTag k
+
+class (TagKind k) => SingTag (t :: k) where
+  singTag :: Tag t
+
+fromSomeTag :: (TagKind k) => SomeTag k -> k
+fromSomeTag (SomeTag t) = fromTag t
 
 -- | The type of states in the protocol.
-data ChainSeek (query :: Type -> Type -> Type) point tip where
+data ChainSeek (k :: Type) point tip where
   -- | The client and server are idle. The client can send a request.
-  StIdle :: ChainSeek query point tip
+  StIdle :: ChainSeek k point tip
   -- | The client has sent a next update request. The client is now waiting for
   -- a response, and the server is preparing to send a response. The server can
   -- respond immediately or it can send a 'Wait' message followed by a response
   -- at some point in the future.
-  StNext :: Type -> Type -> ChainSeek query point tip
+  StNext :: k -> ChainSeek k point tip
   -- | The client has initiated a scan, which is equivalent to fixing the query and repeatedly collecting the next block
   -- that satisfies it.
-  StScan :: Type -> Type -> ChainSeek query point tip
+  StScan :: k -> ChainSeek k point tip
   -- | The client has requested a batch of blocks from the server from a scan.
-  StCollect :: Type -> Type -> ChainSeek query point tip
+  StCollect :: k -> ChainSeek k point tip
   -- | The server has sent a ping to the client to determine if it is still
   -- connected and is waiting for a pong.
-  StPoll :: Type -> Type -> ChainSeek query point tip
+  StPoll :: k -> ChainSeek k point tip
   -- | The terminal state of the protocol.
-  StDone :: ChainSeek query point tip
+  StDone :: ChainSeek k point tip
+
+instance SingClientHasAgency 'StIdle where singClientHasAgency = TokIdle
+instance (SingTag t) => SingClientHasAgency ('StScan t) where singClientHasAgency = TokScan singTag
+instance (SingTag t) => SingClientHasAgency ('StPoll t) where singClientHasAgency = TokPoll singTag
+instance (SingTag t) => SingServerHasAgency ('StNext t) where singServerHasAgency = TokNext singTag
+instance (SingTag t) => SingServerHasAgency ('StCollect t) where singServerHasAgency = TokCollect singTag
+instance SingNobodyHasAgency 'StDone where singNobodyHasAgency = TokDone
 
 instance
-  ( HasSignature query
+  ( HasSignature k
   , HasSignature point
   , HasSignature tip
   )
-  => HasSignature (ChainSeek query point tip)
+  => HasSignature (ChainSeek k point tip)
   where
   signature _ =
     T.intercalate
       " "
       [ "ChainSeek"
-      , signature $ Proxy @query
+      , signature $ Proxy @k
       , signature $ Proxy @point
       , signature $ Proxy @tip
       ]
 
-instance Protocol (ChainSeek query point tip) where
+instance Protocol (ChainSeek k point tip) where
   -- \| The type of messages in the protocol. Corresponds to the state
   -- transition in the state machine diagram.
-  data Message (ChainSeek query point tip) from to where
+  data Message (ChainSeek k point tip) from to where
     -- \| Request the next matching result for the given query from the client's
     -- position.
-    MsgQueryNext
-      :: query err result
-      -> Message
-          (ChainSeek query point tip)
-          'StIdle
-          ('StNext err result)
+    QueryNext
+      :: Move (t :: k)
+      -> Message (ChainSeek k point tip) 'StIdle ('StNext t)
     -- \| Reject a query with an error message.
-    MsgRejectQuery
-      :: err
+    RejectQuery
+      :: SeekError (t :: k)
       -> tip
-      -> Message
-          (ChainSeek query point tip)
-          ('StNext err result)
-          'StIdle
+      -> Message (ChainSeek k point tip) ('StNext t) 'StIdle
     -- \| Send a response to a query and roll the client forward to a new point.
-    MsgRollForward
-      :: result
+    RollForward
+      :: SeekResult (t :: k)
       -> point
       -> tip
-      -> Message
-          (ChainSeek query point tip)
-          ('StNext err result)
-          'StIdle
+      -> Message (ChainSeek k point tip) ('StNext t) 'StIdle
     -- \| Roll the client backward.
-    MsgRollBackward
+    RollBackward
       :: point
       -> tip
-      -> Message
-          (ChainSeek query point tip)
-          ('StNext err result)
-          'StIdle
+      -> Message (ChainSeek k point tip) ('StNext (t :: k)) 'StIdle
     -- \| Inform the client they must wait indefinitely to receive a reply.
-    MsgWait
-      :: Message
-          (ChainSeek query point tip)
-          ('StNext err result)
-          ('StPoll err result)
+    Wait
+      :: Message (ChainSeek k point tip) ('StNext (t :: k)) ('StPoll t)
     -- \| End the protocol
-    MsgDone
-      :: Message
-          (ChainSeek query point tip)
-          'StIdle
-          'StDone
+    Done
+      :: Message (ChainSeek k point tip) 'StIdle 'StDone
     -- \| Ask the server if there have been any updates.
-    MsgPoll
-      :: Message
-          (ChainSeek query point tip)
-          ('StPoll err result)
-          ('StNext err result)
+    Poll
+      :: Message (ChainSeek k point tip) ('StPoll (t :: k)) ('StNext t)
     -- \| Cancel the polling loop.
-    MsgCancel
-      :: Message
-          (ChainSeek query point tip)
-          ('StPoll err result)
-          'StIdle
-    MsgScan
-      :: query err result
-      -> Message
-          (ChainSeek query point tip)
-          'StIdle
-          ('StScan err result)
-    MsgCollect
-      :: Message
-          (ChainSeek query point tip)
-          ('StScan err result)
-          ('StCollect err result)
-    MsgCancelScan
-      :: Message
-          (ChainSeek query point tip)
-          ('StScan err result)
-          'StIdle
-    MsgCollected
-      :: [(point, result)]
+    Cancel
+      :: Message (ChainSeek k point tip) ('StPoll (t :: k)) 'StIdle
+    Scan
+      :: Move (t :: k)
+      -> Message (ChainSeek k point tip) 'StIdle ('StScan t)
+    Collect
+      :: Message (ChainSeek k point tip) ('StScan (t :: k)) ('StCollect t)
+    CancelScan
+      :: Message (ChainSeek k point tip) ('StScan (t :: k)) 'StIdle
+    Collected
+      :: [(point, SeekResult (t :: k))]
       -> tip
-      -> Message
-          (ChainSeek query point tip)
-          ('StCollect err result)
-          ('StScan err result)
-    MsgCollectFailed
-      :: err
+      -> Message (ChainSeek k point tip) ('StCollect t) ('StScan t)
+    CollectFailed
+      :: SeekError (t :: k)
       -> tip
-      -> Message
-          (ChainSeek query point tip)
-          ('StCollect err result)
-          'StIdle
-    MsgCollectRollBackward
+      -> Message (ChainSeek k point tip) ('StCollect t) 'StIdle
+    CollectRollBackward
       :: point
       -> tip
-      -> Message
-          (ChainSeek query point tip)
-          ('StCollect err result)
-          'StIdle
-    MsgCollectWait
+      -> Message (ChainSeek k point tip) ('StCollect (t :: k)) 'StIdle
+    CollectWait
       :: tip
-      -> Message
-          (ChainSeek query point tip)
-          ('StCollect err result)
-          ('StPoll err result)
+      -> Message (ChainSeek k point tip) ('StCollect (t :: k)) ('StPoll t)
 
   data ClientHasAgency st where
     TokIdle :: ClientHasAgency 'StIdle
-    TokPoll :: ClientHasAgency ('StPoll err result)
-    TokScan :: ClientHasAgency ('StScan err result)
+    TokPoll :: Tag (t :: k) -> ClientHasAgency ('StPoll t :: ChainSeek k point tip)
+    TokScan :: Tag (t :: k) -> ClientHasAgency ('StScan t :: ChainSeek k point tip)
 
   data ServerHasAgency st where
-    TokNext :: Tag query err result -> ServerHasAgency ('StNext err result :: ChainSeek query point tip)
-    TokCollect :: Tag query err result -> ServerHasAgency ('StCollect err result :: ChainSeek query point tip)
+    TokNext :: Tag (t :: k) -> ServerHasAgency ('StNext t :: ChainSeek k point tip)
+    TokCollect :: Tag (t :: k) -> ServerHasAgency ('StCollect t :: ChainSeek k point tip)
 
   data NobodyHasAgency st where
     TokDone :: NobodyHasAgency 'StDone
 
   exclusionLemma_ClientAndServerHaveAgency TokIdle = \case {}
-  exclusionLemma_ClientAndServerHaveAgency TokPoll = \case {}
-  exclusionLemma_ClientAndServerHaveAgency TokScan = \case {}
+  exclusionLemma_ClientAndServerHaveAgency TokPoll{} = \case {}
+  exclusionLemma_ClientAndServerHaveAgency TokScan{} = \case {}
 
   exclusionLemma_NobodyAndClientHaveAgency TokDone = \case {}
 
   exclusionLemma_NobodyAndServerHaveAgency TokDone = \case {}
 
+class (Binary k, TagKind k) => BinaryTagKind k where
+  putMove :: Move (t :: k) -> Put
+  getMove :: Tag (t :: k) -> Get (Move t)
+  putSeekResult :: SeekResult (t :: k) -> Put
+  getSeekResult :: Tag (t :: k) -> Get (SeekResult t)
+  putSeekError :: SeekError (t :: k) -> Put
+  getSeekError :: Tag (t :: k) -> Get (SeekError t)
+
+instance (BinaryTagKind k) => Binary (SomeTag k) where
+  put = put . fromSomeTag
+  get = toTag <$> get
+
 instance
-  ( Query query
+  ( BinaryTagKind k
   , Binary tip
   , Binary point
   )
-  => BinaryMessage (ChainSeek query point tip)
+  => BinaryMessage (ChainSeek k point tip)
   where
   putMessage (ClientAgency TokIdle) msg = case msg of
-    MsgQueryNext query -> do
+    QueryNext move -> do
       putWord8 0x01
-      let tag = tagFromQuery query
-      putTag tag
-      putQuery query
-    MsgDone -> putWord8 0x02
-    MsgScan query -> do
+      put $ SomeTag $ moveTag move
+      putMove move
+    Done -> putWord8 0x02
+    Scan move -> do
       putWord8 0x09
-      let tag = tagFromQuery query
-      putTag tag
-      putQuery query
-  putMessage (ServerAgency (TokNext tag)) (MsgRejectQuery err tip) = do
+      put $ SomeTag $ moveTag move
+      putMove move
+  putMessage (ServerAgency (TokNext{})) (RejectQuery err tip) = do
     putWord8 0x03
-    putTag tag
-    putErr tag err
+    putSeekError err
     put tip
-  putMessage (ServerAgency (TokNext tag)) (MsgRollForward result pos tip) = do
+  putMessage (ServerAgency (TokNext{})) (RollForward result pos tip) = do
     putWord8 0x04
-    putTag tag
-    putResult tag result
+    putSeekResult result
     put pos
     put tip
-  putMessage (ServerAgency TokNext{}) (MsgRollBackward pos tip) = do
+  putMessage (ServerAgency TokNext{}) (RollBackward pos tip) = do
     putWord8 0x05
     put pos
     put tip
-  putMessage (ServerAgency TokNext{}) MsgWait = putWord8 0x06
-  putMessage (ClientAgency TokPoll) MsgPoll = putWord8 0x07
-  putMessage (ClientAgency TokPoll) MsgCancel = putWord8 0x08
-  putMessage (ClientAgency TokScan) msg = case msg of
-    MsgCollect -> putWord8 0x0a
-    MsgCancelScan -> putWord8 0x0b
-  putMessage (ServerAgency (TokCollect tag)) (MsgCollectFailed err tip) = do
+  putMessage (ServerAgency TokNext{}) Wait = putWord8 0x06
+  putMessage (ClientAgency TokPoll{}) Poll = putWord8 0x07
+  putMessage (ClientAgency TokPoll{}) Cancel = putWord8 0x08
+  putMessage (ClientAgency TokScan{}) msg = case msg of
+    Collect -> putWord8 0x0a
+    CancelScan -> putWord8 0x0b
+  putMessage (ServerAgency (TokCollect{})) (CollectFailed err tip) = do
     putWord8 0x0c
-    putTag tag
-    putErr tag err
+    putSeekError err
     put tip
-  putMessage (ServerAgency (TokCollect tag)) (MsgCollected results tip) = do
+  putMessage (ServerAgency (TokCollect{})) (Collected results tip) = do
     putWord8 0x0d
-    putTag tag
-    put $ length results
+    put $ toInteger $ length results
     for_ results \(point, result) -> do
       put point
-      putResult tag result
+      putSeekResult result
     put tip
-  putMessage (ServerAgency TokCollect{}) (MsgCollectRollBackward pos tip) = do
+  putMessage (ServerAgency TokCollect{}) (CollectRollBackward pos tip) = do
     putWord8 0x0e
     put pos
     put tip
-  putMessage (ServerAgency TokCollect{}) (MsgCollectWait tip) = do
+  putMessage (ServerAgency TokCollect{}) (CollectWait tip) = do
     putWord8 0x0f
     put tip
 
@@ -280,532 +254,398 @@ instance
     tag <- getWord8
     case (tag, tok) of
       (0x01, ClientAgency TokIdle) -> do
-        SomeTag qtag <- getTag
-        SomeMessage . MsgQueryNext <$> getQuery qtag
-      (0x02, ClientAgency TokIdle) -> pure $ SomeMessage MsgDone
-      (0x03, ServerAgency (TokNext qtag)) -> do
-        SomeTag qtag' :: SomeTag query <- getTag
-        case tagEq qtag qtag' of
-          Nothing -> fail "decoded query tag does not match expected query tag"
-          Just (Refl, Refl) -> do
-            err <- getErr qtag'
-            tip <- get
-            pure $ SomeMessage $ MsgRejectQuery err tip
-      (0x04, ServerAgency (TokNext qtag)) -> do
-        SomeTag qtag' :: SomeTag query <- getTag
-        case tagEq qtag qtag' of
-          Nothing -> fail "decoded query tag does not match expected query tag"
-          Just (Refl, Refl) -> do
-            result <- getResult qtag'
-            point <- get
-            tip <- get
-            pure $ SomeMessage $ MsgRollForward result point tip
+        SomeTag qtag <- get
+        move <- getMove qtag
+        pure $ SomeMessage $ QueryNext move
+      (0x02, ClientAgency TokIdle) -> pure $ SomeMessage Done
+      (0x03, ServerAgency (TokNext t)) -> do
+        err <- getSeekError t
+        tip <- get
+        pure $ SomeMessage $ RejectQuery err tip
+      (0x04, ServerAgency (TokNext t)) -> do
+        result <- getSeekResult t
+        point <- get
+        tip <- get
+        pure $ SomeMessage $ RollForward result point tip
       (0x05, ServerAgency (TokNext _)) -> do
         point <- get
         tip <- get
-        pure $ SomeMessage $ MsgRollBackward point tip
-      (0x06, ServerAgency (TokNext _)) -> pure $ SomeMessage MsgWait
-      (0x07, ClientAgency TokPoll) -> pure $ SomeMessage MsgPoll
-      (0x08, ClientAgency TokPoll) -> pure $ SomeMessage MsgCancel
+        pure $ SomeMessage $ RollBackward point tip
+      (0x06, ServerAgency (TokNext _)) -> pure $ SomeMessage Wait
+      (0x07, ClientAgency TokPoll{}) -> pure $ SomeMessage Poll
+      (0x08, ClientAgency TokPoll{}) -> pure $ SomeMessage Cancel
       (0x09, ClientAgency TokIdle) -> do
-        SomeTag qtag <- getTag
-        SomeMessage . MsgScan <$> getQuery qtag
-      (0x0a, ClientAgency TokScan) -> pure $ SomeMessage MsgCollect
-      (0x0b, ClientAgency TokScan) -> pure $ SomeMessage MsgCancelScan
-      (0x0c, ServerAgency (TokCollect qtag)) -> do
-        SomeTag qtag' :: SomeTag query <- getTag
-        case tagEq qtag qtag' of
-          Nothing -> fail "decoded query tag does not match expected query tag"
-          Just (Refl, Refl) -> do
-            err <- getErr qtag'
-            tip <- get
-            pure $ SomeMessage $ MsgCollectFailed err tip
-      (0x0d, ServerAgency (TokCollect qtag)) -> do
-        SomeTag qtag' :: SomeTag query <- getTag
-        case tagEq qtag qtag' of
-          Nothing -> fail "decoded query tag does not match expected query tag"
-          Just (Refl, Refl) -> do
-            len <- get
-            results <- replicateM len $ (,) <$> get <*> getResult qtag'
-            tip <- get
-            pure $ SomeMessage $ MsgCollected results tip
+        SomeTag qtag <- get
+        move <- getMove qtag
+        pure $ SomeMessage $ Scan move
+      (0x0a, ClientAgency TokScan{}) -> pure $ SomeMessage Collect
+      (0x0b, ClientAgency TokScan{}) -> pure $ SomeMessage CancelScan
+      (0x0c, ServerAgency (TokCollect t)) -> do
+        err <- getSeekError t
+        tip <- get
+        pure $ SomeMessage $ CollectFailed err tip
+      (0x0d, ServerAgency (TokCollect t)) -> do
+        len <- get
+        results <- replicateM (fromInteger len) $ (,) <$> get <*> getSeekResult t
+        tip <- get
+        pure $ SomeMessage $ Collected results tip
       (0x0e, ServerAgency (TokCollect _)) -> do
         point <- get
         tip <- get
-        pure $ SomeMessage $ MsgCollectRollBackward point tip
+        pure $ SomeMessage $ CollectRollBackward point tip
       (0x0f, ServerAgency (TokCollect _)) -> do
         tip <- get
-        pure $ SomeMessage $ MsgCollectWait tip
+        pure $ SomeMessage $ CollectWait tip
       _ -> fail $ "Unexpected tag " <> show tag
 
-class (ShowQuery query) => OTelQuery query where
-  queryTypeName :: Proxy query -> Text
-  queryName :: Tag query err result -> Text
+class (Arbitrary k, TagKind k) => ArbitraryTagKind k where
+  arbitraryMove :: Tag (t :: k) -> Gen (Move t)
+  shrinkMove :: Move (t :: k) -> [Move t]
+  arbitrarySeekError :: Tag (t :: k) -> Maybe (Gen (SeekError t))
+  shrinkSeekError :: SeekError (t :: k) -> [SeekError t]
+  arbitrarySeekResult :: Tag (t :: k) -> Gen (SeekResult t)
+  shrinkSeekResult :: SeekResult (t :: k) -> [SeekResult t]
 
-instance
-  ( OTelQuery query
-  , Show point
-  , Show tip
-  )
-  => OTelProtocol (ChainSeek query point tip)
-  where
-  protocolName _ = "chain_seek." <> queryTypeName (Proxy @query)
-  messageAttributes = curry \case
-    (_, MsgQueryNext query) ->
-      MessageAttributes
-        { messageType = "query/" <> queryName (tagFromQuery query)
-        , messageParameters = [toPrimitiveAttribute $ T.pack $ showsPrecQuery 0 query ""]
-        }
-    (_, MsgScan query) ->
-      MessageAttributes
-        { messageType = "scan/" <> queryName (tagFromQuery query)
-        , messageParameters = [toPrimitiveAttribute $ T.pack $ showsPrecQuery 0 query ""]
-        }
-    (ServerAgency (TokNext tag), MsgRejectQuery err tip) ->
-      MessageAttributes
-        { messageType = "query/" <> queryName tag <> "/reject"
-        , messageParameters = toPrimitiveAttribute . T.pack <$> [showsPrecErr 0 tag err "", show tip]
-        }
-    (ServerAgency (TokNext tag), MsgRollForward result point tip) ->
-      MessageAttributes
-        { messageType = "query/" <> queryName tag <> "/roll_forward"
-        , messageParameters = toPrimitiveAttribute . T.pack <$> [showsPrecResult 0 tag result "", show point, show tip]
-        }
-    (ServerAgency (TokNext tag), MsgRollBackward point tip) ->
-      MessageAttributes
-        { messageType = "query/" <> queryName tag <> "/roll_backward"
-        , messageParameters = toPrimitiveAttribute . T.pack <$> [show point, show tip]
-        }
-    (ServerAgency (TokNext tag), MsgWait) ->
-      MessageAttributes
-        { messageType = "query/" <> queryName tag <> "/wait"
-        , messageParameters = []
-        }
-    (ServerAgency (TokCollect tag), MsgCollectFailed err tip) ->
-      MessageAttributes
-        { messageType = "scan/" <> queryName tag <> "/failed"
-        , messageParameters = toPrimitiveAttribute . T.pack <$> [showsPrecErr 0 tag err "", show tip]
-        }
-    (ServerAgency (TokCollect tag), MsgCollected _ _) ->
-      MessageAttributes
-        { messageType = "scan/" <> queryName tag <> "/collected"
-        , messageParameters = []
-        }
-    (ServerAgency (TokCollect tag), MsgCollectRollBackward point tip) ->
-      MessageAttributes
-        { messageType = "scan/" <> queryName tag <> "/roll_backward"
-        , messageParameters = toPrimitiveAttribute . T.pack <$> [show point, show tip]
-        }
-    (ServerAgency (TokCollect tag), MsgCollectWait _) ->
-      MessageAttributes
-        { messageType = "scan/" <> queryName tag <> "/wait"
-        , messageParameters = []
-        }
-    (_, MsgDone) ->
-      MessageAttributes
-        { messageType = "done"
-        , messageParameters = []
-        }
-    (_, MsgPoll) ->
-      MessageAttributes
-        { messageType = "poll"
-        , messageParameters = []
-        }
-    (_, MsgCancel) ->
-      MessageAttributes
-        { messageType = "cancel"
-        , messageParameters = []
-        }
-    (_, MsgCollect) ->
-      MessageAttributes
-        { messageType = "collect"
-        , messageParameters = []
-        }
-    (_, MsgCancelScan) ->
-      MessageAttributes
-        { messageType = "collect_Cancel"
-        , messageParameters = []
-        }
-
-class (Query query) => ArbitraryQuery query where
-  arbitraryTag :: Gen (SomeTag query)
-  arbitraryQuery :: Tag query err result -> Gen (query err result)
-  arbitraryErr :: Tag query err result -> Maybe (Gen err)
-  arbitraryResult :: Tag query err result -> Gen result
-  shrinkQuery :: query err result -> [query err result]
-  shrinkErr :: Tag query err result -> err -> [err]
-  shrinkResult :: Tag query err result -> result -> [result]
-
-class (Query query) => QueryVariations query where
-  tags :: NonEmpty (SomeTag query)
-  queryVariations :: Tag query err result -> NonEmpty (query err result)
-  errVariations :: Tag query err result -> [err]
-  resultVariations :: Tag query err result -> NonEmpty result
+instance (ArbitraryTagKind k) => Arbitrary (SomeTag k) where
+  arbitrary = toTag <$> arbitrary
+  shrink = fmap toTag . shrink . fromSomeTag
 
 instance
   ( Arbitrary point
   , Arbitrary tip
-  , ArbitraryQuery query
+  , ArbitraryTagKind k
   )
-  => ArbitraryMessage (ChainSeek query point tip)
+  => ArbitraryMessage (ChainSeek k point tip)
   where
   arbitraryMessage = do
-    SomeTag tag <- arbitraryTag
-    let mGenError = arbitraryErr tag
+    SomeTag tag <- arbitrary
+    let mGenSeekError = arbitrarySeekError tag
     oneof $
       catMaybes
         [ Just $ do
-            query <- arbitraryQuery tag
-            pure $ AnyMessageAndAgency (ClientAgency TokIdle) $ MsgQueryNext query
-        , Just $ pure $ AnyMessageAndAgency (ClientAgency TokIdle) MsgDone
-        , mGenError <&> \genErr -> do
+            move <- arbitraryMove tag
+            pure $ AnyMessageAndAgency (ClientAgency TokIdle) $ QueryNext move
+        , Just $ do
+            move <- arbitraryMove tag
+            pure $ AnyMessageAndAgency (ClientAgency TokIdle) $ Scan move
+        , Just $ pure $ AnyMessageAndAgency (ClientAgency TokIdle) Done
+        , mGenSeekError <&> \genErr -> do
             tip <- arbitrary
             err <- genErr
-            pure $ AnyMessageAndAgency (ServerAgency $ TokNext tag) $ MsgRejectQuery err tip
+            pure $ AnyMessageAndAgency (ServerAgency $ TokNext tag) $ RejectQuery err tip
+        , mGenSeekError <&> \genErr -> do
+            tip <- arbitrary
+            err <- genErr
+            pure $ AnyMessageAndAgency (ServerAgency $ TokCollect tag) $ CollectFailed err tip
         , Just $ do
-            result <- arbitraryResult tag
+            result <- arbitrarySeekResult tag
             point <- arbitrary
             tip <- arbitrary
-            pure $ AnyMessageAndAgency (ServerAgency $ TokNext tag) $ MsgRollForward result point tip
+            pure $ AnyMessageAndAgency (ServerAgency $ TokNext tag) $ RollForward result point tip
+        , Just $ do
+            results <- listOf $ (,) <$> arbitrary <*> arbitrarySeekResult tag
+            tip <- arbitrary
+            pure $ AnyMessageAndAgency (ServerAgency $ TokCollect tag) $ Collected results tip
         , Just $ do
             point <- arbitrary
             tip <- arbitrary
-            pure $ AnyMessageAndAgency (ServerAgency $ TokNext tag) $ MsgRollBackward point tip
+            pure $ AnyMessageAndAgency (ServerAgency $ TokNext tag) $ RollBackward point tip
         , Just $ do
-            pure $ AnyMessageAndAgency (ServerAgency $ TokNext tag) MsgWait
-        , Just $ pure $ AnyMessageAndAgency (ClientAgency TokPoll) MsgPoll
-        , Just $ pure $ AnyMessageAndAgency (ClientAgency TokPoll) MsgCancel
+            point <- arbitrary
+            tip <- arbitrary
+            pure $ AnyMessageAndAgency (ServerAgency $ TokCollect tag) $ CollectRollBackward point tip
+        , Just $ pure $ AnyMessageAndAgency (ServerAgency $ TokNext tag) Wait
+        , Just $ AnyMessageAndAgency (ServerAgency $ TokCollect tag) . CollectWait <$> arbitrary
+        , Just $ pure $ AnyMessageAndAgency (ClientAgency $ TokPoll tag) Poll
+        , Just $ pure $ AnyMessageAndAgency (ClientAgency $ TokPoll tag) Cancel
+        , Just $ pure $ AnyMessageAndAgency (ClientAgency $ TokScan tag) Collect
+        , Just $ pure $ AnyMessageAndAgency (ClientAgency $ TokScan tag) CancelScan
         ]
-  shrinkMessage agency = \case
-    MsgQueryNext query -> MsgQueryNext <$> shrinkQuery query
-    MsgRejectQuery err tip ->
+
+  shrinkMessage _ = \case
+    QueryNext move -> QueryNext <$> shrinkMove move
+    RejectQuery err tip ->
       []
-        <> [MsgRejectQuery err' tip | err' <- case agency of ServerAgency (TokNext tag) -> shrinkErr tag err]
-        <> [MsgRejectQuery err tip' | tip' <- shrink tip]
-    MsgRollForward result point tip ->
+        <> [RejectQuery err' tip | err' <- shrinkSeekError err]
+        <> [RejectQuery err tip' | tip' <- shrink tip]
+    RollForward result point tip ->
       []
-        <> [MsgRollForward result' point tip | result' <- case agency of ServerAgency (TokNext tag) -> shrinkResult tag result]
-        <> [MsgRollForward result point' tip | point' <- shrink point]
-        <> [MsgRollForward result point tip' | tip' <- shrink tip]
-    MsgRollBackward point tip ->
+        <> [RollForward result' point tip | result' <- shrinkSeekResult result]
+        <> [RollForward result point' tip | point' <- shrink point]
+        <> [RollForward result point tip' | tip' <- shrink tip]
+    RollBackward point tip ->
       []
-        <> [MsgRollBackward point' tip | point' <- shrink point]
-        <> [MsgRollBackward point tip' | tip' <- shrink tip]
-    _ -> []
+        <> [RollBackward point' tip | point' <- shrink point]
+        <> [RollBackward point tip' | tip' <- shrink tip]
+    Scan move -> Scan <$> shrinkMove move
+    Collected results tip ->
+      []
+        <> [Collected results' tip | results' <- shrinkList (shrinkTuple shrink shrinkSeekResult) results]
+        <> [Collected results tip' | tip' <- shrink tip]
+    CollectFailed err tip ->
+      []
+        <> [CollectFailed err' tip | err' <- shrinkSeekError err]
+        <> [CollectFailed err tip' | tip' <- shrink tip]
+    CollectRollBackward point tip ->
+      []
+        <> [CollectRollBackward point' tip | point' <- shrink point]
+        <> [CollectRollBackward point tip' | tip' <- shrink tip]
+    CollectWait tip -> CollectWait <$> shrink tip
+    Wait -> []
+    Done -> []
+    Poll -> []
+    Cancel -> []
+    Collect -> []
+    CancelScan -> []
+
+shrinkTuple :: (a -> [a]) -> (b -> [b]) -> (a, b) -> [(a, b)]
+shrinkTuple f g (a, b) = ((,b) <$> f a) <> ((a,) <$> g b)
+
+class (Variations k, TagKind k) => VariationsTagKind k where
+  moveVariations :: Tag (t :: k) -> NonEmpty (Move t)
+  errorVariations :: Tag (t :: k) -> [SeekError t]
+  resultVariations :: Tag (t :: k) -> NonEmpty (SeekResult t)
+
+instance (VariationsTagKind k) => Variations (SomeTag k) where
+  variations = toTag <$> variations
 
 instance
   ( Variations point
   , Variations tip
-  , QueryVariations query
+  , VariationsTagKind k
   )
-  => MessageVariations (ChainSeek query point tip)
+  => MessageVariations (ChainSeek k point tip)
   where
   agencyVariations =
     join
       [ pure $ SomePeerHasAgency $ ClientAgency TokIdle
-      , pure $ SomePeerHasAgency $ ClientAgency TokPoll
-      , pure $ SomePeerHasAgency $ ClientAgency TokScan
       , do
-          SomeTag tag <- tags
+          SomeTag tag <- variations
           [ SomePeerHasAgency $ ServerAgency $ TokNext tag
             , SomePeerHasAgency $ ServerAgency $ TokCollect tag
+            , SomePeerHasAgency $ ClientAgency $ TokPoll tag
+            , SomePeerHasAgency $ ClientAgency $ TokScan tag
             ]
       ]
   messageVariations = \case
     ClientAgency TokIdle ->
       join
         [ do
-            SomeTag tag <- tags
+            SomeTag tag <- variations
             join
-              [ SomeMessage . MsgQueryNext <$> queryVariations tag
-              , SomeMessage . MsgScan <$> queryVariations tag
+              [ SomeMessage . QueryNext <$> moveVariations tag
+              , SomeMessage . Scan <$> moveVariations tag
               ]
-        , pure $ SomeMessage MsgDone
+        , pure $ SomeMessage Done
         ]
-    ClientAgency TokPoll -> [SomeMessage MsgPoll, SomeMessage MsgCancel]
-    ClientAgency TokScan -> [SomeMessage MsgCollect, SomeMessage MsgCancelScan]
+    ClientAgency (TokPoll{}) -> [SomeMessage Poll, SomeMessage Cancel]
+    ClientAgency (TokScan{}) -> [SomeMessage Collect, SomeMessage CancelScan]
     ServerAgency (TokNext tag) -> do
       let point :| points = variations
           tip :| tips = variations
           result :| results = resultVariations tag
-          errs = errVariations tag
+          errs = errorVariations tag
       join case errs of
         [] ->
           [ SomeMessage
-              <$> MsgRollForward result point tip
+              <$> RollForward result point tip
                 :| fold @[]
-                  [ MsgRollForward <$> results <*> pure point <*> pure tip
-                  , MsgRollForward result <$> points <*> pure tip
-                  , MsgRollForward result point <$> tips
+                  [ RollForward <$> results <*> pure point <*> pure tip
+                  , RollForward result <$> points <*> pure tip
+                  , RollForward result point <$> tips
                   ]
           , SomeMessage
-              <$> MsgRollBackward point tip
+              <$> RollBackward point tip
                 :| fold @[]
-                  [ MsgRollBackward <$> points <*> pure tip
-                  , MsgRollBackward point <$> tips
+                  [ RollBackward <$> points <*> pure tip
+                  , RollBackward point <$> tips
                   ]
           ]
         err : errs' ->
           [ SomeMessage
-              <$> MsgRollForward result point tip
+              <$> RollForward result point tip
                 :| fold @[]
-                  [ MsgRollForward <$> results <*> pure point <*> pure tip
-                  , MsgRollForward result <$> points <*> pure tip
-                  , MsgRollForward result point <$> tips
+                  [ RollForward <$> results <*> pure point <*> pure tip
+                  , RollForward result <$> points <*> pure tip
+                  , RollForward result point <$> tips
                   ]
           , SomeMessage
-              <$> MsgRollBackward point tip
+              <$> RollBackward point tip
                 :| fold @[]
-                  [ MsgRollBackward <$> points <*> pure tip
-                  , MsgRollBackward point <$> tips
+                  [ RollBackward <$> points <*> pure tip
+                  , RollBackward point <$> tips
                   ]
           , SomeMessage
-              <$> MsgRejectQuery err tip
+              <$> RejectQuery err tip
                 :| fold @[]
-                  [ MsgRejectQuery <$> errs' <*> pure tip
-                  , MsgRejectQuery err <$> tips
+                  [ RejectQuery <$> errs' <*> pure tip
+                  , RejectQuery err <$> tips
                   ]
           ]
     ServerAgency (TokCollect tag) -> do
       let point :| points = variations
           tip :| tips = variations
           result :| results = resultVariations tag
-          errs = errVariations tag
+          errs = errorVariations tag
       join case errs of
         [] ->
           [ SomeMessage
-              <$> MsgCollected [(point, result)] tip
+              <$> Collected [(point, result)] tip
                 :| fold @[]
-                  [ pure $ MsgCollected (zip points results) tip
-                  , MsgCollected [] <$> tips
+                  [ pure $ Collected (zip points results) tip
+                  , Collected [] <$> tips
                   ]
           , SomeMessage
-              <$> MsgCollectRollBackward point tip
+              <$> CollectRollBackward point tip
                 :| fold @[]
-                  [ MsgCollectRollBackward <$> points <*> pure tip
-                  , MsgCollectRollBackward point <$> tips
+                  [ CollectRollBackward <$> points <*> pure tip
+                  , CollectRollBackward point <$> tips
                   ]
           ]
         err : errs' ->
           [ SomeMessage
-              <$> MsgCollected [(point, result)] tip
+              <$> Collected [(point, result)] tip
                 :| fold @[]
-                  [ pure $ MsgCollected (zip points results) tip
-                  , MsgCollected [] <$> tips
+                  [ pure $ Collected (zip points results) tip
+                  , Collected [] <$> tips
                   ]
           , SomeMessage
-              <$> MsgCollectRollBackward point tip
+              <$> CollectRollBackward point tip
                 :| fold @[]
-                  [ MsgCollectRollBackward <$> points <*> pure tip
-                  , MsgCollectRollBackward point <$> tips
+                  [ CollectRollBackward <$> points <*> pure tip
+                  , CollectRollBackward point <$> tips
                   ]
           , SomeMessage
-              <$> MsgCollectFailed err tip
+              <$> CollectFailed err tip
                 :| fold @[]
-                  [ MsgCollectFailed <$> errs' <*> pure tip
-                  , MsgCollectFailed err <$> tips
+                  [ CollectFailed <$> errs' <*> pure tip
+                  , CollectFailed err <$> tips
                   ]
           ]
 
-class (Query query) => QueryEq query where
-  queryEq :: query err result -> query err result -> Bool
-  errEq :: Tag query err result -> err -> err -> Bool
-  resultEq :: Tag query err result -> result -> result -> Bool
+class
+  ( TagKind k
+  , Eq k
+  , TestEquality (Tag :: k -> Type)
+  , forall (t :: k). Eq (Tag t)
+  , forall (t :: k). Eq (Move t)
+  , forall (t :: k). Eq (SeekResult t)
+  , forall (t :: k). Eq (SeekError t)
+  ) =>
+  EqTagKind k
 
-instance
-  ( Eq point
-  , Eq tip
-  , QueryEq query
-  )
-  => MessageEq (ChainSeek query point tip)
-  where
-  messageEq (AnyMessageAndAgency agency msg) = case (agency, msg) of
-    (_, MsgQueryNext query) -> \case
-      AnyMessageAndAgency _ (MsgQueryNext query') ->
-        case tagEq (tagFromQuery query) (tagFromQuery query') of
-          Just (Refl, Refl) -> queryEq query query'
-          Nothing -> False
-      _ -> False
-    (_, MsgScan query) -> \case
-      AnyMessageAndAgency _ (MsgScan query') ->
-        case tagEq (tagFromQuery query) (tagFromQuery query') of
-          Just (Refl, Refl) -> queryEq query query'
-          Nothing -> False
-      _ -> False
-    (ServerAgency (TokNext tag), MsgRejectQuery err tip) -> \case
-      AnyMessageAndAgency (ServerAgency (TokNext tag')) (MsgRejectQuery err' tip') ->
-        tip == tip' && case tagEq tag tag' of
-          Just (Refl, Refl) -> errEq tag err err'
-          Nothing -> False
-      _ -> False
-    (ServerAgency (TokNext tag), MsgRollForward result point tip) -> \case
-      AnyMessageAndAgency (ServerAgency (TokNext tag')) (MsgRollForward result' point' tip') ->
-        point == point' && tip == tip' && case tagEq tag tag' of
-          Just (Refl, Refl) -> resultEq tag result result'
-          Nothing -> False
-      _ -> False
-    (_, MsgRollBackward point tip) -> \case
-      AnyMessageAndAgency _ (MsgRollBackward point' tip') ->
-        point == point' && tip == tip'
-      _ -> False
-    (_, MsgWait) -> \case
-      AnyMessageAndAgency _ MsgWait -> True
-      _ -> False
-    (ServerAgency (TokCollect tag), MsgCollectFailed err tip) -> \case
-      AnyMessageAndAgency (ServerAgency (TokCollect tag')) (MsgCollectFailed err' tip') ->
-        tip == tip' && case tagEq tag tag' of
-          Just (Refl, Refl) -> errEq tag err err'
-          Nothing -> False
-      _ -> False
-    (ServerAgency (TokCollect tag), MsgCollected results tip) -> \case
-      AnyMessageAndAgency (ServerAgency (TokCollect tag')) (MsgCollected results' tip') ->
-        tip == tip' && case tagEq tag tag' of
-          Just (Refl, Refl) -> all (\((point, result), (point', result')) -> point == point' && resultEq tag result result') $ zip results results'
-          Nothing -> False
-      _ -> False
-    (_, MsgCollectRollBackward point tip) -> \case
-      AnyMessageAndAgency _ (MsgCollectRollBackward point' tip') ->
-        point == point' && tip == tip'
-      _ -> False
-    (_, MsgCollectWait tip) -> \case
-      AnyMessageAndAgency _ (MsgCollectWait tip') -> tip == tip'
-      _ -> False
-    (_, MsgDone) -> \case
-      AnyMessageAndAgency _ MsgDone -> True
-      _ -> False
-    (_, MsgPoll) -> \case
-      AnyMessageAndAgency _ MsgPoll -> True
-      _ -> False
-    (_, MsgCancel) -> \case
-      AnyMessageAndAgency _ MsgCancel -> True
-      _ -> False
-    (_, MsgCollect) -> \case
-      AnyMessageAndAgency _ MsgCollect -> True
-      _ -> False
-    (_, MsgCancelScan) -> \case
-      AnyMessageAndAgency _ MsgCancelScan -> True
-      _ -> False
+instance (EqTagKind k) => Eq (SomeTag k) where
+  (==) = on (==) fromSomeTag
 
-class (Query query) => ShowQuery query where
-  showsPrecTag :: Int -> Tag query err result -> ShowS
-  showsPrecQuery :: Int -> query err result -> ShowS
-  showsPrecErr :: Int -> Tag query err result -> err -> ShowS
-  showsPrecResult :: Int -> Tag query err result -> result -> ShowS
+deriving instance (EqTagKind k, Eq point, Eq tip) => Eq (Message (ChainSeek k point tip) st st')
+deriving instance (EqTagKind k) => Eq (ClientHasAgency (st :: ChainSeek k point tip))
+deriving instance (EqTagKind k) => Eq (ServerHasAgency (st :: ChainSeek k point tip))
+deriving instance (EqTagKind k) => Eq (NobodyHasAgency (st :: ChainSeek k point tip))
 
-instance
-  ( Show point
-  , Show tip
-  , ShowQuery query
-  )
-  => ShowProtocol (ChainSeek query point tip)
-  where
-  showsPrecMessage p agency = \case
-    MsgQueryNext query ->
-      showParen
-        (p >= 11)
-        ( showString "MsgQueryNext"
-            . showSpace
-            . showsPrecQuery 11 query
-        )
-    MsgScan query ->
-      showParen
-        (p >= 11)
-        ( showString "MsgScan"
-            . showSpace
-            . showsPrecQuery 11 query
-        )
-    MsgRejectQuery err tip ->
-      showParen
-        (p >= 11)
-        ( showString "MsgRejectQuery"
-            . showSpace
-            . case agency of ServerAgency (TokNext tag) -> showsPrecErr 11 tag err
-            . showSpace
-            . showsPrec 11 tip
-        )
-    MsgRollForward result point tip ->
-      showParen
-        (p >= 11)
-        ( showString "MsgRollForward"
-            . showSpace
-            . case agency of ServerAgency (TokNext tag) -> showsPrecResult 11 tag result
-            . showSpace
-            . showsPrec 11 point
-            . showSpace
-            . showsPrec 11 tip
-        )
-    MsgRollBackward point tip ->
-      showParen
-        (p >= 11)
-        ( showString "MsgRollBackward"
-            . showSpace
-            . showsPrec 11 point
-            . showSpace
-            . showsPrec 11 tip
-        )
-    MsgWait -> showString "MsgWait"
-    MsgCollectFailed err tip ->
-      showParen
-        (p >= 11)
-        ( showString "MsgCollectFailed"
-            . showSpace
-            . case agency of ServerAgency (TokCollect tag) -> showsPrecErr 11 tag err
-            . showSpace
-            . showsPrec 11 tip
-        )
-    MsgCollected results tip ->
-      showParen
-        (p >= 11)
-        ( showString "MsgCollected"
-            . showSpace
-            . case agency of
-              ServerAgency (TokCollect tag) ->
-                showList__
-                  (\(point, result) -> showParen True $ shows point . showsPrecResult 0 tag result)
-                  results
-            . showSpace
-            . showsPrec 11 tip
-        )
-    MsgCollectRollBackward point tip ->
-      showParen
-        (p >= 11)
-        ( showString "MsgCollectRollBackward"
-            . showSpace
-            . showsPrec 11 point
-            . showSpace
-            . showsPrec 11 tip
-        )
-    MsgCollectWait tip ->
-      showParen
-        (p >= 11)
-        ( showString "MsgCollectWait"
-            . showSpace
-            . showsPrec 11 tip
-        )
-    MsgDone -> showString "MsgDone"
-    MsgPoll -> showString "MsgPoll"
-    MsgCancel -> showString "MsgCancel"
-    MsgCollect -> showString "MsgCollect"
-    MsgCancelScan -> showString "MsgCancelScan"
+instance (EqTagKind k) => TestEquality (ClientHasAgency :: ChainSeek k point tip -> Type) where
+  testEquality = \case
+    TokIdle -> \case
+      TokIdle -> Just Refl
+      _ -> Nothing
+    TokPoll t -> \case
+      TokPoll t' -> case testEquality t t' of
+        Just Refl -> Just Refl
+        Nothing -> Nothing
+      _ -> Nothing
+    TokScan t -> \case
+      TokScan t' -> case testEquality t t' of
+        Just Refl -> Just Refl
+        Nothing -> Nothing
+      _ -> Nothing
 
-  showsPrecServerHasAgency p = \case
-    TokNext tag ->
-      showParen
-        (p >= 11)
-        ( showString "TokNext"
-            . showSpace
-            . showsPrecTag p tag
-        )
-    TokCollect tag ->
-      showParen
-        (p >= 11)
-        ( showString "TokCollect"
-            . showSpace
-            . showsPrecTag p tag
-        )
+instance (EqTagKind k) => TestEquality (ServerHasAgency :: ChainSeek k point tip -> Type) where
+  testEquality = \case
+    TokNext t -> \case
+      TokNext t' -> case testEquality t t' of
+        Just Refl -> Just Refl
+        Nothing -> Nothing
+      _ -> Nothing
+    TokCollect t -> \case
+      TokCollect t' -> case testEquality t t' of
+        Just Refl -> Just Refl
+        Nothing -> Nothing
+      _ -> Nothing
 
-  showsPrecClientHasAgency _ =
-    showString . \case
-      TokIdle -> "TokIdle"
-      TokPoll -> "TokPoll"
-      TokScan -> "TokScan"
+instance TestEquality (NobodyHasAgency :: ChainSeek k point tip -> Type) where
+  testEquality TokDone TokDone = Just Refl
+
+instance (EqTagKind k) => TestMessageEquality (ChainSeek k point tip) where
+  testMessageEquality (ClientAgency tok) (ClientAgency tok') msg msg' = case (tok, tok') of
+    (TokIdle, TokIdle) -> case (msg, msg') of
+      (QueryNext p, QueryNext p') -> do
+        Refl <- testEquality (moveTag p) (moveTag p')
+        pure (Refl, Refl, Refl)
+      (QueryNext{}, _) -> Nothing
+      (Scan p, Scan p') -> do
+        Refl <- testEquality (moveTag p) (moveTag p')
+        pure (Refl, Refl, Refl)
+      (Scan{}, _) -> Nothing
+      (Done, Done) -> Just (Refl, Refl, Refl)
+      (Done, _) -> Nothing
+    (TokIdle, _) -> Nothing
+    (TokPoll t, TokPoll t') -> do
+      Refl <- testEquality t t'
+      case (msg, msg') of
+        (Poll, Poll) -> Just (Refl, Refl, Refl)
+        (Poll, _) -> Nothing
+        (Cancel, Cancel) -> Just (Refl, Refl, Refl)
+        (Cancel, _) -> Nothing
+    (TokPoll{}, _) -> Nothing
+    (TokScan t, TokScan t') -> do
+      Refl <- testEquality t t'
+      case (msg, msg') of
+        (Collect, Collect) -> Just (Refl, Refl, Refl)
+        (Collect, _) -> Nothing
+        (CancelScan, CancelScan) -> Just (Refl, Refl, Refl)
+        (CancelScan, _) -> Nothing
+    (TokScan{}, _) -> Nothing
+  testMessageEquality (ServerAgency tok) (ServerAgency tok') msg msg' = case (tok, tok') of
+    (TokNext t, TokNext t') -> do
+      Refl <- testEquality t t'
+      case (msg, msg') of
+        (RejectQuery{}, RejectQuery{}) -> Just (Refl, Refl, Refl)
+        (RejectQuery{}, _) -> Nothing
+        (RollForward{}, RollForward{}) -> Just (Refl, Refl, Refl)
+        (RollForward{}, _) -> Nothing
+        (RollBackward{}, RollBackward{}) -> Just (Refl, Refl, Refl)
+        (RollBackward{}, _) -> Nothing
+        (Wait, Wait) -> Just (Refl, Refl, Refl)
+        (Wait, _) -> Nothing
+    (TokNext{}, _) -> Nothing
+    (TokCollect t, TokCollect t') -> do
+      Refl <- testEquality t t'
+      case (msg, msg') of
+        (CollectFailed{}, CollectFailed{}) -> Just (Refl, Refl, Refl)
+        (CollectFailed{}, _) -> Nothing
+        (Collected{}, Collected{}) -> Just (Refl, Refl, Refl)
+        (Collected{}, _) -> Nothing
+        (CollectRollBackward{}, CollectRollBackward{}) -> Just (Refl, Refl, Refl)
+        (CollectRollBackward{}, _) -> Nothing
+        (CollectWait{}, CollectWait{}) -> Just (Refl, Refl, Refl)
+        (CollectWait{}, _) -> Nothing
+    (TokCollect{}, _) -> Nothing
+  testMessageEquality _ _ _ _ = Nothing
+
+instance (Eq point, Eq tip, EqTagKind k) => MessageEq (ChainSeek k point tip)
+
+class
+  ( Show k
+  , TagKind k
+  , forall (t :: k). Show (Tag t)
+  , forall (t :: k). Show (Move t)
+  , forall (t :: k). Show (SeekResult t)
+  , forall (t :: k). Show (SeekError t)
+  ) =>
+  ShowTagKind k
+
+deriving instance (ShowTagKind k, Show point, Show tip) => Show (Message (ChainSeek k point tip) st st')
+deriving instance (ShowTagKind k) => Show (ClientHasAgency (st :: ChainSeek k point tip))
+deriving instance (ShowTagKind k) => Show (ServerHasAgency (st :: ChainSeek k point tip))
+deriving instance (ShowTagKind k) => Show (NobodyHasAgency (st :: ChainSeek k point tip))
+
+instance (Show point, Show tip, ShowTagKind k) => ShowProtocol (ChainSeek k point tip)

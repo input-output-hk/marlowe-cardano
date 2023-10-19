@@ -8,7 +8,6 @@
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 -- | The type of the query protocol.
@@ -20,14 +19,15 @@ import Control.Monad (join)
 import Data.Binary (Binary, Get, Put, get, getWord8, put, putWord8)
 import Data.Data (type (:~:) (Refl))
 import Data.Foldable (fold)
+import Data.Function (on)
 import Data.Kind (Type)
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NE
 import Data.Maybe (catMaybes)
 import Data.Proxy (Proxy (..))
-import Data.Text (Text)
 import qualified Data.Text as T
-import GHC.Show (showCommaSpace, showSpace)
+import Data.Type.Equality (TestEquality (..))
+import GHC.Generics (Generic)
 import Network.Protocol.Codec (BinaryMessage (..))
 import Network.Protocol.Codec.Spec (
   ArbitraryMessage (..),
@@ -35,52 +35,67 @@ import Network.Protocol.Codec.Spec (
   MessageVariations (..),
   ShowProtocol (..),
   SomePeerHasAgency (..),
+  TestMessageEquality (..),
+  Variations (..),
   varyAp,
  )
 import Network.Protocol.Handshake.Types (HasSignature (..))
-import Network.Protocol.Peer.Trace
+import Network.Protocol.Singleton
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency (..))
-import OpenTelemetry.Attributes (toPrimitiveAttribute)
-import Test.QuickCheck (Gen, oneof, resize, sized)
+import Test.QuickCheck (Arbitrary (..), Gen, oneof, resize, sized)
+import Test.QuickCheck.Arbitrary (genericShrink)
+
+data SomeTag k where
+  SomeTag :: Tag (t :: k) -> SomeTag k
+
+{-# RULES
+"withSingTag" forall t a. withSingTag t a = a
+  #-}
+
+class TagKind k where
+  data Tag :: k -> Type
+  data Request :: k -> Type
+  data Response :: k -> Type
+  requestTag :: Request (t :: k) -> Tag t
+  fromTag :: Tag (t :: k) -> k
+  toTag :: k -> SomeTag k
+  withSingTag :: Tag (t :: k) -> ((SingTag t) => a) -> a
+
+class (TagKind k) => SingTag (t :: k) where
+  singTag :: Tag t
+
+fromSomeTag :: (TagKind k) => SomeTag k -> k
+fromSomeTag (SomeTag t) = fromTag t
 
 -- | A state kind for the query protocol.
-data Query (req :: Type -> Type) where
+data Query (k :: Type) where
   -- | The client can send a request.
-  StReq :: Query req
+  StReq :: Query k
   -- | The server is responding to a request.
-  StRes :: Type -> Query req
+  StRes :: k -> Query k
   -- | The terminal state of the protocol.
-  StDone :: Query req
+  StDone :: Query k
 
-instance (HasSignature req) => HasSignature (Query req) where
-  signature _ = T.intercalate " " ["Query", signature $ Proxy @req]
+instance (HasSignature k) => HasSignature (Query k) where
+  signature _ = T.intercalate " " ["Query", signature $ Proxy @k]
 
-instance Protocol (Query req) where
+instance Protocol (Query k) where
   -- \| The type of messages in the protocol. Corresponds to state transition in
   -- the state machine diagram of the protocol.
-  data Message (Query req) from to where
+  data Message (Query k) from to where
     -- \| Send a request. Transitions from the req state to the res state, with the result type being determined by the
     -- request.
     MsgRequest
-      :: ReqTree req a
-      -> Message
-          (Query req)
-          'StReq
-          ('StRes a)
+      :: Request (t :: k)
+      -> Message (Query k) 'StReq ('StRes t)
     -- \| Respond to a request. Transitions from the res state back to the req state.
     MsgRespond
-      :: a
-      -> Message
-          (Query req)
-          ('StRes a)
-          'StReq
+      :: Response (t :: k)
+      -> Message (Query k) ('StRes t) 'StReq
     -- \| End the session
     MsgDone
-      :: Message
-          (Query query)
-          'StReq
-          'StDone
+      :: Message (Query k) 'StReq 'StDone
 
   data ClientHasAgency st where
     -- \| Client has agency in the req state.
@@ -88,7 +103,7 @@ instance Protocol (Query req) where
 
   data ServerHasAgency st where
     -- \| Server has agency in the res state.
-    TokRes :: Tag (ReqTree req) a -> ServerHasAgency ('StRes a :: Query req)
+    TokRes :: Tag t -> ServerHasAgency ('StRes t)
 
   data NobodyHasAgency st where
     -- \| Nobody has agency in the done state.
@@ -98,119 +113,108 @@ instance Protocol (Query req) where
   exclusionLemma_NobodyAndClientHaveAgency TokDone = \case {}
   exclusionLemma_NobodyAndServerHaveAgency TokDone = \case {}
 
-deriving instance Show (ClientHasAgency (st :: Query req))
-deriving instance forall req (st :: Query req). (forall a. Show (Tag req a)) => Show (ServerHasAgency st)
-deriving instance Show (NobodyHasAgency (st :: Query req))
+-- deriving instance Show (ClientHasAgency (st :: Query k))
+-- deriving instance forall k (st :: Query k). (forall a. Show (Tag k a)) => Show (ServerHasAgency st)
+-- deriving instance Show (NobodyHasAgency (st :: Query k))
 
--- | Basic class for requests.
-class Request (req :: Type -> Type) where
-  -- | A data family that represents which request was issued, but lacks the data associated with the request.
-  data Tag req :: Type -> Type
+-- deriving instance (forall x. Show (req x)) => Show (SomeRequest req)
 
-  -- | Given a request, provide a tag for the request.
-  tagFromReq :: req a -> Tag req a
+-- | One or more tags in a tree structure.
+data Tree k
+  = -- | A single tag at a leaf of a tree.
+    Leaf k
+  | -- | A request tree consisting of two subtrees.
+    Bin (Tree k) (Tree k)
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving anyclass (Binary)
 
-  -- | Propositional equality for request tags.
-  tagEq :: Tag req a -> Tag req b -> Maybe (a :~: b)
+instance (Variations k) => Variations (Tree k) where
+  variations =
+    (Leaf <$> variations)
+      <> (Bin <$> (Leaf <$> variations) <*> (Leaf <$> variations))
 
--- | Existential version of a tag.
-data SomeTag req = forall a. SomeTag (Tag req a)
+instance (TagKind k) => TagKind (Tree k) where
+  data Tag t where
+    TagLeaf :: Tag t -> Tag ('Leaf t)
+    TagBin :: Tag l -> Tag r -> Tag ('Bin l r)
 
--- | Existential version of a request.
-data SomeRequest req where
-  SomeRequest :: req a -> SomeRequest req
+  data Request t where
+    ReqLeaf :: Request t -> Request ('Leaf t)
+    ReqBin :: Request l -> Request r -> Request ('Bin l r)
 
-deriving instance (forall x. Show (req x)) => Show (SomeRequest req)
+  data Response t where
+    ResLeaf :: Response t -> Response ('Leaf t)
+    ResBin :: Response l -> Response r -> Response ('Bin l r)
 
--- | One or more requests in a tree structure.
-data ReqTree req a where
-  -- | A single request at a leaf of a tree.
-  ReqLeaf :: req a -> ReqTree req a
-  -- | A request tree consisting of two subtrees.
-  ReqBin :: ReqTree req a -> ReqTree req b -> ReqTree req (a, b)
+  fromTag = \case
+    TagLeaf t -> Leaf $ fromTag t
+    TagBin l r -> Bin (fromTag l) (fromTag r)
 
-deriving instance (forall x. Show (req x)) => Show (ReqTree req a)
-deriving instance (forall x. Eq (req x)) => Eq (ReqTree req a)
+  toTag = \case
+    Leaf t -> case toTag t of
+      SomeTag t' -> SomeTag $ TagLeaf t'
+    Bin l r -> case (toTag l, toTag r) of
+      (SomeTag l', SomeTag r') -> SomeTag $ TagBin l' r'
 
-instance (Request req) => Request (ReqTree req) where
-  data Tag (ReqTree req) a where
-    TagLeaf :: Tag req a -> Tag (ReqTree req) a
-    TagBin :: Tag (ReqTree req) a -> Tag (ReqTree req) b -> Tag (ReqTree req) (a, b)
-  tagFromReq = \case
-    ReqLeaf req -> TagLeaf $ tagFromReq req
-    ReqBin req reqs -> TagBin (tagFromReq req) $ tagFromReq reqs
-  tagEq = \case
-    TagLeaf req -> \case
-      TagLeaf req' -> case tagEq req req' of
-        Just Refl -> Just Refl
-        _ -> Nothing
-      _ -> Nothing
-    TagBin req reqs -> \case
-      TagBin req' reqs' -> case (tagEq req req', tagEq reqs reqs') of
-        (Just Refl, Just Refl) -> Just Refl
-        _ -> Nothing
-      _ -> Nothing
+  requestTag = \case
+    ReqLeaf r -> TagLeaf $ requestTag r
+    ReqBin l r -> TagBin (requestTag l) (requestTag r)
 
-deriving instance (forall x. Show (Tag req x)) => Show (Tag (ReqTree req) a)
+  withSingTag = \case
+    TagLeaf t -> withSingTag t
+    TagBin l r -> withSingTag l $ withSingTag r
 
-class (Request req) => BinaryRequest (req :: Type -> Type) where
-  putReq :: req a -> Put
-  getReq :: Get (SomeRequest req)
-  putResult :: Tag req a -> a -> Put
-  getResult :: Tag req a -> Get a
+instance (SingTag t) => SingTag ('Leaf t) where singTag = TagLeaf singTag
+instance (SingTag l, SingTag r) => SingTag ('Bin l r) where singTag = TagBin singTag singTag
 
-instance (BinaryRequest req) => BinaryRequest (ReqTree req) where
-  putReq = \case
-    ReqLeaf req -> do
-      put False
-      putReq req
-    ReqBin l r -> do
-      put True
-      putReq l
-      putReq r
-  getReq = do
-    isBin <- get
-    if isBin
-      then do
-        SomeRequest l <- getReq
-        SomeRequest r <- getReq
-        pure $ SomeRequest $ ReqBin l r
-      else do
-        SomeRequest req <- getReq
-        pure $ SomeRequest $ ReqLeaf req
+instance SingClientHasAgency 'StReq where singClientHasAgency = TokReq
+instance (SingTag t) => SingServerHasAgency ('StRes t) where singServerHasAgency = TokRes singTag
+instance SingNobodyHasAgency 'StDone where singNobodyHasAgency = TokDone
 
-  putResult = \case
-    TagLeaf tag -> putResult tag
-    TagBin l r -> \(a, b) -> do
-      putResult l a
-      putResult r b
-  getResult = \case
-    TagLeaf tag -> getResult tag
-    TagBin l r -> (,) <$> getResult l <*> getResult r
+deriving instance (forall (x :: k). Show (Tag x)) => Show (Tag (t :: Tree k))
+deriving instance (forall (x :: k). Eq (Tag x)) => Eq (Tag (t :: Tree k))
+deriving instance (forall (x :: k). Ord (Tag x)) => Ord (Tag (t :: Tree k))
+deriving instance (forall (x :: k). Show (Request x)) => Show (Request (t :: Tree k))
+deriving instance (forall (x :: k). Eq (Request x)) => Eq (Request (t :: Tree k))
+deriving instance (forall (x :: k). Ord (Request x)) => Ord (Request (t :: Tree k))
+deriving instance (forall (x :: k). Show (Response x)) => Show (Response (t :: Tree k))
+deriving instance (forall (x :: k). Eq (Response x)) => Eq (Response (t :: Tree k))
+deriving instance (forall (x :: k). Ord (Response x)) => Ord (Response (t :: Tree k))
 
-foldPutRequestList :: (BinaryRequest req) => ReqTree req a -> Put
-foldPutRequestList = \case
-  ReqLeaf req -> putReq req
-  ReqBin req reqs -> putReq req *> foldPutRequestList reqs
+class (Binary k, TagKind k) => BinaryTagKind k where
+  putRequest :: Request (t :: k) -> Put
+  getRequest :: Tag (t :: k) -> Get (Request t)
+  putResponse :: Response (t :: k) -> Put
+  getResponse :: Tag (t :: k) -> Get (Response t)
 
--- reqAppend :: ReqTree req a -> ReqTree req b -> ReqTree req (a, b)
--- reqAppend acc = \case
---   ReqLeaf _ -> acc
---   ReqBin _ reqs -> reqLength (acc + 1) reqs
+instance (BinaryTagKind k) => Binary (SomeTag k) where
+  put = put . fromSomeTag
+  get = toTag <$> get
 
-instance (BinaryRequest req) => Binary (SomeRequest req) where
-  put (SomeRequest req) = putReq req
-  get = getReq
+instance (BinaryTagKind k) => BinaryTagKind (Tree k) where
+  putRequest = \case
+    ReqLeaf t -> putRequest t
+    ReqBin l r -> putRequest l *> putRequest r
+  getRequest = \case
+    TagLeaf t -> ReqLeaf <$> getRequest t
+    TagBin l r -> ReqBin <$> getRequest l <*> getRequest r
+  putResponse = \case
+    ResLeaf t -> putResponse t
+    ResBin l r -> putResponse l *> putResponse r
+  getResponse = \case
+    TagLeaf t -> ResLeaf <$> getResponse t
+    TagBin l r -> ResBin <$> getResponse l <*> getResponse r
 
-instance (BinaryRequest req) => BinaryMessage (Query req) where
+instance (BinaryTagKind k) => BinaryMessage (Query k) where
   putMessage = \case
     ClientAgency TokReq -> \case
       MsgDone -> putWord8 0x00
       MsgRequest req -> do
         putWord8 0x01
-        put $ SomeRequest req
-    ServerAgency (TokRes tag) -> \case
-      MsgRespond a -> putResult tag a
+        put $ SomeTag $ requestTag req
+        putRequest req
+    ServerAgency (TokRes _) -> \case
+      MsgRespond a -> putResponse a
 
   getMessage = \case
     ClientAgency TokReq -> do
@@ -218,196 +222,176 @@ instance (BinaryRequest req) => BinaryMessage (Query req) where
       case tag of
         0x00 -> pure $ SomeMessage MsgDone
         0x01 -> do
-          SomeRequest req <- get
-          pure $ SomeMessage $ MsgRequest req
+          SomeTag qtag <- get
+          SomeMessage . MsgRequest <$> getRequest qtag
         _ -> fail $ "Invalid message tag " <> show tag
-    ServerAgency (TokRes tag) -> SomeMessage . MsgRespond <$> getResult tag
+    ServerAgency (TokRes tag) -> SomeMessage . MsgRespond <$> getResponse tag
 
-class (ShowRequest req) => OTelRequest req where
-  reqTypeName :: Proxy req -> Text
-  reqName :: Tag req a -> Text
+class (Arbitrary k, TagKind k) => ArbitraryTagKind k where
+  arbitraryRequest :: Tag (t :: k) -> Gen (Request t)
+  arbitraryResponse :: Tag (t :: k) -> Gen (Response t)
+  shrinkRequest :: Request (t :: k) -> [Request t]
+  shrinkResponse :: Response (t :: k) -> [Response t]
 
-instance (OTelRequest req) => OTelRequest (ReqTree req) where
-  reqTypeName _ = reqTypeName (Proxy @req)
-  reqName = \case
-    TagLeaf tag -> reqName tag
-    TagBin l r -> "(" <> reqName l <> " AND " <> reqName r <> ")"
+instance (ArbitraryTagKind k) => Arbitrary (SomeTag k) where
+  arbitrary = toTag <$> arbitrary
+  shrink = fmap toTag . shrink . fromSomeTag
 
-instance (OTelRequest req) => OTelProtocol (Query req) where
-  protocolName _ = "query." <> reqTypeName (Proxy @req)
-  messageAttributes = curry \case
-    (_, MsgRequest req) ->
-      MessageAttributes
-        { messageType = "request/" <> reqName (tagFromReq req)
-        , messageParameters = [toPrimitiveAttribute $ T.pack $ show req]
-        }
-    (ServerAgency (TokRes tag), MsgRespond a) ->
-      MessageAttributes
-        { messageType = "request/" <> reqName tag <> "/respond"
-        , messageParameters = toPrimitiveAttribute . T.pack <$> [showsPrecResult 0 tag a ""]
-        }
-    (_, MsgDone) ->
-      MessageAttributes
-        { messageType = "done"
-        , messageParameters = []
-        }
-
-class (Request req) => ArbitraryRequest req where
-  arbitraryTag :: Gen (SomeTag req)
-  arbitraryReq :: Tag req a -> Gen (req a)
-  arbitraryResult :: Tag req a -> Gen a
-  shrinkReq :: req a -> [req a]
-  shrinkResult :: Tag req a -> a -> [a]
-
-instance (ArbitraryRequest req) => ArbitraryRequest (ReqTree req) where
-  arbitraryTag = sized \i ->
+instance (Arbitrary k) => Arbitrary (Tree k) where
+  arbitrary = sized \i ->
     if i <= 1
-      then do
-        SomeTag tag <- arbitraryTag
-        pure $ SomeTag $ TagLeaf tag
+      then Leaf <$> arbitrary
       else
         oneof
-          [ resize (i `div` 2) do
-              SomeTag l <- arbitraryTag
-              SomeTag r <- arbitraryTag
-              pure $ SomeTag $ TagBin l r
-          , do
-              SomeTag tag <- arbitraryTag
-              pure $ SomeTag $ TagLeaf tag
+          [ resize (i `div` 2) $ Bin <$> arbitrary <*> arbitrary
+          , Leaf <$> arbitrary
           ]
-  arbitraryReq = \case
-    TagLeaf tag -> ReqLeaf <$> arbitraryReq tag
+  shrink = genericShrink
+
+instance (ArbitraryTagKind k) => ArbitraryTagKind (Tree k) where
+  arbitraryRequest = \case
+    TagLeaf tag -> ReqLeaf <$> arbitraryRequest tag
     TagBin l r -> sized \i ->
       resize (i `div` 2) $
         ReqBin
-          <$> arbitraryReq l
-          <*> arbitraryReq r
-  arbitraryResult = \case
-    TagLeaf tag -> arbitraryResult tag
+          <$> arbitraryRequest l
+          <*> arbitraryRequest r
+  arbitraryResponse = \case
+    TagLeaf tag -> ResLeaf <$> arbitraryResponse tag
     TagBin l r -> sized \i ->
-      resize (i `div` 2) $
-        (,)
-          <$> arbitraryResult l
-          <*> arbitraryResult r
-  shrinkReq = \case
-    ReqLeaf req -> ReqLeaf <$> shrinkReq req
+      resize (i `div` 2) $ ResBin <$> arbitraryResponse l <*> arbitraryResponse r
+  shrinkRequest = \case
+    ReqLeaf req -> ReqLeaf <$> shrinkRequest req
     ReqBin req reqs ->
       fold
-        [ ReqBin <$> shrinkReq req <*> pure reqs
-        , ReqBin req <$> shrinkReq reqs
+        [ ReqBin <$> shrinkRequest req <*> pure reqs
+        , ReqBin req <$> shrinkRequest reqs
         ]
-  shrinkResult = \case
-    TagLeaf tag -> shrinkResult tag
-    TagBin l r -> \(a, b) ->
+  shrinkResponse = \case
+    ResLeaf res -> ResLeaf <$> shrinkResponse res
+    ResBin l r ->
       fold
-        [ (,) <$> shrinkResult l a <*> pure b
-        , (,) a <$> shrinkResult r b
+        [ ResBin <$> shrinkResponse l <*> pure r
+        , ResBin l <$> shrinkResponse r
         ]
 
-class (Request req) => RequestVariations req where
-  tagVariations :: NonEmpty (SomeTag req)
-  requestVariations :: Tag req a -> NonEmpty (req a)
-  resultVariations :: Tag req a -> NonEmpty a
-
-instance (RequestVariations req) => RequestVariations (ReqTree req) where
-  tagVariations =
-    NE.cons
-      (NE.head [SomeTag $ TagBin (TagLeaf tag) (TagLeaf tag) | SomeTag tag <- tagVariations])
-      [SomeTag $ TagLeaf tag | SomeTag tag <- tagVariations]
-  requestVariations = \case
-    TagLeaf tag -> ReqLeaf <$> requestVariations tag
-    TagBin l r -> ReqBin <$> requestVariations l `varyAp` requestVariations r
-  resultVariations = \case
-    TagLeaf tag -> resultVariations tag
-    TagBin l r -> (,) <$> resultVariations l `varyAp` resultVariations r
-
-instance (ArbitraryRequest req) => ArbitraryMessage (Query req) where
+instance (ArbitraryTagKind k) => ArbitraryMessage (Query k) where
   arbitraryMessage = do
-    SomeTag tag <- arbitraryTag
+    SomeTag tag <- arbitrary
     oneof $
       catMaybes
-        [ Just $ AnyMessageAndAgency (ClientAgency TokReq) . MsgRequest <$> arbitraryReq tag
-        , Just $ AnyMessageAndAgency (ServerAgency $ TokRes tag) . MsgRespond <$> arbitraryResult tag
+        [ Just $ AnyMessageAndAgency (ClientAgency TokReq) . MsgRequest <$> arbitraryRequest tag
+        , Just $ AnyMessageAndAgency (ServerAgency $ TokRes tag) . MsgRespond <$> arbitraryResponse tag
         , Just $ pure $ AnyMessageAndAgency (ClientAgency TokReq) MsgDone
         ]
   shrinkMessage agency = \case
-    MsgRequest query -> MsgRequest <$> shrinkReq query
+    MsgRequest query -> MsgRequest <$> shrinkRequest query
     MsgRespond result -> case agency of
-      (ServerAgency (TokRes tag)) -> MsgRespond <$> shrinkResult tag result
+      (ServerAgency (TokRes{})) -> MsgRespond <$> shrinkResponse result
     _ -> []
 
-instance (RequestVariations req) => MessageVariations (Query req) where
+class (Variations k, TagKind k) => VariationsTagKind k where
+  requestVariations :: Tag (t :: k) -> NonEmpty (Request t)
+  responseVariations :: Tag (t :: k) -> NonEmpty (Response t)
+
+instance (VariationsTagKind k) => Variations (SomeTag k) where
+  variations = toTag <$> variations
+
+instance (VariationsTagKind k) => VariationsTagKind (Tree k) where
+  requestVariations = \case
+    TagLeaf tag -> ReqLeaf <$> requestVariations tag
+    TagBin l r -> ReqBin <$> requestVariations l `varyAp` requestVariations r
+  responseVariations = \case
+    TagLeaf tag -> ResLeaf <$> responseVariations tag
+    TagBin l r -> ResBin <$> responseVariations l `varyAp` responseVariations r
+
+instance (VariationsTagKind k) => MessageVariations (Query k) where
   agencyVariations =
     join $
       NE.fromList
         [ pure $ SomePeerHasAgency $ ClientAgency TokReq
         , do
-            SomeTag tag <- tagVariations
+            SomeTag tag <- variations
             pure $ SomePeerHasAgency $ ServerAgency $ TokRes tag
         ]
   messageVariations = \case
     ClientAgency TokReq -> NE.cons (SomeMessage MsgDone) do
-      SomeTag tag <- tagVariations
+      SomeTag tag <- variations
       SomeMessage . MsgRequest <$> requestVariations tag
-    ServerAgency (TokRes tag) -> SomeMessage . MsgRespond <$> resultVariations tag
+    ServerAgency (TokRes tag) -> SomeMessage . MsgRespond <$> responseVariations tag
 
-class (forall a. Eq (req a), Request req) => RequestEq req where
-  resultEq :: Tag req a -> a -> a -> Bool
+class
+  ( TagKind k
+  , Eq k
+  , TestEquality (Tag :: k -> Type)
+  , forall (t :: k). Eq (Tag t)
+  , forall (t :: k). Eq (Request t)
+  , forall (t :: k). Eq (Response t)
+  ) =>
+  EqTagKind k
 
-instance (RequestEq req) => RequestEq (ReqTree req) where
-  resultEq = \case
-    TagLeaf tag -> resultEq tag
-    TagBin l r -> \(a, b) (a', b') -> resultEq l a a' && resultEq r b b'
+instance (EqTagKind k) => Eq (SomeTag k) where
+  (==) = on (==) fromSomeTag
 
-instance (RequestEq req) => MessageEq (Query req) where
-  messageEq (AnyMessageAndAgency agency msg) = case (agency, msg) of
-    (_, MsgRequest req) -> \case
-      AnyMessageAndAgency _ (MsgRequest req') ->
-        case tagEq (tagFromReq req) (tagFromReq req') of
-          Just Refl -> req == req'
-          Nothing -> False
-      _ -> False
-    (ServerAgency (TokRes tag), MsgRespond a) -> \case
-      AnyMessageAndAgency (ServerAgency (TokRes tag')) (MsgRespond a') ->
-        case tagEq tag tag' of
-          Just Refl -> resultEq tag a a'
-          Nothing -> False
-      _ -> False
-    (_, MsgDone) -> \case
-      AnyMessageAndAgency _ MsgDone -> True
-      _ -> False
+instance (TestEquality (Tag :: k -> Type)) => TestEquality (Tag :: Tree k -> Type) where
+  testEquality = \case
+    TagLeaf t -> \case
+      TagLeaf t' -> do
+        Refl <- testEquality t t'
+        pure Refl
+      _ -> Nothing
+    TagBin l r -> \case
+      TagBin l' r' -> do
+        Refl <- testEquality l l'
+        Refl <- testEquality r r'
+        pure Refl
+      _ -> Nothing
 
-class (forall a. Show (req a), forall a. Show (Tag req a), Request req) => ShowRequest req where
-  showsPrecResult :: Int -> Tag req a -> a -> ShowS
+instance (EqTagKind k) => EqTagKind (Tree k)
 
-instance (ShowRequest req) => ShowRequest (ReqTree req) where
-  showsPrecResult p = \case
-    TagLeaf tag -> showsPrecResult p tag
-    TagBin l r -> \(a, b) ->
-      showParen
-        True
-        ( showsPrecResult 0 l a
-            . showCommaSpace
-            . showsPrecResult 0 r b
-        )
+deriving instance (EqTagKind k) => Eq (Message (Query k) st st')
+deriving instance (EqTagKind k) => Eq (ClientHasAgency (st :: Query k))
+deriving instance (EqTagKind k) => Eq (ServerHasAgency (st :: Query k))
+deriving instance (EqTagKind k) => Eq (NobodyHasAgency (st :: Query k))
 
-instance (ShowRequest req) => ShowProtocol (Query req) where
-  showsPrecMessage p agency = \case
-    MsgRequest query ->
-      showParen
-        (p >= 11)
-        ( showString "MsgRequest"
-            . showSpace
-            . showsPrec 11 query
-        )
-    MsgRespond a ->
-      showParen
-        (p >= 11)
-        ( showString "MsgRespond"
-            . showSpace
-            . case agency of ServerAgency (TokRes tag) -> showsPrecResult 11 tag a
-        )
-    MsgDone -> showString "MsgDone"
+instance TestEquality (ClientHasAgency :: Query k -> Type) where
+  testEquality TokReq TokReq = Just Refl
 
-  showsPrecServerHasAgency = showsPrec
-  showsPrecClientHasAgency = showsPrec
+instance (EqTagKind k) => TestEquality (ServerHasAgency :: Query k -> Type) where
+  testEquality (TokRes t) (TokRes t') = do
+    Refl <- testEquality t t'
+    pure Refl
+
+instance TestEquality (NobodyHasAgency :: Query k -> Type) where
+  testEquality TokDone TokDone = Just Refl
+
+instance (EqTagKind k) => TestMessageEquality (Query k) where
+  testMessageEquality (ClientAgency TokReq) (ClientAgency TokReq) msg msg' = case (msg, msg') of
+    (MsgRequest r, MsgRequest r') -> do
+      Refl <- testEquality (requestTag r) (requestTag r')
+      pure (Refl, Refl, Refl)
+    (MsgRequest{}, _) -> Nothing
+    (MsgDone, MsgDone) -> Just (Refl, Refl, Refl)
+    (MsgDone, _) -> Nothing
+  testMessageEquality (ServerAgency (TokRes t)) (ServerAgency (TokRes t')) MsgRespond{} MsgRespond{} = do
+    Refl <- testEquality t t'
+    pure (Refl, Refl, Refl)
+  testMessageEquality _ _ _ _ = Nothing
+
+instance (EqTagKind k) => MessageEq (Query k)
+
+class
+  ( Show k
+  , TagKind k
+  , forall (t :: k). Show (Tag t)
+  , forall (t :: k). Show (Request t)
+  , forall (t :: k). Show (Response t)
+  ) =>
+  ShowTagKind k
+
+deriving instance (ShowTagKind k) => Show (Message (Query k) st st')
+deriving instance (ShowTagKind k) => Show (ClientHasAgency (st :: Query k))
+deriving instance (ShowTagKind k) => Show (ServerHasAgency (st :: Query k))
+deriving instance (ShowTagKind k) => Show (NobodyHasAgency (st :: Query k))
+
+instance (ShowTagKind k) => ShowProtocol (Query k)

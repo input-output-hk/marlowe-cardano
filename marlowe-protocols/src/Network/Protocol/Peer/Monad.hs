@@ -11,16 +11,18 @@ module Network.Protocol.Peer.Monad (
   (<*>),
   (>>),
   (>>=),
-  PeerT,
   ClientT,
+  PeerT,
   ServerT,
   await',
   await,
   fail,
   fmap,
   ihoistPeerT,
+  join,
   liftPeerT,
   localDriver,
+  pure,
   runPeerT',
   runPeerT,
   withEvent,
@@ -31,6 +33,7 @@ module Network.Protocol.Peer.Monad (
   withInjectEventFields,
   yield',
   yield,
+  return,
 ) where
 
 import Control.Monad.Event.Class (Inject (..), MonadEvent, MonadInjectEvent)
@@ -101,10 +104,19 @@ ihoistPeerT f g (PeerT m) = PeerT \dState driver -> f P.$ m dState (hoistDriver 
 fmap :: (Functor m) => (a -> b) -> PeerT pr ps i j m a -> PeerT pr ps i j m b
 fmap = P.fmap
 
+return :: (P.Applicative m) => a -> PeerT pr ps i i m a
+return = pure
+
+pure :: (P.Applicative m) => a -> PeerT pr ps i i m a
+pure a = PeerT \dState _ -> P.pure (a, dState)
+
 (>>=) :: (Monad m) => PeerT pr ps i j m a -> (a -> PeerT pr ps j k m b) -> PeerT pr ps i k m b
 PeerT f >>= k = PeerT \dState driver -> do
   (a, dState') <- f dState driver
   unPeerT (k a) dState' driver
+
+join :: (Monad m) => PeerT pr ps i j m (PeerT pr ps j k m b) -> PeerT pr ps i k m b
+join = (>>= P.id)
 
 (>>) :: (Monad m) => PeerT pr ps i j m a -> PeerT pr ps j k m b -> PeerT pr ps i k m b
 ma >> mv = ma >>= const mv
@@ -119,7 +131,7 @@ PeerT mf <*> PeerT ma = PeerT \dState driver -> do
   P.pure (f a, dState'')
 
 instance (Monad m) => P.Applicative (PeerT pr ps i i m) where
-  pure a = PeerT \dState _ -> P.pure (a, dState)
+  pure = pure
   (<*>) = (<*>)
 
 instance (Monad m) => P.Monad (PeerT pr ps i i m) where
