@@ -28,20 +28,18 @@ import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.ByteString.Short (fromShort)
-import qualified Data.List.NonEmpty as NE
 import Data.Maybe (mapMaybe)
 import Data.SOP.Counting (Exactly (..))
 import Data.SOP.Strict (K (..), NP (..))
 import qualified Data.Set.NonEmpty as NESet
 import qualified Data.Text as T
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
-import Data.Void (absurd)
 import Data.Word (Word64)
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScriptData)
 import qualified Language.Marlowe.Runtime.Cardano.Api as Cardano.Api
 import Language.Marlowe.Runtime.ChainSync.Api
 import qualified Network.Protocol.ChainSeek.Types as ChainSeek
-import qualified Network.Protocol.Job.Types as Command
+import qualified Network.Protocol.Job.Types as Job
 import qualified Network.Protocol.Query.Types as Query
 import Ouroboros.Consensus.Block (EpochSize (..))
 import Ouroboros.Consensus.BlockchainTime (RelativeTime (..), SlotLength (..), mkSlotLength)
@@ -296,89 +294,55 @@ instance Arbitrary UTxOs where
   arbitrary = UTxOs <$> arbitrary
   shrink = genericShrink
 
-instance ChainSeek.ArbitraryQuery Move where
-  arbitraryTag = elements $ NE.toList ChainSeek.tags
+instance Arbitrary ChainSyncMove where
+  arbitrary = chooseEnum (minBound, maxBound)
+  shrink = genericShrink
 
-  arbitraryQuery = \case
-    TagAdvanceBlocks -> AdvanceBlocks . fromIntegral <$> arbitrary @Word64
-    TagIntersect -> Intersect <$> arbitrary
-    TagFindConsumingTxs -> FindConsumingTxs <$> arbitrary
-    TagFindTx -> FindTx <$> arbitrary <*> arbitrary
-    TagFindTxsFor -> FindTxsFor <$> (NESet.insertSet <$> arbitrary <*> arbitrary)
-    TagAdvanceToTip -> pure AdvanceToTip
+instance ChainSeek.ArbitraryTagKind ChainSyncMove where
+  arbitraryMove = \case
+    TagAdvanceBlocks -> MoveAdvanceBlocks . fromIntegral <$> arbitrary @Word64
+    TagIntersect -> MoveIntersect <$> arbitrary
+    TagFindConsumingTxs -> MoveFindConsumingTxs <$> arbitrary
+    TagFindTx -> MoveFindTx <$> arbitrary <*> arbitrary
+    TagFindTxsFor -> MoveFindTxsFor <$> (NESet.insertSet <$> arbitrary <*> arbitrary)
+    TagAdvanceToTip -> pure MoveAdvanceToTip
 
-  arbitraryErr = \case
+  arbitrarySeekError = \case
     TagAdvanceBlocks -> Nothing
-    TagIntersect -> Just arbitrary
-    TagFindConsumingTxs -> Just arbitrary
-    TagFindTx -> Just arbitrary
+    TagIntersect -> Just $ ErrIntersect <$> arbitrary
+    TagFindConsumingTxs -> Just $ ErrFindConsumingTxs <$> arbitrary
+    TagFindTx -> Just $ ErrFindTx <$> arbitrary
     TagFindTxsFor -> Nothing
     TagAdvanceToTip -> Nothing
 
-  arbitraryResult = \case
-    TagAdvanceBlocks -> arbitrary
-    TagIntersect -> arbitrary
-    TagFindConsumingTxs -> arbitrary
-    TagFindTx -> arbitrary
-    TagFindTxsFor -> arbitrary
-    TagAdvanceToTip -> arbitrary
+  arbitrarySeekResult = \case
+    TagAdvanceBlocks -> pure ResAdvanceBlocks
+    TagIntersect -> pure ResIntersect
+    TagFindConsumingTxs -> ResFindConsumingTxs <$> arbitrary
+    TagFindTx -> ResFindTx <$> arbitrary
+    TagFindTxsFor -> ResFindTxsFor <$> arbitrary
+    TagAdvanceToTip -> pure ResAdvanceToTip
 
-  shrinkQuery = \case
-    AdvanceBlocks _ -> []
-    Intersect blocks -> Intersect <$> shrink blocks
-    FindConsumingTxs txOuts -> FindConsumingTxs <$> shrink txOuts
-    FindTx _ _ -> []
-    FindTxsFor credentials -> FindTxsFor <$> mapMaybe NESet.nonEmptySet (shrink $ NESet.toSet credentials)
-    AdvanceToTip -> pure AdvanceToTip
+  shrinkMove = \case
+    MoveAdvanceBlocks _ -> []
+    MoveIntersect blocks -> MoveIntersect <$> shrink blocks
+    MoveFindConsumingTxs txOuts -> MoveFindConsumingTxs <$> shrink txOuts
+    MoveFindTx _ _ -> []
+    MoveFindTxsFor credentials -> MoveFindTxsFor <$> mapMaybe NESet.nonEmptySet (shrink $ NESet.toSet credentials)
+    MoveAdvanceToTip -> pure MoveAdvanceToTip
 
-  shrinkErr = \case
-    TagAdvanceBlocks -> absurd
-    TagIntersect -> shrink
-    TagFindConsumingTxs -> shrink
-    TagFindTx -> shrink
-    TagFindTxsFor -> absurd
-    TagAdvanceToTip -> absurd
+  shrinkSeekError = \case
+    ErrIntersect err -> ErrIntersect <$> shrink err
+    ErrFindConsumingTxs err -> ErrFindConsumingTxs <$> shrink err
+    ErrFindTx err -> ErrFindTx <$> shrink err
 
-  shrinkResult = \case
-    TagAdvanceBlocks -> shrink
-    TagIntersect -> shrink
-    TagFindConsumingTxs -> shrink
-    TagFindTx -> shrink
-    TagFindTxsFor -> shrink
-    TagAdvanceToTip -> shrink
-
-instance ChainSeek.QueryEq Move where
-  queryEq = \case
-    AdvanceBlocks blocks -> \case
-      AdvanceBlocks blocks' -> blocks == blocks'
-      _ -> False
-    Intersect blocks -> \case
-      Intersect blocks' -> blocks == blocks'
-    FindConsumingTxs txOuts -> \case
-      FindConsumingTxs txOuts' -> txOuts == txOuts'
-    FindTx wait txId -> \case
-      FindTx wait' txId' -> wait == wait' && txId == txId'
-    FindTxsFor credentials -> \case
-      FindTxsFor credentials' -> credentials == credentials'
-    AdvanceToTip -> \case
-      AdvanceToTip -> True
-      _ -> False
-
-  errEq = \case
-    TagAdvanceBlocks -> (==)
-    TagIntersect -> (==)
-    TagFindConsumingTxs -> (==)
-    TagFindTx -> (==)
-    TagFindTxsFor -> (==)
-    TagAdvanceToTip -> (==)
-
-  resultEq = \case
-    TagAdvanceBlocks -> (==)
-    TagIntersect -> (==)
-    TagFindConsumingTxs -> (==)
-    TagFindTx -> (==)
-    TagFindTxsFor -> (==)
-    TagAdvanceToTip -> (==)
+  shrinkSeekResult = \case
+    ResAdvanceBlocks -> []
+    ResIntersect -> []
+    ResFindConsumingTxs a -> ResFindConsumingTxs <$> shrink a
+    ResFindTx a -> ResFindTx <$> shrink a
+    ResFindTxsFor a -> ResFindTxsFor <$> shrink a
+    ResAdvanceToTip -> []
 
 instance Arbitrary AnyCardanoEra where
   arbitrary =
@@ -392,62 +356,55 @@ instance Arbitrary AnyCardanoEra where
       , AnyCardanoEra ConwayEra
       ]
 
-instance Query.ArbitraryRequest ChainSyncQuery where
-  arbitraryTag =
-    elements
-      [ Query.SomeTag TagGetSecurityParameter
-      , Query.SomeTag TagGetNetworkId
-      , Query.SomeTag TagGetProtocolParameters
-      , Query.SomeTag TagGetSystemStart
-      , Query.SomeTag TagGetEraHistory
-      , Query.SomeTag TagGetUTxOs
-      ]
+instance Arbitrary ChainSyncQuery where
+  arbitrary = chooseEnum (minBound, maxBound)
+  shrink = genericShrink
 
-  arbitraryReq = \case
-    TagGetSecurityParameter -> pure GetSecurityParameter
-    TagGetNetworkId -> pure GetNetworkId
-    TagGetProtocolParameters -> pure GetProtocolParameters
-    TagGetSystemStart -> pure GetSystemStart
-    TagGetEraHistory -> pure GetEraHistory
-    TagGetUTxOs -> GetUTxOs <$> arbitrary
-    TagGetNodeTip -> pure GetNodeTip
-    TagGetTip -> pure GetTip
-    TagGetEra -> pure GetEra
+instance Query.ArbitraryTagKind ChainSyncQuery where
+  arbitraryRequest = \case
+    TagGetSecurityParameter -> pure ReqGetSecurityParameter
+    TagGetNetworkId -> pure ReqGetNetworkId
+    TagGetProtocolParameters -> pure ReqGetProtocolParameters
+    TagGetSystemStart -> pure ReqGetSystemStart
+    TagGetEraHistory -> pure ReqGetEraHistory
+    TagGetUTxOs -> ReqGetUTxOs <$> arbitrary
+    TagGetNodeTip -> pure ReqGetNodeTip
+    TagGetTip -> pure ReqGetTip
+    TagGetEra -> pure ReqGetEra
 
-  arbitraryResult = \case
-    TagGetSecurityParameter -> arbitrary
-    TagGetNetworkId -> arbitrary
-    TagGetProtocolParameters -> hedgehog genProtocolParameters
-    TagGetSystemStart -> SystemStart . posixSecondsToUTCTime . fromIntegral <$> arbitrary @Word64
-    TagGetEraHistory -> genEraHistory
-    TagGetUTxOs -> arbitrary
-    TagGetNodeTip -> arbitrary
-    TagGetTip -> arbitrary
-    TagGetEra -> arbitrary
+  arbitraryResponse = \case
+    TagGetSecurityParameter -> ResGetSecurityParameter <$> arbitrary
+    TagGetNetworkId -> ResGetNetworkId <$> arbitrary
+    TagGetProtocolParameters -> ResGetProtocolParameters <$> hedgehog genProtocolParameters
+    TagGetSystemStart -> ResGetSystemStart . SystemStart . posixSecondsToUTCTime . fromIntegral <$> arbitrary @Word64
+    TagGetEraHistory -> ResGetEraHistory <$> genEraHistory
+    TagGetUTxOs -> ResGetUTxOs <$> arbitrary
+    TagGetNodeTip -> ResGetNodeTip <$> arbitrary
+    TagGetTip -> ResGetTip <$> arbitrary
+    TagGetEra -> ResGetEra <$> arbitrary
 
-  shrinkReq = \case
-    GetSecurityParameter -> []
-    GetNetworkId -> []
-    GetProtocolParameters -> []
-    GetSystemStart -> []
-    GetEraHistory -> []
-    GetUTxOs query -> GetUTxOs <$> shrink query
-    GetNodeTip -> []
-    GetTip -> []
-    GetEra -> []
+  shrinkRequest = \case
+    ReqGetSecurityParameter -> []
+    ReqGetNetworkId -> []
+    ReqGetProtocolParameters -> []
+    ReqGetSystemStart -> []
+    ReqGetEraHistory -> []
+    ReqGetUTxOs query -> ReqGetUTxOs <$> shrink query
+    ReqGetNodeTip -> []
+    ReqGetTip -> []
+    ReqGetEra -> []
 
-  shrinkResult = \case
-    TagGetSecurityParameter -> shrink
-    TagGetNetworkId -> \case
-      Mainnet -> []
-      Testnet _ -> [Mainnet]
-    TagGetProtocolParameters -> const []
-    TagGetSystemStart -> const []
-    TagGetEraHistory -> const []
-    TagGetUTxOs -> shrink
-    TagGetNodeTip -> shrink
-    TagGetTip -> shrink
-    TagGetEra -> shrink
+  shrinkResponse = \case
+    ResGetSecurityParameter x -> ResGetSecurityParameter <$> shrink x
+    ResGetNetworkId Mainnet -> []
+    ResGetNetworkId (Testnet _) -> [ResGetNetworkId Mainnet]
+    ResGetProtocolParameters _ -> []
+    ResGetSystemStart _ -> []
+    ResGetEraHistory _ -> []
+    ResGetUTxOs x -> ResGetUTxOs <$> shrink x
+    ResGetNodeTip x -> ResGetNodeTip <$> shrink x
+    ResGetTip x -> ResGetTip <$> shrink x
+    ResGetEra x -> ResGetEra <$> shrink x
 
 genEraHistory :: Gen (EraHistory CardanoMode)
 genEraHistory =
@@ -510,64 +467,32 @@ genEpochSize = EpochSize <$> arbitrary
 genSlotLength :: Gen SlotLength
 genSlotLength = mkSlotLength . fromIntegral <$> arbitrary @Word64
 
-instance Query.RequestEq ChainSyncQuery where
-  resultEq = \case
-    TagGetSecurityParameter -> (==)
-    TagGetNetworkId -> (==)
-    TagGetProtocolParameters -> (==)
-    TagGetSystemStart -> (==)
-    TagGetEraHistory -> \(EraHistory CardanoMode interpreter1) (EraHistory CardanoMode interpreter2) ->
-      unInterpreter interpreter1 == unInterpreter interpreter2
-    TagGetUTxOs -> (==)
-    TagGetNodeTip -> (==)
-    TagGetTip -> (==)
-    TagGetEra -> (==)
+instance Arbitrary ChainSyncCommand where
+  arbitrary = chooseEnum (minBound, maxBound)
+  shrink = genericShrink
 
-instance Command.ArbitraryCommand ChainSyncCommand where
-  arbitraryTag =
-    elements
-      [ Command.SomeTag $ TagSubmitTx ScriptDataInAlonzoEra
-      , Command.SomeTag $ TagSubmitTx ScriptDataInBabbageEra
-      , Command.SomeTag $ TagSubmitTx ScriptDataInConwayEra
-      ]
-  arbitraryCmd = \case
-    TagSubmitTx ScriptDataInAlonzoEra -> hedgehog $ SubmitTx ScriptDataInAlonzoEra <$> genTx AlonzoEra
-    TagSubmitTx ScriptDataInBabbageEra -> hedgehog $ SubmitTx ScriptDataInBabbageEra <$> genTx BabbageEra
-    TagSubmitTx ScriptDataInConwayEra -> hedgehog $ SubmitTx ScriptDataInConwayEra <$> genTx ConwayEra
+instance Job.ArbitraryTagKind ChainSyncCommand where
+  arbitraryCommand = \case
+    TagSubmitTx ->
+      oneof
+        [ hedgehog $ CmdSubmitTx ScriptDataInAlonzoEra <$> genTx AlonzoEra
+        , hedgehog $ CmdSubmitTx ScriptDataInBabbageEra <$> genTx BabbageEra
+        , hedgehog $ CmdSubmitTx ScriptDataInConwayEra <$> genTx ConwayEra
+        ]
   arbitraryJobId = const Nothing
   arbitraryStatus = const Nothing
-  arbitraryErr = \case
-    TagSubmitTx _ -> Just arbitrary
-  arbitraryResult = \case
-    TagSubmitTx _ -> arbitrary
+  arbitraryJobError = \case
+    TagSubmitTx -> Just $ ErrSubmitTx <$> arbitrary
+  arbitraryJobResult = \case
+    TagSubmitTx -> pure ResSubmitTx
   shrinkCommand = \case
-    SubmitTx _ _ -> []
+    CmdSubmitTx _ _ -> []
   shrinkJobId = \case {}
-  shrinkErr = \case
-    TagSubmitTx _ -> shrink
-  shrinkResult = \case
-    TagSubmitTx _ -> shrink
-  shrinkStatus = \case
-    TagSubmitTx _ -> absurd
-
-instance Command.CommandEq ChainSyncCommand where
-  commandEq = \case
-    SubmitTx ScriptDataInAlonzoEra tx -> \case
-      SubmitTx ScriptDataInAlonzoEra tx' -> tx == tx'
-      _ -> False
-    SubmitTx ScriptDataInBabbageEra tx -> \case
-      SubmitTx ScriptDataInBabbageEra tx' -> tx == tx'
-      _ -> False
-    SubmitTx ScriptDataInConwayEra tx -> \case
-      SubmitTx ScriptDataInConwayEra tx' -> tx == tx'
-      _ -> False
-  jobIdEq = \case {}
-  statusEq = \case
-    TagSubmitTx _ -> absurd
-  errEq = \case
-    TagSubmitTx _ -> (==)
-  resultEq = \case
-    TagSubmitTx _ -> (==)
+  shrinkJobError = \case
+    ErrSubmitTx x -> ErrSubmitTx <$> shrink x
+  shrinkJobResult = \case
+    ResSubmitTx -> []
+  shrinkStatus = \case {}
 
 genNBytes :: Int -> Gen ByteString
 genNBytes len = BS.pack <$> replicateM len (chooseBoundedIntegral (minBound, maxBound))

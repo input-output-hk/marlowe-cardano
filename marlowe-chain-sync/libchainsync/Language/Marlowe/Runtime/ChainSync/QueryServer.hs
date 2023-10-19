@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
@@ -21,13 +22,13 @@ import qualified Cardano.Api as Cardano
 import Cardano.Api.Shelley (AcquiringFailure)
 import Control.Concurrent.STM (STM)
 import Control.Monad.Trans.Except (ExceptT (ExceptT), except, runExceptT, throwE, withExceptT)
-import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, ChainSyncQuery (..))
+import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, ChainSyncQuery (..), Request (..), Response (..))
 import Language.Marlowe.Runtime.ChainSync.Database (GetTip (runGetTip))
 import qualified Language.Marlowe.Runtime.ChainSync.Database as Database
 import Network.Protocol.Connection (ServerSource (..))
-import Network.Protocol.Query.Server (QueryServer (..), ServerStReq (..))
+import Network.Protocol.Query.Server (QueryServerT, batchWith, respond)
 import Network.Protocol.Query.Types
-import UnliftIO (MonadUnliftIO, atomically)
+import UnliftIO (Concurrently (Concurrently, runConcurrently), MonadUnliftIO, atomically)
 
 data ChainSyncQueryServerDependencies m = ChainSyncQueryServerDependencies
   { queryLocalNodeState
@@ -44,28 +45,21 @@ chainSyncQueryServer
   :: forall m
    . (MonadUnliftIO m, MonadFail m)
   => ChainSyncQueryServerDependencies m
-  -> ServerSource (QueryServer ChainSyncQuery) m ()
+  -> ServerSource (QueryServerT (Tree ChainSyncQuery)) m ()
 chainSyncQueryServer ChainSyncQueryServerDependencies{..} = ServerSource $ pure server
   where
-    server :: QueryServer ChainSyncQuery m ()
-    server = QueryServer $ pure serverReq
-
-    serverReq :: ServerStReq ChainSyncQuery m ()
-    serverReq =
-      ServerStReq
-        { recvMsgDone = pure ()
-        , recvMsgRequest =
-            fmap (,serverReq) . traverseReqTree \case
-              GetSecurityParameter -> queryGenesisParameters protocolParamSecurity
-              GetNetworkId -> queryGenesisParameters protocolParamNetworkId
-              GetProtocolParameters -> queryShelley (const QueryProtocolParameters)
-              GetSystemStart -> either (fail . show) pure =<< queryLocalNodeState Nothing QuerySystemStart
-              GetEraHistory -> either (fail . show) pure =<< queryLocalNodeState Nothing (QueryEraHistory CardanoModeIsMultiEra)
-              GetUTxOs utxosQuery -> Database.runGetUTxOs getUTxOs utxosQuery
-              GetNodeTip -> atomically nodeTip
-              GetTip -> runGetTip getTip
-              GetEra -> either (fail . show) pure =<< queryLocalNodeState Nothing (QueryCurrentEra CardanoModeIsMultiEra)
-        }
+    server :: QueryServerT (Tree ChainSyncQuery) m ()
+    server = respond $ batchWith Concurrently runConcurrently \case
+      ReqGetSecurityParameter -> ResGetSecurityParameter <$> queryGenesisParameters protocolParamSecurity
+      ReqGetNetworkId -> ResGetNetworkId <$> queryGenesisParameters protocolParamNetworkId
+      ReqGetProtocolParameters -> ResGetProtocolParameters <$> queryShelley (const QueryProtocolParameters)
+      ReqGetSystemStart -> either (fail . show) (pure . ResGetSystemStart) =<< queryLocalNodeState Nothing QuerySystemStart
+      ReqGetEraHistory ->
+        either (fail . show) (pure . ResGetEraHistory) =<< queryLocalNodeState Nothing (QueryEraHistory CardanoModeIsMultiEra)
+      ReqGetUTxOs utxosQuery -> ResGetUTxOs <$> Database.runGetUTxOs getUTxOs utxosQuery
+      ReqGetNodeTip -> ResGetNodeTip <$> atomically nodeTip
+      ReqGetTip -> ResGetTip <$> runGetTip getTip
+      ReqGetEra -> either (fail . show) (pure . ResGetEra) =<< queryLocalNodeState Nothing (QueryCurrentEra CardanoModeIsMultiEra)
 
     queryGenesisParameters :: (GenesisParameters -> a) -> m a
     queryGenesisParameters f = f <$> queryShelley (const QueryGenesisParameters)
@@ -99,8 +93,3 @@ chainSyncQueryServer ChainSyncQueryServerDependencies{..} = ServerSource $ pure 
                   QueryInShelleyBasedEra shelleyBasedEra $
                     query shelleyBasedEra
         withExceptT show $ except result
-
-    traverseReqTree :: (forall x. ChainSyncQuery x -> m x) -> ReqTree ChainSyncQuery a -> m a
-    traverseReqTree f = \case
-      ReqLeaf req -> f req
-      ReqBin l r -> (,) <$> traverseReqTree f l <*> traverseReqTree f r

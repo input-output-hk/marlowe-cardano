@@ -1,10 +1,13 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE EmptyCase #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE QuantifiedConstraints #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
 
 -- | The type of the job protocol.
 --
@@ -15,18 +18,17 @@
 module Network.Protocol.Job.Types where
 
 import Control.Monad (join)
-import Data.Binary (Put, getWord8, putWord8)
+import Data.Binary (Binary (..), Put, getWord8, putWord8)
 import Data.Binary.Get (Get)
 import Data.Foldable (fold)
+import Data.Function (on)
 import Data.Functor ((<&>))
 import Data.Kind (Type)
 import Data.List.NonEmpty
 import Data.Maybe (catMaybes)
 import Data.Proxy (Proxy (..))
-import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Type.Equality (type (:~:) (Refl))
-import GHC.Show (showSpace)
+import Data.Type.Equality (TestEquality (..), type (:~:) (Refl))
 import Network.Protocol.Codec (BinaryMessage (..))
 import Network.Protocol.Codec.Spec (
   ArbitraryMessage (..),
@@ -34,142 +36,107 @@ import Network.Protocol.Codec.Spec (
   MessageVariations (..),
   ShowProtocol (..),
   SomePeerHasAgency (..),
+  TestMessageEquality (..),
+  Variations (..),
  )
 import Network.Protocol.Handshake.Types (HasSignature (..))
-import Network.Protocol.Peer.Trace
+import Network.Protocol.Singleton
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency (..))
-import OpenTelemetry.Attributes (toPrimitiveAttribute)
-import Test.QuickCheck (Gen, oneof)
+import Test.QuickCheck (Arbitrary (..), Gen, oneof)
 
-data SomeTag cmd = forall status err result. SomeTag (Tag cmd status err result)
+data SomeTag k where
+  SomeTag :: Tag (t :: k) -> SomeTag k
 
--- | A class for commands. Defines associated types and conversion
--- functions needed to run the protocol.
-class Command (cmd :: Type -> Type -> Type -> Type) where
-  -- | The type of job IDs for this command type.
-  data JobId cmd :: Type -> Type -> Type -> Type
+class TagKind k where
+  data Tag :: k -> Type
+  data JobId :: k -> Type
+  data Command :: k -> Type
+  data Status :: k -> Type
+  data JobResult :: k -> Type
+  data JobError :: k -> Type
+  withSingTag :: Tag (t :: k) -> ((SingTag t) => a) -> a
+  commandTag :: Command (t :: k) -> Tag t
+  jobIdTag :: JobId (t :: k) -> Tag t
+  fromTag :: Tag (t :: k) -> k
+  toTag :: k -> SomeTag k
 
-  -- | The type of tags for this command type. Used exclusively for GADT
-  -- pattern matching.
-  data Tag cmd :: Type -> Type -> Type -> Type
+class (TagKind k) => SingTag (t :: k) where
+  singTag :: Tag t
 
-  -- | Obtain a token from a command.
-  tagFromCommand :: cmd status err result -> Tag cmd status err result
-
-  -- | Obtain a token from a command ID.
-  tagFromJobId :: JobId cmd status err result -> Tag cmd status err result
-
-  -- | Prove that two tags are the same.
-  tagEq
-    :: Tag cmd status err result
-    -> Tag cmd status' err' result'
-    -> Maybe (status :~: status', err :~: err', result :~: result')
-
-  putTag :: Tag cmd status err result -> Put
-  getTag :: Get (SomeTag cmd)
-  putJobId :: JobId cmd status err result -> Put
-  getJobId :: Tag cmd status err result -> Get (JobId cmd status err result)
-  putCommand :: cmd status err result -> Put
-  getCommand :: Tag cmd status err result -> Get (cmd status err result)
-  putStatus :: Tag cmd status err result -> status -> Put
-  getStatus :: Tag cmd status err result -> Get status
-  putErr :: Tag cmd status err result -> err -> Put
-  getErr :: Tag cmd status err result -> Get err
-  putResult :: Tag cmd status err result -> result -> Put
-  getResult :: Tag cmd status err result -> Get result
+fromSomeTag :: (TagKind k) => SomeTag k -> k
+fromSomeTag (SomeTag t) = fromTag t
 
 -- | A state kind for the job protocol.
-data Job (cmd :: Type -> Type -> Type -> Type) where
+data Job k where
   -- | The initial state of the protocol.
-  StInit :: Job cmd
+  StInit :: Job k
   -- | In the 'StCmd' state, the server has agency. It is running a command
   -- sent by the client and starting the job.
-  StCmd :: status -> err -> result -> Job cmd
+  StCmd :: k -> Job k
   -- | In the 'StAttach' state, the server has agency. It is looking up the job
   -- associated with the given job ID.
-  StAttach :: status -> err -> result -> Job cmd
+  StAttach :: k -> Job k
   -- | In the 'StAwait state, the client has agency. It has been previously
   -- told to await a job execution and can either poll the status or detach.
-  StAwait :: status -> err -> result -> Job cmd
+  StAwait :: k -> Job k
   -- | The terminal state of the protocol.
-  StDone :: Job cmd
+  StDone :: Job k
 
-instance (HasSignature cmd) => HasSignature (Job cmd) where
-  signature _ = T.intercalate " " ["Job", signature $ Proxy @cmd]
+instance SingClientHasAgency 'StInit where singClientHasAgency = TokInit
+instance (SingTag t) => SingClientHasAgency ('StAwait t) where singClientHasAgency = TokAwait singTag
+instance (SingTag t) => SingServerHasAgency ('StCmd t) where singServerHasAgency = TokCmd singTag
+instance (SingTag t) => SingServerHasAgency ('StAttach t) where singServerHasAgency = TokAttach singTag
+instance SingNobodyHasAgency 'StDone where singNobodyHasAgency = TokDone
 
-instance Protocol (Job cmd) where
+instance (HasSignature k) => HasSignature (Job k) where
+  signature _ = T.intercalate " " ["Job", signature $ Proxy @k]
+
+instance Protocol (Job k) where
   -- \| The type of messages in the protocol. Corresponds to state transition in
   -- the state machine diagram of the protocol.
-  data Message (Job cmd) from to where
+  data Message (Job k) from to where
     -- \| Tell the server to execute a command in a new job.
     MsgExec
-      :: cmd status err result
-      -> Message
-          (Job cmd)
-          'StInit
-          ('StCmd status err result)
+      :: Command (t :: k)
+      -> Message (Job k) 'StInit ('StCmd t)
     -- \| Attach to the job of previously executed command.
     MsgAttach
-      :: JobId cmd status err result
-      -> Message
-          (Job cmd)
-          'StInit
-          ('StAttach status err result)
+      :: JobId (t :: k)
+      -> Message (Job k) 'StInit ('StAttach t)
     -- \| Attaching to the job succeeded.
     MsgAttached
-      :: Message
-          (Job cmd)
-          ('StAttach status err result)
-          ('StCmd status err result)
+      :: Message (Job k) ('StAttach (t :: k)) ('StCmd t)
     -- \| Attaching to the job failed.
     MsgAttachFailed
-      :: Message
-          (Job cmd)
-          ('StAttach status err result)
-          'StDone
+      :: Message (Job k) ('StAttach (t :: k)) 'StDone
     -- \| Tell the client the job failed.
     MsgFail
-      :: err
-      -> Message
-          (Job cmd)
-          ('StCmd status err result)
-          'StDone
+      :: JobError (t :: k)
+      -> Message (Job k) ('StCmd t) 'StDone
     -- \| Tell the client the job succeeded.
     MsgSucceed
-      :: result
-      -> Message
-          (Job cmd)
-          ('StCmd status err result)
-          'StDone
+      :: JobResult (t :: k)
+      -> Message (Job k) ('StCmd t) 'StDone
     -- \| Tell the client the job is in progress.
     MsgAwait
-      :: status
-      -> JobId cmd status err result
-      -> Message
-          (Job cmd)
-          ('StCmd status err result)
-          ('StAwait status err result)
+      :: Status (t :: k)
+      -> JobId t
+      -> Message (Job k) ('StCmd t) ('StAwait t)
     -- \| Ask the server for the current status of the job.
     MsgPoll
-      :: Message
-          (Job cmd)
-          ('StAwait status err result)
-          ('StCmd status err result)
+      :: Message (Job k) ('StAwait (t :: k)) ('StCmd t)
     -- \| Detach from the session and close the protocol.
     MsgDetach
-      :: Message
-          (Job cmd)
-          ('StAwait status err result)
-          'StDone
+      :: Message (Job k) ('StAwait (t :: k)) 'StDone
 
   data ClientHasAgency st where
     TokInit :: ClientHasAgency 'StInit
-    TokAwait :: Tag cmd status err result -> ClientHasAgency ('StAwait status err result :: Job cmd)
+    TokAwait :: Tag (t :: k) -> ClientHasAgency ('StAwait t :: Job k)
 
   data ServerHasAgency st where
-    TokCmd :: Tag cmd status err result -> ServerHasAgency ('StCmd status err result :: Job cmd)
-    TokAttach :: Tag cmd status err result -> ServerHasAgency ('StAttach status err result :: Job cmd)
+    TokCmd :: Tag (t :: k) -> ServerHasAgency ('StCmd t :: Job k)
+    TokAttach :: Tag (t :: k) -> ServerHasAgency ('StAttach t :: Job k)
 
   data NobodyHasAgency st where
     TokDone :: NobodyHasAgency 'StDone
@@ -181,32 +148,43 @@ instance Protocol (Job cmd) where
 
   exclusionLemma_NobodyAndServerHaveAgency TokDone = \case {}
 
-instance (Command cmd) => BinaryMessage (Job cmd) where
+class (Binary k, TagKind k) => BinaryTagKind k where
+  putCommand :: Command (t :: k) -> Put
+  getCommand :: Tag (t :: k) -> Get (Command t)
+  putJobResult :: JobResult (t :: k) -> Put
+  getJobResult :: Tag (t :: k) -> Get (JobResult t)
+  putJobError :: JobError (t :: k) -> Put
+  getJobError :: Tag (t :: k) -> Get (JobError t)
+  putStatus :: Status (t :: k) -> Put
+  getStatus :: Tag (t :: k) -> Get (Status t)
+  putJobId :: JobId (t :: k) -> Put
+  getJobId :: Tag (t :: k) -> Get (JobId t)
+
+instance (BinaryTagKind k) => Binary (SomeTag k) where
+  put = put . fromSomeTag
+  get = toTag <$> get
+
+instance (BinaryTagKind k) => BinaryMessage (Job k) where
   putMessage = \case
     ClientAgency TokInit -> \case
       MsgExec cmd -> do
         putWord8 0x01
-        let tag = tagFromCommand cmd
-        putTag tag
+        put $ SomeTag $ commandTag cmd
         putCommand cmd
       MsgAttach jobId -> do
         putWord8 0x02
-        let tag = tagFromJobId jobId
-        putTag tag
+        put $ SomeTag $ jobIdTag jobId
         putJobId jobId
-    ServerAgency (TokCmd tag) -> \case
+    ServerAgency TokCmd{} -> \case
       MsgFail err -> do
         putWord8 0x03
-        putTag tag
-        putErr tag err
+        putJobError err
       MsgSucceed result -> do
         putWord8 0x04
-        putTag tag
-        putResult tag result
+        putJobResult result
       MsgAwait status jobId -> do
         putWord8 0x05
-        putTag tag
-        putStatus tag status
+        putStatus status
         putJobId jobId
     ClientAgency (TokAwait _) -> \case
       MsgPoll -> putWord8 0x06
@@ -220,34 +198,22 @@ instance (Command cmd) => BinaryMessage (Job cmd) where
     case tag of
       0x01 -> case tok of
         ClientAgency TokInit -> do
-          SomeTag ctag <- getTag
+          SomeTag ctag <- get
           SomeMessage . MsgExec <$> getCommand ctag
         _ -> fail "Invalid protocol state for MsgExec"
       0x02 -> case tok of
         ClientAgency TokInit -> do
-          SomeTag ctag <- getTag
+          SomeTag ctag <- get
           SomeMessage . MsgAttach <$> getJobId ctag
         _ -> fail "Invalid protocol state for MsgAttach"
       0x03 -> case tok of
-        ServerAgency (TokCmd ctag) -> do
-          SomeTag ctag' <- getTag
-          case tagEq ctag ctag' of
-            Nothing -> fail "decoded command tag does not match expected command tag"
-            Just (Refl, Refl, Refl) -> SomeMessage . MsgFail <$> getErr ctag'
+        ServerAgency (TokCmd ctag) -> SomeMessage . MsgFail <$> getJobError ctag
         _ -> fail "Invalid protocol state for MsgFail"
       0x04 -> case tok of
-        ServerAgency (TokCmd ctag) -> do
-          SomeTag ctag' <- getTag
-          case tagEq ctag ctag' of
-            Nothing -> fail "decoded command tag does not match expected command tag"
-            Just (Refl, Refl, Refl) -> SomeMessage . MsgSucceed <$> getResult ctag'
+        ServerAgency (TokCmd ctag) -> SomeMessage . MsgSucceed <$> getJobResult ctag
         _ -> fail "Invalid protocol state for MsgSucceed"
       0x05 -> case tok of
-        ServerAgency (TokCmd ctag) -> do
-          SomeTag ctag' <- getTag
-          case tagEq ctag ctag' of
-            Nothing -> fail "decoded command tag does not match expected command tag"
-            Just (Refl, Refl, Refl) -> SomeMessage <$> (MsgAwait <$> getStatus ctag' <*> getJobId ctag')
+        ServerAgency (TokCmd ctag) -> SomeMessage <$> (MsgAwait <$> getStatus ctag <*> getJobId ctag)
         _ -> fail "Invalid protocol state for MsgAwait"
       0x06 -> case tok of
         ClientAgency (TokAwait _) -> pure $ SomeMessage MsgPoll
@@ -263,100 +229,40 @@ instance (Command cmd) => BinaryMessage (Job cmd) where
         _ -> fail "Invalid protocol state for MsgAttachFailed"
       _ -> fail $ "Invalid msg tag " <> show tag
 
-class (ShowCommand cmd) => OTelCommand cmd where
-  commandTypeName :: Proxy cmd -> Text
-  commandName :: Tag cmd delimiter err result -> Text
+class (Arbitrary k, TagKind k) => ArbitraryTagKind k where
+  arbitraryCommand :: Tag (t :: k) -> Gen (Command t)
+  shrinkCommand :: Command (t :: k) -> [Command t]
+  arbitraryJobError :: Tag (t :: k) -> Maybe (Gen (JobError t))
+  shrinkJobError :: JobError (t :: k) -> [JobError t]
+  arbitraryJobResult :: Tag (t :: k) -> Gen (JobResult t)
+  shrinkJobResult :: JobResult (t :: k) -> [JobResult t]
+  arbitraryStatus :: Tag (t :: k) -> Maybe (Gen (Status t))
+  shrinkStatus :: Status (t :: k) -> [Status t]
+  arbitraryJobId :: Tag (t :: k) -> Maybe (Gen (JobId t))
+  shrinkJobId :: JobId (t :: k) -> [JobId t]
 
-instance (OTelCommand cmd) => OTelProtocol (Job cmd) where
-  protocolName _ = "cmd." <> commandTypeName (Proxy @cmd)
-  messageAttributes = curry \case
-    (_, MsgExec cmd) ->
-      MessageAttributes
-        { messageType = "exec/" <> commandName (tagFromCommand cmd)
-        , messageParameters = [toPrimitiveAttribute $ T.pack $ showsPrecCommand 0 cmd ""]
-        }
-    (_, MsgAttach jobId) ->
-      MessageAttributes
-        { messageType = "attach/" <> commandName (tagFromJobId jobId)
-        , messageParameters = [toPrimitiveAttribute $ T.pack $ showsPrecJobId 0 jobId ""]
-        }
-    (ServerAgency (TokAttach tag), MsgAttached) ->
-      MessageAttributes
-        { messageType = "attach/" <> commandName tag <> "/attached"
-        , messageParameters = []
-        }
-    (ServerAgency (TokAttach tag), MsgAttachFailed) ->
-      MessageAttributes
-        { messageType = "attach/" <> commandName tag <> "/failed"
-        , messageParameters = []
-        }
-    (ServerAgency (TokCmd tag), MsgFail err) ->
-      MessageAttributes
-        { messageType = "exec/" <> commandName tag <> "/fail"
-        , messageParameters = [toPrimitiveAttribute $ T.pack $ showsPrecErr 0 tag err ""]
-        }
-    (ServerAgency (TokCmd tag), MsgSucceed result) ->
-      MessageAttributes
-        { messageType = "exec/" <> commandName tag <> "/succeed"
-        , messageParameters = [toPrimitiveAttribute $ T.pack $ showsPrecResult 0 tag result ""]
-        }
-    (ServerAgency (TokCmd tag), MsgAwait status jobId) ->
-      MessageAttributes
-        { messageType = "exec/" <> commandName tag <> "/await"
-        , messageParameters =
-            toPrimitiveAttribute . T.pack
-              <$> [showsPrecStatus 0 tag status "", showsPrecJobId 0 jobId ""]
-        }
-    (ClientAgency (TokAwait tag), MsgPoll) ->
-      MessageAttributes
-        { messageType = "exec/" <> commandName tag <> "/poll"
-        , messageParameters = []
-        }
-    (ClientAgency (TokAwait tag), MsgDetach) ->
-      MessageAttributes
-        { messageType = "exec/" <> commandName tag <> "/detach"
-        , messageParameters = []
-        }
+instance (ArbitraryTagKind k) => Arbitrary (SomeTag k) where
+  arbitrary = toTag <$> arbitrary
+  shrink = fmap toTag . shrink . fromSomeTag
 
-class (Command cmd) => ArbitraryCommand cmd where
-  arbitraryTag :: Gen (SomeTag cmd)
-  arbitraryCmd :: Tag cmd status err result -> Gen (cmd status err result)
-  arbitraryJobId :: Tag cmd status err result -> Maybe (Gen (JobId cmd status err result))
-  arbitraryStatus :: Tag cmd status err result -> Maybe (Gen status)
-  arbitraryErr :: Tag cmd status err result -> Maybe (Gen err)
-  arbitraryResult :: Tag cmd status err result -> Gen result
-  shrinkCommand :: cmd status err result -> [cmd status err result]
-  shrinkJobId :: JobId cmd status err result -> [JobId cmd status err result]
-  shrinkErr :: Tag cmd status err result -> err -> [err]
-  shrinkResult :: Tag cmd status err result -> result -> [result]
-  shrinkStatus :: Tag cmd status err result -> status -> [status]
-
-class (Command cmd) => CommandVariations cmd where
-  tags :: NonEmpty (SomeTag cmd)
-  cmdVariations :: Tag cmd status err result -> NonEmpty (cmd status err result)
-  jobIdVariations :: Tag cmd status err result -> [JobId cmd status err result]
-  statusVariations :: Tag cmd status err result -> [status]
-  errVariations :: Tag cmd status err result -> [err]
-  resultVariations :: Tag cmd status err result -> NonEmpty result
-
-instance (ArbitraryCommand cmd) => ArbitraryMessage (Job cmd) where
+instance (ArbitraryTagKind k) => ArbitraryMessage (Job k) where
   arbitraryMessage = do
-    SomeTag tag <- arbitraryTag
-    let mError = arbitraryErr tag
+    SomeTag tag <- arbitrary
+    let mJobError = arbitraryJobError tag
     let mStatus = arbitraryStatus tag
     let mJobId = arbitraryJobId tag
     oneof $
       catMaybes
-        [ Just $ AnyMessageAndAgency (ClientAgency TokInit) . MsgExec <$> arbitraryCmd tag
+        [ Just $ AnyMessageAndAgency (ClientAgency TokInit) . MsgExec <$> arbitraryCommand tag
         , mJobId <&> \genJobId -> do
             jobId <- genJobId
             pure $ AnyMessageAndAgency (ClientAgency TokInit) $ MsgAttach jobId
         , Just $ pure $ AnyMessageAndAgency (ServerAgency (TokAttach tag)) MsgAttached
         , Just $ pure $ AnyMessageAndAgency (ServerAgency (TokAttach tag)) MsgAttachFailed
-        , mError <&> \genErr -> do
+        , mJobError <&> \genErr -> do
             err <- genErr
             pure $ AnyMessageAndAgency (ServerAgency $ TokCmd tag) $ MsgFail err
-        , Just $ AnyMessageAndAgency (ServerAgency $ TokCmd tag) . MsgSucceed <$> arbitraryResult tag
+        , Just $ AnyMessageAndAgency (ServerAgency $ TokCmd tag) . MsgSucceed <$> arbitraryJobResult tag
         , ((,) <$> mStatus <*> mJobId) <&> \(genStatus, genJobId) -> do
             status <- genStatus
             jobId <- genJobId
@@ -364,94 +270,52 @@ instance (ArbitraryCommand cmd) => ArbitraryMessage (Job cmd) where
         , Just $ pure $ AnyMessageAndAgency (ClientAgency (TokAwait tag)) MsgPoll
         , Just $ pure $ AnyMessageAndAgency (ClientAgency (TokAwait tag)) MsgDetach
         ]
-  shrinkMessage agency = \case
+  shrinkMessage _ = \case
     MsgExec cmd -> MsgExec <$> shrinkCommand cmd
     MsgAttach jobId -> MsgAttach <$> shrinkJobId jobId
-    MsgFail err -> MsgFail <$> case agency of ServerAgency (TokCmd tag) -> shrinkErr tag err
-    MsgSucceed result -> MsgSucceed <$> case agency of ServerAgency (TokCmd tag) -> shrinkResult tag result
+    MsgFail err -> MsgFail <$> shrinkJobError err
+    MsgSucceed result -> MsgSucceed <$> shrinkJobResult result
     MsgAwait status jobId ->
       []
-        <> [MsgAwait status' jobId | status' <- case agency of ServerAgency (TokCmd tag) -> shrinkStatus tag status]
+        <> [MsgAwait status' jobId | status' <- shrinkStatus status]
         <> [MsgAwait status jobId' | jobId' <- shrinkJobId jobId]
     _ -> []
 
-class (Command cmd) => CommandEq cmd where
-  commandEq :: cmd status err result -> cmd status err result -> Bool
-  jobIdEq :: JobId cmd status err result -> JobId cmd status err result -> Bool
-  statusEq :: Tag cmd status err result -> status -> status -> Bool
-  errEq :: Tag cmd status err result -> err -> err -> Bool
-  resultEq :: Tag cmd status err result -> result -> result -> Bool
+class (Variations k, TagKind k) => VariationsTagKind k where
+  commandVariations :: Tag (t :: k) -> NonEmpty (Command t)
+  errorVariations :: Tag (t :: k) -> [JobError t]
+  resultVariations :: Tag (t :: k) -> NonEmpty (JobResult t)
+  statusVariations :: Tag (t :: k) -> [Status t]
+  jobIdVariations :: Tag (t :: k) -> [JobId t]
 
-instance (CommandEq cmd) => MessageEq (Job cmd) where
-  messageEq (AnyMessageAndAgency agency msg) = case (agency, msg) of
-    (_, MsgExec cmd) -> \case
-      AnyMessageAndAgency _ (MsgExec cmd') ->
-        case tagEq (tagFromCommand cmd) (tagFromCommand cmd') of
-          Just (Refl, Refl, Refl) -> commandEq cmd cmd'
-          Nothing -> False
-      _ -> False
-    (_, MsgAttach jobId) -> \case
-      AnyMessageAndAgency _ (MsgAttach jobId') ->
-        case tagEq (tagFromJobId jobId) (tagFromJobId jobId') of
-          Just (Refl, Refl, Refl) -> jobIdEq jobId jobId'
-          Nothing -> False
-      _ -> False
-    (_, MsgAttached) -> \case
-      AnyMessageAndAgency _ MsgAttached -> True
-      _ -> False
-    (_, MsgAttachFailed) -> \case
-      AnyMessageAndAgency _ MsgAttachFailed -> True
-      _ -> False
-    (ServerAgency (TokCmd tag), MsgFail err) -> \case
-      AnyMessageAndAgency (ServerAgency (TokCmd tag')) (MsgFail err') ->
-        case tagEq tag tag' of
-          Just (Refl, Refl, Refl) -> errEq tag err err'
-          Nothing -> False
-      _ -> False
-    (ServerAgency (TokCmd tag), MsgSucceed result) -> \case
-      AnyMessageAndAgency (ServerAgency (TokCmd tag')) (MsgSucceed result') ->
-        case tagEq tag tag' of
-          Just (Refl, Refl, Refl) -> resultEq tag result result'
-          Nothing -> False
-      _ -> False
-    (ServerAgency (TokCmd tag), MsgAwait status jobId) -> \case
-      AnyMessageAndAgency (ServerAgency (TokCmd tag')) (MsgAwait status' jobId') ->
-        case tagEq tag tag' of
-          Just (Refl, Refl, Refl) -> statusEq tag status status' && jobIdEq jobId jobId'
-          Nothing -> False
-      _ -> False
-    (_, MsgPoll) -> \case
-      AnyMessageAndAgency _ MsgPoll -> True
-      _ -> False
-    (_, MsgDetach) -> \case
-      AnyMessageAndAgency _ MsgDetach -> True
-      _ -> False
+instance (VariationsTagKind k) => Variations (SomeTag k) where
+  variations = toTag <$> variations
 
-instance (CommandVariations cmd) => MessageVariations (Job cmd) where
+instance (VariationsTagKind k) => MessageVariations (Job k) where
   agencyVariations =
     join
       [ pure $ SomePeerHasAgency $ ClientAgency TokInit
       , do
-          SomeTag tag <- tags
+          SomeTag tag <- variations
           pure $ SomePeerHasAgency $ ClientAgency $ TokAwait tag
       , do
-          SomeTag tag <- tags
+          SomeTag tag <- variations
           pure $ SomePeerHasAgency $ ServerAgency $ TokCmd tag
       , do
-          SomeTag tag <- tags
+          SomeTag tag <- variations
           pure $ SomePeerHasAgency $ ServerAgency $ TokAttach tag
       ]
   messageVariations = \case
     ClientAgency TokInit ->
       let execs = do
-            SomeTag tag <- tags
-            cmd <- cmdVariations tag
+            SomeTag tag <- variations
+            cmd <- commandVariations tag
             pure $ SomeMessage $ MsgExec cmd
        in case execs of
             msg :| msgs ->
               msg
                 :| msgs <> do
-                  SomeTag tag <- toList tags
+                  SomeTag tag <- toList variations
                   jobId <- jobIdVariations tag
                   pure $ SomeMessage $ MsgAttach jobId
     ClientAgency (TokAwait _) -> [SomeMessage MsgPoll, SomeMessage MsgDetach]
@@ -461,7 +325,7 @@ instance (CommandVariations cmd) => MessageVariations (Job cmd) where
         msg
           :| msgs
             <> join
-              [ SomeMessage . MsgFail <$> errVariations tag
+              [ SomeMessage . MsgFail <$> errorVariations tag
               , SomeMessage <$> case (statusVariations tag, jobIdVariations tag) of
                   (status : statuses, jobId : jobIds) ->
                     MsgAwait status jobId
@@ -472,80 +336,114 @@ instance (CommandVariations cmd) => MessageVariations (Job cmd) where
                   _ -> []
               ]
 
-class (Command cmd) => ShowCommand cmd where
-  showsPrecTag :: Int -> Tag cmd status err result -> ShowS
-  showsPrecCommand :: Int -> cmd status err result -> ShowS
-  showsPrecJobId :: Int -> JobId cmd status err result -> ShowS
-  showsPrecStatus :: Int -> Tag cmd status err result -> status -> ShowS
-  showsPrecErr :: Int -> Tag cmd status err result -> err -> ShowS
-  showsPrecResult :: Int -> Tag cmd status err result -> result -> ShowS
+class
+  ( TagKind k
+  , Eq k
+  , TestEquality (Tag :: k -> Type)
+  , forall (t :: k). Eq (Tag t)
+  , forall (t :: k). Eq (Command t)
+  , forall (t :: k). Eq (JobResult t)
+  , forall (t :: k). Eq (JobError t)
+  , forall (t :: k). Eq (Status t)
+  , forall (t :: k). Eq (JobId t)
+  ) =>
+  EqTagKind k
 
-instance (ShowCommand cmd) => ShowProtocol (Job cmd) where
-  showsPrecMessage p agency = \case
-    MsgExec cmd ->
-      showParen
-        (p >= 11)
-        ( showString "MsgExec"
-            . showSpace
-            . showsPrecCommand 11 cmd
-        )
-    MsgAttach jobId ->
-      showParen
-        (p >= 11)
-        ( showString "MsgAttach"
-            . showSpace
-            . showsPrecJobId 11 jobId
-        )
-    MsgAttached -> showString "MsgAttached"
-    MsgAttachFailed -> showString "MsgAttachFailed"
-    MsgFail err ->
-      showParen
-        (p >= 11)
-        ( showString "MsgFail"
-            . showSpace
-            . case agency of ServerAgency (TokCmd tag) -> showsPrecErr 11 tag err
-        )
-    MsgSucceed result ->
-      showParen
-        (p >= 11)
-        ( showString "MsgSucceed"
-            . showSpace
-            . case agency of ServerAgency (TokCmd tag) -> showsPrecResult 11 tag result
-        )
-    MsgAwait status jobId ->
-      showParen
-        (p >= 11)
-        ( showString "MsgAwait"
-            . showSpace
-            . case agency of ServerAgency (TokCmd tag) -> showsPrecStatus 11 tag status
-            . showSpace
-            . showsPrecJobId 11 jobId
-        )
-    MsgPoll -> showString "MsgPoll"
-    MsgDetach -> showString "MsgDetach"
+instance (EqTagKind k) => Eq (SomeTag k) where
+  (==) = on (==) fromSomeTag
 
-  showsPrecServerHasAgency p = \case
-    TokCmd tag ->
-      showParen
-        (p >= 11)
-        ( showString "TokCmd"
-            . showSpace
-            . showsPrecTag p tag
-        )
-    TokAttach tag ->
-      showParen
-        (p >= 11)
-        ( showString "TokAttach"
-            . showSpace
-            . showsPrecTag p tag
-        )
+deriving instance (EqTagKind k) => Eq (Message (Job k) st st')
+deriving instance (EqTagKind k) => Eq (ClientHasAgency (st :: Job k))
+deriving instance (EqTagKind k) => Eq (ServerHasAgency (st :: Job k))
+deriving instance (EqTagKind k) => Eq (NobodyHasAgency (st :: Job k))
 
-  showsPrecClientHasAgency p = \case
-    TokInit -> showString "TokInit"
-    TokAwait tag ->
-      showParen
-        (p >= 11)
-        ( showString "TokAwait"
-            . showSpace
-            . showsPrecTag p tag
-        )
+instance (EqTagKind k) => TestEquality (ClientHasAgency :: Job k -> Type) where
+  testEquality = \case
+    TokInit -> \case
+      TokInit -> Just Refl
+      _ -> Nothing
+    TokAwait t -> \case
+      TokAwait t' -> case testEquality t t' of
+        Just Refl -> Just Refl
+        Nothing -> Nothing
+      _ -> Nothing
+
+instance (EqTagKind k) => TestEquality (ServerHasAgency :: Job k -> Type) where
+  testEquality = \case
+    TokCmd t -> \case
+      TokCmd t' -> case testEquality t t' of
+        Just Refl -> Just Refl
+        Nothing -> Nothing
+      _ -> Nothing
+    TokAttach t -> \case
+      TokAttach t' -> case testEquality t t' of
+        Just Refl -> Just Refl
+        Nothing -> Nothing
+      _ -> Nothing
+
+instance TestEquality (NobodyHasAgency :: Job k -> Type) where
+  testEquality TokDone TokDone = Just Refl
+
+instance (EqTagKind k) => TestMessageEquality (Job k) where
+  testMessageEquality (ClientAgency tok) (ClientAgency tok') msg msg' = case (tok, tok') of
+    (TokInit, TokInit) -> case (msg, msg') of
+      (MsgExec cmd, MsgExec cmd') -> do
+        Refl <- testEquality (commandTag cmd) (commandTag cmd')
+        pure (Refl, Refl, Refl)
+      (MsgExec{}, _) -> Nothing
+      (MsgAttach jobId, MsgAttach jobId') -> do
+        Refl <- testEquality (jobIdTag jobId) (jobIdTag jobId')
+        pure (Refl, Refl, Refl)
+      (MsgAttach{}, _) -> Nothing
+    (TokInit, _) -> Nothing
+    (TokAwait t, TokAwait t') -> do
+      Refl <- testEquality t t'
+      case (msg, msg') of
+        (MsgPoll, MsgPoll) -> Just (Refl, Refl, Refl)
+        (MsgPoll, _) -> Nothing
+        (MsgDetach, MsgDetach) -> Just (Refl, Refl, Refl)
+        (MsgDetach, _) -> Nothing
+    (TokAwait{}, _) -> Nothing
+  testMessageEquality (ServerAgency tok) (ServerAgency tok') msg msg' = case (tok, tok') of
+    (TokCmd t, TokCmd t') -> do
+      Refl <- testEquality t t'
+      case (msg, msg') of
+        (MsgFail{}, MsgFail{}) -> Just (Refl, Refl, Refl)
+        (MsgFail{}, MsgSucceed{}) -> Just (Refl, Refl, Refl)
+        (MsgFail{}, _) -> Nothing
+        (MsgSucceed{}, MsgSucceed{}) -> Just (Refl, Refl, Refl)
+        (MsgSucceed{}, MsgFail{}) -> Just (Refl, Refl, Refl)
+        (MsgSucceed{}, _) -> Nothing
+        (MsgAwait{}, MsgAwait{}) -> Just (Refl, Refl, Refl)
+        (MsgAwait{}, _) -> Nothing
+    (TokCmd{}, _) -> Nothing
+    (TokAttach t, TokAttach t') -> do
+      Refl <- testEquality t t'
+      case (msg, msg') of
+        (MsgAttached{}, MsgAttached{}) -> Just (Refl, Refl, Refl)
+        (MsgAttached{}, _) -> Nothing
+        (MsgAttachFailed{}, MsgAttachFailed{}) -> Just (Refl, Refl, Refl)
+        (MsgAttachFailed{}, _) -> Nothing
+    (TokAttach{}, _) -> Nothing
+  testMessageEquality _ _ _ _ = Nothing
+
+instance (EqTagKind k) => MessageEq (Job k)
+
+class
+  ( Show k
+  , TagKind k
+  , forall (t :: k). Show (Tag t)
+  , forall (t :: k). Show (Command t)
+  , forall (t :: k). Show (JobResult t)
+  , forall (t :: k). Show (JobError t)
+  , forall (t :: k). Show (Status t)
+  , forall (t :: k). Show (JobId t)
+  ) =>
+  ShowTagKind k
+
+deriving instance (ShowTagKind k) => Show (Message (Job k) st st')
+deriving instance (ShowTagKind k) => Show (ClientHasAgency (st :: Job k))
+deriving instance (ShowTagKind k) => Show (ServerHasAgency (st :: Job k))
+deriving instance (ShowTagKind k) => Show (NobodyHasAgency (st :: Job k))
+
+instance (ShowTagKind k) => ShowProtocol (Job k)

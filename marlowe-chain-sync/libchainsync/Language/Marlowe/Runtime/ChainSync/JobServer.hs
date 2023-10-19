@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
@@ -6,9 +7,10 @@
 module Language.Marlowe.Runtime.ChainSync.JobServer where
 
 import Cardano.Api (CardanoEra (..), CardanoMode, ScriptDataSupportedInEra (..), Tx, TxValidationErrorInMode)
-import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand (..))
+import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand (..), Command (..), JobError (..), JobResult (..))
 import Network.Protocol.Connection (ServerSource (..))
 import Network.Protocol.Job.Server
+import Network.Protocol.Job.Types (Job (..))
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult (..))
 import UnliftIO (MonadUnliftIO)
 
@@ -24,12 +26,12 @@ chainSyncJobServer
   :: forall m
    . (MonadUnliftIO m)
   => ChainSyncJobServerDependencies m
-  -> ServerSource (JobServer ChainSyncCommand) m ()
+  -> ServerSource (JobServerT ChainSyncCommand 'StInit 'StDone) m ()
 chainSyncJobServer ChainSyncJobServerDependencies{..} = ServerSource $ pure server
   where
-    server :: JobServer ChainSyncCommand m ()
+    server :: JobServerT ChainSyncCommand 'StInit 'StDone m ()
     server = liftCommandHandler $ flip either (\case {}) \case
-      SubmitTx era tx ->
+      CmdSubmitTx era tx ->
         ((),) <$> do
           result <-
             submitTxToNodeLocal
@@ -39,5 +41,5 @@ chainSyncJobServer ChainSyncJobServerDependencies{..} = ServerSource $ pure serv
                 ScriptDataInConwayEra -> ConwayEra
               tx
           pure case result of
-            SubmitFail err -> Left $ show err
-            SubmitSuccess -> Right ()
+            SubmitFail err -> Left $ ErrSubmitTx $ show err
+            SubmitSuccess -> Right ResSubmitTx
