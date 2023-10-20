@@ -11,6 +11,8 @@ module Network.Protocol.Peer.Monad (
   (<*>),
   (>>),
   (>>=),
+  Channel (..),
+  SomeMessageAndChannel (..),
   ClientT,
   PeerT,
   ServerT,
