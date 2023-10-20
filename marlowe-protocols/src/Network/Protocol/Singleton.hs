@@ -8,7 +8,7 @@
 
 module Network.Protocol.Singleton where
 
-import Data.Kind (Constraint)
+import Data.Kind (Constraint, Type)
 import Network.TypedProtocol hiding (FlipAgency, TheyHaveAgency)
 
 type SingClientHasAgency :: forall ps. ps -> Constraint
@@ -53,3 +53,27 @@ instance (SingServerHasAgency st) => SingTheyHaveAgency 'AsClient st where
 
 instance (SingClientHasAgency st) => SingTheyHaveAgency 'AsServer st where
   singTheyHaveAgency = ClientAgency singClientHasAgency
+
+class OurRole (pr :: PeerRole) where
+  type OurAgency pr :: ps -> Type
+  ourAgency :: OurAgency pr (st :: ps) -> WeHaveAgency pr st
+
+class TheirRole (pr :: PeerRole) where
+  type TheirAgency pr :: ps -> Type
+  theirAgency :: TheirAgency pr (st :: ps) -> TheyHaveAgency pr st
+
+instance OurRole 'AsClient where
+  type OurAgency 'AsClient = ClientHasAgency
+  ourAgency = ClientAgency
+
+instance OurRole 'AsServer where
+  type OurAgency 'AsServer = ServerHasAgency
+  ourAgency = ServerAgency
+
+instance TheirRole 'AsClient where
+  type TheirAgency 'AsClient = ServerHasAgency
+  theirAgency = ServerAgency
+
+instance TheirRole 'AsServer where
+  type TheirAgency 'AsServer = ClientHasAgency
+  theirAgency = ClientAgency
