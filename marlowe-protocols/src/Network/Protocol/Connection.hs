@@ -10,6 +10,7 @@ import Control.Monad.Trans.Resource.Internal (ResourceT (..))
 import Data.ByteString (ByteString)
 import Network.Protocol.Peer.Trace
 import Network.TypedProtocol (Message, PeerHasAgency)
+import Observe.Event (InjectSelector)
 import UnliftIO (MonadUnliftIO)
 
 type ToPeer peer protocol pr st m = forall a. peer m a -> PeerTraced protocol pr st m a
@@ -56,6 +57,11 @@ data RecvMessageField ps st where
   RecvMessageStateBeforeMessage :: Maybe ByteString -> RecvMessageField ps st
   RecvMessageStateAfterMessage :: Maybe ByteString -> RecvMessageField ps st
   RecvMessageMessage :: Message ps st st' -> RecvMessageField ps st
+
+newtype ServerSourceTraced server r sub root m a = ServerSourceTraced
+  { getServerTraced :: InjectSelector sub root -> ResourceT m (server m a)
+  }
+  deriving (Functor)
 
 newtype ServerSource server m a = ServerSource
   { getServer :: ResourceT m (server m a)

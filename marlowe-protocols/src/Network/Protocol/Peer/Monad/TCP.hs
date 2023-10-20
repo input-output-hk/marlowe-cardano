@@ -8,30 +8,38 @@ module Network.Protocol.Peer.Monad.TCP where
 import qualified Colog as C
 import Control.Concurrent.Component
 import Control.Monad ((<=<))
+import Control.Monad.Event.Class (MonadEvent (localBackend), composeInjectSelector, withInjectEvent)
 import Control.Monad.Trans (MonadTrans (..))
 import Control.Monad.Trans.Resource (runResourceT)
+import qualified Data.Text as T
+import Data.Void (Void)
 import GHC.IO (mkUserError)
 import Network.Channel (socketAsChannel)
 import Network.Protocol.Codec (BinaryMessage)
-import Network.Protocol.Connection (Connection (..), Connector (..), ServerSource (..))
+import Network.Protocol.Connection (Connection (..), Connector (..), ServerSourceTraced (..))
 import Network.Protocol.Driver (mkDriver, rethrowErrors)
 import qualified Network.Protocol.Driver.Untyped as Untyped
 import Network.Protocol.Peer.Monad (Channel (..), ClientT, PeerT, ServerT, SomeMessageAndChannel (..), runPeerT')
 import Network.Run.TCP (runTCPServer)
 import Network.Socket (
   AddrInfo (..),
+  AddrInfoFlag (..),
   HostName,
   PortNumber,
+  SockAddr,
   Socket,
   SocketType (..),
   connect,
   defaultHints,
   getAddrInfo,
+  getPeerName,
   openSocket,
  )
 import Network.TypedProtocol (Driver, Protocol (..), SomeMessage (..))
 import qualified Network.TypedProtocol as Driver
-import UnliftIO (MonadIO (..), MonadUnliftIO (..), atomicModifyIORef, newIORef, throwIO)
+import Observe.Event (InjectSelector, addField, finalize, injectSelector, reference)
+import Observe.Event.Backend (setInitialCauseEventBackend)
+import UnliftIO (MonadIO (..), MonadUnliftIO (..), atomicModifyIORef, mask, newIORef, throwIO, try)
 
 tcpChannel
   :: forall pr ps st m
@@ -74,12 +82,14 @@ runPeerTOverSocket tok socket peer = do
   (channel, untypedDriver) <- tcpChannel socket
   pure (untypedDriver, runPeerT' tok peer channel)
 
+type ClientTConnector ps i j = Connector (ClientT ps i j)
+
 tcpClientPeerT
   :: (MonadUnliftIO m, BinaryMessage ps)
   => NobodyHasAgency j
   -> HostName
   -> PortNumber
-  -> Connector (ClientT ps i j) m
+  -> ClientTConnector ps i j m
 tcpClientPeerT tok host port = Connector $ liftIO $ do
   addr <-
     head
@@ -91,25 +101,68 @@ tcpClientPeerT tok host port = Connector $ liftIO $ do
   connect socket $ addrAddress addr
   pure $ Connection $ snd <=< runPeerTOverSocket tok socket
 
-type ServerTSource ps i j = ServerSource (ServerT ps i j)
+type ServerTSource ps i j = ServerSourceTraced (ServerT ps i j)
 
-data TcpServerPeerTDependencies ps m = forall (i :: ps) (j :: ps).
+data TcpServerPeerTDependencies ps r sub root m = forall (i :: ps) (j :: ps).
   TcpServerPeerTDependencies
   { host :: HostName
   , port :: PortNumber
   , nobodyHasAgency :: NobodyHasAgency j
-  , serverSource :: ServerTSource ps i j m ()
+  , serverSource :: ServerTSource ps i j r sub root m ()
   }
 
+data TcpServerSelector sub f where
+  Connected :: TcpServerSelector sub ConnectedField
+  ServerPeer
+    :: AddrInfo
+    -> SockAddr
+    -> sub f
+    -> TcpServerSelector sub f
+  CloseServer :: TcpServerSelector ps Void
+
+data ConnectedField
+  = ConnectedAddr AddrInfo
+  | ConnectedPeer SockAddr
+
 tcpServerPeerT
-  :: (MonadUnliftIO m, BinaryMessage ps, C.WithLog env C.Message m)
+  :: (MonadUnliftIO m, BinaryMessage ps, C.WithLog env C.Message m, MonadEvent r root m)
   => String
-  -> Component m (TcpServerPeerTDependencies ps m) ()
-tcpServerPeerT name = component_ (name <> "-tcp-server") \TcpServerPeerTDependencies{..} ->
+  -> InjectSelector (TcpServerSelector sub) root
+  -> Component m (TcpServerPeerTDependencies ps r sub root m) ()
+tcpServerPeerT name inj = component_ (name <> "-tcp-server") \TcpServerPeerTDependencies{..} -> do
+  C.logInfo $ T.pack $ name <> " server starting on port " <> show port
   withRunInIO \runInIO ->
     runTCPServer (Just host) (show port) $
       runComponent_ $
         hoistComponent runInIO $
           component_ (name <> "-tcp-worker") \socket -> runResourceT do
-            server <- getServer serverSource
-            lift $ uncurry rethrowErrors =<< runPeerTOverSocket nobodyHasAgency socket server
+            (pName, server, r) <- withInjectEvent inj Connected \ev -> do
+              addr <-
+                liftIO $
+                  head
+                    <$> getAddrInfo
+                      (Just defaultHints{addrSocketType = Stream, addrFlags = [AI_PASSIVE]})
+                      (Just host)
+                      (Just $ show port)
+              addField ev $ ConnectedAddr addr
+              pName <- liftIO $ getPeerName socket
+              addField ev $ ConnectedPeer pName
+              server <-
+                getServerTraced serverSource $
+                  composeInjectSelector inj $
+                    injectSelector (ServerPeer addr pName)
+              lift $
+                C.logInfo $
+                  T.pack $
+                    name <> " server received new connection from " <> show pName
+              pure (pName, server, reference ev)
+            lift $ localBackend (setInitialCauseEventBackend [r]) do
+              mask \restore -> do
+                result <- try $ restore $ uncurry rethrowErrors =<< runPeerTOverSocket nobodyHasAgency socket server
+                withInjectEvent inj CloseServer \ev -> do
+                  C.logInfo $ T.pack $ name <> " server disconnected from " <> show pName
+                  case result of
+                    Left ex -> do
+                      finalize ev $ Just ex
+                      throwIO ex
+                    Right a -> pure a
