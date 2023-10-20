@@ -12,7 +12,7 @@
     # Use upstream when https://github.com/nlewo/nix2container/pull/82 is merged
     n2c.url = "github:shlevy/nix2container/no-Size-on-dir";
 
-    marlowe-plutus.url = "github:input-output-hk/marlowe-plutus?ref=iogx-v4";
+    marlowe-plutus.url = "github:input-output-hk/marlowe-plutus";
 
     cardano-node.url = "github:input-output-hk/cardano-node?ref=8.1.2";
 
