@@ -67,6 +67,7 @@ library
     Network.Protocol.Job.Types
     Network.Protocol.Peer
     Network.Protocol.Peer.Monad
+    Network.Protocol.Peer.Monad.TCP
     Network.Protocol.Peer.Trace
     Network.Protocol.Query.Client
     Network.Protocol.Query.Server
