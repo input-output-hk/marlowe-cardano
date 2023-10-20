@@ -251,6 +251,7 @@ executable marlowe-chain-indexer
     , mtl >=2.2 && <3
     , optparse-applicative
     , postgresql-libpq ^>=0.9
+    , prettyprinter
     , text ^>=1.2
     , time >=1.9 && <2
     , transformers ^>=0.5.6
@@ -284,5 +285,6 @@ executable marlowe-chain-sync
     , network >=3.1 && <4
     , optparse-applicative
     , postgresql-libpq ^>=0.9
+    , prettyprinter
     , text ^>=1.2
     , unliftio ^>=0.2.1

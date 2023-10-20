@@ -48,16 +48,19 @@ import Options.Applicative (
   help,
   helper,
   info,
+  infoOption,
   long,
   metavar,
   option,
-  progDesc,
+  progDescDoc,
   short,
   showDefault,
   strOption,
   value,
  )
 import Paths_marlowe_runtime (version)
+import Prettyprinter
+import Prettyprinter.Render.Terminal (AnsiStyle, bold)
 
 main :: IO ()
 main = do
@@ -137,7 +140,7 @@ data Options = Options
   }
 
 getOptions :: IO Options
-getOptions = execParser $ info (helper <*> parser) infoMod
+getOptions = execParser $ info (helper <*> versionOption <*> parser) infoMod
   where
     parser =
       Options
@@ -153,6 +156,11 @@ getOptions = execParser $ info (helper <*> parser) infoMod
         <*> analysisTimeoutParser
         <*> httpPortParser
         <*> mintingPolicyCmdParser
+
+    versionOption =
+      infoOption
+        ("marlowe-tx " <> showVersion version)
+        (long "version" <> help "Show version.")
 
     chainSeekPortParser =
       option auto $
@@ -278,6 +286,112 @@ getOptions = execParser $ info (helper <*> parser) infoMod
     infoMod =
       mconcat
         [ fullDesc
-        , progDesc "Marlowe runtime transaction creation server"
-        , header "marlowe-tx : the transaction creation server of the Marlowe Runtime"
+        , progDescDoc $ Just description
+        , header "marlowe-tx: Transaction creation server for the Marlowe Runtime."
         ]
+
+bullets :: [Doc ann] -> Doc ann
+bullets = indent 2 . vcat . fmap (("•" <+>) . align)
+
+description :: Doc AnsiStyle
+description =
+  concatWith
+    (\a b -> a <> line <> line <> b)
+    [ vcat
+        [ "The transaction creation engine for the Marlowe Runtime. This component exposes"
+        , "a job protocol with four commands: create, apply inputs, withdraw, and submit."
+        ]
+    , annotate bold "Create Command"
+    , vcat
+        [ "The create command will create an unsigned transaction body that starts a new Marlowe"
+        , "contract. The options that can be configured for this command are:"
+        ]
+    , bullets $
+        vsep
+          <$> [ ["Adding a staking credential to the Marlowe script address for the contract."]
+              , ["What addresses can be used for coin selection."]
+              , ["Which address to send change to."]
+              ,
+                [ "Rules for role tokens in the contract. Includes rules for minting and distributing"
+                , "role tokens in the creation transaction and rules for using existing role tokens."
+                ]
+              , ["Adding metadata to the transaction"]
+              ,
+                [ "The amount that should be deposited in the contract to cover min UTxO rules"
+                , "(can be omitted and the runtime will compute a worst-case value automatically."
+                ]
+              ,
+                [ "The initial contract or the hash of a contract in the contract store to use as the"
+                , "initial contract."
+                ]
+              ]
+    , annotate bold "Apply Inputs Command"
+    , vcat
+        [ "The apply inputs command will create an unsigned transaction body that advances a"
+        , "Marlowe contract by applying transaction inputs to it. The options that can be"
+        , "configured for this command are:"
+        ]
+    , bullets $
+        vsep
+          <$> [ ["What addresses can be used for coin selection."]
+              , ["Which address to send change to."]
+              , ["Adding metadata to the transaction"]
+              ,
+                [ "The transaction's validity interval. If omitted, the runtime will compute default"
+                , "values from the current contract and the most recent block's slot number."
+                ]
+              ,
+                [ "The initial contract or the hash of a contract in the contract store to use as the"
+                , "initial contract."
+                ]
+              ]
+    , annotate bold "Withdraw Command"
+    , vcat
+        [ "The withdraw command will create an unsigned transaction body that withdraws role payouts"
+        , "from Marlowe contracts from the role payout validators that hold them. When a contract"
+        , "makes a payment to a role, it is not sent directly to the holder of the role token. Instead,"
+        , "it is sent to an auxiliary Plutus script called a payout validator. The holder of the matching"
+        , "role token is then able to spend this script output to withdraw the payout, sending it to an"
+        , "address of their choice. That is what withdrawal means in this context. The options that can be"
+        , "configured for this command are:"
+        ]
+    , bullets $
+        vsep
+          <$> [ ["What addresses can be used for coin selection."]
+              , ["Which address to send change to."]
+              , ["Which payout outputs to withdraw."]
+              ]
+    , annotate bold "Submit Command"
+    , vcat
+        [ "The submit command will submit a signed transaction to a cardano node via a marlowe-chain-sync"
+        , "instance. It waits until the transaction is confirmed and found in a block by marlowe-chain-sync"
+        , "The options that can be configured for this command are:"
+        ]
+    , bullets $
+        vsep
+          <$> [ ["The era of the transaction (babbage or conway)"]
+              , ["The transaction to submit."]
+              ]
+    , annotate bold "Dependencies"
+    , vcat
+        [ "marlowe-tx depends on a marlowe-chain-sync instance at various points. First, it runs a"
+        , "chain seek client for the lifetime of the service to keep track of what the current tip"
+        , "of the blockchain is. Second, it connects via both chain seek and chain query to fetch"
+        , "current information about the UTxO for wallets and marlowe contracts needed to create"
+        , "transactions."
+        ]
+    , vcat
+        [ "marlowe-tx also depends on a marlowe-contract instance both to create contracts and"
+        , "apply inputs to merkleized contracts. For creation, it queries the store for the initial"
+        , "contract if a contract hash was provided in the creation command. It also fetches the"
+        , "closure of contract continuations from the store to analyze the contract for safety issues."
+        , "Finally, it queries contract hashes found in merkleized cases to build merkleized inputs"
+        , "automatically while executing an apply inputs command."
+        ]
+    , annotate bold "Scaling"
+    , vcat
+        [ "marlowe-tx is designed to scale horizontally. That is to say, multiple instances can run"
+        , "in parallel to scale with demand. A typical setup for this would involve running multiple"
+        , "marlowe-tx instances in front of a load balancer."
+        ]
+    ]

@@ -7,6 +7,7 @@ import Cardano.Api (NetworkId (..), NetworkMagic (..))
 import Data.Maybe (fromMaybe)
 import Network.Socket (HostName, PortNumber)
 import qualified Options.Applicative as O
+import Prettyprinter
 import System.Environment (lookupEnv)
 import Text.Read (readMaybe)
 
@@ -219,6 +220,41 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
     infoMod =
       mconcat
         [ O.fullDesc
-        , O.progDesc "Chain sync server for Marlowe Runtime."
-        , O.header "marlowe-chain-sync : a chain sync server for the Marlowe Runtime."
+        , O.progDescDoc $ Just description
+        , O.header "marlowe-chain-indexer: Chain query and sync server for the Marlowe Runtime."
         ]
+
+description :: Doc ann
+description =
+  concatWith
+    (\a b -> a <> line <> line <> b)
+    [ vcat
+        [ "The chain query engine for the Marlowe Runtime. This component exposes three"
+        , "protocols through which downstream components can interact with the blockchain."
+        , "These are: chain seek, chain query, and chain command."
+        ]
+    , vcat
+        [ "The chain seek protocol is a synchronization protocol which allows the follower"
+        , "to jump directly ahead to blocks that match a particular query."
+        ]
+    , vcat
+        [ "The chain query protocol allows various network parameters and UTxO state to be"
+        , "queried."
+        ]
+    , vcat
+        [ "The chain command protocol allows transactions to be submitted to the connected node."
+        ]
+    , vcat
+        [ "marlowe-chain-sync relies on the connected database being migrated and populated by"
+        , "a marlowe-chain-indexer instance. While marlowe-chain-sync can operate without"
+        , "marlowe-chain-indexer running, marlowe-chain-indexer must be run first to insert"
+        , "the genesis UTxOs before marlowe-chain-sync can be used, and relies on"
+        , "marlowe-chain-indexer to keep the database up-to-date."
+        ]
+    , vcat
+        [ "marlowe-chain-sync is designed to scale horizontally. That is to say, multiple"
+        , "instances can run in parallel to scale with demand. A typical setup for this would"
+        , "involve running multiple marlowe-chain-sync instances in front of a load balancer"
+        , "against a scalable postgres replica cluster being populated by a single chain indexer."
+        ]
+    ]

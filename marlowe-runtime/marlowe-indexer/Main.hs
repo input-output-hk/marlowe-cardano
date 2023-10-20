@@ -45,16 +45,18 @@ import Options.Applicative (
   help,
   helper,
   info,
+  infoOption,
   long,
   metavar,
   option,
-  progDesc,
+  progDescDoc,
   short,
   showDefault,
   strOption,
   value,
  )
 import Paths_marlowe_runtime (version)
+import Prettyprinter
 import UnliftIO (MonadUnliftIO (..), throwIO)
 
 main :: IO ()
@@ -118,7 +120,7 @@ data Options = Options
   }
 
 getOptions :: IO Options
-getOptions = execParser $ info (helper <*> parser) infoMod
+getOptions = execParser $ info (helper <*> versionOption <*> parser) infoMod
   where
     parser =
       Options
@@ -127,6 +129,11 @@ getOptions = execParser $ info (helper <*> parser) infoMod
         <*> chainSeekHostParser
         <*> databaseUriParser
         <*> httpPortParser
+
+    versionOption =
+      infoOption
+        ("marlowe-indexer " <> showVersion version)
+        (long "version" <> help "Show version.")
 
     chainSeekPortParser =
       option auto $
@@ -180,6 +187,29 @@ getOptions = execParser $ info (helper <*> parser) infoMod
     infoMod =
       mconcat
         [ fullDesc
-        , progDesc "Contract indexing service for Marlowe Runtime"
-        , header "marlowe-indexer : a contract indexing service for the Marlowe Runtime."
+        , progDescDoc $ Just description
+        , header "marlowe-indexer: Contract indexing service for the Marlowe Runtime."
         ]
+
+description :: Doc ann
+description =
+  concatWith
+    (\a b -> a <> line <> line <> b)
+    [ vcat
+        [ "The contract indexer for the Marlowe Runtime. It connects to a marlowe-chain-sync"
+        , "instance using both the chain seek and chain query protocol. It scans the chain for"
+        , "Marlowe contract transactions and saves them in a postgresql database. This database"
+        , "can be queried by downstream components, such as marlowe-sync."
+        ]
+    , vcat
+        [ "There should only be one instance of marlowe-indexer writing data to a given marlowe"
+        , "database. There is no need to run multiple indexers. If you would like to scale runtime"
+        , "services, it is recommended to deploy a postgres replica cluster, run one indexer to"
+        , "populate it, and as many marlowe-sync instances as required to read from it."
+        ]
+    , vcat
+        [ "Before running the indexer, the database must be created and migrated using"
+        , "sqitch. The migration plan and SQL scripts are included in the source code"
+        , "folder for marlowe-indexer."
+        ]
+    ]

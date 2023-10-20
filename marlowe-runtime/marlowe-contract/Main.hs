@@ -45,16 +45,18 @@ import Options.Applicative (
   help,
   helper,
   info,
+  infoOption,
   long,
   metavar,
   option,
-  progDesc,
+  progDescDoc,
   short,
   showDefault,
   strOption,
   value,
  )
 import Paths_marlowe_runtime
+import Prettyprinter
 
 main :: IO ()
 main = do
@@ -151,6 +153,7 @@ getOptions = do
   execParser $
     info
       ( helper
+          <*> versionOption
           <*> ( Options
                   <$> hostParser
                   <*> portParser
@@ -171,6 +174,11 @@ getOptions = do
       )
       infoMod
   where
+    versionOption =
+      infoOption
+        ("marlowe-contract " <> showVersion version)
+        (long "version" <> help "Show version.")
+
     hostParser =
       strOption $
         mconcat
@@ -314,6 +322,42 @@ getOptions = do
     infoMod =
       mconcat
         [ fullDesc
-        , progDesc "Contract storage service for Marlowe Runtime"
-        , header "marlowe-contract : a contract storage service for the Marlowe Runtime."
+        , progDescDoc $ Just description
+        , header "marlowe-tx: Transaction creation server for the Marlowe Runtime."
         ]
+
+description :: Doc ann
+description =
+  concatWith
+    (\a b -> a <> line <> line <> b)
+    [ vcat
+        [ "The contract storage service for the Marlowe Runtime. It manages a crucial component of the"
+        , "Marlowe runtime: the contract store. The contract store is a content-addressable store of"
+        , "contracts indexed by their hashes. Contracts can refer to sub-contracts via their hashes via"
+        , "the MerkleizedCase construct. The contract store is used to store the continuations of a contract"
+        , "after it has been merkleized (a process which recursively replaces Case constructs with MerkleizedCase"
+        , "constructs). It is also used to lookup continuations when applying inputs to a merkleized contract."
+        , "This component exposes three protocols: marlowe load, marlowe transfer, and contract store query."
+        ]
+    , vcat
+        [ "The marlowe load protocol is one way to import a contract incrementally into the store. It presents"
+        , "a stack-based interface for pushing a contract depth-first into the store."
+        ]
+    , vcat
+        [ "The marlowe transfer protocol is the other way to import a contract incrementally into the store."
+        , "It leverages the Marlowe object model to allow bundles of user-defined marlowe objects to be streamed"
+        , "into the store. marlowe-contract will link the contract on-the-fly, merkleize the intermediate contracts,"
+        , "and build the final contract incrementally. This protocol is generally more efficient and flexible than"
+        , "Marlowe load because it allows duplicate sub-contracts to be pre-abstracted by the user. It also supports"
+        , "An export mode which will stream the closure of a contract from the store to the client as a Marlowe object"
+        , "bundle. This can be used to export continuations from the store and share it with other contract stores."
+        ]
+    , vcat
+        [ "The contract store query protocol provides queries that allow clients to fetch contracts by their hash,"
+        , "fetch the adjacency or closure sets of a contract, or merkleize an input."
+        ]
+    , vcat
+        [ "marlowe-contract depends on a marlowe-sync and marlowe-chain-sync instance to run automatic"
+        , "Garbage collection. These must both be running in order for marlowe-contract to run."
+        ]
+    ]

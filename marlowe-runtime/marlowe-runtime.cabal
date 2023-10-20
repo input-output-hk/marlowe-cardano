@@ -666,6 +666,7 @@ executable marlowe-indexer
     , nonempty-containers ^>=0.3.4
     , optparse-applicative ^>=0.17
     , postgresql-libpq ^>=0.9
+    , prettyprinter
     , text ^>=1.2
     , unliftio ^>=0.2.1
 
@@ -697,6 +698,7 @@ executable marlowe-sync
     , network >=3.1 && <4
     , optparse-applicative ^>=0.17
     , postgresql-libpq ^>=0.9
+    , prettyprinter
     , text ^>=1.2
     , unliftio ^>=0.2.1
 
@@ -723,6 +725,8 @@ executable marlowe-tx
     , marlowe-runtime:{marlowe-runtime, contract-api, tx, tx-api} ==0.0.5
     , network >=3.1 && <4
     , optparse-applicative ^>=0.17
+    , prettyprinter
+    , prettyprinter-ansi-terminal
     , text ^>=1.2
     , time
 
@@ -749,6 +753,7 @@ executable marlowe-contract
     , marlowe-runtime:{config, contract, contract-api, sync-api} ==0.0.5
     , network >=3.1 && <4
     , optparse-applicative ^>=0.17
+    , prettyprinter
     , text ^>=1.2
     , time
     , typed-protocols ^>=0.1
@@ -775,6 +780,7 @@ executable marlowe-proxy
     , marlowe-runtime:{config, contract-api, discovery-api, history-api, proxy, proxy-api, sync-api, tx-api} ==0.0.5
     , network >=3.1 && <4
     , optparse-applicative ^>=0.17
+    , prettyprinter
     , text ^>=1.2
 
   ghc-options:     -threaded
