@@ -1,7 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE QualifiedDo #-}
 {-# LANGUAGE RankNTypes #-}
 
 -- | A generic server for the job protocol. Includes a function for
@@ -9,29 +8,205 @@
 -- driver and a codec.
 module Network.Protocol.Job.Server where
 
-import Control.Monad.Trans (MonadTrans (..))
 import Network.Protocol.Job.Types
-import Network.Protocol.Peer.Monad (ServerT)
-import qualified Network.Protocol.Peer.Monad as PeerT
+import Network.Protocol.Peer.Trace
+import Network.TypedProtocol
 
-type JobServerT k = ServerT (Job k)
+-- | A generic server for the job protocol.
+newtype JobServer cmd m a = JobServer {runJobServer :: m (ServerStInit cmd m a)}
+  deriving (Functor)
+
+-- | In the 'StInit' state, the client has agency. The server must be prepared
+-- to handle either:
+--
+-- * An exec message
+-- * An attach message
+data ServerStInit cmd m a = ServerStInit
+  { recvMsgExec
+      :: forall status err result
+       . cmd status err result
+      -> m (ServerStCmd cmd status err result m a)
+  , recvMsgAttach
+      :: forall status err result
+       . JobId cmd status err result
+      -> m (ServerStAttach cmd status err result m a)
+  }
+
+deriving instance (Functor m) => Functor (ServerStInit cmd m)
+
+-- | In the 'StCmd' state, the server has agency. It is running a command
+-- sent by the client and starting the job. It may send either:
+--
+-- * A failure message with an error
+-- * A success message with a result
+-- * An await message with the current status and job ID
+data ServerStCmd cmd status err result m a where
+  -- | Send a failure message to the client and terminate the protocol.
+  SendMsgFail :: err -> a -> ServerStCmd cmd status err result m a
+  -- | Send a success message to the client and terminate the protocol.
+  SendMsgSucceed :: result -> a -> ServerStCmd cmd status err result m a
+  -- | Send an await message to the client and await a follow-up message from
+  -- the client.
+  SendMsgAwait
+    :: status
+    -> JobId cmd status err result
+    -> ServerStAwait cmd status err result m a
+    -> ServerStCmd cmd status err result m a
+
+deriving instance (Functor m) => Functor (ServerStAttach cmd status err result m)
+
+-- | In the 'StAttach' state, the server has agency. It is looking up the job
+-- associated with the given job ID. It may send either:
+--
+-- * An attach failed message.
+-- * An attached message.
+data ServerStAttach cmd status err result m a where
+  -- | Send a failure message to the client and terminate the protocol.
+  SendMsgAttachFailed :: a -> ServerStAttach cmd status err result m a
+  -- | Send a success message to the client and terminate the protocol.
+  SendMsgAttached :: ServerStCmd cmd status err result m a -> ServerStAttach cmd status err result m a
+
+deriving instance (Functor m) => Functor (ServerStCmd cmd status err result m)
+
+-- | In the 'StAwait' state, the client has agency. The server must be prepared
+-- to handle either:
+--
+-- * A poll message
+-- * A detach message
+data ServerStAwait cmd status err result m a = ServerStAwait
+  { recvMsgPoll :: m (ServerStCmd cmd status err result m a)
+  , recvMsgDetach :: m a
+  }
+
+deriving instance (Functor m) => Functor (ServerStAwait cmd status err result m)
+
+-- | Change the underlying monad type a server runs in with a natural
+-- transformation.
+hoistJobServer
+  :: forall cmd m n a
+   . (Functor m)
+  => (forall x. m x -> n x)
+  -> JobServer cmd m a
+  -> JobServer cmd n a
+hoistJobServer phi = JobServer . phi . fmap (hoistInit phi) . runJobServer
+
+hoistInit
+  :: forall cmd m n a
+   . (Functor m)
+  => (forall x. m x -> n x)
+  -> ServerStInit cmd m a
+  -> ServerStInit cmd n a
+hoistInit phi ServerStInit{..} =
+  ServerStInit
+    { recvMsgExec = phi . fmap (hoistCmd phi) . recvMsgExec
+    , recvMsgAttach = phi . fmap (hoistAttach phi) . recvMsgAttach
+    }
+
+hoistAttach
+  :: forall cmd status err result m n a
+   . (Functor m)
+  => (forall x. m x -> n x)
+  -> ServerStAttach cmd status err result m a
+  -> ServerStAttach cmd status err result n a
+hoistAttach phi = \case
+  SendMsgAttachFailed a -> SendMsgAttachFailed a
+  SendMsgAttached cmd -> SendMsgAttached $ hoistCmd phi cmd
+
+hoistCmd
+  :: forall cmd status err result m n a
+   . (Functor m)
+  => (forall x. m x -> n x)
+  -> ServerStCmd cmd status err result m a
+  -> ServerStCmd cmd status err result n a
+hoistCmd phi = \case
+  SendMsgFail err a -> SendMsgFail err a
+  SendMsgSucceed result a -> SendMsgSucceed result a
+  SendMsgAwait status cmdId await -> SendMsgAwait status cmdId $ hoistAwait phi await
+
+hoistAwait
+  :: forall cmd status err result m n a
+   . (Functor m)
+  => (forall x. m x -> n x)
+  -> ServerStAwait cmd status err result m a
+  -> ServerStAwait cmd status err result n a
+hoistAwait phi ServerStAwait{..} =
+  ServerStAwait
+    { recvMsgPoll = phi $ hoistCmd phi <$> recvMsgPoll
+    , recvMsgDetach = phi recvMsgDetach
+    }
+
+-- | Interpret a server as a typed-protocols peer.
+jobServerPeer
+  :: forall cmd m a
+   . (Monad m, Command cmd)
+  => JobServer cmd m a
+  -> PeerTraced (Job cmd) 'AsServer 'StInit m a
+jobServerPeer JobServer{..} =
+  EffectTraced $ peerInit <$> runJobServer
+  where
+    peerInit :: ServerStInit cmd m a -> PeerTraced (Job cmd) 'AsServer 'StInit m a
+    peerInit ServerStInit{..} =
+      AwaitTraced (ClientAgency TokInit) \case
+        MsgExec cmd ->
+          Respond (ServerAgency $ TokCmd (tagFromCommand cmd)) $
+            peerCmd (tagFromCommand cmd) <$> recvMsgExec cmd
+        MsgAttach jobId ->
+          Respond (ServerAgency $ TokAttach (tagFromJobId jobId)) $
+            peerAttach (tagFromJobId jobId) <$> recvMsgAttach jobId
+
+    peerAttach
+      :: Tag cmd status err result
+      -> ServerStAttach cmd status err result m a
+      -> Response (Job cmd) 'AsServer ('StAttach status err result :: Job cmd) m a
+    peerAttach tag = \case
+      SendMsgAttachFailed a -> Response MsgAttachFailed $ DoneTraced TokDone a
+      SendMsgAttached cmd -> Response MsgAttached case cmd of
+        SendMsgFail err a ->
+          YieldTraced (ServerAgency $ TokCmd tag) (MsgFail err) $
+            Close TokDone a
+        SendMsgSucceed result a ->
+          YieldTraced (ServerAgency $ TokCmd tag) (MsgSucceed result) $
+            Close TokDone a
+        SendMsgAwait status cmdId await ->
+          YieldTraced (ServerAgency $ TokCmd tag) (MsgAwait status cmdId) $
+            Cast $
+              peerAwait tag await
+
+    peerCmd
+      :: Tag cmd status err result
+      -> ServerStCmd cmd status err result m a
+      -> Response (Job cmd) 'AsServer ('StCmd status err result :: Job cmd) m a
+    peerCmd tag = \case
+      SendMsgFail err a -> Response (MsgFail err) $ DoneTraced TokDone a
+      SendMsgSucceed result a -> Response (MsgSucceed result) $ DoneTraced TokDone a
+      SendMsgAwait status cmdId await -> Response (MsgAwait status cmdId) $ peerAwait tag await
+
+    peerAwait
+      :: Tag cmd status err result
+      -> ServerStAwait cmd status err result m a
+      -> PeerTraced (Job cmd) 'AsServer ('StAwait status err result) m a
+    peerAwait tag ServerStAwait{..} =
+      AwaitTraced (ClientAgency (TokAwait tag)) \case
+        MsgPoll -> Respond (ServerAgency $ TokCmd tag) $ peerCmd tag <$> recvMsgPoll
+        MsgDetach -> Closed TokDone recvMsgDetach
 
 -- | Lift a function that executes a command directly into a command server.
 liftCommandHandler
-  :: (Monad m, TagKind k)
-  => (forall (t :: k). Either (Command t) (JobId t) -> m (a, Either (JobError t) (JobResult t)))
-  -> JobServerT k 'StInit 'StDone m a
-liftCommandHandler handle = PeerT.await \case
-  MsgExec cmd -> withSingTag (commandTag cmd) PeerT.do
-    (a, e) <- lift $ handle $ Left cmd
-    PeerT.yield case e of
-      Left err -> MsgFail err
-      Right result -> MsgSucceed result
-    pure a
-  MsgAttach jobId -> withSingTag (jobIdTag jobId) PeerT.do
-    (a, e) <- lift $ handle $ Right jobId
-    PeerT.yield MsgAttached
-    PeerT.yield case e of
-      Left err -> MsgFail err
-      Right result -> MsgSucceed result
-    pure a
+  :: (Monad m)
+  => (forall status err result. Either (cmd status err result) (JobId cmd status err result) -> m (a, Either err result))
+  -> JobServer cmd m a
+liftCommandHandler handle =
+  JobServer $
+    pure $
+      ServerStInit
+        { recvMsgExec = \cmd -> do
+            (a, e) <- handle $ Left cmd
+            pure case e of
+              Left err -> SendMsgFail err a
+              Right result -> SendMsgSucceed result a
+        , recvMsgAttach = \cmdId -> do
+            (a, e) <- handle $ Right cmdId
+            pure $ SendMsgAttached case e of
+              Left err -> SendMsgFail err a
+              Right result -> SendMsgSucceed result a
+        }

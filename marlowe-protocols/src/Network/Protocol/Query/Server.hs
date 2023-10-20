@@ -2,7 +2,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE QualifiedDo #-}
 {-# LANGUAGE RankNTypes #-}
 
 -- | A generic server for the query protocol. Includes a function for
@@ -10,46 +9,68 @@
 -- driver and a codec.
 module Network.Protocol.Query.Server where
 
-import Control.Monad.Trans (MonadTrans (..))
-import Network.Protocol.Peer.Monad (ServerT)
-import qualified Network.Protocol.Peer.Monad as PeerT
+import Control.Arrow ((***))
+import Network.Protocol.Peer.Trace
 import Network.Protocol.Query.Types
+import Network.TypedProtocol
 
-type QueryServerT k = ServerT (Query k) 'StReq 'StDone
+-- | A generic server for the query protocol.
+newtype QueryServer req m a = QueryServer {runQueryServer :: m (ServerStReq req m a)}
+  deriving (Functor)
 
--- | Lift a handler function into a query server which responds until the client
--- terminates the session.
+data ServerStReq req m a = ServerStReq
+  { recvMsgRequest :: forall x. ReqTree req x -> m (x, ServerStReq req m a)
+  , recvMsgDone :: m a
+  }
+  deriving (Functor)
+
+-- | Change the underlying monad type a server runs in with a natural
+-- transformation.
+hoistQueryServer
+  :: forall req m n a
+   . (Functor m)
+  => (forall x. m x -> n x)
+  -> QueryServer req m a
+  -> QueryServer req n a
+hoistQueryServer f = QueryServer . f . fmap hoistReq . runQueryServer
+  where
+    hoistReq ServerStReq{..} =
+      ServerStReq
+        { recvMsgRequest = f . (fmap . fmap) hoistReq . recvMsgRequest
+        , recvMsgDone = f recvMsgDone
+        }
+
+-- | Interpret a server as a typed-protocols peer.
+queryServerPeer
+  :: forall req m a
+   . (Functor m, Request req)
+  => QueryServer req m a
+  -> PeerTraced (Query req) 'AsServer 'StReq m a
+queryServerPeer QueryServer{..} =
+  EffectTraced $ peerReq <$> runQueryServer
+  where
+    peerReq :: ServerStReq req m a -> PeerTraced (Query req) 'AsServer 'StReq m a
+    peerReq ServerStReq{..} =
+      AwaitTraced (ClientAgency TokReq) \case
+        MsgRequest req ->
+          Respond (ServerAgency $ TokRes $ tagFromReq req) $
+            uncurry Response . (MsgRespond *** peerReq) <$> recvMsgRequest req
+        MsgDone -> Closed TokDone recvMsgDone
+
 respond
-  :: (Monad m, TagKind k)
-  => (forall (t :: k). Request t -> m (Response t))
-  -> QueryServerT k m ()
-respond handle = go
+  :: forall req m
+   . (Applicative m)
+  => (forall a b. m a -> m b -> m (a, b))
+  -> (forall a. req a -> m a)
+  -> QueryServer req m ()
+respond merge handle = QueryServer $ pure server
   where
-    go = PeerT.await \case
-      MsgDone -> pure ()
-      MsgRequest req -> withSingTag (requestTag req) $ PeerT.do
-        response <- lift $ handle req
-        PeerT.yield $ MsgRespond response
-        go
-
--- | Lift a function that handles individual requests into a function that handles
--- trees of requests in an Applicative functor. For example, to handle requests
--- concurrently:
--- @@
--- import UnliftIO (Concurrently(..))
---
--- batchWith Concurrently runConcurrently handle
--- @@
-batchWith
-  :: forall k m n
-   . (Applicative n)
-  => (forall a. m a -> n a)
-  -> (forall a. n a -> m a)
-  -> (forall (t :: k). Request t -> m (Response t))
-  -> (forall (t :: Tree k). Request t -> m (Response t))
-batchWith wrap unwrap handleLeaf = unwrap . go
-  where
-    go :: forall (t :: Tree k). Request t -> n (Response t)
-    go = \case
-      ReqLeaf req -> ResLeaf <$> wrap (handleLeaf req)
-      ReqBin l r -> ResBin <$> go l <*> go r
+    server =
+      ServerStReq
+        { recvMsgDone = pure ()
+        , recvMsgRequest = fmap (,server) . handle'
+        }
+    handle' :: ReqTree req a -> m a
+    handle' = \case
+      ReqLeaf req -> handle req
+      ReqBin l r -> handle' l `merge` handle' r

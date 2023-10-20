@@ -1,11 +1,8 @@
 {-# LANGUAGE ApplicativeDo #-}
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE QuasiQuotes #-}
 
@@ -127,7 +124,7 @@ databaseQueries pool networkId =
 
 -- Scan
 
-mkCollect :: C.NetworkId -> ChainPoint -> Move t -> Collect t HT.Transaction
+mkCollect :: C.NetworkId -> ChainPoint -> Move err result -> Collect err result HT.Transaction
 mkCollect networkId point move = Collect \batchSize -> do
   tip <- runGetTip getTip
   getRollbackPoint point >>= \case
@@ -147,20 +144,20 @@ performCollect
   :: C.NetworkId
   -> Natural
   -> ChainPoint
-  -> Move (t :: ChainSyncMove)
+  -> Move err result
   -> ChainPoint
-  -> HT.Transaction (PerformCollectResult (SeekError t) (SeekResult t))
+  -> HT.Transaction (PerformCollectResult err result)
 performCollect networkId batchSize tip = \case
-  MoveAdvanceBlocks blocks -> repeatMove (\case {}) [] batchSize $ performAdvanceBlocks blocks
-  MoveFindTx txId wait -> collectOne . performFindTx txId wait
-  MoveIntersect points -> collectOne . performIntersect points
-  MoveFindConsumingTxs txOutRef -> collectOne . performFindConsumingTxs txOutRef
-  MoveFindTxsFor credentials -> collectTxsFor networkId batchSize credentials
-  MoveAdvanceToTip -> \point -> pure case tip of
+  AdvanceBlocks blocks -> repeatMove [] batchSize $ performAdvanceBlocks blocks
+  FindTx txId wait -> collectOne . performFindTx txId wait
+  Intersect points -> collectOne . performIntersect points
+  FindConsumingTxs txOutRef -> collectOne . performFindConsumingTxs txOutRef
+  FindTxsFor credentials -> collectTxsFor networkId batchSize credentials
+  AdvanceToTip -> \point -> pure case tip of
     Genesis -> CollectWait'
     At tipBlock
       | point == tip -> CollectWait'
-      | otherwise -> Collected $ pure (tipBlock, ResAdvanceToTip)
+      | otherwise -> Collected $ pure (tipBlock, ())
 
 collectOne :: HT.Transaction (PerformMoveResult err a) -> HT.Transaction (PerformCollectResult err a)
 collectOne query =
@@ -170,26 +167,25 @@ collectOne query =
     MoveArrive point result -> Collected $ pure (point, result)
 
 repeatMove
-  :: (SeekError t -> Void)
-  -> [(BlockHeader, SeekResult t)]
+  :: [(BlockHeader, a)]
   -> Natural
-  -> (ChainPoint -> HT.Transaction (PerformMoveResult' t))
+  -> (ChainPoint -> HT.Transaction (PerformMoveResult Void a))
   -> ChainPoint
-  -> HT.Transaction (PerformCollectResult (SeekError t) (SeekResult t))
-repeatMove _ [] 0 _ _ = pure CollectWait'
-repeatMove _ acc 0 _ _ = pure $ Collected $ NE.fromList $ reverse acc
-repeatMove voidError acc n query point =
+  -> HT.Transaction (PerformCollectResult Void a)
+repeatMove [] 0 _ _ = pure CollectWait'
+repeatMove acc 0 _ _ = pure $ Collected $ NE.fromList $ reverse acc
+repeatMove acc n query point =
   query point >>= \case
     MoveWait -> pure CollectWait'
-    MoveAbort err -> absurd $ voidError err
-    MoveArrive point' result -> repeatMove voidError ((point', result) : acc) (pred n) query $ At point'
+    MoveAbort err -> absurd err
+    MoveArrive point' result -> repeatMove ((point', result) : acc) (pred n) query $ At point'
 
 collectTxsFor
   :: C.NetworkId
   -> Natural
   -> NESet Credential
   -> ChainPoint
-  -> HT.Transaction (PerformCollectResult (SeekError 'FindTxsFor) (SeekResult 'FindTxsFor))
+  -> HT.Transaction (PerformCollectResult Void (Set Transaction))
 collectTxsFor networkId batchSize credentials fromPoint =
   maybe CollectWait' Collected <$> runMaybeT do
     blocks <- lift loadTxIds
@@ -329,11 +325,11 @@ collectTxsFor networkId batchSize credentials fromPoint =
       -> Map TxId Transaction
       -> Map TxId (Set TransactionInput)
       -> Map TxId [TransactionOutput]
-      -> NonEmpty (BlockHeader, SeekResult 'FindTxsFor)
+      -> NonEmpty (BlockHeader, Set Transaction)
     assembleResults txIds txs txIns txOuts =
       NE.fromList $
         Map.toList $
-          ResFindTxsFor . Set.fromList . Map.elems . Map.restrictKeys mergedTxs <$> txIds
+          Set.fromList . Map.elems . Map.restrictKeys mergedTxs <$> txIds
       where
         mergedTxs = Map.intersectionWith ($) (Map.intersectionWith mergeTx txs txIns) txOuts
 
@@ -345,8 +341,7 @@ collectTxsFor networkId batchSize credentials fromPoint =
 moveClient :: C.NetworkId -> MoveClient HT.Transaction
 moveClient networkId = MoveClient $ performMoveWithRollbackCheck networkId
 
-performMoveWithRollbackCheck
-  :: C.NetworkId -> ChainPoint -> Move t -> HT.Transaction (MoveResult t)
+performMoveWithRollbackCheck :: C.NetworkId -> ChainPoint -> Move err result -> HT.Transaction (MoveResult err result)
 performMoveWithRollbackCheck networkId point move = do
   tip <- runGetTip getTip
   getRollbackPoint point >>= \case
@@ -390,28 +385,22 @@ data PerformMoveResult err result
   | MoveArrive BlockHeader result
 
 performMove
-  :: C.NetworkId
-  -> ChainPoint
-  -> Move t
-  -> ChainPoint
-  -> HT.Transaction (PerformMoveResult' t)
+  :: C.NetworkId -> ChainPoint -> Move err result -> ChainPoint -> HT.Transaction (PerformMoveResult err result)
 performMove networkId tip = \case
-  MoveAdvanceBlocks blocks -> performAdvanceBlocks blocks
-  MoveFindTx txId wait -> performFindTx txId wait
-  MoveIntersect points -> performIntersect points
-  MoveFindConsumingTxs txOutRef -> performFindConsumingTxs txOutRef
-  MoveFindTxsFor credentials -> performFindTxsFor networkId credentials
-  MoveAdvanceToTip -> \point -> pure case tip of
+  AdvanceBlocks blocks -> performAdvanceBlocks blocks
+  FindTx txId wait -> performFindTx txId wait
+  Intersect points -> performIntersect points
+  FindConsumingTxs txOutRef -> performFindConsumingTxs txOutRef
+  FindTxsFor credentials -> performFindTxsFor networkId credentials
+  AdvanceToTip -> \point -> pure case tip of
     Genesis -> MoveWait
     At tipBlock
       | point == tip -> MoveWait
-      | otherwise -> MoveArrive tipBlock ResAdvanceToTip
+      | otherwise -> MoveArrive tipBlock ()
 
-type PerformMoveResult' (t :: ChainSyncMove) = PerformMoveResult (SeekError t) (SeekResult t)
-
-performAdvanceBlocks :: Natural -> ChainPoint -> HT.Transaction (PerformMoveResult' 'AdvanceBlocks)
+performAdvanceBlocks :: Natural -> ChainPoint -> HT.Transaction (PerformMoveResult Void ())
 performAdvanceBlocks blocks point = do
-  decodeAdvance ResAdvanceBlocks
+  decodeAdvance
     <$> HT.statement
       (pointSlot point, fromIntegral blocks)
       [maybeStatement|
@@ -505,7 +494,7 @@ performFindConsumingTx TxOutRef{..} point = do
 performFindConsumingTxs
   :: Set TxOutRef
   -> ChainPoint
-  -> HT.Transaction (PerformMoveResult' 'FindConsumingTxs)
+  -> HT.Transaction (PerformMoveResult (Map TxOutRef UTxOError) (Map TxOutRef Transaction))
 performFindConsumingTxs utxos point = do
   -- TODO consider refactoring this to perform a bulk query rather than querying in a loop
   -- For each requested Tx, perform a FindConsumingTx query
@@ -528,12 +517,12 @@ performFindConsumingTxs utxos point = do
     -- There were no errors, no consuming Txs were found, and no UTxOs to wait
     -- for. In this case, the client provided an empty set of UTxOs and this is
     -- an error.
-    (False, Nothing, False) -> MoveAbort $ ErrFindConsumingTxs mempty
+    (False, Nothing, False) -> MoveAbort mempty
     -- There were no errors and some consuming Txs were found. move the client
     -- to the block where the Txs reside and return them.
-    (False, Just (blockHeader, txs), _) -> MoveArrive blockHeader $ ResFindConsumingTxs txs
+    (False, Just (blockHeader, txs), _) -> MoveArrive blockHeader txs
     -- There were some errors. Pass these back.
-    (True, _, _) -> MoveAbort $ ErrFindConsumingTxs aborts
+    (True, _, _) -> MoveAbort aborts
   where
     foldEarliestBlockTxs utxo (header, tx) Nothing = Just (header, Map.singleton utxo tx)
     foldEarliestBlockTxs utxo (header', tx) (Just (header, txs)) = Just case compare header' header of
@@ -546,7 +535,7 @@ performFindConsumingTxs utxos point = do
       MoveWait -> (mempty, 1 :: Sum Int, mempty)
       MoveAbort err -> (Map.singleton utxo err, mempty, mempty)
 
-performFindTx :: TxId -> Bool -> ChainPoint -> HT.Transaction (PerformMoveResult' 'FindTx)
+performFindTx :: TxId -> Bool -> ChainPoint -> HT.Transaction (PerformMoveResult TxError Transaction)
 performFindTx txId wait point = do
   initialResult <-
     HT.statement (unTxId txId) $
@@ -572,25 +561,25 @@ performFindTx txId wait point = do
   case initialResult of
     MoveWait
       | wait -> pure MoveWait
-      | otherwise -> pure $ MoveAbort $ ErrFindTx TxNotFound
+      | otherwise -> pure $ MoveAbort TxNotFound
     MoveAbort err -> pure $ MoveAbort err
-    MoveArrive header@BlockHeader{..} (ResFindTx tx) -> do
+    MoveArrive header@BlockHeader{..} tx -> do
       txIns <- queryTxIns slotNo txId
       txOuts <- queryTxOuts slotNo txId
-      pure $ MoveArrive header $ ResFindTx tx{inputs = txIns, outputs = txOuts}
+      pure $ MoveArrive header tx{inputs = txIns, outputs = txOuts}
   where
-    foldTx :: Fold ReadTxRow (PerformMoveResult' 'FindTx)
+    foldTx :: Fold ReadTxRow (PerformMoveResult TxError Transaction)
     foldTx = Fold foldTx' MoveWait id
 
     foldTx'
-      :: PerformMoveResult' 'FindTx
+      :: PerformMoveResult TxError Transaction
       -> ReadTxRow
-      -> PerformMoveResult' 'FindTx
+      -> PerformMoveResult TxError Transaction
     foldTx' MoveWait row = readFirstTxRow row
-    foldTx' (MoveArrive header (ResFindTx tx)) row = MoveArrive header $ ResFindTx $ mergeTxRow tx row
+    foldTx' (MoveArrive header tx) row = MoveArrive header $ mergeTxRow tx row
     foldTx' x _ = x
 
-    readFirstTxRow :: ReadTxRow -> PerformMoveResult' 'FindTx
+    readFirstTxRow :: ReadTxRow -> PerformMoveResult TxError Transaction
     readFirstTxRow
       ( Just slotNo
         , Just hash
@@ -603,27 +592,26 @@ performFindTx txId wait point = do
         , tokenName
         , quantity
         )
-        | slotNo <= pointSlot point = MoveAbort $ ErrFindTx $ TxInPast $ decodeBlockHeader (slotNo, hash, blockNo)
+        | slotNo <= pointSlot point = MoveAbort $ TxInPast $ decodeBlockHeader (slotNo, hash, blockNo)
         | otherwise =
             MoveArrive
               (decodeBlockHeader (slotNo, hash, blockNo))
-              $ ResFindTx
-                Transaction
-                  { txId = TxId spendingTxId
-                  , validityRange = case (validityLowerBound, validityUpperBound) of
-                      (Nothing, Nothing) -> Unbounded
-                      (Just lb, Nothing) -> MinBound $ decodeSlotNo lb
-                      (Nothing, Just ub) -> MaxBound $ decodeSlotNo ub
-                      (Just lb, Just ub) -> MinMaxBound (decodeSlotNo lb) $ decodeSlotNo ub
-                  , metadata = maybe mempty fromCardanoTxMetadata $ decodeMetadata =<< mMetadata
-                  , inputs = Set.empty
-                  , outputs = []
-                  , mintedTokens = decodeTokens policyId tokenName quantity
-                  }
+              Transaction
+                { txId = TxId spendingTxId
+                , validityRange = case (validityLowerBound, validityUpperBound) of
+                    (Nothing, Nothing) -> Unbounded
+                    (Just lb, Nothing) -> MinBound $ decodeSlotNo lb
+                    (Nothing, Just ub) -> MaxBound $ decodeSlotNo ub
+                    (Just lb, Just ub) -> MinMaxBound (decodeSlotNo lb) $ decodeSlotNo ub
+                , metadata = maybe mempty fromCardanoTxMetadata $ decodeMetadata =<< mMetadata
+                , inputs = Set.empty
+                , outputs = []
+                , mintedTokens = decodeTokens policyId tokenName quantity
+                }
     readFirstTxRow _ = MoveWait
 
 performFindTxsFor
-  :: C.NetworkId -> NESet Credential -> ChainPoint -> HT.Transaction (PerformMoveResult' 'FindTxsFor)
+  :: C.NetworkId -> NESet Credential -> ChainPoint -> HT.Transaction (PerformMoveResult Void (Set Transaction))
 performFindTxsFor networkId credentials point = do
   initialResult <-
     HT.statement params $
@@ -673,11 +661,10 @@ performFindTxsFor networkId credentials point = do
       let insOuts = Map.intersectionWith (,) txIns txOuts
       pure $
         MoveArrive header $
-          ResFindTxsFor $
-            Set.fromList $
-              fmap snd $
-                Map.toList $
-                  Map.intersectionWith (\(ins, outs) tx -> tx{inputs = ins, outputs = outs}) insOuts txs
+          Set.fromList $
+            fmap snd $
+              Map.toList $
+                Map.intersectionWith (\(ins, outs) tx -> tx{inputs = ins, outputs = outs}) insOuts txs
   where
     params =
       ( V.fromList $ fst <$> addressParts
@@ -1041,14 +1028,14 @@ type ReadTxOutBulkRow =
   , Maybe Int64 -- TxOut's Token's Quantity
   )
 
-performIntersect :: [BlockHeader] -> ChainPoint -> HT.Transaction (PerformMoveResult' 'Intersect)
+performIntersect :: [BlockHeader] -> ChainPoint -> HT.Transaction (PerformMoveResult IntersectError ())
 performIntersect points point = do
   let params =
         ( V.fromList $ (\BlockHeader{..} -> fromIntegral slotNo) <$> points
         , V.fromList $ (\BlockHeader{..} -> unBlockHeaderHash headerHash) <$> points
         , pointSlot point
         )
-  decodeAdvance ResIntersect
+  decodeAdvance
     <$> HT.statement
       params
       [maybeStatement|
@@ -1082,9 +1069,9 @@ pointSlot :: ChainPoint -> Int64
 pointSlot Genesis = -1
 pointSlot (At BlockHeader{..}) = fromIntegral slotNo
 
-decodeAdvance :: a -> Maybe (Int64, ByteString, Int64) -> PerformMoveResult err a
-decodeAdvance _ Nothing = MoveWait
-decodeAdvance a (Just row) = MoveArrive (decodeBlockHeader row) a
+decodeAdvance :: Maybe (Int64, ByteString, Int64) -> PerformMoveResult err ()
+decodeAdvance Nothing = MoveWait
+decodeAdvance (Just row) = MoveArrive (decodeBlockHeader row) ()
 
 decodeMetadata :: ByteString -> Maybe C.TxMetadata
 decodeMetadata = hush . C.deserialiseFromCBOR C.AsTxMetadata

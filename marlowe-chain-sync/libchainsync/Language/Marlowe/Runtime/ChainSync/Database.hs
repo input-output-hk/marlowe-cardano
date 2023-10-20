@@ -1,21 +1,10 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
 
 module Language.Marlowe.Runtime.ChainSync.Database where
 
 import Data.List.NonEmpty (NonEmpty)
-import Language.Marlowe.Runtime.ChainSync.Api (
-  BlockHeader,
-  ChainPoint,
-  ChainSyncMove,
-  GetUTxOsQuery,
-  Move,
-  SeekError,
-  SeekResult,
-  UTxOs,
- )
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, GetUTxOsQuery, Move, UTxOs)
 import Numeric.Natural (Natural)
 
 -- Queries
@@ -26,26 +15,26 @@ newtype GetTip m = GetTip
 newtype GetUTxOs m = GetUTxOs
   {runGetUTxOs :: GetUTxOsQuery -> m UTxOs}
 
-data MoveResult (t :: ChainSyncMove)
-  = RollForward (SeekResult t) BlockHeader ChainPoint
+data MoveResult err result
+  = RollForward result BlockHeader ChainPoint
   | RollBack ChainPoint ChainPoint
-  | Reject (SeekError t) ChainPoint
+  | Reject err ChainPoint
   | Wait ChainPoint
 
 newtype MoveClient m = MoveClient
-  {runMoveClient :: forall t. ChainPoint -> Move t -> m (MoveResult t)}
+  {runMoveClient :: forall err result. ChainPoint -> Move err result -> m (MoveResult err result)}
 
 newtype Scan m = Scan
-  {runScan :: forall t. ChainPoint -> Move t -> m (Collect t m)}
+  {runScan :: forall err result. ChainPoint -> Move err result -> m (Collect err result m)}
 
-data CollectResult t m
-  = NextBlocks (NonEmpty (BlockHeader, SeekResult t)) ChainPoint (Collect t m)
+data CollectResult err result m
+  = NextBlocks (NonEmpty (BlockHeader, result)) ChainPoint (Collect err result m)
   | CollectRollBack ChainPoint ChainPoint
-  | CollectReject (SeekError t) ChainPoint
+  | CollectReject err ChainPoint
   | CollectWait ChainPoint
 
-newtype Collect (t :: ChainSyncMove) m = Collect
-  {runCollect :: Natural -> m (CollectResult t m)}
+newtype Collect err result m = Collect
+  {runCollect :: Natural -> m (CollectResult err result m)}
 
 hoistGetUTxOs :: (forall a. m a -> n a) -> GetUTxOs m -> GetUTxOs n
 hoistGetUTxOs transformation = GetUTxOs . fmap transformation . runGetUTxOs
@@ -61,11 +50,11 @@ hoistScan :: (Functor m) => (forall a. m a -> n a) -> Scan m -> Scan n
 hoistScan transformation (Scan runScan) =
   Scan $ fmap (transformation . fmap (hoistCollect transformation)) . runScan
 
-hoistCollect :: (Functor m) => (forall a. m a -> n a) -> Collect t m -> Collect t n
+hoistCollect :: (Functor m) => (forall a. m a -> n a) -> Collect err result m -> Collect err result n
 hoistCollect transformation (Collect runCollect) =
   Collect $ transformation . fmap (hoistCollectResult transformation) . runCollect
 
-hoistCollectResult :: (Functor m) => (forall a. m a -> n a) -> CollectResult t m -> CollectResult t n
+hoistCollectResult :: (Functor m) => (forall a. m a -> n a) -> CollectResult err result m -> CollectResult err result n
 hoistCollectResult transformation = \case
   NextBlocks results tip collect -> NextBlocks results tip $ hoistCollect transformation collect
   CollectRollBack point tip -> CollectRollBack point tip

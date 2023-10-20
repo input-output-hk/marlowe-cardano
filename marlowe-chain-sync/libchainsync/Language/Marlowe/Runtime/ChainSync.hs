@@ -1,5 +1,4 @@
 {-# LANGUAGE Arrows #-}
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
@@ -22,7 +21,7 @@ import Data.ByteString (ByteString)
 import Data.Maybe (catMaybes)
 import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
-import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, ChainSyncCommand, ChainSyncQuery, RuntimeChainSeekServerT)
+import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, ChainSyncCommand, ChainSyncQuery, RuntimeChainSeekServer)
 import Language.Marlowe.Runtime.ChainSync.Database (DatabaseQueries (..))
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL (QuerySelector)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as DB
@@ -30,12 +29,9 @@ import Language.Marlowe.Runtime.ChainSync.JobServer (ChainSyncJobServerDependenc
 import Language.Marlowe.Runtime.ChainSync.NodeClient (NodeClientSelector (..))
 import Language.Marlowe.Runtime.ChainSync.QueryServer (ChainSyncQueryServerDependencies (..), chainSyncQueryServer)
 import Language.Marlowe.Runtime.ChainSync.Server (ChainSyncServerDependencies (..), chainSyncServer)
-import qualified Network.Protocol.ChainSeek.Types as ChainSeek
 import Network.Protocol.Connection (ServerSource (..))
-import Network.Protocol.Job.Server (JobServerT)
-import qualified Network.Protocol.Job.Types as Job
-import Network.Protocol.Query.Server (QueryServerT)
-import Network.Protocol.Query.Types (Tree)
+import Network.Protocol.Job.Server (JobServer)
+import Network.Protocol.Query.Server (QueryServer)
 import Numeric.Natural (Natural)
 import Observe.Event.Render.OpenTelemetry (OTelRendered (..), RenderSelectorOTel)
 import OpenTelemetry.Trace.Core (SpanKind (..), toAttribute)
@@ -60,9 +56,9 @@ data ChainSyncDependencies m = ChainSyncDependencies
   }
 
 data ChainSync m = ChainSync
-  { syncServerSource :: ServerSource (RuntimeChainSeekServerT 'ChainSeek.StIdle 'ChainSeek.StDone) m ()
-  , queryServerSource :: ServerSource (QueryServerT (Tree ChainSyncQuery)) m ()
-  , jobServerSource :: ServerSource (JobServerT ChainSyncCommand 'Job.StInit 'Job.StDone) m ()
+  { syncServerSource :: ServerSource RuntimeChainSeekServer m ()
+  , queryServerSource :: ServerSource (QueryServer ChainSyncQuery) m ()
+  , jobServerSource :: ServerSource (JobServer ChainSyncCommand) m ()
   , probes :: Probes
   }
 
