@@ -63,7 +63,6 @@ import qualified Data.ByteString.Char8 as BS
 import Data.Function (on)
 import Data.Functor (($>))
 import Data.Hashable (Hashable)
-import Data.Kind (Type)
 import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -80,17 +79,22 @@ import Data.Text.Encoding (encodeUtf8)
 import Data.Time (UTCTime (..), diffTimeToPicoseconds, picosecondsToDiffTime)
 import Data.Time.Calendar.OrdinalDate (fromOrdinalDateValid, toOrdinalDate)
 import Data.Traversable (for)
-import Data.Type.Equality (TestEquality (..), type (:~:) (..))
+import Data.Type.Equality (type (:~:) (Refl))
 import qualified Data.Vector as Vector
-import Data.Word (Word16, Word32, Word64)
+import Data.Void (Void, absurd)
+import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)
 import GHC.Natural (Natural)
+import GHC.Show (showSpace)
 import Language.Marlowe.Runtime.Cardano.Feature (hush)
+import Network.Protocol.ChainSeek.Client
+import Network.Protocol.ChainSeek.Server
+import Network.Protocol.ChainSeek.Types
 import qualified Network.Protocol.ChainSeek.Types as ChainSeek
 import Network.Protocol.Codec.Spec
 import Network.Protocol.Handshake.Types (HasSignature (..))
 import qualified Network.Protocol.Job.Types as Job
-import Network.Protocol.Peer.Monad (ClientT, ServerT)
+import Network.Protocol.Query.Types (OTelRequest (reqTypeName))
 import qualified Network.Protocol.Query.Types as Query
 import Ouroboros.Consensus.BlockchainTime (RelativeTime, SlotLength, SystemStart (..))
 import Ouroboros.Consensus.HardFork.History (
@@ -691,199 +695,246 @@ data IntersectError = IntersectionNotFound
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary, ToJSON, Variations)
 
-data ChainSyncMove
-  = AdvanceBlocks
-  | Intersect
-  | FindConsumingTxs
-  | FindTx
-  | FindTxsFor
-  | AdvanceToTip
-  deriving stock (Show, Read, Eq, Ord, Bounded, Enum, Generic)
-  deriving anyclass (Binary, Variations)
+-- | The 'query' type for the Marlowe Chain Sync.
+data Move err result where
+  -- | Advance a fixed number of blocks without collecting any results..
+  AdvanceBlocks :: Natural -> Move Void ()
+  -- | Jump to the latest intersection from a list of known block headers
+  -- without collecting any results.
+  Intersect :: [BlockHeader] -> Move IntersectError ()
+  -- | Advance to the block when a tx out is consumed and collect the tx that
+  -- consumes the tx out.
+  FindConsumingTxs :: Set TxOutRef -> Move (Map TxOutRef UTxOError) (Map TxOutRef Transaction)
+  -- | Advance to the block containing a transaction. The boolean flag
+  -- indicates whether or not to wait for the transaction to be produced.
+  FindTx :: TxId -> Bool -> Move TxError Transaction
+  -- | Advance to the block containing transactions that send or consume outputs
+  -- to any addresses with the requested credentials.
+  FindTxsFor :: NESet Credential -> Move Void (Set Transaction)
+  -- | Advances to the tip block. Waits if already at the tip.
+  AdvanceToTip :: Move Void ()
 
-instance HasSignature ChainSyncMove where
-  signature _ = "ChainSyncMove"
+instance HasSignature Move where
+  signature _ = "Move"
 
-instance ChainSeek.TagKind ChainSyncMove where
-  data Tag t where
-    TagAdvanceBlocks :: ChainSeek.Tag 'AdvanceBlocks
-    TagIntersect :: ChainSeek.Tag 'Intersect
-    TagFindConsumingTxs :: ChainSeek.Tag 'FindConsumingTxs
-    TagFindTx :: ChainSeek.Tag 'FindTx
-    TagFindTxsFor :: ChainSeek.Tag 'FindTxsFor
-    TagAdvanceToTip :: ChainSeek.Tag 'AdvanceToTip
+deriving instance Show (Move err result)
+deriving instance Eq (Move err result)
+deriving instance Ord (Move err result)
 
-  data Move t where
-    MoveAdvanceBlocks :: Natural -> ChainSeek.Move 'AdvanceBlocks
-    MoveIntersect :: [BlockHeader] -> ChainSeek.Move 'Intersect
-    MoveFindConsumingTxs :: Set TxOutRef -> ChainSeek.Move 'FindConsumingTxs
-    MoveFindTx :: TxId -> Bool -> ChainSeek.Move 'FindTx
-    MoveFindTxsFor :: NESet Credential -> ChainSeek.Move 'FindTxsFor
-    MoveAdvanceToTip :: ChainSeek.Move 'AdvanceToTip
-
-  data SeekResult t where
-    ResAdvanceBlocks :: ChainSeek.SeekResult 'AdvanceBlocks
-    ResIntersect :: ChainSeek.SeekResult 'Intersect
-    ResFindConsumingTxs :: Map TxOutRef Transaction -> ChainSeek.SeekResult 'FindConsumingTxs
-    ResFindTx :: Transaction -> ChainSeek.SeekResult 'FindTx
-    ResFindTxsFor :: Set Transaction -> ChainSeek.SeekResult 'FindTxsFor
-    ResAdvanceToTip :: ChainSeek.SeekResult 'AdvanceToTip
-
-  data SeekError t where
-    ErrIntersect :: IntersectError -> ChainSeek.SeekError 'Intersect
-    ErrFindConsumingTxs :: Map TxOutRef UTxOError -> ChainSeek.SeekError 'FindConsumingTxs
-    ErrFindTx :: TxError -> ChainSeek.SeekError 'FindTx
-
-  withSingTag = \case
-    TagAdvanceBlocks -> id
-    TagIntersect -> id
-    TagFindConsumingTxs -> id
-    TagFindTx -> id
-    TagFindTxsFor -> id
-    TagAdvanceToTip -> id
-
-  moveTag = \case
-    MoveAdvanceBlocks{} -> TagAdvanceBlocks
-    MoveIntersect{} -> TagIntersect
-    MoveFindConsumingTxs{} -> TagFindConsumingTxs
-    MoveFindTx{} -> TagFindTx
-    MoveFindTxsFor{} -> TagFindTxsFor
-    MoveAdvanceToTip{} -> TagAdvanceToTip
-
-  fromTag = \case
-    TagAdvanceBlocks -> AdvanceBlocks
-    TagIntersect -> Intersect
-    TagFindConsumingTxs -> FindConsumingTxs
-    TagFindTx -> FindTx
-    TagFindTxsFor -> FindTxsFor
-    TagAdvanceToTip -> AdvanceToTip
-
-  toTag = \case
-    AdvanceBlocks -> ChainSeek.SomeTag TagAdvanceBlocks
-    Intersect -> ChainSeek.SomeTag TagIntersect
-    FindConsumingTxs -> ChainSeek.SomeTag TagFindConsumingTxs
-    FindTx -> ChainSeek.SomeTag TagFindTx
-    FindTxsFor -> ChainSeek.SomeTag TagFindTxsFor
-    AdvanceToTip -> ChainSeek.SomeTag TagAdvanceToTip
-
-instance ChainSeek.SingTag 'AdvanceBlocks where singTag = TagAdvanceBlocks
-instance ChainSeek.SingTag 'Intersect where singTag = TagIntersect
-instance ChainSeek.SingTag 'FindConsumingTxs where singTag = TagFindConsumingTxs
-instance ChainSeek.SingTag 'FindTx where singTag = TagFindTx
-instance ChainSeek.SingTag 'FindTxsFor where singTag = TagFindTxsFor
-instance ChainSeek.SingTag 'AdvanceToTip where singTag = TagAdvanceToTip
-
-deriving instance Show (ChainSeek.Tag (t :: ChainSyncMove))
-deriving instance Eq (ChainSeek.Tag (t :: ChainSyncMove))
-deriving instance Ord (ChainSeek.Tag (t :: ChainSyncMove))
-deriving instance Show (ChainSeek.Move (t :: ChainSyncMove))
-deriving instance Eq (ChainSeek.Move (t :: ChainSyncMove))
-deriving instance Ord (ChainSeek.Move (t :: ChainSyncMove))
-deriving instance Show (ChainSeek.SeekResult (t :: ChainSyncMove))
-deriving instance Eq (ChainSeek.SeekResult (t :: ChainSyncMove))
-deriving instance Ord (ChainSeek.SeekResult (t :: ChainSyncMove))
-deriving instance Show (ChainSeek.SeekError (t :: ChainSyncMove))
-deriving instance Eq (ChainSeek.SeekError (t :: ChainSyncMove))
-deriving instance Ord (ChainSeek.SeekError (t :: ChainSyncMove))
-
-instance TestEquality (ChainSeek.Tag :: ChainSyncMove -> Type) where
-  testEquality = \case
-    TagAdvanceBlocks -> \case
-      TagAdvanceBlocks -> Just Refl
-      _ -> Nothing
-    TagIntersect -> \case
-      TagIntersect -> Just Refl
-      _ -> Nothing
-    TagFindConsumingTxs -> \case
-      TagFindConsumingTxs -> Just Refl
-      _ -> Nothing
-    TagFindTx -> \case
-      TagFindTx -> Just Refl
-      _ -> Nothing
-    TagFindTxsFor -> \case
-      TagFindTxsFor -> Just Refl
-      _ -> Nothing
-    TagAdvanceToTip -> \case
-      TagAdvanceToTip -> Just Refl
-      _ -> Nothing
-
-instance ChainSeek.EqTagKind ChainSyncMove
-instance ChainSeek.ShowTagKind ChainSyncMove
-
-instance ChainSeek.VariationsTagKind ChainSyncMove where
-  moveVariations = \case
-    TagAdvanceBlocks -> MoveAdvanceBlocks <$> variations
-    TagIntersect -> MoveIntersect <$> variations
-    TagFindConsumingTxs -> MoveFindConsumingTxs <$> variations
-    TagFindTx -> MoveFindTx <$> variations `varyAp` variations
-    TagFindTxsFor -> MoveFindTxsFor <$> variations
-    TagAdvanceToTip -> pure MoveAdvanceToTip
-  errorVariations = \case
+instance ChainSeek.QueryVariations Move where
+  tags =
+    NE.fromList
+      [ ChainSeek.SomeTag TagAdvanceBlocks
+      , ChainSeek.SomeTag TagIntersect
+      , ChainSeek.SomeTag TagFindConsumingTxs
+      , ChainSeek.SomeTag TagFindTx
+      , ChainSeek.SomeTag TagFindTxsFor
+      , ChainSeek.SomeTag TagAdvanceToTip
+      ]
+  queryVariations = \case
+    TagAdvanceBlocks -> AdvanceBlocks <$> variations
+    TagIntersect -> Intersect <$> variations
+    TagFindConsumingTxs -> FindConsumingTxs <$> variations
+    TagFindTx -> FindTx <$> variations `varyAp` variations
+    TagFindTxsFor -> FindTxsFor <$> variations
+    TagAdvanceToTip -> pure AdvanceToTip
+  errVariations = \case
     TagAdvanceBlocks -> []
-    TagIntersect -> ErrIntersect <$> NE.toList variations
-    TagFindConsumingTxs -> ErrFindConsumingTxs <$> NE.toList variations
-    TagFindTx -> ErrFindTx <$> NE.toList variations
+    TagIntersect -> NE.toList variations
+    TagFindConsumingTxs -> NE.toList variations
+    TagFindTx -> NE.toList variations
     TagFindTxsFor -> []
     TagAdvanceToTip -> []
   resultVariations = \case
-    TagAdvanceBlocks -> pure ResAdvanceBlocks
-    TagIntersect -> pure ResIntersect
-    TagFindConsumingTxs -> ResFindConsumingTxs <$> variations
-    TagFindTx -> ResFindTx <$> variations
-    TagFindTxsFor -> ResFindTxsFor <$> variations
-    TagAdvanceToTip -> pure ResAdvanceToTip
+    TagAdvanceBlocks -> variations
+    TagIntersect -> variations
+    TagFindConsumingTxs -> variations
+    TagFindTx -> variations
+    TagFindTxsFor -> variations
+    TagAdvanceToTip -> variations
 
-type RuntimeChainSeek = ChainSeek.ChainSeek ChainSyncMove ChainPoint ChainPoint
+type RuntimeChainSeek = ChainSeek Move ChainPoint ChainPoint
 
-type RuntimeChainSeekClientT = ClientT RuntimeChainSeek
+type RuntimeChainSeekClient = ChainSeekClient Move ChainPoint ChainPoint
 
-type RuntimeChainSeekServerT = ServerT RuntimeChainSeek
+type RuntimeChainSeekServer = ChainSeekServer Move ChainPoint ChainPoint
 
-instance ChainSeek.BinaryTagKind ChainSyncMove where
-  putMove = \case
-    MoveAdvanceBlocks blocks -> put blocks
-    MoveIntersect points -> put points
-    MoveFindTx txId wait -> put txId *> put wait
-    MoveFindConsumingTxs utxos -> put utxos
-    MoveAdvanceToTip -> mempty
-    MoveFindTxsFor credentials -> put $ NESet.toList credentials
+instance Query Move where
+  data Tag Move err result where
+    TagAdvanceBlocks :: Tag Move Void ()
+    TagIntersect :: Tag Move IntersectError ()
+    TagFindTx :: Tag Move TxError Transaction
+    TagFindConsumingTxs :: Tag Move (Map TxOutRef UTxOError) (Map TxOutRef Transaction)
+    TagFindTxsFor :: Tag Move Void (Set Transaction)
+    TagAdvanceToTip :: Tag Move Void ()
 
-  getMove = \case
-    TagAdvanceBlocks -> MoveAdvanceBlocks <$> get
-    TagIntersect -> MoveIntersect <$> get
-    TagFindTx -> MoveFindTx <$> get <*> get
-    TagFindConsumingTxs -> MoveFindConsumingTxs <$> get
-    TagAdvanceToTip -> pure MoveAdvanceToTip
-    TagFindTxsFor -> MoveFindTxsFor . NESet.fromList <$> get
+  tagFromQuery = \case
+    AdvanceBlocks _ -> TagAdvanceBlocks
+    Intersect _ -> TagIntersect
+    FindTx _ _ -> TagFindTx
+    FindConsumingTxs _ -> TagFindConsumingTxs
+    FindTxsFor _ -> TagFindTxsFor
+    AdvanceToTip -> TagAdvanceToTip
 
-  putSeekResult = \case
-    ResAdvanceBlocks -> mempty
-    ResFindTx tx -> put tx
-    ResIntersect -> mempty
-    ResFindConsumingTxs txs -> put txs
-    ResAdvanceToTip -> mempty
-    ResFindTxsFor txs -> put txs
+  tagEq = curry \case
+    (TagAdvanceBlocks, TagAdvanceBlocks) -> Just (Refl, Refl)
+    -- Please don't refactor this to use a single catch-all wildcard pattern.
+    -- The idea of doing it this way is to cause an incomplete pattern match
+    -- warning when a new 'Tag' constructor is added.
+    (TagAdvanceBlocks, _) -> Nothing
+    (TagIntersect, TagIntersect) -> Just (Refl, Refl)
+    (TagIntersect, _) -> Nothing
+    (TagFindTx, TagFindTx) -> Just (Refl, Refl)
+    (TagFindTx, _) -> Nothing
+    (TagFindConsumingTxs, TagFindConsumingTxs) -> Just (Refl, Refl)
+    (TagFindConsumingTxs, _) -> Nothing
+    (TagFindTxsFor, TagFindTxsFor) -> Just (Refl, Refl)
+    (TagFindTxsFor, _) -> Nothing
+    (TagAdvanceToTip, TagAdvanceToTip) -> Just (Refl, Refl)
+    (TagAdvanceToTip, _) -> Nothing
 
-  getSeekResult = \case
-    TagAdvanceBlocks -> pure ResAdvanceBlocks
-    TagFindTx -> ResFindTx <$> get
-    TagIntersect -> pure ResIntersect
-    TagFindConsumingTxs -> ResFindConsumingTxs <$> get
-    TagAdvanceToTip -> pure ResAdvanceToTip
-    TagFindTxsFor -> ResFindTxsFor <$> get
+  putTag = \case
+    TagAdvanceBlocks -> putWord8 0x01
+    TagIntersect -> putWord8 0x02
+    TagFindTx -> putWord8 0x03
+    TagFindConsumingTxs -> putWord8 0x04
+    TagAdvanceToTip -> putWord8 0x05
+    TagFindTxsFor -> putWord8 0x06
 
-  putSeekError = \case
-    ErrFindTx err -> put err
-    ErrIntersect err -> put err
-    ErrFindConsumingTxs err -> put err
+  putQuery = \case
+    AdvanceBlocks blocks -> put blocks
+    Intersect points -> put points
+    FindTx txId wait -> put txId *> put wait
+    FindConsumingTxs utxos -> put utxos
+    AdvanceToTip -> mempty
+    FindTxsFor credentials -> put $ NESet.toList credentials
 
-  getSeekError = \case
-    TagAdvanceBlocks -> fail "advance blocks has no error"
-    TagFindTx -> ErrFindTx <$> get
-    TagIntersect -> ErrIntersect <$> get
-    TagFindConsumingTxs -> ErrFindConsumingTxs <$> get
-    TagFindTxsFor -> fail "find txs for has no error"
-    TagAdvanceToTip -> fail "advance to tip has no error"
+  getTag = do
+    tag <- getWord8
+    case tag of
+      0x01 -> pure $ SomeTag TagAdvanceBlocks
+      0x02 -> pure $ SomeTag TagIntersect
+      0x03 -> pure $ SomeTag TagFindTx
+      0x04 -> pure $ SomeTag TagFindConsumingTxs
+      0x05 -> pure $ SomeTag TagAdvanceToTip
+      0x06 -> pure $ SomeTag TagFindTxsFor
+      _ -> fail $ "Invalid move tag " <> show tag
+
+  getQuery = \case
+    TagAdvanceBlocks -> AdvanceBlocks <$> get
+    TagIntersect -> Intersect <$> get
+    TagFindTx -> FindTx <$> get <*> get
+    TagFindConsumingTxs -> FindConsumingTxs <$> get
+    TagAdvanceToTip -> pure AdvanceToTip
+    TagFindTxsFor -> FindTxsFor . NESet.fromList <$> get
+
+  putResult = \case
+    TagAdvanceBlocks -> mempty
+    TagFindTx -> put
+    TagIntersect -> mempty
+    TagFindConsumingTxs -> put
+    TagAdvanceToTip -> mempty
+    TagFindTxsFor -> put
+
+  getResult = \case
+    TagAdvanceBlocks -> pure ()
+    TagFindTx -> get
+    TagIntersect -> pure ()
+    TagFindConsumingTxs -> get
+    TagAdvanceToTip -> pure ()
+    TagFindTxsFor -> get
+
+  putErr = \case
+    TagAdvanceBlocks -> put
+    TagFindTx -> put
+    TagIntersect -> put
+    TagFindConsumingTxs -> put
+    TagFindTxsFor -> put
+    TagAdvanceToTip -> put
+
+  getErr = \case
+    TagAdvanceBlocks -> get
+    TagFindTx -> get
+    TagIntersect -> get
+    TagFindConsumingTxs -> get
+    TagFindTxsFor -> get
+    TagAdvanceToTip -> get
+
+instance ChainSeek.ShowQuery Move where
+  showsPrecTag _ =
+    showString . \case
+      TagAdvanceBlocks -> "TagAdvanceBlocks"
+      TagIntersect -> "TagIntersect"
+      TagFindConsumingTxs -> "TagFindConsumingTxs"
+      TagFindTx -> "TagFindTx"
+      TagFindTxsFor -> "TagFindTxsFor"
+      TagAdvanceToTip -> "TagAdvanceToTip"
+
+  showsPrecQuery p = \case
+    AdvanceBlocks blocks ->
+      showParen
+        (p >= 11)
+        ( showString "AdvanceBlocks"
+            . showSpace
+            . showsPrec 11 blocks
+        )
+    Intersect blocks ->
+      showParen
+        (p >= 11)
+        ( showString "Intersect"
+            . showSpace
+            . showsPrec 11 blocks
+        )
+    FindConsumingTxs txOuts ->
+      showParen
+        (p >= 11)
+        ( showString "FindConsumingTxs"
+            . showSpace
+            . showsPrec 11 txOuts
+        )
+    FindTx wait txId ->
+      showParen
+        (p >= 11)
+        ( showString "FindTx"
+            . showSpace
+            . showsPrec 11 wait
+            . showSpace
+            . showsPrec 11 txId
+        )
+    FindTxsFor credentials ->
+      showParen
+        (p >= 11)
+        ( showString "FindTxsFor"
+            . showSpace
+            . showsPrec 11 credentials
+        )
+    AdvanceToTip -> showString "AdvanceToTip"
+
+  showsPrecErr p = \case
+    TagAdvanceBlocks -> showsPrec p
+    TagIntersect -> showsPrec p
+    TagFindConsumingTxs -> showsPrec p
+    TagFindTx -> showsPrec p
+    TagFindTxsFor -> showsPrec p
+    TagAdvanceToTip -> showsPrec p
+
+  showsPrecResult p = \case
+    TagAdvanceBlocks -> showsPrec p
+    TagIntersect -> showsPrec p
+    TagFindConsumingTxs -> showsPrec p
+    TagFindTx -> showsPrec p
+    TagFindTxsFor -> showsPrec p
+    TagAdvanceToTip -> showsPrec p
+
+instance ChainSeek.OTelQuery Move where
+  queryTypeName _ = "marlowe_chain_sync_query"
+  queryName = \case
+    TagAdvanceBlocks -> "advance_blocks"
+    TagIntersect -> "intersect"
+    TagFindConsumingTxs -> "find_consuming_txs"
+    TagFindTx -> "find_tx"
+    TagFindTxsFor -> "find_txs_for"
+    TagAdvanceToTip -> "advance_to_tip"
 
 instance Binary UTCTime where
   put UTCTime{..} = do
@@ -905,7 +956,7 @@ data GetUTxOsQuery
   = GetUTxOsAtAddresses (Set Address)
   | GetUTxOsForTxOutRefs (Set TxOutRef)
   deriving (Show, Eq, Ord, Generic)
-  deriving anyclass (Variations, Binary)
+  deriving anyclass (Variations)
 
 -- Semigroup and Monoid seem to be safe - we cover here a subset of a partial function.
 newtype UTxOs = UTxOs {unUTxOs :: Map TxOutRef TransactionOutput}
@@ -929,142 +980,16 @@ data UTxO = UTxO
 toUTxOTuple :: UTxO -> (TxOutRef, TransactionOutput)
 toUTxOTuple (UTxO txOutRef transactionOutput) = (txOutRef, transactionOutput)
 
-data ChainSyncQuery
-  = GetSecurityParameter
-  | GetNetworkId
-  | GetProtocolParameters
-  | GetSystemStart
-  | GetEraHistory
-  | GetUTxOs
-  | GetNodeTip
-  | GetTip
-  | GetEra
-  deriving stock (Show, Read, Eq, Ord, Bounded, Enum, Generic)
-  deriving anyclass (Binary, Variations)
-
-instance HasSignature ChainSyncQuery where
-  signature _ = "ChainSyncQuery"
-
-instance Query.TagKind ChainSyncQuery where
-  data Tag t where
-    TagGetSecurityParameter :: Query.Tag 'GetSecurityParameter
-    TagGetNetworkId :: Query.Tag 'GetNetworkId
-    TagGetProtocolParameters :: Query.Tag 'GetProtocolParameters
-    TagGetSystemStart :: Query.Tag 'GetSystemStart
-    TagGetEraHistory :: Query.Tag 'GetEraHistory
-    TagGetUTxOs :: Query.Tag 'GetUTxOs
-    TagGetNodeTip :: Query.Tag 'GetNodeTip
-    TagGetTip :: Query.Tag 'GetTip
-    TagGetEra :: Query.Tag 'GetEra
-
-  data Request t where
-    ReqGetSecurityParameter :: Query.Request 'GetSecurityParameter
-    ReqGetNetworkId :: Query.Request 'GetNetworkId
-    ReqGetProtocolParameters :: Query.Request 'GetProtocolParameters
-    ReqGetSystemStart :: Query.Request 'GetSystemStart
-    ReqGetEraHistory :: Query.Request 'GetEraHistory
-    ReqGetUTxOs :: GetUTxOsQuery -> Query.Request 'GetUTxOs
-    ReqGetNodeTip :: Query.Request 'GetNodeTip
-    ReqGetTip :: Query.Request 'GetTip
-    ReqGetEra :: Query.Request 'GetEra
-
-  data Response t where
-    ResGetSecurityParameter :: Int -> Query.Response 'GetSecurityParameter
-    ResGetNetworkId :: NetworkId -> Query.Response 'GetNetworkId
-    ResGetProtocolParameters :: ProtocolParameters -> Query.Response 'GetProtocolParameters
-    ResGetSystemStart :: SystemStart -> Query.Response 'GetSystemStart
-    ResGetEraHistory :: EraHistory CardanoMode -> Query.Response 'GetEraHistory
-    ResGetUTxOs :: UTxOs -> Query.Response 'GetUTxOs
-    ResGetNodeTip :: ChainPoint -> Query.Response 'GetNodeTip
-    ResGetTip :: ChainPoint -> Query.Response 'GetTip
-    ResGetEra :: AnyCardanoEra -> Query.Response 'GetEra
-
-  withSingTag = \case
-    TagGetSecurityParameter -> id
-    TagGetNetworkId -> id
-    TagGetProtocolParameters -> id
-    TagGetSystemStart -> id
-    TagGetEraHistory -> id
-    TagGetUTxOs -> id
-    TagGetNodeTip -> id
-    TagGetTip -> id
-    TagGetEra -> id
-
-  requestTag = \case
-    ReqGetSecurityParameter -> TagGetSecurityParameter
-    ReqGetNetworkId -> TagGetNetworkId
-    ReqGetProtocolParameters -> TagGetProtocolParameters
-    ReqGetSystemStart -> TagGetSystemStart
-    ReqGetEraHistory -> TagGetEraHistory
-    ReqGetUTxOs{} -> TagGetUTxOs
-    ReqGetNodeTip -> TagGetNodeTip
-    ReqGetTip -> TagGetTip
-    ReqGetEra -> TagGetEra
-
-  fromTag = \case
-    TagGetSecurityParameter -> GetSecurityParameter
-    TagGetNetworkId -> GetNetworkId
-    TagGetProtocolParameters -> GetProtocolParameters
-    TagGetSystemStart -> GetSystemStart
-    TagGetEraHistory -> GetEraHistory
-    TagGetUTxOs -> GetUTxOs
-    TagGetNodeTip -> GetNodeTip
-    TagGetTip -> GetTip
-    TagGetEra -> GetEra
-
-  toTag = \case
-    GetSecurityParameter -> Query.SomeTag TagGetSecurityParameter
-    GetNetworkId -> Query.SomeTag TagGetNetworkId
-    GetProtocolParameters -> Query.SomeTag TagGetProtocolParameters
-    GetSystemStart -> Query.SomeTag TagGetSystemStart
-    GetEraHistory -> Query.SomeTag TagGetEraHistory
-    GetUTxOs -> Query.SomeTag TagGetUTxOs
-    GetNodeTip -> Query.SomeTag TagGetNodeTip
-    GetTip -> Query.SomeTag TagGetTip
-    GetEra -> Query.SomeTag TagGetEra
-
-instance Query.SingTag 'GetSecurityParameter where singTag = TagGetSecurityParameter
-instance Query.SingTag 'GetNetworkId where singTag = TagGetNetworkId
-instance Query.SingTag 'GetProtocolParameters where singTag = TagGetProtocolParameters
-instance Query.SingTag 'GetSystemStart where singTag = TagGetSystemStart
-instance Query.SingTag 'GetEraHistory where singTag = TagGetEraHistory
-instance Query.SingTag 'GetUTxOs where singTag = TagGetUTxOs
-instance Query.SingTag 'GetNodeTip where singTag = TagGetNodeTip
-instance Query.SingTag 'GetTip where singTag = TagGetTip
-instance Query.SingTag 'GetEra where singTag = TagGetEra
-
-deriving instance Show (Query.Tag (t :: ChainSyncQuery))
-deriving instance Eq (Query.Tag (t :: ChainSyncQuery))
-deriving instance Ord (Query.Tag (t :: ChainSyncQuery))
-deriving instance Show (Query.Request (t :: ChainSyncQuery))
-deriving instance Eq (Query.Request (t :: ChainSyncQuery))
-deriving instance Ord (Query.Request (t :: ChainSyncQuery))
-deriving instance Show (Query.Response (t :: ChainSyncQuery))
-deriving instance Eq (Query.Response (t :: ChainSyncQuery))
-
-instance TestEquality (Query.Tag :: ChainSyncQuery -> Type) where
-  testEquality TagGetSecurityParameter TagGetSecurityParameter = Just Refl
-  testEquality TagGetSecurityParameter _ = Nothing
-  testEquality TagGetNetworkId TagGetNetworkId = Just Refl
-  testEquality TagGetNetworkId _ = Nothing
-  testEquality TagGetProtocolParameters TagGetProtocolParameters = Just Refl
-  testEquality TagGetProtocolParameters _ = Nothing
-  testEquality TagGetEraHistory TagGetEraHistory = Just Refl
-  testEquality TagGetEraHistory _ = Nothing
-  testEquality TagGetSystemStart TagGetSystemStart = Just Refl
-  testEquality TagGetSystemStart _ = Nothing
-  testEquality TagGetUTxOs TagGetUTxOs = Just Refl
-  testEquality TagGetUTxOs _ = Nothing
-  testEquality TagGetNodeTip TagGetNodeTip = Just Refl
-  testEquality TagGetNodeTip _ = Nothing
-  testEquality TagGetTip TagGetTip = Just Refl
-  testEquality TagGetTip _ = Nothing
-  testEquality TagGetEra TagGetEra = Just Refl
-  testEquality TagGetEra _ = Nothing
-
-deriving instance Show (EraHistory CardanoMode)
-deriving instance Eq (EraHistory CardanoMode)
-deriving instance Eq (ConsensusMode a)
+data ChainSyncQuery a where
+  GetSecurityParameter :: ChainSyncQuery Int
+  GetNetworkId :: ChainSyncQuery NetworkId
+  GetProtocolParameters :: ChainSyncQuery ProtocolParameters
+  GetSystemStart :: ChainSyncQuery SystemStart
+  GetEraHistory :: ChainSyncQuery (EraHistory CardanoMode)
+  GetUTxOs :: GetUTxOsQuery -> ChainSyncQuery UTxOs
+  GetNodeTip :: ChainSyncQuery ChainPoint
+  GetTip :: ChainSyncQuery ChainPoint
+  GetEra :: ChainSyncQuery AnyCardanoEra
 
 instance Ord AnyCardanoEra where
   compare = on compare fromEnum
@@ -1083,208 +1008,318 @@ instance Binary AnyCardanoEra where
       6 -> pure $ AnyCardanoEra ConwayEra
       _ -> fail $ "Invalid era tag: " <> show tag
 
-instance Query.VariationsTagKind ChainSyncQuery where
+deriving instance Show (ChainSyncQuery a)
+deriving instance Eq (ChainSyncQuery a)
+
+instance HasSignature ChainSyncQuery where
+  signature _ = "ChainSyncQuery"
+
+instance Query.RequestVariations ChainSyncQuery where
+  tagVariations =
+    NE.fromList
+      [ Query.SomeTag TagGetSecurityParameter
+      , Query.SomeTag TagGetNetworkId
+      , Query.SomeTag TagGetProtocolParameters
+      , Query.SomeTag TagGetSystemStart
+      , Query.SomeTag TagGetEraHistory
+      , Query.SomeTag TagGetUTxOs
+      , Query.SomeTag TagGetNodeTip
+      , Query.SomeTag TagGetTip
+      , Query.SomeTag TagGetEra
+      ]
   requestVariations = \case
-    TagGetSecurityParameter -> pure ReqGetSecurityParameter
-    TagGetNetworkId -> pure ReqGetNetworkId
-    TagGetProtocolParameters -> pure ReqGetProtocolParameters
-    TagGetSystemStart -> pure ReqGetSystemStart
-    TagGetEraHistory -> pure ReqGetEraHistory
-    TagGetUTxOs -> ReqGetUTxOs <$> variations
-    TagGetNodeTip -> pure ReqGetNodeTip
-    TagGetTip -> pure ReqGetTip
-    TagGetEra -> pure ReqGetEra
+    TagGetSecurityParameter -> pure GetSecurityParameter
+    TagGetNetworkId -> pure GetNetworkId
+    TagGetProtocolParameters -> pure GetProtocolParameters
+    TagGetSystemStart -> pure GetSystemStart
+    TagGetEraHistory -> pure GetEraHistory
+    TagGetUTxOs -> GetUTxOs <$> variations
+    TagGetNodeTip -> pure GetNodeTip
+    TagGetTip -> pure GetTip
+    TagGetEra -> pure GetEra
+  resultVariations = \case
+    TagGetSecurityParameter -> variations
+    TagGetNetworkId -> Mainnet NE.:| [Testnet $ NetworkMagic 0]
+    TagGetProtocolParameters -> variations
+    TagGetSystemStart -> SystemStart <$> variations
+    TagGetEraHistory -> variations
+    TagGetUTxOs -> variations
+    TagGetNodeTip -> variations
+    TagGetTip -> variations
+    TagGetEra -> variations
 
-  responseVariations = \case
-    TagGetSecurityParameter -> ResGetSecurityParameter <$> variations
-    TagGetNetworkId -> ResGetNetworkId <$> Mainnet NE.:| [Testnet $ NetworkMagic 0]
-    TagGetProtocolParameters -> ResGetProtocolParameters <$> variations
-    TagGetSystemStart -> ResGetSystemStart . SystemStart <$> variations
-    TagGetEraHistory -> ResGetEraHistory <$> variations
-    TagGetUTxOs -> ResGetUTxOs <$> variations
-    TagGetNodeTip -> ResGetNodeTip <$> variations
-    TagGetTip -> ResGetTip <$> variations
-    TagGetEra -> ResGetEra <$> variations
+instance Query.Request ChainSyncQuery where
+  data Tag ChainSyncQuery result where
+    TagGetSecurityParameter :: Query.Tag ChainSyncQuery Int
+    TagGetNetworkId :: Query.Tag ChainSyncQuery NetworkId
+    TagGetProtocolParameters :: Query.Tag ChainSyncQuery ProtocolParameters
+    TagGetSystemStart :: Query.Tag ChainSyncQuery SystemStart
+    TagGetEraHistory :: Query.Tag ChainSyncQuery (EraHistory CardanoMode)
+    TagGetUTxOs :: Query.Tag ChainSyncQuery UTxOs
+    TagGetNodeTip :: Query.Tag ChainSyncQuery ChainPoint
+    TagGetTip :: Query.Tag ChainSyncQuery ChainPoint
+    TagGetEra :: Query.Tag ChainSyncQuery AnyCardanoEra
+  tagEq TagGetSecurityParameter TagGetSecurityParameter = Just Refl
+  tagEq TagGetSecurityParameter _ = Nothing
+  tagEq TagGetNetworkId TagGetNetworkId = Just Refl
+  tagEq TagGetNetworkId _ = Nothing
+  tagEq TagGetProtocolParameters TagGetProtocolParameters = Just Refl
+  tagEq TagGetProtocolParameters _ = Nothing
+  tagEq TagGetEraHistory TagGetEraHistory = Just Refl
+  tagEq TagGetEraHistory _ = Nothing
+  tagEq TagGetSystemStart TagGetSystemStart = Just Refl
+  tagEq TagGetSystemStart _ = Nothing
+  tagEq TagGetUTxOs TagGetUTxOs = Just Refl
+  tagEq TagGetUTxOs _ = Nothing
+  tagEq TagGetNodeTip TagGetNodeTip = Just Refl
+  tagEq TagGetNodeTip _ = Nothing
+  tagEq TagGetTip TagGetTip = Just Refl
+  tagEq TagGetTip _ = Nothing
+  tagEq TagGetEra TagGetEra = Just Refl
+  tagEq TagGetEra _ = Nothing
+  tagFromReq = \case
+    GetSecurityParameter -> TagGetSecurityParameter
+    GetNetworkId -> TagGetNetworkId
+    GetProtocolParameters -> TagGetProtocolParameters
+    GetEraHistory -> TagGetEraHistory
+    GetSystemStart -> TagGetSystemStart
+    GetUTxOs _ -> TagGetUTxOs
+    GetNodeTip -> TagGetNodeTip
+    GetTip -> TagGetTip
+    GetEra -> TagGetEra
 
-instance Query.BinaryTagKind ChainSyncQuery where
-  putRequest = \case
-    ReqGetSecurityParameter -> mempty
-    ReqGetNetworkId -> mempty
-    ReqGetProtocolParameters -> mempty
-    ReqGetSystemStart -> mempty
-    ReqGetEraHistory -> mempty
-    ReqGetUTxOs q -> put q
-    ReqGetNodeTip -> mempty
-    ReqGetTip -> mempty
-    ReqGetEra -> mempty
+deriving instance Show (Query.Tag ChainSyncQuery a)
+deriving instance Eq (Query.Tag ChainSyncQuery a)
 
-  getRequest = \case
-    TagGetSecurityParameter -> pure ReqGetSecurityParameter
-    TagGetNetworkId -> pure ReqGetNetworkId
-    TagGetProtocolParameters -> pure ReqGetProtocolParameters
-    TagGetSystemStart -> pure ReqGetSystemStart
-    TagGetEraHistory -> pure ReqGetEraHistory
-    TagGetUTxOs -> ReqGetUTxOs <$> get
-    TagGetNodeTip -> pure ReqGetNodeTip
-    TagGetTip -> pure ReqGetTip
-    TagGetEra -> pure ReqGetEra
+instance Query.BinaryRequest ChainSyncQuery where
+  putReq = \case
+    GetSecurityParameter -> putWord8 0x01
+    GetNetworkId -> putWord8 0x02
+    GetProtocolParameters -> putWord8 0x03
+    GetSystemStart -> putWord8 0x04
+    GetEraHistory -> putWord8 0x05
+    GetUTxOs q -> do
+      putWord8 0x06
+      case q of
+        (GetUTxOsAtAddresses addresses) -> do
+          putWord8 0x01
+          put addresses
+        (GetUTxOsForTxOutRefs txOutRefs) -> do
+          putWord8 0x02
+          put txOutRefs
+    GetNodeTip -> putWord8 0x07
+    GetTip -> putWord8 0x08
+    GetEra -> putWord8 0x09
+  getReq = do
+    tag <- getWord8
+    case tag of
+      0x01 -> pure $ Query.SomeRequest GetSecurityParameter
+      0x02 -> pure $ Query.SomeRequest GetNetworkId
+      0x03 -> pure $ Query.SomeRequest GetProtocolParameters
+      0x04 -> pure $ Query.SomeRequest GetSystemStart
+      0x05 -> pure $ Query.SomeRequest GetEraHistory
+      0x06 -> do
+        tag' <- getWord8
+        Query.SomeRequest . GetUTxOs <$> case tag' of
+          0x01 -> do
+            GetUTxOsAtAddresses <$> get
+          0x02 -> do
+            GetUTxOsForTxOutRefs <$> get
+          _ -> fail "Invalid GetUTxOsQuery tag"
+      0x07 -> pure $ Query.SomeRequest GetNodeTip
+      0x08 -> pure $ Query.SomeRequest GetTip
+      0x09 -> pure $ Query.SomeRequest GetEra
+      _ -> fail "Invalid ChainSyncQuery tag"
+  putResult = \case
+    TagGetSecurityParameter -> put
+    TagGetNetworkId ->
+      put . \case
+        Mainnet -> Nothing
+        Testnet (NetworkMagic magic) -> Just magic
+    TagGetProtocolParameters -> put . Aeson.encode
+    TagGetEraHistory -> \case
+      EraHistory _ interpreter -> put $ serialise interpreter
+    TagGetSystemStart -> \case
+      SystemStart start -> put start
+    TagGetUTxOs -> put
+    TagGetNodeTip -> put
+    TagGetTip -> put
+    TagGetEra -> put
+  getResult = \case
+    TagGetSecurityParameter -> get
+    TagGetNetworkId -> maybe Mainnet (Testnet . NetworkMagic) <$> get
+    TagGetProtocolParameters -> do
+      bytes <- get
+      case Aeson.decode bytes of
+        Nothing -> fail "failed to decode protocol parameters JSON"
+        Just params -> pure params
+    TagGetEraHistory -> do
+      bytes <- get
+      case deserialiseOrFail bytes of
+        Left err -> fail $ show err
+        Right interpreter -> pure $ EraHistory CardanoMode interpreter
+    TagGetSystemStart -> SystemStart <$> get
+    TagGetUTxOs -> get
+    TagGetNodeTip -> get
+    TagGetTip -> get
+    TagGetEra -> get
 
-  putResponse = \case
-    ResGetSecurityParameter x -> put x
-    ResGetNetworkId Mainnet -> put $ Nothing @Word32
-    ResGetNetworkId (Testnet (NetworkMagic x)) -> put $ Just x
-    ResGetProtocolParameters x -> put $ Aeson.encode x
-    ResGetSystemStart (SystemStart x) -> put x
-    ResGetEraHistory (EraHistory _ x) -> put $ serialise x
-    ResGetUTxOs x -> put x
-    ResGetNodeTip x -> put x
-    ResGetTip x -> put x
-    ResGetEra x -> put x
+instance Query.ShowRequest ChainSyncQuery where
+  showsPrecResult p = \case
+    TagGetSecurityParameter -> showsPrec p
+    TagGetNetworkId -> showsPrec p
+    TagGetProtocolParameters -> showsPrec p
+    TagGetSystemStart -> showsPrec p
+    TagGetEraHistory -> \(EraHistory CardanoMode interpreter) ->
+      showParen
+        (p >= 11)
+        ( showString "EraHistory"
+            . showSpace
+            . showString "CardanoMode"
+            . showSpace
+            . showParen
+              True
+              ( showString "mkInterpreter"
+                  . showSpace
+                  . showsPrec 11 (unInterpreter interpreter)
+              )
+        )
+    TagGetUTxOs -> showsPrec p
+    TagGetNodeTip -> showsPrec p
+    TagGetTip -> showsPrec p
+    TagGetEra -> showsPrec p
 
-  getResponse = \case
-    TagGetSecurityParameter -> ResGetSecurityParameter <$> get
-    TagGetNetworkId -> ResGetNetworkId . maybe Mainnet (Testnet . NetworkMagic) <$> get
-    TagGetProtocolParameters ->
-      ResGetProtocolParameters <$> do
-        bytes <- get
-        case Aeson.decode bytes of
-          Nothing -> fail "failed to decode protocol parameters JSON"
-          Just params -> pure params
-    TagGetSystemStart -> ResGetSystemStart . SystemStart <$> get
-    TagGetEraHistory ->
-      ResGetEraHistory <$> do
-        bytes <- get
-        case deserialiseOrFail bytes of
-          Left err -> fail $ show err
-          Right interpreter -> pure $ EraHistory CardanoMode interpreter
-    TagGetUTxOs -> ResGetUTxOs <$> get
-    TagGetNodeTip -> ResGetNodeTip <$> get
-    TagGetTip -> ResGetTip <$> get
-    TagGetEra -> ResGetEra <$> get
-
-instance Query.ShowTagKind ChainSyncQuery
-instance Query.EqTagKind ChainSyncQuery
+instance Query.OTelRequest ChainSyncQuery where
+  reqTypeName _ = "chain_sync"
+  reqName = \case
+    TagGetSecurityParameter -> "security_parameter"
+    TagGetNetworkId -> "network_id"
+    TagGetProtocolParameters -> "protocol_parameters"
+    TagGetSystemStart -> "system_start"
+    TagGetEraHistory -> "era_history"
+    TagGetUTxOs -> "utxos"
+    TagGetNodeTip -> "node_tip"
+    TagGetTip -> "tip"
+    TagGetEra -> "era"
 
 unInterpreter :: Interpreter xs -> Summary xs
 unInterpreter = unsafeCoerce
 
-data ChainSyncCommand = SubmitTx
-  deriving stock (Show, Read, Eq, Ord, Bounded, Enum, Generic)
-  deriving anyclass (Binary, Variations)
-
-instance Job.TagKind ChainSyncCommand where
-  data Tag t where
-    TagSubmitTx :: Job.Tag 'SubmitTx
-
-  data Command t where
-    CmdSubmitTx :: ScriptDataSupportedInEra era -> Tx era -> Job.Command 'SubmitTx
-
-  data JobError t where
-    ErrSubmitTx :: String -> Job.JobError 'SubmitTx
-
-  data JobResult t where
-    ResSubmitTx :: Job.JobResult 'SubmitTx
-
-  data JobId t
-  data Status t
-
-  withSingTag = \case
-    TagSubmitTx -> id
-
-  commandTag = \case
-    CmdSubmitTx{} -> TagSubmitTx
-
-  jobIdTag = \case {}
-
-  fromTag = \case
-    TagSubmitTx -> SubmitTx
-
-  toTag = \case
-    SubmitTx -> Job.SomeTag TagSubmitTx
-
-instance Job.SingTag 'SubmitTx where singTag = TagSubmitTx
-
-deriving instance Show (Job.Tag (t :: ChainSyncCommand))
-deriving instance Eq (Job.Tag (t :: ChainSyncCommand))
-deriving instance Ord (Job.Tag (t :: ChainSyncCommand))
-deriving instance Show (Job.Command (t :: ChainSyncCommand))
-instance Eq (Job.Command (t :: ChainSyncCommand)) where
-  CmdSubmitTx era tx == CmdSubmitTx era' tx' = case (era, era') of
-    (ScriptDataInAlonzoEra, ScriptDataInAlonzoEra) -> tx == tx'
-    (ScriptDataInAlonzoEra, _) -> False
-    (ScriptDataInBabbageEra, ScriptDataInBabbageEra) -> tx == tx'
-    (ScriptDataInBabbageEra, _) -> False
-    (ScriptDataInConwayEra, ScriptDataInConwayEra) -> tx == tx'
-    (ScriptDataInConwayEra, _) -> False
-deriving instance Show (Job.JobId (t :: ChainSyncCommand))
-deriving instance Eq (Job.JobId (t :: ChainSyncCommand))
-deriving instance Ord (Job.JobId (t :: ChainSyncCommand))
-deriving instance Show (Job.JobResult (t :: ChainSyncCommand))
-deriving instance Eq (Job.JobResult (t :: ChainSyncCommand))
-deriving instance Ord (Job.JobResult (t :: ChainSyncCommand))
-deriving instance Show (Job.JobError (t :: ChainSyncCommand))
-deriving instance Eq (Job.JobError (t :: ChainSyncCommand))
-deriving instance Ord (Job.JobError (t :: ChainSyncCommand))
-deriving instance Show (Job.Status (t :: ChainSyncCommand))
-deriving instance Eq (Job.Status (t :: ChainSyncCommand))
-deriving instance Ord (Job.Status (t :: ChainSyncCommand))
-
-instance TestEquality (Job.Tag :: ChainSyncCommand -> Type) where
-  testEquality TagSubmitTx TagSubmitTx = Just Refl
-
-instance Job.EqTagKind ChainSyncCommand
-instance Job.ShowTagKind ChainSyncCommand
+data ChainSyncCommand status err result where
+  SubmitTx :: ScriptDataSupportedInEra era -> Tx era -> ChainSyncCommand Void String ()
 
 instance HasSignature ChainSyncCommand where
   signature _ = "ChainSyncCommand"
 
-instance Job.BinaryTagKind ChainSyncCommand where
-  putCommand = \case
-    CmdSubmitTx ScriptDataInAlonzoEra tx -> do
+instance Job.Command ChainSyncCommand where
+  data Tag ChainSyncCommand status err result where
+    TagSubmitTx :: ScriptDataSupportedInEra era -> Job.Tag ChainSyncCommand Void String ()
+
+  data JobId ChainSyncCommand status err result
+
+  tagFromCommand = \case
+    SubmitTx era _ -> TagSubmitTx era
+  tagFromJobId = \case {}
+  tagEq (TagSubmitTx era1) (TagSubmitTx era2) = do
+    Refl <- eraEq era1 era2
+    pure (Refl, Refl, Refl)
+  putTag = \case
+    TagSubmitTx era -> do
       putWord8 0x01
-      put $ serialiseToCBOR tx
-    CmdSubmitTx ScriptDataInBabbageEra tx -> do
-      putWord8 0x02
-      put $ serialiseToCBOR tx
-    CmdSubmitTx ScriptDataInConwayEra tx -> do
-      putWord8 0x03
-      put $ serialiseToCBOR tx
-  getCommand = \case
-    TagSubmitTx ->
-      getWord8 >>= \case
-        0x01 ->
-          CmdSubmitTx ScriptDataInAlonzoEra <$> do
-            bytes <- get
-            case deserialiseFromCBOR (AsTx AsAlonzo) bytes of
-              Left err -> fail $ show err
-              Right tx -> pure tx
-        0x02 ->
-          CmdSubmitTx ScriptDataInBabbageEra <$> do
-            bytes <- get
-            case deserialiseFromCBOR (AsTx AsBabbage) bytes of
-              Left err -> fail $ show err
-              Right tx -> pure tx
-        0x03 ->
-          CmdSubmitTx ScriptDataInConwayEra <$> do
-            bytes <- get
-            case deserialiseFromCBOR (AsTx AsConway) bytes of
-              Left err -> fail $ show err
-              Right tx -> pure tx
-        tag -> fail $ "invalid era tag " <> show tag
-  putJobResult = \case
-    ResSubmitTx -> mempty
-  getJobResult = \case
-    TagSubmitTx -> pure ResSubmitTx
-  putJobError = \case
-    ErrSubmitTx err -> put err
-  getJobError = \case
-    TagSubmitTx -> ErrSubmitTx <$> get
-  putStatus = \case {}
-  getStatus = \case
-    TagSubmitTx -> fail "submit tx has no status"
+      case era of
+        ScriptDataInAlonzoEra -> putWord8 0x01
+        ScriptDataInBabbageEra -> putWord8 0x02
+        ScriptDataInConwayEra -> putWord8 0x03
+  getTag =
+    getWord8 >>= \case
+      0x01 ->
+        getWord8 >>= \case
+          0x01 -> pure $ Job.SomeTag $ TagSubmitTx ScriptDataInAlonzoEra
+          0x02 -> pure $ Job.SomeTag $ TagSubmitTx ScriptDataInBabbageEra
+          0x03 -> pure $ Job.SomeTag $ TagSubmitTx ScriptDataInConwayEra
+          tag -> fail $ "invalid era tag " <> show tag
+      tag -> fail $ "invalid command tag " <> show tag
   putJobId = \case {}
   getJobId = \case
-    TagSubmitTx -> fail "submit tx has no job ID"
+    TagSubmitTx _ -> fail "SubmitTx does not support job IDs"
+  putCommand = \case
+    SubmitTx ScriptDataInAlonzoEra tx -> put $ serialiseToCBOR tx
+    SubmitTx ScriptDataInBabbageEra tx -> put $ serialiseToCBOR tx
+    SubmitTx ScriptDataInConwayEra tx -> put $ serialiseToCBOR tx
+  getCommand = \case
+    TagSubmitTx era ->
+      SubmitTx era <$> do
+        bytes <- get @ByteString
+        case era of
+          ScriptDataInAlonzoEra -> case deserialiseFromCBOR (AsTx AsAlonzo) bytes of
+            Left err -> fail $ show err
+            Right tx -> pure tx
+          ScriptDataInBabbageEra -> case deserialiseFromCBOR (AsTx AsBabbage) bytes of
+            Left err -> fail $ show err
+            Right tx -> pure tx
+          ScriptDataInConwayEra -> case deserialiseFromCBOR (AsTx AsConway) bytes of
+            Left err -> fail $ show err
+            Right tx -> pure tx
+  putStatus = \case
+    TagSubmitTx _ -> absurd
+  getStatus = \case
+    TagSubmitTx _ -> fail "SubmitTx does not support job statuses"
+  putErr = \case
+    TagSubmitTx _ -> put
+  getErr = \case
+    TagSubmitTx _ -> get
+  putResult = \case
+    TagSubmitTx _ -> mempty
+  getResult = \case
+    TagSubmitTx _ -> pure ()
+
+instance Job.ShowCommand ChainSyncCommand where
+  showsPrecTag p =
+    showParen (p >= 11) . showString . \case
+      TagSubmitTx ScriptDataInAlonzoEra -> "TagSubmitTx ScriptDataInAlonzoEra"
+      TagSubmitTx ScriptDataInBabbageEra -> "TagSubmitTx ScriptDataInBabbageEra"
+      TagSubmitTx ScriptDataInConwayEra -> "TagSubmitTx ScriptDataInConwayEra"
+  showsPrecCommand p =
+    showParen (p >= 11) . \case
+      SubmitTx ScriptDataInAlonzoEra tx ->
+        ( showString "TagSubmitTx ScriptDataInAlonzoEra"
+            . showSpace
+            . showsPrec p tx
+        )
+      SubmitTx ScriptDataInBabbageEra tx ->
+        ( showString "TagSubmitTx ScriptDataInBabbageEra"
+            . showSpace
+            . showsPrec p tx
+        )
+      SubmitTx ScriptDataInConwayEra tx ->
+        ( showString "TagSubmitTx ScriptDataInConwayEra"
+            . showSpace
+            . showsPrec p tx
+        )
+  showsPrecJobId _ = \case {}
+  showsPrecStatus _ = \case
+    TagSubmitTx _ -> absurd
+  showsPrecErr p = \case
+    TagSubmitTx _ -> showsPrec p
+  showsPrecResult p = \case
+    TagSubmitTx _ -> showsPrec p
+
+instance Job.OTelCommand ChainSyncCommand where
+  commandTypeName _ = "chain_sync"
+  commandName = \case
+    TagSubmitTx era ->
+      "submit_tx/" <> case era of
+        ScriptDataInAlonzoEra -> "alonzo"
+        ScriptDataInBabbageEra -> "babbage"
+        ScriptDataInConwayEra -> "babbage"
+
+eraEq :: ScriptDataSupportedInEra era1 -> ScriptDataSupportedInEra era2 -> Maybe (era1 :~: era2)
+eraEq ScriptDataInAlonzoEra ScriptDataInAlonzoEra = Just Refl
+eraEq ScriptDataInAlonzoEra _ = Nothing
+eraEq ScriptDataInBabbageEra ScriptDataInBabbageEra = Just Refl
+eraEq ScriptDataInBabbageEra _ = Nothing
+eraEq ScriptDataInConwayEra ScriptDataInConwayEra = Just Refl
+eraEq ScriptDataInConwayEra _ = Nothing
 
 -- * Orphan instances
 

@@ -3,7 +3,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Network.Protocol.Codec.Spec where
@@ -28,7 +27,6 @@ import Data.Text (Text)
 import qualified Data.Text.Lazy as TL
 import Data.Time (Day, DiffTime, NominalDiffTime, UTCTime (..), secondsToDiffTime, secondsToNominalDiffTime)
 import Data.Time.Calendar.OrdinalDate (fromOrdinalDate)
-import Data.Type.Equality ((:~:) (Refl))
 import Data.Version (Version)
 import Data.Word
 import GHC.Generics
@@ -57,27 +55,8 @@ class ShowProtocol ps where
   default showsPrecClientHasAgency :: forall (st :: ps). (Show (ClientHasAgency st)) => Int -> ClientHasAgency st -> ShowS
   showsPrecClientHasAgency = showsPrec
 
-class TestMessageEquality ps where
-  testMessageEquality
-    :: PeerHasAgency pr a
-    -> PeerHasAgency pr' a'
-    -> Message ps a b
-    -> Message ps a' b'
-    -> Maybe (pr :~: pr', a :~: a', b :~: b')
-
 class MessageEq ps where
   messageEq :: AnyMessageAndAgency ps -> AnyMessageAndAgency ps -> Bool
-  default messageEq
-    :: ( TestMessageEquality ps
-       , forall st st'. Eq (Message ps st st')
-       )
-    => AnyMessageAndAgency ps
-    -> AnyMessageAndAgency ps
-    -> Bool
-  messageEq (AnyMessageAndAgency tok msg) (AnyMessageAndAgency tok' msg') =
-    case testMessageEquality tok tok' msg msg' of
-      Nothing -> False
-      Just (Refl, Refl, Refl) -> msg == msg'
 
 class ArbitraryMessage ps where
   arbitraryMessage :: Gen (AnyMessageAndAgency ps)

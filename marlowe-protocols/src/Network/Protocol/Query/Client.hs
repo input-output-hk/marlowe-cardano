@@ -1,8 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE QualifiedDo #-}
 {-# LANGUAGE RankNTypes #-}
 
 -- | A generic client for the query protocol. Includes a function for
@@ -11,17 +9,19 @@
 module Network.Protocol.Query.Client where
 
 import Control.Applicative (liftA2)
+import Control.Monad (join)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (MonadTrans (..))
-import Network.Protocol.Peer.Monad (ClientT)
-import qualified Network.Protocol.Peer.Monad as PeerT
+import Network.Protocol.Peer.Trace
+import Network.Protocol.Query.Server
 import Network.Protocol.Query.Types
+import Network.TypedProtocol
 
 -- | A generic client for the query protocol.
-data QueryClient k m a where
-  ClientRequest :: Request (t :: Tree k) -> (Response t -> m (QueryClient k m a)) -> QueryClient k m a
-  ClientLift :: m (QueryClient k m a) -> QueryClient k m a
-  ClientPure :: a -> QueryClient k m a
+data QueryClient req m a where
+  ClientRequest :: ReqTree req x -> (x -> m (QueryClient req m a)) -> QueryClient req m a
+  ClientLift :: m (QueryClient req m a) -> QueryClient req m a
+  ClientPure :: a -> QueryClient req m a
 
 deriving instance (Functor m) => Functor (QueryClient req m)
 
@@ -32,7 +32,7 @@ instance (Applicative m) => Applicative (QueryClient req m) where
   f <*> ClientLift a = ClientLift $ (f <*>) <$> a
   ClientLift f <*> a = ClientLift $ (<*> a) <$> f
   ClientRequest req1 contF <*> ClientRequest req2 contA =
-    ClientRequest (ReqBin req1 req2) \(ResBin r1 r2) -> liftA2 (<*>) (contF r1) (contA r2)
+    ClientRequest (ReqBin req1 req2) \(r1, r2) -> liftA2 (<*>) (contF r1) (contA r2)
 
 instance (Monad m) => Monad (QueryClient req m) where
   ClientPure a >>= k = k a
@@ -51,24 +51,36 @@ hoistQueryClient f = \case
   ClientLift m -> ClientLift $ f $ hoistQueryClient f <$> m
   ClientRequest req cont -> ClientRequest req $ f . fmap (hoistQueryClient f) . cont
 
-request :: (Applicative m) => Request (t :: k) -> QueryClient k m (Response t)
-request req = ClientRequest (ReqLeaf req) $ pure . pure . \case ResLeaf t -> t
+request :: (Applicative m) => req a -> QueryClient req m a
+request req = ClientRequest (ReqLeaf req) $ pure . pure
 
-runQueryClient
-  :: forall k m a
-   . (Monad m, TagKind k)
-  => QueryClient k m a
-  -> ClientT (Query (Tree k)) 'StReq 'StDone m a
-runQueryClient client = PeerT.do
-  a <- go client
-  PeerT.yield MsgDone
-  pure a
+queryClientPeer
+  :: (Functor m, Request req)
+  => QueryClient req m a
+  -> PeerTraced (Query req) 'AsClient 'StReq m a
+queryClientPeer = \case
+  ClientPure a ->
+    YieldTraced (ClientAgency TokReq) MsgDone $
+      Close TokDone a
+  ClientLift m ->
+    EffectTraced $ queryClientPeer <$> m
+  ClientRequest req cont ->
+    YieldTraced (ClientAgency TokReq) (MsgRequest req) $
+      Call (ServerAgency (TokRes $ tagFromReq req)) \case
+        MsgRespond r -> EffectTraced $ queryClientPeer <$> cont r
+
+serveQueryClient
+  :: forall req m a b
+   . (Monad m)
+  => QueryServer req m a
+  -> QueryClient req m b
+  -> m (a, b)
+serveQueryClient QueryServer{..} client = join $ serveReq <$> runQueryServer <*> pure client
   where
-    go :: QueryClient k m x -> ClientT (Query (Tree k)) 'StReq 'StReq m x
-    go = \case
-      ClientPure a -> pure a
-      ClientLift m -> go =<< lift m
-      ClientRequest req cont -> withSingTag (requestTag req) PeerT.do
-        PeerT.yield (MsgRequest req)
-        PeerT.await \case
-          MsgRespond r -> go =<< lift (cont r)
+    serveReq :: ServerStReq req m a -> QueryClient req m b -> m (a, b)
+    serveReq server@ServerStReq{..} = \case
+      ClientRequest reqTree k -> do
+        (x, next) <- recvMsgRequest reqTree
+        serveReq next =<< k x
+      ClientLift m -> serveReq server =<< m
+      ClientPure b -> (,b) <$> recvMsgDone

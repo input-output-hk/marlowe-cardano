@@ -50,6 +50,8 @@ library
   exposed-modules:
     Network.Channel
     Network.Channel.Typed
+    Network.Protocol.ChainSeek.Client
+    Network.Protocol.ChainSeek.Server
     Network.Protocol.ChainSeek.Types
     Network.Protocol.Codec
     Network.Protocol.Codec.Spec
