@@ -11,20 +11,21 @@ import Colog (Message, WithLog, logInfo)
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, TVar, newTQueue, newTVar, readTQueue, readTVar, writeTQueue, writeTVar)
 import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
-import Control.Monad.State (execStateT, get, put)
+import Control.Monad.State (get, put, runStateT)
 import Control.Monad.Trans (lift)
-import Data.Foldable (for_)
 import Data.Functor ((<&>))
+import Data.Maybe (catMaybes)
 import Data.Set (Set)
 import Data.Set.NonEmpty (NESet)
 import qualified Data.Set.NonEmpty as NESet
 import Data.String (fromString)
 import Data.Time (NominalDiffTime, nominalDiffTimeToSeconds)
+import Data.Traversable (for)
 import Data.Void (Void, absurd)
 import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.Indexer.Database (DatabaseQueries (..))
 import Language.Marlowe.Runtime.Indexer.Types (MarloweBlock (..), MarloweUTxO (..), extractMarloweBlock)
-import Network.Protocol.ChainSeek.Client
+import Network.Protocol.ChainSeek.Client hiding (ChainSeekClientSelector)
 import Network.Protocol.Connection (Connector, runConnector)
 import Network.Protocol.Query.Client (QueryClient, request)
 import Observe.Event (addField, reference)
@@ -56,7 +57,7 @@ data ChainSeekClientDependencies m = ChainSeekClientDependencies
 -- | A change to the chain with respect to Marlowe contracts
 data ChainEvent r
   = -- | A change in which a new block of Marlowe transactions is added to the chain.
-    RollForward MarloweBlock ChainPoint ChainPoint r
+    RollForward [(ChainPoint, MarloweBlock)] ChainPoint r
   | -- | A change in which the chain is reverted to a previous point, discarding later blocks.
     RollBackward ChainPoint ChainPoint r
 
@@ -105,11 +106,11 @@ chainSeekClient = component "indexer-chain-seek-client" \ChainSeekClientDependen
                             no
                             remoteNo
                             ((no * 100) `div` remoteNo)
-                  RollForward _ local remote _ -> do
+                  RollForward blocks remote _ -> do
                     let remoteNo = case remote of
                           Genesis -> 0
                           At (BlockHeader _ _ no) -> unBlockNo no
-                    logInfo case local of
+                    logInfo case fst $ last blocks of
                       Genesis -> "Rolled forward to genesis"
                       At (BlockHeader _ hash (BlockNo no)) ->
                         fromString $
@@ -250,7 +251,7 @@ chainSeekClient = component "indexer-chain-seek-client" \ChainSeekClientDependen
                 -- Get the era history
                 eraHistory <- runConnector chainSyncQueryConnector $ request GetEraHistory
 
-                nextUtxo <- flip execStateT utxo $ for_ blocks \(point, txs) -> do
+                (blocks', nextUtxo) <- flip runStateT utxo $ for blocks \(point, txs) -> do
                   -- Get the current block (not expected ever to be Genesis).
                   block <- case point of
                     Genesis -> fail "Rolled forward to Genesis"
@@ -259,12 +260,15 @@ chainSeekClient = component "indexer-chain-seek-client" \ChainSeekClientDependen
                   utxo' <- get
 
                   -- Extract the Marlowe block and compute the next MarloweUTxO.
-                  for_ (extractMarloweBlock systemStart eraHistory (NESet.toSet marloweScriptHashes) block txs utxo') \(nextUtxo, marloweBlock) -> do
-                    -- Emit the marlowe block in a roll forward event to a downstream consumer.
-                    lift $ emit $ RollForward marloweBlock point tip
-
+                  for (extractMarloweBlock systemStart eraHistory (NESet.toSet marloweScriptHashes) block txs utxo') \(nextUtxo, marloweBlock) -> do
                     -- Update the MarloweUTxO
                     put nextUtxo
+
+                    -- Return the marlowe block
+                    pure (point, marloweBlock)
+
+                -- Emit the marlowe blocks in a roll forward event to a downstream consumer.
+                emit $ RollForward (catMaybes blocks') tip
 
                 -- Loop back into the main synchronization loop with an updated
                 -- rollback state.

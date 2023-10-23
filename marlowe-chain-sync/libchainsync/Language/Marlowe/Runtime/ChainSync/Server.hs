@@ -14,7 +14,7 @@ import Language.Marlowe.Runtime.ChainSync.Database (
   MoveResult (..),
   Scan (..),
  )
-import Network.Protocol.ChainSeek.Server
+import Network.Protocol.ChainSeek.Server hiding (Wait)
 import Network.Protocol.Connection (ServerSource (..))
 import Numeric.Natural (Natural)
 import UnliftIO (MonadUnliftIO)

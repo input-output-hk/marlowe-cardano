@@ -5,25 +5,23 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Network.Protocol.Driver.Trace where
 
 import Colog (WithLog)
 import qualified Colog as C
 import Control.Concurrent.Component
-import Control.Monad (join, replicateM)
+import Control.Monad (join)
 import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Resource (runResourceT)
-import Data.Binary (Binary, get, getWord8, put)
+import Data.Binary (get, put)
 import Data.Binary.Get (runGet)
-import Data.Binary.Put (putWord8, runPut)
+import Data.Binary.Put (runPut)
 import qualified Data.ByteString as B
 import Data.ByteString.Base16 (encodeBase16)
 import qualified Data.ByteString.Lazy as LBS
-import Data.Foldable (traverse_)
 import Data.Int (Int64)
 import Data.List (intercalate)
 import Data.Proxy
@@ -32,6 +30,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Void (Void)
 import Network.Channel hiding (close)
+import Network.Protocol.ChainSeek.Types ()
 import Network.Protocol.Codec (BinaryMessage, getMessage, putMessage)
 import Network.Protocol.Codec.Spec (ShowProtocol (..))
 import Network.Protocol.Connection (
@@ -74,8 +73,6 @@ import Observe.Event (Event (..), InjectSelector, NewEventArgs (..), addField, i
 import Observe.Event.Backend (setAncestorEventBackend, simpleNewEventArgs)
 import Observe.Event.Render.OpenTelemetry
 import OpenTelemetry.Trace.Core
-import OpenTelemetry.Trace.Id (SpanId, TraceId, bytesToSpanId, bytesToTraceId, spanIdBytes, traceIdBytes)
-import OpenTelemetry.Trace.TraceState (Key (..), TraceState, Value (..), empty, insert, toList)
 import UnliftIO (MonadUnliftIO, mask, throwIO, try, withRunInIO)
 
 data DriverTraced ps dState r m = DriverTraced
@@ -368,47 +365,6 @@ mkDriverTraced inj Untyped.Driver{..} = DriverTraced{..}
 
     startDStateTraced :: Maybe B.ByteString
     startDStateTraced = Nothing
-
-instance Binary TraceFlags where
-  put = putWord8 . traceFlagsValue
-  get = traceFlagsFromWord8 <$> getWord8
-
-instance Binary TraceId where
-  put = traverse_ putWord8 . B.unpack . traceIdBytes
-  get = either fail pure . bytesToTraceId . B.pack =<< replicateM 16 getWord8
-
-instance Binary SpanId where
-  put = traverse_ putWord8 . B.unpack . spanIdBytes
-  get = either fail pure . bytesToSpanId . B.pack =<< replicateM 8 getWord8
-
-instance Binary TraceState where
-  put = put . toList
-  get = fromList <$> get
-    where
-      fromList :: [(Key, Value)] -> TraceState
-      fromList = foldr (uncurry insert) empty
-
-instance Binary Key where
-  put (Key t) = put t
-  get = Key <$> get
-
-instance Binary Value where
-  put (Value t) = put t
-  get = Value <$> get
-
-instance Binary SpanContext where
-  put SpanContext{..} = do
-    put traceFlags
-    put traceId
-    put spanId
-    put traceState
-  get = do
-    traceFlags <- get
-    let isRemote = True
-    traceId <- get
-    spanId <- get
-    traceState <- get
-    pure SpanContext{..}
 
 renderTcpClientSelectorOTel
   :: forall ps. (OTelProtocol ps, ShowProtocol ps) => RenderSelectorOTel (TcpClientSelector ps)

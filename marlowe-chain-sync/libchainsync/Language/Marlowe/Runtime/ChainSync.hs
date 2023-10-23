@@ -21,7 +21,7 @@ import Data.ByteString (ByteString)
 import Data.Maybe (catMaybes)
 import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
-import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, ChainSyncCommand, ChainSyncQuery, RuntimeChainSeekServer)
+import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.ChainSync.Database (DatabaseQueries (..))
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL (QuerySelector)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as DB
