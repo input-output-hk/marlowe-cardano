@@ -18,6 +18,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   BlockNo (..),
   ChainSyncQuery (..),
   RuntimeChainSeekClient,
+  WithGenesis (..),
  )
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
@@ -31,11 +32,19 @@ import qualified Language.Marlowe.Runtime.Transaction.Query as Query
 import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
 import Logging (RootSelector (..), renderRootSelectorOTel)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
-import Network.Protocol.Connection (Connector, runConnector)
-import Network.Protocol.Driver (TcpServerDependencies (..), tcpClient)
+import qualified Network.Protocol.ChainSeek.Types as ChainSeek
+import Network.Protocol.Connection (
+  Connection (..),
+  ConnectionTraced (..),
+  Connector (..),
+  ConnectorTraced (..),
+  runConnector,
+ )
+import Network.Protocol.Driver (TcpServerDependencies (..))
 import Network.Protocol.Driver.Trace (tcpClientTraced, tcpServerTraced)
 import Network.Protocol.Job.Client (jobClientPeer)
 import Network.Protocol.Job.Server (jobServerPeer)
+import Network.Protocol.Peer.Monad.TCP (tcpClientPeerTTraced)
 import Network.Protocol.Query.Client (QueryClient, queryClientPeer, request)
 import Network.Socket (HostName, PortNumber)
 import Observe.Event.Backend (injectSelector)
@@ -76,7 +85,17 @@ main = do
 run :: Options -> AppM Span RootSelector ()
 run Options{..} = flip runComponent_ () proc _ -> do
   let chainSyncConnector :: Connector RuntimeChainSeekClient (AppM Span RootSelector)
-      chainSyncConnector = tcpClient chainSeekHost chainSeekPort chainSeekClientPeer
+      chainSyncConnector =
+        let connectorTraced =
+              tcpClientPeerTTraced
+                "chain-seek"
+                ChainSeek.TokDone
+                (injectSelector ChainSeekClient)
+                chainSeekHost
+                chainSeekPort
+         in Connector do
+              ConnectionTraced{..} <- openConnectionTraced connectorTraced
+              pure $ Connection \client -> runConnectionTraced \inj -> chainSeekClientPeer Genesis inj client
 
       chainSyncQueryConnector :: Connector (QueryClient ChainSyncQuery) (AppM Span RootSelector)
       chainSyncQueryConnector = tcpClientTraced (injectSelector ChainSyncQueryClient) chainSeekHost chainSeekQueryPort queryClientPeer

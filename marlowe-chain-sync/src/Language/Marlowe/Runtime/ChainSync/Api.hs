@@ -70,6 +70,7 @@ import Data.Maybe (fromJust)
 import Data.Proxy (Proxy (..))
 import qualified Data.SOP.Counting as Counting
 import Data.Set (Set)
+import qualified Data.Set as Set
 import Data.Set.NonEmpty (NESet)
 import qualified Data.Set.NonEmpty as NESet
 import Data.String (IsString (..))
@@ -88,7 +89,9 @@ import GHC.Natural (Natural)
 import GHC.Show (showSpace)
 import Language.Marlowe.Runtime.Cardano.Feature (hush)
 import Network.Protocol.ChainSeek.Client
+import qualified Network.Protocol.ChainSeek.Client as ChainSeekClient
 import Network.Protocol.ChainSeek.Server
+import qualified Network.Protocol.ChainSeek.Server as ChainSeekServer
 import Network.Protocol.ChainSeek.Types
 import qualified Network.Protocol.ChainSeek.Types as ChainSeek
 import Network.Protocol.Codec.Spec
@@ -96,6 +99,9 @@ import Network.Protocol.Handshake.Types (HasSignature (..))
 import qualified Network.Protocol.Job.Types as Job
 import Network.Protocol.Query.Types (OTelRequest (reqTypeName))
 import qualified Network.Protocol.Query.Types as Query
+import Observe.Event.Render.OpenTelemetry (RenderSelectorOTel)
+import OpenTelemetry.Attributes (Attribute, PrimitiveAttribute (..))
+import OpenTelemetry.Trace.Core (toAttribute)
 import Ouroboros.Consensus.BlockchainTime (RelativeTime, SlotLength, SystemStart (..))
 import Ouroboros.Consensus.HardFork.History (
   Bound,
@@ -757,7 +763,11 @@ type RuntimeChainSeek = ChainSeek Move ChainPoint ChainPoint
 
 type RuntimeChainSeekClient = ChainSeekClient Move ChainPoint ChainPoint
 
+type RuntimeChainSeekClientSelector = ChainSeekClientSelector Move ChainPoint ChainPoint
+
 type RuntimeChainSeekServer = ChainSeekServer Move ChainPoint ChainPoint
+
+type RuntimeChainSeekServerSelector = ChainSeekServerSelector Move ChainPoint ChainPoint
 
 instance Query Move where
   data Tag Move err result where
@@ -925,16 +935,6 @@ instance ChainSeek.ShowQuery Move where
     TagFindTx -> showsPrec p
     TagFindTxsFor -> showsPrec p
     TagAdvanceToTip -> showsPrec p
-
-instance ChainSeek.OTelQuery Move where
-  queryTypeName _ = "marlowe_chain_sync_query"
-  queryName = \case
-    TagAdvanceBlocks -> "advance_blocks"
-    TagIntersect -> "intersect"
-    TagFindConsumingTxs -> "find_consuming_txs"
-    TagFindTx -> "find_tx"
-    TagFindTxsFor -> "find_txs_for"
-    TagAdvanceToTip -> "advance_to_tip"
 
 instance Binary UTCTime where
   put UTCTime{..} = do
@@ -1384,3 +1384,116 @@ instance Variations Bound
 instance Variations Cardano.SlotNo
 
 instance Variations RelativeTime
+
+renderChainSeekServerSelectorOTel :: RenderSelectorOTel RuntimeChainSeekServerSelector
+renderChainSeekServerSelectorOTel =
+  ChainSeekServer.renderChainSeekServerSelectorOTel pointAttributes tipAttributes renderChainSeekQueryOTel
+
+renderChainSeekClientSelectorOTel :: RenderSelectorOTel RuntimeChainSeekClientSelector
+renderChainSeekClientSelectorOTel =
+  ChainSeekClient.renderChainSeekClientSelectorOTel pointAttributes tipAttributes renderChainSeekQueryOTel
+
+pointAttributes :: Bool -> ChainPoint -> [(T.Text, Attribute)]
+pointAttributes isEnd point = case point of
+  Genesis -> [("cardano.chain-point" <> suffix, "genesis")]
+  At BlockHeader{..} ->
+    [ ("cardano.chain-point.blockNo" <> suffix, toAttribute $ IntAttribute $ fromIntegral blockNo)
+    , ("cardano.chain-point.slotNo" <> suffix, toAttribute $ IntAttribute $ fromIntegral slotNo)
+    , ("cardano.chain-point.block-header-hash" <> suffix, toAttribute $ TextAttribute $ read $ show headerHash)
+    ]
+  where
+    suffix
+      | isEnd = ".end"
+      | otherwise = ".start"
+
+tipAttributes :: ChainPoint -> [(T.Text, Attribute)]
+tipAttributes = \case
+  Genesis -> [("cardano.chain-tip", "genesis")]
+  At BlockHeader{..} ->
+    [ ("cardano.chain-tip.blockNo", toAttribute $ IntAttribute $ fromIntegral blockNo)
+    , ("cardano.chain-tip.slotNo", toAttribute $ IntAttribute $ fromIntegral slotNo)
+    , ("cardano.chain-tip.block-header-hash", toAttribute $ TextAttribute $ read $ show headerHash)
+    ]
+
+renderChainSeekQueryOTel :: RenderChainSeekQueryOTel Move
+renderChainSeekQueryOTel = \case
+  AdvanceBlocks count ->
+    ChainSeekQueryOTelRendered
+      { queryName = "advance_blocks"
+      , queryAttributes = [("chain-seek.query.advance-blocks.count", toAttribute @Int $ fromIntegral count)]
+      , errorAttributes = \case {}
+      , resultAttributes = const []
+      }
+  Intersect blocks ->
+    ChainSeekQueryOTelRendered
+      { queryName = "intersect"
+      , queryAttributes =
+          [
+            ( "chain-seek.query.intersect.blocks"
+            , toAttribute $ TextAttribute . read . show . headerHash <$> blocks
+            )
+          ]
+      , errorAttributes = const [("chain-seek.query.intersect.match", "none")]
+      , resultAttributes = const [("chain-seek.query.intersect.match", "end-point")]
+      }
+  FindConsumingTxs txOutRefs ->
+    ChainSeekQueryOTelRendered
+      { queryName = "find_consuming_txs"
+      , queryAttributes =
+          [
+            ( "chain-seek.query.find-consuming-txs.ids"
+            , toAttribute $ renderTxOutRef <$> Set.toList txOutRefs
+            )
+          ]
+      , errorAttributes = \errors ->
+          [
+            ( "chain-seek.query.find-consuming-txs.errors"
+            , toAttribute do
+                (txOutRef, err) <- Map.toList errors
+                pure $ TextAttribute $ renderTxOutRef txOutRef <> ": " <> T.pack (show err)
+            )
+          ]
+      , resultAttributes = \results ->
+          [
+            ( "chain-seek.query.find-consuming-txs.results"
+            , toAttribute do
+                (txOutRef, Transaction{..}) <- Map.toList results
+                pure $ TextAttribute $ renderTxOutRef txOutRef <> ": " <> read (show txId)
+            )
+          ]
+      }
+  FindTx txId wait ->
+    ChainSeekQueryOTelRendered
+      { queryName = "find_tx"
+      , queryAttributes =
+          [ ("chain-seek.query.find-tx.txId", toAttribute $ TextAttribute $ read $ show txId)
+          , ("chain-seek.query.find-tx.wait-if-not-found", toAttribute wait)
+          ]
+      , errorAttributes = \err -> [("chain-seek.query.find-tx.error", fromString $ show err)]
+      , resultAttributes = \Transaction{txId = txId'} ->
+          [("chain-seek.query.find-tx.tx-id", toAttribute $ TextAttribute $ read $ show txId')]
+      }
+  FindTxsFor credentials ->
+    ChainSeekQueryOTelRendered
+      { queryName = "find_txs_for"
+      , queryAttributes =
+          [
+            ( "chain-seek.query.find-txs-for.credentials"
+            , toAttribute $ TextAttribute . T.pack . show <$> NE.toList (NESet.toList credentials)
+            )
+          ]
+      , errorAttributes = \case {}
+      , resultAttributes = \results ->
+          [
+            ( "chain-seek.query.find-txs-for.tx-tds"
+            , toAttribute $ TextAttribute . read . show . (\Transaction{..} -> txId) <$> Set.toList results
+            )
+          ]
+      }
+  AdvanceToTip ->
+    ChainSeekQueryOTelRendered
+      { queryName = "advance_to_tip"
+      , queryAttributes = []
+      , errorAttributes = \case {}
+      , resultAttributes = const []
+      }

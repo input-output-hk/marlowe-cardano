@@ -10,7 +10,11 @@ module Logging (
 
 import Control.Monad.Event.Class (Inject (..))
 import Data.ByteString (ByteString)
-import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery)
+import Language.Marlowe.Runtime.ChainSync.Api (
+  ChainSyncQuery,
+  RuntimeChainSeekClientSelector,
+  renderChainSeekClientSelectorOTel,
+ )
 import Language.Marlowe.Runtime.Indexer (
   MarloweIndexerSelector (..),
   renderDatabaseSelectorOTel,
@@ -21,6 +25,7 @@ import Language.Marlowe.Runtime.Indexer.Database.PostgreSQL (QuerySelector (..))
 import Language.Marlowe.Runtime.Indexer.Store (StoreSelector (..))
 import Network.Protocol.Driver.Trace (TcpClientSelector, renderTcpClientSelectorOTel)
 import Network.Protocol.Handshake.Types (Handshake)
+import qualified Network.Protocol.Peer.Monad.TCP as PeerT
 import Network.Protocol.Query.Types (Query)
 import Observe.Event (idInjectSelector, injectSelector)
 import Observe.Event.Render.OpenTelemetry
@@ -30,6 +35,7 @@ data RootSelector f where
   ChainQueryClient :: TcpClientSelector (Handshake (Query ChainSyncQuery)) f -> RootSelector f
   Database :: QuerySelector f -> RootSelector f
   App :: MarloweIndexerSelector Span f -> RootSelector f
+  ChainSeekClient :: PeerT.TcpClientSelector RuntimeChainSeekClientSelector f -> RootSelector f
 
 instance Inject RootSelector RootSelector where
   inject = idInjectSelector
@@ -53,3 +59,4 @@ renderRootSelectorOTel dbName dbUser host port = \case
   ChainQueryClient sel -> renderTcpClientSelectorOTel sel
   Database sel -> renderDatabaseSelectorOTel dbName dbUser host port sel
   App sel -> renderMarloweIndexerSelectorOTel sel
+  ChainSeekClient sel -> PeerT.renderTcpClientSelectorOTel renderChainSeekClientSelectorOTel sel

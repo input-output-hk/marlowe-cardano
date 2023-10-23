@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE QualifiedDo #-}
 {-# LANGUAGE RankNTypes #-}
 
 -- | A view of the chain sync protocol from the point of view of the
@@ -9,11 +10,19 @@
 -- underlying typed protocol types.
 module Network.Protocol.ChainSeek.Server where
 
+import Control.Monad.Event.Class (MonadEvent)
 import Data.Bifunctor (Bifunctor (..))
+import Data.Foldable (traverse_)
+import Data.Function ((&))
+import Data.Text (Text)
 import Network.Protocol.ChainSeek.Types
-import Network.Protocol.Peer.Trace
-import Network.TypedProtocol (PeerHasAgency (..))
-import Network.TypedProtocol.Core (PeerRole (..))
+import Network.Protocol.Driver.Trace (HasSpanContext (..))
+import qualified Network.Protocol.Peer.Monad as P
+import Observe.Event (InjectSelector, NewEventArgs (..))
+import Observe.Event.Backend (Event (..), simpleNewEventArgs)
+import Observe.Event.Render.OpenTelemetry (OTelRendered (..), RenderSelectorOTel)
+import OpenTelemetry.Attributes (Attribute, ToAttribute (..))
+import OpenTelemetry.Trace.Core (SpanKind (..))
 
 -- | A chain sync protocol server that runs in some monad 'm'.
 newtype ChainSeekServer query point tip m a = ChainSeekServer
@@ -251,79 +260,320 @@ hoistChainSeekServer f =
         , recvMsgCancelScan = f $ fmap hoistIdle recvMsgCancelScan
         }
 
+data ChainSeekServerSelector query point tip f where
+  GetNextBlock
+    :: query err result
+    -> ChainSeekServerSelector query point tip (GetNextBlockField query err result point tip)
+  Wait :: ChainSeekServerSelector query point tip Int
+  CancelWait :: ChainSeekServerSelector query point tip ()
+  Scan
+    :: query err result
+    -> ChainSeekServerSelector query point tip (query err result)
+  CancelScan :: ChainSeekServerSelector query point tip ()
+  Collect
+    :: query err result
+    -> ChainSeekServerSelector query point tip (CollectField query err result point tip)
+  Done :: ChainSeekServerSelector query point tip ()
+
+data GetNextBlockField query err result point tip
+  = GetNextBlockQuery (query err result)
+  | GetNextBlockError err
+  | GetNextBlockResult result
+  | GetNextBlockStartPoint point
+  | GetNextBlockEndPoint point
+  | GetNextBlockEndTip tip
+
+data CollectField query err result point tip
+  = CollectQuery (query err result)
+  | CollectError err
+  | CollectResults [result]
+  | CollectStartPoint point
+  | CollectEndPoint point
+  | CollectEndTip tip
+
 chainSeekServerPeer
-  :: forall query point tip m a
-   . (Functor m, Query query)
-  => ChainSeekServer query point tip m a
-  -> PeerTraced (ChainSeek query point tip) 'AsServer 'StIdle m a
-chainSeekServerPeer = EffectTraced . fmap peerIdle . runChainSeekServer
+  :: forall query point tip r s m a
+   . (Query query, MonadEvent r s m, HasSpanContext r)
+  => point
+  -> InjectSelector (ChainSeekServerSelector query point tip) s
+  -> ChainSeekServer query point tip m a
+  -> P.ServerT (ChainSeek query point tip) 'StIdle 'StDone m a
+chainSeekServerPeer initialPoint inj server = P.do
+  idle <- P.lift $ runChainSeekServer server
+  peerIdle initialPoint idle
   where
     peerIdle
-      :: ServerStIdle query point tip m a
-      -> PeerTraced (ChainSeek query point tip) 'AsServer 'StIdle m a
-    peerIdle ServerStIdle{..} = AwaitTraced (ClientAgency TokIdle) \case
-      MsgQueryNext query ->
-        Respond (ServerAgency $ TokNext $ tagFromQuery query) $
-          peerNext (tagFromQuery query) <$> recvMsgQueryNext query
-      MsgScan query ->
-        Receive $ EffectTraced $ peerScan (tagFromQuery query) <$> recvMsgScan query
-      MsgDone ->
-        Closed TokDone recvMsgDone
+      :: point
+      -> ServerStIdle query point tip m a
+      -> P.ServerT (ChainSeek query point tip) 'StIdle 'StDone m a
+    peerIdle pos ServerStIdle{..} = P.await' TokIdle \case
+      MsgQueryNext ctx query -> P.do
+        let tag = tagFromQuery query
+            args =
+              (simpleNewEventArgs $ GetNextBlock query)
+                { newEventInitialFields =
+                    [ GetNextBlockQuery query
+                    , GetNextBlockStartPoint pos
+                    ]
+                , newEventParent = wrapContext <$> ctx
+                }
+        P.join $ P.withInjectEventArgs inj args \ev -> P.do
+          next <- P.lift $ recvMsgQueryNext query
+          peerNext pos 0 ev Nothing tag next
+      MsgScan ctx query -> P.do
+        let args =
+              (simpleNewEventArgs $ Scan query)
+                { newEventInitialFields = [query]
+                , newEventParent = wrapContext <$> ctx
+                }
+        scan <- P.withInjectEventArgs inj args \_ -> P.lift $ recvMsgScan query
+        P.join $ peerScan pos query scan
+      MsgDone ctx -> P.do
+        let args =
+              (simpleNewEventArgs Done)
+                { newEventParent = wrapContext <$> ctx
+                , newEventInitialFields = [()]
+                }
+        P.withInjectEventArgs inj args \_ -> P.lift recvMsgDone
 
     peerNext
       :: forall err result
-       . Tag query err result
+       . point
+      -> Int
+      -> Event m r (GetNextBlockField query err result point tip)
+      -> Maybe (Event m r Int)
+      -> Tag query err result
       -> ServerStNext query err result point tip m a
-      -> Response (ChainSeek query point tip) 'AsServer ('StNext err result :: ChainSeek query point tip) m a
-    peerNext tag = \case
-      SendMsgQueryRejected err tip idle ->
-        Response (MsgRejectQuery err tip) $ peerIdle idle
-      SendMsgRollForward result point tip idle ->
-        Response (MsgRollForward result point tip) $ peerIdle idle
-      SendMsgRollBackward point tip idle ->
-        Response (MsgRollBackward point tip) $ peerIdle idle
-      SendMsgWait poll ->
-        Response MsgWait $ peerPoll tag poll
+      -> P.ServerT
+          (ChainSeek query point tip)
+          ('StNext err result)
+          'StIdle
+          m
+          (P.ServerT (ChainSeek query point tip) 'StIdle 'StDone m a)
+    peerNext pos waitCount ev mWaitEv tag = \case
+      SendMsgQueryRejected err tip idle -> P.do
+        P.lift $ traverse_ (flip addField waitCount) mWaitEv
+        P.lift $ addField ev $ GetNextBlockEndPoint pos
+        P.lift $ addField ev $ GetNextBlockError err
+        P.lift $ addField ev $ GetNextBlockEndTip tip
+        P.yield' (TokNext tag) $ MsgRejectQuery err tip
+        pure $ peerIdle pos idle
+      SendMsgRollForward result point tip idle -> P.do
+        P.lift $ traverse_ (flip addField waitCount) mWaitEv
+        P.lift $ addField ev $ GetNextBlockResult result
+        P.lift $ addField ev $ GetNextBlockEndPoint point
+        P.lift $ addField ev $ GetNextBlockEndTip tip
+        P.yield' (TokNext tag) $ MsgRollForward result point tip
+        pure $ peerIdle point idle
+      SendMsgRollBackward point tip idle -> P.do
+        P.lift $ traverse_ (flip addField waitCount) mWaitEv
+        P.lift $ addField ev $ GetNextBlockEndPoint point
+        P.lift $ addField ev $ GetNextBlockEndTip tip
+        P.yield' (TokNext tag) $ MsgRollBackward point tip
+        pure $ peerIdle point idle
+      SendMsgWait poll -> maybe (P.withInjectEventFields inj Wait [0]) (&) mWaitEv \waitEv -> P.do
+        P.yield' (TokNext tag) MsgWait
+        peerPoll pos (waitCount + 1) ev waitEv tag poll
 
     peerPoll
       :: forall err result
-       . Tag query err result
+       . point
+      -> Int
+      -> Event m r (GetNextBlockField query err result point tip)
+      -> Event m r Int
+      -> Tag query err result
       -> ServerStPoll query err result point tip m a
-      -> PeerTraced (ChainSeek query point tip) 'AsServer ('StPoll err result) m a
-    peerPoll tag ServerStPoll{..} = AwaitTraced (ClientAgency TokPoll) \case
-      MsgPoll ->
-        Respond (ServerAgency $ TokNext tag) $
-          peerNext tag <$> recvMsgPoll
-      MsgCancel ->
-        Receive $
-          EffectTraced $
-            peerIdle <$> recvMsgCancel
+      -> P.ServerT
+          (ChainSeek query point tip)
+          ('StPoll err result)
+          'StIdle
+          m
+          (P.ServerT (ChainSeek query point tip) 'StIdle 'StDone m a)
+    peerPoll pos waitCount ev waitEv tag ServerStPoll{..} = P.await' TokPoll \case
+      MsgPoll -> P.do
+        next <- P.lift recvMsgPoll
+        peerNext pos waitCount ev (Just waitEv) tag next
+      MsgCancel -> P.withInjectEventFields inj CancelWait [()] \_ -> P.do
+        P.lift $ addField waitEv waitCount
+        idle <- P.lift recvMsgCancel
+        pure $ peerIdle pos idle
 
     peerScan
       :: forall err result
-       . Tag query err result
+       . point
+      -> query err result
       -> ServerStScan query err result point tip m a
-      -> PeerTraced (ChainSeek query point tip) 'AsServer ('StScan err result :: ChainSeek query point tip) m a
-    peerScan tag ServerStScan{..} = AwaitTraced (ClientAgency TokScan) \case
-      MsgCollect ->
-        Respond (ServerAgency $ TokCollect tag) $
-          peerCollect tag <$> recvMsgCollect
-      MsgCancelScan ->
-        Receive $
-          EffectTraced $
-            peerIdle <$> recvMsgCancelScan
+      -> P.ServerT
+          (ChainSeek query point tip)
+          ('StScan err result)
+          'StIdle
+          m
+          (P.ServerT (ChainSeek query point tip) 'StIdle 'StDone m a)
+    peerScan pos query ServerStScan{..} = P.await' TokScan \case
+      MsgCollect ctx -> P.do
+        let args =
+              (simpleNewEventArgs $ Collect query)
+                { newEventInitialFields =
+                    [ CollectQuery query
+                    , CollectStartPoint pos
+                    ]
+                , newEventParent = wrapContext <$> ctx
+                }
+        P.withInjectEventArgs inj args \ev -> P.do
+          collect <- P.lift recvMsgCollect
+          peerCollect pos ev query collect
+      MsgCancelScan ctx -> P.do
+        let args =
+              (simpleNewEventArgs CancelScan)
+                { newEventInitialFields = [()]
+                , newEventParent = wrapContext <$> ctx
+                }
+        P.withInjectEventArgs inj args \_ -> P.do
+          idle <- P.lift recvMsgCancelScan
+          pure $ peerIdle pos idle
 
     peerCollect
       :: forall err result
-       . Tag query err result
+       . point
+      -> Event m r (CollectField query err result point tip)
+      -> query err result
       -> ServerStCollect query err result point tip m a
-      -> Response (ChainSeek query point tip) 'AsServer ('StCollect err result :: ChainSeek query point tip) m a
-    peerCollect tag = \case
-      SendMsgCollectFailed err tip idle ->
-        Response (MsgCollectFailed err tip) $ peerIdle idle
-      SendMsgCollected results tip scan ->
-        Response (MsgCollected results tip) $ peerScan tag scan
-      SendMsgCollectRollBackward point tip idle ->
-        Response (MsgCollectRollBackward point tip) $ peerIdle idle
-      SendMsgCollectWait tip poll ->
-        Response (MsgCollectWait tip) $ peerPoll tag poll
+      -> P.ServerT
+          (ChainSeek query point tip)
+          ('StCollect err result)
+          'StIdle
+          m
+          (P.ServerT (ChainSeek query point tip) 'StIdle 'StDone m a)
+    peerCollect pos ev query = \case
+      SendMsgCollectFailed err tip idle -> P.do
+        P.lift $ addField ev $ CollectError err
+        P.lift $ addField ev $ CollectEndTip tip
+        P.yield' (TokCollect $ tagFromQuery query) $ MsgCollectFailed err tip
+        pure $ peerIdle pos idle
+      SendMsgCollected results tip scan -> P.do
+        P.lift $ addField ev $ CollectResults $ snd <$> results
+        let endPoint = fst $ last results
+        P.lift $ addField ev $ CollectEndPoint endPoint
+        P.lift $ addField ev $ CollectEndTip tip
+        P.yield' (TokCollect $ tagFromQuery query) $ MsgCollected results tip
+        P.lift $ finalize ev Nothing
+        peerScan endPoint query scan
+      SendMsgCollectRollBackward point tip idle -> P.do
+        P.lift $ addField ev $ CollectEndPoint point
+        P.lift $ addField ev $ CollectEndTip tip
+        P.yield' (TokCollect $ tagFromQuery query) $ MsgCollectRollBackward point tip
+        pure $ peerIdle pos idle
+      SendMsgCollectWait tip poll -> P.withInjectEventFields inj Wait [0] \waitEv -> P.do
+        P.yield' (TokCollect $ tagFromQuery query) $ MsgCollectWait tip
+        peerPoll pos 1 (cmapEvent nextToCollect ev) waitEv (tagFromQuery query) poll
+
+nextToCollect
+  :: GetNextBlockField query err result point tip
+  -> CollectField query err result point tip
+nextToCollect = \case
+  GetNextBlockEndPoint point -> CollectEndPoint point
+  GetNextBlockEndTip tip -> CollectEndTip tip
+  GetNextBlockError err -> CollectError err
+  GetNextBlockQuery q -> CollectQuery q
+  GetNextBlockResult result -> CollectResults [result]
+  GetNextBlockStartPoint q -> CollectStartPoint q
+
+cmapEvent :: (g -> f) -> Event m r f -> Event m r g
+cmapEvent f Event{..} =
+  Event
+    { reference
+    , addField = addField . f
+    , finalize
+    }
+
+data ChainSeekQueryOTelRendered query err result = ChainSeekQueryOTelRendered
+  { queryName :: Text
+  , queryAttributes :: [(Text, Attribute)]
+  , errorAttributes :: err -> [(Text, Attribute)]
+  , resultAttributes :: result -> [(Text, Attribute)]
+  }
+
+type RenderChainSeekQueryOTel query =
+  forall err result. query err result -> ChainSeekQueryOTelRendered query err result
+
+renderGetNextBlockField
+  :: (Bool -> point -> [(Text, Attribute)])
+  -> (tip -> [(Text, Attribute)])
+  -> ChainSeekQueryOTelRendered query err result
+  -> GetNextBlockField query err result point tip
+  -> [(Text, Attribute)]
+renderGetNextBlockField pointAttributes tipAttributes ChainSeekQueryOTelRendered{..} = \case
+  GetNextBlockQuery _ -> ("chain-seek.query", toAttribute queryName) : queryAttributes
+  GetNextBlockError err -> errorAttributes err
+  GetNextBlockResult result -> resultAttributes result
+  GetNextBlockStartPoint point -> pointAttributes False point
+  GetNextBlockEndPoint point -> pointAttributes True point
+  GetNextBlockEndTip tip -> tipAttributes tip
+
+renderCollectField
+  :: (Bool -> point -> [(Text, Attribute)])
+  -> (tip -> [(Text, Attribute)])
+  -> ChainSeekQueryOTelRendered query err result
+  -> CollectField query err result point tip
+  -> [(Text, Attribute)]
+renderCollectField pointAttributes tipAttributes ChainSeekQueryOTelRendered{..} = \case
+  CollectQuery _ -> ("chain-seek.query", toAttribute queryName) : queryAttributes
+  CollectError err -> errorAttributes err
+  CollectResults results ->
+    ("chain-seek.collect.block-count", toAttribute $ length results)
+      : resultAttributes (last results)
+  CollectStartPoint point -> pointAttributes False point
+  CollectEndPoint point -> pointAttributes True point
+  CollectEndTip tip -> tipAttributes tip
+
+renderChainSeekServerSelectorOTel
+  :: (Bool -> point -> [(Text, Attribute)])
+  -> (tip -> [(Text, Attribute)])
+  -> RenderChainSeekQueryOTel query
+  -> RenderSelectorOTel (ChainSeekServerSelector query point tip)
+renderChainSeekServerSelectorOTel pointAttributes tipAttributes renderQuery = \case
+  GetNextBlock query -> case renderQuery query of
+    qr@ChainSeekQueryOTelRendered{..} ->
+      OTelRendered
+        { eventName = "chain_seek/server/getNextBlock " <> queryName
+        , eventKind = Server
+        , renderField = renderGetNextBlockField pointAttributes tipAttributes qr
+        }
+  Scan qr -> case renderQuery qr of
+    ChainSeekQueryOTelRendered{..} ->
+      OTelRendered
+        { eventName = "chain_seek/server/scan " <> queryName
+        , eventKind = Server
+        , renderField = \_ -> ("chain-seek.query", toAttribute queryName) : queryAttributes
+        }
+  Collect query -> case renderQuery query of
+    qr@ChainSeekQueryOTelRendered{..} ->
+      OTelRendered
+        { eventName = "chain_seek/server/collect " <> queryName
+        , eventKind = Internal
+        , renderField = renderCollectField pointAttributes tipAttributes qr
+        }
+  Wait ->
+    OTelRendered
+      { eventName = "chain_seek/server/wait"
+      , eventKind = Internal
+      , renderField = \count -> [("chain-seek.poll-count", toAttribute count)]
+      }
+  CancelWait ->
+    OTelRendered
+      { eventName = "chain_seek/server/wait/cancel"
+      , eventKind = Internal
+      , renderField = const []
+      }
+  CancelScan ->
+    OTelRendered
+      { eventName = "chain_seek/server/scan/cancel"
+      , eventKind = Internal
+      , renderField = const []
+      }
+  Done ->
+    OTelRendered
+      { eventName = "chain_seek/server/done"
+      , eventKind = Server
+      , renderField = const []
+      }

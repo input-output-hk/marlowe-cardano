@@ -7,20 +7,21 @@
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 -- | The type of the chain sync protocol.
 module Network.Protocol.ChainSeek.Types where
 
 import Control.Monad (join, replicateM)
 import Data.Binary (Binary (..), Get, Put, getWord8, putWord8)
+import qualified Data.ByteString as B
 import Data.Data (type (:~:) (Refl))
-import Data.Foldable (fold, for_)
+import Data.Foldable (fold, for_, traverse_)
 import Data.Functor ((<&>))
 import Data.Kind (Type)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Maybe (catMaybes)
 import Data.Proxy (Proxy (..))
-import Data.Text (Text)
 import qualified Data.Text as T
 import GHC.Show (showList__, showSpace)
 import Network.Protocol.Codec (BinaryMessage (..))
@@ -33,11 +34,53 @@ import Network.Protocol.Codec.Spec (
   Variations (..),
  )
 import Network.Protocol.Handshake.Types (HasSignature (..))
-import Network.Protocol.Peer.Trace (MessageAttributes (..), OTelProtocol (..))
 import Network.TypedProtocol (PeerHasAgency (..), Protocol (..), SomeMessage (SomeMessage))
 import Network.TypedProtocol.Codec (AnyMessageAndAgency (..))
-import OpenTelemetry.Attributes (ToPrimitiveAttribute (toPrimitiveAttribute))
+import OpenTelemetry.Trace.Core (SpanContext (..), TraceFlags, traceFlagsFromWord8, traceFlagsValue)
+import OpenTelemetry.Trace.Id (SpanId, TraceId, bytesToSpanId, bytesToTraceId, spanIdBytes, traceIdBytes)
+import OpenTelemetry.Trace.TraceState (Key (..), TraceState, Value (..), empty, insert, toList)
 import Test.QuickCheck (Arbitrary, Gen, arbitrary, oneof, shrink)
+
+instance Binary TraceFlags where
+  put = putWord8 . traceFlagsValue
+  get = traceFlagsFromWord8 <$> getWord8
+
+instance Binary TraceId where
+  put = traverse_ putWord8 . B.unpack . traceIdBytes
+  get = either fail pure . bytesToTraceId . B.pack =<< replicateM 16 getWord8
+
+instance Binary SpanId where
+  put = traverse_ putWord8 . B.unpack . spanIdBytes
+  get = either fail pure . bytesToSpanId . B.pack =<< replicateM 8 getWord8
+
+instance Binary TraceState where
+  put = put . toList
+  get = fromList <$> get
+    where
+      fromList :: [(Key, Value)] -> TraceState
+      fromList = foldr (uncurry insert) empty
+
+instance Binary Key where
+  put (Key t) = put t
+  get = Key <$> get
+
+instance Binary Value where
+  put (Value t) = put t
+  get = Value <$> get
+
+instance Binary SpanContext where
+  put SpanContext{..} = do
+    put traceFlags
+    put traceId
+    put spanId
+    put traceState
+  get = do
+    traceFlags <- get
+    let isRemote = True
+    traceId <- get
+    spanId <- get
+    traceState <- get
+    pure SpanContext{..}
 
 data SomeTag q = forall err result. SomeTag (Tag q err result)
 
@@ -97,7 +140,8 @@ instance Protocol (ChainSeek query point tip) where
     -- \| Request the next matching result for the given query from the client's
     -- position.
     MsgQueryNext
-      :: query err result
+      :: Maybe SpanContext
+      -> query err result
       -> Message
           (ChainSeek query point tip)
           'StIdle
@@ -135,7 +179,8 @@ instance Protocol (ChainSeek query point tip) where
           ('StPoll err result)
     -- \| End the protocol
     MsgDone
-      :: Message
+      :: Maybe SpanContext
+      -> Message
           (ChainSeek query point tip)
           'StIdle
           'StDone
@@ -152,18 +197,21 @@ instance Protocol (ChainSeek query point tip) where
           ('StPoll err result)
           'StIdle
     MsgScan
-      :: query err result
+      :: Maybe SpanContext
+      -> query err result
       -> Message
           (ChainSeek query point tip)
           'StIdle
           ('StScan err result)
     MsgCollect
-      :: Message
+      :: Maybe SpanContext
+      -> Message
           (ChainSeek query point tip)
           ('StScan err result)
           ('StCollect err result)
     MsgCancelScan
-      :: Message
+      :: Maybe SpanContext
+      -> Message
           (ChainSeek query point tip)
           ('StScan err result)
           'StIdle
@@ -223,14 +271,16 @@ instance
   => BinaryMessage (ChainSeek query point tip)
   where
   putMessage (ClientAgency TokIdle) msg = case msg of
-    MsgQueryNext query -> do
+    MsgQueryNext ctx query -> do
       putWord8 0x01
+      put ctx
       let tag = tagFromQuery query
       putTag tag
       putQuery query
-    MsgDone -> putWord8 0x02
-    MsgScan query -> do
+    MsgDone ctx -> putWord8 0x02 *> put ctx
+    MsgScan ctx query -> do
       putWord8 0x09
+      put ctx
       let tag = tagFromQuery query
       putTag tag
       putQuery query
@@ -253,8 +303,8 @@ instance
   putMessage (ClientAgency TokPoll) MsgPoll = putWord8 0x07
   putMessage (ClientAgency TokPoll) MsgCancel = putWord8 0x08
   putMessage (ClientAgency TokScan) msg = case msg of
-    MsgCollect -> putWord8 0x0a
-    MsgCancelScan -> putWord8 0x0b
+    MsgCollect ctx -> putWord8 0x0a *> put ctx
+    MsgCancelScan ctx -> putWord8 0x0b *> put ctx
   putMessage (ServerAgency (TokCollect tag)) (MsgCollectFailed err tip) = do
     putWord8 0x0c
     putTag tag
@@ -280,9 +330,10 @@ instance
     tag <- getWord8
     case (tag, tok) of
       (0x01, ClientAgency TokIdle) -> do
+        ctx <- get
         SomeTag qtag <- getTag
-        SomeMessage . MsgQueryNext <$> getQuery qtag
-      (0x02, ClientAgency TokIdle) -> pure $ SomeMessage MsgDone
+        SomeMessage . MsgQueryNext ctx <$> getQuery qtag
+      (0x02, ClientAgency TokIdle) -> SomeMessage . MsgDone <$> get
       (0x03, ServerAgency (TokNext qtag)) -> do
         SomeTag qtag' :: SomeTag query <- getTag
         case tagEq qtag qtag' of
@@ -308,10 +359,11 @@ instance
       (0x07, ClientAgency TokPoll) -> pure $ SomeMessage MsgPoll
       (0x08, ClientAgency TokPoll) -> pure $ SomeMessage MsgCancel
       (0x09, ClientAgency TokIdle) -> do
+        ctx <- get
         SomeTag qtag <- getTag
-        SomeMessage . MsgScan <$> getQuery qtag
-      (0x0a, ClientAgency TokScan) -> pure $ SomeMessage MsgCollect
-      (0x0b, ClientAgency TokScan) -> pure $ SomeMessage MsgCancelScan
+        SomeMessage . MsgScan ctx <$> getQuery qtag
+      (0x0a, ClientAgency TokScan) -> SomeMessage . MsgCollect <$> get
+      (0x0b, ClientAgency TokScan) -> SomeMessage . MsgCancelScan <$> get
       (0x0c, ServerAgency (TokCollect qtag)) -> do
         SomeTag qtag' :: SomeTag query <- getTag
         case tagEq qtag qtag' of
@@ -337,95 +389,6 @@ instance
         tip <- get
         pure $ SomeMessage $ MsgCollectWait tip
       _ -> fail $ "Unexpected tag " <> show tag
-
-class (ShowQuery query) => OTelQuery query where
-  queryTypeName :: Proxy query -> Text
-  queryName :: Tag query err result -> Text
-
-instance
-  ( OTelQuery query
-  , Show point
-  , Show tip
-  )
-  => OTelProtocol (ChainSeek query point tip)
-  where
-  protocolName _ = "chain_seek." <> queryTypeName (Proxy @query)
-  messageAttributes = curry \case
-    (_, MsgQueryNext query) ->
-      MessageAttributes
-        { messageType = "query/" <> queryName (tagFromQuery query)
-        , messageParameters = [toPrimitiveAttribute $ T.pack $ showsPrecQuery 0 query ""]
-        }
-    (_, MsgScan query) ->
-      MessageAttributes
-        { messageType = "scan/" <> queryName (tagFromQuery query)
-        , messageParameters = [toPrimitiveAttribute $ T.pack $ showsPrecQuery 0 query ""]
-        }
-    (ServerAgency (TokNext tag), MsgRejectQuery err tip) ->
-      MessageAttributes
-        { messageType = "query/" <> queryName tag <> "/reject"
-        , messageParameters = toPrimitiveAttribute . T.pack <$> [showsPrecErr 0 tag err "", show tip]
-        }
-    (ServerAgency (TokNext tag), MsgRollForward result point tip) ->
-      MessageAttributes
-        { messageType = "query/" <> queryName tag <> "/roll_forward"
-        , messageParameters = toPrimitiveAttribute . T.pack <$> [showsPrecResult 0 tag result "", show point, show tip]
-        }
-    (ServerAgency (TokNext tag), MsgRollBackward point tip) ->
-      MessageAttributes
-        { messageType = "query/" <> queryName tag <> "/roll_backward"
-        , messageParameters = toPrimitiveAttribute . T.pack <$> [show point, show tip]
-        }
-    (ServerAgency (TokNext tag), MsgWait) ->
-      MessageAttributes
-        { messageType = "query/" <> queryName tag <> "/wait"
-        , messageParameters = []
-        }
-    (ServerAgency (TokCollect tag), MsgCollectFailed err tip) ->
-      MessageAttributes
-        { messageType = "scan/" <> queryName tag <> "/failed"
-        , messageParameters = toPrimitiveAttribute . T.pack <$> [showsPrecErr 0 tag err "", show tip]
-        }
-    (ServerAgency (TokCollect tag), MsgCollected _ _) ->
-      MessageAttributes
-        { messageType = "scan/" <> queryName tag <> "/collected"
-        , messageParameters = []
-        }
-    (ServerAgency (TokCollect tag), MsgCollectRollBackward point tip) ->
-      MessageAttributes
-        { messageType = "scan/" <> queryName tag <> "/roll_backward"
-        , messageParameters = toPrimitiveAttribute . T.pack <$> [show point, show tip]
-        }
-    (ServerAgency (TokCollect tag), MsgCollectWait _) ->
-      MessageAttributes
-        { messageType = "scan/" <> queryName tag <> "/wait"
-        , messageParameters = []
-        }
-    (_, MsgDone) ->
-      MessageAttributes
-        { messageType = "done"
-        , messageParameters = []
-        }
-    (_, MsgPoll) ->
-      MessageAttributes
-        { messageType = "poll"
-        , messageParameters = []
-        }
-    (_, MsgCancel) ->
-      MessageAttributes
-        { messageType = "cancel"
-        , messageParameters = []
-        }
-    (_, MsgCollect) ->
-      MessageAttributes
-        { messageType = "collect"
-        , messageParameters = []
-        }
-    (_, MsgCancelScan) ->
-      MessageAttributes
-        { messageType = "collect_Cancel"
-        , messageParameters = []
-        }
 
 class (Query query) => ArbitraryQuery query where
   arbitraryTag :: Gen (SomeTag query)
@@ -456,8 +419,8 @@ instance
       catMaybes
         [ Just $ do
             query <- arbitraryQuery tag
-            pure $ AnyMessageAndAgency (ClientAgency TokIdle) $ MsgQueryNext query
-        , Just $ pure $ AnyMessageAndAgency (ClientAgency TokIdle) MsgDone
+            pure $ AnyMessageAndAgency (ClientAgency TokIdle) $ MsgQueryNext Nothing query
+        , Just $ pure $ AnyMessageAndAgency (ClientAgency TokIdle) $ MsgDone Nothing
         , mGenError <&> \genErr -> do
             tip <- arbitrary
             err <- genErr
@@ -477,7 +440,7 @@ instance
         , Just $ pure $ AnyMessageAndAgency (ClientAgency TokPoll) MsgCancel
         ]
   shrinkMessage agency = \case
-    MsgQueryNext query -> MsgQueryNext <$> shrinkQuery query
+    MsgQueryNext ctx query -> MsgQueryNext ctx <$> shrinkQuery query
     MsgRejectQuery err tip ->
       []
         <> [MsgRejectQuery err' tip | err' <- case agency of ServerAgency (TokNext tag) -> shrinkErr tag err]
@@ -517,13 +480,13 @@ instance
         [ do
             SomeTag tag <- tags
             join
-              [ SomeMessage . MsgQueryNext <$> queryVariations tag
-              , SomeMessage . MsgScan <$> queryVariations tag
+              [ SomeMessage . MsgQueryNext Nothing <$> queryVariations tag
+              , SomeMessage . MsgScan Nothing <$> queryVariations tag
               ]
-        , pure $ SomeMessage MsgDone
+        , pure $ SomeMessage $ MsgDone Nothing
         ]
     ClientAgency TokPoll -> [SomeMessage MsgPoll, SomeMessage MsgCancel]
-    ClientAgency TokScan -> [SomeMessage MsgCollect, SomeMessage MsgCancelScan]
+    ClientAgency TokScan -> [SomeMessage $ MsgCollect Nothing, SomeMessage $ MsgCancelScan Nothing]
     ServerAgency (TokNext tag) -> do
       let point :| points = variations
           tip :| tips = variations
@@ -620,15 +583,15 @@ instance
   => MessageEq (ChainSeek query point tip)
   where
   messageEq (AnyMessageAndAgency agency msg) = case (agency, msg) of
-    (_, MsgQueryNext query) -> \case
-      AnyMessageAndAgency _ (MsgQueryNext query') ->
-        case tagEq (tagFromQuery query) (tagFromQuery query') of
+    (_, MsgQueryNext ctx query) -> \case
+      AnyMessageAndAgency _ (MsgQueryNext ctx' query') ->
+        ctx == ctx' && case tagEq (tagFromQuery query) (tagFromQuery query') of
           Just (Refl, Refl) -> queryEq query query'
           Nothing -> False
       _ -> False
-    (_, MsgScan query) -> \case
-      AnyMessageAndAgency _ (MsgScan query') ->
-        case tagEq (tagFromQuery query) (tagFromQuery query') of
+    (_, MsgScan ctx query) -> \case
+      AnyMessageAndAgency _ (MsgScan ctx' query') ->
+        ctx == ctx' && case tagEq (tagFromQuery query) (tagFromQuery query') of
           Just (Refl, Refl) -> queryEq query query'
           Nothing -> False
       _ -> False
@@ -670,8 +633,8 @@ instance
     (_, MsgCollectWait tip) -> \case
       AnyMessageAndAgency _ (MsgCollectWait tip') -> tip == tip'
       _ -> False
-    (_, MsgDone) -> \case
-      AnyMessageAndAgency _ MsgDone -> True
+    (_, MsgDone ctx) -> \case
+      AnyMessageAndAgency _ (MsgDone ctx') -> ctx == ctx'
       _ -> False
     (_, MsgPoll) -> \case
       AnyMessageAndAgency _ MsgPoll -> True
@@ -679,11 +642,11 @@ instance
     (_, MsgCancel) -> \case
       AnyMessageAndAgency _ MsgCancel -> True
       _ -> False
-    (_, MsgCollect) -> \case
-      AnyMessageAndAgency _ MsgCollect -> True
+    (_, MsgCollect ctx) -> \case
+      AnyMessageAndAgency _ (MsgCollect ctx') -> ctx == ctx'
       _ -> False
-    (_, MsgCancelScan) -> \case
-      AnyMessageAndAgency _ MsgCancelScan -> True
+    (_, MsgCancelScan ctx) -> \case
+      AnyMessageAndAgency _ (MsgCancelScan ctx') -> ctx == ctx'
       _ -> False
 
 class (Query query) => ShowQuery query where
@@ -700,17 +663,21 @@ instance
   => ShowProtocol (ChainSeek query point tip)
   where
   showsPrecMessage p agency = \case
-    MsgQueryNext query ->
+    MsgQueryNext ctx query ->
       showParen
         (p >= 11)
         ( showString "MsgQueryNext"
             . showSpace
+            . showsPrec 11 ctx
+            . showSpace
             . showsPrecQuery 11 query
         )
-    MsgScan query ->
+    MsgScan ctx query ->
       showParen
         (p >= 11)
         ( showString "MsgScan"
+            . showSpace
+            . showsPrec 11 ctx
             . showSpace
             . showsPrecQuery 11 query
         )
@@ -782,11 +749,29 @@ instance
             . showSpace
             . showsPrec 11 tip
         )
-    MsgDone -> showString "MsgDone"
+    MsgDone ctx ->
+      showParen
+        (p >= 11)
+        ( showString "MsgDone"
+            . showSpace
+            . showsPrec 11 ctx
+        )
     MsgPoll -> showString "MsgPoll"
     MsgCancel -> showString "MsgCancel"
-    MsgCollect -> showString "MsgCollect"
-    MsgCancelScan -> showString "MsgCancelScan"
+    MsgCollect ctx ->
+      showParen
+        (p >= 11)
+        ( showString "MsgCollect"
+            . showSpace
+            . showsPrec 11 ctx
+        )
+    MsgCancelScan ctx ->
+      showParen
+        (p >= 11)
+        ( showString "MsgCancelScan"
+            . showSpace
+            . showsPrec 11 ctx
+        )
 
   showsPrecServerHasAgency p = \case
     TokNext tag ->

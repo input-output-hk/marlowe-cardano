@@ -7,7 +7,12 @@ module Logging (
 ) where
 
 import Control.Monad.Event.Class (Inject (..))
-import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand, ChainSyncQuery)
+import Language.Marlowe.Runtime.ChainSync.Api (
+  ChainSyncCommand,
+  ChainSyncQuery,
+  RuntimeChainSeekClientSelector,
+  renderChainSeekClientSelectorOTel,
+ )
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Transaction (
   renderLoadMarloweContextSelectorOTel,
@@ -26,6 +31,7 @@ import Network.Protocol.Driver.Trace (
  )
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Job.Types (Job)
+import qualified Network.Protocol.Peer.Monad.TCP as PeerT
 import Network.Protocol.Query.Types (Query)
 import Observe.Event (idInjectSelector, injectSelector)
 import Observe.Event.Render.OpenTelemetry
@@ -33,6 +39,7 @@ import Observe.Event.Render.OpenTelemetry
 data RootSelector f where
   ChainSyncJobClient :: TcpClientSelector (Handshake (Job ChainSyncCommand)) f -> RootSelector f
   ChainSyncQueryClient :: TcpClientSelector (Handshake (Query ChainSyncQuery)) f -> RootSelector f
+  ChainSeekClient :: PeerT.TcpClientSelector RuntimeChainSeekClientSelector f -> RootSelector f
   ContractQueryClient :: TcpClientSelector (Handshake (Query ContractRequest)) f -> RootSelector f
   Server :: TcpServerSelector (Handshake (Job MarloweTxCommand)) f -> RootSelector f
   App :: TransactionServerSelector f -> RootSelector f
@@ -59,6 +66,7 @@ renderRootSelectorOTel :: RenderSelectorOTel RootSelector
 renderRootSelectorOTel = \case
   ChainSyncJobClient sel -> renderTcpClientSelectorOTel sel
   ChainSyncQueryClient sel -> renderTcpClientSelectorOTel sel
+  ChainSeekClient sel -> PeerT.renderTcpClientSelectorOTel renderChainSeekClientSelectorOTel sel
   ContractQueryClient sel -> renderTcpClientSelectorOTel sel
   Server sel -> renderTcpServerSelectorOTel sel
   App sel -> renderTransactionServerSelectorOTel sel

@@ -88,16 +88,16 @@ aggregator = component "indexer-store-aggregator" \pullEvent -> do
 
         let -- Compute the changes for the pulled event.
             changes = case event of
-              RollForward block point tip parent ->
+              RollForward blocks tip parent ->
                 mempty
-                  { blocks = [block]
-                  , statistics = computeStats block
-                  , localTip = Just point
+                  { blocks = snd <$> blocks
+                  , statistics = foldMap (computeStats . snd) blocks
+                  , localTip = listToMaybe $ fst <$> reverse blocks
                   , remoteTip = Just tip
-                  , invalidCreateTxs = flip foldMap (transactions block) \case
+                  , invalidCreateTxs = flip foldMap blocks \(_, block) -> flip foldMap (transactions block) \case
                       InvalidCreateTransaction contractId err -> Map.singleton contractId err
                       _ -> mempty
-                  , invalidApplyInputsTxs = flip foldMap (transactions block) \case
+                  , invalidApplyInputsTxs = flip foldMap blocks \(_, block) -> flip foldMap (transactions block) \case
                       InvalidApplyInputsTransaction txId _ err -> Map.singleton txId err
                       _ -> mempty
                   , events = [parent]
