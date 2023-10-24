@@ -1,7 +1,7 @@
-{ inputs', ... }:
+{ inputs, ... }:
 
 let
-  oci-images = inputs'.self.oci-images;
+  oci-images = inputs.self.oci-images;
   # OCI-Image Namer
   ociNamer = oci: builtins.unsafeDiscardStringContext "ghcr.io/input-output-hk/${oci.imageName}:latest";
 

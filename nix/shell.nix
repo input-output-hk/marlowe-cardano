@@ -1,11 +1,10 @@
-# This file is part of the IOGX template and is documented at the link below:
-# https://www.github.com/input-output-hk/iogx#34-nixshellnix
+{ repoRoot, inputs, pkgs, lib, system }:
 
-{ nix, inputs, inputs', pkgs, project, l, ... }:
+cabalProject:
 
 let
 
-  scripts = nix.marlowe-cardano.scripts;
+  scripts = repoRoot.nix.marlowe-cardano.scripts;
 
   isLinux = pkgs.stdenv.hostPlatform.isLinux;
 
@@ -16,11 +15,11 @@ in
 
 
   packages = [
-    inputs'.cardano-world.cardano.packages.cardano-address
-    inputs'.cardano-node.packages.cardano-node
-    inputs'.cardano-node.packages.cardano-cli
+    inputs.cardano-world.cardano.packages.cardano-address
+    inputs.cardano-node.packages.cardano-node
+    inputs.cardano-node.packages.cardano-cli
 
-    inputs'.marlowe-plutus.packages.marlowe-minting-validator
+    inputs.marlowe-plutus.packages.marlowe-minting-validator
 
     pkgs.z3
     pkgs.sqitchPg
@@ -29,7 +28,7 @@ in
     pkgs.jq
     pkgs.docker-compose
 
-    project.hsPkgs.hspec-golden.components.exes.hgold
+    cabalProject.hsPkgs.hspec-golden.components.exes.hgold
   ];
 
 
@@ -72,5 +71,15 @@ in
   };
 
 
-  enterShell = l.optionalString isLinux "refresh-compose";
+  shellHook = lib.optionalString isLinux "refresh-compose";
+
+
+  preCommit = {
+    cabal-fmt.enable = true;
+    cabal-fmt.extraOptions = "--no-tabular";
+    nixpkgs-fmt.enable = true;
+    shellcheck.enable = true;
+    fourmolu.enable = true;
+    hlint.enable = true;
+  };
 }

@@ -1,34 +1,57 @@
-# This file is part of the IOGX template and is documented at the link below:
-# https://www.github.com/input-output-hk/iogx#31-flakenix
-
 {
   description = "Marlowe Cardano implementation";
 
+
   inputs = {
-    cardano-world.url = "github:input-output-hk/cardano-world/d22f50fc77d23e2612ca2b313a098dd0b48834d4";
-    std.url = "github:divnix/std";
-    std.inputs.n2c.follows = "n2c";
-    iogx.url = "github:input-output-hk/iogx";
-    iogx.inputs.CHaP.follows = "CHaP";
-    iogx.inputs.hackage.follows = "hackage";
-    CHaP = {
-      url = "github:input-output-hk/cardano-haskell-packages?ref=repo";
-      flake = false;
+
+    std = {
+      url = "github:divnix/std";
+      inputs.n2c.follows = "n2c";
     };
+
+    # Use upstream when https://github.com/nlewo/nix2container/pull/82 is merged
+    n2c.url = "github:shlevy/nix2container/no-Size-on-dir";
+
+    marlowe-plutus.url = "github:input-output-hk/marlowe-plutus";
+
+    cardano-node.url = "github:input-output-hk/cardano-node?ref=8.1.2";
+
+    cardano-world.url = "github:input-output-hk/cardano-world/d22f50fc77d23e2612ca2b313a098dd0b48834d4";
+
+    iogx = {
+      url = "github:input-output-hk/iogx";
+      inputs.hackage.follows = "hackage";
+      inputs.CHaP.follows = "CHaP";
+      inputs.haskell-nix.follows = "haskell-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    nixpkgs.follows = "haskell-nix/nixpkgs";
+
     hackage = {
       url = "github:input-output-hk/hackage.nix";
       flake = false;
     };
-    # Use upstream when https://github.com/nlewo/nix2container/pull/82 is merged
-    n2c.url = "github:shlevy/nix2container/no-Size-on-dir";
-    marlowe-plutus.url = "github:input-output-hk/marlowe-plutus";
-    cardano-node.url = "github:input-output-hk/cardano-node?ref=8.1.2";
+
+    CHaP = {
+      url = "github:input-output-hk/cardano-haskell-packages?ref=repo";
+      flake = false;
+    };
+
+    haskell-nix = {
+      url = "github:input-output-hk/haskell.nix";
+      inputs.hackage.follows = "hackage";
+    };
   };
+
 
   outputs = inputs: inputs.iogx.lib.mkFlake {
     inherit inputs;
     repoRoot = ./.;
+    systems = [ "x86_64-linux" "x86_64-darwin" ];
+    outputs = import ./nix/outputs.nix;
   };
+
 
   nixConfig = {
     extra-substituters = [
