@@ -854,6 +854,8 @@ data RoleTokenConfig
   | RoleTokenAdvanced Address TokenMetadata
   | OpenRoleTokenSimple
   | OpenRoleTokenAdvanced TokenMetadata
+  | ThreadRoleTokenSimple
+  | ThreadRoleTokenAdvanced TokenMetadata
   deriving (Show, Eq, Ord, Generic)
 
 instance FromJSON RoleTokenConfig where
@@ -863,12 +865,17 @@ instance FromJSON RoleTokenConfig where
       "RoleTokenConfig"
       ( \obj ->
           let parseAdvanced = RoleTokenAdvanced <$> obj .: "address" <*> obj .: "metadata"
+              parseThread =
+                do
+                  script <- obj .: "script"
+                  guard $ script == ("ThreadRole" :: String)
+                  ThreadRoleTokenAdvanced <$> obj .: "metadata" <|> pure ThreadRoleTokenSimple
               parseOpen =
                 do
                   script <- obj .: "script"
                   guard $ script == ("OpenRole" :: String)
                   OpenRoleTokenAdvanced <$> obj .: "metadata" <|> pure OpenRoleTokenSimple
-           in parseAdvanced <|> parseOpen
+           in parseAdvanced <|> parseThread <|> parseOpen
       )
       value
 
@@ -885,6 +892,14 @@ instance ToJSON RoleTokenConfig where
   toJSON (OpenRoleTokenAdvanced config) =
     object
       [ ("script", "OpenRole")
+      , ("metadata", toJSON config)
+      ]
+  toJSON ThreadRoleTokenSimple =
+    object
+      [("script", "ThreadRole")]
+  toJSON (ThreadRoleTokenAdvanced config) =
+    object
+      [ ("script", "ThreadRole")
       , ("metadata", toJSON config)
       ]
 
@@ -904,7 +919,7 @@ instance ToSchema RoleTokenConfig where
           mempty
             & type_ ?~ OpenApiString
             & OpenApi.description ?~ "The type of script receiving the role token."
-            & enum_ ?~ ["OpenRole"]
+            & enum_ ?~ ["ThreadRole", "OpenRole"]
         openSchema =
           mempty
             & type_ ?~ OpenApiObject

@@ -810,6 +810,8 @@ instance FromDTO Tx.Mint where
           curry (second Just) . Tx.ToAddress
             <$> fromDTO address
             <*> fromDTO metadata
+        Web.ThreadRoleTokenSimple -> pure (Tx.ToSelf, Nothing)
+        Web.ThreadRoleTokenAdvanced metadata -> (Tx.ToSelf,) . Just <$> fromDTO metadata
         Web.OpenRoleTokenSimple -> pure (Tx.ToScript Tx.OpenRoleScript, Nothing)
         Web.OpenRoleTokenAdvanced metadata -> (Tx.ToScript Tx.OpenRoleScript,) . Just <$> fromDTO metadata
 

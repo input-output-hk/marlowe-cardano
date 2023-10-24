@@ -33,6 +33,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   Assets (..),
   ChainPoint,
   Move (FindConsumingTxs, FindTx),
+  PolicyId,
   RuntimeChainSeekClient,
   TokenName,
   Tokens (..),
@@ -59,7 +60,11 @@ import Language.Marlowe.Runtime.History.Api (
  )
 import Language.Marlowe.Runtime.Plutus.V2.Api (fromPlutusCurrencySymbol)
 import Language.Marlowe.Runtime.Transaction.Api (
+  Destination (..),
+  HelperScript (..),
   LoadHelpersContextError (..),
+  RoleTokensConfig (..),
+  unMint,
  )
 import Language.Marlowe.Runtime.Transaction.Constraints (
   HelperScriptInfo (..),
@@ -95,7 +100,7 @@ data LoadHelpersContextSelector f where
 type LoadHelpersContext m =
   forall v
    . MarloweVersion v
-  -> Maybe ContractId
+  -> Either (PolicyId, RoleTokensConfig) (Maybe ContractId)
   -> m (Either LoadHelpersContextError HelpersContext)
 
 loadHelpersContext
@@ -106,7 +111,7 @@ loadHelpersContext
   -> C.NetworkId
   -> Connector RuntimeChainSeekClient m
   -> LoadHelpersContext m
-loadHelpersContext getCurrentScripts _ networkId _ desiredVersion Nothing =
+loadHelpersContext getCurrentScripts _ networkId _ desiredVersion (Right Nothing) =
   pure
     . Right
     $ HelpersContext
@@ -114,7 +119,30 @@ loadHelpersContext getCurrentScripts _ networkId _ desiredVersion Nothing =
       , helperPolicyId = ""
       , helperScriptStates = mempty
       }
-loadHelpersContext getCurrentScripts getScripts networkId chainSyncConnector desiredVersion (Just contractId@(ContractId (TxOutRef creationTxId _))) =
+loadHelpersContext getCurrentScripts _ networkId _ desiredVersion (Left (rolesCurrency, roleTokens)) =
+  -- TODO: Generalize beyoned open roles when other helper script types are supported.
+  case (OpenRoleScript `Map.lookup` current, roleTokens) of
+    (Just _, RoleTokensNone) ->
+      pure . Right $ HelpersContext current rolesCurrency mempty
+    (Just _, RoleTokensUsePolicy _) ->
+      pure . Right $ HelpersContext current rolesCurrency mempty
+    (Just helperScriptInfo, RoleTokensMint mint) ->
+      pure
+        . Right
+        . HelpersContext current rolesCurrency
+        . Map.map (const HelperScriptCreateState{..})
+        . Map.filter ((== ToScript OpenRoleScript) . fst)
+        $ unMint mint
+    (Just helperScriptInfo, RoleTokensUsePolicyWithOpenRoles policyId _ openRoleNames) ->
+      pure
+        . Right
+        . HelpersContext current policyId
+        . Map.fromList
+        $ (,HelperScriptCreateState{..}) <$> openRoleNames
+    (Nothing, _) -> pure . Right $ HelpersContext current "" mempty
+  where
+    current = getHelperInfos helperScript networkId $ getCurrentScripts desiredVersion
+loadHelpersContext getCurrentScripts getScripts networkId chainSyncConnector desiredVersion (Right (Just contractId@(ContractId (TxOutRef creationTxId _)))) =
   withEventFields LoadHelpersContext [contractId] $
     const . runConnector chainSyncConnector . ChainSeekClient $
       pure clientFindContract
@@ -225,6 +253,7 @@ loadHelpersContext getCurrentScripts getScripts networkId chainSyncConnector des
                   context{helperScriptStates = Map.insert roleName state helperScriptStates}
                   remainder
           }
+    clientFollowHelper helpersContext _ = SendMsgDone $ Right helpersContext
 
 getHelperInfos
   :: (Ord k)
