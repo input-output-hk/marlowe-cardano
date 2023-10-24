@@ -70,6 +70,7 @@ import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.Cardano.Api (
   fromCardanoAddressInEra,
+  fromCardanoDatumHash,
   fromCardanoTxIn,
   toCardanoAddressInEra,
   toCardanoPaymentKeyHash,
@@ -79,6 +80,7 @@ import Language.Marlowe.Runtime.Cardano.Api (
   toCardanoTxIn,
   toCardanoTxOut,
   toCardanoTxOut',
+  toCardanoTxOutDatum',
   toCardanoTxOutValue,
   tokensToCardanoValue,
  )
@@ -949,9 +951,14 @@ allUtxos era marloweVersion scriptCtx WalletContext{..} HelpersContext{..} inclu
           <*> ( C.TxOut
                   <$> toCardanoAddressInEra C.cardanoEra address
                   <*> toCardanoTxOutValue multiAssetSupported assets
-                  <*> pure
-                    ( C.TxOutDatumInline era . C.unsafeHashableScriptData . toCardanoScriptData $
-                        Core.toChainDatum marloweVersion datum
+                  <*> toCardanoTxOutDatum'
+                    C.cardanoEra
+                    ( Just
+                        . fromCardanoDatumHash
+                        . C.hashScriptDataBytes
+                        . unsafeHashableScriptData
+                        $ toCardanoScriptData
+                        $ Core.toChainDatum marloweVersion datum
                     )
                   <*> pure C.ReferenceScriptNone
               )
