@@ -1,9 +1,9 @@
 Show: MsgCancel
 Binary: 08
-Show: MsgCancelScan
-Binary: 0b
-Show: MsgCollect
-Binary: 0a
+Show: MsgCancelScan Nothing
+Binary: 0b00
+Show: MsgCollect Nothing
+Binary: 0a00
 Show: MsgCollectFailed (TxInPast (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}})) Genesis
 Binary: 0c030100000000000000010000000000000000000000000000000100
 Show: MsgCollectFailed (TxInPast (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}})) Genesis
@@ -142,46 +142,46 @@ Show: MsgCollected [] Genesis
 Binary: 0d02000000000000000000
 Show: MsgCollected [] Genesis
 Binary: 0d05000000000000000000
-Show: MsgDone
-Binary: 02
+Show: MsgDone Nothing
+Binary: 0200
 Show: MsgPoll
 Binary: 07
-Show: MsgQueryNext (AdvanceBlocks 1)
-Binary: 0101000000000000000001
-Show: MsgQueryNext (FindConsumingTxs (fromList [TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}}]))
-Binary: 0104000000000000000100000000000000000001
-Show: MsgQueryNext (FindConsumingTxs (fromList [TxOutRef {txId = "61", txIx = TxIx {unTxIx = 1}}]))
-Binary: 010400000000000000010000000000000001610001
-Show: MsgQueryNext (FindConsumingTxs (fromList []))
-Binary: 01040000000000000000
-Show: MsgQueryNext (FindTx "" False)
-Binary: 0103000000000000000000
-Show: MsgQueryNext (FindTx "" True)
-Binary: 0103000000000000000001
-Show: MsgQueryNext (FindTx "61" False)
-Binary: 010300000000000000016100
-Show: MsgQueryNext (FindTxsFor (fromList (PaymentKeyCredential "" :| [PaymentKeyCredential "61"])))
-Binary: 0106000000000000000200000000000000000000000000000000000161
-Show: MsgQueryNext (FindTxsFor (fromList (PaymentKeyCredential "" :| [ScriptCredential ""])))
-Binary: 01060000000000000002000000000000000000010000000000000000
-Show: MsgQueryNext (FindTxsFor (fromList (PaymentKeyCredential "" :| [ScriptCredential "61"])))
-Binary: 0106000000000000000200000000000000000001000000000000000161
-Show: MsgQueryNext (FindTxsFor (fromList (PaymentKeyCredential "" :| [])))
-Binary: 01060000000000000001000000000000000000
-Show: MsgQueryNext (FindTxsFor (fromList (PaymentKeyCredential "61" :| [])))
-Binary: 0106000000000000000100000000000000000161
-Show: MsgQueryNext (FindTxsFor (fromList (ScriptCredential "" :| [])))
-Binary: 01060000000000000001010000000000000000
-Show: MsgQueryNext (FindTxsFor (fromList (ScriptCredential "61" :| [])))
-Binary: 0106000000000000000101000000000000000161
-Show: MsgQueryNext (Intersect [BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}}])
-Binary: 01020000000000000001000000000000000100000000000000000000000000000001
-Show: MsgQueryNext (Intersect [BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}])
-Binary: 0102000000000000000100000000000000010000000000000001610000000000000001
-Show: MsgQueryNext (Intersect [])
-Binary: 01020000000000000000
-Show: MsgQueryNext AdvanceToTip
-Binary: 0105
+Show: MsgQueryNext Nothing (AdvanceBlocks 1)
+Binary: 010001000000000000000001
+Show: MsgQueryNext Nothing (FindConsumingTxs (fromList [TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}}]))
+Binary: 010004000000000000000100000000000000000001
+Show: MsgQueryNext Nothing (FindConsumingTxs (fromList [TxOutRef {txId = "61", txIx = TxIx {unTxIx = 1}}]))
+Binary: 01000400000000000000010000000000000001610001
+Show: MsgQueryNext Nothing (FindConsumingTxs (fromList []))
+Binary: 0100040000000000000000
+Show: MsgQueryNext Nothing (FindTx "" False)
+Binary: 010003000000000000000000
+Show: MsgQueryNext Nothing (FindTx "" True)
+Binary: 010003000000000000000001
+Show: MsgQueryNext Nothing (FindTx "61" False)
+Binary: 01000300000000000000016100
+Show: MsgQueryNext Nothing (FindTxsFor (fromList (PaymentKeyCredential "" :| [PaymentKeyCredential "61"])))
+Binary: 010006000000000000000200000000000000000000000000000000000161
+Show: MsgQueryNext Nothing (FindTxsFor (fromList (PaymentKeyCredential "" :| [ScriptCredential ""])))
+Binary: 0100060000000000000002000000000000000000010000000000000000
+Show: MsgQueryNext Nothing (FindTxsFor (fromList (PaymentKeyCredential "" :| [ScriptCredential "61"])))
+Binary: 010006000000000000000200000000000000000001000000000000000161
+Show: MsgQueryNext Nothing (FindTxsFor (fromList (PaymentKeyCredential "" :| [])))
+Binary: 0100060000000000000001000000000000000000
+Show: MsgQueryNext Nothing (FindTxsFor (fromList (PaymentKeyCredential "61" :| [])))
+Binary: 010006000000000000000100000000000000000161
+Show: MsgQueryNext Nothing (FindTxsFor (fromList (ScriptCredential "" :| [])))
+Binary: 0100060000000000000001010000000000000000
+Show: MsgQueryNext Nothing (FindTxsFor (fromList (ScriptCredential "61" :| [])))
+Binary: 010006000000000000000101000000000000000161
+Show: MsgQueryNext Nothing (Intersect [BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}}])
+Binary: 0100020000000000000001000000000000000100000000000000000000000000000001
+Show: MsgQueryNext Nothing (Intersect [BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}])
+Binary: 010002000000000000000100000000000000010000000000000001610000000000000001
+Show: MsgQueryNext Nothing (Intersect [])
+Binary: 0100020000000000000000
+Show: MsgQueryNext Nothing AdvanceToTip
+Binary: 010005
 Show: MsgRejectQuery (TxInPast (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}})) Genesis
 Binary: 03030100000000000000010000000000000000000000000000000100
 Show: MsgRejectQuery (TxInPast (BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}})) Genesis
@@ -656,39 +656,39 @@ Show: MsgRollForward (fromList []) Genesis Genesis
 Binary: 040400000000000000000000
 Show: MsgRollForward (fromList []) Genesis Genesis
 Binary: 040600000000000000000000
-Show: MsgScan (AdvanceBlocks 1)
-Binary: 0901000000000000000001
-Show: MsgScan (FindConsumingTxs (fromList [TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}}]))
-Binary: 0904000000000000000100000000000000000001
-Show: MsgScan (FindConsumingTxs (fromList [TxOutRef {txId = "61", txIx = TxIx {unTxIx = 1}}]))
-Binary: 090400000000000000010000000000000001610001
-Show: MsgScan (FindConsumingTxs (fromList []))
-Binary: 09040000000000000000
-Show: MsgScan (FindTx "" False)
-Binary: 0903000000000000000000
-Show: MsgScan (FindTx "" True)
-Binary: 0903000000000000000001
-Show: MsgScan (FindTx "61" False)
-Binary: 090300000000000000016100
-Show: MsgScan (FindTxsFor (fromList (PaymentKeyCredential "" :| [PaymentKeyCredential "61"])))
-Binary: 0906000000000000000200000000000000000000000000000000000161
-Show: MsgScan (FindTxsFor (fromList (PaymentKeyCredential "" :| [ScriptCredential ""])))
-Binary: 09060000000000000002000000000000000000010000000000000000
-Show: MsgScan (FindTxsFor (fromList (PaymentKeyCredential "" :| [ScriptCredential "61"])))
-Binary: 0906000000000000000200000000000000000001000000000000000161
-Show: MsgScan (FindTxsFor (fromList (PaymentKeyCredential "" :| [])))
-Binary: 09060000000000000001000000000000000000
-Show: MsgScan (FindTxsFor (fromList (PaymentKeyCredential "61" :| [])))
-Binary: 0906000000000000000100000000000000000161
-Show: MsgScan (FindTxsFor (fromList (ScriptCredential "" :| [])))
-Binary: 09060000000000000001010000000000000000
-Show: MsgScan (FindTxsFor (fromList (ScriptCredential "61" :| [])))
-Binary: 0906000000000000000101000000000000000161
-Show: MsgScan (Intersect [BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}}])
-Binary: 09020000000000000001000000000000000100000000000000000000000000000001
-Show: MsgScan (Intersect [BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}])
-Binary: 0902000000000000000100000000000000010000000000000001610000000000000001
-Show: MsgScan (Intersect [])
-Binary: 09020000000000000000
-Show: MsgScan AdvanceToTip
-Binary: 0905
+Show: MsgScan Nothing (AdvanceBlocks 1)
+Binary: 090001000000000000000001
+Show: MsgScan Nothing (FindConsumingTxs (fromList [TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}}]))
+Binary: 090004000000000000000100000000000000000001
+Show: MsgScan Nothing (FindConsumingTxs (fromList [TxOutRef {txId = "61", txIx = TxIx {unTxIx = 1}}]))
+Binary: 09000400000000000000010000000000000001610001
+Show: MsgScan Nothing (FindConsumingTxs (fromList []))
+Binary: 0900040000000000000000
+Show: MsgScan Nothing (FindTx "" False)
+Binary: 090003000000000000000000
+Show: MsgScan Nothing (FindTx "" True)
+Binary: 090003000000000000000001
+Show: MsgScan Nothing (FindTx "61" False)
+Binary: 09000300000000000000016100
+Show: MsgScan Nothing (FindTxsFor (fromList (PaymentKeyCredential "" :| [PaymentKeyCredential "61"])))
+Binary: 090006000000000000000200000000000000000000000000000000000161
+Show: MsgScan Nothing (FindTxsFor (fromList (PaymentKeyCredential "" :| [ScriptCredential ""])))
+Binary: 0900060000000000000002000000000000000000010000000000000000
+Show: MsgScan Nothing (FindTxsFor (fromList (PaymentKeyCredential "" :| [ScriptCredential "61"])))
+Binary: 090006000000000000000200000000000000000001000000000000000161
+Show: MsgScan Nothing (FindTxsFor (fromList (PaymentKeyCredential "" :| [])))
+Binary: 0900060000000000000001000000000000000000
+Show: MsgScan Nothing (FindTxsFor (fromList (PaymentKeyCredential "61" :| [])))
+Binary: 090006000000000000000100000000000000000161
+Show: MsgScan Nothing (FindTxsFor (fromList (ScriptCredential "" :| [])))
+Binary: 0900060000000000000001010000000000000000
+Show: MsgScan Nothing (FindTxsFor (fromList (ScriptCredential "61" :| [])))
+Binary: 090006000000000000000101000000000000000161
+Show: MsgScan Nothing (Intersect [BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "", blockNo = BlockNo {unBlockNo = 1}}])
+Binary: 0900020000000000000001000000000000000100000000000000000000000000000001
+Show: MsgScan Nothing (Intersect [BlockHeader {slotNo = SlotNo {unSlotNo = 1}, headerHash = "61", blockNo = BlockNo {unBlockNo = 1}}])
+Binary: 090002000000000000000100000000000000010000000000000001610000000000000001
+Show: MsgScan Nothing (Intersect [])
+Binary: 0900020000000000000000
+Show: MsgScan Nothing AdvanceToTip
+Binary: 090005
