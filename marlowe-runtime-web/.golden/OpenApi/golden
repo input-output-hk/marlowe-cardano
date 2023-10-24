@@ -1974,6 +1974,9 @@
                         },
                         "type": "object"
                     },
+                    "threadTokenName": {
+                        "type": "string"
+                    },
                     "version": {
                         "$ref": "#/components/schemas/MarloweVersion"
                     }
@@ -2056,6 +2059,25 @@
                         "required": [
                             "address",
                             "metadata"
+                        ],
+                        "type": "object"
+                    },
+                    {
+                        "properties": {
+                            "metadata": {
+                                "$ref": "#/components/schemas/TokenMetadata"
+                            },
+                            "script": {
+                                "description": "The type of script receiving the role token.",
+                                "enum": [
+                                    "ThreadRole",
+                                    "OpenRole"
+                                ],
+                                "type": "string"
+                            }
+                        },
+                        "required": [
+                            "script"
                         ],
                         "type": "object"
                     }
