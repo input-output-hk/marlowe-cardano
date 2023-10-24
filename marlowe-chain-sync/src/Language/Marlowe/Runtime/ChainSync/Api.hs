@@ -54,21 +54,24 @@ import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
+import Data.Aeson.Text (encodeToLazyText)
 import Data.Aeson.Types (parseFail, toJSONKeyText)
-import Data.Bifunctor (bimap)
+import Data.Bifunctor (Bifunctor (..), bimap)
 import Data.Binary (Binary (..), get, getWord8, put, putWord8)
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import qualified Data.ByteString.Char8 as BS
+import Data.Foldable (Foldable (..))
 import Data.Function (on)
 import Data.Functor (($>))
 import Data.Hashable (Hashable)
 import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, mapMaybe)
 import Data.Proxy (Proxy (..))
 import qualified Data.SOP.Counting as Counting
+import Data.SOP.Strict (K (..), NP (..))
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Set.NonEmpty (NESet)
@@ -77,8 +80,10 @@ import Data.String (IsString (..))
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
+import qualified Data.Text.Lazy as TL
 import Data.Time (UTCTime (..), diffTimeToPicoseconds, picosecondsToDiffTime)
 import Data.Time.Calendar.OrdinalDate (fromOrdinalDateValid, toOrdinalDate)
+import Data.Time.Clock (nominalDiffTimeToSeconds)
 import Data.Traversable (for)
 import Data.Type.Equality (type (:~:) (Refl))
 import qualified Data.Vector as Vector
@@ -97,19 +102,28 @@ import qualified Network.Protocol.ChainSeek.Types as ChainSeek
 import Network.Protocol.Codec.Spec
 import Network.Protocol.Handshake.Types (HasSignature (..))
 import qualified Network.Protocol.Job.Types as Job
+import Network.Protocol.Query.Client (QueryClientSelector, renderQueryClientSelectorOTel)
+import Network.Protocol.Query.Server (
+  QueryServerSelector,
+  RenderRequestOTel,
+  RequestRenderedOTel (..),
+  renderQueryServerSelectorOTel,
+ )
 import Network.Protocol.Query.Types (OTelRequest (reqTypeName))
 import qualified Network.Protocol.Query.Types as Query
 import Observe.Event.Render.OpenTelemetry (RenderSelectorOTel)
 import OpenTelemetry.Attributes (Attribute, PrimitiveAttribute (..))
 import OpenTelemetry.Trace.Core (toAttribute)
-import Ouroboros.Consensus.BlockchainTime (RelativeTime, SlotLength, SystemStart (..))
+import Ouroboros.Consensus.Block (EpochNo (..), EpochSize (..))
+import qualified Ouroboros.Consensus.Block as O
+import Ouroboros.Consensus.BlockchainTime (RelativeTime, SlotLength (..), SystemStart (..))
 import Ouroboros.Consensus.HardFork.History (
-  Bound,
-  EraEnd,
-  EraParams,
-  EraSummary,
+  Bound (..),
+  EraEnd (..),
+  EraParams (..),
+  EraSummary (..),
   Interpreter,
-  SafeZone,
+  SafeZone (..),
   Summary (Summary),
   mkInterpreter,
  )
@@ -991,6 +1005,158 @@ data ChainSyncQuery a where
   GetTip :: ChainSyncQuery ChainPoint
   GetEra :: ChainSyncQuery AnyCardanoEra
 
+type ChainSyncQueryClientSelector = QueryClientSelector ChainSyncQuery
+
+type ChainSyncQueryServerSelector = QueryServerSelector ChainSyncQuery
+
+renderChainSyncQueryClientSelector :: RenderSelectorOTel ChainSyncQueryClientSelector
+renderChainSyncQueryClientSelector = renderQueryClientSelectorOTel renderChainSyncQueryOTel
+
+renderChainSyncQueryServerSelector :: RenderSelectorOTel ChainSyncQueryServerSelector
+renderChainSyncQueryServerSelector = renderQueryServerSelectorOTel renderChainSyncQueryOTel
+
+renderChainSyncQueryOTel :: RenderRequestOTel ChainSyncQuery
+renderChainSyncQueryOTel = \case
+  GetSecurityParameter ->
+    RequestRenderedOTel
+      { requestName = "get-security-parameter"
+      , requestAttributes = []
+      , responseAttributes = \k -> [("security-parameter", toAttribute k)]
+      }
+  GetNetworkId ->
+    RequestRenderedOTel
+      { requestName = "get-network-id"
+      , requestAttributes = []
+      , responseAttributes = \case
+          Mainnet -> [("network-kind", "mainnet")]
+          Testnet (NetworkMagic i) ->
+            [ ("network-kind", "testnet")
+            , ("network-magic", toAttribute $ IntAttribute $ fromIntegral i)
+            ]
+      }
+  GetProtocolParameters ->
+    RequestRenderedOTel
+      { requestName = "get-protocol-parameters"
+      , requestAttributes = []
+      , responseAttributes = \params ->
+          [("protocol-parameters", toAttribute $ TextAttribute $ TL.toStrict $ encodeToLazyText params)]
+      }
+  GetSystemStart ->
+    RequestRenderedOTel
+      { requestName = "get-system-start"
+      , requestAttributes = []
+      , responseAttributes = \(SystemStart time) ->
+          [("system-start", fromString $ show time)]
+      }
+  GetEraHistory ->
+    RequestRenderedOTel
+      { requestName = "get-era-history"
+      , requestAttributes = []
+      , responseAttributes = \(EraHistory CardanoMode (unInterpreter -> Summary summary)) ->
+          summaryAttributes summary $
+            Counting.Exactly $
+              K "byron"
+                :* K "shelley"
+                :* K "allegra"
+                :* K "mary"
+                :* K "alonzo"
+                :* K "babbage"
+                :* K "conway"
+                :* Nil
+      }
+  GetUTxOs query ->
+    RequestRenderedOTel
+      { requestName = "get-utxos"
+      , requestAttributes = case query of
+          GetUTxOsAtAddresses addresses ->
+            [
+              ( "for-addresses"
+              , toAttribute $ mapMaybe toBech32 $ Set.toList addresses
+              )
+            ]
+          GetUTxOsForTxOutRefs outs ->
+            [
+              ( "for-outputs"
+              , toAttribute $ renderTxOutRef <$> Set.toList outs
+              )
+            ]
+      , responseAttributes = \utxos ->
+          [("outputs", toAttribute $ fmap renderTxOutRef $ Map.keys $ unUTxOs utxos)]
+      }
+  GetNodeTip ->
+    RequestRenderedOTel
+      { requestName = "get-node-tip"
+      , requestAttributes = []
+      , responseAttributes = tipAttributes
+      }
+  GetTip ->
+    RequestRenderedOTel
+      { requestName = "get-tip"
+      , requestAttributes = []
+      , responseAttributes = tipAttributes
+      }
+  GetEra ->
+    RequestRenderedOTel
+      { requestName = "get-era"
+      , requestAttributes = []
+      , responseAttributes = \(AnyCardanoEra era) ->
+          [
+            ( "era"
+            , case era of
+                ByronEra -> "byron"
+                ShelleyEra -> "shelley"
+                AllegraEra -> "allegra"
+                MaryEra -> "mary"
+                AlonzoEra -> "alonzo"
+                BabbageEra -> "babbage"
+                ConwayEra -> "conway"
+            )
+          ]
+      }
+
+summaryAttributes :: Counting.NonEmpty xs EraSummary -> Counting.Exactly xs Text -> [(Text, Attribute)]
+summaryAttributes (Counting.NonEmptyOne summary) (Counting.Exactly (K era :* _)) =
+  eraSummaryAttributes era summary
+summaryAttributes (Counting.NonEmptyCons summary summaries) (Counting.Exactly (K era :* eras)) =
+  eraSummaryAttributes era summary <> summaryAttributes summaries (Counting.Exactly eras)
+
+eraSummaryAttributes :: Text -> EraSummary -> [(Text, Attribute)]
+eraSummaryAttributes eraName EraSummary{..} =
+  first ((eraName <> ".") <>)
+    <$> fold
+      [ eraStartAttributes eraStart
+      , eraEndAttributes eraEnd
+      , eraParamsAttributes eraParams
+      ]
+
+eraStartAttributes :: Bound -> [(Text, Attribute)]
+eraStartAttributes Bound{..} =
+  [ ("era-start.relative-time", fromString $ show boundTime)
+  , ("era-start.slot", toAttribute $ IntAttribute $ fromIntegral $ O.unSlotNo boundSlot)
+  , ("era-start.epoch", toAttribute $ IntAttribute $ fromIntegral $ unEpochNo boundEpoch)
+  ]
+
+eraEndAttributes :: EraEnd -> [(Text, Attribute)]
+eraEndAttributes = \case
+  EraUnbounded -> [("era-end", "unbounded")]
+  EraEnd Bound{..} ->
+    [ ("era-end.relative-time", fromString $ show boundTime)
+    , ("era-end.slot", toAttribute $ IntAttribute $ fromIntegral $ O.unSlotNo boundSlot)
+    , ("era-end.epoch", toAttribute $ IntAttribute $ fromIntegral $ unEpochNo boundEpoch)
+    ]
+
+eraParamsAttributes :: EraParams -> [(Text, Attribute)]
+eraParamsAttributes EraParams{..} =
+  [ ("epoch-size", toAttribute $ IntAttribute $ fromIntegral $ unEpochSize eraEpochSize)
+  , ("slot-length", toAttribute $ IntAttribute $ floor $ nominalDiffTimeToSeconds $ getSlotLength eraSlotLength)
+  ,
+    ( "safe-zone"
+    , case eraSafeZone of
+        StandardSafeZone w -> toAttribute $ IntAttribute $ fromIntegral w
+        UnsafeIndefiniteSafeZone -> "indefinite"
+    )
+  ]
+
 instance Ord AnyCardanoEra where
   compare = on compare fromEnum
 
@@ -1395,11 +1561,11 @@ renderChainSeekClientSelectorOTel =
 
 pointAttributes :: Bool -> ChainPoint -> [(T.Text, Attribute)]
 pointAttributes isEnd point = case point of
-  Genesis -> [("cardano.chain-point" <> suffix, "genesis")]
+  Genesis -> [("chain-point" <> suffix, "genesis")]
   At BlockHeader{..} ->
-    [ ("cardano.chain-point.blockNo" <> suffix, toAttribute $ IntAttribute $ fromIntegral blockNo)
-    , ("cardano.chain-point.slotNo" <> suffix, toAttribute $ IntAttribute $ fromIntegral slotNo)
-    , ("cardano.chain-point.block-header-hash" <> suffix, toAttribute $ TextAttribute $ read $ show headerHash)
+    [ ("chain-point.blockNo" <> suffix, toAttribute $ IntAttribute $ fromIntegral blockNo)
+    , ("chain-point.slotNo" <> suffix, toAttribute $ IntAttribute $ fromIntegral slotNo)
+    , ("chain-point.block-header-hash" <> suffix, toAttribute $ TextAttribute $ read $ show headerHash)
     ]
   where
     suffix
@@ -1408,11 +1574,11 @@ pointAttributes isEnd point = case point of
 
 tipAttributes :: ChainPoint -> [(T.Text, Attribute)]
 tipAttributes = \case
-  Genesis -> [("cardano.chain-tip", "genesis")]
+  Genesis -> [("chain-tip", "genesis")]
   At BlockHeader{..} ->
-    [ ("cardano.chain-tip.blockNo", toAttribute $ IntAttribute $ fromIntegral blockNo)
-    , ("cardano.chain-tip.slotNo", toAttribute $ IntAttribute $ fromIntegral slotNo)
-    , ("cardano.chain-tip.block-header-hash", toAttribute $ TextAttribute $ read $ show headerHash)
+    [ ("chain-tip.blockNo", toAttribute $ IntAttribute $ fromIntegral blockNo)
+    , ("chain-tip.slotNo", toAttribute $ IntAttribute $ fromIntegral slotNo)
+    , ("chain-tip.block-header-hash", toAttribute $ TextAttribute $ read $ show headerHash)
     ]
 
 renderChainSeekQueryOTel :: RenderChainSeekQueryOTel Move

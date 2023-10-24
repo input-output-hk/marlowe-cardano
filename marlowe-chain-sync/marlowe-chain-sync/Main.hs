@@ -44,7 +44,8 @@ import Network.Protocol.Driver (TcpServerDependencies (..))
 import Network.Protocol.Driver.Trace (tcpServerTraced)
 import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Peer.Monad.TCP (TcpServerPeerTDependencies (..), tcpServerPeerT)
-import Network.Protocol.Query.Server (queryServerPeer)
+import Network.Protocol.Query.Server (queryServerPeerT)
+import qualified Network.Protocol.Query.Types as Query
 import Observe.Event.Explicit (injectSelector)
 import OpenTelemetry.Trace
 import Options (Options (..), getOptions)
@@ -111,13 +112,15 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
                 pure $ chainSeekServerPeer Genesis inj server
             }
 
-      tcpServerTraced "chain-query" $ injectSelector QueryServer
+      tcpServerPeerT "query" $ injectSelector QueryServer
         -<
-          TcpServerDependencies
+          TcpServerPeerTDependencies
             { host
             , port = queryPort
-            , toPeer = queryServerPeer
-            , serverSource = queryServerSource
+            , nobodyHasAgency = Query.TokDone
+            , serverSource = ServerSourceTraced \inj -> do
+                server <- getServer queryServerSource
+                pure $ queryServerPeerT inj server
             }
 
       tcpServerTraced "chain-job" $ injectSelector JobServer

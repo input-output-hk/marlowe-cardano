@@ -29,10 +29,13 @@ import Language.Marlowe.Runtime.Contract.Store.File (
   defaultContractStoreOptions,
  )
 import Logging (RootSelector (..), renderRootSelectorOTel)
+import Network.Protocol.Connection (Connection (..), ConnectionTraced (..), Connector (..), ConnectorTraced (..))
 import Network.Protocol.Driver (TcpServerDependencies (..))
 import Network.Protocol.Driver.Trace (tcpClientTraced, tcpServerTraced)
-import Network.Protocol.Query.Client (queryClientPeer)
+import Network.Protocol.Peer.Monad.TCP (tcpClientPeerTTraced)
+import Network.Protocol.Query.Client (queryClientPeerT)
 import Network.Protocol.Query.Server (queryServerPeer)
+import qualified Network.Protocol.Query.Types as Query
 import Network.Socket (HostName, PortNumber)
 import Network.TypedProtocol (unsafeIntToNat)
 import Observe.Event (injectSelector)
@@ -76,11 +79,16 @@ run Options{..} = do
       <$> createContractStore ContractStoreOptions{..}
   flip runComponent_ () proc _ -> do
     let chainSyncQueryConnector =
-          tcpClientTraced
-            (injectSelector ChainSyncQueryClient)
-            chainSyncHost
-            chainSyncQueryPort
-            queryClientPeer
+          let connectorTraced =
+                tcpClientPeerTTraced
+                  "chain-query"
+                  Query.TokDone
+                  (injectSelector ChainSyncQueryClient)
+                  chainSyncHost
+                  chainSyncQueryPort
+           in Connector do
+                ConnectionTraced{..} <- openConnectionTraced connectorTraced
+                pure $ Connection \client -> runConnectionTraced \inj -> queryClientPeerT inj client
 
         marloweBulkSyncConnector =
           tcpClientTraced
