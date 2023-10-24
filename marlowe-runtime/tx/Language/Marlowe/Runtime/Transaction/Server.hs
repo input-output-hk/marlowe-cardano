@@ -316,7 +316,6 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
   referenceInputsSupported <- referenceInputsSupportedInEra (CreateEraUnsupported $ AnyCardanoEra era) era
   let adjustMinUtxo = mkAdjustMinimumUtxo referenceInputsSupported protocolParameters version
   walletContext <- lift $ loadWalletContext addresses
-  helpersContext <- withExceptT CreateLoadHelpersContextFailed $ ExceptT $ loadHelpersContext version Nothing
   (_, dummyState) <-
     except $
       initialMarloweState
@@ -382,6 +381,11 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
         , marloweScriptHash = marloweScript
         , payoutScriptHash = payoutScript
         }
+  helpersContext <-
+    withExceptT CreateLoadHelpersContextFailed $
+      ExceptT $
+        loadHelpersContext version $
+          Left (rolesCurrency, roleTokens)
   let -- Fast analysis of safety: examines bounds for transactions.
       contractSafetyErrors = checkContract networkId roleTokens version contract' continuations
       limitAnalysisTime =
@@ -510,7 +514,7 @@ execApplyInputs
         ExceptT $
           loadMarloweContext version contractId
     helpersContext <-
-      withExceptT ApplyInputsLoadHelpersContextFailed $ ExceptT $ loadHelpersContext version $ Just contractId
+      withExceptT ApplyInputsLoadHelpersContextFailed $ ExceptT $ loadHelpersContext version $ Right $ Just contractId
     let getTipSlot =
           atomically $
             getTip >>= \case
@@ -576,7 +580,7 @@ execWithdraw era solveConstraints loadWalletContext loadPayoutContext loadHelper
     payoutContext <- lift $ loadPayoutContext version payouts
     (inputs, constraints) <- buildWithdrawConstraints payoutContext version payouts
     walletContext <- lift $ loadWalletContext addresses
-    helpersContext <- withExceptT WithdrawLoadHelpersContextFailed $ ExceptT $ loadHelpersContext version Nothing
+    helpersContext <- withExceptT WithdrawLoadHelpersContextFailed $ ExceptT $ loadHelpersContext version $ Right Nothing
     txBody <-
       except $
         first WithdrawConstraintError $

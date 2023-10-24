@@ -359,6 +359,7 @@ spec = do
       -- generation only tests with empty wallets!
       maxLovelace <- choose (0, 40_000_000)
       walletContext <- genWalletWithAsset marloweVersion constraints maxLovelace
+      let helpersContext = HelpersContext mempty "" mempty
 
       let extractCollat :: TxBodyContent BuildTx BabbageEra -> [Chain.Assets]
           extractCollat txBC = map Chain.assets selectedCollat
@@ -465,6 +466,7 @@ spec = do
               marloweVersion
               marloweContext
               walletContext
+              helpersContext
               txBodyContent
           selectResult :: Either String ()
           selectResult =
@@ -499,6 +501,7 @@ spec = do
     prop "selectCoins should increase the number of outputs by either 0 or exactly 1" \(SomeTxConstraints marloweVersion constraints) -> do
       scriptCtx <- genSimpleScriptContext marloweVersion constraints
       walletContext <- genWalletWithNuisance marloweVersion constraints 1_000_000_000
+      let helpersContext = HelpersContext mempty "" mempty
       txBodyContentBefore <- genBodyContentWith500AdaOutput
 
       let -- Get a non-ADA asset count from a wallet context
@@ -522,6 +525,7 @@ spec = do
                 marloweVersion
                 scriptCtx
                 walletContext
+                helpersContext
                 txBodyContentBefore
 
       pure $ case selectResult of
@@ -536,6 +540,7 @@ spec = do
     prop "selectCoins creates a balanceable tx" \(SomeTxConstraints marloweVersion constraints) -> do
       scriptCtx <- genSimpleScriptContext marloweVersion constraints
       walletContext <- genWalletWithNuisance marloweVersion constraints 1_000_000_000
+      let helpersContext = HelpersContext mempty "" mempty
       txBodyContentBefore <- genBodyContentWith500AdaOutput
 
       let walletHasValue :: WalletContext -> WalletValueDesc
@@ -615,6 +620,7 @@ spec = do
                 marloweVersion
                 scriptCtx
                 walletContext
+                helpersContext
                 txBodyContentBefore
 
       pure $ case selectResult of
@@ -730,6 +736,7 @@ spec = do
               let -- The following 4 definitions are for constructing a pure EraHistory,
                   -- which would normally come from the chain at runtime
 
+                  helpersContext = HelpersContext mempty "" mempty
                   eraHistory :: EraHistory CardanoMode
                   eraHistory =
                     EraHistory CardanoMode $
@@ -833,6 +840,7 @@ spec = do
                     MarloweV1
                     scriptCtx
                     walletContext
+                    helpersContext
                     txBodyContent of
                     Right _ -> label "balancing succeeded" True
                     Left (BalancingError err) ->
