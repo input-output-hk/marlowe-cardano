@@ -14,9 +14,10 @@ import Data.ByteString (ByteString)
 import Language.Marlowe.Runtime.ChainSync (renderDatabaseSelectorOTel, renderNodeServiceSelectorOTel)
 import Language.Marlowe.Runtime.ChainSync.Api (
   ChainSyncCommand,
-  ChainSyncQuery,
+  ChainSyncQueryServerSelector,
   RuntimeChainSeekServerSelector,
   renderChainSeekServerSelectorOTel,
+  renderChainSyncQueryServerSelector,
  )
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as DB
 import Language.Marlowe.Runtime.ChainSync.NodeClient (NodeClientSelector (..))
@@ -24,13 +25,12 @@ import Network.Protocol.Driver.Trace (TcpServerSelector, renderTcpServerSelector
 import Network.Protocol.Handshake.Types (Handshake)
 import Network.Protocol.Job.Types (Job)
 import qualified Network.Protocol.Peer.Monad.TCP as PeerT
-import Network.Protocol.Query.Types (Query)
 import Observe.Event (idInjectSelector, injectSelector)
 import Observe.Event.Render.OpenTelemetry
 
 data RootSelector f where
   ChainSeekServer :: PeerT.TcpServerSelector RuntimeChainSeekServerSelector f -> RootSelector f
-  QueryServer :: TcpServerSelector (Handshake (Query ChainSyncQuery)) f -> RootSelector f
+  QueryServer :: PeerT.TcpServerSelector ChainSyncQueryServerSelector f -> RootSelector f
   JobServer :: TcpServerSelector (Handshake (Job ChainSyncCommand)) f -> RootSelector f
   Database :: DB.QuerySelector f -> RootSelector f
   NodeService :: NodeClientSelector f -> RootSelector f
@@ -52,7 +52,7 @@ renderRootSelectorOTel
   -> RenderSelectorOTel RootSelector
 renderRootSelectorOTel dbName dbUser host port = \case
   ChainSeekServer sel -> PeerT.renderTcpServerSelectorOTel renderChainSeekServerSelectorOTel sel
-  QueryServer sel -> renderTcpServerSelectorOTel sel
+  QueryServer sel -> PeerT.renderTcpServerSelectorOTel renderChainSyncQueryServerSelector sel
   JobServer sel -> renderTcpServerSelectorOTel sel
   Database sel -> renderDatabaseSelectorOTel dbName dbUser host port sel
   NodeService sel -> renderNodeServiceSelectorOTel sel

@@ -27,10 +27,13 @@ import Language.Marlowe.Runtime.Sync (MarloweSync (..), SyncDependencies (..), s
 import Language.Marlowe.Runtime.Sync.Database (hoistDatabaseQueries, logDatabaseQueries)
 import qualified Language.Marlowe.Runtime.Sync.Database.PostgreSQL as Postgres
 import Logging (RootSelector (..), renderRootSelectorOTel)
+import Network.Protocol.Connection (Connection (..), ConnectionTraced (..), Connector (..), ConnectorTraced (..))
 import Network.Protocol.Driver (TcpServerDependencies (..))
-import Network.Protocol.Driver.Trace (tcpClientTraced, tcpServerTraced)
-import Network.Protocol.Query.Client (queryClientPeer)
+import Network.Protocol.Driver.Trace (tcpServerTraced)
+import Network.Protocol.Peer.Monad.TCP (tcpClientPeerTTraced)
+import Network.Protocol.Query.Client (queryClientPeerT)
 import Network.Protocol.Query.Server (queryServerPeer)
+import qualified Network.Protocol.Query.Types as Query
 import Network.Socket (HostName, PortNumber)
 import Observe.Event.Backend (injectSelector)
 import OpenTelemetry.Trace
@@ -83,7 +86,16 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
                       Postgres.databaseQueries
               , runtimeVersion = version
               , chainSyncQueryConnector =
-                  tcpClientTraced (injectSelector ChainSyncQueryClient) chainSyncHost chainQueryPort queryClientPeer
+                  let connectorTraced =
+                        tcpClientPeerTTraced
+                          "chain-query"
+                          Query.TokDone
+                          (injectSelector ChainSyncQueryClient)
+                          chainSyncHost
+                          chainQueryPort
+                   in Connector do
+                        ConnectionTraced{..} <- openConnectionTraced connectorTraced
+                        pure $ Connection \client -> runConnectionTraced \inj -> queryClientPeerT inj client
               }
 
       tcpServerTraced "marlowe-sync" (injectSelector MarloweSyncServer)

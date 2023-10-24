@@ -13,23 +13,24 @@ import Language.Marlowe.Protocol.BulkSync.Types (MarloweBulkSync)
 import Language.Marlowe.Protocol.HeaderSync.Types (MarloweHeaderSync)
 import Language.Marlowe.Protocol.Query.Types (MarloweQuery)
 import Language.Marlowe.Protocol.Sync.Types (MarloweSync)
-import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery)
+import Language.Marlowe.Runtime.ChainSync.Api (
+  ChainSyncQueryClientSelector,
+  renderChainSyncQueryClientSelector,
+ )
 import Language.Marlowe.Runtime.Sync (renderDatabaseSelectorOTel)
 import Language.Marlowe.Runtime.Sync.Database
 import Network.Protocol.Driver.Trace (
-  TcpClientSelector,
   TcpServerSelector,
-  renderTcpClientSelectorOTel,
   renderTcpServerSelectorOTel,
  )
 import Network.Protocol.Handshake.Types (Handshake)
-import Network.Protocol.Query.Types (Query)
+import qualified Network.Protocol.Peer.Monad.TCP as PeerT
 import Observe.Event (idInjectSelector, injectSelector)
 import Observe.Event.Render.OpenTelemetry
 import Prelude hiding (filter)
 
 data RootSelector f where
-  ChainSyncQueryClient :: TcpClientSelector (Handshake (Query ChainSyncQuery)) f -> RootSelector f
+  ChainSyncQueryClient :: PeerT.TcpClientSelector ChainSyncQueryClientSelector f -> RootSelector f
   MarloweSyncServer :: TcpServerSelector (Handshake MarloweSync) f -> RootSelector f
   MarloweHeaderSyncServer :: TcpServerSelector (Handshake MarloweHeaderSync) f -> RootSelector f
   MarloweBulkSyncServer :: TcpServerSelector (Handshake MarloweBulkSync) f -> RootSelector f
@@ -49,7 +50,7 @@ renderRootSelectorOTel
   -> Maybe ByteString
   -> RenderSelectorOTel RootSelector
 renderRootSelectorOTel dbName dbUser host port = \case
-  ChainSyncQueryClient sel -> renderTcpClientSelectorOTel sel
+  ChainSyncQueryClient sel -> PeerT.renderTcpClientSelectorOTel renderChainSyncQueryClientSelector sel
   MarloweSyncServer sel -> renderTcpServerSelectorOTel sel
   MarloweHeaderSyncServer sel -> renderTcpServerSelectorOTel sel
   MarloweBulkSyncServer sel -> renderTcpServerSelectorOTel sel

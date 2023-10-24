@@ -38,9 +38,9 @@ import Network.Protocol.Connection (
   ConnectorTraced (..),
   runConnector,
  )
-import Network.Protocol.Driver.Trace (tcpClientTraced)
 import Network.Protocol.Peer.Monad.TCP (tcpClientPeerTTraced)
-import Network.Protocol.Query.Client (QueryClient, queryClientPeer, request)
+import Network.Protocol.Query.Client (QueryClient, queryClientPeerT, request)
+import qualified Network.Protocol.Query.Types as Query
 import Network.Socket (AddrInfo (..), HostName, PortNumber, SocketType (..), defaultHints)
 import Observe.Event.Backend (injectSelector)
 import OpenTelemetry.Trace
@@ -123,7 +123,17 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
         }
 
     chainSyncQueryConnector :: Connector (QueryClient ChainSyncQuery) (AppM Span RootSelector)
-    chainSyncQueryConnector = tcpClientTraced (injectSelector ChainQueryClient) chainSeekHost chainSeekQueryPort queryClientPeer
+    chainSyncQueryConnector =
+      let connectorTraced =
+            tcpClientPeerTTraced
+              "chain-query"
+              Query.TokDone
+              (injectSelector ChainQueryClient)
+              chainSeekHost
+              chainSeekQueryPort
+       in Connector do
+            ConnectionTraced{..} <- openConnectionTraced connectorTraced
+            pure $ Connection \client -> runConnectionTraced \inj -> queryClientPeerT inj client
 
     queryChainSync :: QueryClient ChainSyncQuery (AppM Span RootSelector) a -> AppM Span RootSelector a
     queryChainSync = runConnector chainSyncQueryConnector

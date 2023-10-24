@@ -81,6 +81,7 @@ let
 
   # We assume that all the components are versioned together.
   marloweRuntimeVersion = "0.0.5";
+  marloweRuntimeWebVersion = "0.0.5.1";
   symlinks = runCommand "symlinks" { } ''
     mkdir -p $out
     ln -sv ${run-sqitch}/bin/run-sqitch $out
@@ -89,7 +90,7 @@ let
     ln -sv ${run-local-service "marlowe-chain-sync" marloweRuntimeVersion "marlowe-chain-sync"}/bin/run-marlowe-chain-sync $out
     ln -sv ${run-local-service "marlowe-runtime" marloweRuntimeVersion "marlowe-sync"}/bin/run-marlowe-sync $out
     ln -sv ${run-local-service "marlowe-runtime" marloweRuntimeVersion "marlowe-tx"}/bin/run-marlowe-tx $out
-    ln -sv ${run-local-service "marlowe-runtime-web" marloweRuntimeVersion "marlowe-web-server"}/bin/run-marlowe-web-server $out
+    ln -sv ${run-local-service "marlowe-runtime-web" marloweRuntimeWebVersion "marlowe-web-server"}/bin/run-marlowe-web-server $out
     ln -sv ${run-indexer}/bin/run-marlowe-indexer $out
     ln -sv ${run-local-service "marlowe-runtime" marloweRuntimeVersion "marlowe-proxy"}/bin/run-marlowe-proxy $out
     ln -sv ${run-local-service "marlowe-runtime" marloweRuntimeVersion "marlowe-contract"}/bin/run-marlowe-contract $out
@@ -327,7 +328,7 @@ let
     command = [
       "/exec/run-marlowe-web-server"
       "--marlowe-runtime-host"
-      "marlowe-runtime"
+      dep
       "--enable-open-api"
       "--access-control-allow-origin-all"
     ];
@@ -406,17 +407,17 @@ let
 
     volumes.postgres = null;
 
-    # services.marlowe-chain-indexer = chain-indexer-service;
-    # services.marlowe-chain-sync = marlowe-chain-sync-service;
-    # services.marlowe-tx = tx-service;
-    # services.marlowe-proxy = proxy-service;
-    # services.marlowe-indexer = marlowe-indexer-service;
-    # services.marlowe-sync = sync-service;
-    # services.marlowe-contract = contract-service;
-    # services.web = web-service "marlowe-proxy";
+    services.marlowe-chain-indexer = chain-indexer-service;
+    services.marlowe-chain-sync = marlowe-chain-sync-service;
+    services.marlowe-tx = tx-service;
+    services.marlowe-proxy = proxy-service;
+    services.marlowe-indexer = marlowe-indexer-service;
+    services.marlowe-sync = sync-service;
+    services.marlowe-contract = contract-service;
+    services.web = web-service "marlowe-proxy";
 
-    services.marlowe-runtime = runtime-service;
-    services.web = web-service "marlowe-runtime";
+    # services.marlowe-runtime = runtime-service;
+    # services.web = web-service "marlowe-runtime";
 
     services.node = node-service;
     volumes.shared = null;

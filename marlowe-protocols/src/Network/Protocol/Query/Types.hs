@@ -28,6 +28,7 @@ import Data.Proxy (Proxy (..))
 import Data.Text (Text)
 import qualified Data.Text as T
 import GHC.Show (showCommaSpace, showSpace)
+import Network.Protocol.ChainSeek.Types ()
 import Network.Protocol.Codec (BinaryMessage (..))
 import Network.Protocol.Codec.Spec (
   ArbitraryMessage (..),
@@ -42,6 +43,7 @@ import Network.Protocol.Peer.Trace
 import Network.TypedProtocol
 import Network.TypedProtocol.Codec (AnyMessageAndAgency (..))
 import OpenTelemetry.Attributes (toPrimitiveAttribute)
+import OpenTelemetry.Trace.Core (SpanContext)
 import Test.QuickCheck (Gen, oneof, resize, sized)
 
 -- | A state kind for the query protocol.
@@ -63,7 +65,8 @@ instance Protocol (Query req) where
     -- \| Send a request. Transitions from the req state to the res state, with the result type being determined by the
     -- request.
     MsgRequest
-      :: ReqTree req a
+      :: Maybe SpanContext
+      -> ReqTree req a
       -> Message
           (Query req)
           'StReq
@@ -77,7 +80,8 @@ instance Protocol (Query req) where
           'StReq
     -- \| End the session
     MsgDone
-      :: Message
+      :: Maybe SpanContext
+      -> Message
           (Query query)
           'StReq
           'StDone
@@ -188,16 +192,6 @@ instance (BinaryRequest req) => BinaryRequest (ReqTree req) where
     TagLeaf tag -> getResult tag
     TagBin l r -> (,) <$> getResult l <*> getResult r
 
-foldPutRequestList :: (BinaryRequest req) => ReqTree req a -> Put
-foldPutRequestList = \case
-  ReqLeaf req -> putReq req
-  ReqBin req reqs -> putReq req *> foldPutRequestList reqs
-
--- reqAppend :: ReqTree req a -> ReqTree req b -> ReqTree req (a, b)
--- reqAppend acc = \case
---   ReqLeaf _ -> acc
---   ReqBin _ reqs -> reqLength (acc + 1) reqs
-
 instance (BinaryRequest req) => Binary (SomeRequest req) where
   put (SomeRequest req) = putReq req
   get = getReq
@@ -205,9 +199,10 @@ instance (BinaryRequest req) => Binary (SomeRequest req) where
 instance (BinaryRequest req) => BinaryMessage (Query req) where
   putMessage = \case
     ClientAgency TokReq -> \case
-      MsgDone -> putWord8 0x00
-      MsgRequest req -> do
+      MsgDone ctx -> putWord8 0x00 *> put ctx
+      MsgRequest ctx req -> do
         putWord8 0x01
+        put ctx
         put $ SomeRequest req
     ServerAgency (TokRes tag) -> \case
       MsgRespond a -> putResult tag a
@@ -216,10 +211,11 @@ instance (BinaryRequest req) => BinaryMessage (Query req) where
     ClientAgency TokReq -> do
       tag <- getWord8
       case tag of
-        0x00 -> pure $ SomeMessage MsgDone
+        0x00 -> SomeMessage . MsgDone <$> get
         0x01 -> do
+          ctx <- get
           SomeRequest req <- get
-          pure $ SomeMessage $ MsgRequest req
+          pure $ SomeMessage $ MsgRequest ctx req
         _ -> fail $ "Invalid message tag " <> show tag
     ServerAgency (TokRes tag) -> SomeMessage . MsgRespond <$> getResult tag
 
@@ -236,20 +232,23 @@ instance (OTelRequest req) => OTelRequest (ReqTree req) where
 instance (OTelRequest req) => OTelProtocol (Query req) where
   protocolName _ = "query." <> reqTypeName (Proxy @req)
   messageAttributes = curry \case
-    (_, MsgRequest req) ->
+    (_, MsgRequest ctx req) ->
       MessageAttributes
         { messageType = "request/" <> reqName (tagFromReq req)
-        , messageParameters = [toPrimitiveAttribute $ T.pack $ show req]
+        , messageParameters =
+            [ toPrimitiveAttribute $ T.pack $ show ctx
+            , toPrimitiveAttribute $ T.pack $ show req
+            ]
         }
     (ServerAgency (TokRes tag), MsgRespond a) ->
       MessageAttributes
         { messageType = "request/" <> reqName tag <> "/respond"
         , messageParameters = toPrimitiveAttribute . T.pack <$> [showsPrecResult 0 tag a ""]
         }
-    (_, MsgDone) ->
+    (_, MsgDone ctx) ->
       MessageAttributes
         { messageType = "done"
-        , messageParameters = []
+        , messageParameters = [toPrimitiveAttribute $ T.pack $ show ctx]
         }
 
 class (Request req) => ArbitraryRequest req where
@@ -326,12 +325,12 @@ instance (ArbitraryRequest req) => ArbitraryMessage (Query req) where
     SomeTag tag <- arbitraryTag
     oneof $
       catMaybes
-        [ Just $ AnyMessageAndAgency (ClientAgency TokReq) . MsgRequest <$> arbitraryReq tag
+        [ Just $ AnyMessageAndAgency (ClientAgency TokReq) . MsgRequest Nothing <$> arbitraryReq tag
         , Just $ AnyMessageAndAgency (ServerAgency $ TokRes tag) . MsgRespond <$> arbitraryResult tag
-        , Just $ pure $ AnyMessageAndAgency (ClientAgency TokReq) MsgDone
+        , Just $ pure $ AnyMessageAndAgency (ClientAgency TokReq) $ MsgDone Nothing
         ]
   shrinkMessage agency = \case
-    MsgRequest query -> MsgRequest <$> shrinkReq query
+    MsgRequest ctx query -> MsgRequest ctx <$> shrinkReq query
     MsgRespond result -> case agency of
       (ServerAgency (TokRes tag)) -> MsgRespond <$> shrinkResult tag result
     _ -> []
@@ -346,9 +345,9 @@ instance (RequestVariations req) => MessageVariations (Query req) where
             pure $ SomePeerHasAgency $ ServerAgency $ TokRes tag
         ]
   messageVariations = \case
-    ClientAgency TokReq -> NE.cons (SomeMessage MsgDone) do
+    ClientAgency TokReq -> NE.cons (SomeMessage $ MsgDone Nothing) do
       SomeTag tag <- tagVariations
-      SomeMessage . MsgRequest <$> requestVariations tag
+      SomeMessage . MsgRequest Nothing <$> requestVariations tag
     ServerAgency (TokRes tag) -> SomeMessage . MsgRespond <$> resultVariations tag
 
 class (forall a. Eq (req a), Request req) => RequestEq req where
@@ -361,10 +360,10 @@ instance (RequestEq req) => RequestEq (ReqTree req) where
 
 instance (RequestEq req) => MessageEq (Query req) where
   messageEq (AnyMessageAndAgency agency msg) = case (agency, msg) of
-    (_, MsgRequest req) -> \case
-      AnyMessageAndAgency _ (MsgRequest req') ->
+    (_, MsgRequest ctx req) -> \case
+      AnyMessageAndAgency _ (MsgRequest ctx' req') ->
         case tagEq (tagFromReq req) (tagFromReq req') of
-          Just Refl -> req == req'
+          Just Refl -> req == req' && ctx == ctx'
           Nothing -> False
       _ -> False
     (ServerAgency (TokRes tag), MsgRespond a) -> \case
@@ -373,8 +372,8 @@ instance (RequestEq req) => MessageEq (Query req) where
           Just Refl -> resultEq tag a a'
           Nothing -> False
       _ -> False
-    (_, MsgDone) -> \case
-      AnyMessageAndAgency _ MsgDone -> True
+    (_, MsgDone ctx) -> \case
+      AnyMessageAndAgency _ (MsgDone ctx') -> ctx == ctx'
       _ -> False
 
 class (forall a. Show (req a), forall a. Show (Tag req a), Request req) => ShowRequest req where
@@ -393,10 +392,12 @@ instance (ShowRequest req) => ShowRequest (ReqTree req) where
 
 instance (ShowRequest req) => ShowProtocol (Query req) where
   showsPrecMessage p agency = \case
-    MsgRequest query ->
+    MsgRequest ctx query ->
       showParen
         (p >= 11)
         ( showString "MsgRequest"
+            . showSpace
+            . showsPrec 11 ctx
             . showSpace
             . showsPrec 11 query
         )
@@ -407,7 +408,13 @@ instance (ShowRequest req) => ShowProtocol (Query req) where
             . showSpace
             . case agency of ServerAgency (TokRes tag) -> showsPrecResult 11 tag a
         )
-    MsgDone -> showString "MsgDone"
+    MsgDone ctx ->
+      showParen
+        (p >= 11)
+        ( showString "MsgDone"
+            . showSpace
+            . showsPrec 11 ctx
+        )
 
   showsPrecServerHasAgency = showsPrec
   showsPrecClientHasAgency = showsPrec

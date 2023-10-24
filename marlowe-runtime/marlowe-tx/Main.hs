@@ -45,7 +45,8 @@ import Network.Protocol.Driver.Trace (tcpClientTraced, tcpServerTraced)
 import Network.Protocol.Job.Client (jobClientPeer)
 import Network.Protocol.Job.Server (jobServerPeer)
 import Network.Protocol.Peer.Monad.TCP (tcpClientPeerTTraced)
-import Network.Protocol.Query.Client (QueryClient, queryClientPeer, request)
+import Network.Protocol.Query.Client (QueryClient, queryClientPeer, queryClientPeerT, request)
+import qualified Network.Protocol.Query.Types as Query
 import Network.Socket (HostName, PortNumber)
 import Observe.Event.Backend (injectSelector)
 import OpenTelemetry.Trace hiding (Server)
@@ -98,7 +99,17 @@ run Options{..} = flip runComponent_ () proc _ -> do
               pure $ Connection \client -> runConnectionTraced \inj -> chainSeekClientPeer Genesis inj client
 
       chainSyncQueryConnector :: Connector (QueryClient ChainSyncQuery) (AppM Span RootSelector)
-      chainSyncQueryConnector = tcpClientTraced (injectSelector ChainSyncQueryClient) chainSeekHost chainSeekQueryPort queryClientPeer
+      chainSyncQueryConnector =
+        let connectorTraced =
+              tcpClientPeerTTraced
+                "chain-query"
+                Query.TokDone
+                (injectSelector ChainSyncQueryClient)
+                chainSeekHost
+                chainSeekQueryPort
+         in Connector do
+              ConnectionTraced{..} <- openConnectionTraced connectorTraced
+              pure $ Connection \client -> runConnectionTraced \inj -> queryClientPeerT inj client
 
       contractQueryConnector :: Connector (QueryClient ContractRequest) (AppM Span RootSelector)
       contractQueryConnector = tcpClientTraced (injectSelector ContractQueryClient) contractHost contractQueryPort queryClientPeer
