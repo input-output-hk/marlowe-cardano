@@ -25,7 +25,6 @@ module Language.Marlowe.Runtime.Transaction.Api (
   MarloweTxCommand (..),
   Mint (unMint),
   Destination (..),
-  HelperScript (..),
   NFTMetadataFile (..),
   RoleTokenMetadata (..),
   RoleTokensConfig (..),
@@ -61,7 +60,7 @@ import qualified Cardano.Api as C
 import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import qualified Cardano.Api.Shelley as CS
 import Control.Applicative ((<|>))
-import Data.Aeson (FromJSON, FromJSONKey, ToJSON (..), ToJSONKey, Value (..), object, (.!=), (.:!), (.=))
+import Data.Aeson (ToJSON (..), Value (..), object, (.!=), (.:!), (.=))
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as Aeson.KeyMap
 import Data.Aeson.Types ((.:))
@@ -113,8 +112,10 @@ import Language.Marlowe.Runtime.ChainSync.Api (
  )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
+import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript)
 import Language.Marlowe.Runtime.History.Api (ExtractCreationError, ExtractMarloweTransactionError)
 import Network.HTTP.Media (MediaType)
+
 import Network.Protocol.Codec.Spec (Variations (..), varyAp)
 import Network.Protocol.Handshake.Types (HasSignature (..))
 import Network.Protocol.Job.Types
@@ -265,10 +266,6 @@ encodeRoleTokenMetadata = encodeNFTMetadataDetails
 
     encodeText :: Text -> Metadata
     encodeText = MetadataList . fmap MetadataText . Text.chunksOf 64
-
-data HelperScript = OpenRoleScript
-  deriving stock (Read, Show, Bounded, Enum, Eq, Ord, Generic)
-  deriving anyclass (Binary, FromJSON, FromJSONKey, ToJSON, ToJSONKey, Variations)
 
 data Destination
   = ToAddress Address

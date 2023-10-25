@@ -16,6 +16,7 @@ import Data.Semigroup (Semigroup (..))
 import Language.Marlowe.Runtime.ChainSync.Gen ()
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.Core.Gen (ArbitraryMarloweVersion)
+import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript)
 import Language.Marlowe.Runtime.History.Gen ()
 import Language.Marlowe.Runtime.Transaction.Api
 import qualified Language.Marlowe.Runtime.Transaction.Api as ContractCreatedInEra (ContractCreatedInEra (..))

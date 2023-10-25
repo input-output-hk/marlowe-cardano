@@ -101,9 +101,9 @@ import Language.Marlowe.Runtime.Core.Api (
   fromChainPayoutDatum,
  )
 import qualified Language.Marlowe.Runtime.Core.Api as Core
-import Language.Marlowe.Runtime.Core.ScriptRegistry (ReferenceScriptUtxo (..))
+import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript, ReferenceScriptUtxo (..))
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
-import Language.Marlowe.Runtime.Transaction.Api (ConstraintError (..), Destination (..), HelperScript (..))
+import Language.Marlowe.Runtime.Transaction.Api (ConstraintError (..), Destination (..))
 import qualified Language.Marlowe.Scripts.Types as V1
 import Ouroboros.Consensus.BlockchainTime (SystemStart)
 

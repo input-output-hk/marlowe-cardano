@@ -44,7 +44,7 @@ scriptSetSpec marloweVersion = do
       Right openRoleScriptBytes <- readFileTextEnvelope (AsScript AsPlutusScriptV2) $ File openRoleScriptPath
       let payoutScript = fromCardanoScriptHash $ hashScript payoutScriptBytes
       let marloweScript = fromCardanoScriptHash $ hashScript marloweScriptBytes
-      let helperScripts = Map.singleton "OpenRoleScript" . fromCardanoScriptHash $ hashScript openRoleScriptBytes
+      let helperScripts = Map.singleton OpenRoleScript . fromCardanoScriptHash $ hashScript openRoleScriptBytes
       let marloweScriptUTxOs = mempty
       let payoutScriptUTxOs = mempty
       let helperScriptUTxOs = mempty
