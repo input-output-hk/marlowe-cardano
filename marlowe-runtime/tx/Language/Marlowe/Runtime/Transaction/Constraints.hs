@@ -115,7 +115,7 @@ data TxConstraints era v = TxConstraints
   , payToAddresses :: Map Chain.Address Chain.Assets
   , payToRoles :: Map (Core.PayoutDatum v) Chain.Assets
   , marloweOutputConstraints :: MarloweOutputConstraints v
-  , helperOutputConstraints :: [HelperOutputConstraints]
+  , helperOutputConstraints :: Map Chain.TokenName HelperOutputConstraints
   , signatureConstraints :: Set Chain.PaymentKeyHash
   , metadataConstraints :: Core.MarloweTransactionMetadata
   }
@@ -185,7 +185,7 @@ instance Monoid (MarloweOutputConstraints v) where
   mempty = MarloweOutputConstraintsNone
 
 data HelperOutputConstraints
-  = HelperOutput Chain.TokenName Chain.Assets Chain.Datum
+  = HelperOutput Chain.Assets Chain.Datum
 
 deriving instance Show HelperOutputConstraints
 deriving instance Eq HelperOutputConstraints
@@ -223,7 +223,7 @@ mustSendMarloweOutput assets datum =
 mustSendHelperOutput
   :: (Core.IsMarloweVersion v) => Chain.TokenName -> Chain.Assets -> Chain.Datum -> TxConstraints era v
 mustSendHelperOutput helper assets datum =
-  mempty{helperOutputConstraints = pure $ HelperOutput helper assets datum}
+  mempty{helperOutputConstraints = Map.singleton helper $ HelperOutput assets datum}
 
 -- | Require the transaction to send an output to the payout script address
 -- with the given assets and the given datum.
@@ -1258,10 +1258,10 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
         _ -> pure Nothing
 
     getHelperOutputs :: Either ConstraintError [Chain.TransactionOutput]
-    getHelperOutputs = mapM getHelperOutput helperOutputConstraints
+    getHelperOutputs = uncurry getHelperOutput `mapM` Map.toList helperOutputConstraints
 
-    getHelperOutput :: HelperOutputConstraints -> Either ConstraintError Chain.TransactionOutput
-    getHelperOutput (HelperOutput helperRole assets datum) =
+    getHelperOutput :: Chain.TokenName -> HelperOutputConstraints -> Either ConstraintError Chain.TransactionOutput
+    getHelperOutput helperRole (HelperOutput assets datum) =
       case helperScriptInfo <$> helperRole `Map.lookup` helperScriptStates of
         Just HelperScriptInfo{..} -> Right $ Chain.TransactionOutput helperAddress assets Nothing $ Just datum
         Nothing -> Left $ HelperScriptNotFound helperRole
