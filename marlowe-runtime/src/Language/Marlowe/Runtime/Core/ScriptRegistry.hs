@@ -4,7 +4,8 @@
 module Language.Marlowe.Runtime.Core.ScriptRegistry where
 
 import Cardano.Api (AsType (..), NetworkId (..), NetworkMagic (..), PlutusScript, PlutusScriptV2, SerialiseAsCBOR (..))
-import Data.Aeson (ToJSON (..))
+import Data.Aeson (FromJSON, FromJSONKey, ToJSON (..), ToJSONKey)
+import Data.Binary (Binary)
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16)
 import Data.Foldable (asum)
@@ -14,9 +15,11 @@ import Data.Maybe (fromJust)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Text as T
+import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.ChainSync.Api (Assets (..), ScriptHash, TxOutRef, fromBech32)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
+import Network.Protocol.Codec.Spec (Variations)
 
 instance Ord NetworkId where
   compare Mainnet Mainnet = EQ
@@ -39,12 +42,16 @@ instance ToJSON ReferenceScriptUtxo where
 data MarloweScripts = MarloweScripts
   { marloweScript :: ScriptHash
   , payoutScript :: ScriptHash
-  , helperScripts :: Map String ScriptHash
+  , helperScripts :: Map HelperScript ScriptHash
   , marloweScriptUTxOs :: Map NetworkId ReferenceScriptUtxo
   , payoutScriptUTxOs :: Map NetworkId ReferenceScriptUtxo
-  , helperScriptUTxOs :: Map (String, NetworkId) ReferenceScriptUtxo
+  , helperScriptUTxOs :: Map (HelperScript, NetworkId) ReferenceScriptUtxo
   }
   deriving (Show, Eq, Ord)
+
+data HelperScript = OpenRoleScript
+  deriving stock (Read, Show, Bounded, Enum, Eq, Ord, Generic)
+  deriving anyclass (Binary, FromJSON, FromJSONKey, ToJSON, ToJSONKey, Variations)
 
 mainnetNetworkId :: NetworkId
 mainnetNetworkId = Mainnet
@@ -74,7 +81,7 @@ currentV1Scripts =
     , helperScripts =
         Map.fromList
           [
-            ( "OpenRoleScript"
+            ( OpenRoleScript
             , "b1d61d0c8a3c0f081a7ccebf0050e3f2c9751e82a4f3953a769dddfb"
             )
           ]
@@ -175,7 +182,7 @@ currentV1Scripts =
     , helperScriptUTxOs =
         Map.fromList
           [
-            ( ("OpenRoleScript", preprodNetworkId)
+            ( (OpenRoleScript, preprodNetworkId)
             , ReferenceScriptUtxo
                 { txOutRef = "5f325073371633102979e661077bc2c24a6e0cdc02b95f181a453e7a3ec2344f#0"
                 , txOut =

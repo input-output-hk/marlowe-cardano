@@ -77,6 +77,7 @@ import Language.Marlowe.Runtime.Core.Api (
   fromChainPayoutDatum,
   withMarloweVersion,
  )
+import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript (..))
 import Language.Marlowe.Runtime.Plutus.V2.Api (
   fromPlutusValue,
   toAssetId,
@@ -90,7 +91,6 @@ import Language.Marlowe.Runtime.Transaction.Api (
   CreateBuildupError (AddressDecodingFailed, MintingScriptDecodingFailed, MintingUtxoSelectionFailed),
   CreateError (..),
   Destination (..),
-  HelperScript (..),
   Mint (unMint),
   RoleTokensConfig (..),
   WithdrawError (..),
