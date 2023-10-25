@@ -38,7 +38,7 @@ import Language.Marlowe.Runtime.Core.Api (
   MarloweVersion (MarloweV1),
   TransactionScriptOutput (..),
  )
-import Language.Marlowe.Runtime.Transaction.Api (Mint (..), RoleTokensConfig (..))
+import Language.Marlowe.Runtime.Transaction.Api (Destination (ToSelf), Mint (..), RoleTokensConfig (..))
 import Language.Marlowe.Runtime.Transaction.BuildConstraints (buildApplyInputsConstraints)
 import Language.Marlowe.Runtime.Transaction.Constraints (
   HelpersContext (..),
@@ -61,7 +61,7 @@ import qualified Cardano.Api.Shelley as Shelley (
  )
 import Control.Monad.IO.Class (MonadIO)
 import Data.Functor.Identity (runIdentity)
-import qualified Data.Map.Strict as M (Map, elems, empty, fromList, keys, map, mapKeys, singleton, size)
+import qualified Data.Map.Strict as M (Map, elems, empty, filter, fromList, keys, map, mapKeys, singleton, size)
 import qualified Data.SOP.Counting as Ouroboros
 import qualified Data.Set as S (singleton)
 import qualified Language.Marlowe.Core.V1.Merkle as V1 (MerkleizedContract (..))
@@ -218,7 +218,8 @@ checkContract
   -> Continuations v
   -> [SafetyError]
 checkContract network config MarloweV1 contract continuations =
-  let continuations' = remapContinuations continuations
+  let toPlutusTokenName = Plutus.TokenName . Plutus.toBuiltin . Chain.unTokenName
+      continuations' = remapContinuations continuations
       roles = toList $ V1.extractAllWithContinuations contract continuations'
       mintCheck =
         case (config, null roles) of
@@ -226,11 +227,13 @@ checkContract network config MarloweV1 contract continuations =
           (RoleTokensNone, True) -> mempty
           (_, True) -> pure ContractHasNoRoles
           (RoleTokensMint mint, False) ->
-            let minted = Plutus.TokenName . Plutus.toBuiltin . Chain.unTokenName <$> M.keys (unMint mint)
+            let minted = toPlutusTokenName <$> M.keys (M.filter ((/= ToSelf) . fst) $ unMint mint)
                 missing = MissingRoleToken <$> filter (`notElem` minted) roles
                 extra = ExtraRoleToken <$> filter (`notElem` roles) minted
              in missing <> extra
-          _ -> mempty
+          (RoleTokensUsePolicy _, False) -> mempty
+          (RoleTokensUsePolicyWithOpenRoles _ _ openRoles, False) ->
+            ExtraRoleToken <$> filter (`notElem` roles) (toPlutusTokenName <$> openRoles)
       avoidDuplicateReport = True
       nameCheck = checkRoleNames avoidDuplicateReport Nothing contract continuations'
       tokenCheck = checkTokens Nothing contract continuations'
