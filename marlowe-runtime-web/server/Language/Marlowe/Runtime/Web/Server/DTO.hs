@@ -67,6 +67,7 @@ import Data.Traversable (for)
 import Data.Word (Word16, Word64)
 import GHC.TypeLits (KnownSymbol)
 import qualified Language.Marlowe.Core.V1.Semantics as Sem
+import Language.Marlowe.Runtime.Core.ScriptRegistry as Tx (HelperScript (..))
 
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Sem
 

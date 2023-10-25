@@ -50,6 +50,7 @@ import Language.Marlowe.Runtime.Core.Api (
   TransactionScriptOutput (TransactionScriptOutput, datum),
  )
 import Language.Marlowe.Runtime.Core.ScriptRegistry (
+  HelperScript (..),
   MarloweScripts (..),
  )
 import Language.Marlowe.Runtime.History.Api (
@@ -61,7 +62,6 @@ import Language.Marlowe.Runtime.History.Api (
 import Language.Marlowe.Runtime.Plutus.V2.Api (fromPlutusCurrencySymbol)
 import Language.Marlowe.Runtime.Transaction.Api (
   Destination (..),
-  HelperScript (..),
   LoadHelpersContextError (..),
   RoleTokensConfig (..),
   unMint,
@@ -84,7 +84,6 @@ import Network.Protocol.ChainSeek.Client (
   ClientStPoll (..),
  )
 import Network.Protocol.Connection (Connector, runConnector)
-import Text.Read (readMaybe)
 import UnliftIO (MonadUnliftIO)
 
 data LoadHelpersContextSelector f where
@@ -262,11 +261,10 @@ getHelperInfos
   -> MarloweScripts
   -> Map.Map k HelperScriptInfo
 getHelperInfos f networkId MarloweScripts{helperScripts, helperScriptUTxOs} =
-  let lookupHelper helper =
+  let lookupHelper helperScript =
         do
-          helperScript <- readMaybe helper
-          helperScriptUTxO <- (helper, networkId) `Map.lookup` helperScriptUTxOs
-          helperScriptHash <- helper `Map.lookup` helperScripts
+          helperScriptUTxO <- (helperScript, networkId) `Map.lookup` helperScriptUTxOs
+          helperScriptHash <- helperScript `Map.lookup` helperScripts
           let helperAddress =
                 fromCardanoAddressInEra C.BabbageEra $
                   C.AddressInEra (C.ShelleyAddressInEra C.ShelleyBasedEraBabbage) $
