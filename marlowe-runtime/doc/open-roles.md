@@ -48,7 +48,7 @@ roles:
     - Buyer
 ```
 
-## Distribution of open-role tokens
+### Distribution of open-role tokens
 
 The open-role validator authorizes the distribution of the open-role token that it holds to anyone who performs the contract's first action that takes the open role as input. After they have received the open-role token, they can use it as a role token for any future inputs to the contract or for any withdrawals from the role-payout validator address.
 
@@ -510,7 +510,7 @@ $MARLOWE_CLI transaction submit \
     TxId "9dc3a66a7a4cb26b281970833fe86a43507294e09e907de6c3bf078a6c5511e2"
 
 
-### Transaction 4. The buyer withdraws the `BearGarden` token.
+### Transaction 5. The buyer withdraws the `BearGarden` token.
 
 Compute the URL for that transaction that paid to Marlowe's role-payout validator address.
 
@@ -598,7 +598,7 @@ $MARLOWE_CLI transaction submit \
     TxId "f605194da995697a10122dc656e4ad7f7851881123bf43d6ee3d2f1200e6a021"
 
 
-### Transaction 5. The seller withdraws the 8 ada.
+### Transaction 6. The seller withdraws the 8 ada.
 
 Craft the request for Marlowe Runtime.
 
