@@ -24,6 +24,7 @@ in
     pkgs.z3
     pkgs.sqitchPg
     pkgs.postgresql
+    pkgs.scriv
 
     pkgs.jq
     pkgs.docker-compose
