@@ -7,6 +7,20 @@ Although all the roles in a Marlowe contract must be specified when the contract
 
 One or more open roles can be included in a Marlowe contract by specifying them when Marlowe Runtime builds the transaction for instantiating the contract.
 
+-   The creation transaction for the Marlowe contract does the following:
+    -   Places the thread token in the contract's UTXO.
+    -   Creates a UTXO for the open-roles validator.
+        -   The `Datum` references the thread token that is placed in the contract's UTXO.
+        -   The `Value` contains the open-role token.
+-   The open-role assignment transaction does the following:
+    -   Transfers the open-role token to the change address for the transaction.
+    -   Verifies the validity of the transaction.
+        -   The open-role validator ensures that `IDeposit` and/or `IChoice` actions for the open role are present in the input.
+        -   The open-role validator ensures that the contract's UTXO contains the required thread token.
+        -   The Marlowe semantics validator does its usual validation, including checking that the relevant inputs are authorized by the open-role token.
+
+![Transactions involved in an open-roles Marlowe contract](open-roles-interaction.png)
+
 
 ### Minting open roles
 
@@ -57,7 +71,7 @@ The open-roles validator lets *anyone with a Cardano address* make a deposit or 
 5. The seller withdraws their 8 ada from the role-payout validator address.
 6. The buyer withdraws their one `BearGarden` from the role-payout validator address.
 
-![Example open-roles contract for Marlowe](open-roles.png)
+![Example open-roles contract for Marlowe](open-roles-contract.png)
 
 ### Prerequisites
 
@@ -351,7 +365,7 @@ $MARLOWE_CLI transaction submit \
     TxId "f8c9d984b4a368c92ac5e5425188840f08b6fd51d2150f82f850c827fbfd555a"
 
 
-### Transaction 3. The buyer deposits 8 ada and recieves the `Buyer` role token.
+### Transaction 3. The buyer deposits 8 ada and receives the `Buyer` role token.
 
 Generate the JSON for making the deposit.
 
