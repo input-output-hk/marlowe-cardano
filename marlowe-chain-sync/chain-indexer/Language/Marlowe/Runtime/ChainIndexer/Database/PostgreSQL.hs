@@ -110,7 +110,6 @@ import qualified Data.Set as Set
 import Data.String (IsString (..))
 import Data.Text (Text)
 import Data.Text.Encoding (encodeUtf8)
-import Data.Time (diffUTCTime, getCurrentTime)
 import Data.Vector (Vector)
 import qualified Data.Vector as V
 import qualified Database.PostgreSQL.Simple as PS
@@ -348,10 +347,7 @@ commitBlocks = CommitBlocks \blocks -> do
       assetOuts = extractAssetOuts =<< txOuts
       assetMints = extractAssetMints =<< txs
   sessionConnection <- ask
-  pre <- liftIO getCurrentTime
   assetIds <- TS.transaction TS.Serializable TS.Write $ copyAssets assetOuts assetMints
-  post <- liftIO getCurrentTime
-  liftIO $ putStrLn $ "INSERT chain.asset took " <> show (diffUTCTime post pre)
   liftIO $ withLibPQConnection sessionConnection \libPqConnection -> do
     connectionHandle <- newMVar libPqConnection
     connectionObjects <- newMVar mempty
@@ -618,7 +614,6 @@ copyAssetMints assetIds conn =
 copyBuilder :: (ToRecord a) => PS.Connection -> ByteString -> Builder a -> IO ()
 copyBuilder conn table builder = mask \restore -> do
   let query = "COPY chain." <> PS.Query table <> " FROM STDIN WITH (FORMAT 'csv')"
-  pre <- getCurrentTime
   copy conn query ()
   result <- try $ restore $ traverse_ (putCopyData conn) $ BL.toChunks $ encode builder
   case result of
@@ -626,11 +621,7 @@ copyBuilder conn table builder = mask \restore -> do
       putCopyError conn $ fromString $ displayException ex
       throwIO ex
     Right _ -> do
-      count <- putCopyEnd conn
-      post <- getCurrentTime
-      let elapsed = diffUTCTime post pre
-      putStr $ "[" <> show elapsed <> "] [" <> show count <> "Rows] "
-      putStrLn $ "COPY " <> show table
+      _ <- putCopyEnd conn
       pure ()
 
 blockRow :: CardanoBlock -> BlockRow
