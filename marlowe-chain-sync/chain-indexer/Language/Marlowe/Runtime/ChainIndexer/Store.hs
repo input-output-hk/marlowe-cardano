@@ -95,7 +95,7 @@ chainStore = component "indexer-chain-store" \ChainStoreDependencies{..} -> do
       computeDelay :: UTCTime -> IO (Maybe Delay)
       computeDelay lastWrite = runMaybeT do
         currentTime <- lift getCurrentTime
-        let nextWrite = addUTCTime rateLimit lastWrite
+        let nextWrite = addUTCTime 0 lastWrite
         guard $ nextWrite > currentTime
         let delay = nextWrite `diffUTCTime` currentTime
         let delayMicroseconds = floor $ 1_000_000 * nominalDiffTimeToSeconds delay

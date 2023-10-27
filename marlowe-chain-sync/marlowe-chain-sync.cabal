@@ -150,6 +150,7 @@ library chain-indexer
     , cardano-ledger-byron ^>=1.0
     , cardano-ledger-core ^>=1.2
     , cardano-ledger-shelley ^>=1.2
+    , cassava
     , co-log >=0.5.0.0 && <0.6.0.0
     , containers ^>=0.6.5
     , eventuo11y >=0.9 && <0.11
@@ -160,7 +161,9 @@ library chain-indexer
     , hasql-th ^>=0.4
     , hasql-transaction ^>=1
     , hs-opentelemetry-api >=0.0.3 && <0.0.4
+    , mtl >=2.2 && <3
     , ouroboros-network-api ^>=0.5
+    , postgresql-simple
     , profunctors >=5.6 && <6
     , stm ^>=2.5
     , stm-delay ^>=0.1.1
