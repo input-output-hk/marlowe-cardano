@@ -11,6 +11,7 @@ module Language.Marlowe.Runtime.Transaction.Constraints (
   HelpersContext (..),
   HelperScriptState (..),
   HelperScriptInfo (..),
+  HelperOutputConstraints (..),
   MarloweInputConstraints (..),
   MarloweOutputConstraints (..),
   RoleTokenConstraints (..),

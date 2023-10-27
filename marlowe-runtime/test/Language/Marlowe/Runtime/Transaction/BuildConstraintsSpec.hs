@@ -10,12 +10,13 @@ module Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec (
 import Cardano.Api (BabbageEra, ConsensusMode (..), EraHistory (EraHistory), SlotNo (SlotNo))
 import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import Control.Monad.Trans.Except (runExcept, runExceptT)
+import Data.Bifunctor (second)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.Function (on)
 import Data.Functor ((<&>))
 import Data.Functor.Identity (Identity (..))
-import Data.List (isPrefixOf)
+import Data.List (isPrefixOf, nub)
 import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -42,12 +43,13 @@ import Language.Marlowe.Runtime.Core.Api (
   emptyMarloweTransactionMetadata,
  )
 import qualified Language.Marlowe.Runtime.Core.Api as Core.Api
+import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript (..))
 import Language.Marlowe.Runtime.Plutus.V2.Api (fromPlutusValue, toAssetId)
 import Language.Marlowe.Runtime.Transaction.Api (
   ApplyInputsConstraintsBuildupError (..),
   ApplyInputsError (..),
   CreateError,
-  Destination (ToAddress),
+  Destination (..),
   RoleTokensConfig (..),
   mkMint,
   unMint,
@@ -56,6 +58,7 @@ import qualified Language.Marlowe.Runtime.Transaction.Api as Transaction.Api
 import Language.Marlowe.Runtime.Transaction.BuildConstraints (buildApplyInputsConstraints, buildCreateConstraints)
 import qualified Language.Marlowe.Runtime.Transaction.BuildConstraints as BuildConstraints
 import Language.Marlowe.Runtime.Transaction.Constraints (
+  HelperOutputConstraints (..),
   MarloweInputConstraints (..),
   MarloweOutputConstraints (..),
   PayoutContext (..),
@@ -77,6 +80,7 @@ import Ouroboros.Consensus.HardFork.History (
  )
 import PlutusLedgerApi.V1 (Address (Address), Credential (PubKeyCredential), PubKeyHash (PubKeyHash), fromBuiltin)
 import PlutusLedgerApi.V1.Time (POSIXTime (POSIXTime))
+import qualified PlutusLedgerApi.V2 as Plutus
 import qualified PlutusTx.AssocMap as AM
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Test.Hspec (Spec, shouldBe)
@@ -108,6 +112,7 @@ spec = do
   createSpec
   withdrawSpec
   buildApplyInputsConstraintsSpec
+  openRolesSpec
 
 createSpec :: Spec
 createSpec = Hspec.describe "buildCreateConstraints" do
@@ -763,3 +768,97 @@ buildApplyInputsConstraintsSpec =
           Left _ ->
             counterexample "Unexpected transaction failure" False
         :: QuickCheck.Gen Property
+
+openRolesSpec :: Spec
+openRolesSpec = Hspec.describe "Open Role Constraints" do
+  let runBuild CreateArgs{..} =
+        do
+          roleTokensConfig' <- genOpenRolesConfig
+          let result =
+                fmap snd . runIdentity $
+                  buildCreateConstraints
+                    (\_ _ -> pure $ PlutusScript mempty)
+                    ReferenceTxInsScriptsInlineDatumsInBabbageEra
+                    version
+                    walletContext
+                    roleTokensConfig'
+                    metadata
+                    minAda
+                    (\(Chain.Assets ada tokens) -> Chain.Assets (max 2_000_000 ada) tokens)
+                    contract
+              policyId =
+                case (version, extractMarloweDatum <$> result) of
+                  (MarloweV1, Right (Just datum)) -> Semantics.rolesCurrency $ Semantics.marloweParams datum
+                  _ -> ""
+              filterRoles destination =
+                case roleTokensConfig' of
+                  RoleTokensMint mint ->
+                    Set.fromList
+                      . fmap (Chain.AssetId . Chain.PolicyId . Plutus.fromBuiltin $ Plutus.unCurrencySymbol policyId)
+                      . Map.keys
+                      . Map.filter ((== destination) . fst)
+                      $ unMint mint
+                  _ -> mempty
+          pure (policyId, filterRoles ToSelf, filterRoles $ ToScript OpenRoleScript, result)
+      toChainPolicyId = Chain.PolicyId . Plutus.fromBuiltin . Plutus.unCurrencySymbol
+      toChainAssetId (Semantics.Token p n) =
+        Chain.AssetId
+          (toChainPolicyId p)
+          (Chain.TokenName . Plutus.fromBuiltin . Plutus.unTokenName $ n)
+  Hspec.QuickCheck.prop "adds thread tokens to initial state" \(SomeCreateArgs args) ->
+    do
+      (policyId, threadTokens, _, result) <- fmap (second extractMarloweDatum) <$> runBuild args
+      let isRoleToken ((_, Semantics.Token policy _), 1) = policy == policyId
+          isRoleToken _ = False
+          getThreadTokens =
+            Set.fromList
+              . fmap (toChainAssetId . snd . fst)
+              . filter isRoleToken
+              . AM.toList
+              . Semantics.accounts
+              . Semantics.marloweState
+      pure $
+        case version args of
+          MarloweV1 -> (maybe mempty getThreadTokens <$> result) === Right threadTokens
+        :: QuickCheck.Gen Property
+  Hspec.QuickCheck.prop "includes constraints for all open-role tokens" \(SomeCreateArgs args) ->
+    do
+      (policyId, _, openRoleTokens, result) <- fmap (second helperOutputConstraints) <$> runBuild args
+      let actual = Set.map (Chain.AssetId $ toChainPolicyId policyId) . Map.keysSet <$> result
+      pure $
+        case version args of
+          MarloweV1 -> actual === Right openRoleTokens
+        :: QuickCheck.Gen Property
+  Hspec.QuickCheck.prop "open-role datum references thread token" \(SomeCreateArgs args) ->
+    do
+      (_, threadTokens, _, result) <- fmap (second helperOutputConstraints) <$> runBuild args
+      let expected =
+            if result == Right mempty
+              then mempty
+              else Set.map (Chain.B . Chain.unTokenName . Chain.tokenName) threadTokens
+          actual = Set.fromList . foldr (\(HelperOutput _ datum) -> (datum :)) mempty <$> result
+      pure $
+        case version args of
+          MarloweV1 -> actual === Right expected
+        :: QuickCheck.Gen Property
+  Hspec.QuickCheck.prop "open-role validator UTxO contains open-role token" \(SomeCreateArgs args) ->
+    do
+      (_, _, openRoleTokens, result) <- fmap (second helperOutputConstraints) <$> runBuild args
+      let expected =
+            Map.fromList
+              . fmap (\token@(Chain.AssetId _ name) -> (name, Chain.Assets 0 . Chain.Tokens $ Map.singleton token 1))
+              $ Set.toList openRoleTokens
+          actual = fmap (\(HelperOutput (Chain.Assets _ tokens) _) -> Chain.Assets 0 tokens) <$> result
+      pure $
+        case version args of
+          MarloweV1 -> actual === Right expected
+        :: QuickCheck.Gen Property
+
+genOpenRolesConfig :: QuickCheck.Gen RoleTokensConfig
+genOpenRolesConfig =
+  do
+    roles <- nub <$> listOf1 genRole
+    destinations <- (ToSelf :) <$> listOf (oneof [pure $ ToScript OpenRoleScript, ToAddress <$> arbitrary])
+    pure $
+      RoleTokensMint . mkMint . NE.fromList $
+        zip roles ((,Nothing) <$> destinations)
