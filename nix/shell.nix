@@ -30,6 +30,7 @@ in
     pkgs.docker-compose
 
     cabalProject.hsPkgs.hspec-golden.components.exes.hgold
+    repoRoot.nix.marlowe-cardano.scriv
   ];
 
 

@@ -219,8 +219,8 @@ queryNext
   :: (Query.Request req) => PeerHasAgency pr st -> Message (Query req) st st' -> NextAgency (Query req) pr st st'
 queryNext = \case
   ClientAgency _ -> \case
-    Query.MsgRequest req -> NextCall $ ServerAgency $ Query.TokRes $ Query.tagFromReq req
-    Query.MsgDone -> NextClose Query.TokDone
+    Query.MsgRequest _ req -> NextCall $ ServerAgency $ Query.TokRes $ Query.tagFromReq req
+    Query.MsgDone _ -> NextClose Query.TokDone
   ServerAgency _ -> \case
     Query.MsgRespond _ -> NextReceive $ ClientAgency Query.TokReq
 

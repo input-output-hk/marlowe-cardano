@@ -1,35 +1,35 @@
-Show: MsgDone
-Binary: 00
-Show: MsgRequest (ReqBin (ReqLeaf GetSecurityParameter) (ReqLeaf GetSecurityParameter))
-Binary: 010100010001
-Show: MsgRequest (ReqLeaf (GetUTxOs (GetUTxOsAtAddresses (fromList [""]))))
-Binary: 0100060100000000000000010000000000000000
-Show: MsgRequest (ReqLeaf (GetUTxOs (GetUTxOsAtAddresses (fromList ["61"]))))
-Binary: 010006010000000000000001000000000000000161
-Show: MsgRequest (ReqLeaf (GetUTxOs (GetUTxOsAtAddresses (fromList []))))
-Binary: 010006010000000000000000
-Show: MsgRequest (ReqLeaf (GetUTxOs (GetUTxOsForTxOutRefs (fromList [TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}}]))))
-Binary: 01000602000000000000000100000000000000000001
-Show: MsgRequest (ReqLeaf (GetUTxOs (GetUTxOsForTxOutRefs (fromList [TxOutRef {txId = "61", txIx = TxIx {unTxIx = 1}}]))))
-Binary: 0100060200000000000000010000000000000001610001
-Show: MsgRequest (ReqLeaf (GetUTxOs (GetUTxOsForTxOutRefs (fromList []))))
-Binary: 010006020000000000000000
-Show: MsgRequest (ReqLeaf GetEra)
-Binary: 010009
-Show: MsgRequest (ReqLeaf GetEraHistory)
-Binary: 010005
-Show: MsgRequest (ReqLeaf GetNetworkId)
-Binary: 010002
-Show: MsgRequest (ReqLeaf GetNodeTip)
-Binary: 010007
-Show: MsgRequest (ReqLeaf GetProtocolParameters)
-Binary: 010003
-Show: MsgRequest (ReqLeaf GetSecurityParameter)
-Binary: 010001
-Show: MsgRequest (ReqLeaf GetSystemStart)
-Binary: 010004
-Show: MsgRequest (ReqLeaf GetTip)
-Binary: 010008
+Show: MsgDone Nothing
+Binary: 0000
+Show: MsgRequest Nothing (ReqBin (ReqLeaf GetSecurityParameter) (ReqLeaf GetSecurityParameter))
+Binary: 01000100010001
+Show: MsgRequest Nothing (ReqLeaf (GetUTxOs (GetUTxOsAtAddresses (fromList [""]))))
+Binary: 010000060100000000000000010000000000000000
+Show: MsgRequest Nothing (ReqLeaf (GetUTxOs (GetUTxOsAtAddresses (fromList ["61"]))))
+Binary: 01000006010000000000000001000000000000000161
+Show: MsgRequest Nothing (ReqLeaf (GetUTxOs (GetUTxOsAtAddresses (fromList []))))
+Binary: 01000006010000000000000000
+Show: MsgRequest Nothing (ReqLeaf (GetUTxOs (GetUTxOsForTxOutRefs (fromList [TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}}]))))
+Binary: 0100000602000000000000000100000000000000000001
+Show: MsgRequest Nothing (ReqLeaf (GetUTxOs (GetUTxOsForTxOutRefs (fromList [TxOutRef {txId = "61", txIx = TxIx {unTxIx = 1}}]))))
+Binary: 010000060200000000000000010000000000000001610001
+Show: MsgRequest Nothing (ReqLeaf (GetUTxOs (GetUTxOsForTxOutRefs (fromList []))))
+Binary: 01000006020000000000000000
+Show: MsgRequest Nothing (ReqLeaf GetEra)
+Binary: 01000009
+Show: MsgRequest Nothing (ReqLeaf GetEraHistory)
+Binary: 01000005
+Show: MsgRequest Nothing (ReqLeaf GetNetworkId)
+Binary: 01000002
+Show: MsgRequest Nothing (ReqLeaf GetNodeTip)
+Binary: 01000007
+Show: MsgRequest Nothing (ReqLeaf GetProtocolParameters)
+Binary: 01000003
+Show: MsgRequest Nothing (ReqLeaf GetSecurityParameter)
+Binary: 01000001
+Show: MsgRequest Nothing (ReqLeaf GetSystemStart)
+Binary: 01000004
+Show: MsgRequest Nothing (ReqLeaf GetTip)
+Binary: 01000008
 Show: MsgRespond (1, 1)
 Binary: 00000000000000010000000000000001
 Show: MsgRespond (AnyCardanoEra AllegraEra)

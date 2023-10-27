@@ -33,14 +33,19 @@ import qualified Database.PostgreSQL.LibPQ as PQ
 import Hasql.Connection (withLibPQConnection)
 import qualified Hasql.Pool as Pool
 import Language.Marlowe.Runtime.ChainSync (ChainSync (..), ChainSyncDependencies (..), chainSync)
+import Language.Marlowe.Runtime.ChainSync.Api (WithGenesis (..))
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as PostgreSQL
 import Language.Marlowe.Runtime.ChainSync.NodeClient (NodeClient (..), NodeClientDependencies (..), nodeClient)
 import Logging (RootSelector (..), renderRootSelectorOTel)
 import Network.Protocol.ChainSeek.Server (chainSeekServerPeer)
-import Network.Protocol.Driver (TcpServerDependencies (..), tcpServer)
+import qualified Network.Protocol.ChainSeek.Types as ChainSeek
+import Network.Protocol.Connection (ServerSource (..), ServerSourceTraced (ServerSourceTraced))
+import Network.Protocol.Driver (TcpServerDependencies (..))
 import Network.Protocol.Driver.Trace (tcpServerTraced)
 import Network.Protocol.Job.Server (jobServerPeer)
-import Network.Protocol.Query.Server (queryServerPeer)
+import Network.Protocol.Peer.Monad.TCP (TcpServerPeerTDependencies (..), tcpServerPeerT)
+import Network.Protocol.Query.Server (queryServerPeerT)
+import qualified Network.Protocol.Query.Types as Query
 import Observe.Event.Explicit (injectSelector)
 import OpenTelemetry.Trace
 import Options (Options (..), getOptions)
@@ -96,22 +101,26 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
               , scanBatchSize = 8192 -- TODO make this a command line option
               }
 
-      tcpServer "chain-seek"
+      tcpServerPeerT "chain-seek" $ injectSelector ChainSeekServer
         -<
-          TcpServerDependencies
+          TcpServerPeerTDependencies
             { host
             , port
-            , toPeer = chainSeekServerPeer
-            , serverSource = syncServerSource
+            , nobodyHasAgency = ChainSeek.TokDone
+            , serverSource = ServerSourceTraced \inj -> do
+                server <- getServer syncServerSource
+                pure $ chainSeekServerPeer Genesis inj server
             }
 
-      tcpServerTraced "chain-query" $ injectSelector QueryServer
+      tcpServerPeerT "query" $ injectSelector QueryServer
         -<
-          TcpServerDependencies
+          TcpServerPeerTDependencies
             { host
             , port = queryPort
-            , toPeer = queryServerPeer
-            , serverSource = queryServerSource
+            , nobodyHasAgency = Query.TokDone
+            , serverSource = ServerSourceTraced \inj -> do
+                server <- getServer queryServerSource
+                pure $ queryServerPeerT inj server
             }
 
       tcpServerTraced "chain-job" $ injectSelector JobServer

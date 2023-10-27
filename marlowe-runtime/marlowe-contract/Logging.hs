@@ -9,7 +9,10 @@ import Control.Monad.Event.Class
 import Language.Marlowe.Protocol.BulkSync.Types (MarloweBulkSync)
 import Language.Marlowe.Protocol.Load.Types (MarloweLoad)
 import Language.Marlowe.Protocol.Transfer.Types (MarloweTransfer)
-import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncQuery)
+import Language.Marlowe.Runtime.ChainSync.Api (
+  ChainSyncQueryClientSelector,
+  renderChainSyncQueryClientSelector,
+ )
 import Language.Marlowe.Runtime.Contract (renderContractStoreSelectorOTel)
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Contract.Store (ContractStoreSelector (..))
@@ -20,6 +23,7 @@ import Network.Protocol.Driver.Trace (
   renderTcpServerSelectorOTel,
  )
 import Network.Protocol.Handshake.Types (Handshake)
+import qualified Network.Protocol.Peer.Monad.TCP as PeerT
 import Network.Protocol.Query.Types (Query)
 import Observe.Event.Explicit (injectSelector)
 import Observe.Event.Render.OpenTelemetry (RenderSelectorOTel)
@@ -29,7 +33,7 @@ data RootSelector f where
   MarloweLoadServer :: TcpServerSelector (Handshake MarloweLoad) f -> RootSelector f
   MarloweTransferServer :: TcpServerSelector (Handshake MarloweTransfer) f -> RootSelector f
   QueryServer :: TcpServerSelector (Handshake (Query ContractRequest)) f -> RootSelector f
-  ChainSyncQueryClient :: TcpClientSelector (Handshake (Query ChainSyncQuery)) f -> RootSelector f
+  ChainSyncQueryClient :: PeerT.TcpClientSelector ChainSyncQueryClientSelector f -> RootSelector f
   MarloweBulkSyncClient :: TcpClientSelector (Handshake MarloweBulkSync) f -> RootSelector f
 
 instance Inject (TcpServerSelector (Handshake (Query ContractRequest))) RootSelector where
@@ -50,5 +54,5 @@ renderRootSelectorOTel = \case
   MarloweTransferServer sel -> renderTcpServerSelectorOTel sel
   QueryServer sel -> renderTcpServerSelectorOTel sel
   ContractStoreSelector sel -> renderContractStoreSelectorOTel sel
-  ChainSyncQueryClient sel -> renderTcpClientSelectorOTel sel
+  ChainSyncQueryClient sel -> PeerT.renderTcpClientSelectorOTel renderChainSyncQueryClientSelector sel
   MarloweBulkSyncClient sel -> renderTcpClientSelectorOTel sel

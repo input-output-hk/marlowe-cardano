@@ -66,10 +66,13 @@ library
     Network.Protocol.Job.Server
     Network.Protocol.Job.Types
     Network.Protocol.Peer
+    Network.Protocol.Peer.Monad
+    Network.Protocol.Peer.Monad.TCP
     Network.Protocol.Peer.Trace
     Network.Protocol.Query.Client
     Network.Protocol.Query.Server
     Network.Protocol.Query.Types
+    Network.Protocol.Singleton
 
   build-depends:
     , async-components ==0.1.1.0
@@ -85,6 +88,7 @@ library
     , hs-opentelemetry-api ==0.0.3.6
     , hspec >=2.10 && <3
     , hspec-golden ^>=0.2
+    , mtl >=2.2 && <3
     , network >=3.1 && <4
     , network-run ^>=0.2.4
     , nonempty-containers ^>=0.3.4
