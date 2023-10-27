@@ -2,9 +2,15 @@
 let
   inherit (inputs) std n2c;
 
-  mkOciImages = imageConfigSet:
+  mkOciImages =
+    { defaultImageAttrs ? { }
+    , imageSet
+    }:
     let
-      builtImageSet = lib.mapAttrs (_: mkImage) imageConfigSet;
+      builtImageSet = lib.mapAttrs
+        (_: imageConfig: mkImage (lib.recursiveUpdate imageConfig defaultImageAttrs))
+        imageSet;
+
       forAllImages = f: lib.concatMapStrings (s: s + "\n") (lib.mapAttrsToList f builtImageSet);
     in
     builtImageSet // {
