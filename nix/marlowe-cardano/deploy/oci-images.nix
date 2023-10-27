@@ -33,20 +33,6 @@ let
     marlowe-oracle
     marlowe-finder;
 
-  defaultImageAttrs = {
-    # This tag should only really be in use locally.
-    # The github actions use this to find the local image and publish the image
-    # under tag based on the github tag or branch.
-    # TODO: Invesitage changing this from "latest" to "local"
-    tag = "latest";
-    uid = "0";
-    gid = "0";
-    labels = {
-      source = "https://github.com/input-output-hk/marlowe-cardano";
-      license = "Apache-2.0";
-    };
-  };
-
   withProbes = args: (args // probes);
 
   # Ensure this path only changes when sqitch.plan file is updated, or DDL
@@ -782,4 +768,21 @@ let
   };
 
 in
-mkOciImages (mapAttrs (_: recursiveUpdate defaultImageAttrs) images)
+mkOciImages
+{
+  defaultImageAttrs = {
+    # This tag should only really be in use locally.
+    # The github actions use this to find the local image and publish the image
+    # under tag based on the github tag or branch.
+    # TODO: Invesitage changing this from "latest" to "local"
+    tag = "latest";
+    uid = "0";
+    gid = "0";
+    labels = {
+      source = "https://github.com/input-output-hk/marlowe-cardano";
+      license = "Apache-2.0";
+    };
+  };
+
+  images = images;
+}
