@@ -66,7 +66,7 @@ The open-roles validator lets *anyone with a Cardano address* make a deposit or 
 
 1. The seller creates a contract that offers one `BearGarden` token for sale at the price of 8 ada.
 2. The seller deposits the `BearGarden` token.
-3. Anyone can join the contract by depositing the sale price of 8 ada into the contract. In that transaction, the open-role validator will pay them the `Seller` token so that they are now a party to the contract.
+3. Anyone can join the contract by depositing the sale price of 8 ada into the contract. In that transaction, the open-role validator will pay them the `Buyer` token so that they are now a party to the contract.
 4. Anyone notifies the contract to complete its operation and pay the 8 ada to Marlowe's role-payout validator address for the benefit of the seller and one `BearGarden` for the benefit of the buyer. The `Notify TrueObs` is present because of the aforementioned security restriction.
 5. The seller withdraws their 8 ada from the role-payout validator address.
 6. The buyer withdraws their one `BearGarden` from the role-payout validator address.
