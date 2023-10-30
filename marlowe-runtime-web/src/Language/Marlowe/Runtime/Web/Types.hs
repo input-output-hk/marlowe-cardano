@@ -773,7 +773,6 @@ data PostContractsRequest = PostContractsRequest
   , metadata :: Map Word64 Metadata
   , version :: MarloweVersion
   , roles :: Maybe RolesConfig
-  , threadTokenName :: Maybe String
   , contract :: ContractOrSourceId
   , minUTxODeposit :: Maybe Word64
   }

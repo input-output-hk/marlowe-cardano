@@ -1974,9 +1974,6 @@
                         },
                         "type": "object"
                     },
-                    "threadTokenName": {
-                        "type": "string"
-                    },
                     "version": {
                         "$ref": "#/components/schemas/MarloweVersion"
                     }
