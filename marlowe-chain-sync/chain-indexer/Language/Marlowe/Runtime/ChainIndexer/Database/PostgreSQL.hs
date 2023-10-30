@@ -6,6 +6,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE RankNTypes #-}
 
 -- {-# LANGUAGE QuasiQuotes #-}
 
@@ -47,6 +48,7 @@ import Cardano.Api (
   BlockNo (..),
   CardanoMode,
   ChainPoint (..),
+  ChainTip (..),
   CtxTx,
   EraInMode,
   IsCardanoEra,
@@ -88,8 +90,9 @@ import qualified Cardano.Ledger.Babbage.Tx as Babbage
 import qualified Cardano.Ledger.Babbage.TxBody as Babbage
 import Cardano.Ledger.SafeHash (originalBytes)
 import Cardano.Ledger.Shelley.API.Types (Credential (..), Network (..), StakeReference (..), StrictMaybe (..))
+import Colog (Message, WithLog, logInfo)
+import Control.Monad (when)
 import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
-import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (ask)
 import Data.Bits ((.|.))
 import Data.ByteString (ByteString)
@@ -109,12 +112,16 @@ import Data.Profunctor (rmap)
 import qualified Data.Set as Set
 import Data.String (IsString (..))
 import Data.Text (Text)
+import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.Vector (Vector)
 import qualified Data.Vector as V
+import Data.Word (Word64)
+import Database.PostgreSQL.Simple (execute_)
 import qualified Database.PostgreSQL.Simple as PS
 import Database.PostgreSQL.Simple.Copy (copy, putCopyData, putCopyEnd, putCopyError)
 import qualified Database.PostgreSQL.Simple.Internal as PS
+import Database.PostgreSQL.Simple.SqlQQ (sql)
 import Database.PostgreSQL.Simple.Transaction (withTransactionSerializable)
 import qualified Database.PostgreSQL.Simple.Types as PS
 import GHC.Generics (Generic)
@@ -135,7 +142,6 @@ import Language.Marlowe.Runtime.ChainIndexer.Database (
   DatabaseQueries (DatabaseQueries),
   GetGenesisBlock (..),
   GetIntersectionPoints (..),
-  hoistCommitBlocks,
   hoistCommitGenesisBlock,
   hoistCommitRollback,
   hoistGetGenesisBlock,
@@ -144,11 +150,28 @@ import Language.Marlowe.Runtime.ChainIndexer.Database (
 import Language.Marlowe.Runtime.ChainIndexer.Genesis (GenesisBlock (..), GenesisTx (..))
 import Observe.Event (addField)
 import Ouroboros.Network.Point (WithOrigin (..))
-import UnliftIO (Exception (displayException), SomeException (..), mask, newIORef, newMVar, throwIO, try)
+import UnliftIO (
+  Exception (displayException),
+  MonadIO (..),
+  MonadUnliftIO (..),
+  SomeException (..),
+  mask,
+  newIORef,
+  newMVar,
+  throwIO,
+  try,
+ )
 import Prelude hiding (init)
 
 data QuerySelector f where
   Query :: Text -> QuerySelector QueryField
+  CopyBlocks :: QuerySelector Int64
+  CopyTxs :: QuerySelector Int64
+  CopyTxOuts :: QuerySelector Int64
+  CopyTxIns :: QuerySelector Int64
+  CopyAssetOuts :: QuerySelector Int64
+  CopyAssetMints :: QuerySelector Int64
+  EnableIndexes :: QuerySelector ()
 
 data QueryField
   = SqlStatement ByteString
@@ -157,22 +180,27 @@ data QueryField
 
 -- | PostgreSQL implementation for the chain sync database queries.
 databaseQueries
-  :: forall r s m. (MonadInjectEvent r QuerySelector s m, MonadIO m) => Pool -> GenesisBlock -> DatabaseQueries m
-databaseQueries pool genesisBlock =
+  :: forall r s env m
+   . (MonadInjectEvent r QuerySelector s m, MonadUnliftIO m, WithLog env Message m)
+  => Word64
+  -> Pool
+  -> GenesisBlock
+  -> DatabaseQueries m
+databaseQueries securityParameter pool genesisBlock =
   DatabaseQueries
     (hoistCommitRollback (transact "commitRollback" "INSERT" TS.Write) $ commitRollback genesisBlock)
-    (hoistCommitBlocks (runSession "commitBlocks" "INSERT") commitBlocks)
+    ( CommitBlocks \blocks local remote -> withRunInIO \runInIO -> do
+        result <- Pool.use pool $ runCommitBlocks (commitBlocks runInIO securityParameter) blocks local remote
+        either throwIO pure result
+    )
     (hoistCommitGenesisBlock (transact "commitGenesisBlock" "INSERT" TS.Write) commitGenesisBlock)
     (hoistGetIntersectionPoints (transact "getIntersectionPoints" "SELECT" TS.Read) getIntersectionPoints)
     (hoistGetGenesisBlock (transact "getGenesisBlock" "SELECT" TS.Read) getGenesisBlock)
   where
     transact :: Text -> Text -> TS.Mode -> Transaction a -> m a
-    transact operation queryName = fmap (runSession operation queryName) . TS.transaction TS.Serializable
-
-    runSession :: Text -> Text -> Session.Session a -> m a
-    runSession operation queryName m = withEvent (Query queryName) \ev -> do
+    transact operation queryName mode m = withEvent (Query queryName) \ev -> do
       addField ev $ Operation operation
-      result <- liftIO $ Pool.use pool m
+      result <- liftIO $ Pool.use pool $ TS.transaction TS.Serializable mode m
       case result of
         Left ex -> do
           case ex of
@@ -309,22 +337,38 @@ commitGenesisBlock = CommitGenesisBlock \GenesisBlock{..} ->
         , V.fromList $ lovelaceToParam . genesisTxLovelace <$> genesisBlockTxsList
         , V.fromList $ BS.take 2 . serialiseToRawBytes . genesisTxAddress <$> genesisBlockTxsList
         )
-   in HT.statement
-        params
-        [resultlessStatement|
-        WITH newBlock AS
-          ( INSERT INTO chain.block (id, slotNo, blockNo) VALUES ($1 :: bytea, -1, -1)
-            RETURNING id
-          )
-        , newTxs AS
-          ( INSERT INTO chain.tx (id, blockId, slotNo, isValid)
-            SELECT tx.*, block.id, -1, true
-            FROM   (SELECT * FROM UNNEST ($2 :: bytea[])) AS tx
-            JOIN   newBlock AS block ON true
-          )
-        INSERT INTO chain.txOut (txId, address, lovelace, addressHeader, slotNo, txIx, isCollateral)
-        SELECT *, -1, 0, false FROM UNNEST ($2 :: bytea[], $3 :: bytea[], $4 :: bigint[], $5 :: bytea[])
-      |]
+   in do
+        HT.statement
+          ()
+          [resultlessStatement|
+            WITH indexes (indexId) AS
+              ( SELECT (schemaName||'.'||indexName)
+                FROM pg_indexes
+                WHERE schemaName = 'chain'
+                  AND tableName <> 'asset'
+                  AND tableName NOT LIKE 'block%'
+              )
+            UPDATE pg_index
+            SET indisready = FALSE
+            FROM indexes
+            WHERE indexrelid = indexId::regclass
+          |]
+        HT.statement
+          params
+          [resultlessStatement|
+            WITH newBlock AS
+              ( INSERT INTO chain.block (id, slotNo, blockNo) VALUES ($1 :: bytea, -1, -1)
+                RETURNING id
+              )
+            , newTxs AS
+              ( INSERT INTO chain.tx (id, blockId, slotNo, isValid)
+                SELECT tx.*, block.id, -1, true
+                FROM   (SELECT * FROM UNNEST ($2 :: bytea[])) AS tx
+                JOIN   newBlock AS block ON true
+              )
+            INSERT INTO chain.txOut (txId, address, lovelace, addressHeader, slotNo, txIx, isCollateral)
+            SELECT *, -1, 0, false FROM UNNEST ($2 :: bytea[], $3 :: bytea[], $4 :: bigint[], $5 :: bytea[])
+          |]
 
 -- CommitBlocks
 
@@ -339,8 +383,14 @@ commitGenesisBlock = CommitGenesisBlock \GenesisBlock{..} ->
 -- belonging to the new epoch. Beware that if a unique key is ever added to the
 -- index for block or slot number, then these blocks will violate that new
 -- constraint.
-commitBlocks :: CommitBlocks Session.Session
-commitBlocks = CommitBlocks \blocks -> do
+commitBlocks
+  :: forall r s env m
+   . (MonadInjectEvent r QuerySelector s m, MonadUnliftIO m, WithLog env Message m)
+  => (forall x. m x -> IO x)
+  -> Word64
+  -> CommitBlocks Session.Session
+commitBlocks runInIO securityParameter = CommitBlocks \blocks localTip remoteTip -> do
+  liftIO $ runInIO $ logInfo $ "Saving " <> T.pack (show $ length blocks) <> " blocks"
   let txs = extractTxs =<< blocks
       txOuts = extractTxOuts =<< txs
       txIns = extractTxIns =<< txs
@@ -354,13 +404,41 @@ commitBlocks = CommitBlocks \blocks -> do
     connectionTempNameCounter <- newIORef 0
     let connection = PS.Connection{..}
     withTransactionSerializable connection do
-      copyBlocks connection blocks
-      copyTxs connection txs
-      copyTxOuts connection txOuts
-      copyTxIns connection txIns
-      copyAssetOuts assetIds connection assetOuts
-      copyAssetMints assetIds connection assetMints
+      runInIO $ copyBlocks connection blocks
+      runInIO $ copyTxs connection txs
+      runInIO $ copyTxOuts connection txOuts
+      runInIO $ copyTxIns connection txIns
+      runInIO $ copyAssetOuts assetIds connection assetOuts
+      runInIO $ copyAssetMints assetIds connection assetMints
+    runInIO $ enableIndexesIfCaughtUp connection localTip remoteTip
   where
+    enableIndexesIfCaughtUp conn localTip remoteTip = do
+      let distanceFromTip = case (localTip, remoteTip) of
+            (_, ChainTipAtGenesis) -> 0
+            (ChainTipAtGenesis, ChainTip _ _ (BlockNo r)) -> r + 1
+            (ChainTip _ _ (BlockNo l), ChainTip _ _ (BlockNo r)) -> r - l
+      when (distanceFromTip <= securityParameter || True) do
+        numberOfIndexesEnabled <-
+          liftIO $
+            execute_
+              conn
+              [sql|
+                WITH indexes (indexId) AS
+                  ( SELECT (schemaName||'.'||indexName)
+                    FROM pg_indexes
+                    WHERE schemaName = 'chain'
+                  )
+                UPDATE pg_index
+                SET indisready = TRUE
+                FROM indexes
+                WHERE NOT indisready
+                  AND indexrelid = indexId::regclass
+              |]
+        when (numberOfIndexesEnabled > 0) $ withEvent EnableIndexes \ev -> do
+          logInfo "Local tip within security window, enabling indexes"
+          _ <- liftIO $ execute_ conn "REINDEX SCHEMA chain"
+          addField ev ()
+
     extractTxs :: CardanoBlock -> [SomeTx]
     extractTxs (BlockInMode (Block (BlockHeader slotNo hash _) blockTxs) era) = flip (SomeTx hash slotNo) era <$> blockTxs
 
@@ -459,9 +537,9 @@ data BlockRow = BlockRow
 
 instance ToRecord BlockRow
 
-copyBlocks :: PS.Connection -> [CardanoBlock] -> IO ()
+copyBlocks :: (MonadInjectEvent r QuerySelector s m, MonadUnliftIO m) => PS.Connection -> [CardanoBlock] -> m ()
 copyBlocks conn =
-  copyBuilder conn "block (id, slotNo, blockNo)"
+  copyBuilder CopyBlocks conn "block (id, slotNo, blockNo)"
     . foldMap (encodeRecord . blockRow)
 
 data SomeTx
@@ -488,9 +566,9 @@ data TxRow = TxRow
 
 instance ToRecord TxRow
 
-copyTxs :: PS.Connection -> [SomeTx] -> IO ()
+copyTxs :: (MonadInjectEvent r QuerySelector s m, MonadUnliftIO m) => PS.Connection -> [SomeTx] -> m ()
 copyTxs conn =
-  copyBuilder conn "tx (blockId, id, slotNo, validityLowerBound, validityUpperBound, metadata, isValid)"
+  copyBuilder CopyTxs conn "tx (blockId, id, slotNo, validityLowerBound, validityUpperBound, metadata, isValid)"
     . foldMap (encodeRecord . txRow)
 
 data SomeTxOut
@@ -515,9 +593,10 @@ data TxOutRow = TxOutRow
 
 instance ToRecord TxOutRow
 
-copyTxOuts :: PS.Connection -> [SomeTxOut] -> IO ()
+copyTxOuts :: (MonadInjectEvent r QuerySelector s m, MonadUnliftIO m) => PS.Connection -> [SomeTxOut] -> m ()
 copyTxOuts conn =
   copyBuilder
+    CopyTxOuts
     conn
     "txOut (txId, txIx, slotNo, address, lovelace, datumHash, datumBytes, isCollateral, addressHeader, addressPaymentCredential, addressStakeAddressReference)"
     . foldMap (encodeRecord . txOutRow)
@@ -536,9 +615,9 @@ data TxInRow = TxInRow
 
 instance ToRecord TxInRow
 
-copyTxIns :: PS.Connection -> [SomeTxIn] -> IO ()
+copyTxIns :: (MonadInjectEvent r QuerySelector s m, MonadUnliftIO m) => PS.Connection -> [SomeTxIn] -> m ()
 copyTxIns conn =
-  copyBuilder conn "txIn (txOutId, txOutIx, txInId, slotNo, redeemerDatumBytes, isCollateral)"
+  copyBuilder CopyTxIns conn "txIn (txOutId, txOutIx, txInId, slotNo, redeemerDatumBytes, isCollateral)"
     . foldMap (encodeRecord . txInRow)
 
 type Asset = (ByteString, ByteString)
@@ -589,9 +668,14 @@ data AssetOutRow = AssetOutRow
 
 instance ToRecord AssetOutRow
 
-copyAssetOuts :: Map (ByteString, ByteString) Int -> PS.Connection -> [AssetOut] -> IO ()
+copyAssetOuts
+  :: (MonadInjectEvent r QuerySelector s m, MonadUnliftIO m)
+  => Map (ByteString, ByteString) Int
+  -> PS.Connection
+  -> [AssetOut]
+  -> m ()
 copyAssetOuts assetIds conn =
-  copyBuilder conn "assetOut (txOutId, txOutIx, slotNo, assetId, quantity)"
+  copyBuilder CopyAssetOuts conn "assetOut (txOutId, txOutIx, slotNo, assetId, quantity)"
     . foldMap (encodeRecord . assetOutRow assetIds)
 
 data AssetMint = AssetMint TxId SlotNo PolicyId AssetName Quantity
@@ -606,23 +690,39 @@ data AssetMintRow = AssetMintRow
 
 instance ToRecord AssetMintRow
 
-copyAssetMints :: Map (ByteString, ByteString) Int -> PS.Connection -> [AssetMint] -> IO ()
+copyAssetMints
+  :: (MonadInjectEvent r QuerySelector s m, MonadUnliftIO m)
+  => Map (ByteString, ByteString) Int
+  -> PS.Connection
+  -> [AssetMint]
+  -> m ()
 copyAssetMints assetIds conn =
-  copyBuilder conn "assetMint (txId, slotNo, assetId, quantity)"
+  copyBuilder CopyAssetMints conn "assetMint (txId, slotNo, assetId, quantity)"
     . foldMap (encodeRecord . assetMintRow assetIds)
 
-copyBuilder :: (ToRecord a) => PS.Connection -> ByteString -> Builder a -> IO ()
-copyBuilder conn table builder = mask \restore -> do
+copyBuilder
+  :: ( MonadInjectEvent r QuerySelector s m
+     , MonadUnliftIO m
+     , ToRecord a
+     )
+  => QuerySelector Int64
+  -> PS.Connection
+  -> ByteString
+  -> Builder a
+  -> m ()
+copyBuilder sel conn table builder = do
   let query = "COPY chain." <> PS.Query table <> " FROM STDIN WITH (FORMAT 'csv')"
-  copy conn query ()
-  result <- try $ restore $ traverse_ (putCopyData conn) $ BL.toChunks $ encode builder
-  case result of
-    Left (SomeException ex) -> do
-      putCopyError conn $ fromString $ displayException ex
-      throwIO ex
-    Right _ -> do
-      _ <- putCopyEnd conn
-      pure ()
+  withEvent sel \ev -> mask \restore -> do
+    liftIO $ copy conn query ()
+    result <- try $ restore $ liftIO $ traverse_ (putCopyData conn) $ BL.toChunks $ encode builder
+    case result of
+      Left (SomeException ex) -> do
+        liftIO $ putCopyError conn $ fromString $ displayException ex
+        throwIO ex
+      Right _ -> do
+        count <- liftIO $ putCopyEnd conn
+        addField ev count
+        pure ()
 
 blockRow :: CardanoBlock -> BlockRow
 blockRow (BlockInMode (Block (BlockHeader slotNo hash (BlockNo blockNo)) _) _) =

@@ -8,7 +8,24 @@
 
 module Main where
 
-import Cardano.Api (CardanoMode, ConsensusModeParams (..), EpochSlots (..), File (..), LocalNodeConnectInfo (..))
+import Cardano.Api (
+  AnyCardanoEra (..),
+  CardanoMode,
+  ConsensusMode (..),
+  ConsensusModeIsMultiEra (..),
+  ConsensusModeParams (..),
+  EpochSlots (..),
+  EraInMode (..),
+  File (..),
+  GenesisParameters (..),
+  LocalNodeConnectInfo (..),
+  QueryInEra (..),
+  QueryInMode (..),
+  QueryInShelleyBasedEra (..),
+  ShelleyBasedEra (..),
+  queryNodeLocalState,
+  toEraInMode,
+ )
 import qualified Cardano.Api as Cardano
 import Cardano.Api.Byron (toByronRequiresNetworkMagic)
 import qualified Cardano.Chain.Genesis as Byron
@@ -50,6 +67,24 @@ run Options{..} = do
         (Byron.mkConfigFromFile (toByronRequiresNetworkMagic networkId) genesisConfigFile hash)
   (hash, genesisConfig) <- either (fail . unpack) pure genesisConfigResult
   shelleyGenesis <- either error id <$> eitherDecodeFileStrict shelleyGenesisFile
+  Right (AnyCardanoEra era) <-
+    queryNodeLocalState localNodeConnectInfo Nothing $ QueryCurrentEra CardanoModeIsMultiEra
+  eraInMode <- case toEraInMode era CardanoMode of
+    Nothing -> fail $ "cannot convert " <> show era <> " to era in mode"
+    Just eraInMode -> pure eraInMode
+  shelleyBasedEra <- case eraInMode of
+    ByronEraInCardanoMode -> fail "Cannot query shelley in byron era"
+    ShelleyEraInCardanoMode -> pure ShelleyBasedEraShelley
+    AllegraEraInCardanoMode -> pure ShelleyBasedEraAllegra
+    MaryEraInCardanoMode -> pure ShelleyBasedEraMary
+    AlonzoEraInCardanoMode -> pure ShelleyBasedEraAlonzo
+    BabbageEraInCardanoMode -> pure ShelleyBasedEraBabbage
+    ConwayEraInCardanoMode -> pure ShelleyBasedEraConway
+  Right (Right GenesisParameters{..}) <-
+    queryNodeLocalState localNodeConnectInfo Nothing $
+      QueryInEra eraInMode $
+        QueryInShelleyBasedEra shelleyBasedEra QueryGenesisParameters
+  let securityParameter = fromIntegral protocolParamSecurity
   let genesisBlock = computeGenesisBlock (abstractHashToBytes hash) genesisConfig shelleyGenesis
       appComponent = proc pool -> do
         probes <-
@@ -57,7 +92,7 @@ run Options{..} = do
             -<
               ChainIndexerDependencies
                 { connectToLocalNode = liftIO . Cardano.connectToLocalNode localNodeConnectInfo
-                , databaseQueries = PostgreSQL.databaseQueries pool genesisBlock
+                , databaseQueries = PostgreSQL.databaseQueries securityParameter pool genesisBlock
                 , persistRateLimit
                 , genesisBlock
                 , maxCost

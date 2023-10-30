@@ -9,7 +9,7 @@ module Language.Marlowe.Runtime.ChainIndexer.Store (
   chainStore,
 ) where
 
-import Colog (Message, WithLog)
+import Colog (Message, WithLog, logInfo)
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, newTVar, readTVar)
 import Control.Concurrent.STM.Delay (Delay, newDelay, waitDelay)
@@ -77,7 +77,9 @@ chainStore = component "indexer-chain-store" \ChainStoreDependencies{..} -> do
           case mDbGenesisBlock of
             Just dbGenesisBlock -> unless (dbGenesisBlock == genesisBlock) do
               liftIO $ fail "Existing genesis block does not match computed genesis block"
-            Nothing -> runCommitGenesisBlock commitGenesisBlock genesisBlock
+            Nothing -> do
+              logInfo "Saving Genesis block, indexes disabled"
+              runCommitGenesisBlock commitGenesisBlock genesisBlock
         atomically $ writeTVar readyVar True
         go Nothing
         where
@@ -89,7 +91,7 @@ chainStore = component "indexer-chain-store" \ChainStoreDependencies{..} -> do
               addField ev changes
               traverse_ (runCommitRollback commitRollback) changesRollback
               when (changesBlockCount > 0) do
-                runCommitBlocks commitBlocks changesBlocks
+                runCommitBlocks commitBlocks changesBlocks changesLocalTip changesTip
             go . Just =<< liftIO getCurrentTime
 
       computeDelay :: UTCTime -> IO (Maybe Delay)
