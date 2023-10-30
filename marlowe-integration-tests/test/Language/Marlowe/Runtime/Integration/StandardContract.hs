@@ -111,7 +111,18 @@ createStandardContract :: Wallet -> Wallet -> Integration (StandardContractInit 
 createStandardContract = createStandardContractWithTags mempty
 
 createStandardContractWithTags :: Set MarloweMetadataTag -> Wallet -> Wallet -> Integration (StandardContractInit 'V1)
-createStandardContractWithTags tags partyAWallet partyBWallet = do
+createStandardContractWithTags tags partyAWallet =
+  createStandardContractWithTagsAndRolesConfig
+    (RoleTokensMint $ mkMint $ pure ("Party A", (ToAddress . changeAddress $ addresses partyAWallet, Nothing)))
+    tags
+    partyAWallet
+
+createStandardContractWithRolesConfig :: RoleTokensConfig -> Wallet -> Wallet -> Integration (StandardContractInit 'V1)
+createStandardContractWithRolesConfig rolesConfig = createStandardContractWithTagsAndRolesConfig rolesConfig mempty
+
+createStandardContractWithTagsAndRolesConfig
+  :: RoleTokensConfig -> Set MarloweMetadataTag -> Wallet -> Wallet -> Integration (StandardContractInit 'V1)
+createStandardContractWithTagsAndRolesConfig rolesConfig tags partyAWallet partyBWallet = do
   partyBAddress <-
     expectJust "Failed to convert party B address" $ toPlutusAddress $ changeAddress $ addresses partyBWallet
   now <- liftIO getCurrentTime
@@ -122,7 +133,7 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
       Nothing
       MarloweV1
       (addresses partyAWallet)
-      (RoleTokensMint $ mkMint $ pure ("Party A", (ToAddress . changeAddress $ addresses partyAWallet, Nothing)))
+      rolesConfig
       ( if Set.null tags
           then emptyMarloweTransactionMetadata
           else
