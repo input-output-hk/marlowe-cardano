@@ -69,6 +69,7 @@ executable marlowe-integration-tests
     Language.Marlowe.Runtime.Integration.Create
     Language.Marlowe.Runtime.Integration.Intersections
     Language.Marlowe.Runtime.Integration.MarloweQuery
+    Language.Marlowe.Runtime.Integration.OpenRoles
     Language.Marlowe.Runtime.Integration.StandardContract
     Language.Marlowe.Runtime.Integration.Withdraw
     Language.Marlowe.Runtime.IntegrationSpec
