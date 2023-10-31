@@ -58,6 +58,9 @@ library
     Language.Marlowe.Runtime.Cardano.Api
     Language.Marlowe.Runtime.Cardano.Feature
     Language.Marlowe.Runtime.ChainSync.Api
+    Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Byron
+    Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Cardano
+    Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types
 
   other-modules:
   build-depends:
@@ -67,7 +70,15 @@ library
     , binary ^>=0.8.8
     , bytestring >=0.10.12 && <0.12
     , cardano-api ^>=8.2
+    , cardano-binary
+    , cardano-crypto-wrapper ^>=1.5
+    , cardano-ledger-alonzo ^>=1.2
+    , cardano-ledger-babbage ^>=1.2
+    , cardano-ledger-binary ^>=1.1
+    , cardano-ledger-byron ^>=1.0
     , cardano-ledger-core ^>=1.2
+    , cardano-ledger-shelley ^>=1.2
+    , cassava
     , containers ^>=0.6.5
     , eventuo11y-otel ^>=0.1
     , hashable >=1.3 && <2
