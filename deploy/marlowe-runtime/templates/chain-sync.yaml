@@ -94,7 +94,11 @@ spec:
         volumes:
         - name: ipc
           path: /ipc
-
+    - type: cpuscaler
+      properties:
+        min: 1
+        max: 10
+        cpuUtil: 70
   policies:
   - name: local-{{ $.Values.namespace }}
     properties:
