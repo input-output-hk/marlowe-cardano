@@ -34,6 +34,11 @@ spec:
           port: 3780
           protocol: TCP
       traits:
+      - type: cpuscaler
+        properties:
+          min: 1
+          max: 10
+          cpuUtil: 50
       - type: https-route
         properties:
           domains:
