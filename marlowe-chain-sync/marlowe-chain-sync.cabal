@@ -312,3 +312,24 @@ executable marlowe-chain-sync
     , prettyprinter
     , text ^>=1.2
     , unliftio ^>=0.2.1
+
+executable marlowe-chain-copy
+  import:          lang
+  ghc-options:     -threaded
+  hs-source-dirs:  marlowe-chain-copy
+  main-is:         Main.hs
+  other-modules:
+    Options
+    Paths_marlowe_chain_sync
+
+  autogen-modules: Paths_marlowe_chain_sync
+  build-depends:
+    , base >=4.9 && <5
+    , bytestring >=0.10.12 && <0.12
+    , cardano-api ^>=8.2
+    , cassava
+    , marlowe-chain-sync ==0.0.5
+    , optparse-applicative
+    , postgresql-simple
+    , prettyprinter
+    , unliftio ^>=0.2.1
