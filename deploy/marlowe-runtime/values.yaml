@@ -24,3 +24,5 @@ releaseName: marlowe-runtime
 databaseName: marlowe-runtime-database
 
 databaseHost: dapps-marlowe-runtime-database.csguv6v6ban1.us-east-1.rds.amazonaws.com
+
+databaseReadReplica: dapps-marlowe-runtime-database-read-0.csguv6v6ban1.us-east-1.rds.amazonaws.com
