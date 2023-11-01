@@ -152,12 +152,6 @@ renderDatabaseSelectorOTel dbName dbUser host port = \case
   CopyTxIns -> renderCopy "txIn"
   CopyAssetOuts -> renderCopy "assetOut"
   CopyAssetMints -> renderCopy "assetMint"
-  EnableIndexes ->
-    OTelRendered
-      { eventName = "enable indexes"
-      , eventKind = Internal
-      , renderField = \_ -> ("db.statement", "REINDEX SCHEMA chain") : standardAttributes
-      }
   where
     standardAttributes =
       catMaybes

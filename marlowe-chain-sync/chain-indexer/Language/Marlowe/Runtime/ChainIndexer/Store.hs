@@ -78,7 +78,7 @@ chainStore = component "indexer-chain-store" \ChainStoreDependencies{..} -> do
             Just dbGenesisBlock -> unless (dbGenesisBlock == genesisBlock) do
               liftIO $ fail "Existing genesis block does not match computed genesis block"
             Nothing -> do
-              logInfo "Saving Genesis block, indexes disabled"
+              logInfo "Saving Genesis block"
               runCommitGenesisBlock commitGenesisBlock genesisBlock
         atomically $ writeTVar readyVar True
         go Nothing
@@ -91,7 +91,7 @@ chainStore = component "indexer-chain-store" \ChainStoreDependencies{..} -> do
               addField ev changes
               traverse_ (runCommitRollback commitRollback) changesRollback
               when (changesBlockCount > 0) do
-                runCommitBlocks commitBlocks changesBlocks changesLocalTip changesTip
+                runCommitBlocks commitBlocks changesBlocks
             go . Just =<< liftIO getCurrentTime
 
       computeDelay :: UTCTime -> IO (Maybe Delay)

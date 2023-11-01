@@ -171,7 +171,6 @@ data QuerySelector f where
   CopyTxIns :: QuerySelector Int64
   CopyAssetOuts :: QuerySelector Int64
   CopyAssetMints :: QuerySelector Int64
-  EnableIndexes :: QuerySelector ()
 
 data QueryField
   = SqlStatement ByteString
@@ -182,15 +181,14 @@ data QueryField
 databaseQueries
   :: forall r s env m
    . (MonadInjectEvent r QuerySelector s m, MonadUnliftIO m, WithLog env Message m)
-  => Word64
-  -> Pool
+  => Pool
   -> GenesisBlock
   -> DatabaseQueries m
-databaseQueries securityParameter pool genesisBlock =
+databaseQueries pool genesisBlock =
   DatabaseQueries
     (hoistCommitRollback (transact "commitRollback" "INSERT" TS.Write) $ commitRollback genesisBlock)
-    ( CommitBlocks \blocks local remote -> withRunInIO \runInIO -> do
-        result <- Pool.use pool $ runCommitBlocks (commitBlocks runInIO securityParameter) blocks local remote
+    ( CommitBlocks \blocks -> withRunInIO \runInIO -> do
+        result <- Pool.use pool $ runCommitBlocks (commitBlocks runInIO) blocks
         either throwIO pure result
     )
     (hoistCommitGenesisBlock (transact "commitGenesisBlock" "INSERT" TS.Write) commitGenesisBlock)
@@ -262,11 +260,11 @@ getIntersectionPoints =
       rmap
         decodeResults
         [vectorStatement|
-    SELECT slotNo :: bigint, id :: bytea, blockNo :: bigint
-    FROM   chain.block
-    WHERE  rollbackToBlock IS NULL
-    ORDER BY slotNo DESC LIMIT 2160
-  |]
+          SELECT slotNo :: bigint, id :: bytea, blockNo :: bigint
+          FROM   chain.block
+          WHERE  rollbackToBlock IS NULL
+          ORDER BY slotNo DESC LIMIT 2160
+        |]
   where
     decodeResults :: Vector (Int64, ByteString, Int64) -> [WithOrigin BlockHeader]
     decodeResults = fmap decodeResult . V.toList
@@ -337,38 +335,22 @@ commitGenesisBlock = CommitGenesisBlock \GenesisBlock{..} ->
         , V.fromList $ lovelaceToParam . genesisTxLovelace <$> genesisBlockTxsList
         , V.fromList $ BS.take 2 . serialiseToRawBytes . genesisTxAddress <$> genesisBlockTxsList
         )
-   in do
-        HT.statement
-          ()
-          [resultlessStatement|
-            WITH indexes (indexId) AS
-              ( SELECT (schemaName||'.'||indexName)
-                FROM pg_indexes
-                WHERE schemaName = 'chain'
-                  AND tableName <> 'asset'
-                  AND tableName NOT LIKE 'block%'
-              )
-            UPDATE pg_index
-            SET indisready = FALSE
-            FROM indexes
-            WHERE indexrelid = indexId::regclass
-          |]
-        HT.statement
-          params
-          [resultlessStatement|
-            WITH newBlock AS
-              ( INSERT INTO chain.block (id, slotNo, blockNo) VALUES ($1 :: bytea, -1, -1)
-                RETURNING id
-              )
-            , newTxs AS
-              ( INSERT INTO chain.tx (id, blockId, slotNo, isValid)
-                SELECT tx.*, block.id, -1, true
-                FROM   (SELECT * FROM UNNEST ($2 :: bytea[])) AS tx
-                JOIN   newBlock AS block ON true
-              )
-            INSERT INTO chain.txOut (txId, address, lovelace, addressHeader, slotNo, txIx, isCollateral)
-            SELECT *, -1, 0, false FROM UNNEST ($2 :: bytea[], $3 :: bytea[], $4 :: bigint[], $5 :: bytea[])
-          |]
+   in HT.statement
+        params
+        [resultlessStatement|
+          WITH newBlock AS
+            ( INSERT INTO chain.block (id, slotNo, blockNo) VALUES ($1 :: bytea, -1, -1)
+              RETURNING id
+            )
+          , newTxs AS
+            ( INSERT INTO chain.tx (id, blockId, slotNo, isValid)
+              SELECT tx.*, block.id, -1, true
+              FROM   (SELECT * FROM UNNEST ($2 :: bytea[])) AS tx
+              JOIN   newBlock AS block ON true
+            )
+          INSERT INTO chain.txOut (txId, address, lovelace, addressHeader, slotNo, txIx, isCollateral)
+          SELECT *, -1, 0, false FROM UNNEST ($2 :: bytea[], $3 :: bytea[], $4 :: bigint[], $5 :: bytea[])
+        |]
 
 -- CommitBlocks
 
@@ -387,9 +369,8 @@ commitBlocks
   :: forall r s env m
    . (MonadInjectEvent r QuerySelector s m, MonadUnliftIO m, WithLog env Message m)
   => (forall x. m x -> IO x)
-  -> Word64
   -> CommitBlocks Session.Session
-commitBlocks runInIO securityParameter = CommitBlocks \blocks localTip remoteTip -> do
+commitBlocks runInIO = CommitBlocks \blocks -> do
   liftIO $ runInIO $ logInfo $ "Saving " <> T.pack (show $ length blocks) <> " blocks"
   let txs = extractTxs =<< blocks
       txOuts = extractTxOuts =<< txs
@@ -410,35 +391,7 @@ commitBlocks runInIO securityParameter = CommitBlocks \blocks localTip remoteTip
       runInIO $ copyTxIns connection txIns
       runInIO $ copyAssetOuts assetIds connection assetOuts
       runInIO $ copyAssetMints assetIds connection assetMints
-    runInIO $ enableIndexesIfCaughtUp connection localTip remoteTip
   where
-    enableIndexesIfCaughtUp conn localTip remoteTip = do
-      let distanceFromTip = case (localTip, remoteTip) of
-            (_, ChainTipAtGenesis) -> 0
-            (ChainTipAtGenesis, ChainTip _ _ (BlockNo r)) -> r + 1
-            (ChainTip _ _ (BlockNo l), ChainTip _ _ (BlockNo r)) -> r - l
-      when (distanceFromTip <= securityParameter || True) do
-        numberOfIndexesEnabled <-
-          liftIO $
-            execute_
-              conn
-              [sql|
-                WITH indexes (indexId) AS
-                  ( SELECT (schemaName||'.'||indexName)
-                    FROM pg_indexes
-                    WHERE schemaName = 'chain'
-                  )
-                UPDATE pg_index
-                SET indisready = TRUE
-                FROM indexes
-                WHERE NOT indisready
-                  AND indexrelid = indexId::regclass
-              |]
-        when (numberOfIndexesEnabled > 0) $ withEvent EnableIndexes \ev -> do
-          logInfo "Local tip within security window, enabling indexes"
-          _ <- liftIO $ execute_ conn "REINDEX SCHEMA chain"
-          addField ev ()
-
     extractTxs :: CardanoBlock -> [SomeTx]
     extractTxs (BlockInMode (Block (BlockHeader slotNo hash _) blockTxs) era) = flip (SomeTx hash slotNo) era <$> blockTxs
 
