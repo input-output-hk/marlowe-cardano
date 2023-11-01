@@ -4,10 +4,6 @@
 module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types where
 
 import Cardano.Api
-import Cardano.Api.Byron
-import Cardano.Api.Shelley
-import Cardano.Crypto (AbstractHash, hashToBytes)
-import qualified Cardano.Ledger.Core as Core
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (encodeBase16)
 import Data.Csv
@@ -114,9 +110,3 @@ convertSlotNo = fromIntegral . unSlotNo
 
 convertBlockNo :: BlockNo -> Int64
 convertBlockNo = fromIntegral . unBlockNo
-
-convertTxIx :: TxIx -> Int16
-convertTxIx (TxIx txIx) = fromIntegral txIx
-
-hashToBytea :: AbstractHash al a -> Bytea
-hashToBytea = Bytea . hashToBytes

@@ -339,6 +339,8 @@ let
     services.postgres = {
       image = "postgres:11.5-alpine";
 
+      ports = [ 5432 ];
+
       # TODO translate from attrset
       environment = [
         "POSTGRES_LOGGING=true"

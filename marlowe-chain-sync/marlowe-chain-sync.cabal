@@ -58,8 +58,14 @@ library
     Language.Marlowe.Runtime.Cardano.Api
     Language.Marlowe.Runtime.Cardano.Feature
     Language.Marlowe.Runtime.ChainSync.Api
+    Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Allegra
+    Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Alonzo
+    Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Babbage
     Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Byron
     Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Cardano
+    Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Conway
+    Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Mary
+    Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Shelley
     Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types
 
   other-modules:
@@ -71,12 +77,16 @@ library
     , bytestring >=0.10.12 && <0.12
     , cardano-api ^>=8.2
     , cardano-binary
+    , cardano-crypto-class
     , cardano-crypto-wrapper ^>=1.5
+    , cardano-ledger-allegra
     , cardano-ledger-alonzo ^>=1.2
     , cardano-ledger-babbage ^>=1.2
     , cardano-ledger-binary ^>=1.1
     , cardano-ledger-byron ^>=1.0
+    , cardano-ledger-conway
     , cardano-ledger-core ^>=1.2
+    , cardano-ledger-mary
     , cardano-ledger-shelley ^>=1.2
     , cassava
     , containers ^>=0.6.5
@@ -154,10 +164,7 @@ library chain-indexer
     , base16 ^>=0.3.2
     , bytestring >=0.10.12 && <0.12
     , cardano-api ^>=8.2
-    , cardano-binary
     , cardano-crypto-wrapper ^>=1.5
-    , cardano-ledger-alonzo ^>=1.2
-    , cardano-ledger-babbage ^>=1.2
     , cardano-ledger-byron ^>=1.0
     , cardano-ledger-core ^>=1.2
     , cardano-ledger-shelley ^>=1.2
@@ -172,6 +179,7 @@ library chain-indexer
     , hasql-th ^>=0.4
     , hasql-transaction ^>=1
     , hs-opentelemetry-api >=0.0.3 && <0.0.4
+    , marlowe-chain-sync ==0.0.5
     , mtl >=2.2 && <3
     , ouroboros-network-api ^>=0.5
     , postgresql-simple

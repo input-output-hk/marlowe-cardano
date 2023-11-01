@@ -34,9 +34,8 @@ CREATE TABLE chain.assetMint
       ON DELETE RESTRICT
   );
 
-COMMIT;
-
 CREATE INDEX assetMint_slotNo ON chain.assetMint USING BTREE (slotNo);
 CREATE INDEX assetMint_txId ON chain.assetMint USING BTREE (txId);
 CREATE INDEX assetMint_assetId ON chain.assetMint USING BTREE (assetId);
 
+COMMIT;

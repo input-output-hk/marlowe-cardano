@@ -276,14 +276,12 @@ collectTxsFor networkId batchSize credentials fromPoint =
             (ARRAY_AGG(tx.validityLowerBound))[1] :: bigint?,
             (ARRAY_AGG(tx.validityUpperBound))[1] :: bigint?,
             (ARRAY_AGG(tx.metadata))[1] :: bytea?,
-            ARRAY_REMOVE(ARRAY_AGG(asset.policyId), NULL) :: bytea[],
-            ARRAY_REMOVE(ARRAY_AGG(asset.name), NULL) :: bytea[],
+            ARRAY_REMOVE(ARRAY_AGG(assetMint.policyId), NULL) :: bytea[],
+            ARRAY_REMOVE(ARRAY_AGG(assetMint.name), NULL) :: bytea[],
             ARRAY_REMOVE(ARRAY_AGG(assetMint.quantity), NULL) :: bigint[]
           FROM chain.tx
           LEFT JOIN chain.assetMint
             ON assetMint.txId = tx.id
-          LEFT JOIN chain.asset
-            ON asset.id = assetMint.assetId
           WHERE tx.id = ANY($1 :: bytea[])
           GROUP BY tx.id
           ORDER BY tx.id
@@ -425,15 +423,14 @@ performFindConsumingTx TxOutRef{..} point = do
            , tx.validityLowerBound :: bigint?
            , tx.validityUpperBound :: bigint?
            , tx.metadata :: bytea?
-           , asset.policyId :: bytea?
-           , asset.name :: bytea?
+           , assetMint.policyId :: bytea?
+           , assetMint.name :: bytea?
            , assetMint.quantity :: bigint?
         FROM chain.txOut AS txOut
         LEFT JOIN chain.txIn      AS txIn      ON txIn.txOutId = txOut.txId AND txIn.txOutIx = txOut.txIx
         LEFT JOIN chain.tx        AS tx        ON tx.id = txIn.txInId AND tx.slotNo = txIn.slotNo
         LEFT JOIN chain.block     AS block     ON block.id = tx.blockId AND block.slotNo = tx.slotNo
         LEFT JOIN chain.assetMint AS assetMint ON assetMint.txId = tx.id AND assetMint.slotNo = tx.slotNo
-        LEFT JOIN chain.asset     AS asset     ON asset.id = assetMint.assetId
         WHERE txOut.slotNo <= $1 :: bigint
           AND block.rollbackToBlock IS NULL
           AND txOut.txId = $2 :: bytea
@@ -547,13 +544,12 @@ performFindTx txId wait point = do
            , tx.validityLowerBound :: bigint?
            , tx.validityUpperBound :: bigint?
            , tx.metadata :: bytea?
-           , asset.policyId :: bytea?
-           , asset.name :: bytea?
+           , assetMint.policyId :: bytea?
+           , assetMint.name :: bytea?
            , assetMint.quantity :: bigint?
         FROM chain.tx             AS tx
         JOIN chain.block          AS block     ON block.id = tx.blockId AND block.slotNo = tx.slotNo
         LEFT JOIN chain.assetMint AS assetMint ON assetMint.txId = tx.id AND assetMint.slotNo = tx.slotNo
-        LEFT JOIN chain.asset     AS asset     ON asset.id = assetMint.assetId
         WHERE block.rollbackToBlock IS NULL
           AND tx.id = $1 :: bytea
     |]
@@ -641,15 +637,14 @@ performFindTxsFor networkId credentials point = do
            , tx.validityLowerBound :: bigint?
            , tx.validityUpperBound :: bigint?
            , tx.metadata :: bytea?
-           , asset.policyId :: bytea?
-           , asset.name :: bytea?
+           , assetMint.policyId :: bytea?
+           , assetMint.name :: bytea?
            , assetMint.quantity :: bigint?
         FROM chain.tx             AS tx
         JOIN nextSlot                          USING (slotNo)
         JOIN txIds                             USING (id)
         JOIN chain.block          AS block     ON block.id = tx.blockId AND block.slotNo = tx.slotNo
         LEFT JOIN chain.assetMint AS assetMint ON assetMint.txId = tx.id AND assetMint.slotNo = tx.slotNo
-        LEFT JOIN chain.asset     AS asset     ON asset.id = assetMint.assetId
     |]
         foldTxs
   case initialResult of
@@ -751,12 +746,11 @@ queryTxOuts slotNo txId =
          , txOut.lovelace :: bigint
          , txOut.datumHash :: bytea?
          , txOut.datumBytes :: bytea?
-         , asset.policyId :: bytea?
-         , asset.name :: bytea?
+         , assetOut.policyId :: bytea?
+         , assetOut.name :: bytea?
          , assetOut.quantity :: bigint?
       FROM chain.txOut         AS txOut
       LEFT JOIN chain.assetOut AS assetOut ON assetOut.txOutId = txOut.txId AND assetOut.txOutIx = txOut.txIx
-      LEFT JOIN chain.asset    AS asset    ON asset.id = assetOut.assetId
      WHERE txOut.txId = $1 :: bytea AND txOut.slotNo = $2 :: bigint
      ORDER BY txIx
   |]
@@ -823,12 +817,11 @@ queryTxOutsBulk txIds =
           , txOut.lovelace :: bigint
           , txOut.datumHash :: bytea?
           , txOut.datumBytes :: bytea?
-          , asset.policyId :: bytea?
-          , asset.name :: bytea?
+          , assetOut.policyId :: bytea?
+          , assetOut.name :: bytea?
           , assetOut.quantity :: bigint?
         FROM chain.txOut         AS txOut
         LEFT JOIN chain.assetOut AS assetOut ON assetOut.txOutId = txOut.txId AND assetOut.txOutIx = txOut.txIx
-        LEFT JOIN chain.asset    AS asset    ON asset.id = assetOut.assetId
       WHERE txOut.txId = ANY($1 :: bytea[])
       ORDER BY txIx
   |]
@@ -906,14 +899,13 @@ getUTxOs =
                 , txOut.lovelace :: bigint
                 , txOut.datumHash :: bytea?
                 , txOut.datumBytes :: bytea?
-                , asset.policyId :: bytea?
-                , asset.name :: bytea?
+                , assetOut.policyId :: bytea?
+                , assetOut.name :: bytea?
                 , assetOut.quantity :: bigint?
               FROM chain.txOut         AS txOut
               NATURAL JOIN txOuts
               LEFT JOIN chain.txIn     AS txIn     ON txIn.txOutId = txOut.txId AND txIn.txOutIx = txOut.txIx
               LEFT JOIN chain.assetOut AS assetOut ON assetOut.txOutId = txOut.txId AND assetOut.txOutIx = txOut.txIx
-              LEFT JOIN chain.asset    AS asset    ON asset.id = assetOut.assetId
             WHERE txIn.txInId IS NULL
             ORDER BY txIx
           |]
@@ -931,14 +923,13 @@ getUTxOs =
                 , txOut.lovelace :: bigint
                 , txOut.datumHash :: bytea?
                 , txOut.datumBytes :: bytea?
-                , asset.policyId :: bytea?
-                , asset.name :: bytea?
+                , assetOut.policyId :: bytea?
+                , assetOut.name :: bytea?
                 , assetOut.quantity :: bigint?
               FROM chain.txOut         AS txOut
               JOIN addresses           AS addr     ON addr.address = txOut.address AND CAST(MD5(addr.address) AS uuid) = CAST(MD5(txOut.address) AS uuid)
               LEFT JOIN chain.txIn     AS txIn     ON txIn.txOutId = txOut.txId AND txIn.txOutIx = txOut.txIx
               LEFT JOIN chain.assetOut AS assetOut ON assetOut.txOutId = txOut.txId AND assetOut.txOutIx = txOut.txIx
-              LEFT JOIN chain.asset    AS asset    ON asset.id = assetOut.assetId
             WHERE txIn.txInId IS NULL
             ORDER BY txIx
           |]

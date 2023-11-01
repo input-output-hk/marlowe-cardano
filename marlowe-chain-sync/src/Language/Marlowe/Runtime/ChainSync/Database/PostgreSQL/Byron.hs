@@ -4,8 +4,9 @@
 
 module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Byron where
 
-import Cardano.Chain.Common (addrToBase58, unsafeGetLovelace)
+import Cardano.Chain.Common (Address, addrToBase58, unsafeGetLovelace)
 import Cardano.Chain.UTxO
+import Cardano.Crypto (AbstractHash, hashToBytes)
 import Cardano.Ledger.Binary (Annotated (..))
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
@@ -46,16 +47,35 @@ byronTxOutRow slotNo txId txIx TxOut{..} =
       { txId
       , txIx
       , slotNo
-      , address = Bytea address
+      , address
       , lovelace = fromIntegral $ unsafeGetLovelace txOutValue
       , datumHash = Nothing
       , datumBytes = Nothing
       , isCollateral = SqlBool False
-      , addressHeader = Bytea $ BS.take 1 address
-      , addressPaymentCredential = Nothing
-      , addressStakeAddressReference = Nothing
+      , addressHeader
+      , addressPaymentCredential
+      , addressStakeAddressReference
       }
   , []
   )
   where
-    address = addrToBase58 txOutAddress
+    AddressFields{..} = byronAddressFields txOutAddress
+
+hashToBytea :: AbstractHash al a -> Bytea
+hashToBytea = Bytea . hashToBytes
+
+byronAddressFields :: Address -> AddressFields
+byronAddressFields (addrToBase58 -> addressBytes) =
+  AddressFields
+    { address = Bytea addressBytes
+    , addressHeader = Bytea $ BS.take 1 addressBytes
+    , addressPaymentCredential = Nothing
+    , addressStakeAddressReference = Nothing
+    }
+
+data AddressFields = AddressFields
+  { address :: Bytea
+  , addressHeader :: Bytea
+  , addressPaymentCredential :: Maybe Bytea
+  , addressStakeAddressReference :: Maybe Bytea
+  }
