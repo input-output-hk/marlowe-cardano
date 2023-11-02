@@ -2,27 +2,6 @@
 
 module Language.Marlowe.Runtime.Transaction.SafetySpec where
 
-import Data.List (isInfixOf, nub)
-import Data.Maybe (fromJust)
-import Language.Marlowe.Analysis.Safety.Types (SafetyError (..))
-import Language.Marlowe.Runtime.Core.Api (MarloweVersion (MarloweV1))
-import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts (..), getCurrentScripts)
-import Language.Marlowe.Runtime.Transaction.Api (Mint (..), RoleTokensConfig (..))
-import Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec ()
-import Language.Marlowe.Runtime.Transaction.Constraints (MarloweContext (..))
-import Language.Marlowe.Runtime.Transaction.ConstraintsSpec (protocolTestnet)
-import Language.Marlowe.Runtime.Transaction.Safety (
-  checkContract,
-  checkTransactions,
-  minAdaUpperBound,
-  noContinuations,
- )
-import Spec.Marlowe.Reference (readReferenceContracts)
-import Spec.Marlowe.Semantics.Arbitrary ()
-import Test.Hspec (Spec, describe, expectationFailure, it, runIO)
-import Test.Hspec.QuickCheck (prop)
-import Test.QuickCheck (counterexample, discard, elements, generate, sublistOf, suchThat, (===))
-
 import qualified Cardano.Api as Cardano (
   AddressInEra (..),
   AddressTypeInEra (..),
@@ -45,7 +24,10 @@ import Cardano.Api.Shelley (CardanoEra (..), ReferenceTxInsScriptsInlineDatumsSu
 import qualified Cardano.Api.Shelley as Shelley (ReferenceScript (..), StakeAddressReference (..))
 import Data.Either (fromRight)
 import Data.Foldable (for_)
+import Data.List (isInfixOf, nub)
 import qualified Data.Map.Strict as M (fromList, keys, lookup, mapKeys, toList)
+import Data.Maybe (fromJust)
+import Language.Marlowe.Analysis.Safety.Types (SafetyError (..))
 import Language.Marlowe.Core.V1.Merkle as V1 (MerkleizedContract (..), deepMerkleize, merkleizedContract)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1
@@ -65,6 +47,18 @@ import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain (
   TokenName (..),
   Tokens (..),
  )
+import Language.Marlowe.Runtime.Core.Api (MarloweVersion (MarloweV1))
+import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts (..), getCurrentScripts)
+import Language.Marlowe.Runtime.Transaction.Api (Mint (..), RoleTokensConfig (..))
+import Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec ()
+import Language.Marlowe.Runtime.Transaction.Constraints (MarloweContext (..))
+import Language.Marlowe.Runtime.Transaction.ConstraintsSpec (protocolTestnet)
+import Language.Marlowe.Runtime.Transaction.Safety (
+  checkContract,
+  checkTransactions,
+  minAdaUpperBound,
+  noContinuations,
+ )
 import qualified PlutusLedgerApi.V2 as Plutus (
   Address (..),
   Credential (..),
@@ -73,6 +67,11 @@ import qualified PlutusLedgerApi.V2 as Plutus (
   TokenName (..),
  )
 import qualified PlutusTx.Builtins as Plutus (fromBuiltin, lengthOfByteString, toBuiltin)
+import Spec.Marlowe.Reference (readReferenceContracts)
+import Spec.Marlowe.Semantics.Arbitrary ()
+import Test.Hspec (Spec, describe, expectationFailure, it, runIO)
+import Test.Hspec.QuickCheck (prop)
+import Test.QuickCheck (counterexample, discard, elements, generate, sublistOf, suchThat, (===))
 import Test.QuickCheck.Arbitrary (arbitrary)
 
 spec :: Spec
@@ -316,7 +315,7 @@ spec =
             marloweContext
             policy
             address
-            minAda
+            (Chain.Assets (fromIntegral minAda) (Chain.Tokens mempty))
             contract
             continuations
         case actual of
@@ -330,7 +329,7 @@ spec =
       prop
         "Contract with prohibitive execution cost"
         do
-          let minAda = 3_000_000
+          let minAda = Chain.Assets 3_000_000 (Chain.Tokens mempty)
               policy = "46e79d4fbf0dd6766f8601fdec651ad708af7115fd8f7b5e14b622e5"
               address = "608db2b806ba9e7ae2909ae38afc6c1bce02f5df3e1cb1b06cbc80546f"
               ada = V1.Token "" ""

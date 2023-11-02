@@ -404,7 +404,7 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
               marloweContext
               rolesCurrency
               (changeAddress addresses)
-              (toInteger minAda)
+              assets
               contract'
               continuations
           )
