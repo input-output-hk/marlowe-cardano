@@ -27,7 +27,7 @@ import Control.Monad.Except (runExceptT)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (runReaderT)
 import Data.Ratio ((%))
-import Language.Marlowe.Analysis.Safety.Transaction (findTransactions')
+import Language.Marlowe.Analysis.Safety.Transaction (findTransactions', unitAnnotator)
 import Language.Marlowe.CLI.Analyze (
   ContractInstance (
     ContractInstance,
@@ -111,7 +111,7 @@ checkTransactionCost merkleize =
           ciOpenRoleValidator = mtOpenRoleValidator
           ciPayoutValidator = mtRoleValidator
           ciSlotConfig = mtSlotConfig
-      transactions <- findTransactions' True $ MerkleizedContract ciContract ciContinuations
+      transactions <- findTransactions' unitAnnotator True $ MerkleizedContract ciContract ciContinuations
       actual <- checkExecutionCost protocolTestnet ContractInstance{..} transactions False
       liftIO $ assertBool "" $ actual == expected merkleize
 

@@ -576,7 +576,7 @@ instance ToSchema V1.SafetyError where
       accountIdSchema <- ("account-id",) <$> declareSchemaRef (Proxy @AccountId)
       choiceIdSchema <- ("choice-id",) <$> declareSchemaRef (Proxy @ChoiceId)
       costSchema <- ("cost",) <$> declareSchemaRef (Proxy @P.ExBudget)
-      transactionSchema <- ("transaction",) <$> declareSchemaRef (Proxy @V1.Transaction)
+      transactionSchema <- ("transaction",) <$> declareSchemaRef (Proxy @(V1.Transaction ()))
       addressSchema <- ("address",) <$> declareSchemaRef (Proxy @P.Address)
       let errorSchema = ("error", stringSchema)
           detailSchema = ("detail", stringSchema)
@@ -630,7 +630,7 @@ instance ToSchema V1.Payment where
             & required .~ fmap fst [accountIdSchema, payeeSchema, tokenSchema, amountSchema]
             & properties .~ [accountIdSchema, payeeSchema, tokenSchema, amountSchema]
 
-instance ToSchema V1.Transaction where
+instance ToSchema (V1.Transaction ()) where
   declareNamedSchema _ =
     do
       stateSchema <- ("state",) <$> declareSchemaRef (Proxy @State)

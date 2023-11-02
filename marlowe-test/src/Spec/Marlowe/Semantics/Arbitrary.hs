@@ -1318,7 +1318,7 @@ instance Arbitrary SafetyError where
   shrink (IllegalAddress address) = IllegalAddress <$> shrink address
   shrink SafetyAnalysisTimeout = mempty
 
-instance Arbitrary Transaction where
+instance (Arbitrary a) => Arbitrary (Transaction a) where
   arbitrary =
     do
       context <- arbitrary
@@ -1326,6 +1326,7 @@ instance Arbitrary Transaction where
       txContract <- semiArbitrary context
       txInput <- semiArbitrary context
       txOutput <- arbitrary
+      txAnnotation <- arbitrary
       pure Transaction{..}
   shrink transaction@Transaction{..} =
     [transaction{txState = state} | state <- shrink txState]
