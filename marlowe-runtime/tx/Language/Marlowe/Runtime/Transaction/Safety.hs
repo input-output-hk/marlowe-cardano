@@ -61,9 +61,23 @@ import qualified Cardano.Api.Shelley as Shelley (
  )
 import Control.Monad.IO.Class (MonadIO)
 import Data.Functor.Identity (runIdentity)
-import qualified Data.Map.Strict as M (Map, elems, empty, filter, fromList, keys, map, mapKeys, singleton, size, toList)
+import qualified Data.Map.Strict as M (
+  Map,
+  elems,
+  empty,
+  filter,
+  fromList,
+  fromSet,
+  intersection,
+  keys,
+  map,
+  mapKeys,
+  singleton,
+  size,
+  toList,
+ )
 import qualified Data.SOP.Counting as Ouroboros
-import qualified Data.Set as S (Set, singleton)
+import qualified Data.Set as S (Set, intersection, map, singleton)
 import qualified Language.Marlowe.Core.V1.Merkle as V1 (MerkleizedContract (..))
 import qualified Language.Marlowe.Core.V1.Plate as V1 (extractAllWithContinuations)
 import qualified Language.Marlowe.Core.V1.Semantics as V1 (
@@ -90,6 +104,7 @@ import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain (
   UTxOs (..),
  )
 import qualified Language.Marlowe.Runtime.Plutus.V2.Api as Chain (
+  fromPlutusTokenName,
   fromPlutusValue,
   toPlutusCurrencySymbol,
   toPlutusTokenName,
@@ -254,13 +269,15 @@ checkTransactions
   -> C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
   -> MarloweVersion v
   -> MarloweContext v
+  -> HelpersContext
   -> Chain.PolicyId
+  -> S.Set Chain.TokenName
   -> Chain.Address
   -> Chain.Assets
   -> Contract v
   -> Continuations v
   -> m (Either String [SafetyError])
-checkTransactions protocolParameters era version@MarloweV1 marloweContext rolesCurrency changeAddress (Chain.Assets initialAda initialTokens) contract continuations =
+checkTransactions protocolParameters era version@MarloweV1 marloweContext helpersContext rolesCurrency openRoleTokens changeAddress (Chain.Assets initialAda initialTokens) contract continuations =
   runExceptT $
     do
       let changeAddress' = uncurry V1.Address . fromJust . V1.deserialiseAddress $ Chain.unAddress changeAddress
@@ -270,12 +287,14 @@ checkTransactions protocolParameters era version@MarloweV1 marloweContext rolesC
                 : [ (V1.Token (Chain.toPlutusCurrencySymbol p) (Chain.toPlutusTokenName n), fromIntegral quantity)
                   | (Chain.AssetId p n, quantity) <- M.toList $ Chain.unTokens initialTokens
                   ]
+          intersectOpenRoles transaction@Transaction{txAnnotation} =
+            transaction{txAnnotation = S.intersection txAnnotation $ S.map Chain.toPlutusTokenName openRoleTokens}
       transactions <-
         findTransactions firstRoleAuthorizationAnnotator False changeAddress' initialValue . V1.MerkleizedContract contract $
           remapContinuations continuations
       either throwE (pure . mconcat)
-        . forM transactions
-        $ checkTransaction protocolParameters era version marloweContext rolesCurrency changeAddress
+        . forM (intersectOpenRoles <$> transactions)
+        $ checkTransaction protocolParameters era version marloweContext helpersContext rolesCurrency changeAddress
 
 -- | Check a transaction for safety issues.
 checkTransaction
@@ -283,11 +302,12 @@ checkTransaction
   -> C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
   -> MarloweVersion v
   -> MarloweContext v
+  -> HelpersContext
   -> Chain.PolicyId
   -> Chain.Address
   -> Transaction (S.Set Plutus.TokenName)
   -> Either String [SafetyError]
-checkTransaction protocolParameters era version@MarloweV1 marloweContext@MarloweContext{..} (Chain.PolicyId rolesCurrency) changeAddress transaction@Transaction{..} =
+checkTransaction protocolParameters era version@MarloweV1 marloweContext@MarloweContext{..} helpersContext (Chain.PolicyId rolesCurrency) changeAddress transaction@Transaction{..} =
   do
     let V1.TransactionInput{..} = txInput
         rolesCurrency' = V1.MarloweParams . Plutus.CurrencySymbol $ Plutus.toBuiltin rolesCurrency
@@ -337,12 +357,18 @@ checkTransaction protocolParameters era version@MarloweV1 marloweContext@Marlowe
               intervalEnd
               txInputs
     let walletContext = walletForConstraints version marloweContext changeAddress constraints
-    let helpersContext = HelpersContext mempty "" mempty
+    let helpersContext' =
+          helpersContext
+            { helperScriptStates =
+                M.intersection (helperScriptStates helpersContext)
+                  . M.fromSet (const ())
+                  $ S.map Chain.fromPlutusTokenName txAnnotation
+            }
     pure
       . either
         (pure . TransactionValidationError (stripAnnotation transaction) . show)
         (const $ TransactionWarning (stripAnnotation transaction) <$> V1.txOutWarnings txOutput)
-      $ solveConstraints' era version (Left marloweContext') walletContext helpersContext constraints
+      $ solveConstraints' era version (Left marloweContext') walletContext helpersContext' constraints
 
 -- | Create a wallet context that will satisfy the given constraints.
 walletForConstraints

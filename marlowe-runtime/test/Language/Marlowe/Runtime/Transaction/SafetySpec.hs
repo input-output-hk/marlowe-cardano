@@ -25,7 +25,7 @@ import qualified Cardano.Api.Shelley as Shelley (ReferenceScript (..), StakeAddr
 import Data.Either (fromRight)
 import Data.Foldable (for_)
 import Data.List (isInfixOf, nub)
-import qualified Data.Map.Strict as M (fromList, keys, lookup, mapKeys, toList)
+import qualified Data.Map.Strict as M (empty, fromList, keys, lookup, mapKeys, toList)
 import Data.Maybe (fromJust)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError (..))
 import Language.Marlowe.Core.V1.Merkle as V1 (MerkleizedContract (..), deepMerkleize, merkleizedContract)
@@ -51,7 +51,7 @@ import Language.Marlowe.Runtime.Core.Api (MarloweVersion (MarloweV1))
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts (..), getCurrentScripts)
 import Language.Marlowe.Runtime.Transaction.Api (Mint (..), RoleTokensConfig (..))
 import Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec ()
-import Language.Marlowe.Runtime.Transaction.Constraints (MarloweContext (..))
+import Language.Marlowe.Runtime.Transaction.Constraints (HelpersContext (..), MarloweContext (..))
 import Language.Marlowe.Runtime.Transaction.ConstraintsSpec (protocolTestnet)
 import Language.Marlowe.Runtime.Transaction.Safety (
   checkContract,
@@ -79,6 +79,7 @@ spec =
   do
     let testnet = Cardano.Testnet $ Cardano.NetworkMagic 1
         version = MarloweV1
+        emptyHelpersContext = HelpersContext M.empty "" M.empty
         continuations = noContinuations version
         party = V1.Role "x"
         payee = V1.Party party
@@ -313,7 +314,9 @@ spec =
             ReferenceTxInsScriptsInlineDatumsInBabbageEra
             version
             marloweContext
+            emptyHelpersContext
             policy
+            mempty
             address
             (Chain.Assets (fromIntegral minAda) (Chain.Tokens mempty))
             contract
@@ -346,7 +349,9 @@ spec =
               ReferenceTxInsScriptsInlineDatumsInBabbageEra
               version
               marloweContext
+              emptyHelpersContext
               policy
+              mempty
               address
               minAda
               contract
