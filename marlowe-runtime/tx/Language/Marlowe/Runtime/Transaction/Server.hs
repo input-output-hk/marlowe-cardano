@@ -6,6 +6,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Language.Marlowe.Runtime.Transaction.Server where
 
@@ -97,17 +98,19 @@ import Language.Marlowe.Runtime.Core.Api (
   fromChainPayoutDatum,
   withMarloweVersion,
  )
-import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts (..))
+import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript (..), MarloweScripts (..))
 import Language.Marlowe.Runtime.Transaction.Api (
   ApplyInputsError (..),
   ContractCreated (..),
   ContractCreatedInEra (..),
   CreateError (..),
+  Destination (ToScript),
   InputsApplied (..),
   InputsAppliedInEra (..),
   JobId (..),
   MarloweTxCommand (..),
-  RoleTokensConfig,
+  Mint (..),
+  RoleTokensConfig (..),
   SubmitError (..),
   SubmitStatus (..),
   WalletAddresses (..),
@@ -386,6 +389,11 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
       ExceptT $
         loadHelpersContext version $
           Left (rolesCurrency, roleTokens)
+  let openRoles =
+        case roleTokens of
+          RoleTokensMint (unMint -> mint) -> Map.keysSet $ Map.filter ((== ToScript OpenRoleScript) . fst) mint
+          RoleTokensUsePolicyWithOpenRoles _ _ roles -> Set.fromList roles
+          _ -> mempty
   let -- Fast analysis of safety: examines bounds for transactions.
       contractSafetyErrors = checkContract networkId roleTokens version contract' continuations
       limitAnalysisTime =
@@ -402,7 +410,9 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
               referenceInputsSupported
               version
               marloweContext
+              helpersContext
               rolesCurrency
+              openRoles
               (changeAddress addresses)
               assets
               contract'
