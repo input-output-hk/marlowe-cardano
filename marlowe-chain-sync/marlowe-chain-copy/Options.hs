@@ -64,7 +64,7 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri version = O.i
         versionOption :: O.Parser (a -> a)
         versionOption =
           O.infoOption
-            ("marlowe-chain-indexer " <> version)
+            ("marlowe-chain-copy " <> version)
             (O.long "version" <> O.help "Show version.")
 
         socketPathOption :: O.Parser FilePath
@@ -114,29 +114,44 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri version = O.i
       mconcat
         [ O.fullDesc
         , O.progDescDoc $ Just description
-        , O.header "marlowe-chain-indexer: Chain indexer for the Marlowe Runtime."
+        , O.header "marlowe-chain-copy: A bulk data transfer utility for marlowe-chain-sync"
         ]
+
+bullets :: [Doc ann] -> Doc ann
+bullets = indent 2 . vcat . fmap (("•" <+>) . align)
 
 description :: Doc ann
 description =
   concatWith
     (\a b -> a <> line <> line <> b)
     [ vcat
-        [ "The chain indexer for the Marlowe Runtime. This component connects to a local"
-        , "Cardano Node and follows the chain. It copies a subset of the information"
-        , "contained in every block to a postgresql database. This database can be queried"
-        , "by downstream components, such as marlowe-chain-sync."
+        [ "marlowe-bulk-copy is a admin utility designed to speed up initial synchronization"
+        , "of data from a fully caught-up cardano-node into a new marlowe-chain-sync database."
+        , "It offers roughly double the throughput of marlowe-chain-indexer during initial sync"
+        , "by performing the following optimizations:"
+        ]
+    , bullets
+        [ "Truncating all tables before the copy begins"
+        , "Disabling index updates during sync"
+        , "Streaming data to all tables in parallel using COPY operations"
+        , "Enabling indexes and re-indexing all tables after sync completes"
         ]
     , vcat
-        [ "There should only be one instance of marlowe-chain-indexer writing data to a"
-        , "given chain database. There is no need to run multiple indexers. If you would"
-        , "like to scale runtime services, it is recommended to deploy a postgres replica"
-        , "cluster, run one indexer to populate it, and as many marlowe-chain-sync"
-        , "instances as required to read from it."
+        [ "Because of these optimizations, this tool is not meant to be used during normal"
+        , "Runtime operations. Instead, it should be used as an ops tool for provisioning new"
+        , "Runtime instances."
         ]
     , vcat
-        [ "Before running the indexer, the database must be created and migrated using"
-        , "sqitch. The migration plan and SQL scripts are included in the source code"
-        , "folder for marlowe-chain-indexer."
+        [ "CAUTION: because of the parallel streaming writes and the initial truncation of"
+        , "tables, once marlowe-chain-copy starts, it must be allowed to run to completion"
+        , "before the database is fit for use by marlowe-chain-sync and marlowe-chain-indexer."
+        , "Early termination of the process will result in the transactions initiated by the"
+        , "COPY operations being rolled back, and the tables will be left truncated."
+        ]
+    , vcat
+        [ "Running against a fully synchronized node is necessary for realizing performance"
+        , "benefits, as node sync rate will become the primary bottleneck. If operating against"
+        , "a new node that is still synchronizing, using marlowe-chain-copy offers little benefit"
+        , "compared with simply running marlowe-chain-indexer."
         ]
     ]
