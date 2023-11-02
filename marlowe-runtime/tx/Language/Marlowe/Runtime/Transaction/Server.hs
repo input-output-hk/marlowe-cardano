@@ -393,6 +393,7 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
     case roleTokens of
       RoleTokensMint (unMint -> mint) ->
         case Set.toList . Map.keysSet $ Map.filter ((== ToSelf) . fst) mint of
+          [] -> pure Nothing
           [role] -> pure $ Just role
           _ -> throwE RequiresSingleThreadToken
       RoleTokensUsePolicyWithOpenRoles _ role _ -> pure $ Just role
