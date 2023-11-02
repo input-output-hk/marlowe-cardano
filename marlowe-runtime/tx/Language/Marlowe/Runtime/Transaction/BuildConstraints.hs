@@ -9,6 +9,7 @@ module Language.Marlowe.Runtime.Transaction.BuildConstraints (
   buildCreateConstraints,
   buildWithdrawConstraints,
   initialMarloweState,
+  safeLovelace,
 ) where
 
 import Cardano.Api (CardanoMode, EraHistory (..))
