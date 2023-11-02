@@ -63,11 +63,7 @@ spec:
           - port: 3700
           - port: 3701
           - port: 3786
-      - type: cpuscaler
-        properties:
-          min: 1
-          max: 10
-          cpuUtil: 70
+
 
   policies:
   - name: local-{{ $.Values.namespace }}
