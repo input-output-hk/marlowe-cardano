@@ -9,10 +9,7 @@
 module Main where
 
 import Cardano.Api (
-  AnyCardanoEra (..),
   CardanoMode,
-  ConsensusMode (..),
-  ConsensusModeIsMultiEra (..),
   ConsensusModeParams (..),
   EpochSlots (..),
   EraInMode (..),
@@ -26,7 +23,6 @@ import Cardano.Api (
   QueryInShelleyBasedEra (..),
   ShelleyBasedEra (..),
   queryNodeLocalState,
-  toEraInMode,
  )
 import qualified Cardano.Api as Cardano
 import Cardano.Api.Byron (toByronRequiresNetworkMagic)
@@ -126,31 +122,13 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
           }
 
       genesisBlock = computeGenesisBlock (abstractHashToBytes hash) genesisConfig shelleyGenesis
-  Right (AnyCardanoEra era) <-
-    queryNodeLocalState localNodeConnectInfo Nothing $ QueryCurrentEra CardanoModeIsMultiEra
-  eraInMode <- case toEraInMode era CardanoMode of
-    Nothing -> fail $ "cannot convert " <> show era <> " to era in mode"
-    Just eraInMode -> pure eraInMode
-  shelleyBasedEra <- case eraInMode of
-    ByronEraInCardanoMode -> fail "Cannot query shelley in byron era"
-    ShelleyEraInCardanoMode -> pure ShelleyBasedEraShelley
-    AllegraEraInCardanoMode -> pure ShelleyBasedEraAllegra
-    MaryEraInCardanoMode -> pure ShelleyBasedEraMary
-    AlonzoEraInCardanoMode -> pure ShelleyBasedEraAlonzo
-    BabbageEraInCardanoMode -> pure ShelleyBasedEraBabbage
-    ConwayEraInCardanoMode -> pure ShelleyBasedEraConway
-  Right (Right GenesisParameters{..}) <-
-    queryNodeLocalState localNodeConnectInfo Nothing $
-      QueryInEra eraInMode $
-        QueryInShelleyBasedEra shelleyBasedEra QueryGenesisParameters
-  let securityParameter = fromIntegral protocolParamSecurity
 
   scripts <- case ScriptRegistry.getScripts MarloweV1 of
     NESet.IsEmpty -> fail "No known marlowe scripts"
     NESet.IsNonEmpty scripts -> pure scripts
 
   runAppMTraced instrumentationLibrary (renderRootSelectorOTel dbName dbUser dbHost dbPort) do
-    let chainIndexerDatabaseQueries = ChainIndexerPostgres.databaseQueries securityParameter pool genesisBlock
+    let chainIndexerDatabaseQueries = ChainIndexerPostgres.databaseQueries pool genesisBlock
 
     runGetGenesisBlock (getGenesisBlock chainIndexerDatabaseQueries) >>= \case
       Just dbGenesisBlock -> unless (dbGenesisBlock == genesisBlock) do
@@ -158,6 +136,13 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
       Nothing -> runCommitGenesisBlock (commitGenesisBlock chainIndexerDatabaseQueries) genesisBlock
 
     contractStore <- traceContractStore inject <$> createContractStore ContractStoreOptions{..}
+
+    securityParameter <-
+      liftIO $
+        (either (fail . show) (either (fail . show) $ pure . protocolParamSecurity) =<<) $
+          queryNodeLocalState localNodeConnectInfo Nothing $
+            QueryInEra BabbageEraInCardanoMode $
+              QueryInShelleyBasedEra ShelleyBasedEraBabbage QueryGenesisParameters
 
     flip runComponent_ () proc _ -> do
       MarloweRuntime{..} <-
@@ -176,7 +161,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
               , contractStore
               , costModel
               , genesisBlock
-              , marloweIndexerDatabaseQueries = IndexerPostgreSQL.databaseQueries pool protocolParamSecurity
+              , marloweIndexerDatabaseQueries = IndexerPostgreSQL.databaseQueries pool securityParameter
               , maxCost
               , marloweScriptHashes = NESet.map ScriptRegistry.marloweScript scripts
               , payoutScriptHashes = NESet.map ScriptRegistry.payoutScript scripts
