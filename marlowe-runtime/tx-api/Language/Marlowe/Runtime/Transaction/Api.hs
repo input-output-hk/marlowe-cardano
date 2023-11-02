@@ -1167,7 +1167,7 @@ instance Variations V1.TransactionError
 instance Variations V1.TransactionWarning
 instance Variations V1.Payment
 instance Variations V1.TransactionOutput
-instance Variations Safety.Transaction
+instance (Variations a) => Variations (Safety.Transaction a)
 instance Variations SatInt
 instance Variations ExCPU
 instance Variations ExMemory

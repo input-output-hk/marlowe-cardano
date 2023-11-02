@@ -576,7 +576,7 @@ instance Binary V1.Payment
 instance Binary V1.SafetyError
 instance Binary V1.State
 instance Binary V1.Token
-instance Binary V1.Transaction
+instance (Binary a) => Binary (V1.Transaction a)
 instance Binary V1.TransactionError
 instance Binary V1.TransactionInput
 instance Binary V1.TransactionOutput

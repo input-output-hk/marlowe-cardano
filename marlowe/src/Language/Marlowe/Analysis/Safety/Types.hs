@@ -7,7 +7,9 @@
 -- Portability :  Portable
 --
 -----------------------------------------------------------------------------
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -17,6 +19,7 @@ module Language.Marlowe.Analysis.Safety.Types (
   SafetyError (..),
   SafetyReport (..),
   Transaction (..),
+  stripAnnotation,
 ) where
 
 import Control.Applicative ((<|>))
@@ -88,13 +91,13 @@ data SafetyError
   | -- | Too many tokens might be stored at some point in the contract.
     MaximumValueMayExceedProtocol Natural
   | -- | The transaction size (in bytes) might be too large.
-    TransactionSizeMayExceedProtocol Transaction Natural
+    TransactionSizeMayExceedProtocol TransactionWithoutAnnotation Natural
   | -- | The transaction's execution cost might be too high.
-    TransactionCostMayExceedProtocol Transaction ExBudget
+    TransactionCostMayExceedProtocol TransactionWithoutAnnotation ExBudget
   | -- | The transaction does not validate.
-    TransactionValidationError Transaction String
+    TransactionValidationError TransactionWithoutAnnotation String
   | -- | The transaction has warnings.
-    TransactionWarning Transaction V1.TransactionWarning
+    TransactionWarning TransactionWithoutAnnotation V1.TransactionWarning
   | -- | The contract is missing a continuation not present in its continuation map.
     MissingContinuation DatumHash
   | -- | The contract contains both mainnet and testnet addresses.
@@ -351,15 +354,16 @@ instance FromJSON SafetyError where
             _ -> fail "Invalid safety error."
 
 -- | A Marlowe transaction.
-data Transaction = Transaction
+data Transaction a = Transaction
   { txState :: State
   , txContract :: Contract
   , txInput :: TransactionInput
   , txOutput :: TransactionOutput
+  , txAnnotation :: a
   }
   deriving (Eq, Generic, Show)
 
-instance ToJSON Transaction where
+instance {-# OVERLAPPING #-} ToJSON (Transaction ()) where
   toJSON Transaction{..} =
     object
       [ "state" .= txState
@@ -368,7 +372,17 @@ instance ToJSON Transaction where
       , "output" .= txOutput
       ]
 
-instance FromJSON Transaction where
+instance (ToJSON a) => ToJSON (Transaction a) where
+  toJSON Transaction{..} =
+    object
+      [ "state" .= txState
+      , "contract" .= txContract
+      , "input" .= txInput
+      , "output" .= txOutput
+      , "annotation" .= txAnnotation
+      ]
+
+instance {-# OVERLAPPING #-} FromJSON (Transaction ()) where
   parseJSON =
     withObject "Transaction" $
       \o ->
@@ -377,4 +391,26 @@ instance FromJSON Transaction where
           txContract <- o .: "contract"
           txInput <- o .: "input"
           txOutput <- o .: "output"
+          let txAnnotation = ()
           pure Transaction{..}
+
+instance (FromJSON a) => FromJSON (Transaction a) where
+  parseJSON =
+    withObject "Transaction" $
+      \o ->
+        do
+          txState <- o .: "state"
+          txContract <- o .: "contract"
+          txInput <- o .: "input"
+          txOutput <- o .: "output"
+          txAnnotation <- o .: "annotation"
+          pure Transaction{..}
+
+type TransactionWithoutAnnotation = Transaction ()
+
+stripAnnotation
+  :: Transaction a
+  -> Transaction ()
+stripAnnotation Transaction{txState, txContract, txInput, txOutput} =
+  let txAnnotation = ()
+   in Transaction{..}

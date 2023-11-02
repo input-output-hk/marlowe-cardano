@@ -30,8 +30,8 @@ import Language.Marlowe.Analysis.Safety.Ledger (
   checkTokens,
   worstValue,
  )
-import Language.Marlowe.Analysis.Safety.Transaction (findTransactions)
-import Language.Marlowe.Analysis.Safety.Types (SafetyError (..), Transaction (..))
+import Language.Marlowe.Analysis.Safety.Transaction (findTransactions, firstRoleAuthorizationAnnotator)
+import Language.Marlowe.Analysis.Safety.Types (SafetyError (..), Transaction (..), stripAnnotation)
 import Language.Marlowe.Runtime.Core.Api (
   Contract,
   MarloweTransactionMetadata (..),
@@ -63,7 +63,7 @@ import Control.Monad.IO.Class (MonadIO)
 import Data.Functor.Identity (runIdentity)
 import qualified Data.Map.Strict as M (Map, elems, empty, filter, fromList, keys, map, mapKeys, singleton, size)
 import qualified Data.SOP.Counting as Ouroboros
-import qualified Data.Set as S (singleton)
+import qualified Data.Set as S (Set, singleton)
 import qualified Language.Marlowe.Core.V1.Merkle as V1 (MerkleizedContract (..))
 import qualified Language.Marlowe.Core.V1.Plate as V1 (extractAllWithContinuations)
 import qualified Language.Marlowe.Core.V1.Semantics as V1 (
@@ -262,7 +262,8 @@ checkTransactions protocolParameters era version@MarloweV1 marloweContext rolesC
     do
       let changeAddress' = uncurry V1.Address . fromJust . V1.deserialiseAddress $ Chain.unAddress changeAddress
       transactions <-
-        findTransactions False changeAddress' minAda . V1.MerkleizedContract contract $ remapContinuations continuations
+        findTransactions firstRoleAuthorizationAnnotator False changeAddress' minAda . V1.MerkleizedContract contract $
+          remapContinuations continuations
       either throwE (pure . mconcat)
         . forM transactions
         $ checkTransaction protocolParameters era version marloweContext rolesCurrency changeAddress
@@ -275,7 +276,7 @@ checkTransaction
   -> MarloweContext v
   -> Chain.PolicyId
   -> Chain.Address
-  -> Transaction
+  -> Transaction (S.Set Plutus.TokenName)
   -> Either String [SafetyError]
 checkTransaction protocolParameters era version@MarloweV1 marloweContext@MarloweContext{..} (Chain.PolicyId rolesCurrency) changeAddress transaction@Transaction{..} =
   do
@@ -330,8 +331,8 @@ checkTransaction protocolParameters era version@MarloweV1 marloweContext@Marlowe
     let helpersContext = HelpersContext mempty "" mempty
     pure
       . either
-        (pure . TransactionValidationError transaction . show)
-        (const $ TransactionWarning transaction <$> V1.txOutWarnings txOutput)
+        (pure . TransactionValidationError (stripAnnotation transaction) . show)
+        (const $ TransactionWarning (stripAnnotation transaction) <$> V1.txOutWarnings txOutput)
       $ solveConstraints' era version (Left marloweContext') walletContext helpersContext constraints
 
 -- | Create a wallet context that will satisfy the given constraints.
