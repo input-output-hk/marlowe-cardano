@@ -61,7 +61,7 @@ import qualified Cardano.Api.Shelley as Shelley (
  )
 import Control.Monad.IO.Class (MonadIO)
 import Data.Functor.Identity (runIdentity)
-import qualified Data.Map.Strict as M (Map, elems, empty, filter, fromList, keys, map, mapKeys, singleton, size)
+import qualified Data.Map.Strict as M (Map, elems, empty, filter, fromList, keys, map, mapKeys, singleton, size, toList)
 import qualified Data.SOP.Counting as Ouroboros
 import qualified Data.Set as S (Set, singleton)
 import qualified Language.Marlowe.Core.V1.Merkle as V1 (MerkleizedContract (..))
@@ -89,7 +89,11 @@ import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain (
   TxOutRef,
   UTxOs (..),
  )
-import qualified Language.Marlowe.Runtime.Plutus.V2.Api as Chain (fromPlutusValue)
+import qualified Language.Marlowe.Runtime.Plutus.V2.Api as Chain (
+  fromPlutusValue,
+  toPlutusCurrencySymbol,
+  toPlutusTokenName,
+ )
 import qualified Ouroboros.Consensus.BlockchainTime as Ouroboros (RelativeTime (..), mkSlotLength, toRelativeTime)
 import qualified Ouroboros.Consensus.HardFork.History as Ouroboros (
   Bound (..),
@@ -111,7 +115,7 @@ import qualified PlutusLedgerApi.V2 as Plutus (
   fromBuiltin,
   toBuiltin,
  )
-import qualified PlutusTx.AssocMap as AM (toList)
+import qualified PlutusTx.AssocMap as AM (fromList, toList)
 
 -- FIXME: Relocate this definition when full support for Merkleization is added to Runtime.
 type Continuations v = M.Map Chain.DatumHash (Contract v)
@@ -218,8 +222,7 @@ checkContract
   -> Continuations v
   -> [SafetyError]
 checkContract network config MarloweV1 contract continuations =
-  let toPlutusTokenName = Plutus.TokenName . Plutus.toBuiltin . Chain.unTokenName
-      continuations' = remapContinuations continuations
+  let continuations' = remapContinuations continuations
       roles = toList $ V1.extractAllWithContinuations contract continuations'
       mintCheck =
         case (config, null roles) of
@@ -227,13 +230,13 @@ checkContract network config MarloweV1 contract continuations =
           (RoleTokensNone, True) -> mempty
           (_, True) -> pure ContractHasNoRoles
           (RoleTokensMint mint, False) ->
-            let minted = toPlutusTokenName <$> M.keys (M.filter ((/= ToSelf) . fst) $ unMint mint)
+            let minted = Chain.toPlutusTokenName <$> M.keys (M.filter ((/= ToSelf) . fst) $ unMint mint)
                 missing = MissingRoleToken <$> filter (`notElem` minted) roles
                 extra = ExtraRoleToken <$> filter (`notElem` roles) minted
              in missing <> extra
           (RoleTokensUsePolicy _, False) -> mempty
           (RoleTokensUsePolicyWithOpenRoles _ _ openRoles, False) ->
-            ExtraRoleToken <$> filter (`notElem` roles) (toPlutusTokenName <$> openRoles)
+            ExtraRoleToken <$> filter (`notElem` roles) (Chain.toPlutusTokenName <$> openRoles)
       avoidDuplicateReport = True
       nameCheck = checkRoleNames avoidDuplicateReport Nothing contract continuations'
       tokenCheck = checkTokens Nothing contract continuations'
@@ -253,16 +256,22 @@ checkTransactions
   -> MarloweContext v
   -> Chain.PolicyId
   -> Chain.Address
-  -> Integer
+  -> Chain.Assets
   -> Contract v
   -> Continuations v
   -> m (Either String [SafetyError])
-checkTransactions protocolParameters era version@MarloweV1 marloweContext rolesCurrency changeAddress minAda contract continuations =
+checkTransactions protocolParameters era version@MarloweV1 marloweContext rolesCurrency changeAddress (Chain.Assets initialAda initialTokens) contract continuations =
   runExceptT $
     do
       let changeAddress' = uncurry V1.Address . fromJust . V1.deserialiseAddress $ Chain.unAddress changeAddress
+          initialValue =
+            AM.fromList $
+              (V1.Token "" "", fromIntegral initialAda)
+                : [ (V1.Token (Chain.toPlutusCurrencySymbol p) (Chain.toPlutusTokenName n), fromIntegral quantity)
+                  | (Chain.AssetId p n, quantity) <- M.toList $ Chain.unTokens initialTokens
+                  ]
       transactions <-
-        findTransactions firstRoleAuthorizationAnnotator False changeAddress' minAda . V1.MerkleizedContract contract $
+        findTransactions firstRoleAuthorizationAnnotator False changeAddress' initialValue . V1.MerkleizedContract contract $
           remapContinuations continuations
       either throwE (pure . mconcat)
         . forM transactions

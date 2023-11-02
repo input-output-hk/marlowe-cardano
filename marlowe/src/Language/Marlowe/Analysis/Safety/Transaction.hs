@@ -571,23 +571,23 @@ findTransactions
   -- ^ Throw an error if all required continuations are not present.
   -> Party
   -- ^ The contract creator.
-  -> Integer
+  -> AM.Map Token Integer
   -- ^ The initial lovelace for the creator's account.
   -> MerkleizedContract
   -- ^ The bundle of contract information.
   -> m [Transaction a]
   -- ^ Action for computing the initial state, initial contract, perhaps-merkleized input, and the output for the transactions.
-findTransactions annotate requireContinuations creatorAddress minAda mc@MerkleizedContract{..} =
+findTransactions annotate requireContinuations creatorAddress initialValue mc@MerkleizedContract{..} =
   do
-    let ada = Token P.adaSymbol P.adaToken
-        prune (Transaction s c i _ a) (Transaction s' c' i' _ a') = s == s' && c == c' && i == i' && a == a'
-    paths <- findPaths requireContinuations creatorAddress minAda mc
+    let prune (Transaction s c i _ a) (Transaction s' c' i' _ a') = s == s' && c == c' && i == i' && a == a'
+    paths <- findPaths requireContinuations creatorAddress initialValue mc
     nubBy prune
       . concat
       <$> sequence
         [ findTransactionPath mcContinuations state mcContract $ annotate inputs
-        | (minTime, inputs) <- paths
-        , let state = State (AM.singleton (creatorAddress, ada) minAda) AM.empty AM.empty minTime
+        | let initialAccounts = AM.fromList $ first (creatorAddress,) <$> AM.toList initialValue
+        , (minTime, inputs) <- paths
+        , let state = State initialAccounts AM.empty AM.empty minTime
         ]
 
 -- | Find transactions along all execution paths of a contract.
@@ -611,7 +611,7 @@ findTransactions' annotate requireContinuations mc@MerkleizedContract{..} =
           P.Address
             (P.PubKeyCredential "88888888888888888888888888888888888888888888888888888888")
             (Just . P.StakingHash $ P.PubKeyCredential "99999999999999999999999999999999999999999999999999999999")
-      minAda = worstMinimumUtxo' utxoCostPerByte mcContract mcContinuations
+      minAda = AM.singleton (Token "" "") $ worstMinimumUtxo' utxoCostPerByte mcContract mcContinuations
    in findTransactions annotate requireContinuations creatorAddress minAda mc
 
 -- | Find the transactions corresponding to a path of demerkleized inputs.
@@ -666,25 +666,27 @@ findPaths
   -- ^ Throw an error if all required continuations are not present.
   -> Party
   -- ^ The creator.
-  -> Integer
-  -- ^ The initial lovelace in the creator's account.
+  -> AM.Map Token Integer
+  -- ^ The initial value in the creator's account.
   -> MerkleizedContract
   -- ^ The bundle of contract information.
   -> m [(P.POSIXTime, [TransactionInput])]
   -- ^ The paths through the Marlowe contract.
-findPaths requireContinuations creatorAddress minAda MerkleizedContract{..} =
+findPaths requireContinuations creatorAddress initialValue MerkleizedContract{..} =
   do
-    let ada = Token P.adaSymbol P.adaToken
-        forever = 4_102_444_800_000 {- 1 Jan 2100 -}
-        -- Add an initial deposit so that `getAllInputs` accounts for the initial state in its analysis.
-        contract = When [Case (Deposit creatorAddress creatorAddress ada $ Constant minAda) mcContract] forever Close
+    let forever = 4_102_444_800_000 {- 1 Jan 2100 -}
+    -- Add an initial deposit so that `getAllInputs` accounts for the initial state in its analysis.
+        deposit token quantity continuation =
+          When [Case (Deposit creatorAddress creatorAddress token $ Constant quantity) continuation] forever Close
+        initializations = length $ AM.toList initialValue
+        contract = foldr (uncurry deposit) mcContract $ AM.toList initialValue
     paths <-
       liftEither . first (fromString . show)
         =<< liftIO . getAllInputs
         =<< demerkleizeContract mcContinuations (deepDemerkleize requireContinuations contract)
     pure
-      . filter (not . null . snd) -- Discard the input that is only the initial deposit.
-      $ second tail <$> paths -- Discard the initial deposit from each path.
+      . filter (not . null . snd) -- Discard the input that is only the initial deposits.
+      $ second (drop initializations) <$> paths -- Discard the initial deposit from each path.
 
 -- | Do not annotate.
 unitAnnotator
