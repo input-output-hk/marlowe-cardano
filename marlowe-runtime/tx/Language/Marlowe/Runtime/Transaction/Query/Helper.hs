@@ -8,6 +8,7 @@ module Language.Marlowe.Runtime.Transaction.Query.Helper (
   LoadHelpersContext,
   LoadHelpersContextSelector (..),
   loadHelpersContext,
+  getHelperInfos,
 ) where
 
 import qualified Cardano.Api as C

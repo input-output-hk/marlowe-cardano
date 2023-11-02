@@ -98,18 +98,18 @@ import Language.Marlowe.Runtime.Core.Api (
   fromChainPayoutDatum,
   withMarloweVersion,
  )
-import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript (..), MarloweScripts (..))
+import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts (..))
 import Language.Marlowe.Runtime.Transaction.Api (
   ApplyInputsError (..),
   ContractCreated (..),
   ContractCreatedInEra (..),
   CreateError (..),
-  Destination (ToScript),
+  Destination (ToSelf),
   InputsApplied (..),
   InputsAppliedInEra (..),
   JobId (..),
   MarloweTxCommand (..),
-  Mint (..),
+  Mint (unMint),
   RoleTokensConfig (..),
   SubmitError (..),
   SubmitStatus (..),
@@ -389,11 +389,14 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
       ExceptT $
         loadHelpersContext version $
           Left (rolesCurrency, roleTokens)
-  let openRoles =
-        case roleTokens of
-          RoleTokensMint (unMint -> mint) -> Map.keysSet $ Map.filter ((== ToScript OpenRoleScript) . fst) mint
-          RoleTokensUsePolicyWithOpenRoles _ _ roles -> Set.fromList roles
-          _ -> mempty
+  threadRole <-
+    case roleTokens of
+      RoleTokensMint (unMint -> mint) ->
+        case Set.toList . Map.keysSet $ Map.filter ((== ToSelf) . fst) mint of
+          [role] -> pure $ Just role
+          _ -> throwE RequiresSingleThreadToken
+      RoleTokensUsePolicyWithOpenRoles _ role _ -> pure $ Just role
+      _ -> pure Nothing
   let -- Fast analysis of safety: examines bounds for transactions.
       contractSafetyErrors = checkContract networkId roleTokens version contract' continuations
       limitAnalysisTime =
@@ -412,9 +415,10 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
               marloweContext
               helpersContext
               rolesCurrency
-              openRoles
+              threadRole
               (changeAddress addresses)
               assets
+              adjustMinUtxo
               contract'
               continuations
           )
