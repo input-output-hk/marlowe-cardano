@@ -404,7 +404,9 @@ let
         "-c"
         "log_directory=pg_log"
         "-c"
-        "log_min_duration_statement=10000"
+        "log_min_duration_statement=500"
+        "-c"
+        "log_error_verbosity=TERSE"
       ];
     };
 

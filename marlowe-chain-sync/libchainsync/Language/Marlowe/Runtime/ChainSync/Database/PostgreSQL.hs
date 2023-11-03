@@ -241,7 +241,12 @@ collectTxsFor networkId batchSize credentials fromPoint =
                 ORDER BY txIn.slotNo
                 LIMIT $4 :: int
             |]
-      let mergedTxs = Set.fromList . V.toList . fmap TxId <$> Map.unionWith (<>) fromTxs toTxs
+      let mergedTxs =
+            Map.fromDistinctAscList
+              . take (fromIntegral batchSize)
+              . Map.toAscList
+              . fmap (Set.fromList . V.toList . fmap TxId)
+              $ Map.unionWith (<>) fromTxs toTxs
       blockHeaders <-
         Map.fromDistinctAscList . fmap decodeBlockHeaderRow . V.toList
           <$> HT.statement
