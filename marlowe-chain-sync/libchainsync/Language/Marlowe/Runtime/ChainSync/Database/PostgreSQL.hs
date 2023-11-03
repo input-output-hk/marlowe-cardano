@@ -289,21 +289,21 @@ collectTxsFor networkId batchSize credentials fromPoint =
         <$> HT.statement
           params
           [vectorStatement|
-          SELECT
-            tx.id :: bytea,
-            (ARRAY_AGG(tx.validityLowerBound))[1] :: bigint?,
-            (ARRAY_AGG(tx.validityUpperBound))[1] :: bigint?,
-            (ARRAY_AGG(tx.metadata))[1] :: bytea?,
-            ARRAY_REMOVE(ARRAY_AGG(assetMint.policyId), NULL) :: bytea[],
-            ARRAY_REMOVE(ARRAY_AGG(assetMint.name), NULL) :: bytea[],
-            ARRAY_REMOVE(ARRAY_AGG(assetMint.quantity), NULL) :: bigint[]
-          FROM chain.tx
-          LEFT JOIN chain.assetMint
-            ON assetMint.txId = tx.id
-          WHERE tx.id = ANY($1 :: bytea[])
-          GROUP BY tx.id
-          ORDER BY tx.id
-      |]
+            SELECT
+              tx.id :: bytea,
+              (ARRAY_AGG(tx.validityLowerBound))[1] :: bigint?,
+              (ARRAY_AGG(tx.validityUpperBound))[1] :: bigint?,
+              (ARRAY_AGG(tx.metadata))[1] :: bytea?,
+              ARRAY_REMOVE(ARRAY_AGG(assetMint.policyId), NULL) :: bytea[],
+              ARRAY_REMOVE(ARRAY_AGG(assetMint.name), NULL) :: bytea[],
+              ARRAY_REMOVE(ARRAY_AGG(assetMint.quantity), NULL) :: bigint[]
+            FROM chain.tx
+            LEFT JOIN chain.assetMint
+              ON assetMint.txId = tx.id
+            WHERE tx.id = ANY($1 :: bytea[])
+            GROUP BY tx.id
+            ORDER BY tx.id
+          |]
       where
         params = V.fromList $ fmap unTxId $ Set.toList txIds
 
