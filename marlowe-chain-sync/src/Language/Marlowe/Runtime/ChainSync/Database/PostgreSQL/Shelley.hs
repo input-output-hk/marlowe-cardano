@@ -4,7 +4,7 @@
 
 module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Shelley where
 
-import Cardano.Binary (serialize')
+import Cardano.Api.Shelley (SerialiseAsCBOR (..), TxMetadata (..), fromShelleyMetadata)
 import qualified Cardano.Crypto.Hash as Hash
 import Cardano.Ledger.Address (BootstrapAddress (..), putPtr, serialiseAddr)
 import Cardano.Ledger.BaseTypes (TxIx (..))
@@ -30,7 +30,14 @@ shelleyTxRow slotNo blockHash txId ShelleyTx{..} =
       , slotNo
       , validityUpperBound = Just $ convertSlotNo $ stbTTL body
       , validityLowerBound = Nothing
-      , metadata = mapStrictMaybe (Bytea . serialize') auxiliaryData
+      , metadata =
+          -- This is an awkward workaround that is summarized by this comment
+          -- https://input-output-hk.github.io/cardano-api/cardano-api/lib_internal/src/Cardano.Api.TxMetadata.html#line-118
+          mapStrictMaybe
+            ( \(ShelleyTxAuxData md) ->
+                Bytea . serialiseToCBOR . TxMetadata $ fromShelleyMetadata md
+            )
+            auxiliaryData
       , isValid = SqlBool True
       }
   , shelleyTxInRow slotNo txId <$> Set.toAscList (stbInputs body)

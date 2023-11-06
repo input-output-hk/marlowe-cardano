@@ -4,10 +4,10 @@
 
 module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Byron where
 
-import Cardano.Chain.Common (Address, addrToBase58, unsafeGetLovelace)
+import Cardano.Chain.Common (Address, unsafeGetLovelace)
 import Cardano.Chain.UTxO
 import Cardano.Crypto (AbstractHash, hashToBytes)
-import Cardano.Ledger.Binary (Annotated (..))
+import Cardano.Ledger.Binary (Annotated (..), byronProtVer, serialize')
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.Int
@@ -65,7 +65,7 @@ hashToBytea :: AbstractHash al a -> Bytea
 hashToBytea = Bytea . hashToBytes
 
 byronAddressFields :: Address -> AddressFields
-byronAddressFields (addrToBase58 -> addressBytes) =
+byronAddressFields (serialize' byronProtVer -> addressBytes) =
   AddressFields
     { address = Bytea addressBytes
     , addressHeader = Bytea $ BS.take 1 addressBytes
