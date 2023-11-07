@@ -47,9 +47,8 @@ common lang
     TypeApplications
 
   ghc-options:
-    -Wall -Wnoncanonical-monad-instances -Wunused-packages
-    -Wincomplete-uni-patterns -Wincomplete-record-updates
-    -Wredundant-constraints -Widentities
+    -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
+    -Wincomplete-record-updates -Wredundant-constraints -Widentities
 
 library
   import:          lang

@@ -215,7 +215,7 @@ truncateTablesAndDisableIndexes :: String -> IO Connection
 truncateTablesAndDisableIndexes dbUri = do
   conn <- connectPostgreSQL $ fromString dbUri
   flip onException (close conn) do
-    void $ execute_ conn "TRUNCATE TABLE chain.block, chain.tx, chain.txOut, chain.txIn, chain.assetOut, chain.assetMint"
+    void $ execute_ conn "TRUNCATE chain.block, chain.tx, chain.txOut, chain.txIn, chain.assetOut, chain.assetMint"
     void $
       execute_
         conn

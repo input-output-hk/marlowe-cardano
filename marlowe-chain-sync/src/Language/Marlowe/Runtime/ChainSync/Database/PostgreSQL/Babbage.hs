@@ -8,13 +8,16 @@ module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Babbage where
 import Cardano.Binary (serialize')
 import Cardano.Ledger.Alonzo.Scripts.Data (binaryDataToData, hashBinaryData)
 import Cardano.Ledger.Alonzo.Tx (AlonzoTx (..), txdats')
+import Cardano.Ledger.Alonzo.TxAuxData (AlonzoTxAuxData (..))
 import Cardano.Ledger.Alonzo.TxWits (TxDats, unTxDats)
 import Cardano.Ledger.Babbage (BabbageEra, BabbageTxOut)
 import Cardano.Ledger.Babbage.Tx (IsValid (..))
 import Cardano.Ledger.Babbage.TxBody (BabbageTxBody (..), BabbageTxOut (..), Datum (..))
-import Cardano.Ledger.Binary (Sized (..))
+import Cardano.Ledger.Binary (Sized (..), shelleyProtVer)
+import qualified Cardano.Ledger.Binary as L
 import Cardano.Ledger.Crypto
 import Cardano.Ledger.Shelley.API (ShelleyTxOut (..), StrictMaybe (..))
+import Data.ByteString (ByteString)
 import Data.Foldable (Foldable (..))
 import Data.Int
 import qualified Data.Map as Map
@@ -25,11 +28,14 @@ import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types
 
 babbageTxToRows :: Int64 -> Bytea -> Bytea -> AlonzoTx (BabbageEra StandardCrypto) -> TxRowGroup
 babbageTxToRows slotNo blockHash txId tx@AlonzoTx{..} =
-  ( alonzoTxRow slotNo blockHash txId (btbValidityInterval body) auxiliaryData isValid
+  ( alonzoTxRow encodeBabbageMetadata slotNo blockHash txId (btbValidityInterval body) auxiliaryData isValid
   , alonzoTxInRows slotNo txId isValid tx (btbInputs body) (btbCollateral body)
   , babbageTxOutRows slotNo txId isValid (txdats' wits) (btbCollateralReturn body) $ toList $ btbOutputs body
   , maryAssetMintRows slotNo txId $ btbMint body
   )
+
+encodeBabbageMetadata :: AlonzoTxAuxData (BabbageEra StandardCrypto) -> ByteString
+encodeBabbageMetadata (AlonzoTxAuxData md _ _) = L.serialize' shelleyProtVer md
 
 babbageTxOutRows
   :: Int64

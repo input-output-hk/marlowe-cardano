@@ -5,12 +5,15 @@
 
 module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Allegra where
 
-import Cardano.Binary (ToCBOR, serialize')
 import Cardano.Ledger.Allegra
+import Cardano.Ledger.Allegra.TxAuxData (AllegraTxAuxData (..))
 import Cardano.Ledger.Allegra.TxBody (AllegraTxBody (..), ValidityInterval (..))
+import Cardano.Ledger.BaseTypes (shelleyProtVer)
+import Cardano.Ledger.Binary (serialize')
 import Cardano.Ledger.Core (TxAuxData)
 import Cardano.Ledger.Crypto
 import Cardano.Ledger.Shelley.API
+import Data.ByteString (ByteString)
 import Data.Foldable (Foldable (..))
 import Data.Int
 import qualified Data.Set as Set
@@ -23,28 +26,32 @@ import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types
 
 allegraTxToRows :: Int64 -> Bytea -> Bytea -> ShelleyTx (AllegraEra StandardCrypto) -> TxRowGroup
 allegraTxToRows slotNo blockHash txId ShelleyTx{..} =
-  ( allegraTxRow slotNo blockHash txId (atbValidityInterval body) auxiliaryData
+  ( allegraTxRow encodeAllegraMetadata slotNo blockHash txId (atbValidityInterval body) auxiliaryData
   , shelleyTxInRow slotNo txId <$> Set.toAscList (atbInputs body)
   , zipWith (allegraTxOutRow slotNo txId) [0 ..] $ toList $ atbOutputs body
   , []
   )
 
+encodeAllegraMetadata :: AllegraTxAuxData (AllegraEra StandardCrypto) -> ByteString
+encodeAllegraMetadata (AllegraTxAuxData md _) = serialize' shelleyProtVer md
+
 allegraTxRow
-  :: (ToCBOR (TxAuxData era))
-  => Int64
+  :: (TxAuxData era -> ByteString)
+  -> Int64
   -> Bytea
   -> Bytea
   -> ValidityInterval
   -> StrictMaybe (TxAuxData era)
   -> TxRow
-allegraTxRow slotNo blockHash txId validityInterval auxiliaryData =
+allegraTxRow encodeMetadata slotNo blockHash txId validityInterval auxiliaryData =
   TxRow
     { blockHash
     , txId
     , slotNo
     , validityUpperBound
     , validityLowerBound
-    , metadata = mapStrictMaybe (Bytea . serialize') auxiliaryData
+    , metadata =
+        mapStrictMaybe (Bytea . encodeMetadata) auxiliaryData
     , isValid = SqlBool False
     }
   where

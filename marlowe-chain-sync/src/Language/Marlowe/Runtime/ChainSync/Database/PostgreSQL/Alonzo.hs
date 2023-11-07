@@ -5,17 +5,21 @@
 
 module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Alonzo where
 
-import Cardano.Binary (ToCBOR, serialize')
+import Cardano.Binary (serialize')
 import Cardano.Ledger.Alonzo
 import Cardano.Ledger.Alonzo.Scripts.Data (dataToBinaryData)
 import Cardano.Ledger.Alonzo.Tx (AlonzoTx (..), IsValid (..), ScriptPurpose (Spending), indexedRdmrs, txdats')
+import Cardano.Ledger.Alonzo.TxAuxData (AlonzoTxAuxData (..))
 import Cardano.Ledger.Alonzo.TxBody (AlonzoTxBody (..), AlonzoTxOut (..))
 import Cardano.Ledger.Alonzo.TxWits (AlonzoEraTxWits, TxDats)
 import qualified Cardano.Ledger.Alonzo.TxWits as Alonzo
+import Cardano.Ledger.BaseTypes (shelleyProtVer)
+import qualified Cardano.Ledger.Binary as L
 import Cardano.Ledger.Core (Era (..), EraTx, Tx, TxAuxData)
 import Cardano.Ledger.Crypto
 import Cardano.Ledger.Mary.TxBody (MaryEraTxBody, ValidityInterval)
 import Cardano.Ledger.Shelley.API
+import Data.ByteString (ByteString)
 import Data.Foldable (Foldable (..))
 import Data.Int
 import qualified Data.Map as Map
@@ -31,23 +35,26 @@ import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types as
 
 alonzoTxToRows :: Int64 -> Bytea -> Bytea -> AlonzoTx (AlonzoEra StandardCrypto) -> TxRowGroup
 alonzoTxToRows slotNo blockHash txId tx@AlonzoTx{..} =
-  ( alonzoTxRow slotNo blockHash txId (atbValidityInterval body) auxiliaryData isValid
+  ( alonzoTxRow encodeAlonzoMetadata slotNo blockHash txId (atbValidityInterval body) auxiliaryData isValid
   , alonzoTxInRows slotNo txId isValid tx (atbInputs body) (atbCollateral body)
   , zipWith (alonzoTxOutRow slotNo txId $ txdats' wits) [0 ..] $ toList $ atbOutputs body
   , maryAssetMintRows slotNo txId $ atbMint body
   )
 
+encodeAlonzoMetadata :: AlonzoTxAuxData (AlonzoEra StandardCrypto) -> ByteString
+encodeAlonzoMetadata (AlonzoTxAuxData md _ _) = L.serialize' shelleyProtVer md
+
 alonzoTxRow
-  :: (ToCBOR (TxAuxData era))
-  => Int64
+  :: (TxAuxData era -> ByteString)
+  -> Int64
   -> Bytea
   -> Bytea
   -> ValidityInterval
   -> StrictMaybe (TxAuxData era)
   -> IsValid
   -> TxRow
-alonzoTxRow slotNo blockHash txId validityInterval auxiliaryData isValid =
-  (maryTxRow slotNo blockHash txId validityInterval auxiliaryData)
+alonzoTxRow encodeMetadata slotNo blockHash txId validityInterval auxiliaryData isValid =
+  (maryTxRow encodeMetadata slotNo blockHash txId validityInterval auxiliaryData)
     { Marlowe.isValid = convertIsValid isValid
     }
 
