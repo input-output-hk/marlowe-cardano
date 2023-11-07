@@ -22,8 +22,10 @@ import Control.Concurrent.STM (atomically)
 import Control.Monad (join)
 import Control.Monad.Event.Class (Inject, MonadEvent)
 import Data.ByteString (ByteString)
+import Data.Int (Int64)
 import Data.Maybe (catMaybes)
 import Data.String (fromString)
+import Data.Text (Text)
 import Data.Text.Encoding (decodeUtf8)
 import Data.Time (NominalDiffTime)
 import Language.Marlowe.Runtime.ChainIndexer.Database (DatabaseQueries (..))
@@ -142,14 +144,32 @@ renderDatabaseSelectorOTel dbName dbUser host port = \case
       , renderField = \case
           SqlStatement sql -> [("db.statement", toAttribute $ decodeUtf8 sql)]
           Parameters params -> [("db.parameters", toAttribute params)]
-          Operation operation ->
-            catMaybes
-              [ Just ("db.system", "postgresql")
-              , ("db.user",) . toAttribute . decodeUtf8 <$> dbUser
-              , ("net.peer.name",) . toAttribute . decodeUtf8 <$> host
-              , ("net.peer.port",) . toAttribute . decodeUtf8 <$> port
-              , ("db.name",) . toAttribute . decodeUtf8 <$> dbName
-              , Just ("net.transport", "ip_tcp")
-              , Just ("db.operation", toAttribute operation)
-              ]
+          Operation operation -> ("db.operation", toAttribute operation) : standardAttributes
       }
+  CopyBlocks -> renderCopy "block"
+  CopyTxs -> renderCopy "tx"
+  CopyTxOuts -> renderCopy "txOut"
+  CopyTxIns -> renderCopy "txIn"
+  CopyAssetOuts -> renderCopy "assetOut"
+  CopyAssetMints -> renderCopy "assetMint"
+  where
+    standardAttributes =
+      catMaybes
+        [ Just ("db.system", "postgresql")
+        , ("db.user",) . toAttribute . decodeUtf8 <$> dbUser
+        , ("net.peer.name",) . toAttribute . decodeUtf8 <$> host
+        , ("net.peer.port",) . toAttribute . decodeUtf8 <$> port
+        , ("db.name",) . toAttribute . decodeUtf8 <$> dbName
+        , Just ("net.transport", "ip_tcp")
+        ]
+    renderCopy :: Text -> OTelRendered Int64
+    renderCopy table =
+      OTelRendered
+        { eventName = "COPY chain." <> table
+        , eventKind = Internal
+        , renderField = \rows ->
+            standardAttributes
+              <> [ ("db.statement", toAttribute $ "COPY chain." <> table <> " FROM STDIN WITH (FORMAT 'csv')")
+                 , ("db.rowsAffected", toAttribute rows)
+                 ]
+        }

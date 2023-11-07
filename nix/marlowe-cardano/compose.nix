@@ -339,6 +339,8 @@ let
     services.postgres = {
       image = "postgres:11.5-alpine";
 
+      ports = [ 5432 ];
+
       # TODO translate from attrset
       environment = [
         "POSTGRES_LOGGING=true"
@@ -381,6 +383,22 @@ let
       command = [
         "-c"
         "max_connections=1000"
+        "-c"
+        "superuser_reserved_connections=5"
+        "-c"
+        "huge_pages=try"
+        "-c"
+        "max_wal_size=6GB"
+        "-c"
+        "max_locks_per_transaction=256"
+        "-c"
+        "max_pred_locks_per_transaction=256"
+        "-c"
+        "work_mem=32MB"
+        "-c"
+        "maintenance_work_mem=256MB"
+        "-c"
+        "synchronous_commit=off"
       ];
     };
 

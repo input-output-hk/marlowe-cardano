@@ -1,10 +1,14 @@
 {-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE BinaryLiterals #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE RankNTypes #-}
+
+-- {-# LANGUAGE QuasiQuotes #-}
 
 {- IMPORTANT PERFORMANCE WARNING - non-obvious requirement for filtering on addresses
 
@@ -34,69 +38,39 @@ module Language.Marlowe.Runtime.ChainIndexer.Database.PostgreSQL (
 import Cardano.Api (
   AddressAny,
   AsType (..),
-  AssetId (..),
-  AssetName (..),
-  Block (..),
   BlockHeader (..),
-  BlockInMode (..),
   BlockNo (..),
-  CardanoMode,
   ChainPoint (..),
-  CtxTx,
-  EraInMode,
-  IsCardanoEra,
   Lovelace (..),
-  PolicyId,
-  Quantity (Quantity),
-  ScriptValidity (..),
-  SerialiseAsCBOR (serialiseToCBOR),
   SerialiseAsRawBytes (..),
-  ShelleyBasedEra (ShelleyBasedEraAlonzo, ShelleyBasedEraBabbage),
   SlotNo (..),
-  Tx,
-  TxBody (..),
-  TxBodyContent (..),
   TxId,
-  TxIn (..),
-  TxInsCollateral (..),
-  TxIx (..),
-  TxMetadataInEra (..),
-  TxMintValue (..),
-  TxOut (..),
-  TxOutValue (..),
-  TxReturnCollateral (..),
-  TxScriptValidity (..),
-  TxValidityLowerBound (..),
-  TxValidityUpperBound (..),
-  getTxBody,
-  getTxId,
-  selectLovelace,
-  valueToList,
  )
-import Cardano.Api.Shelley (Hash (..), Tx (..), toShelleyTxIn)
-import Cardano.Binary (serialize')
-import qualified Cardano.Ledger.Alonzo.Scripts.Data as Alonzo
-import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
-import qualified Cardano.Ledger.Alonzo.TxBody as Alonzo
-import qualified Cardano.Ledger.Alonzo.TxWits as Alonzo
-import qualified Cardano.Ledger.Babbage.Tx as Babbage
-import qualified Cardano.Ledger.Babbage.TxBody as Babbage
-import Cardano.Ledger.SafeHash (originalBytes)
-import Cardano.Ledger.Shelley.API.Types (StrictMaybe (..))
+import Cardano.Api.Shelley (Hash (..))
+import Colog (Message, WithLog, logInfo)
 import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
-import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Reader (ask)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BL
 import Data.ByteString.Short (fromShort, toShort)
-import Data.Foldable (toList)
-import Data.Int (Int16, Int64)
-import qualified Data.Map.Strict as M
+import Data.Csv (ToRecord)
+import Data.Csv.Incremental (Builder, encode, encodeRecord)
+import Data.Foldable (traverse_)
+import Data.Int (Int64)
 import Data.Profunctor (rmap)
 import qualified Data.Set as Set
 import Data.String (IsString (..))
 import Data.Text (Text)
+import qualified Data.Text as T
 import Data.Vector (Vector)
 import qualified Data.Vector as V
+import qualified Database.PostgreSQL.Simple as PS
+import Database.PostgreSQL.Simple.Copy (copy, putCopyData, putCopyEnd, putCopyError)
+import qualified Database.PostgreSQL.Simple.Internal as PS
+import Database.PostgreSQL.Simple.Transaction (withTransactionSerializable)
+import qualified Database.PostgreSQL.Simple.Types as PS
+import Hasql.Connection (withLibPQConnection)
 import Hasql.Pool (Pool)
 import qualified Hasql.Pool as Pool
 import qualified Hasql.Session as Session
@@ -106,27 +80,43 @@ import Hasql.Transaction (Transaction)
 import qualified Hasql.Transaction as HT
 import qualified Hasql.Transaction.Sessions as TS
 import Language.Marlowe.Runtime.ChainIndexer.Database (
-  CardanoBlock,
   CommitBlocks (..),
   CommitGenesisBlock (..),
   CommitRollback (..),
   DatabaseQueries (DatabaseQueries),
   GetGenesisBlock (..),
   GetIntersectionPoints (..),
-  hoistCommitBlocks,
   hoistCommitGenesisBlock,
   hoistCommitRollback,
   hoistGetGenesisBlock,
   hoistGetIntersectionPoints,
  )
 import Language.Marlowe.Runtime.ChainIndexer.Genesis (GenesisBlock (..), GenesisTx (..))
+import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Cardano (blockToRows)
+import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types
 import Observe.Event (addField)
 import Ouroboros.Network.Point (WithOrigin (..))
-import UnliftIO (throwIO)
+import UnliftIO (
+  Exception (displayException),
+  MonadIO (..),
+  MonadUnliftIO (..),
+  SomeException (..),
+  mask,
+  newIORef,
+  newMVar,
+  throwIO,
+  try,
+ )
 import Prelude hiding (init)
 
 data QuerySelector f where
   Query :: Text -> QuerySelector QueryField
+  CopyBlocks :: QuerySelector Int64
+  CopyTxs :: QuerySelector Int64
+  CopyTxOuts :: QuerySelector Int64
+  CopyTxIns :: QuerySelector Int64
+  CopyAssetOuts :: QuerySelector Int64
+  CopyAssetMints :: QuerySelector Int64
 
 data QueryField
   = SqlStatement ByteString
@@ -135,11 +125,18 @@ data QueryField
 
 -- | PostgreSQL implementation for the chain sync database queries.
 databaseQueries
-  :: forall r s m. (MonadInjectEvent r QuerySelector s m, MonadIO m) => Pool -> GenesisBlock -> DatabaseQueries m
+  :: forall r s env m
+   . (MonadInjectEvent r QuerySelector s m, MonadUnliftIO m, WithLog env Message m)
+  => Pool
+  -> GenesisBlock
+  -> DatabaseQueries m
 databaseQueries pool genesisBlock =
   DatabaseQueries
     (hoistCommitRollback (transact "commitRollback" "INSERT" TS.Write) $ commitRollback genesisBlock)
-    (hoistCommitBlocks (transact "commitBlocks" "INSERT" TS.Write) commitBlocks)
+    ( CommitBlocks \blocks -> withRunInIO \runInIO -> do
+        result <- Pool.use pool $ runCommitBlocks (commitBlocks runInIO) blocks
+        either throwIO pure result
+    )
     (hoistCommitGenesisBlock (transact "commitGenesisBlock" "INSERT" TS.Write) commitGenesisBlock)
     (hoistGetIntersectionPoints (transact "getIntersectionPoints" "SELECT" TS.Read) getIntersectionPoints)
     (hoistGetGenesisBlock (transact "getGenesisBlock" "SELECT" TS.Read) getGenesisBlock)
@@ -151,8 +148,8 @@ databaseQueries pool genesisBlock =
       case result of
         Left ex -> do
           case ex of
-            (Pool.SessionUsageError (Session.QueryError sql params _)) -> do
-              addField ev $ SqlStatement sql
+            (Pool.SessionUsageError (Session.QueryError query params _)) -> do
+              addField ev $ SqlStatement query
               addField ev $ Parameters params
             _ -> pure ()
           throwIO ex
@@ -209,11 +206,11 @@ getIntersectionPoints =
       rmap
         decodeResults
         [vectorStatement|
-    SELECT slotNo :: bigint, id :: bytea, blockNo :: bigint
-    FROM   chain.block
-    WHERE  rollbackToBlock IS NULL
-    ORDER BY slotNo DESC LIMIT 2160
-  |]
+          SELECT slotNo :: bigint, id :: bytea, blockNo :: bigint
+          FROM   chain.block
+          WHERE  rollbackToBlock IS NULL
+          ORDER BY slotNo DESC LIMIT 2160
+        |]
   where
     decodeResults :: Vector (Int64, ByteString, Int64) -> [WithOrigin BlockHeader]
     decodeResults = fmap decodeResult . V.toList
@@ -287,99 +284,22 @@ commitGenesisBlock = CommitGenesisBlock \GenesisBlock{..} ->
    in HT.statement
         params
         [resultlessStatement|
-        WITH newBlock AS
-          ( INSERT INTO chain.block (id, slotNo, blockNo) VALUES ($1 :: bytea, -1, -1)
-            RETURNING id
-          )
-        , newTxs AS
-          ( INSERT INTO chain.tx (id, blockId, slotNo, isValid)
-            SELECT tx.*, block.id, -1, true
-            FROM   (SELECT * FROM UNNEST ($2 :: bytea[])) AS tx
-            JOIN   newBlock AS block ON true
-          )
-        INSERT INTO chain.txOut (txId, address, lovelace, addressHeader, slotNo, txIx, isCollateral)
-        SELECT *, -1, 0, false FROM UNNEST ($2 :: bytea[], $3 :: bytea[], $4 :: bigint[], $5 :: bytea[])
-      |]
+          WITH newBlock AS
+            ( INSERT INTO chain.block (id, slotNo, blockNo) VALUES ($1 :: bytea, -1, -1)
+              RETURNING id
+            )
+          , newTxs AS
+            ( INSERT INTO chain.tx (id, blockId, slotNo, isValid)
+              SELECT tx.*, block.id, -1, true
+              FROM   (SELECT * FROM UNNEST ($2 :: bytea[])) AS tx
+              JOIN   newBlock AS block ON true
+            )
+          INSERT INTO chain.txOut (txId, address, lovelace, addressHeader, slotNo, txIx, isCollateral)
+          SELECT *, -1, 0, false FROM UNNEST ($2 :: bytea[], $3 :: bytea[], $4 :: bigint[], $5 :: bytea[])
+        |]
 
 -- CommitBlocks
 
-data BlockRow = BlockRow
-  { hash :: !ByteString
-  , slotNo :: !Int64
-  , blockNo :: !Int64
-  }
-
-data TxRow = TxRow
-  { blockHash :: !ByteString
-  , txId :: !ByteString
-  , slotNo :: !Int64
-  , validityLowerBound :: !(Maybe Int64)
-  , validityUpperBound :: !(Maybe Int64)
-  , metadata :: !(Maybe ByteString)
-  , isValid :: !Bool
-  }
-
-data TxOutRow = TxOutRow
-  { txId :: !ByteString
-  , txIx :: !Int16
-  , slotNo :: !Int64
-  , address :: !ByteString
-  , lovelace :: !Int64
-  , datumHash :: !(Maybe ByteString)
-  , datumBytes :: !(Maybe ByteString)
-  , isCollateral :: !Bool
-  }
-
-data TxInRow = TxInRow
-  { txOutId :: !ByteString
-  , txOutIx :: !Int16
-  , txInId :: !ByteString
-  , slotNo :: !Int64
-  , redeemerDatumBytes :: !(Maybe ByteString)
-  , isCollateral :: !Bool
-  }
-
-data AssetOutRow = AssetOutRow
-  { policyId :: !ByteString
-  , name :: !ByteString
-  , txId :: !ByteString
-  , txIx :: !Int16
-  , slotNo :: !Int64
-  , quantity :: !Int64
-  }
-
-data AssetMintRow = AssetMintRow
-  { policyId :: !ByteString
-  , name :: !ByteString
-  , txId :: !ByteString
-  , slotNo :: !Int64
-  , quantity :: !Int64
-  }
-
-data SomeTx
-  = forall era.
-    (IsCardanoEra era) =>
-    SomeTx (Hash BlockHeader) SlotNo (Tx era) (EraInMode era CardanoMode)
-
-data SomeTxOut
-  = forall era.
-    (IsCardanoEra era) =>
-    SomeTxOut TxId TxIx SlotNo (TxOut CtxTx era) (Maybe ByteString, Maybe ByteString) Bool (EraInMode era CardanoMode)
-
-data SomeTxIn = SomeTxIn TxId TxIx TxId SlotNo (Maybe ByteString) Bool
-
-data Asset = Asset PolicyId AssetName deriving (Eq, Ord)
-
-data AssetMint = AssetMint TxId SlotNo PolicyId AssetName Quantity
-
-data AssetOut = AssetOut TxId TxIx SlotNo PolicyId AssetName Quantity
-
--- TODO use COPY ... FROM when catching up for faster bulk inserts.
--- See https://hackage.haskell.org/package/postgresql-libpq-0.9.4.3/docs/Database-PostgreSQL-LibPQ.html#g:8
--- For how to do this with postgresql-libpg. You can expose the underlying
--- libpg connection from a `Session` using `withLibPQConnection`
--- (see https://hackage.haskell.org/package/hasql-1.6.0.1/docs/Hasql-Connection.html#v:withLibPQConnection)
---
 -- NOTE: If this query ever gets refactored, it is extremely important that all
 -- writes are atomic at the block level (i.e. it should be impossible for a
 -- block to be partially saved). This is because the server may be shut down at
@@ -391,309 +311,120 @@ data AssetOut = AssetOut TxId TxIx SlotNo PolicyId AssetName Quantity
 -- belonging to the new epoch. Beware that if a unique key is ever added to the
 -- index for block or slot number, then these blocks will violate that new
 -- constraint.
-commitBlocks :: CommitBlocks Transaction
-commitBlocks = CommitBlocks \blocks ->
-  let txs = extractTxs =<< blocks
-      txOuts = extractTxOuts =<< txs
-      txIns = extractTxIns =<< txs
-      assetOuts = extractAssetOuts =<< txOuts
-      assetMints = extractAssetMints =<< txs
-   in HT.statement
-        (params blocks txs txOuts txIns assetOuts assetMints)
-        [resultlessStatement|
-        WITH blockInputs (id, slotNo, blockNo) AS
-          ( SELECT * FROM UNNEST ($1 :: bytea[], $2 :: bigint[], $3 :: bigint[])
-          )
-        , newBlocks AS
-          ( INSERT INTO chain.block (id, slotNo, blockNo)
-            SELECT * FROM blockInputs AS input
-            WHERE NOT EXISTS
-              ( SELECT 1
-                FROM   chain.block AS block
-                WHERE  input.id = block.id AND input.slotNo = block.slotNo
-              )
-          )
-        , blockUpdates AS
-          ( UPDATE chain.block
-               SET rollbackToBlock = NULL, rollbackToSlot = NULL
-              FROM blockInputs AS input
-             WHERE chain.block.id = input.id
-          )
-        , txInputs (id, blockId, slotNo, validityLowerBound, validityUpperBound, metadata, isValid) AS
-          ( SELECT * FROM UNNEST ($4 :: bytea[], $5 :: bytea[], $6 :: bigint[], $7 :: bigint?[], $8 :: bigint?[], $9 :: bytea?[], $10 :: boolean[])
-          )
-        , newTxs AS
-          ( INSERT INTO chain.tx (id, blockId, slotNo, validityLowerBound, validityUpperBound, metadata, isValid)
-            SELECT tx.id, tx.blockId, tx.slotNo, tx.validityLowerBound, tx.validityUpperBound, tx.metadata, tx.isValid
-            FROM   txInputs AS tx
-          )
-        , txOutInputs (txId, txIx, slotNo, address, lovelace, datumHash, datumBytes, isCollateral) AS
-          ( SELECT * FROM UNNEST ($11 :: bytea[], $12 :: smallint[], $13 :: bigint[], $14 :: bytea[], $15 :: bigint[], $16 :: bytea?[], $17 :: bytea?[], $18 :: boolean[])
-          )
-        , newTxOuts AS
-          ( INSERT INTO chain.txOut (txId, txIx, slotNo, address, lovelace, datumHash, datumBytes, isCollateral, addressHeader, addressPaymentCredential, addressStakeAddressReference)
-            SELECT txOut.txId
-                 , txOut.txIx
-                 , txOut.slotNo
-                 , txOut.address
-                 , txOut.lovelace
-                 , txOut.datumHash
-                 , txOut.datumBytes
-                 , txOut.isCollateral
-                 , substring(txOut.address from 0 for 2)
-                 , CASE
-                    WHEN length(txOut.address) in (29, 57) THEN substring(txOut.address from 2 for 28)
-                    ELSE NULL
-                   END
-                 , CASE
-                    WHEN length(txOut.address) = 57 THEN substring(txOut.address from 30)
-                    ELSE NULL
-                   END
-            FROM   txOutInputs AS txOut
-          )
-        , txInInputs (txOutId, txOutIx, txInId, slotNo, redeemerDatumBytes, isCollateral) AS
-          ( SELECT * FROM UNNEST ($19 :: bytea[], $20 :: smallint[], $21 :: bytea[], $22 :: bigint[], $23 :: bytea?[], $24 :: boolean[])
-          )
-        , newTxIns AS
-          ( INSERT INTO chain.txIn (txOutId, txOutIx, txInId, slotNo, redeemerDatumBytes, isCollateral)
-            SELECT txIn.txOutId, txIn.txOutIx, txIn.txInId, txIn.slotNo, txIn.redeemerDatumBytes, txIn.isCollateral
-            FROM   txInInputs  AS txIn
-          )
-        , assetOutInputs (policyId, name, txOutId, txOutIx, slotNo, quantity) AS
-          ( SELECT * FROM UNNEST ($25 :: bytea[], $26 :: bytea[], $27 :: bytea[], $28 :: smallint[], $29 :: bigint[], $30 :: bigint[])
-          )
-        , assetMintInputs (policyId, name, txId, slotNo, quantity) AS
-          ( SELECT * FROM UNNEST ($31 :: bytea[], $32 :: bytea[], $33 :: bytea[], $34 :: bigint[], $35 :: bigint[])
-          )
-        , newAssets AS
-          ( INSERT INTO chain.asset (policyId, name)
-            SELECT assetInputs.* FROM
-              ( SELECT DISTINCT policyId, name FROM assetOutInputs
-                UNION
-                SELECT DISTINCT policyId, name FROM assetMintInputs
-              ) AS assetInputs
-            ON CONFLICT (policyId, name) DO NOTHING
-            RETURNING id, policyId, name
-          )
-        , assetIds AS
-          ( SELECT * FROM newAssets
-            UNION
-            SELECT asset.*
-            FROM   assetOutInputs AS assetOut
-            JOIN   chain.asset    AS asset    USING  (policyId, name)
-            UNION
-            SELECT asset.*
-            FROM   assetMintInputs AS assetMint
-            JOIN   chain.asset    AS asset    USING  (policyId, name)
-          )
-        , newAssetOuts AS
-          ( INSERT INTO chain.assetOut (txOutId, txOutIx, slotNo, assetId, quantity)
-            SELECT assetOut.txOutId, assetOut.txOutIx, assetOut.slotNo, asset.id, assetOut.quantity
-            FROM   assetOutInputs AS assetOut
-            JOIN   assetIds       AS asset    USING (policyId, name)
-          )
-        INSERT INTO chain.assetMint (txId, slotNo, assetId, quantity)
-        SELECT assetMint.txId, assetMint.slotNo, asset.id, assetMint.quantity
-        FROM   assetMintInputs AS assetMint
-        JOIN   assetIds        AS asset     USING (policyId, name)
-      |]
+commitBlocks
+  :: forall r s env m
+   . (MonadInjectEvent r QuerySelector s m, MonadUnliftIO m, WithLog env Message m)
+  => (forall x. m x -> IO x)
+  -> CommitBlocks Session.Session
+commitBlocks runInIO = CommitBlocks \blocks -> do
+  liftIO $ runInIO $ logInfo $ "Saving " <> T.pack (show $ length blocks) <> " blocks"
+  let blockGroups = blockToRows <$> blocks
+  let (blockRows, txRows, txOutRows, txInRows, assetOutRows, assetMintRows) = flattenBlockGroups blockGroups
+  sessionConnection <- ask
+  liftIO $ withLibPQConnection sessionConnection \libPqConnection -> do
+    connectionHandle <- newMVar libPqConnection
+    connectionObjects <- newMVar mempty
+    connectionTempNameCounter <- newIORef 0
+    let connection = PS.Connection{..}
+    withTransactionSerializable connection do
+      runInIO $ copyBlocks connection blockRows
+      runInIO $ copyTxs connection txRows
+      runInIO $ copyTxOuts connection txOutRows
+      runInIO $ copyTxIns connection txInRows
+      runInIO $ copyAssetOuts connection assetOutRows
+      runInIO $ copyAssetMints connection assetMintRows
+
+flattenBlockGroups :: [BlockRowGroup] -> ([BlockRow], [TxRow], [TxOutRow], [TxInRow], [AssetOutRow], [AssetMintRow])
+flattenBlockGroups = foldr foldBlockGroup ([], [], [], [], [], [])
   where
-    params blocks txs txOuts txIns assetOuts assetMints =
-      ( V.fromList $ hash <$> blockRows
-      , V.fromList $ (\BlockRow{..} -> slotNo) <$> blockRows
-      , V.fromList $ blockNo <$> blockRows
-      , V.fromList $ (\TxRow{..} -> txId) <$> txRows
-      , V.fromList $ blockHash <$> txRows
-      , V.fromList $ (\TxRow{..} -> slotNo) <$> txRows
-      , V.fromList $ validityLowerBound <$> txRows
-      , V.fromList $ validityUpperBound <$> txRows
-      , V.fromList $ metadata <$> txRows
-      , V.fromList $ isValid <$> txRows
-      , V.fromList $ (\TxOutRow{..} -> txId) <$> txOutRows
-      , V.fromList $ (\TxOutRow{..} -> txIx) <$> txOutRows
-      , V.fromList $ (\TxOutRow{..} -> slotNo) <$> txOutRows
-      , V.fromList $ address <$> txOutRows
-      , V.fromList $ lovelace <$> txOutRows
-      , V.fromList $ datumHash <$> txOutRows
-      , V.fromList $ datumBytes <$> txOutRows
-      , V.fromList $ (\TxOutRow{..} -> isCollateral) <$> txOutRows
-      , V.fromList $ txOutId <$> txInRows
-      , V.fromList $ txOutIx <$> txInRows
-      , V.fromList $ txInId <$> txInRows
-      , V.fromList $ (\TxInRow{..} -> slotNo) <$> txInRows
-      , V.fromList $ redeemerDatumBytes <$> txInRows
-      , V.fromList $ (\TxInRow{..} -> isCollateral) <$> txInRows
-      , V.fromList $ (\AssetOutRow{..} -> policyId) <$> assetOutRows
-      , V.fromList $ (\AssetOutRow{..} -> name) <$> assetOutRows
-      , V.fromList $ (\AssetOutRow{..} -> txId) <$> assetOutRows
-      , V.fromList $ (\AssetOutRow{..} -> txIx) <$> assetOutRows
-      , V.fromList $ (\AssetOutRow{..} -> slotNo) <$> assetOutRows
-      , V.fromList $ (\AssetOutRow{..} -> quantity) <$> assetOutRows
-      , V.fromList $ (\AssetMintRow{..} -> policyId) <$> assetMintRows
-      , V.fromList $ (\AssetMintRow{..} -> name) <$> assetMintRows
-      , V.fromList $ (\AssetMintRow{..} -> txId) <$> assetMintRows
-      , V.fromList $ (\AssetMintRow{..} -> slotNo) <$> assetMintRows
-      , V.fromList $ (\AssetMintRow{..} -> quantity) <$> assetMintRows
-      )
+    foldBlockGroup
+      :: BlockRowGroup
+      -> ([BlockRow], [TxRow], [TxOutRow], [TxInRow], [AssetOutRow], [AssetMintRow])
+      -> ([BlockRow], [TxRow], [TxOutRow], [TxInRow], [AssetOutRow], [AssetMintRow])
+    foldBlockGroup (blockRow, txGroups) (blockRows, txRows, txOutRows, txInRows, assetOutRows, assetMintRows) =
+      (blockRow : blockRows, txRows', txOutRows', txInRows', assetOutRows', assetMintRows')
       where
-        blockRows = blockRow <$> blocks
-        blockRow (BlockInMode (Block (BlockHeader slotNo hash (BlockNo blockNo)) _) _) =
-          BlockRow
-            { hash = headerHashToParam hash
-            , slotNo = slotNoToParam slotNo
-            , blockNo = fromIntegral blockNo
-            }
+        (txRows', txOutRows', txInRows', assetOutRows', assetMintRows') =
+          foldr foldTxGroup (txRows, txOutRows, txInRows, assetOutRows, assetMintRows) txGroups
 
-        txRows = txRow <$> txs
-        txRow (SomeTx blockHash slotNo tx _) = case getTxBody tx of
-          body@(TxBody TxBodyContent{txValidityRange, txMetadata, txScriptValidity}) ->
-            TxRow
-              { blockHash = headerHashToParam blockHash
-              , txId = serialiseToRawBytes $ getTxId body
-              , slotNo = slotNoToParam slotNo
-              , validityLowerBound = case fst txValidityRange of
-                  TxValidityNoLowerBound -> Nothing
-                  TxValidityLowerBound _ slot -> Just $ slotNoToParam slot
-              , validityUpperBound = case snd txValidityRange of
-                  TxValidityNoUpperBound _ -> Nothing
-                  TxValidityUpperBound _ slot -> Just $ slotNoToParam slot
-              , metadata = case txMetadata of
-                  TxMetadataNone -> Nothing
-                  TxMetadataInEra _ metadata -> Just $ serialiseToCBOR metadata
-              , isValid = case txScriptValidity of
-                  TxScriptValidity _ ScriptInvalid -> False
-                  _ -> True
-              }
-
-        txOutRows = txOutRow <$> txOuts
-        txOutRow (SomeTxOut txId txIx slotNo (TxOut address value _ _) (datumBytesHashed, datumBytes) isCollateral _) =
-          TxOutRow
-            { txId = serialiseToRawBytes txId
-            , txIx = txIxToParam txIx
-            , slotNo = slotNoToParam slotNo
-            , address = serialiseToRawBytes address
-            , lovelace = lovelaceToParam case value of
-                TxOutAdaOnly _ lovelace -> lovelace
-                TxOutValue _ value' -> selectLovelace value'
-            , datumHash = datumBytesHashed
-            , datumBytes = datumBytes
-            , isCollateral
-            }
-
-        txInRows = txInRow <$> txIns
-        txInRow (SomeTxIn txOutId txOutIx txInId txInSlotNo redeemerDatumBytes isCollateral) =
-          TxInRow
-            { txOutId = serialiseToRawBytes txOutId
-            , txOutIx = txIxToParam txOutIx
-            , txInId = serialiseToRawBytes txInId
-            , slotNo = slotNoToParam txInSlotNo
-            , redeemerDatumBytes
-            , isCollateral
-            }
-
-        assetOutRows = assetOutRow <$> assetOuts
-        assetMintRows = assetMintRow <$> assetMints
-        assetOutRow (AssetOut txId txIx slotNo policyId (AssetName name) (Quantity quantity)) =
-          AssetOutRow
-            { policyId = serialiseToRawBytes policyId
-            , name
-            , txId = serialiseToRawBytes txId
-            , txIx = txIxToParam txIx
-            , slotNo = slotNoToParam slotNo
-            , quantity = fromIntegral quantity
-            }
-        assetMintRow (AssetMint txId slotNo policyId (AssetName name) (Quantity quantity)) =
-          AssetMintRow
-            { policyId = serialiseToRawBytes policyId
-            , name
-            , txId = serialiseToRawBytes txId
-            , slotNo = slotNoToParam slotNo
-            , quantity = fromIntegral quantity
-            }
-
-    extractTxs :: CardanoBlock -> [SomeTx]
-    extractTxs (BlockInMode (Block (BlockHeader slotNo hash _) blockTxs) era) = flip (SomeTx hash slotNo) era <$> blockTxs
-
-    extractTxOuts :: SomeTx -> [SomeTxOut]
-    extractTxOuts (SomeTx _ slotNo tx era) = case getTxBody tx of
-      body@(TxBody TxBodyContent{..}) -> case txScriptValidity of
-        TxScriptValidity _ ScriptInvalid -> case txReturnCollateral of
-          TxReturnCollateralNone -> []
-          TxReturnCollateral _ txOut ->
-            let -- The index of the `TxOut` for collateral change on a transaction that
-                -- fails due to an invalid script is one more than the number of `TxOut`s
-                -- that there would have been had the transaction succeeded.
-                index = toEnum $ length txOuts
-             in [SomeTxOut (getTxId body) (TxIx index) slotNo txOut (Nothing, Nothing) True era]
-        _ -> do
-          (ix, txOut, datumInfo) <- zip3 [0 ..] txOuts datums
-          pure $ SomeTxOut (getTxId body) (TxIx ix) slotNo txOut datumInfo False era
+    foldTxGroup
+      :: TxRowGroup
+      -> ([TxRow], [TxOutRow], [TxInRow], [AssetOutRow], [AssetMintRow])
+      -> ([TxRow], [TxOutRow], [TxInRow], [AssetOutRow], [AssetMintRow])
+    foldTxGroup (txRow, txInRows, txOutGroups, assetMintRows) (txRows, txOutRows, txInRows', assetOutRows, assetMintRows') =
+      (txRow : txRows, txOutRows', foldr (:) txInRows' txInRows, assetOutRows', foldr (:) assetMintRows' assetMintRows)
       where
-        datums = case tx of
-          ShelleyTx ShelleyBasedEraAlonzo (Alonzo.AlonzoTx body wits _ _) ->
-            let getDatum (Alonzo.AlonzoTxOut _ _ (SJust dh)) =
-                  ( Just $ originalBytes dh
-                  , fmap serialize' . M.lookup dh . Alonzo.unTxDats $ Alonzo.txdats' wits
-                  )
-                getDatum (Alonzo.AlonzoTxOut _ _ SNothing) = (Nothing, Nothing)
-             in toList $ getDatum <$> Alonzo.outputs' body
-          ShelleyTx ShelleyBasedEraBabbage (Alonzo.AlonzoTx body wits _ _) ->
-            let getDatum (Babbage.BabbageTxOut _ _ datum _) =
-                  case datum of
-                    Babbage.NoDatum -> (Nothing, Nothing)
-                    Babbage.DatumHash dh ->
-                      ( Just $ originalBytes dh
-                      , fmap serialize' . M.lookup dh . Alonzo.unTxDats $ Babbage.txdats' wits
-                      )
-                    Babbage.Datum d ->
-                      ( Just . originalBytes $ Alonzo.hashBinaryData d
-                      , Just . serialize' $ Alonzo.binaryDataToData d
-                      )
-             in toList $ getDatum <$> Babbage.outputs' body
-          _ -> (Nothing, Nothing) <$ (let TxBody TxBodyContent{txOuts} = getTxBody tx in txOuts)
+        (txOutRows', assetOutRows') =
+          foldr foldTxOutGroup (txOutRows, assetOutRows) txOutGroups
 
-    extractTxIns :: SomeTx -> [SomeTxIn]
-    extractTxIns (SomeTx _ slotNo tx _) = case getTxBody tx of
-      body@(TxBody TxBodyContent{..}) -> case txScriptValidity of
-        TxScriptValidity _ ScriptInvalid -> case txInsCollateral of
-          TxInsCollateralNone -> []
-          TxInsCollateral _ collateralIns -> do
-            TxIn txId txIx <- collateralIns
-            pure $ SomeTxIn txId txIx (getTxId body) slotNo Nothing True
-        _ -> do
-          txIn@(TxIn txId txIx) <- fst <$> txIns
-          pure $ SomeTxIn txId txIx (getTxId body) slotNo (getRedeemer txIn) False
-      where
-        getRedeemer :: TxIn -> Maybe ByteString
-        getRedeemer = case tx of
-          ShelleyTx ShelleyBasedEraAlonzo alonzoTx@Alonzo.AlonzoTx{} ->
-            \txIn -> do
-              (datum, _) <- Alonzo.indexedRdmrs alonzoTx $ Alonzo.Spending $ toShelleyTxIn txIn
-              pure $ originalBytes $ Alonzo.dataToBinaryData datum
-          ShelleyTx ShelleyBasedEraBabbage babbageTx -> do
-            \txIn -> do
-              (datum, _) <- Babbage.indexedRdmrs babbageTx $ Babbage.Spending $ toShelleyTxIn txIn
-              pure $ originalBytes $ Alonzo.dataToBinaryData datum
-          _ -> const Nothing
+    foldTxOutGroup :: TxOutRowGroup -> ([TxOutRow], [AssetOutRow]) -> ([TxOutRow], [AssetOutRow])
+    foldTxOutGroup (txOutRow, assetOutRows) (txOutRows, assetOutRows') =
+      (txOutRow : txOutRows, foldr (:) assetOutRows' assetOutRows)
 
-    extractAssetMints :: SomeTx -> [AssetMint]
-    extractAssetMints (SomeTx _ slotNo tx _) = case getTxBody tx of
-      body@(TxBody TxBodyContent{..}) -> case txMintValue of
-        TxMintNone -> []
-        TxMintValue _ value _ -> do
-          (assetId, quantity) <- valueToList value
-          case assetId of
-            AdaAssetId -> []
-            AssetId policyId name -> [AssetMint (getTxId body) slotNo policyId name quantity]
+copyBlocks :: (MonadInjectEvent r QuerySelector s m, MonadUnliftIO m) => PS.Connection -> [BlockRow] -> m ()
+copyBlocks conn =
+  copyBuilder CopyBlocks conn "block (id, slotNo, blockNo)"
+    . foldMap encodeRecord
 
-    extractAssetOuts :: SomeTxOut -> [AssetOut]
-    extractAssetOuts (SomeTxOut txId ix slotNo (TxOut _ value _ _) _ _ _) = case value of
-      TxOutAdaOnly _ _ -> []
-      TxOutValue _ value' -> do
-        (assetId, quantity) <- valueToList value'
-        case assetId of
-          AdaAssetId -> []
-          AssetId policyId name -> [AssetOut txId ix slotNo policyId name quantity]
+copyTxs :: (MonadInjectEvent r QuerySelector s m, MonadUnliftIO m) => PS.Connection -> [TxRow] -> m ()
+copyTxs conn =
+  copyBuilder CopyTxs conn "tx (blockId, id, slotNo, validityLowerBound, validityUpperBound, metadata, isValid)"
+    . foldMap encodeRecord
+
+copyTxOuts :: (MonadInjectEvent r QuerySelector s m, MonadUnliftIO m) => PS.Connection -> [TxOutRow] -> m ()
+copyTxOuts conn =
+  copyBuilder
+    CopyTxOuts
+    conn
+    "txOut (txId, txIx, slotNo, address, lovelace, datumHash, datumBytes, isCollateral, addressHeader, addressPaymentCredential, addressStakeAddressReference)"
+    . foldMap encodeRecord
+
+copyTxIns :: (MonadInjectEvent r QuerySelector s m, MonadUnliftIO m) => PS.Connection -> [TxInRow] -> m ()
+copyTxIns conn =
+  copyBuilder CopyTxIns conn "txIn (txOutId, txOutIx, txInId, slotNo, redeemerDatumBytes, isCollateral)"
+    . foldMap encodeRecord
+
+copyAssetOuts
+  :: (MonadInjectEvent r QuerySelector s m, MonadUnliftIO m)
+  => PS.Connection
+  -> [AssetOutRow]
+  -> m ()
+copyAssetOuts conn =
+  copyBuilder CopyAssetOuts conn "assetOut (txOutId, txOutIx, slotNo, policyId, name, quantity)"
+    . foldMap encodeRecord
+
+copyAssetMints
+  :: (MonadInjectEvent r QuerySelector s m, MonadUnliftIO m)
+  => PS.Connection
+  -> [AssetMintRow]
+  -> m ()
+copyAssetMints conn =
+  copyBuilder CopyAssetMints conn "assetMint (txId, slotNo, policyId, name, quantity)"
+    . foldMap encodeRecord
+
+copyBuilder
+  :: ( MonadInjectEvent r QuerySelector s m
+     , MonadUnliftIO m
+     , ToRecord a
+     )
+  => QuerySelector Int64
+  -> PS.Connection
+  -> ByteString
+  -> Builder a
+  -> m ()
+copyBuilder sel conn table builder = do
+  let query = "COPY chain." <> PS.Query table <> " FROM STDIN WITH (FORMAT 'csv')"
+  withEvent sel \ev -> mask \restore -> do
+    liftIO $ copy conn query ()
+    result <- try $ restore $ liftIO $ traverse_ (putCopyData conn) $ BL.toChunks $ encode builder
+    case result of
+      Left (SomeException ex) -> do
+        liftIO $ putCopyError conn $ fromString $ displayException ex
+        throwIO ex
+      Right _ -> do
+        count <- liftIO $ putCopyEnd conn
+        addField ev count
+        pure ()
 
 headerHashToParam :: Hash BlockHeader -> ByteString
 headerHashToParam (HeaderHash hash) = fromShort hash
@@ -703,6 +434,3 @@ lovelaceToParam (Lovelace slotNo) = fromIntegral slotNo
 
 slotNoToParam :: SlotNo -> Int64
 slotNoToParam (SlotNo slotNo) = fromIntegral $ min slotNo (fromIntegral (maxBound :: Int64))
-
-txIxToParam :: TxIx -> Int16
-txIxToParam (TxIx txIx) = fromIntegral txIx

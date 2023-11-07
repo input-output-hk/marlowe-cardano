@@ -199,7 +199,7 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri version = O.i
           O.option O.auto $
             mconcat
               [ O.long "max-cost"
-              , O.value 100_000
+              , O.value 1_000_000
               , O.metavar "COST_UNITS"
               , O.help
                   "The maximum number of cost units that can be batched when persisting blocks. If the cost of the current batch would exceed this value, the chain sync client will wait until the current batch is persisted before requesting another block."
