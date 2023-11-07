@@ -40,27 +40,6 @@ spec:
           - marlowe-runtime-{{ . }}-web.{{ $instance.parentDomain }}
           rules:
           - port: 3780
-      - type: opentelemetry-collector
-        properties:
-          mode: sidecar
-          config: |
-            receivers:
-              otlp:
-                protocols:
-                  http:
-                  grpc:
-            processors:
-
-            exporters:
-              logging:
-
-            service:
-              pipelines:
-                traces:
-                  receivers: [otlp]
-                  processors: []
-                  exporters: [logging]
-
   policies:
   - name: local-{{ $.Values.namespace }}
     properties:
