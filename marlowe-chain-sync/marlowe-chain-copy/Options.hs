@@ -125,7 +125,7 @@ description =
   concatWith
     (\a b -> a <> line <> line <> b)
     [ vcat
-        [ "marlowe-bulk-copy is a admin utility designed to speed up initial synchronization"
+        [ "marlowe-chain-copy is a admin utility designed to speed up initial synchronization"
         , "of data from a fully caught-up cardano-node into a new marlowe-chain-sync database."
         , "It offers roughly double the throughput of marlowe-chain-indexer during initial sync"
         , "by performing the following optimizations:"
