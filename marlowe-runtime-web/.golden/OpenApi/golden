@@ -177,16 +177,21 @@
                 "type": "object"
             },
             "ApplyInputsTxEnvelope": {
+                "description": "The \"type\" property of \"tx\" must be \"Tx BabbageEra\" or \"Tx ConwayEra\"",
                 "properties": {
+                    "contractId": {
+                        "$ref": "#/components/schemas/TxOutRef"
+                    },
+                    "transactionId": {
+                        "$ref": "#/components/schemas/TxId"
+                    },
                     "tx": {
                         "$ref": "#/components/schemas/TextEnvelope"
-                    },
-                    "withdrawalId": {
-                        "$ref": "#/components/schemas/TxId"
                     }
                 },
                 "required": [
-                    "withdrawalId",
+                    "contractId",
+                    "transactionId",
                     "tx"
                 ],
                 "type": "object"
@@ -845,12 +850,56 @@
                         "type": "object"
                     },
                     "resource": {
-                        "$ref": "#/components/schemas/ApplyInputsTxEnvelope"
+                        "$ref": "#/components/schemas/CreateTxEnvelope"
                     }
                 },
                 "required": [
                     "resource",
                     "links"
+                ],
+                "type": "object"
+            },
+            "CreateTxBodyEnvelope": {
+                "description": "The \"type\" property of \"txBody\" must be \"TxBody BabbageEra\" or \"TxBody ConwayEra\"",
+                "properties": {
+                    "contractId": {
+                        "$ref": "#/components/schemas/TxOutRef"
+                    },
+                    "safetyErrors": {
+                        "items": {
+                            "$ref": "#/components/schemas/SafetyError"
+                        },
+                        "type": "array"
+                    },
+                    "txBody": {
+                        "$ref": "#/components/schemas/TextEnvelope"
+                    }
+                },
+                "required": [
+                    "contractId",
+                    "txBody"
+                ],
+                "type": "object"
+            },
+            "CreateTxEnvelope": {
+                "description": "The \"type\" property of \"tx\" must be \"Tx BabbageEra\" or \"Tx ConwayEra\"",
+                "properties": {
+                    "contractId": {
+                        "$ref": "#/components/schemas/TxOutRef"
+                    },
+                    "safetyErrors": {
+                        "items": {
+                            "$ref": "#/components/schemas/SafetyError"
+                        },
+                        "type": "array"
+                    },
+                    "tx": {
+                        "$ref": "#/components/schemas/TextEnvelope"
+                    }
+                },
+                "required": [
+                    "contractId",
+                    "tx"
                 ],
                 "type": "object"
             },
@@ -900,14 +949,17 @@
                             "properties": {
                                 "links": {
                                     "properties": {
-                                        "payout": {
+                                        "contract": {
+                                            "type": "string"
+                                        },
+                                        "transactions": {
                                             "type": "string"
                                         }
                                     },
                                     "type": "object"
                                 },
                                 "resource": {
-                                    "$ref": "#/components/schemas/PayoutHeader"
+                                    "$ref": "#/components/schemas/ContractHeader"
                                 }
                             },
                             "required": [
@@ -950,6 +1002,37 @@
                 ],
                 "type": "object"
             },
+            "GetPayoutsResponse": {
+                "properties": {
+                    "results": {
+                        "items": {
+                            "properties": {
+                                "links": {
+                                    "properties": {
+                                        "payout": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                },
+                                "resource": {
+                                    "$ref": "#/components/schemas/PayoutHeader"
+                                }
+                            },
+                            "required": [
+                                "resource",
+                                "links"
+                            ],
+                            "type": "object"
+                        },
+                        "type": "array"
+                    }
+                },
+                "required": [
+                    "results"
+                ],
+                "type": "object"
+            },
             "GetTransactionResponse": {
                 "properties": {
                     "links": {
@@ -970,6 +1053,68 @@
                 "required": [
                     "resource",
                     "links"
+                ],
+                "type": "object"
+            },
+            "GetTransactionsResponse": {
+                "properties": {
+                    "results": {
+                        "items": {
+                            "properties": {
+                                "links": {
+                                    "properties": {
+                                        "transaction": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                },
+                                "resource": {
+                                    "$ref": "#/components/schemas/TxHeader"
+                                }
+                            },
+                            "required": [
+                                "resource",
+                                "links"
+                            ],
+                            "type": "object"
+                        },
+                        "type": "array"
+                    }
+                },
+                "required": [
+                    "results"
+                ],
+                "type": "object"
+            },
+            "GetWithdrawalsResponse": {
+                "properties": {
+                    "results": {
+                        "items": {
+                            "properties": {
+                                "links": {
+                                    "properties": {
+                                        "withdrawal": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                },
+                                "resource": {
+                                    "$ref": "#/components/schemas/WithdrawalHeader"
+                                }
+                            },
+                            "required": [
+                                "resource",
+                                "links"
+                            ],
+                            "type": "object"
+                        },
+                        "type": "array"
+                    }
+                },
+                "required": [
+                    "results"
                 ],
                 "type": "object"
             },
@@ -2146,6 +2291,7 @@
                         "type": "string"
                     },
                     "type": {
+                        "description": "What type of data is encoded in the CBOR Hex. Valid values include \"Tx <era>\", \"TxBody <era>\", and \"ShelleyTxWitness <era>\" where <era> is one of \"BabbageEra\", \"ConwayEra\".",
                         "type": "string"
                     }
                 },
@@ -2958,12 +3104,44 @@
                         "type": "object"
                     },
                     "resource": {
-                        "$ref": "#/components/schemas/ApplyInputsTxEnvelope"
+                        "$ref": "#/components/schemas/WithdrawTxEnvelope"
                     }
                 },
                 "required": [
                     "resource",
                     "links"
+                ],
+                "type": "object"
+            },
+            "WithdrawTxBodyEnvelope": {
+                "description": "The \"type\" property of \"txBody\" must be \"TxBody BabbageEra\" or \"TxBody ConwayEra\"",
+                "properties": {
+                    "txBody": {
+                        "$ref": "#/components/schemas/TextEnvelope"
+                    },
+                    "withdrawalId": {
+                        "$ref": "#/components/schemas/TxId"
+                    }
+                },
+                "required": [
+                    "withdrawalId",
+                    "txBody"
+                ],
+                "type": "object"
+            },
+            "WithdrawTxEnvelope": {
+                "description": "The \"type\" property of \"tx\" must be \"Tx BabbageEra\" or \"Tx ConwayEra\"",
+                "properties": {
+                    "tx": {
+                        "$ref": "#/components/schemas/TextEnvelope"
+                    },
+                    "withdrawalId": {
+                        "$ref": "#/components/schemas/TxId"
+                    }
+                },
+                "required": [
+                    "withdrawalId",
+                    "tx"
                 ],
                 "type": "object"
             },
@@ -3163,7 +3341,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -3197,7 +3376,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -3231,7 +3411,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -3357,7 +3538,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -3391,7 +3573,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -3425,7 +3608,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -3529,7 +3713,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -3563,7 +3748,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -3597,7 +3783,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -3695,7 +3882,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -3729,7 +3917,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -3763,7 +3952,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -3856,7 +4046,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -3890,7 +4081,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -3924,7 +4116,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -4014,7 +4207,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -4048,7 +4242,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -4082,7 +4277,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -4172,7 +4368,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -4206,7 +4403,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -4240,7 +4438,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -4334,7 +4533,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -4368,7 +4568,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -4402,7 +4603,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -4527,7 +4729,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -4561,7 +4764,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -4595,7 +4799,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -4651,7 +4856,7 @@
                         "content": {
                             "application/json;charset=utf-8": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/GetContractsResponse"
+                                    "$ref": "#/components/schemas/GetTransactionsResponse"
                                 }
                             }
                         },
@@ -4725,7 +4930,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -4759,7 +4965,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -4793,7 +5000,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -4922,7 +5130,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -4956,7 +5165,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -4990,7 +5200,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -5093,7 +5304,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -5127,7 +5339,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -5161,7 +5374,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -5265,7 +5479,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -5299,7 +5514,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -5333,7 +5549,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -5410,7 +5627,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -5444,7 +5662,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -5478,7 +5697,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -5556,7 +5776,7 @@
                         "content": {
                             "application/json;charset=utf-8": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/GetContractsResponse"
+                                    "$ref": "#/components/schemas/GetPayoutsResponse"
                                 }
                             }
                         },
@@ -5630,7 +5850,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -5664,7 +5885,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -5698,7 +5920,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -5788,7 +6011,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -5822,7 +6046,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -5856,7 +6081,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -5910,7 +6136,7 @@
                         "content": {
                             "application/json;charset=utf-8": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/GetContractsResponse"
+                                    "$ref": "#/components/schemas/GetWithdrawalsResponse"
                                 }
                             }
                         },
@@ -5984,7 +6210,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -6018,7 +6245,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -6052,7 +6280,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -6167,7 +6396,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -6201,7 +6431,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -6235,7 +6466,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -6324,7 +6556,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -6358,7 +6591,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -6392,7 +6626,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -6485,7 +6720,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -6519,7 +6755,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }
@@ -6553,7 +6790,8 @@
                                                 }
                                             },
                                             "required": [
-                                                "genesisTimeUTC"
+                                                "blockHeader",
+                                                "slotTimeUTC"
                                             ],
                                             "type": "object"
                                         }

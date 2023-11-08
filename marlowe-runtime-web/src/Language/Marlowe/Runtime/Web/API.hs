@@ -600,7 +600,6 @@ type GetWithdrawalAPI =
 -- | Helper type for defining generic paginated GET endpoints
 type PaginatedGet rangeFields resource =
   Header "Range" (Ranges rangeFields resource)
-    :> RenameResponseSchema "GetContractsResponse"
     :> GetPartialContent '[JSON] (PaginatedResponse rangeFields resource)
 
 -- | Helper type for describing the response type of generic paginated APIs
