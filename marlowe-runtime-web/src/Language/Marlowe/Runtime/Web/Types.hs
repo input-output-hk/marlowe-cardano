@@ -1130,7 +1130,7 @@ instance ToParamSchema ChainTip where
             .~ [ ("blockHeader", Ref $ Reference "BlockHeader")
                , ("slotTimeUTC", Inline $ toParamSchema $ Proxy @UTCTime)
                ]
-          & required .~ ["genesisTimeUTC"]
+          & required .~ ["blockHeader", "slotTimeUTC"]
 
 instance ToParamSchema NetworkId where
   toParamSchema _ =
