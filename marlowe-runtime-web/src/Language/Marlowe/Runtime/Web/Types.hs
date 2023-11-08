@@ -621,9 +621,10 @@ instance ToSchema (WithdrawTxEnvelope CardanoTx) where
     withdrawalIdSchema <- declareSchemaRef (Proxy :: Proxy TxId)
     txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
     return $
-      NamedSchema (Just "ApplyInputsTxEnvelope") $
+      NamedSchema (Just "WithdrawTxEnvelope") $
         mempty
           & type_ ?~ OpenApiObject
+          & OpenApi.description ?~ "The \"type\" property of \"tx\" must be \"Tx BabbageEra\" or \"Tx ConwayEra\""
           & properties
             .~ [ ("withdrawalId", withdrawalIdSchema)
                , ("tx", txEnvelopeSchema)
@@ -635,9 +636,10 @@ instance ToSchema (WithdrawTxEnvelope CardanoTxBody) where
     withdrawalIdSchema <- declareSchemaRef (Proxy :: Proxy TxId)
     txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
     return $
-      NamedSchema (Just "ApplyInputsTxEnvelope") $
+      NamedSchema (Just "WithdrawTxBodyEnvelope") $
         mempty
           & type_ ?~ OpenApiObject
+          & OpenApi.description ?~ "The \"type\" property of \"txBody\" must be \"TxBody BabbageEra\" or \"TxBody ConwayEra\""
           & properties
             .~ [ ("withdrawalId", withdrawalIdSchema)
                , ("txBody", txEnvelopeSchema)
@@ -686,9 +688,10 @@ instance ToSchema (CreateTxEnvelope CardanoTx) where
     txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
     safetyErrorsSchema <- declareSchemaRef (Proxy :: Proxy [SafetyError])
     return $
-      NamedSchema (Just "ApplyInputsTxEnvelope") $
+      NamedSchema (Just "CreateTxEnvelope") $
         mempty
           & type_ ?~ OpenApiObject
+          & OpenApi.description ?~ "The \"type\" property of \"tx\" must be \"Tx BabbageEra\" or \"Tx ConwayEra\""
           & properties
             .~ [ ("contractId", contractIdSchema)
                , ("tx", txEnvelopeSchema)
@@ -702,9 +705,10 @@ instance ToSchema (CreateTxEnvelope CardanoTxBody) where
     txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
     safetyErrorsSchema <- declareSchemaRef (Proxy :: Proxy [SafetyError])
     return $
-      NamedSchema (Just "ApplyInputsTxEnvelope") $
+      NamedSchema (Just "CreateTxBodyEnvelope") $
         mempty
           & type_ ?~ OpenApiObject
+          & OpenApi.description ?~ "The \"type\" property of \"txBody\" must be \"TxBody BabbageEra\" or \"TxBody ConwayEra\""
           & properties
             .~ [ ("contractId", contractIdSchema)
                , ("txBody", txEnvelopeSchema)
@@ -737,13 +741,18 @@ instance FromJSON TextEnvelope where
 instance ToSchema TextEnvelope where
   declareNamedSchema _ = do
     textSchema <- declareSchemaRef (Proxy @Text)
+    let typeSchema =
+          mempty
+            & type_ ?~ OpenApiString
+            & OpenApi.description
+              ?~ "What type of data is encoded in the CBOR Hex. Valid values include \"Tx <era>\", \"TxBody <era>\", and \"ShelleyTxWitness <era>\" where <era> is one of \"BabbageEra\", \"ConwayEra\"."
     pure $
       NamedSchema (Just "TextEnvelope") $
         mempty
           & type_ ?~ OpenApiObject
           & required .~ ["type", "description", "cborHex"]
           & properties
-            .~ [ ("type", textSchema)
+            .~ [ ("type", Inline typeSchema)
                , ("description", textSchema)
                , ("cborHex", textSchema)
                ]
@@ -1014,6 +1023,7 @@ instance ToSchema (ApplyInputsTxEnvelope CardanoTx) where
       NamedSchema (Just "ApplyInputsTxEnvelope") $
         mempty
           & type_ ?~ OpenApiObject
+          & OpenApi.description ?~ "The \"type\" property of \"tx\" must be \"Tx BabbageEra\" or \"Tx ConwayEra\""
           & properties
             .~ [ ("contractId", contractIdSchema)
                , ("transactionId", transactionIdSchema)
@@ -1030,6 +1040,7 @@ instance ToSchema (ApplyInputsTxEnvelope CardanoTxBody) where
       NamedSchema (Just "ApplyInputsTxEnvelope") $
         mempty
           & type_ ?~ OpenApiObject
+          & OpenApi.description ?~ "The \"type\" property of \"txBody\" must be \"TxBody BabbageEra\" or \"TxBody ConwayEra\""
           & properties
             .~ [ ("contractId", contractIdSchema)
                , ("transactionId", transactionIdSchema)

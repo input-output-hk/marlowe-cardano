@@ -177,16 +177,21 @@
                 "type": "object"
             },
             "ApplyInputsTxEnvelope": {
+                "description": "The \"type\" property of \"tx\" must be \"Tx BabbageEra\" or \"Tx ConwayEra\"",
                 "properties": {
+                    "contractId": {
+                        "$ref": "#/components/schemas/TxOutRef"
+                    },
+                    "transactionId": {
+                        "$ref": "#/components/schemas/TxId"
+                    },
                     "tx": {
                         "$ref": "#/components/schemas/TextEnvelope"
-                    },
-                    "withdrawalId": {
-                        "$ref": "#/components/schemas/TxId"
                     }
                 },
                 "required": [
-                    "withdrawalId",
+                    "contractId",
+                    "transactionId",
                     "tx"
                 ],
                 "type": "object"
@@ -845,12 +850,56 @@
                         "type": "object"
                     },
                     "resource": {
-                        "$ref": "#/components/schemas/ApplyInputsTxEnvelope"
+                        "$ref": "#/components/schemas/CreateTxEnvelope"
                     }
                 },
                 "required": [
                     "resource",
                     "links"
+                ],
+                "type": "object"
+            },
+            "CreateTxBodyEnvelope": {
+                "description": "The \"type\" property of \"txBody\" must be \"TxBody BabbageEra\" or \"TxBody ConwayEra\"",
+                "properties": {
+                    "contractId": {
+                        "$ref": "#/components/schemas/TxOutRef"
+                    },
+                    "safetyErrors": {
+                        "items": {
+                            "$ref": "#/components/schemas/SafetyError"
+                        },
+                        "type": "array"
+                    },
+                    "txBody": {
+                        "$ref": "#/components/schemas/TextEnvelope"
+                    }
+                },
+                "required": [
+                    "contractId",
+                    "txBody"
+                ],
+                "type": "object"
+            },
+            "CreateTxEnvelope": {
+                "description": "The \"type\" property of \"tx\" must be \"Tx BabbageEra\" or \"Tx ConwayEra\"",
+                "properties": {
+                    "contractId": {
+                        "$ref": "#/components/schemas/TxOutRef"
+                    },
+                    "safetyErrors": {
+                        "items": {
+                            "$ref": "#/components/schemas/SafetyError"
+                        },
+                        "type": "array"
+                    },
+                    "tx": {
+                        "$ref": "#/components/schemas/TextEnvelope"
+                    }
+                },
+                "required": [
+                    "contractId",
+                    "tx"
                 ],
                 "type": "object"
             },
@@ -2242,6 +2291,7 @@
                         "type": "string"
                     },
                     "type": {
+                        "description": "What type of data is encoded in the CBOR Hex. Valid values include \"Tx <era>\", \"TxBody <era>\", and \"ShelleyTxWitness <era>\" where <era> is one of \"BabbageEra\", \"ConwayEra\".",
                         "type": "string"
                     }
                 },
@@ -3054,12 +3104,44 @@
                         "type": "object"
                     },
                     "resource": {
-                        "$ref": "#/components/schemas/ApplyInputsTxEnvelope"
+                        "$ref": "#/components/schemas/WithdrawTxEnvelope"
                     }
                 },
                 "required": [
                     "resource",
                     "links"
+                ],
+                "type": "object"
+            },
+            "WithdrawTxBodyEnvelope": {
+                "description": "The \"type\" property of \"txBody\" must be \"TxBody BabbageEra\" or \"TxBody ConwayEra\"",
+                "properties": {
+                    "txBody": {
+                        "$ref": "#/components/schemas/TextEnvelope"
+                    },
+                    "withdrawalId": {
+                        "$ref": "#/components/schemas/TxId"
+                    }
+                },
+                "required": [
+                    "withdrawalId",
+                    "txBody"
+                ],
+                "type": "object"
+            },
+            "WithdrawTxEnvelope": {
+                "description": "The \"type\" property of \"tx\" must be \"Tx BabbageEra\" or \"Tx ConwayEra\"",
+                "properties": {
+                    "tx": {
+                        "$ref": "#/components/schemas/TextEnvelope"
+                    },
+                    "withdrawalId": {
+                        "$ref": "#/components/schemas/TxId"
+                    }
+                },
+                "required": [
+                    "withdrawalId",
+                    "tx"
                 ],
                 "type": "object"
             },
