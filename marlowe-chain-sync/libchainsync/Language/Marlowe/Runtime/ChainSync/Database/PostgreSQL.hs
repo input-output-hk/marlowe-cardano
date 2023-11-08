@@ -53,6 +53,7 @@ import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Maybe (fromJust)
 import Data.Monoid (Sum (..))
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -198,50 +199,72 @@ collectTxsFor networkId batchSize credentials fromPoint =
       pure $ assembleResults blocks txs txIns txOuts
   where
     loadTxIds :: HT.Transaction (Map BlockHeader (Set TxId))
-    loadTxIds =
-      Map.fromDistinctAscList . fmap mapRow . V.toList
-        <$> HT.statement
-          params
-          [vectorStatement|
-            WITH credentials (addressHeader,  addressPaymentCredential) as
-              ( SELECT * FROM UNNEST ($1 :: bytea[], $2 :: bytea[])
-              )
-            , blocks (slotNo, blockId, blockNo, txId) as
-              ( SELECT
-                  block.slotNo,
-                  block.id,
-                  block.blockNo,
-                  tx.id
-                FROM chain.block
-                JOIN chain.tx                          ON block.id = tx.blockId AND  block.slotNo = tx.slotNo
-                JOIN chain.txOut                       ON tx.id = txOut.txId AND tx.slotNo = txOut.slotNo
-                JOIN credentials USING (addressHeader, addressPaymentCredential)
-                WHERE block.rollbackToSlot IS NULL
-                  AND block.slotNo > $3 :: bigint
-                UNION
+    loadTxIds = do
+      -- Fetching the from and to txs and block headers separately is significantly more efficient than
+      -- doing everything in a single query using CTEs.
+      fromTxs <-
+        Map.fromDistinctAscList . V.toList
+          <$> HT.statement
+            params
+            [vectorStatement|
+                WITH credentials (addressHeader,  addressPaymentCredential) as
+                  ( SELECT * FROM UNNEST ($1 :: bytea[], $2 :: bytea[])
+                  )
                 SELECT
-                  block.slotNo,
-                  block.id,
-                  block.blockNo,
-                  tx.id
+                  slotNo :: bigint,
+                  ARRAY_AGG(txId) :: bytea[]
+                FROM chain.txOut
+                NATURAL JOIN credentials
+                WHERE slotNo > $3 :: bigint
+                GROUP BY slotNo
+                ORDER BY slotNo
+                LIMIT $4 :: int
+            |]
+      toTxs <-
+        Map.fromDistinctAscList . V.toList
+          <$> HT.statement
+            params
+            [vectorStatement|
+                WITH credentials (addressHeader,  addressPaymentCredential) as
+                  ( SELECT * FROM UNNEST ($1 :: bytea[], $2 :: bytea[])
+                  )
+                SELECT
+                  txIn.slotNo :: bigint,
+                  ARRAY_AGG(txIn.txInId) :: bytea[]
+                FROM chain.txIn
+                JOIN chain.txOut
+                  ON txOut.txId = txIn.txOutId
+                  AND txOut.txIx = txIn.txOutIx
+                NATURAL JOIN credentials
+                WHERE txIn.slotNo > $3 :: bigint
+                GROUP BY txIn.slotNo
+                ORDER BY txIn.slotNo
+                LIMIT $4 :: int
+            |]
+      let mergedTxs =
+            Map.fromDistinctAscList
+              . take (fromIntegral batchSize)
+              . Map.toAscList
+              . fmap (Set.fromList . V.toList . fmap TxId)
+              $ Map.unionWith (<>) fromTxs toTxs
+      blockHeaders <-
+        Map.fromDistinctAscList . fmap decodeBlockHeaderRow . V.toList
+          <$> HT.statement
+            (V.fromList $ Map.keys mergedTxs)
+            [vectorStatement|
+                WITH slots (slotNo) as
+                  ( SELECT * FROM UNNEST ($1 :: bigint[])
+                  )
+                SELECT
+                  slotNo :: bigint,
+                  id :: bytea,
+                  blockNo :: bigint
                 FROM chain.block
-                JOIN chain.tx                          ON block.id = tx.blockId AND  block.slotNo = tx.slotNo
-                JOIN chain.txIn                        ON tx.id = txIn.txInId AND tx.slotNo = txIn.slotNo
-                JOIN chain.txOut                       ON txIn.txOutId = txOut.txId AND txIn.txOutIx = txOut.txIx
-                JOIN credentials USING (addressHeader, addressPaymentCredential)
-                WHERE block.rollbackToSlot IS NULL
-                  AND block.slotNo > $3 :: bigint
-              )
-            SELECT
-              slotNo :: bigint,
-              (ARRAY_AGG(blockId))[1] :: bytea,
-              (ARRAY_AGG(blockNo))[1] :: bigint,
-              ARRAY_AGG(txId) :: bytea[]
-            FROM blocks
-            GROUP BY slotNo
-            ORDER BY slotNo
-            LIMIT $4 :: int
-      |]
+                NATURAL JOIN slots
+                WHERE rollbackToBlock IS NULL
+                ORDER BY slotNo
+            |]
+      pure $ Map.mapKeysMonotonic (\slot -> fromJust $ Map.lookup slot blockHeaders) mergedTxs
       where
         params =
           ( V.fromList $ fst <$> addressParts
@@ -259,10 +282,10 @@ collectTxsFor networkId batchSize credentials fromPoint =
               (,unScriptHash sh) . BS.pack . pure
                 <$> if networkId == C.Mainnet then [0x11, 0x31, 0x51, 0x71] else [0x10, 0x30, 0x50, 0x70]
 
-        mapRow :: (Int64, ByteString, Int64, V.Vector ByteString) -> (BlockHeader, Set TxId)
-        mapRow (slotNo, blockHeaderHash, blockNo, txIds) =
-          ( decodeBlockHeader (slotNo, blockHeaderHash, blockNo)
-          , Set.fromList $ V.toList $ TxId <$> txIds
+        decodeBlockHeaderRow :: (Int64, ByteString, Int64) -> (Int64, BlockHeader)
+        decodeBlockHeaderRow (slotNo, blockHeaderHash, blockNo) =
+          ( slotNo
+          , decodeBlockHeader (slotNo, blockHeaderHash, blockNo)
           )
 
     loadTxs :: Set TxId -> HT.Transaction (Map TxId Transaction)
@@ -271,21 +294,21 @@ collectTxsFor networkId batchSize credentials fromPoint =
         <$> HT.statement
           params
           [vectorStatement|
-          SELECT
-            tx.id :: bytea,
-            (ARRAY_AGG(tx.validityLowerBound))[1] :: bigint?,
-            (ARRAY_AGG(tx.validityUpperBound))[1] :: bigint?,
-            (ARRAY_AGG(tx.metadata))[1] :: bytea?,
-            ARRAY_REMOVE(ARRAY_AGG(assetMint.policyId), NULL) :: bytea[],
-            ARRAY_REMOVE(ARRAY_AGG(assetMint.name), NULL) :: bytea[],
-            ARRAY_REMOVE(ARRAY_AGG(assetMint.quantity), NULL) :: bigint[]
-          FROM chain.tx
-          LEFT JOIN chain.assetMint
-            ON assetMint.txId = tx.id
-          WHERE tx.id = ANY($1 :: bytea[])
-          GROUP BY tx.id
-          ORDER BY tx.id
-      |]
+            SELECT
+              tx.id :: bytea,
+              (ARRAY_AGG(tx.validityLowerBound))[1] :: bigint?,
+              (ARRAY_AGG(tx.validityUpperBound))[1] :: bigint?,
+              (ARRAY_AGG(tx.metadata))[1] :: bytea?,
+              ARRAY_REMOVE(ARRAY_AGG(assetMint.policyId), NULL) :: bytea[],
+              ARRAY_REMOVE(ARRAY_AGG(assetMint.name), NULL) :: bytea[],
+              ARRAY_REMOVE(ARRAY_AGG(assetMint.quantity), NULL) :: bigint[]
+            FROM chain.tx
+            LEFT JOIN chain.assetMint
+              ON assetMint.txId = tx.id
+            WHERE tx.id = ANY($1 :: bytea[])
+            GROUP BY tx.id
+            ORDER BY tx.id
+          |]
       where
         params = V.fromList $ fmap unTxId $ Set.toList txIds
 

@@ -399,6 +399,14 @@ let
         "maintenance_work_mem=256MB"
         "-c"
         "synchronous_commit=off"
+        "-c"
+        "logging_collector=on"
+        "-c"
+        "log_directory=pg_log"
+        "-c"
+        "log_min_duration_statement=500"
+        "-c"
+        "log_error_verbosity=TERSE"
       ];
     };
 
