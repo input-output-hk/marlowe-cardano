@@ -14,3 +14,5 @@ rename-metadata [tx] 2022-12-14T13:38:23Z Jamie Bertram <jamie.bertram@iohk.io> 
 fix-collateral-index [split-address] 2023-02-07T19:41:05Z Brian W Bush <brian.bush@iohk.io> # Fix two incorrect output indices in `preview`.
 fix-upper-validity [split-address] 2023-02-23T21:59:30Z Brian W Bush <brian.bush@iohk.io> # Fix 23 incorrect validity upper bounds in `mainnet`.
 new-partitions [initial_partition] 2023-07-28T14:05:56Z Jamie Bertram <jamie.bertram@iohk.io> # Adds new partitions to tables.
+drop-assets [asset] 2023-10-31T19:50:15Z Jamie Bertram <jamie.bertram@iohk.io> # Drop asset table
+indexAddresses [split-address] 2023-11-07T20:26:39Z Jamie Bertram <jamie.bertram@iohk.io> # Add indexes for address headers
