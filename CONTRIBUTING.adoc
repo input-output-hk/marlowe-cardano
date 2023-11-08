@@ -51,7 +51,7 @@ bug workarounds.
 
 === How to build the code with profiling
 
-If you launch `nix develop .#prof`, you will get a shell where all the dependencies have been built with profiling.
+If you launch `nix develop .#profiled`, you will get a shell where all the dependencies have been built with profiling.
 
 [WARNING]
 ====
@@ -105,7 +105,7 @@ You need to do a few things when adding a new package, in the following order:
 . Add the package to link:stack.yaml[`stack.yaml`].
 . Update the xref:update-generated[package set].
 . Update the `xref:update-hie[hie-*.yaml` files].
-. Check that you can run `nix build .#marlowe.haskell.projectPackages.<package name>` successfully.
+. Check that you can run `nix build .#cabalProject.<SYSTEM>.hsPkgs.<PACKAGE>.exec.<COMPONENT>` successfully.
 
 [[update-haskell-pins]]
 === How to update our pinned Haskell dependencies
@@ -116,7 +116,7 @@ These can be managed normally, but ensure that:
 
 * The specifications remain in sync between `cabal.project` and `stack.yaml`.
 * You update the xref:update-generated[package set].
-* If it is an `source-repository-package`/`extra-dep` from Git, you update the `sha256` mapping in `nix/haskell.nix`.
+* If it is an `source-repository-package`/`extra-dep` from Git, you update the `sha256` mapping in `nix/project.nix`.
 For the moment you have to do this by hand, using the following command to get the sha: `nix-prefetch-git --quiet <repo-url> <rev> | jq .sha256`, or by just getting it wrong and trying to build it, in which case Nix will give you the right value.
 
 [[update-nix-pins]]
@@ -356,9 +356,6 @@ However, this is sufficiently infrequent that we just live with the possibility,
 
 Hydra is the "standard" CI builder for Nix-based projects.
 It builds everything in the project, including all the tests, documentation, etc.
-
-Hydra builds jobs based on `release.nix`, although currently this imports a lot of its jobs from `ci.nix` (was used for Hercules, may be used again in future).
-Hydra should report a failed status even if `release.nix` fails to evaluate.
 
 Hydra can be a bit flaky, unfortunately:
 - If evaluation fails saying "out of memory" or "unexpected EOF reading line", then this is likely a transient failure.

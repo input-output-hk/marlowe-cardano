@@ -42,7 +42,7 @@ nix develop
 cd marlowe-cardano/marlowe-runtime/doc/
 ```
 
-This should result in a new shell being opened, with a prompt starting with `[nix develop:`. To run this tutorial, simply copy and paste the commands in each cell of this notebook into the terminal containing the Nix shell.
+This should result in a new shell being opened, with a prompt starting with `[marlowe-cardano:`. To run this tutorial, simply copy and paste the commands in each cell of this notebook into the terminal containing the Nix shell.
 
 ## The ACTUS Principal at Maturity (PAM) Contract
 

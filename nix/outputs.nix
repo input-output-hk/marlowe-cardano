@@ -29,6 +29,8 @@ in
 
   # Extra flake outputs
   {
+    devShells.profiled = project.variants.profiled.devShell;
+
     inherit static allStatic;
 
     operables = repoRoot.nix.marlowe-cardano.deploy.operables;

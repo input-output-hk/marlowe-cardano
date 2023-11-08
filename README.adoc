@@ -93,7 +93,7 @@ If you use Nix, these tools are provided for you via `nix develop`, and you do *
 [[building-with-nix]]
 ==== How to build the Haskell packages and other artifacts with Nix
 
-Run `nix build .#ghc8107-marlowe-runtime-lib-marlowe-runtime` from the root to build the Marlowe library.
+Run `nix build .#marlowe-runtime` from the root to build the Marlowe library.
 
 See <<nix-build-attributes>> to find out what other attributes you can build.
 
@@ -121,71 +121,29 @@ If that fails you might have a corrupt cabal store, in which case you should `rm
 
 
 [[nix-advice]]
-== Nix
 
-[[iohk-binary-cache]]
-=== How to set up the IOHK binary caches
+This repository uses nix to provide the development and build environment.
 
-Adding the IOHK binary cache to your Nix configuration will speed up
-builds a lot, since many things will have been built already by our CI.
+If you know nix, simply run `nix develop` to enter the shell; if prompted, trust 
+the flake config values to enable access to our binary caches.   
 
-If you find you are building packages that are not defined in this
-repository, or if the build seems to take a very long time then you may
-not have this set up properly.
+The nix code is based on a template from the 
+link:https://github.com/input-output-hk/iogx/[IOGX flake]
+For instructions on how to install and configure nix (including how to enable 
+access to our binary caches), and how keep the flake inputs up to date, refer to 
+link:https://github.com/input-output-hk/iogx/blob/main/doc/api.md#flakenix[this section]
+of the IOGX manual.
 
-To set up the cache:
-
-. On non-NixOS, edit `/etc/nix/nix.conf` and add the following lines:
-+
-----
-substituters        = https://cache.iog.io https://iohk.cachix.org https://cache.nixos.org/
-trusted-public-keys = hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= iohk.cachix.org-1:DpRUyj7h7V830dp/i6Nti+NEO2/nhblbov/8MW7Rqoo= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
-----
-+
-[NOTE]
-====
-If you don't have an `/etc/nix/nix.conf` or don't want to edit it, you may add the `nix.conf` lines to `~/.config/nix/nix.conf` instead.
-You must be a https://nixos.org/nix/manual/#ssec-multi-user[trusted user] to do this.
-====
-. On NixOS, set the following NixOS options:
-+
-----
-nix.settings = {
-  substituters        = [ "https://cache.iog.io" "https://iohk.cachix.org" ];
-  trusted-public-keys = [ "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=" "iohk.cachix.org-1:DpRUyj7h7V830dp/i6Nti+NEO2/nhblbov/8MW7Rqoo=" ];
-};
-----
-
-
-=== Nix on macOS
-
-Nix on macOS can be a bit tricky. In particular, sandboxing is disabled by default, which can lead to strange failures.
-
-These days it should be safe to turn on sandboxing on macOS with a few exceptions. Consider setting the following Nix settings, in the same way as in xref:iohk-binary-cache[previous section]:
-
-----
-sandbox = true
-extra-sandbox-paths = /System/Library/Frameworks /System/Library/PrivateFrameworks /usr/lib /private/tmp /private/var/tmp /usr/bin/env
-----
-
-Changes to `/etc/nix/nix.conf` may require a restart of the nix daemon in order to take affect. Restart the nix daemon by running the following commands:
-
-----
-sudo launchctl stop org.nixos.nix-daemon
-sudo launchctl start org.nixos.nix-daemon
-----
 
 [[nix-build-attributes]]
 === Which attributes to use to build different artifacts
 
-link:./packages.nix[`packages.nix`] defines a package set with attributes for all the artifacts you can build from this repository.
-These can be built using `nix build`.
-For example:
+Run `list-flake-outputs` while inside the `nix develop` shell for a list of all the artifacts you can build from this repository
 
 == Docker compose
 
 There is a `docker compose` setup designed to give a local developer mode of the marlowe runtime components,
-configured in link:./nix/dev/compose.nix[`compose.nix`].
+configured in link:./nix/marlowe-cardano/compose.nix[`compose.nix`].
 
 Currently, this only supports Linux systems.
 
