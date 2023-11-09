@@ -63,6 +63,7 @@ import Language.Marlowe.Runtime.Core.Api (
  )
 import qualified Language.Marlowe.Runtime.Core.Gen ()
 import Language.Marlowe.Runtime.Core.ScriptRegistry (ReferenceScriptUtxo (..))
+import Language.Marlowe.Runtime.Transaction.Api (Destination (ToAddress))
 import Language.Marlowe.Runtime.Transaction.Constraints
 import qualified Language.Marlowe.Scripts.Types as V1
 import Ouroboros.Consensus.BlockchainTime (RelativeTime (..), mkSlotLength)
@@ -125,6 +126,7 @@ spec = do
               marloweVersion
               scriptCtx
               walletContext
+              (HelpersContext mempty "" mempty)
               constraints
           mViolations = violations marloweVersion scriptCtx utxos constraints <$> result
           theProperty :: Property
@@ -357,6 +359,7 @@ spec = do
       -- generation only tests with empty wallets!
       maxLovelace <- choose (0, 40_000_000)
       walletContext <- genWalletWithAsset marloweVersion constraints maxLovelace
+      let helpersContext = HelpersContext mempty "" mempty
 
       let extractCollat :: TxBodyContent BuildTx BabbageEra -> [Chain.Assets]
           extractCollat txBC = map Chain.assets selectedCollat
@@ -463,6 +466,7 @@ spec = do
               marloweVersion
               marloweContext
               walletContext
+              helpersContext
               txBodyContent
           selectResult :: Either String ()
           selectResult =
@@ -497,6 +501,7 @@ spec = do
     prop "selectCoins should increase the number of outputs by either 0 or exactly 1" \(SomeTxConstraints marloweVersion constraints) -> do
       scriptCtx <- genSimpleScriptContext marloweVersion constraints
       walletContext <- genWalletWithNuisance marloweVersion constraints 1_000_000_000
+      let helpersContext = HelpersContext mempty "" mempty
       txBodyContentBefore <- genBodyContentWith500AdaOutput
 
       let -- Get a non-ADA asset count from a wallet context
@@ -520,6 +525,7 @@ spec = do
                 marloweVersion
                 scriptCtx
                 walletContext
+                helpersContext
                 txBodyContentBefore
 
       pure $ case selectResult of
@@ -534,6 +540,7 @@ spec = do
     prop "selectCoins creates a balanceable tx" \(SomeTxConstraints marloweVersion constraints) -> do
       scriptCtx <- genSimpleScriptContext marloweVersion constraints
       walletContext <- genWalletWithNuisance marloweVersion constraints 1_000_000_000
+      let helpersContext = HelpersContext mempty "" mempty
       txBodyContentBefore <- genBodyContentWith500AdaOutput
 
       let walletHasValue :: WalletContext -> WalletValueDesc
@@ -613,6 +620,7 @@ spec = do
                 marloweVersion
                 scriptCtx
                 walletContext
+                helpersContext
                 txBodyContentBefore
 
       pure $ case selectResult of
@@ -728,6 +736,7 @@ spec = do
               let -- The following 4 definitions are for constructing a pure EraHistory,
                   -- which would normally come from the chain at runtime
 
+                  helpersContext = HelpersContext mempty "" mempty
                   eraHistory :: EraHistory CardanoMode
                   eraHistory =
                     EraHistory CardanoMode $
@@ -831,6 +840,7 @@ spec = do
                     MarloweV1
                     scriptCtx
                     walletContext
+                    helpersContext
                     txBodyContent of
                     Right _ -> label "balancing succeeded" True
                     Left (BalancingError err) ->
@@ -1137,7 +1147,7 @@ mustMintRoleTokenViolations MarloweV1 TxConstraints{..} TxBodyContent{..} =
                     (selectAsset value cardanoAssetId == 1)
                     ("Output quantity for token expected to equal 1, was: " <> show (selectAsset value cardanoAssetId))
                 , check
-                    (fromCardanoAddressInEra BabbageEra outAddress == address)
+                    (ToAddress (fromCardanoAddressInEra BabbageEra outAddress) == address)
                     ("Output sent to wrong address: " <> show outAddress)
                 ]
             [] -> pure "No outputs contain role token"
@@ -1411,7 +1421,7 @@ genV1MarloweConstraints = sized \n ->
   frequency
     [ (n, resize (n `div` 2) $ (<>) <$> genV1MarloweConstraints <*> genV1MarloweConstraints)
     , (1, pure mempty)
-    , (1, mustMintRoleToken <$> arbitrary <*> genMintScriptWitness <*> genRoleToken False <*> arbitrary)
+    , (1, mustMintRoleToken <$> arbitrary <*> genMintScriptWitness <*> genRoleToken False <*> (ToAddress <$> arbitrary))
     , (1, mustSpendRoleToken <$> genRoleToken True)
     , (1, mustPayToAddress <$> arbitrary <*> arbitrary)
     , (1, mustSendMarloweOutput <$> arbitrary <*> genDatum)

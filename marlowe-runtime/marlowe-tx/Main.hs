@@ -29,6 +29,7 @@ import Language.Marlowe.Runtime.Transaction (
   transaction,
  )
 import qualified Language.Marlowe.Runtime.Transaction.Query as Query
+import qualified Language.Marlowe.Runtime.Transaction.Query.Helper as Helper
 import qualified Language.Marlowe.Runtime.Transaction.Submit as Submit
 import Logging (RootSelector (..), renderRootSelectorOTel)
 import Network.Protocol.ChainSeek.Client (chainSeekClientPeer)
@@ -139,6 +140,15 @@ run Options{..} = flip runComponent_ () proc _ -> do
                 (runConnector chainSyncQueryConnector . request . GetUTxOs)
                 v
                 payouts
+          , loadHelpersContext = \v contractId -> do
+              networkId <- runConnector chainSyncQueryConnector $ request GetNetworkId
+              Helper.loadHelpersContext
+                ScriptRegistry.getCurrentScripts
+                ScriptRegistry.getScripts
+                networkId
+                chainSyncConnector
+                v
+                contractId
           , getCurrentScripts = ScriptRegistry.getCurrentScripts
           , analysisTimeout = analysisTimeout
           , mkRoleTokenMintingPolicy = mkCommandLineRoleTokenMintingPolicy mintingPolicyCmd

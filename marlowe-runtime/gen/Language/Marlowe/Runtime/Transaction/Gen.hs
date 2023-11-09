@@ -16,6 +16,7 @@ import Data.Semigroup (Semigroup (..))
 import Language.Marlowe.Runtime.ChainSync.Gen ()
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.Core.Gen (ArbitraryMarloweVersion)
+import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript)
 import Language.Marlowe.Runtime.History.Gen ()
 import Language.Marlowe.Runtime.Transaction.Api
 import qualified Language.Marlowe.Runtime.Transaction.Api as ContractCreatedInEra (ContractCreatedInEra (..))
@@ -102,16 +103,30 @@ instance Arbitrary RoleTokenMetadata where
       <*> arbitrary
   shrink = genericShrink
 
+instance Arbitrary HelperScript where
+  arbitrary = elements [minBound .. maxBound]
+  shrink = genericShrink
+
+instance Arbitrary Destination where
+  arbitrary =
+    frequency
+      [ (30, ToAddress <$> arbitrary)
+      , (2, pure ToSelf)
+      , (1, ToScript <$> arbitrary)
+      ]
+  shrink = genericShrink
+
 instance Arbitrary Mint where
   arbitrary = mkMint <$> arbitrary
   shrink = genericShrink
 
 instance Arbitrary RoleTokensConfig where
   arbitrary =
-    oneof
-      [ pure RoleTokensNone
-      , RoleTokensUsePolicy <$> arbitrary
-      , RoleTokensMint <$> arbitrary
+    frequency
+      [ (1, pure RoleTokensNone)
+      , (10, RoleTokensUsePolicy <$> arbitrary)
+      , (10, RoleTokensMint <$> arbitrary)
+      , (10, RoleTokensUsePolicyWithOpenRoles <$> arbitrary <*> arbitrary <*> arbitrary)
       ]
   shrink = genericShrink
 
@@ -130,6 +145,10 @@ instance Arbitrary LoadMarloweContextError where
       , ExtractCreationError <$> arbitrary
       , ExtractMarloweTransactionError <$> arbitrary
       ]
+  shrink = genericShrink
+
+instance Arbitrary LoadHelpersContextError where
+  arbitrary = HelperScriptNotFoundInRegistry <$> arbitrary
   shrink = genericShrink
 
 instance Arbitrary ConstraintError where
@@ -169,6 +188,7 @@ instance Arbitrary CreateError where
       , CreateLoadMarloweContextFailed <$> arbitrary
       , CreateBuildupFailed <$> arbitrary
       , pure CreateToCardanoError
+      , pure RequiresSingleThreadToken
       ]
   shrink = genericShrink
 
@@ -187,6 +207,7 @@ instance Arbitrary ApplyInputsError where
       , ApplyInputsConstraintError <$> arbitrary
       , pure ScriptOutputNotFound
       , ApplyInputsLoadMarloweContextFailed <$> arbitrary
+      , ApplyInputsLoadHelpersContextFailed <$> arbitrary
       , ApplyInputsConstraintsBuildupFailed <$> arbitrary
       , SlotConversionFailed <$> arbitrary
       , pure TipAtGenesis
@@ -199,6 +220,7 @@ instance Arbitrary WithdrawError where
     oneof
       [ WithdrawConstraintError <$> arbitrary
       , WithdrawEraUnsupported <$> arbitrary
+      , WithdrawLoadHelpersContextFailed <$> arbitrary
       , pure EmptyPayouts
       ]
   shrink = genericShrink

@@ -535,6 +535,7 @@ library tx
     Language.Marlowe.Runtime.Transaction.Chain
     Language.Marlowe.Runtime.Transaction.Constraints
     Language.Marlowe.Runtime.Transaction.Query
+    Language.Marlowe.Runtime.Transaction.Query.Helper
     Language.Marlowe.Runtime.Transaction.Safety
     Language.Marlowe.Runtime.Transaction.Server
     Language.Marlowe.Runtime.Transaction.Submit

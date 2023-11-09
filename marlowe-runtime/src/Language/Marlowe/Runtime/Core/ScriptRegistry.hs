@@ -4,7 +4,8 @@
 module Language.Marlowe.Runtime.Core.ScriptRegistry where
 
 import Cardano.Api (AsType (..), NetworkId (..), NetworkMagic (..), PlutusScript, PlutusScriptV2, SerialiseAsCBOR (..))
-import Data.Aeson (ToJSON (..))
+import Data.Aeson (FromJSON, FromJSONKey, ToJSON (..), ToJSONKey)
+import Data.Binary (Binary)
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16)
 import Data.Foldable (asum)
@@ -14,9 +15,11 @@ import Data.Maybe (fromJust)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Text as T
-import Language.Marlowe.Runtime.ChainSync.Api (Assets (..), Datum (..), ScriptHash, TxOutRef, fromBech32)
+import GHC.Generics (Generic)
+import Language.Marlowe.Runtime.ChainSync.Api (Assets (..), ScriptHash, TxOutRef, fromBech32)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
+import Network.Protocol.Codec.Spec (Variations)
 
 instance Ord NetworkId where
   compare Mainnet Mainnet = EQ
@@ -39,10 +42,16 @@ instance ToJSON ReferenceScriptUtxo where
 data MarloweScripts = MarloweScripts
   { marloweScript :: ScriptHash
   , payoutScript :: ScriptHash
+  , helperScripts :: Map HelperScript ScriptHash
   , marloweScriptUTxOs :: Map NetworkId ReferenceScriptUtxo
   , payoutScriptUTxOs :: Map NetworkId ReferenceScriptUtxo
+  , helperScriptUTxOs :: Map (HelperScript, NetworkId) ReferenceScriptUtxo
   }
   deriving (Show, Eq, Ord)
+
+data HelperScript = OpenRoleScript
+  deriving stock (Read, Show, Bounded, Enum, Eq, Ord, Generic)
+  deriving anyclass (Binary, FromJSON, FromJSONKey, ToJSON, ToJSONKey, Variations)
 
 mainnetNetworkId :: NetworkId
 mainnetNetworkId = Mainnet
@@ -69,6 +78,13 @@ currentV1Scripts =
   MarloweScripts
     { marloweScript = "d85fa9bc2bdfd97d5ebdbc5e3fc66f7476213c40c21b73b41257f09d"
     , payoutScript = "10ec7e02d25f5836b3e1098e0d4d8389e71d7a97a57aa737adc1d1fa"
+    , helperScripts =
+        Map.fromList
+          [
+            ( OpenRoleScript
+            , "b1d61d0c8a3c0f081a7ccebf0050e3f2c9751e82a4f3953a769dddfb"
+            )
+          ]
     , marloweScriptUTxOs =
         Map.fromList
           [
@@ -80,8 +96,8 @@ currentV1Scripts =
                       { address =
                           fromJust $
                             fromBech32 "addr1z9l4w7djneh0kss4drg2php6ynflsvmal7x3w5nrc95uvhz7e4q926apsvcd6kn33cpx95k8jsmrj7v0k62rczvz8urqrl2z0l"
-                      , assets = Assets 53581920 mempty
-                      , datum = Just $ Constr 0 []
+                      , assets = Assets 53_581_920 mempty
+                      , datum = Nothing
                       , datumHash = Nothing
                       }
                 , script = either (error . show) id $ deserialiseFromCBOR (AsPlutusScript AsPlutusScriptV2) currentV1MarloweScriptCBOR
@@ -94,8 +110,8 @@ currentV1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vz53mawjqyzly4zdd7yr97s4wkef0y3jtzfzvtc2xr4rv4skmmd6n"
-                      , assets = Assets 53461240 mempty
-                      , datum = Just $ Constr 0 []
+                      , assets = Assets 53_461_240 mempty
+                      , datum = Nothing
                       , datumHash = Nothing
                       }
                 , script = either (error . show) id $ deserialiseFromCBOR (AsPlutusScript AsPlutusScriptV2) currentV1MarloweScriptCBOR
@@ -108,8 +124,8 @@ currentV1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vz53mawjqyzly4zdd7yr97s4wkef0y3jtzfzvtc2xr4rv4skmmd6n"
-                      , assets = Assets 53461240 mempty
-                      , datum = Just $ Constr 0 []
+                      , assets = Assets 53_461_240 mempty
+                      , datum = Nothing
                       , datumHash = Nothing
                       }
                 , script = either (error . show) id $ deserialiseFromCBOR (AsPlutusScript AsPlutusScriptV2) currentV1MarloweScriptCBOR
@@ -127,8 +143,8 @@ currentV1Scripts =
                       { address =
                           fromJust $
                             fromBech32 "addr1z9l4w7djneh0kss4drg2php6ynflsvmal7x3w5nrc95uvhz7e4q926apsvcd6kn33cpx95k8jsmrj7v0k62rczvz8urqrl2z0l"
-                      , assets = Assets 12369700 mempty
-                      , datum = Just $ Constr 0 []
+                      , assets = Assets 12_369_700 mempty
+                      , datum = Nothing
                       , datumHash = Nothing
                       }
                 , script = either (error . show) id $ deserialiseFromCBOR (AsPlutusScript AsPlutusScriptV2) currentV1PayoutScriptCBOR
@@ -141,8 +157,8 @@ currentV1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vrkl3n9lfzzrkh7xsvg3apja297f5hsvdl8kawa8a5868mqecyjgc"
-                      , assets = Assets 12249020 mempty
-                      , datum = Just $ Constr 0 []
+                      , assets = Assets 12_249_020 mempty
+                      , datum = Nothing
                       , datumHash = Nothing
                       }
                 , script = either (error . show) id $ deserialiseFromCBOR (AsPlutusScript AsPlutusScriptV2) currentV1PayoutScriptCBOR
@@ -155,11 +171,28 @@ currentV1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vrkl3n9lfzzrkh7xsvg3apja297f5hsvdl8kawa8a5868mqecyjgc"
-                      , assets = Assets 12249020 mempty
-                      , datum = Just $ Constr 0 []
+                      , assets = Assets 12_249_020 mempty
+                      , datum = Nothing
                       , datumHash = Nothing
                       }
                 , script = either (error . show) id $ deserialiseFromCBOR (AsPlutusScript AsPlutusScriptV2) currentV1PayoutScriptCBOR
+                }
+            )
+          ]
+    , helperScriptUTxOs =
+        Map.fromList
+          [
+            ( (OpenRoleScript, preprodNetworkId)
+            , ReferenceScriptUtxo
+                { txOutRef = "5f325073371633102979e661077bc2c24a6e0cdc02b95f181a453e7a3ec2344f#0"
+                , txOut =
+                    Chain.TransactionOutput
+                      { address = fromJust $ fromBech32 "addr_test1vqxdw4rlu6krp9fwgwcnld6y84wdahg585vrdy67n5urp9qyts0y7"
+                      , assets = Assets 20_000_000 mempty
+                      , datum = Nothing
+                      , datumHash = Nothing
+                      }
+                , script = either (error . show) id $ deserialiseFromCBOR (AsPlutusScript AsPlutusScriptV2) currentV1OpenRoleScriptCBOR
                 }
             )
           ]
@@ -177,12 +210,19 @@ currentV1PayoutScriptCBOR =
     decodeBase16
       "590a48590a450100003232332232323232323232323232323232323322323232323232323232323233223232322323222323232533500110261326320263357389210350543500026323232350032232323335530151200135018501723500122333553018120013501b501a2350012233350012330354800000488cc0d80080048cc0d400520000013300f002001323500122222222222233355302112001335025223355302212001235001223355032002335530251200123500122335503500233350012330464800000488cc11c0080048cc11800520000013301d002001502c2350012235001222200300c350042200233501d335501f00233501d335501f0014800940794078cccd5cd19b8735573aa0089000119910919800801801191919191919191919191919191999ab9a3370e6aae754031200023333333333332222222222221233333333333300100d00c00b00a00900800700600500400300233502402535742a01866a04804a6ae85402ccd4090098d5d0a805199aa8143ae502735742a012666aa050eb9409cd5d0a80419a8120181aba150073335502803175a6ae854018c8c8c8cccd5cd19b8735573aa00490001199109198008018011919191999ab9a3370e6aae754009200023322123300100300233503b75a6ae854008c0f0d5d09aba2500223263203e33573807e07c07826aae7940044dd50009aba150023232323333573466e1cd55cea8012400046644246600200600466a076eb4d5d0a801181e1aba135744a004464c6407c66ae700fc0f80f04d55cf280089baa001357426ae8940088c98c80e8cd5ce01d81d01c09aab9e5001137540026ae854014cd4091d71aba150043335502802d200135742a006666aa050eb88004d5d0a80118179aba135744a004464c6406c66ae700dc0d80d04d5d1280089aba25001135744a00226ae8940044d5d1280089aba25001135744a00226ae8940044d5d1280089aba25001135573ca00226ea8004d5d0a802180f9aba135744a008464c6405066ae700a40a0098cccd5cd19b8735573a6ea80152000202723263202733573805004e04a6666ae68cdc39aab9d5006480008cd5406cdd71aba15006375c6ae84d5d1280311931901319ab9c027026024135573ca00226ea80044d55cf280089baa001223355300712001235001223355017002333500123355300b1200123500122335501b00235500d0010012233355500800e00200123355300b1200123500122335501b00235500c001001333555003009002001111222333553004120015012335530071200123500122335501700235500900133355300412001223500222533533355300c12001323350112233350032200200200135001220011233001225335002102a1001027235001223300a002005006100313350160040035013001335530071200123500122323355018003300100532001355028225335001135500a003221350022253353300c002008112223300200a0041300600300232001355021221122253350011002221330050023335530071200100500400111212223003004112122230010043200135501e221122533500115010221335011300400233553006120010040013200135501d221122253350011350032200122133350052200230040023335530071200100500400122333573466e3c00800407006c448cc004894cd40084004406c06848cd400888ccd400c88008008004d40048800448848cc00400c00848c88c008dd6000990009aa80c911999aab9f0012500a233500930043574200460066ae880080548c8c8cccd5cd19b8735573aa004900011991091980080180118069aba150023005357426ae8940088c98c8054cd5ce00b00a80989aab9e5001137540024646464646666ae68cdc39aab9d5004480008cccc888848cccc00401401000c008c8c8c8cccd5cd19b8735573aa0049000119910919800801801180b1aba15002335010015357426ae8940088c98c8068cd5ce00d80d00c09aab9e5001137540026ae854010ccd54021d728039aba150033232323333573466e1d4005200423212223002004357426aae79400c8cccd5cd19b875002480088c84888c004010dd71aba135573ca00846666ae68cdc3a801a400042444006464c6403866ae700740700680640604d55cea80089baa00135742a00466a018eb8d5d09aba2500223263201633573802e02c02826ae8940044d5d1280089aab9e500113754002266aa002eb9d6889119118011bab00132001355016223233335573e0044a010466a00e66aa012600c6aae754008c014d55cf280118021aba20030131357420022244004244244660020080062244246600200600424464646666ae68cdc3a800a40004642446004006600a6ae84d55cf280191999ab9a3370ea0049001109100091931900819ab9c01101000e00d135573aa00226ea80048c8c8cccd5cd19b875001480188c848888c010014c01cd5d09aab9e500323333573466e1d400920042321222230020053009357426aae7940108cccd5cd19b875003480088c848888c004014c01cd5d09aab9e500523333573466e1d40112000232122223003005375c6ae84d55cf280311931900819ab9c01101000e00d00c00b135573aa00226ea80048c8c8cccd5cd19b8735573aa004900011991091980080180118029aba15002375a6ae84d5d1280111931900619ab9c00d00c00a135573ca00226ea80048c8cccd5cd19b8735573aa002900011bae357426aae7940088c98c8028cd5ce00580500409baa001232323232323333573466e1d4005200c21222222200323333573466e1d4009200a21222222200423333573466e1d400d2008233221222222233001009008375c6ae854014dd69aba135744a00a46666ae68cdc3a8022400c4664424444444660040120106eb8d5d0a8039bae357426ae89401c8cccd5cd19b875005480108cc8848888888cc018024020c030d5d0a8049bae357426ae8940248cccd5cd19b875006480088c848888888c01c020c034d5d09aab9e500b23333573466e1d401d2000232122222223005008300e357426aae7940308c98c804ccd5ce00a00980880800780700680600589aab9d5004135573ca00626aae7940084d55cf280089baa0012323232323333573466e1d400520022333222122333001005004003375a6ae854010dd69aba15003375a6ae84d5d1280191999ab9a3370ea0049000119091180100198041aba135573ca00c464c6401866ae700340300280244d55cea80189aba25001135573ca00226ea80048c8c8cccd5cd19b875001480088c8488c00400cdd71aba135573ca00646666ae68cdc3a8012400046424460040066eb8d5d09aab9e500423263200933573801401200e00c26aae7540044dd500089119191999ab9a3370ea00290021091100091999ab9a3370ea00490011190911180180218031aba135573ca00846666ae68cdc3a801a400042444004464c6401466ae7002c02802001c0184d55cea80089baa0012323333573466e1d40052002200923333573466e1d40092000200923263200633573800e00c00800626aae74dd5000a4c24002921035054310022333573466e2400800401000c48800848800488cdc0001000889191800800911980198010010009"
 
+currentV1OpenRoleScriptCBOR :: ByteString
+currentV1OpenRoleScriptCBOR =
+  either (error . T.unpack) id $
+    decodeBase16
+      "59113a59113701000033232332232332232323233223233223232332232323232323232323232323232323232323222223232335500f25335001102b132632026335738921035054350002b353333573466e1cd55cea80124000466442466002006004646464646464646464646464646666ae68cdc39aab9d500c480008cccccccccccc88888888888848cccccccccccc00403403002c02802402001c01801401000c008c8c080dd60009aba1500c35742a0166ae854028d5d0a8049aba1500835742a00e6ae854018d5d0a8029aba150043335502001a200135742a0066ae854008d5d09aba2500223263203433573804c07206426ae8940044d5d1280089aba25001135744a00226ae8940044d5d1280089aba25001135744a00226ae8940044d5d1280089aab9e5001137540026ae854008c030d5d09aba25002232632026335738030056048446a004464444444444446666a01c405a405a405a46464646464a66a004200220646400264666ae68cdc4800a40000640666464646464600200a640026aa0864466a0029000111a80111299a999ab9a3371e0040120780762600e0022600c006640026aa0844466a0029000111a80111299a999ab9a3371e00400e07607420022600c0066eb806cd5401488008cd5408c8d4004888800cc8d4004880054044cd5408894cd4004840cc40c4ccd54068c080480048cd40048c00c00488c0100094cd4c8c8c004024c8004d540fc894cd4004540f8884d4008894cd4cccd40088cccd402094ccccccd4008854ccccccd400884cc0980080048840f0840ec40e840e88840f08840f08854ccccccd400c840f08854cd4cc0a00100084cc0a800c00440f4840f040ec40ec8840f48840f4854ccccccd4008840ec8840f084cc09800800440e840e88840f08840f054ccccccd4004840e88840ec840e840e840e48840ec8840ec54ccccccd4004840e88840ec840e840e440e88840ec8840ec8854ccccccd400c840f08840f4840f040ec40ec8854cd4ccd5cd19b8f00400203e03d13302a003001103d22103d2215333333350032103c22103d2103c103b103b22103d2215335333573466e3c0100080f80f44cc0a400c00440f480e480e480e48cccd402080e48cc09800800480e480e48cccd402080e480e48cc09000800480e48cccd402080e480e480e48cc0a80080044d410c0044c01800cc07cd5404088008854cd4ccccccd5d20009281e9281e918169bac0022503d2503d03e210011616253335001221350022233500122036233022001500722221335003220362330220015007103013550012200115335335501f20013200135533533355017301d12001235001223302100200400e21001162235001222200316221350022232533500413001498884d4008894cd40044c015262213500222533500315335007153353302700b489001335502f00600213009498884c02d26221300b49894cd400858884d4008894cd400c54cd4020588854cd40044cd540b40240108858885854cd4ccd54028c040480048d400488c8c8d400888d400c88c8cd40148cd401094cd4ccd5cd19b8f00200102d02c15003102c202c2335004202c25335333573466e3c0080040b40b05400c40b054cd400c854cd400884cc05800800440a854cd4004840a840a8cc098c0b003540bcd4004888801000484004584d55cf280089baa001112223335500332123300122533500221003100100250242533530030011350260011502500122335002233500223350022335002233008002001201b2335002201b23300800200122201b222335004201b2225335333573466e1c01800c07807454cd4ccd5cd19b8700500201e01d133009004001101d101d22333573466e1c00800405c05888ccd5cd19b8f002001016015232323333573466e1d400520062321222230040053232323232323333573466e1d4005200c21222222200323333573466e1d4009200a21222222200423333573466e1d400d2008233221222222233001009008375c6ae854014dd69aba135744a00a46666ae68cdc3a8022400c4664424444444660040120106eb8d5d0a8039bae357426ae89401c8cccd5cd19b875005480108cc8848888888cc018024020c060d5d0a8049bae357426ae8940248cccd5cd19b875006480088c848888888c01c020c064d5d09aab9e500b23333573466e1d401d2000232122222223005008301a357426aae7940308c98c80accd5ce00e81801481401381301281201189aab9d5004135573ca00626aae7940084d55cf280089baa001357426aae79400c8cccd5cd19b875002480108c848888c008014c038d5d09aab9e500423333573466e1d400d2002230073011357426aae7940148cccd5cd19b875004480008c848888c00c014dd71aba135573ca00c464c6404266ae7004c09807c0780740704d55cea80089baa00121222230010053200135501e2211222533500113500322001221333500522002300400233355300712001005004001225335333573466e3cd400888008d4004880080480444ccd5cd19b87350022200135001220010120111011112230020013200135501b2233335573e0024a01a466a0186464646666ae68cdc39aab9d5002480008cc8848cc00400c008c034d5d0a80119191919191999ab9a3370e6aae75401120002333322221233330010050040030023232323333573466e1cd55cea80124000466040602c6ae854008cd4050054d5d09aba2500223263202633573803005604826aae7940044dd50009aba150043335500e75c66aa01ceb9d69aba150033232323333573466e1d4005200423212223002004357426aae79400c8cccd5cd19b875002480088c84888c004010dd71aba135573ca00846666ae68cdc3a801a400042444006464c6405066ae700680b40980940904d55cea80089baa00135742a00466a020eb8d5d09aba2500223263202233573802804e04026ae8940044d5d1280089aab9e5001137540026ae84d5d1280111931900e19ab9c00e02101a135573ca00226ea8004d5d080118019aba200201c112232230023756002640026aa03844646666aae7c0089403c8cd4038cd5401cc018d55cea80118029aab9e500230043574400603c26ae84004448848cc00400c008488c8c8cccd5cd19b875001480008d406cc014d5d09aab9e500323333573466e1d400920022501b23263201833573801403a02c02a26aae7540044dd50009191919191999ab9a3370ea002900111998091bad35742a0086eb4d5d0a8019bad357426ae89400c8cccd5cd19b875002480008c050c020d5d09aab9e500623263201833573801403a02c02a26aae75400c4d5d1280089aab9e500113754002464646666ae68cdc3a800a4004460286eb8d5d09aab9e500323333573466e1d4009200023016375c6ae84d55cf280211931900a99ab9c00701a013012135573aa00226ea80048c8c8cccd5cd19b8735573aa004900011991091980080180119191999ab9a3370e6aae75400520002375c6ae84d55cf280111931900b19ab9c00801b014137540026ae854008dd69aba135744a004464c6402666ae700140600444d55cf280089baa00149010350543100320013550132233335573e00246a028a00a4a66a64646464646666666ae900148cccd5cd19b875002480088cccd55cfa8029280d91999aab9f50052501c233335573e6ae89401894cd4c040d5d0a80410a99a980e9aba150082135020122330010040031501e1501d2501d01e01d01c23333573466e1d400d2000233335573ea00c4a03846666aae7cd5d128039299a98081aba15008213501f12230020031501d2501d01e01d2501b0160152501925019250192501901a135573aa00626ae8940044d55cf280089baa0013574200442a66a60086ae8800c84d4058cd4018008004540505404c0504488008488488cc00401000c8c8c8c8c8c8c8c8ccccccd5d200411999ab9a3370ea004900211999aab9f500823501912220012501801923333573466e1d400d2002233335573ea0124a03246666aae7d4018940688cccd55cf9aba2500725335323232323333333574800846666ae68cdc39aab9d5004480008cccd55cfa8021281111999aab9f500425023233335573e6ae89401494cd4c08cd5d0a80390a99a980c9aba15007213502712330010030021502515024250240250240232502101c25020250202502025020021135744a00226aae7940044dd50009aba1500c215335301635742a012426a03c24446600600a0082a0382a0364a03603803603446666ae68cdc3a8022400046666aae7d4028940688cccd55cfa8051280d91999aab9f500a2501c233335573ea0144a03a46666aae7cd5d128059299a98091aba1500f215335301335742a01e42a66a646464646666666ae900108cccd5cd19b8735573aa008900011999aab9f500425027233335573ea0084a05046666aae7cd5d128029299a98141aba15007215335302935742a00e426a05824660020060042a0542a0524a0520540520504a04c0424a04a4a04a4a04a4a04a04c26ae8940044d55cf280089baa00135742a01e42a66a60366ae85403c84d408c4888cccc00801c01801401054084540805407c540789407807c07807407006c9406405004c0489405894058940589405805c4d55cea80309aba25004135744a00226ae8940044d5d1280089aab9e5001137540024646464646666666ae900148cccd5cd19b875002480088cccd55cfa8029280a11999aab9f35744a00c4a66a60286ae85401c84d405c488c00400c54054940540580548cccd5cd19b875003480008cccd55cfa8031280a91999aab9f500625016233335573e6ae89401c94cd4c8c8c8c8ccccccd5d200211999ab9a3370ea004900111999aab9f500423501f0142501e01f23333573466e1d400d2000233335573ea00a46a0400284a03e0404a03c0320304a0384a0384a0384a03803a26aae7540084d55cf280089baa00135742a01242a66a646464646666666ae900108cccd5cd19b8735573aa008900011999aab9f50042501f233335573ea0084a04046666aae7cd5d128029299a980e1aba15007215335323232323333333574800846666ae68cdc3a8012400046666aae7d4010940a48cccd55cf9aba25005253353232323232323333333574800c46666ae68cdc3a8012400446666aae7d4018940cc8cccd55cfa8031281a11999aab9f500625035233335573e6ae89401c94cd4c0c0d5d0a80510a99a98189aba1500a215335303235742a014426a0746660620060040022a0702a06e2a06c4a06c06e06c06a06846666ae68cdc3a801a400046666aae7d401c940d08cccd55cf9aba2500825335303035742a012426a06e605e0022a06a4a06a06c06a4a06605c05a4a0624a0624a0624a06206426aae7540104d5d1280089aba25001135573ca00226ea8004d5d0a803109a8161a8160008a8151281501581511999ab9a3370ea006900111999aab9f500523502b502a2502a02b2502902402325027250272502725027028135573aa00426aae7940044dd50009aba1500721350243301a0020011502215021250210220210202501e0192501d2501d2501d2501d01e135744a00226aae7940044dd50009aba15009213501a122330020040031501815017250170180170162501400f00e25012250122501225012013135573aa00626ae8940044d55cf280089baa001122002122001221233001003002212230020032221223330010050040032333333357480024a0104a0104a01046a0126eb4008940200248c8c8c8ccccccd5d200211999ab9a3370ea004900111999aab9f50042500c233335573e6ae89401494cd4c030d5d0a803109a80798058008a8069280680700691999ab9a3370ea006900011999aab9f50052500d233335573e6ae89401894cd4c034d5d0a803909a80818068008a80712807007807128060038031280512805128051280500589aab9d5002135573ca00226ea80052621223002003212230010032333333357480024a0064a0064a0064a00646a0086eb800801048488c00800c448800448004448c8c00400488cc00cc00800800522011cd85fa9bc2bdfd97d5ebdbc5e3fc66f7476213c40c21b73b41257f09d0001"
+
 -- | The scripts which addressed the findings of the Marlowe V1 audit.
 postAuditV1Scripts :: MarloweScripts
 postAuditV1Scripts =
   MarloweScripts
     { marloweScript = "2ed2631dbb277c84334453c5c437b86325d371f0835a28b910a91a6e"
     , payoutScript = "e165610232235bbbbeff5b998b233daae42979dec92a6722d9cda989"
+    , helperScripts = mempty
     , marloweScriptUTxOs =
         Map.fromList
           [
@@ -194,8 +234,8 @@ postAuditV1Scripts =
                       { address =
                           fromJust $
                             fromBech32 "addr1z9l4w7djneh0kss4drg2php6ynflsvmal7x3w5nrc95uvhz7e4q926apsvcd6kn33cpx95k8jsmrj7v0k62rczvz8urqrl2z0l"
-                      , assets = Assets 54021540 mempty
-                      , datum = Just $ Constr 0 []
+                      , assets = Assets 54_021_540 mempty
+                      , datum = Nothing
                       , datumHash = Nothing
                       }
                 , script = either (error . show) id $ deserialiseFromCBOR (AsPlutusScript AsPlutusScriptV2) postAuditV1MarloweScriptCBOR
@@ -208,8 +248,8 @@ postAuditV1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vpyr8478g2lkhte6v240adhumqn0e5dfqa6nt0txp3gc0mgd5h2fl"
-                      , assets = Assets 53900860 mempty
-                      , datum = Just $ Constr 0 []
+                      , assets = Assets 53_900_860 mempty
+                      , datum = Nothing
                       , datumHash = Nothing
                       }
                 , script = either (error . show) id $ deserialiseFromCBOR (AsPlutusScript AsPlutusScriptV2) postAuditV1MarloweScriptCBOR
@@ -222,8 +262,8 @@ postAuditV1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vpyr8478g2lkhte6v240adhumqn0e5dfqa6nt0txp3gc0mgd5h2fl"
-                      , assets = Assets 53900860 mempty
-                      , datum = Just $ Constr 0 []
+                      , assets = Assets 53_900_860 mempty
+                      , datum = Nothing
                       , datumHash = Nothing
                       }
                 , script = either (error . show) id $ deserialiseFromCBOR (AsPlutusScript AsPlutusScriptV2) postAuditV1MarloweScriptCBOR
@@ -241,8 +281,8 @@ postAuditV1Scripts =
                       { address =
                           fromJust $
                             fromBech32 "addr1z9l4w7djneh0kss4drg2php6ynflsvmal7x3w5nrc95uvhz7e4q926apsvcd6kn33cpx95k8jsmrj7v0k62rczvz8urqrl2z0l"
-                      , assets = Assets 13020510 mempty
-                      , datum = Just $ Constr 0 []
+                      , assets = Assets 13_020_510 mempty
+                      , datum = Nothing
                       , datumHash = Nothing
                       }
                 , script = either (error . show) id $ deserialiseFromCBOR (AsPlutusScript AsPlutusScriptV2) postAuditV1PayoutScriptCBOR
@@ -255,8 +295,8 @@ postAuditV1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vrmgtjj95nyvqlw4j2apvztfpdt0mv9crnhegsp5th550ug9l7tlx"
-                      , assets = Assets 12899830 mempty
-                      , datum = Just $ Constr 0 []
+                      , assets = Assets 12_899_830 mempty
+                      , datum = Nothing
                       , datumHash = Nothing
                       }
                 , script = either (error . show) id $ deserialiseFromCBOR (AsPlutusScript AsPlutusScriptV2) postAuditV1PayoutScriptCBOR
@@ -269,14 +309,15 @@ postAuditV1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vrmgtjj95nyvqlw4j2apvztfpdt0mv9crnhegsp5th550ug9l7tlx"
-                      , assets = Assets 12899830 mempty
-                      , datum = Just $ Constr 0 []
+                      , assets = Assets 12_899_830 mempty
+                      , datum = Nothing
                       , datumHash = Nothing
                       }
                 , script = either (error . show) id $ deserialiseFromCBOR (AsPlutusScript AsPlutusScriptV2) postAuditV1PayoutScriptCBOR
                 }
             )
           ]
+    , helperScriptUTxOs = mempty
     }
 
 -- | The semantics validator script which addressed the findings of the Marlowe V1 audit.
@@ -299,6 +340,7 @@ auditV1Scripts =
   MarloweScripts
     { marloweScript = "6a9391d6aa51af28dd876ebb5565b69d1e83e5ac7861506bd29b56b0"
     , payoutScript = "49076eab20243dc9462511fb98a9cfb719f86e9692288139b7c91df3"
+    , helperScripts = mempty
     , marloweScriptUTxOs =
         Map.fromList
           [
@@ -310,8 +352,8 @@ auditV1Scripts =
                       { address =
                           fromJust $
                             fromBech32 "addr1z9l4w7djneh0kss4drg2php6ynflsvmal7x3w5nrc95uvhz7e4q926apsvcd6kn33cpx95k8jsmrj7v0k62rczvz8urqrl2z0l"
-                      , assets = Assets 54922330 mempty
-                      , datum = Just $ Constr 0 []
+                      , assets = Assets 54_922_330 mempty
+                      , datum = Nothing
                       , datumHash = Nothing
                       }
                 , script = either (error . show) id $ deserialiseFromCBOR (AsPlutusScript AsPlutusScriptV2) auditV1MarloweScriptCBOR
@@ -324,8 +366,8 @@ auditV1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vrw0tuh8l95thdqr65dmpcfqnmcw0en7v7vhgegck7gzqgswa07sw"
-                      , assets = Assets 54801650 mempty
-                      , datum = Just $ Constr 0 []
+                      , assets = Assets 54_801_650 mempty
+                      , datum = Nothing
                       , datumHash = Nothing
                       }
                 , script = either (error . show) id $ deserialiseFromCBOR (AsPlutusScript AsPlutusScriptV2) auditV1MarloweScriptCBOR
@@ -338,8 +380,8 @@ auditV1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vrw0tuh8l95thdqr65dmpcfqnmcw0en7v7vhgegck7gzqgswa07sw"
-                      , assets = Assets 54801650 mempty
-                      , datum = Just $ Constr 0 []
+                      , assets = Assets 54_801_650 mempty
+                      , datum = Nothing
                       , datumHash = Nothing
                       }
                 , script = either (error . show) id $ deserialiseFromCBOR (AsPlutusScript AsPlutusScriptV2) auditV1MarloweScriptCBOR
@@ -357,8 +399,8 @@ auditV1Scripts =
                       { address =
                           fromJust $
                             fromBech32 "addr1z9l4w7djneh0kss4drg2php6ynflsvmal7x3w5nrc95uvhz7e4q926apsvcd6kn33cpx95k8jsmrj7v0k62rczvz8urqrl2z0l"
-                      , assets = Assets 12555030 mempty
-                      , datum = Just $ Constr 0 []
+                      , assets = Assets 12_555_030 mempty
+                      , datum = Nothing
                       , datumHash = Nothing
                       }
                 , script = either (error . show) id $ deserialiseFromCBOR (AsPlutusScript AsPlutusScriptV2) auditV1PayoutScriptCBOR
@@ -371,8 +413,8 @@ auditV1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vpa36uuyf95kxpcleldsncedlhjru6vdmh2vnpkdrsz4u6cll9zas"
-                      , assets = Assets 12434350 mempty
-                      , datum = Just $ Constr 0 []
+                      , assets = Assets 12_434_350 mempty
+                      , datum = Nothing
                       , datumHash = Nothing
                       }
                 , script = either (error . show) id $ deserialiseFromCBOR (AsPlutusScript AsPlutusScriptV2) auditV1PayoutScriptCBOR
@@ -385,14 +427,15 @@ auditV1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vpa36uuyf95kxpcleldsncedlhjru6vdmh2vnpkdrsz4u6cll9zas"
-                      , assets = Assets 12434350 mempty
-                      , datum = Just $ Constr 0 []
+                      , assets = Assets 12_434_350 mempty
+                      , datum = Nothing
                       , datumHash = Nothing
                       }
                 , script = either (error . show) id $ deserialiseFromCBOR (AsPlutusScript AsPlutusScriptV2) auditV1PayoutScriptCBOR
                 }
             )
           ]
+    , helperScriptUTxOs = mempty
     }
 
 -- | The semantics validator script on which the Marlowe V1 audit was performed.

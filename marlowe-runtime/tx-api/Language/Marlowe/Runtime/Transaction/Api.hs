@@ -21,8 +21,10 @@ module Language.Marlowe.Runtime.Transaction.Api (
   InputsAppliedInEra (..),
   JobId (..),
   LoadMarloweContextError (..),
+  LoadHelpersContextError (..),
   MarloweTxCommand (..),
   Mint (unMint),
+  Destination (..),
   NFTMetadataFile (..),
   RoleTokenMetadata (..),
   RoleTokensConfig (..),
@@ -110,8 +112,10 @@ import Language.Marlowe.Runtime.ChainSync.Api (
  )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
+import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript)
 import Language.Marlowe.Runtime.History.Api (ExtractCreationError, ExtractMarloweTransactionError)
 import Network.HTTP.Media (MediaType)
+
 import Network.Protocol.Codec.Spec (Variations (..), varyAp)
 import Network.Protocol.Handshake.Types (HasSignature (..))
 import Network.Protocol.Job.Types
@@ -263,18 +267,26 @@ encodeRoleTokenMetadata = encodeNFTMetadataDetails
     encodeText :: Text -> Metadata
     encodeText = MetadataList . fmap MetadataText . Text.chunksOf 64
 
+data Destination
+  = ToAddress Address
+  | ToSelf
+  | ToScript HelperScript
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving anyclass (Binary, ToJSON, Variations)
+
 -- | Non empty mint request.
-newtype Mint = Mint {unMint :: Map TokenName (Address, Maybe RoleTokenMetadata)}
+newtype Mint = Mint {unMint :: Map TokenName (Destination, Maybe RoleTokenMetadata)}
   deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (Binary, Semigroup, Monoid, ToJSON, Variations)
 
-mkMint :: NonEmpty (TokenName, (Address, Maybe RoleTokenMetadata)) -> Mint
+mkMint :: NonEmpty (TokenName, (Destination, Maybe RoleTokenMetadata)) -> Mint
 mkMint = Mint . Map.fromList . NonEmpty.toList
 
 data RoleTokensConfig
   = RoleTokensNone
   | RoleTokensUsePolicy PolicyId
   | RoleTokensMint Mint
+  | RoleTokensUsePolicyWithOpenRoles PolicyId TokenName [TokenName]
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary, ToJSON, Variations)
 
@@ -871,6 +883,7 @@ data ConstraintError
   | MissingMarloweInput
   | PayoutNotFound TxOutRef
   | InvalidPayoutDatum TxOutRef (Maybe Chain.Datum)
+  | InvalidHelperDatum TxOutRef (Maybe Chain.Datum)
   | InvalidPayoutScriptAddress TxOutRef Address
   | CalculateMinUtxoFailed String
   | CoinSelectionFailed String
@@ -880,6 +893,7 @@ data ConstraintError
   | PayoutOutputInWithdraw
   | PayoutInputInCreateOrApply
   | UnknownPayoutScript ScriptHash
+  | HelperScriptNotFound Chain.TokenName
   deriving (Generic)
 
 deriving instance Eq ConstraintError
@@ -893,12 +907,14 @@ data CreateError
   = CreateEraUnsupported AnyCardanoEra
   | CreateConstraintError ConstraintError
   | CreateLoadMarloweContextFailed LoadMarloweContextError
+  | CreateLoadHelpersContextFailed LoadHelpersContextError
   | CreateBuildupFailed CreateBuildupError
   | CreateToCardanoError
   | CreateSafetyAnalysisError String -- FIXME: This is a placeholder, pending design of error handling for safety analysis.
   | CreateContractNotFound
   | ProtocolParamNoUTxOCostPerByte
   | InsufficientMinAdaDeposit Lovelace
+  | RequiresSingleThreadToken
   deriving (Generic)
 
 deriving instance Eq CreateError
@@ -920,6 +936,7 @@ data ApplyInputsError
   | ApplyInputsConstraintError ConstraintError
   | ScriptOutputNotFound
   | ApplyInputsLoadMarloweContextFailed LoadMarloweContextError
+  | ApplyInputsLoadHelpersContextFailed LoadHelpersContextError
   | ApplyInputsConstraintsBuildupFailed ApplyInputsConstraintsBuildupError
   | SlotConversionFailed String
   | TipAtGenesis
@@ -942,6 +959,7 @@ data WithdrawError
   = WithdrawEraUnsupported AnyCardanoEra
   | WithdrawConstraintError ConstraintError
   | EmptyPayouts
+  | WithdrawLoadHelpersContextFailed LoadHelpersContextError
   deriving (Generic)
 
 deriving instance Eq WithdrawError
@@ -958,6 +976,16 @@ data LoadMarloweContextError
   | PayoutScriptNotPublished ScriptHash
   | ExtractCreationError ExtractCreationError
   | ExtractMarloweTransactionError ExtractMarloweTransactionError
+  deriving (Eq, Show, Ord, Generic)
+  deriving anyclass (Binary, ToJSON, Variations)
+
+data LoadHelpersContextError
+  = HelperScriptNotFoundInRegistry HelperScript
+  | LoadHelpersContextErrorNotFound TxId
+  | LoadHelpersContextErrorVersionMismatch SomeMarloweVersion
+  | ContractNotExtractedError ExtractCreationError
+  | RollForwardToGenesisError
+  | LoadHelpersContextTxOutRefNotFoundError TxOutRef
   deriving (Eq, Show, Ord, Generic)
   deriving anyclass (Binary, ToJSON, Variations)
 
@@ -1139,7 +1167,7 @@ instance Variations V1.TransactionError
 instance Variations V1.TransactionWarning
 instance Variations V1.Payment
 instance Variations V1.TransactionOutput
-instance Variations Safety.Transaction
+instance (Variations a) => Variations (Safety.Transaction a)
 instance Variations SatInt
 instance Variations ExCPU
 instance Variations ExMemory

@@ -6,6 +6,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Language.Marlowe.Runtime.Transaction.Server where
 
@@ -103,11 +104,13 @@ import Language.Marlowe.Runtime.Transaction.Api (
   ContractCreated (..),
   ContractCreatedInEra (..),
   CreateError (..),
+  Destination (ToSelf),
   InputsApplied (..),
   InputsAppliedInEra (..),
   JobId (..),
   MarloweTxCommand (..),
-  RoleTokensConfig,
+  Mint (unMint),
+  RoleTokensConfig (..),
   SubmitError (..),
   SubmitStatus (..),
   WalletAddresses (..),
@@ -120,6 +123,7 @@ import Language.Marlowe.Runtime.Transaction.BuildConstraints (
   buildApplyInputsConstraints,
   buildCreateConstraints,
   buildWithdrawConstraints,
+  initialMarloweState,
  )
 import Language.Marlowe.Runtime.Transaction.Constraints (MarloweContext (..), SolveConstraints, TxConstraints)
 import qualified Language.Marlowe.Runtime.Transaction.Constraints as Constraints
@@ -130,11 +134,13 @@ import Language.Marlowe.Runtime.Transaction.Query (
   lookupMarloweScriptUtxo,
   lookupPayoutScriptUtxo,
  )
+import Language.Marlowe.Runtime.Transaction.Query.Helper (LoadHelpersContext)
 import Language.Marlowe.Runtime.Transaction.Safety (
   Continuations,
   checkContract,
   checkTransactions,
   minAdaUpperBound,
+  mkAdjustMinimumUtxo,
   noContinuations,
  )
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob (..), SubmitJobStatus (..))
@@ -175,6 +181,7 @@ data TransactionServerDependencies m = TransactionServerDependencies
   , loadWalletContext :: LoadWalletContext m
   , loadMarloweContext :: LoadMarloweContext m
   , loadPayoutContext :: LoadPayoutContext m
+  , loadHelpersContext :: LoadHelpersContext m
   , chainSyncQueryConnector :: Connector (QueryClient ChainSyncQuery) m
   , contractQueryConnector :: Connector (QueryClient ContractRequest) m
   , getTip :: STM Chain.ChainPoint
@@ -229,6 +236,7 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                       solveConstraints
                       protocolParameters
                       loadWalletContext
+                      loadHelpersContext
                       networkId
                       mStakeCredential
                       version
@@ -250,6 +258,7 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                         solveConstraints
                         loadWalletContext
                         loadMarloweContext
+                        loadHelpersContext
                         version
                         addresses
                         contractId
@@ -264,6 +273,7 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                       solveConstraints
                       loadWalletContext
                       loadPayoutContext
+                      loadHelpersContext
                       version
                       addresses
                       payouts
@@ -294,6 +304,7 @@ execCreate
   -> SolveConstraints
   -> ProtocolParameters
   -> LoadWalletContext m
+  -> LoadHelpersContext m
   -> NetworkId
   -> Maybe Chain.StakeCredential
   -> MarloweVersion v
@@ -304,9 +315,19 @@ execCreate
   -> Either (Contract v) DatumHash
   -> NominalDiffTime
   -> m (ServerStCmd MarloweTxCommand Void CreateError (ContractCreated v) m ())
-execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts solveConstraints protocolParameters loadWalletContext networkId mStakeCredential version addresses roleTokens metadata optMinAda contract analysisTimeout = execExceptT do
+execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts solveConstraints protocolParameters loadWalletContext loadHelpersContext networkId mStakeCredential version addresses roleTokens metadata optMinAda contract analysisTimeout = execExceptT do
   referenceInputsSupported <- referenceInputsSupportedInEra (CreateEraUnsupported $ AnyCardanoEra era) era
+  let adjustMinUtxo = mkAdjustMinimumUtxo referenceInputsSupported protocolParameters version
   walletContext <- lift $ loadWalletContext addresses
+  (_, dummyState) <-
+    except $
+      initialMarloweState
+        adjustMinUtxo
+        version
+        roleTokens
+        "00000000000000000000000000000000000000000000000000000000"
+        (fromMaybe 0 optMinAda)
+        walletContext
   (contract', continuations) <- case contract of
     Right hash -> case version of
       MarloweV1 -> noteT CreateContractNotFound do
@@ -318,7 +339,8 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
   computedMinAdaDeposit <-
     except $
       note ProtocolParamNoUTxOCostPerByte $
-        fromCardanoLovelace <$> minAdaUpperBound protocolParameters version contract' continuations
+        fromCardanoLovelace
+          <$> minAdaUpperBound referenceInputsSupported protocolParameters version dummyState contract' continuations
   let minAda = fromMaybe computedMinAdaDeposit optMinAda
   unless (minAda >= computedMinAdaDeposit) $ throwE $ InsufficientMinAdaDeposit computedMinAdaDeposit
   ((datum, assets, rolesCurrency), constraints) <-
@@ -331,6 +353,7 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
         roleTokens
         metadata
         minAda
+        adjustMinUtxo
         contract'
   let scripts@MarloweScripts{..} = getCurrentScripts version
       stakeReference = maybe NoStakeAddress StakeAddressByValue mCardanoStakeCredential
@@ -361,6 +384,20 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
         , marloweScriptHash = marloweScript
         , payoutScriptHash = payoutScript
         }
+  helpersContext <-
+    withExceptT CreateLoadHelpersContextFailed $
+      ExceptT $
+        loadHelpersContext version $
+          Left (rolesCurrency, roleTokens)
+  threadRole <-
+    case roleTokens of
+      RoleTokensMint (unMint -> mint) ->
+        case Set.toList . Map.keysSet $ Map.filter ((== ToSelf) . fst) mint of
+          [] -> pure Nothing
+          [role] -> pure $ Just role
+          _ -> throwE RequiresSingleThreadToken
+      RoleTokensUsePolicyWithOpenRoles _ role _ -> pure $ Just role
+      _ -> pure Nothing
   let -- Fast analysis of safety: examines bounds for transactions.
       contractSafetyErrors = checkContract networkId roleTokens version contract' continuations
       limitAnalysisTime =
@@ -377,16 +414,19 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
               referenceInputsSupported
               version
               marloweContext
+              helpersContext
               rolesCurrency
+              threadRole
               (changeAddress addresses)
-              (toInteger minAda)
+              assets
+              adjustMinUtxo
               contract'
               continuations
           )
   txBody <-
     except $
       first CreateConstraintError $
-        solveConstraints referenceInputsSupported version (Left marloweContext) walletContext constraints
+        solveConstraints referenceInputsSupported version (Left marloweContext) walletContext helpersContext constraints
   let marloweScriptAddress = Constraints.marloweAddress marloweContext
   pure $
     ContractCreated referenceInputsSupported $
@@ -457,6 +497,7 @@ execApplyInputs
   -> SolveConstraints
   -> LoadWalletContext m
   -> LoadMarloweContext m
+  -> LoadHelpersContext m
   -> MarloweVersion v
   -> WalletAddresses
   -> ContractId
@@ -474,6 +515,7 @@ execApplyInputs
   solveConstraints
   loadWalletContext
   loadMarloweContext
+  loadHelpersContext
   version
   addresses
   contractId
@@ -486,6 +528,8 @@ execApplyInputs
       withExceptT ApplyInputsLoadMarloweContextFailed $
         ExceptT $
           loadMarloweContext version contractId
+    helpersContext <-
+      withExceptT ApplyInputsLoadHelpersContextFailed $ ExceptT $ loadHelpersContext version $ Right $ Just contractId
     let getTipSlot =
           atomically $
             getTip >>= \case
@@ -514,7 +558,7 @@ execApplyInputs
     txBody <-
       except $
         first ApplyInputsConstraintError $
-          solveConstraints referenceInputsSupported version (Left marloweContext) walletContext constraints
+          solveConstraints referenceInputsSupported version (Left marloweContext) walletContext helpersContext constraints
     let input = scriptOutput'
     let buildOutput (assets, datum) utxo = TransactionScriptOutput marloweAddress assets utxo datum
     let output =
@@ -540,20 +584,22 @@ execWithdraw
   -> SolveConstraints
   -> LoadWalletContext m
   -> LoadPayoutContext m
+  -> LoadHelpersContext m
   -> MarloweVersion v
   -> WalletAddresses
   -> Set Chain.TxOutRef
   -> m (ServerStCmd MarloweTxCommand Void WithdrawError (WithdrawTx v) m ())
-execWithdraw era solveConstraints loadWalletContext loadPayoutContext version addresses payouts = execExceptT $ case version of
+execWithdraw era solveConstraints loadWalletContext loadPayoutContext loadHelpersContext version addresses payouts = execExceptT $ case version of
   MarloweV1 -> do
     referenceInputsSupported <- referenceInputsSupportedInEra (WithdrawEraUnsupported $ AnyCardanoEra era) era
     payoutContext <- lift $ loadPayoutContext version payouts
     (inputs, constraints) <- buildWithdrawConstraints payoutContext version payouts
     walletContext <- lift $ loadWalletContext addresses
+    helpersContext <- withExceptT WithdrawLoadHelpersContextFailed $ ExceptT $ loadHelpersContext version $ Right Nothing
     txBody <-
       except $
         first WithdrawConstraintError $
-          solveConstraints referenceInputsSupported version (Right payoutContext) walletContext constraints
+          solveConstraints referenceInputsSupported version (Right payoutContext) walletContext helpersContext constraints
     pure $ WithdrawTx referenceInputsSupported $ WithdrawTxInEra{..}
 
 execSubmit

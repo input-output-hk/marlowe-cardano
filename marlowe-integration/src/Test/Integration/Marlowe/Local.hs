@@ -109,7 +109,7 @@ import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as Chain
 import Language.Marlowe.Runtime.Contract.Store (ContractStore)
 import Language.Marlowe.Runtime.Contract.Store.File (ContractStoreOptions (..), createContractStore)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion (..))
-import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts (..), ReferenceScriptUtxo (..))
+import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript (..), MarloweScripts (..), ReferenceScriptUtxo (..))
 import qualified Language.Marlowe.Runtime.Indexer.Database as Indexer
 import qualified Language.Marlowe.Runtime.Indexer.Database.PostgreSQL as IndexerDB
 import qualified Language.Marlowe.Runtime.Sync.Database as Sync
@@ -449,13 +449,17 @@ toMarloweScripts testnetMagic MarloweScriptsRefs{..} = MarloweScripts{..}
   where
     marloweValidatorInfo = snd mrMarloweValidator
     payoutValidatorInfo = snd mrRolePayoutValidator
+    openRoleValidatorInfo = snd mrOpenRoleValidator
     marloweScript = fromCardanoScriptHash $ viHash marloweValidatorInfo
     payoutScript = fromCardanoScriptHash $ viHash payoutValidatorInfo
+    openRoleScript = fromCardanoScriptHash $ viHash openRoleValidatorInfo
     networkId = Testnet $ NetworkMagic $ fromIntegral testnetMagic
     marloweTxOutRef = fromCardanoTxIn $ fst $ unAnUTxO $ fst mrMarloweValidator
     payoutTxOutRef = fromCardanoTxIn $ fst $ unAnUTxO $ fst mrRolePayoutValidator
+    openRoleTxOutRef = fromCardanoTxIn $ fst $ unAnUTxO $ fst mrOpenRoleValidator
     refScriptPublisher (AnUTxO (_, Cardano.TxOut addr _ _ _), _) = addr
     refScriptValue (AnUTxO (_, Cardano.TxOut _ value _ _), _) = Cardano.txOutValueToValue value
+    helperScripts = Map.singleton OpenRoleScript openRoleScript
 
     marloweReferenceScriptUTxO =
       ReferenceScriptUtxo
@@ -483,6 +487,20 @@ toMarloweScripts testnetMagic MarloweScriptsRefs{..} = MarloweScripts{..}
         }
     marloweScriptUTxOs = Map.singleton networkId marloweReferenceScriptUTxO
     payoutScriptUTxOs = Map.singleton networkId payoutReferenceScriptUTxO
+    helperScriptUTxOs =
+      Map.singleton
+        (OpenRoleScript, networkId)
+        $ ReferenceScriptUtxo
+          { txOutRef = openRoleTxOutRef
+          , txOut =
+              TransactionOutput
+                { address = fromCardanoAddressInEra BabbageEra $ refScriptPublisher mrOpenRoleValidator
+                , assets = assetsFromCardanoValue $ refScriptValue mrOpenRoleValidator
+                , datumHash = Nothing
+                , datum = Nothing
+                }
+          , script = viScript openRoleValidatorInfo
+          }
 
 data RuntimeSelector f where
   AnyEvent :: s f -> RuntimeSelector f

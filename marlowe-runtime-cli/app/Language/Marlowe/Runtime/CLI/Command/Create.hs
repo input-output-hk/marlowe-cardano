@@ -52,6 +52,7 @@ import Language.Marlowe.Runtime.Transaction.Api (
   ContractCreated (..),
   ContractCreatedInEra (..),
   CreateError,
+  Destination (ToAddress),
   RoleTokenMetadata,
   RoleTokensConfig (..),
   mkMint,
@@ -235,14 +236,14 @@ runCreateCommand TxCommand{walletAddresses, signingMethod, tagsFile, metadataFil
     minting' <- case roles of
       Nothing -> pure RoleTokensNone
       Just (MintSimple tokens) -> do
-        let toNFT addr = (addr, Nothing)
+        let toNFT addr = (ToAddress addr, Nothing)
         pure $ RoleTokensMint $ mkMint $ fmap toNFT <$> tokens
       Just (UseExistingPolicyId policyId) -> pure $ RoleTokensUsePolicy policyId
       Just (MintConfig roleTokensConfigFilePath) -> do
         configMap <- ExceptT $ liftIO $ first RolesConfigFileDecodingError <$> A.eitherDecodeFileStrict roleTokensConfigFilePath
         case Map.toList configMap of
           [] -> throwE $ RolesConfigFileDecodingError "Empty role token config"
-          (x : xs) -> pure $ RoleTokensMint $ mkMint $ fmap (\RoleConfig{..} -> (address, Just metadata)) <$> x :| xs
+          (x : xs) -> pure $ RoleTokensMint $ mkMint $ fmap (\RoleConfig{..} -> (ToAddress address, Just metadata)) <$> x :| xs
     (ContractId contractId, safetyErrors) <- run MarloweV1 minting'
     liftIO $
       if null safetyErrors
