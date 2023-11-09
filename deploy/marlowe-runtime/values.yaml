@@ -24,3 +24,7 @@ releaseName: marlowe-runtime
 databaseName: marlowe-runtime-database
 
 databaseHost: prod-marlowe-runtime-db.csguv6v6ban1.us-east-1.rds.amazonaws.com
+
+otelExporterURL: http://grafana-agent.grafana-agent
+
+otelExporterPort: 4318
