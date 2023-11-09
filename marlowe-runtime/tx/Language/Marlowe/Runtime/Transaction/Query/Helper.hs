@@ -130,7 +130,7 @@ loadHelpersContext getCurrentScripts _ networkId _ desiredVersion (Left (rolesCu
       pure
         . Right
         . HelpersContext current rolesCurrency
-        . Map.map (const HelperScriptCreateState{..})
+        . Map.map (const $ HelperScriptState helperScriptInfo Nothing)
         . Map.filter ((== ToScript OpenRoleScript) . fst)
         $ unMint mint
     (Just helperScriptInfo, RoleTokensUsePolicyWithOpenRoles policyId _ openRoleNames) ->
@@ -138,7 +138,7 @@ loadHelpersContext getCurrentScripts _ networkId _ desiredVersion (Left (rolesCu
         . Right
         . HelpersContext current policyId
         . Map.fromList
-        $ (,HelperScriptCreateState{..}) <$> openRoleNames
+        $ (,HelperScriptState helperScriptInfo Nothing) <$> openRoleNames
     (Nothing, _) -> pure . Right $ HelpersContext current "" mempty
   where
     current = getHelperInfos helperScript networkId $ getCurrentScripts desiredVersion
@@ -194,7 +194,7 @@ loadHelpersContext getCurrentScripts getScripts networkId chainSyncConnector des
                                     -- because the creation transaction might have be built outside of Runtime.
                                     _ -> Nothing
                                 helperScriptInfo <- address `Map.lookup` scripts
-                                pure (roleName, HelperScriptState{..})
+                                pure (roleName, HelperScriptState helperScriptInfo $ Just (helperTxOutRef, helperTransactionOutput))
                             initialStates = mapMaybe findHelperScriptOutput $ zip (TxOutRef creationTxId <$> [0 ..]) $ outputs tx
                             helperScriptStates = mempty
                         pure $ clientFollowHelper HelpersContext{..} initialStates
@@ -208,51 +208,57 @@ loadHelpersContext getCurrentScripts getScripts networkId chainSyncConnector des
       -> [(TokenName, HelperScriptState)]
       -> ClientStIdle Move ChainPoint ChainPoint m (Either LoadHelpersContextError HelpersContext)
     clientFollowHelper context [] = SendMsgDone $ Right context
-    clientFollowHelper context@HelpersContext{helperPolicyId, helperScriptStates} ((roleName, state@HelperScriptState{helperTxOutRef, helperScriptInfo = HelperScriptInfo{helperAddress}}) : remainder) =
-      SendMsgQueryNext
-        (FindConsumingTxs $ Set.singleton helperTxOutRef)
-        ClientStNext
-          { recvMsgQueryRejected = \_ _ -> do
-              emitImmediateEventFields_ LoadHelpersContextTxOutRefNotFound [helperTxOutRef]
-              -- Fail if the query is rejected.
-              pure . SendMsgDone . Left $ LoadHelpersContextTxOutRefNotFoundError helperTxOutRef
-          , recvMsgRollBackward =
-              -- Start over if a rollback is encountered.
-              \_ _ -> pure clientFindContract
-          , recvMsgRollForward = \txs point _ -> case (point, Map.toList txs) of
-              (Genesis, _) -> do
-                emitImmediateEvent_ RollForwardToGenesis
-                -- Unexpected roll forward to genesis.
-                pure $ SendMsgDone $ Left RollForwardToGenesisError
-              (At _, [(_, Transaction{txId, outputs})]) -> do
-                emitImmediateEventFields_ TxOutRefConsumed [(helperTxOutRef, txId)]
-                let isHelperScriptOutput (_, TransactionOutput{address, assets = Assets{tokens}}) =
-                      address == helperAddress && AssetId helperPolicyId roleName `Map.member` unTokens tokens
-                case filter isHelperScriptOutput $ zip (TxOutRef txId <$> [0 ..]) outputs of
-                  [(helperTxOutRef', helperTransactionOutput')] ->
-                    -- The head's helper script output has been consumed.
-                    pure
-                      . clientFollowHelper context
-                      $ (roleName, state{helperTxOutRef = helperTxOutRef', helperTransactionOutput = helperTransactionOutput'})
-                        : remainder
-                  _ -> do
-                    emitImmediateEventFields_ TxOutRefNotConsumed [helperTxOutRef]
-                    -- There was not exactly one helper output.
-                    pure $ clientFollowHelper context remainder
-              (At _, _) -> do
+    clientFollowHelper
+      context@HelpersContext{helperPolicyId, helperScriptStates}
+      ( ( roleName
+          , state@HelperScriptState{helperUTxO = Just (helperTxOutRef, _), helperScriptInfo = HelperScriptInfo{helperAddress}}
+          )
+          : remainder
+        ) =
+        SendMsgQueryNext
+          (FindConsumingTxs $ Set.singleton helperTxOutRef)
+          ClientStNext
+            { recvMsgQueryRejected = \_ _ -> do
+                emitImmediateEventFields_ LoadHelpersContextTxOutRefNotFound [helperTxOutRef]
+                -- Fail if the query is rejected.
+                pure . SendMsgDone . Left $ LoadHelpersContextTxOutRefNotFoundError helperTxOutRef
+            , recvMsgRollBackward =
+                -- Start over if a rollback is encountered.
+                \_ _ -> pure clientFindContract
+            , recvMsgRollForward = \txs point _ -> case (point, Map.toList txs) of
+                (Genesis, _) -> do
+                  emitImmediateEvent_ RollForwardToGenesis
+                  -- Unexpected roll forward to genesis.
+                  pure $ SendMsgDone $ Left RollForwardToGenesisError
+                (At _, [(_, Transaction{txId, outputs})]) -> do
+                  emitImmediateEventFields_ TxOutRefConsumed [(helperTxOutRef, txId)]
+                  let isHelperScriptOutput (_, TransactionOutput{address, assets = Assets{tokens}}) =
+                        address == helperAddress && AssetId helperPolicyId roleName `Map.member` unTokens tokens
+                  case filter isHelperScriptOutput $ zip (TxOutRef txId <$> [0 ..]) outputs of
+                    [(helperTxOutRef', helperTransactionOutput')] ->
+                      -- The head's helper script output has been consumed.
+                      pure
+                        . clientFollowHelper context
+                        $ (roleName, state{helperUTxO = Just (helperTxOutRef', helperTransactionOutput')})
+                          : remainder
+                    _ -> do
+                      emitImmediateEventFields_ TxOutRefNotConsumed [helperTxOutRef]
+                      -- There was not exactly one helper output.
+                      pure $ clientFollowHelper context remainder
+                (At _, _) -> do
+                  emitImmediateEventFields_ TxOutRefNotConsumed [helperTxOutRef]
+                  -- The helper output was not consumed exactly once.
+                  pure $ clientFollowHelper context remainder
+            , recvMsgWait = do
                 emitImmediateEventFields_ TxOutRefNotConsumed [helperTxOutRef]
-                -- The helper output was not consumed exactly once.
-                pure $ clientFollowHelper context remainder
-          , recvMsgWait = do
-              emitImmediateEventFields_ TxOutRefNotConsumed [helperTxOutRef]
-              -- The tip of the head's helper script has been reached, so
-              -- insert its state information into the context.
-              pure
-                . SendMsgCancel
-                $ clientFollowHelper
-                  context{helperScriptStates = Map.insert roleName state helperScriptStates}
-                  remainder
-          }
+                -- The tip of the head's helper script has been reached, so
+                -- insert its state information into the context.
+                pure
+                  . SendMsgCancel
+                  $ clientFollowHelper
+                    context{helperScriptStates = Map.insert roleName state helperScriptStates}
+                    remainder
+            }
     clientFollowHelper helpersContext _ = SendMsgDone $ Right helpersContext
 
 getHelperInfos

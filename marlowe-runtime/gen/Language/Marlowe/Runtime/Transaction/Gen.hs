@@ -114,9 +114,7 @@ instance Arbitrary Destination where
       , (2, pure ToSelf)
       , (1, ToScript <$> arbitrary)
       ]
-  shrink (ToAddress address) = ToAddress <$> genericShrink address
-  shrink ToSelf = []
-  shrink (ToScript script) = ToScript <$> genericShrink script
+  shrink = genericShrink
 
 instance Arbitrary Mint where
   arbitrary = mkMint <$> arbitrary
@@ -125,10 +123,10 @@ instance Arbitrary Mint where
 instance Arbitrary RoleTokensConfig where
   arbitrary =
     frequency
-      [ (10, pure RoleTokensNone)
+      [ (1, pure RoleTokensNone)
       , (10, RoleTokensUsePolicy <$> arbitrary)
       , (10, RoleTokensMint <$> arbitrary)
-      , (1, RoleTokensUsePolicyWithOpenRoles <$> arbitrary <*> arbitrary <*> arbitrary)
+      , (10, RoleTokensUsePolicyWithOpenRoles <$> arbitrary <*> arbitrary <*> arbitrary)
       ]
   shrink = genericShrink
 

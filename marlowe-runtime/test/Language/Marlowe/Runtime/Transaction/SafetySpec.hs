@@ -53,7 +53,7 @@ import Language.Marlowe.Runtime.Transaction.Api (Mint (..), RoleTokensConfig (..
 import Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec ()
 import Language.Marlowe.Runtime.Transaction.Constraints (
   HelperScriptInfo (..),
-  HelperScriptState (HelperScriptCreateState),
+  HelperScriptState (HelperScriptState),
   HelpersContext (..),
   MarloweContext (..),
  )
@@ -376,7 +376,7 @@ spec =
           let address = "608db2b806ba9e7ae2909ae38afc6c1bce02f5df3e1cb1b06cbc80546f"
               helperPolicyId = "46e79d4fbf0dd6766f8601fdec651ad708af7115fd8f7b5e14b622e5"
               currentHelperScripts = getHelperInfos helperScript networkId $ getCurrentScripts MarloweV1
-              helperScriptStates = M.singleton "Beneficiary" . HelperScriptCreateState $ currentHelperScripts M.! OpenRoleScript
+              helperScriptStates = M.singleton "Beneficiary" $ HelperScriptState (currentHelperScripts M.! OpenRoleScript) Nothing
               helpersContext = HelpersContext{..}
               benefactor = "Benefactor"
               beneficiary = "Beneficiary"

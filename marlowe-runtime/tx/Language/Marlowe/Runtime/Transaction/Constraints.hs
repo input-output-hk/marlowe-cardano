@@ -390,15 +390,10 @@ data HelpersContext = HelpersContext
 deriving instance Show HelpersContext
 deriving anyclass instance ToJSON HelpersContext
 
-data HelperScriptState
-  = HelperScriptState
-      { helperScriptInfo :: HelperScriptInfo
-      , helperTxOutRef :: Chain.TxOutRef
-      , helperTransactionOutput :: Chain.TransactionOutput
-      }
-  | HelperScriptCreateState
-      { helperScriptInfo :: HelperScriptInfo
-      }
+data HelperScriptState = HelperScriptState
+  { helperScriptInfo :: HelperScriptInfo
+  , helperUTxO :: Maybe (Chain.TxOutRef, Chain.TransactionOutput)
+  }
   deriving (Generic)
 
 deriving instance Show HelperScriptState
@@ -972,12 +967,12 @@ allUtxos era marloweVersion scriptCtx WalletContext{..} HelpersContext{..} inclu
           <*> toCardanoTxOut' multiAssetSupported txOut (Just . C.toScriptInAnyLang $ C.PlutusScript C.PlutusScriptV2 script)
 
       -- UTxOs for helper scripts.
-      helperUTxO HelperScriptState{..} =
+      helperUTxO HelperScriptState{helperUTxO = Just (helperTxOutRef, helperTransactionOutput)} =
         maybe mempty pure $
           (,)
             <$> toCardanoTxIn helperTxOutRef
             <*> toCardanoTxOut' multiAssetSupported helperTransactionOutput Nothing
-      helperUTxO HelperScriptCreateState{} = mempty
+      helperUTxO _ = mempty
    in mapMaybe convertUtxo (SMap.toList . Chain.unUTxOs $ availableUtxos)
         <> either
           (maybe mempty pure . (mkMarloweUtxo <=< scriptOutput))
@@ -1233,7 +1228,7 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
       -> Either ConstraintError (Maybe ((C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn era)), (Chain.AssetId, C.TxIn)))
     getHelperInput role@(Chain.AssetId rolePolicy roleToken) =
       case (rolePolicy == helperPolicyId, roleToken `Map.lookup` helperScriptStates) of
-        (True, Just HelperScriptState{..}) ->
+        (True, Just HelperScriptState{helperScriptInfo, helperUTxO = Just (helperTxOutRef, helperTransactionOutput)}) ->
           do
             let HelperScriptInfo{..} = helperScriptInfo
                 Chain.TransactionOutput{datum} = helperTransactionOutput

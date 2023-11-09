@@ -14,7 +14,7 @@ module Language.Marlowe.Runtime.Web.Types where
 
 import Control.Applicative ((<|>))
 import Control.Lens hiding ((.=))
-import Control.Monad (guard, (<=<))
+import Control.Monad (unless, (<=<))
 import Data.Aeson
 import Data.Aeson.Text (encodeToLazyText)
 import Data.Aeson.Types (Parser, parseFail, toJSONKeyText)
@@ -53,6 +53,7 @@ import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text.Lazy as TL
 import Data.Time (UTCTime)
 import Data.Time.Format.ISO8601 (iso8601Show)
+import Data.Traversable (for)
 import Data.Version (Version)
 import Data.Word (Word16, Word32, Word64)
 import GHC.Exts (IsList)
@@ -831,7 +832,7 @@ instance FromJSON RolesConfig where
               parseOpen =
                 do
                   script <- obj .: "script"
-                  guard $ script == ("OpenRole" :: String)
+                  unless (script == ("OpenRole" :: String)) $ fail "AllowedValues: \"OpenRole\""
                   UsePolicyWithOpenRoles <$> obj .: "policyId" <*> obj .: "threadRoleName" <*> obj .: "openRoleNames"
            in parseOpen <|> parseMint
       )
@@ -857,58 +858,54 @@ instance ToSchema RolesConfig where
         mempty
           & oneOf ?~ [policySchema, mintSchema]
 
-data RoleTokenConfig
-  = RoleTokenSimple Address
-  | RoleTokenAdvanced Address TokenMetadata
-  | OpenRoleTokenSimple
-  | OpenRoleTokenAdvanced TokenMetadata
-  | ThreadRoleTokenSimple
-  | ThreadRoleTokenAdvanced TokenMetadata
+data RoleTokenConfig = RoleTokenConfig
+  { role :: Role
+  , metadata :: Maybe TokenMetadata
+  }
+  deriving (Show, Eq, Ord, Generic)
+
+data Role
+  = ClosedRole Address
+  | OpenRole
+  | ThreadRole
   deriving (Show, Eq, Ord, Generic)
 
 instance FromJSON RoleTokenConfig where
-  parseJSON (String s) = pure $ RoleTokenSimple $ Address s
+  parseJSON (String s) = pure . flip RoleTokenConfig Nothing . ClosedRole $ Address s
   parseJSON value =
     withObject
       "RoleTokenConfig"
-      ( \obj ->
-          let parseAdvanced = RoleTokenAdvanced <$> obj .: "address" <*> obj .: "metadata"
-              parseThread =
-                do
-                  script <- obj .: "script"
-                  guard $ script == ("ThreadRole" :: String)
-                  ThreadRoleTokenAdvanced <$> obj .: "metadata" <|> pure ThreadRoleTokenSimple
-              parseOpen =
-                do
-                  script <- obj .: "script"
-                  guard $ script == ("OpenRole" :: String)
-                  OpenRoleTokenAdvanced <$> obj .: "metadata" <|> pure OpenRoleTokenSimple
-           in parseAdvanced <|> parseThread <|> parseOpen
+      ( \obj -> do
+          mAddress <- obj .:? "address"
+          mScriptRole <- do
+            mScript :: Maybe String <- obj .:? "script"
+            for mScript \case
+              "ThreadRole" -> pure ThreadRole
+              "OpenRole" -> pure OpenRole
+              _ -> fail "Expected one of \"ThreadRole\" or \'OpenRole\""
+          metadata <- obj .:? "metadata"
+          role <- case (mAddress, mScriptRole) of
+            (Just address, _) -> pure $ ClosedRole address
+            (_, Just scriptRole) -> pure scriptRole
+            _ -> fail "one of address or script required"
+          pure RoleTokenConfig{..}
       )
       value
 
 instance ToJSON RoleTokenConfig where
-  toJSON (RoleTokenSimple address) = toJSON address
-  toJSON (RoleTokenAdvanced address config) =
+  toJSON (RoleTokenConfig (ClosedRole address) Nothing) = toJSON address
+  toJSON (RoleTokenConfig (ClosedRole address) config) =
     object
-      [ ("address", toJSON address)
-      , ("metadata", toJSON config)
+      [ "address" .= address
+      , "metadata" .= config
       ]
-  toJSON OpenRoleTokenSimple =
+  toJSON (RoleTokenConfig scriptRole Nothing) =
     object
-      [("script", "OpenRole")]
-  toJSON (OpenRoleTokenAdvanced config) =
+      ["script" .= show scriptRole]
+  toJSON (RoleTokenConfig scriptRole config) =
     object
-      [ ("script", "OpenRole")
-      , ("metadata", toJSON config)
-      ]
-  toJSON ThreadRoleTokenSimple =
-    object
-      [("script", "ThreadRole")]
-  toJSON (ThreadRoleTokenAdvanced config) =
-    object
-      [ ("script", "ThreadRole")
-      , ("metadata", toJSON config)
+      [ "script" .= show scriptRole
+      , "metadata" .= config
       ]
 
 instance ToSchema RoleTokenConfig where

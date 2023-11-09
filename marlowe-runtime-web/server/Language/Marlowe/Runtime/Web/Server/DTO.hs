@@ -44,7 +44,7 @@ import Cardano.Api.Shelley (
  )
 import qualified Cardano.Ledger.Alonzo.Scripts as Ledger.Alonzo.Scripts
 import qualified Cardano.Ledger.Core as Ledger.Core
-import Control.Arrow (Arrow (..), second)
+import Control.Arrow (Arrow (..))
 import Control.Error.Util (hush)
 import Control.Monad ((<=<))
 import Control.Monad.Except (MonadError, throwError)
@@ -805,16 +805,16 @@ instance FromDTO Tx.Mint where
       <=< toNonEmpty
         . Map.toList
     where
-      convertConfig = \case
-        Web.RoleTokenSimple address -> (,Nothing) . Tx.ToAddress <$> fromDTO address
-        Web.RoleTokenAdvanced address metadata ->
-          curry (second Just) . Tx.ToAddress
-            <$> fromDTO address
-            <*> fromDTO metadata
-        Web.ThreadRoleTokenSimple -> pure (Tx.ToSelf, Nothing)
-        Web.ThreadRoleTokenAdvanced metadata -> (Tx.ToSelf,) . Just <$> fromDTO metadata
-        Web.OpenRoleTokenSimple -> pure (Tx.ToScript Tx.OpenRoleScript, Nothing)
-        Web.OpenRoleTokenAdvanced metadata -> (Tx.ToScript Tx.OpenRoleScript,) . Just <$> fromDTO metadata
+      convertConfig (Web.RoleTokenConfig role metadata) =
+        flip (,) <$> fromDTO metadata <*> case role of
+          Web.ClosedRole address -> Tx.ToAddress <$> fromDTO address
+          Web.ThreadRole -> pure Tx.ToSelf
+          Web.OpenRole -> pure $ Tx.ToScript Tx.OpenRoleScript
+
+--    convertConfig = \case
+--      (Web.RoleTokenConfig (Web.ClosedRole address) metadata) -> (,) <$> (Tx.ToAddress <$> fromDTO address) <*> fromDTO metadata
+--      (Web.RoleTokenConfig Web.ThreadRole metadata) -> (Tx.ToSelf, ) <$> fromDTO metadata
+--      (Web.RoleTokenConfig Web.OpenRole metadata) -> (Tx.ToScript Tx.OpenRoleScript, ) <$> fromDTO metadata
 
 instance HasDTO Tx.RoleTokenMetadata where
   type DTO Tx.RoleTokenMetadata = Web.TokenMetadata

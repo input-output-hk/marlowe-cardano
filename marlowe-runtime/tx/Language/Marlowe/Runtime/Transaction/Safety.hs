@@ -413,7 +413,7 @@ helpersForRoles policyId threadRole helperRoles adjustMinUtxo helpersContext =
                   <$> datum
               datum = Chain.B . Chain.unTokenName <$> threadRole
               helperTransactionOutput = Chain.TransactionOutput{..}
-           in HelperScriptState{..}
+           in HelperScriptState helperScriptInfo $ Just (helperTxOutRef, helperTransactionOutput)
         )
    in helpersContext{helperScriptStates = M.fromList $ uncurry buildHelperState <$> zip [0 ..] activeHelperScripts}
 
