@@ -124,16 +124,9 @@ If that fails you might have a corrupt cabal store, in which case you should `rm
 
 This repository uses nix to provide the development and build environment.
 
-If you know nix, simply run `nix develop` to enter the shell; if prompted, trust 
-the flake config values to enable access to our binary caches.   
+For instructions on how to install and configure nix (including how to enable access to our binary caches), refer to link:https://github.com/input-output-hk/iogx/blob/main/doc/nix-setup-guide.md[this document]. 
 
-The nix code is based on a template from the 
-link:https://github.com/input-output-hk/iogx/[IOGX flake]
-For instructions on how to install and configure nix (including how to enable 
-access to our binary caches), and how keep the flake inputs up to date, refer to 
-link:https://github.com/input-output-hk/iogx/blob/main/doc/api.md#flakenix[this section]
-of the IOGX manual.
-
+If you already have nix installed and configured, you may enter the development shell by running `nix develop`.
 
 [[nix-build-attributes]]
 === Which attributes to use to build different artifacts
