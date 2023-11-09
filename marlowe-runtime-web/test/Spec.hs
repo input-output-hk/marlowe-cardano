@@ -26,12 +26,12 @@ import Language.Marlowe.Object.Gen ()
 import Language.Marlowe.Runtime.Transaction.Gen ()
 import Language.Marlowe.Runtime.Web (ContractOrSourceId (..), WithRuntimeStatus)
 import qualified Language.Marlowe.Runtime.Web as Web
-import Language.Marlowe.Runtime.Web.Server.OpenAPI (openApi)
+import Language.Marlowe.Runtime.Web.Server.OpenAPI (OpenApiLintIssue, lintOpenApi, openApi)
 import Servant.API
 import Servant.OpenApi
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Spec.Marlowe.Semantics.Next.Arbitrary ()
-import Test.Hspec (Spec, describe, hspec, it)
+import Test.Hspec (Spec, describe, focus, hspec, it, shouldBe)
 import Test.Hspec.Golden (defaultGolden)
 import Test.QuickCheck (Arbitrary (..), Gen, elements, genericShrink, listOf, oneof, resize, suchThat)
 import Test.QuickCheck.Instances ()
@@ -43,6 +43,11 @@ main = hspec do
 
 openAPISpec :: Spec
 openAPISpec = do
+  focus do
+    it "finds no problems with empty schema" do
+      let actual = lintOpenApi mempty
+          expected :: [OpenApiLintIssue] = []
+      actual `shouldBe` expected
   validateEveryToJSONWithPatternChecker patternChecker (Proxy @(WrapContractBodies (RetractRuntimeStatus Web.API)))
   it "Should match the golden test" do
     defaultGolden "OpenApi" $

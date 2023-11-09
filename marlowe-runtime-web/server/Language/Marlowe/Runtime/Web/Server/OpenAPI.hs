@@ -62,6 +62,12 @@ instance ToJSON OpenApiWithEmptySecurity where
 
 type API = "openapi.json" :> Get '[JSON] OpenApiWithEmptySecurity
 
+data OpenApiLintIssue = Unknown
+  deriving (Show, Eq)
+
+lintOpenApi :: OpenApi -> [OpenApiLintIssue]
+lintOpenApi _ = []
+
 openApi :: OpenApiWithEmptySecurity
 openApi =
   OpenApiWithEmptySecurity $
