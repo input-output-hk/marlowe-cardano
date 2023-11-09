@@ -39,7 +39,7 @@ spec:
       - name: HTTP_PORT
         value: "3781"
       - name: OTEL_EXPORTER_OTLP_ENDPOINT
-        value: http://grafana-agent.grafana-agent:4318
+        value: {{ $.Values.otelExporterURL }}:{{ $.Values.otelExporterPort }}
       - name: OTEL_SERVICE_NAME
         value: marlowe-chain-indexer-{{ $network }}-{{ $instanceName }}
       image: {{ $instance.repo }}/{{ $instance.org }}/marlowe-chain-indexer:{{ $instance.tag }}
