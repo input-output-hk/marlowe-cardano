@@ -55,7 +55,11 @@ import Language.Marlowe.Runtime.Transaction.Api (
   unMint,
  )
 import qualified Language.Marlowe.Runtime.Transaction.Api as Transaction.Api
-import Language.Marlowe.Runtime.Transaction.BuildConstraints (buildApplyInputsConstraints, buildCreateConstraints)
+import Language.Marlowe.Runtime.Transaction.BuildConstraints (
+  buildApplyInputsConstraints,
+  buildCreateConstraints,
+  safeLovelace,
+ )
 import qualified Language.Marlowe.Runtime.Transaction.BuildConstraints as BuildConstraints
 import Language.Marlowe.Runtime.Transaction.Constraints (
   HelperOutputConstraints (..),
@@ -127,7 +131,7 @@ createSpec = Hspec.describe "buildCreateConstraints" do
   Hspec.QuickCheck.prop "sends the minAda deposit to the marlowe output" \(SomeCreateArgs args) ->
     let result = extractMarloweAssets <$> runBuildCreateConstraints args
      in case version args of
-          MarloweV1 -> result === (Right $ Just $ Chain.Assets (max 2_000_000 $ minAda args) mempty)
+          MarloweV1 -> result === (Right $ Just $ Chain.Assets (minAda args) mempty)
           :: Property
   Hspec.QuickCheck.prop "sends minted role tokens" \(SomeCreateArgs args) ->
     case roleTokensConfig args of
@@ -217,7 +221,7 @@ runBuildCreateConstraints CreateArgs{..} =
           roleTokensConfig
           metadata
           minAda
-          (\(Chain.Assets ada tokens) -> Chain.Assets (max 2_000_000 ada) tokens)
+          (\(Chain.Assets ada tokens) -> Chain.Assets ada tokens)
           contract
       )
 
@@ -237,7 +241,7 @@ instance Arbitrary (CreateArgs 'V1) where
       <$> arbitrary `suchThat` notEmptyWalletContext
       <*> arbitrary
       <*> arbitrary
-      <*> (Chain.Lovelace <$> arbitrary)
+      <*> ((+ safeLovelace) . Chain.Lovelace <$> arbitrary)
       <*> arbitrary
   shrink args@CreateArgs{..} =
     concat
@@ -784,7 +788,7 @@ openRolesSpec = Hspec.describe "Open Role Constraints" do
                     roleTokensConfig'
                     metadata
                     minAda
-                    (\(Chain.Assets ada tokens) -> Chain.Assets (max 2_000_000 ada) tokens)
+                    (\(Chain.Assets ada tokens) -> Chain.Assets ada tokens)
                     contract
               policyId =
                 case (version, extractMarloweDatum <$> result) of
