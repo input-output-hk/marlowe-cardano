@@ -8,13 +8,20 @@
 module Language.Marlowe.Runtime.Web.Server.OpenAPI where
 
 import Control.Applicative ((<|>))
-import Control.Lens
+import Control.Lens hiding (allOf, anyOf)
+import qualified Control.Lens as Optics
+import qualified Control.Monad as Control
 import Data.Aeson
 import Data.Aeson.Lens
+import qualified Data.HashMap.Strict.InsOrd as IOHM
+import qualified Data.List as List
 import Data.OpenApi hiding (Server)
 import Data.String (fromString)
+import Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text as Text
 import Data.Version (showVersion)
+import GHC.Exts (toList)
 import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
 import qualified Language.Marlowe.Runtime.Web as Web
 import qualified Paths_marlowe_runtime_web
@@ -62,11 +69,48 @@ instance ToJSON OpenApiWithEmptySecurity where
 
 type API = "openapi.json" :> Get '[JSON] OpenApiWithEmptySecurity
 
-data OpenApiLintIssue = Unknown
+data OpenApiLintIssue = OpenApiLintIssue
+  { trace :: Text
+  , message :: Text
+  }
   deriving (Show, Eq)
 
 lintOpenApi :: OpenApi -> [OpenApiLintIssue]
-lintOpenApi _ = []
+lintOpenApi oa = definitionLints
+  where
+    showStackTrace :: [Text] -> Text
+    showStackTrace = Text.concat . List.intersperse "/" . List.reverse
+
+    definitions :: [(Text, Schema)]
+    definitions = toList $ Optics.view (components . schemas) oa
+
+    schemaRule1Check :: [Text] -> Schema -> [OpenApiLintIssue]
+    schemaRule1Check stackTrace s = do
+      let schemaRequiredFields = Optics.view required s
+      -- TODO: schemaType = Optics.view type_ s
+      Control.when (null schemaRequiredFields) []
+      let schemaProperties = Optics.view properties s
+      -- TODO: schemaAnyOf = Optics.view anyOf s
+      -- TODO: schemaOneOf = Optics.view oneOf s
+      -- TODO: schemaAllOf = Optics.view allOf s
+      schemaRequiredField <- schemaRequiredFields
+      if IOHM.member schemaRequiredField schemaProperties
+        then mempty
+        else
+          pure $
+            OpenApiLintIssue
+              { trace = showStackTrace stackTrace
+              , message = "Missing type for required field '" <> schemaRequiredField <> "'!"
+              }
+
+    lintSchema :: [Text] -> Schema -> [OpenApiLintIssue]
+    lintSchema = schemaRule1Check
+
+    definitionLints :: [OpenApiLintIssue]
+    definitionLints = do
+      let stackTrace = ["schemas", "components"]
+      (definitionName, definitionSchema) <- definitions
+      lintSchema (definitionName : stackTrace) definitionSchema
 
 openApi :: OpenApiWithEmptySecurity
 openApi =

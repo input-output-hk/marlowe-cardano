@@ -133,6 +133,7 @@ library server
     , eventuo11y-extras ==0.1.1.0
     , exceptions >=0.10 && <0.12
     , http-media ^>=0.8
+    , insert-ordered-containers >=0.2.5 && <0.3
     , lens >=5.2 && <6
     , lens-aeson ^>=1.2
     , marlowe-cardano ==0.2.0.0
@@ -205,6 +206,7 @@ test-suite marlowe-runtime-web-test
     , bytestring >=0.10.12 && <0.12
     , hspec
     , hspec-golden
+    , lens >=5.2 && <6
     , marlowe-cardano ==0.2.0.0
     , marlowe-object:gen
     , marlowe-runtime-web:{marlowe-runtime-web, server}

@@ -8,6 +8,7 @@
 
 module Main where
 
+import Control.Lens ((&), (.~))
 import Control.Monad (replicateM)
 import Data.Aeson (ToJSON, Value (Null))
 import Data.Aeson.Encode.Pretty (encodePrettyToTextBuilder)
@@ -20,13 +21,14 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Internal.Builder as TB
 import qualified Data.Text.Lazy as TL
+import GHC.Exts (fromList)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics (Input (..))
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Object.Gen ()
 import Language.Marlowe.Runtime.Transaction.Gen ()
 import Language.Marlowe.Runtime.Web (ContractOrSourceId (..), WithRuntimeStatus)
 import qualified Language.Marlowe.Runtime.Web as Web
-import Language.Marlowe.Runtime.Web.Server.OpenAPI (OpenApiLintIssue, lintOpenApi, openApi)
+import Language.Marlowe.Runtime.Web.Server.OpenAPI (OpenApiLintIssue (..), lintOpenApi, openApi)
 import Servant.API
 import Servant.OpenApi
 import Spec.Marlowe.Semantics.Arbitrary ()
@@ -47,6 +49,21 @@ openAPISpec = do
     it "finds no problems with empty schema" do
       let actual = lintOpenApi mempty
           expected :: [OpenApiLintIssue] = []
+      actual `shouldBe` expected
+    it "rejects object schemas with required fields which have no types" do
+      let definitions :: Definitions Schema
+          definitions = fromList [("mydefinition", mempty & required .~ ["myfield"])]
+          openApiSchema :: OpenApi
+          openApiSchema = mempty & components . schemas .~ definitions
+          actual :: [OpenApiLintIssue]
+          actual = lintOpenApi openApiSchema
+          expected :: [OpenApiLintIssue]
+          expected =
+            [ OpenApiLintIssue
+                { trace = "components/schemas/mydefinition"
+                , message = "Missing type for required field 'myfield'!"
+                }
+            ]
       actual `shouldBe` expected
   validateEveryToJSONWithPatternChecker patternChecker (Proxy @(WrapContractBodies (RetractRuntimeStatus Web.API)))
   it "Should match the golden test" do
