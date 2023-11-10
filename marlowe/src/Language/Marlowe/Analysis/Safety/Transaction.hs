@@ -15,6 +15,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE StrictData #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- | Safety analysis for Plutus transactions in Marlowe contracts.
@@ -32,6 +33,10 @@ module Language.Marlowe.Analysis.Safety.Transaction (
   TxOutSpec (..),
   UseReferenceInput (..),
   ValidatorEvalContext (..),
+
+  -- * Transaction annotation
+  unitAnnotator,
+  firstRoleAuthorizationAnnotator,
 ) where
 
 import Control.Monad.Except (MonadError (throwError), MonadIO (..), foldM, liftEither, liftIO)
@@ -74,7 +79,7 @@ import Language.Marlowe.Scripts.Types (marloweTxInputsFromInputs)
 import Language.Marlowe.Util (dataHash)
 
 import Control.Monad (guard)
-import Control.Monad.State (MonadState (get), evalStateT)
+import Control.Monad.State (MonadState (get), evalState, evalStateT)
 import Control.Monad.State.Class (MonadState (put))
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import qualified Data.ByteString.Short as SBS (ShortByteString)
@@ -82,6 +87,7 @@ import Data.Functor ((<&>))
 import qualified Data.List as L
 import qualified Data.Map.Strict as M
 import Data.Maybe (catMaybes)
+import qualified Data.Set as S
 import Data.Traversable (for)
 import Language.Marlowe (Input (..))
 import qualified PlutusLedgerApi.Common as P (PlutusLedgerLanguage (..), evaluateScriptCounting)
@@ -109,11 +115,11 @@ executeTransaction
   -- ^ The public-key address executing the transaction.
   -> MarloweParams
   -- ^ The parameters for the Marlowe contract instance.
-  -> Transaction
+  -> Transaction a
   -- ^ The transaction to be executed.
   -> m P.ExBudget
   -- ^ Action to execute the transaction and to return the new state and contract along with the execution cost.
-executeTransaction evaluationContext semanticsValidator semanticsAddress payoutAddress referenceInputs creatorAddress marloweParams@MarloweParams{..} (Transaction marloweState marloweContract TransactionInput{..} output) =
+executeTransaction evaluationContext semanticsValidator semanticsAddress payoutAddress referenceInputs creatorAddress marloweParams@MarloweParams{..} (Transaction marloweState marloweContract TransactionInput{..} output _) =
   do
     -- We only attend to details that make affect the *execution cost* of the script context,
     -- so the corresponding transaction does not actually need to be valid.
@@ -253,7 +259,7 @@ calcMarloweTxExBudget
   -- ^ The payout validator address.
   -> MarloweParams
   -- ^ The parameters for the Marlowe contract instance.
-  -> Transaction
+  -> Transaction a
   -- ^ The transaction to be executed.
   -> m MarloweExBudget
 calcMarloweTxExBudget
@@ -262,7 +268,7 @@ calcMarloweTxExBudget
   (openRoleValidator, openRoleAddress, openRoleUseReferenceInput, LockedRoles openRoleLockedTokens)
   payoutAddress
   marloweParams@MarloweParams{..}
-  (Transaction marloweState marloweContract TransactionInput{..} output) = flip evalStateT initSequence $ do
+  (Transaction marloweState marloweContract TransactionInput{..} output _) = flip evalStateT initSequence $ do
     creatorAddress <- freshAddress
     -- We only attend to details that make affect the *execution cost* of the script context,
     -- so the corresponding transaction does not actually need to be valid.
@@ -544,9 +550,9 @@ calcValidatorsExBudget evaluationContext creatorAddress txInSpecs txOutSpecs (in
 foldTransactionsM
   :: (Monad m)
   => (Monoid a)
-  => (Transaction -> m a)
+  => (Transaction b -> m a)
   -- ^ Function to collect results.
-  -> [Transaction]
+  -> [Transaction b]
   -- ^ The transactions.
   -> m a
   -- ^ The collected results.
@@ -555,52 +561,58 @@ foldTransactionsM f =
 
 -- | Find transactions along all execution paths of a contract.
 findTransactions
-  :: (IsString e)
+  :: (Eq a)
+  => (IsString e)
   => (MonadError e m)
   => (MonadIO m)
-  => Bool
+  => ([TransactionInput] -> [(TransactionInput, a)])
+  -- ^ Function for annotating transaction paths.
+  -> Bool
   -- ^ Throw an error if all required continuations are not present.
   -> Party
   -- ^ The contract creator.
-  -> Integer
+  -> AM.Map Token Integer
   -- ^ The initial lovelace for the creator's account.
   -> MerkleizedContract
   -- ^ The bundle of contract information.
-  -> m [Transaction]
+  -> m [Transaction a]
   -- ^ Action for computing the initial state, initial contract, perhaps-merkleized input, and the output for the transactions.
-findTransactions requireContinuations creatorAddress minAda mc@MerkleizedContract{..} =
+findTransactions annotate requireContinuations creatorAddress initialValue mc@MerkleizedContract{..} =
   do
-    let ada = Token P.adaSymbol P.adaToken
-        prune (Transaction s c i _) (Transaction s' c' i' _) = s == s' && c == c' && i == i'
-    paths <- findPaths requireContinuations creatorAddress minAda mc
+    let prune (Transaction s c i _ a) (Transaction s' c' i' _ a') = s == s' && c == c' && i == i' && a == a'
+    paths <- findPaths requireContinuations creatorAddress initialValue mc
     nubBy prune
       . concat
       <$> sequence
-        [ findTransactionPath mcContinuations state mcContract inputs
-        | (minTime, inputs) <- paths
-        , let state = State (AM.singleton (creatorAddress, ada) minAda) AM.empty AM.empty minTime
+        [ findTransactionPath mcContinuations state mcContract $ annotate inputs
+        | let initialAccounts = AM.fromList $ first (creatorAddress,) <$> AM.toList initialValue
+        , (minTime, inputs) <- paths
+        , let state = State initialAccounts AM.empty AM.empty minTime
         ]
 
 -- | Find transactions along all execution paths of a contract.
 findTransactions'
-  :: (IsString e)
+  :: (Eq a)
+  => (IsString e)
   => (MonadError e m)
   => (MonadIO m)
-  => Bool
+  => ([TransactionInput] -> [(TransactionInput, a)])
+  -- ^ Function for annotating transaction paths.
+  -> Bool
   -- ^ Throw an error if all required continuations are not present.
   -> MerkleizedContract
   -- ^ The bundle of contract information.
-  -> m [Transaction]
+  -> m [Transaction a]
   -- ^ Action for computing the initial state, initial contract, perhaps-merkleized input, and the output for the transactions.
-findTransactions' requireContinuations mc@MerkleizedContract{..} =
+findTransactions' annotate requireContinuations mc@MerkleizedContract{..} =
   let utxoCostPerByte = 4_310
       creatorAddress =
         Address True $
           P.Address
             (P.PubKeyCredential "88888888888888888888888888888888888888888888888888888888")
             (Just . P.StakingHash $ P.PubKeyCredential "99999999999999999999999999999999999999999999999999999999")
-      minAda = worstMinimumUtxo' utxoCostPerByte mcContract mcContinuations
-   in findTransactions requireContinuations creatorAddress minAda mc
+      minAda = AM.singleton (Token "" "") $ worstMinimumUtxo' utxoCostPerByte mcContract mcContinuations
+   in findTransactions annotate requireContinuations creatorAddress minAda mc
 
 -- | Find the transactions corresponding to a path of demerkleized inputs.
 findTransactionPath
@@ -612,16 +624,16 @@ findTransactionPath
   -- ^ The initial contract.
   -> Contract
   -- ^ The initial state.
-  -> [TransactionInput]
+  -> [(TransactionInput, a)]
   -- ^ The path of demerkleized inputs.
-  -> m [Transaction]
+  -> m [Transaction a]
   -- ^ Action for computing the perhaps-merkleized input and the output for the transaction.
 findTransactionPath continuations state contract =
-  let go ((state', contract'), previous) input =
+  let go ((state', contract'), previous) (input, annotation) =
         do
           (input', output) <- findTransaction continuations state' contract' input
           case output of
-            TransactionOutput{..} -> pure ((txOutState, txOutContract), Transaction state' contract' input' output : previous)
+            TransactionOutput{..} -> pure ((txOutState, txOutContract), Transaction state' contract' input' output annotation : previous)
             Error e -> throwError . fromString $ show e
    in fmap snd . foldM go ((state, contract), [])
 
@@ -654,25 +666,53 @@ findPaths
   -- ^ Throw an error if all required continuations are not present.
   -> Party
   -- ^ The creator.
-  -> Integer
-  -- ^ The initial lovelace in the creator's account.
+  -> AM.Map Token Integer
+  -- ^ The initial value in the creator's account.
   -> MerkleizedContract
   -- ^ The bundle of contract information.
   -> m [(P.POSIXTime, [TransactionInput])]
   -- ^ The paths through the Marlowe contract.
-findPaths requireContinuations creatorAddress minAda MerkleizedContract{..} =
+findPaths requireContinuations creatorAddress initialValue MerkleizedContract{..} =
   do
-    let ada = Token P.adaSymbol P.adaToken
-        forever = 4_102_444_800_000 {- 1 Jan 2100 -}
-        -- Add an initial deposit so that `getAllInputs` accounts for the initial state in its analysis.
-        contract = When [Case (Deposit creatorAddress creatorAddress ada $ Constant minAda) mcContract] forever Close
+    let forever = 4_102_444_800_000 {- 1 Jan 2100 -}
+    -- Add an initial deposit so that `getAllInputs` accounts for the initial state in its analysis.
+        deposit token quantity continuation =
+          When [Case (Deposit creatorAddress creatorAddress token $ Constant quantity) continuation] forever Close
+        initializations = length $ AM.toList initialValue
+        contract = foldr (uncurry deposit) mcContract $ AM.toList initialValue
     paths <-
       liftEither . first (fromString . show)
         =<< liftIO . getAllInputs
         =<< demerkleizeContract mcContinuations (deepDemerkleize requireContinuations contract)
     pure
-      . filter (not . null . snd) -- Discard the input that is only the initial deposit.
-      $ second tail <$> paths -- Discard the initial deposit from each path.
+      . filter (not . null . snd) -- Discard the input that is only the initial deposits.
+      $ second (drop initializations) <$> paths -- Discard the initial deposit from each path.
+
+-- | Do not annotate.
+unitAnnotator
+  :: [TransactionInput]
+  -- ^ The sequence of transactions.
+  -> [(TransactionInput, ())]
+unitAnnotator = fmap (,())
+
+-- | Find which roles are used for the first time to authorize a transaction along a sequence of transactions.
+firstRoleAuthorizationAnnotator
+  :: [TransactionInput]
+  -- ^ The sequence of transactions.
+  -> [(TransactionInput, S.Set P.TokenName)]
+  -- ^ The sequence of transactions, annotated with the first-time authorization of each.
+firstRoleAuthorizationAnnotator =
+  flip evalState mempty . traverse
+    \input ->
+      do
+        usedRoles <- get
+        let roleAuthorization (IDeposit _ (Role role) _ _) = S.singleton role
+            roleAuthorization (IChoice (ChoiceId _ (Role role)) _) = S.singleton role
+            roleAuthorization _ = mempty
+            roleAuthorizations = foldMap (roleAuthorization . getInputContent) $ txInputs input
+            newUses = roleAuthorizations S.\\ usedRoles
+        put $ roleAuthorizations `S.union` usedRoles
+        pure (input, newUses)
 
 -- | Run the Plutus evaluator on the Marlowe semantics validator.
 evaluateSemantics

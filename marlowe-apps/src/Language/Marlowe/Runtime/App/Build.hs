@@ -24,6 +24,7 @@ import Language.Marlowe.Runtime.Core.Api (ContractId, IsMarloweVersion (..), Mar
 import Language.Marlowe.Runtime.Transaction.Api (
   ContractCreated (..),
   ContractCreatedInEra (..),
+  Destination (ToAddress),
   InputsApplied (..),
   InputsAppliedInEra (..),
   MarloweTxCommand (ApplyInputs, Create, Withdraw),
@@ -55,7 +56,7 @@ buildCreation version' contract roles minUtxo metadata' =
   let roles' =
         if M.null roles
           then RoleTokensNone
-          else RoleTokensMint . mkMint . fmap (second (,Nothing)) . NE.fromList . M.toList $ roles
+          else RoleTokensMint . mkMint . fmap (second $ (,Nothing) . ToAddress) . NE.fromList . M.toList $ roles
    in build show (\(ContractCreated era ContractCreatedInEra{..}) -> (contractId, TxBodyInEraWithReferenceScripts era txBody)) $
         \w -> Create Nothing version' w roles' metadata' minUtxo $ Left contract
 

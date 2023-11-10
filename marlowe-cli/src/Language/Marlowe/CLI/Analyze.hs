@@ -47,6 +47,7 @@ import Language.Marlowe.Analysis.Safety.Transaction (
   findTransactions',
   foldTransactionsM,
   inputsRequiredRoles,
+  unitAnnotator,
  )
 import Language.Marlowe.Analysis.Safety.Types (Transaction (..))
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage (..), toScriptLanguageInEra)
@@ -250,7 +251,7 @@ analyzeImpl era protocol MarloweTransaction{..} preconditions roles tokens maxim
             mtSlotConfig
     transactions <-
       if checkAll || executionCost || transactionSize || best && (maximumValue || minimumUtxo)
-        then findTransactions' True $ MerkleizedContract mtContract mtContinuations
+        then findTransactions' unitAnnotator True $ MerkleizedContract mtContract mtContinuations
         else pure mempty
     let perhapsTransactions = if best then Right transactions else Left ci
         guardValue condition x =
@@ -364,7 +365,7 @@ checkMaximumValue
   :: (MonadError CliError m)
   => Api.ProtocolParameters
   -- ^ The `maxValue` protocol parameter.
-  -> Either (ContractInstance lang era) [Transaction]
+  -> Either (ContractInstance lang era) [Transaction ()]
   -- ^ The bundle of contract information, or the transactions to traverse.
   -> Bool
   -- ^ Whether to include worst-case example in output.
@@ -374,7 +375,7 @@ checkMaximumValue Api.ProtocolParameters{protocolParamMaxValueSize = Just maxVal
   let (size, worst) =
         case info of
           Right transactions ->
-            let measure tx@(Transaction _ contract _ _) = [(worstValueSize $ extractAll contract, Just tx)]
+            let measure tx@(Transaction _ contract _ _ ()) = [(worstValueSize $ extractAll contract, Just tx)]
              in maximumBy (compare `on` fst) $ foldMap measure transactions
           Left ContractInstance{..} -> (worstValueSize $ extractAllWithContinuations ciContract ciContinuations, Nothing)
    in pure $
@@ -397,7 +398,7 @@ checkMinimumUtxo
   -- ^ The era.
   -> Api.ProtocolParameters
   -- ^ The protocol parameters.
-  -> Either (ContractInstance lang era) [Transaction]
+  -> Either (ContractInstance lang era) [Transaction ()]
   -- ^ The bundle of contract information, or the transactions to traverse.
   -> Bool
   -- ^ Whether to include worst-case example in output.
@@ -423,9 +424,9 @@ checkMinimumUtxo era protocol info verbose =
     (value, worst) <-
       case info of
         Right transactions ->
-          let measure tx@(Transaction _ contract _ _) = pure . (,Just tx) <$> compute (extractAll contract)
+          let measure tx@(Transaction _ contract _ _ ()) = pure . (,Just tx) <$> compute (extractAll contract)
            in ( maximumBy (compare `on` fst)
-                  :: [(Api.Lovelace, Maybe Transaction)] -> (Api.Lovelace, Maybe Transaction)
+                  :: [(Api.Lovelace, Maybe (Transaction ()))] -> (Api.Lovelace, Maybe (Transaction ()))
               )
                 <$> foldTransactionsM measure transactions
         Left ContractInstance{..} -> fmap (,Nothing) . compute $ extractAllWithContinuations ciContract ciContinuations
@@ -442,7 +443,7 @@ checkExecutionCost
   -- ^ The protocol parameters.
   -> ContractInstance lang era
   -- ^ The bundle of contract information.
-  -> [Transaction]
+  -> [Transaction ()]
   -- ^ The transaction-paths through the contract.
   -> Bool
   -- ^ Whether to include worst-case example in output.
@@ -519,7 +520,7 @@ calcMarloweTxExBudgets
   -- ^ The protocol parameters.
   -> ContractInstance lang era
   -- ^ The bundle of contract information.
-  -> [Transaction]
+  -> [Transaction ()]
   -- ^ The transaction-path through the contract. It should be a list of *consecutive* transactions.
   -> [P.TokenName]
   -> m [MarloweExBudget]
@@ -545,7 +546,7 @@ calcMarloweTxExBudgets protocol ContractInstance{..} transactionsPath lockedRole
           transaction
 
       step (budgets, stillLockedRoles) transaction = do
-        let Transaction _ _ TransactionInput{txInputs = txInputs} _ = transaction
+        let Transaction _ _ TransactionInput{txInputs = txInputs} _ () = transaction
             requiredRoles = inputsRequiredRoles txInputs
             stillLockedRoles' = filter (`notElem` requiredRoles) stillLockedRoles
         txBudgets <- calcTxBudget transaction stillLockedRoles
@@ -566,7 +567,7 @@ checkTransactionSizes
   -- ^ The protocol parameters.
   -> ContractInstance lang era
   -- ^ The bundle of contract information.
-  -> [Transaction]
+  -> [Transaction ()]
   -- ^ The transaction-paths through the contract.
   -> Bool
   -- ^ Whether to include worst-case example in output.
@@ -599,11 +600,11 @@ checkTransactionSize
   -- ^ The protocol parameters.
   -> ContractInstance lang era
   -- ^ The bundle of contract information.
-  -> Transaction
+  -> Transaction ()
   -- ^ The transaction-paths through the contract.
   -> m Int
   -- ^ Action to measure the transaction size.
-checkTransactionSize era protocol ContractInstance{..} (Transaction marloweState marloweContract TransactionInput{..} output) =
+checkTransactionSize era protocol ContractInstance{..} (Transaction marloweState marloweContract TransactionInput{..} output ()) =
   do
     -- We only attend to details that make affect the *size* of the transaction, so
     -- the transaction itself does not actually need to be valid.

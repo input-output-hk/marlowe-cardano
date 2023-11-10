@@ -12,8 +12,9 @@
 -- | Web API.
 module Language.Marlowe.Runtime.Web.Types where
 
+import Control.Applicative ((<|>))
 import Control.Lens hiding ((.=))
-import Control.Monad ((<=<))
+import Control.Monad (unless, (<=<))
 import Data.Aeson
 import Data.Aeson.Text (encodeToLazyText)
 import Data.Aeson.Types (Parser, parseFail, toJSONKeyText)
@@ -52,6 +53,7 @@ import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text.Lazy as TL
 import Data.Time (UTCTime)
 import Data.Time.Format.ISO8601 (iso8601Show)
+import Data.Traversable (for)
 import Data.Version (Version)
 import Data.Word (Word16, Word32, Word64)
 import GHC.Exts (IsList)
@@ -816,15 +818,35 @@ instance ToSchema ContractOrSourceId where
 
 data RolesConfig
   = UsePolicy PolicyId
+  | UsePolicyWithOpenRoles PolicyId Text [Text]
   | Mint (Map Text RoleTokenConfig)
   deriving (Show, Eq, Ord, Generic)
 
 instance FromJSON RolesConfig where
   parseJSON (String s) = UsePolicy <$> parseJSON (String s)
-  parseJSON value = Mint <$> parseJSON value
+  parseJSON value =
+    withObject
+      "RoleConfig"
+      ( \obj ->
+          let parseMint = Mint <$> parseJSON value
+              parseOpen =
+                do
+                  script <- obj .: "script"
+                  unless (script == ("OpenRole" :: String)) $ fail "AllowedValues: \"OpenRole\""
+                  UsePolicyWithOpenRoles <$> obj .: "policyId" <*> obj .: "threadRoleName" <*> obj .: "openRoleNames"
+           in parseOpen <|> parseMint
+      )
+      value
 
 instance ToJSON RolesConfig where
   toJSON (UsePolicy policy) = toJSON policy
+  toJSON (UsePolicyWithOpenRoles policy threadRoleName openRoleNames) =
+    object
+      [ "script" .= ("OpenRole" :: String)
+      , "policyId" .= policy
+      , "threadRoleName" .= threadRoleName
+      , "openRoleNames" .= openRoleNames
+      ]
   toJSON (Mint configs) = toJSON configs
 
 instance ToSchema RolesConfig where
@@ -836,25 +858,54 @@ instance ToSchema RolesConfig where
         mempty
           & oneOf ?~ [policySchema, mintSchema]
 
-data RoleTokenConfig
-  = RoleTokenSimple Address
-  | RoleTokenAdvanced Address TokenMetadata
+data RoleTokenConfig = RoleTokenConfig
+  { role :: Role
+  , metadata :: Maybe TokenMetadata
+  }
+  deriving (Show, Eq, Ord, Generic)
+
+data Role
+  = ClosedRole Address
+  | OpenRole
+  | ThreadRole
   deriving (Show, Eq, Ord, Generic)
 
 instance FromJSON RoleTokenConfig where
-  parseJSON (String s) = pure $ RoleTokenSimple $ Address s
+  parseJSON (String s) = pure . flip RoleTokenConfig Nothing . ClosedRole $ Address s
   parseJSON value =
     withObject
       "RoleTokenConfig"
-      (\obj -> RoleTokenAdvanced <$> obj .: "address" <*> obj .: "metadata")
+      ( \obj -> do
+          mAddress <- obj .:? "address"
+          mScriptRole <- do
+            mScript :: Maybe String <- obj .:? "script"
+            for mScript \case
+              "ThreadRole" -> pure ThreadRole
+              "OpenRole" -> pure OpenRole
+              _ -> fail "Expected one of \"ThreadRole\" or \'OpenRole\""
+          metadata <- obj .:? "metadata"
+          role <- case (mAddress, mScriptRole) of
+            (Just address, _) -> pure $ ClosedRole address
+            (_, Just scriptRole) -> pure scriptRole
+            _ -> fail "one of address or script required"
+          pure RoleTokenConfig{..}
+      )
       value
 
 instance ToJSON RoleTokenConfig where
-  toJSON (RoleTokenSimple address) = toJSON address
-  toJSON (RoleTokenAdvanced address config) =
+  toJSON (RoleTokenConfig (ClosedRole address) Nothing) = toJSON address
+  toJSON (RoleTokenConfig (ClosedRole address) config) =
     object
-      [ ("address", toJSON address)
-      , ("metadata", toJSON config)
+      [ "address" .= address
+      , "metadata" .= config
+      ]
+  toJSON (RoleTokenConfig scriptRole Nothing) =
+    object
+      ["script" .= show scriptRole]
+  toJSON (RoleTokenConfig scriptRole config) =
+    object
+      [ "script" .= show scriptRole
+      , "metadata" .= config
       ]
 
 instance ToSchema RoleTokenConfig where
@@ -869,10 +920,23 @@ instance ToSchema RoleTokenConfig where
               .~ [ ("address", simpleSchema)
                  , ("metadata", metadataSchema)
                  ]
+        scriptSchema =
+          mempty
+            & type_ ?~ OpenApiString
+            & OpenApi.description ?~ "The type of script receiving the role token."
+            & enum_ ?~ ["ThreadRole", "OpenRole"]
+        openSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ ["script"]
+            & properties
+              .~ [ ("script", Inline scriptSchema)
+                 , ("metadata", metadataSchema)
+                 ]
     pure $
       NamedSchema (Just "RoleTokenConfig") $
         mempty
-          & oneOf ?~ [simpleSchema, Inline advancedSchema]
+          & oneOf ?~ [simpleSchema, Inline advancedSchema, Inline openSchema]
 
 data TokenMetadata = TokenMetadata
   { name :: Text

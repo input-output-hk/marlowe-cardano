@@ -44,7 +44,7 @@ import Cardano.Api.Shelley (
  )
 import qualified Cardano.Ledger.Alonzo.Scripts as Ledger.Alonzo.Scripts
 import qualified Cardano.Ledger.Core as Ledger.Core
-import Control.Arrow (Arrow (..), second)
+import Control.Arrow (Arrow (..))
 import Control.Error.Util (hush)
 import Control.Monad ((<=<))
 import Control.Monad.Except (MonadError, throwError)
@@ -67,6 +67,7 @@ import Data.Traversable (for)
 import Data.Word (Word16, Word64)
 import GHC.TypeLits (KnownSymbol)
 import qualified Language.Marlowe.Core.V1.Semantics as Sem
+import Language.Marlowe.Runtime.Core.ScriptRegistry as Tx (HelperScript (..))
 
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Sem
 
@@ -791,6 +792,7 @@ instance FromDTO Tx.RoleTokensConfig where
   fromDTO = \case
     Nothing -> pure Tx.RoleTokensNone
     Just (Web.UsePolicy policy) -> Tx.RoleTokensUsePolicy <$> fromDTO policy
+    Just (Web.UsePolicyWithOpenRoles policy threadRoleName openRoleNames) -> Tx.RoleTokensUsePolicyWithOpenRoles <$> fromDTO policy <*> fromDTO threadRoleName <*> fromDTO openRoleNames
     Just (Web.Mint mint) -> Tx.RoleTokensMint <$> fromDTO mint
 
 instance HasDTO Tx.Mint where
@@ -803,12 +805,16 @@ instance FromDTO Tx.Mint where
       <=< toNonEmpty
         . Map.toList
     where
-      convertConfig = \case
-        Web.RoleTokenSimple address -> (,Nothing) <$> fromDTO address
-        Web.RoleTokenAdvanced address metadata ->
-          curry (second Just)
-            <$> fromDTO address
-            <*> fromDTO metadata
+      convertConfig (Web.RoleTokenConfig role metadata) =
+        flip (,) <$> fromDTO metadata <*> case role of
+          Web.ClosedRole address -> Tx.ToAddress <$> fromDTO address
+          Web.ThreadRole -> pure Tx.ToSelf
+          Web.OpenRole -> pure $ Tx.ToScript Tx.OpenRoleScript
+
+--    convertConfig = \case
+--      (Web.RoleTokenConfig (Web.ClosedRole address) metadata) -> (,) <$> (Tx.ToAddress <$> fromDTO address) <*> fromDTO metadata
+--      (Web.RoleTokenConfig Web.ThreadRole metadata) -> (Tx.ToSelf, ) <$> fromDTO metadata
+--      (Web.RoleTokenConfig Web.OpenRole metadata) -> (Tx.ToScript Tx.OpenRoleScript, ) <$> fromDTO metadata
 
 instance HasDTO Tx.RoleTokenMetadata where
   type DTO Tx.RoleTokenMetadata = Web.TokenMetadata

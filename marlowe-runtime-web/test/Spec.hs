@@ -263,10 +263,15 @@ instance Arbitrary Web.RolesConfig where
   shrink = genericShrink
 
 instance Arbitrary Web.RoleTokenConfig where
+  arbitrary = Web.RoleTokenConfig <$> arbitrary <*> arbitrary
+  shrink = genericShrink
+
+instance Arbitrary Web.Role where
   arbitrary =
     oneof
-      [ Web.RoleTokenSimple <$> arbitrary
-      , Web.RoleTokenAdvanced <$> arbitrary <*> arbitrary
+      [ Web.ClosedRole <$> arbitrary
+      , pure Web.OpenRole
+      , pure Web.ThreadRole
       ]
   shrink = genericShrink
 

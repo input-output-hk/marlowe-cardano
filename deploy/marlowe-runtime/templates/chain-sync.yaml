@@ -26,7 +26,7 @@ spec:
       - name: HTTP_PORT
         value: "3782"
       - name: OTEL_EXPORTER_OTLP_ENDPOINT
-        value: http://grafana-agent.grafana-agent:4318
+        value: {{ $.Values.otelExporterURL }}:{{ $.Values.otelExporterPort }}
       - name: OTEL_SERVICE_NAME
         value: marlowe-chain-sync-{{ $network }}-{{ $instanceName }}
       - name: CARDANO_NODE_SOCKET_PATH

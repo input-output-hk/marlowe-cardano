@@ -30,12 +30,14 @@ import qualified Language.Marlowe.Runtime.Indexer.Store as MarloweIndexer
 import qualified Language.Marlowe.Runtime.Sync as Sync
 import qualified Language.Marlowe.Runtime.Sync.Database as Sync
 import Language.Marlowe.Runtime.Transaction (
+  renderLoadHelpersContextSelectorOTel,
   renderLoadMarloweContextSelectorOTel,
   renderLoadPayoutContextSelectorOTel,
   renderLoadWalletContextSelectorOTel,
   renderTransactionServerSelectorOTel,
  )
 import qualified Language.Marlowe.Runtime.Transaction.Query as Q
+import qualified Language.Marlowe.Runtime.Transaction.Query.Helper as Q
 import Language.Marlowe.Runtime.Transaction.Server (TransactionServerSelector)
 import Network.Protocol.Driver.Trace (TcpServerSelector, renderTcpServerSelectorOTel)
 import Network.Protocol.Handshake.Types (Handshake)
@@ -58,6 +60,7 @@ data RootSelector f where
   LoadWalletContext :: Q.LoadWalletContextSelector f -> RootSelector f
   LoadMarloweContext :: Q.LoadMarloweContextSelector f -> RootSelector f
   LoadPayoutContext :: Q.LoadPayoutContextSelector f -> RootSelector f
+  LoadHelpersContext :: Q.LoadHelpersContextSelector f -> RootSelector f
   ContractStoreSelector :: ContractStoreSelector f -> RootSelector f
 
 instance Inject RootSelector RootSelector where
@@ -95,6 +98,9 @@ instance Inject Q.LoadMarloweContextSelector RootSelector where
 
 instance Inject Q.LoadPayoutContextSelector RootSelector where
   inject = injectSelector LoadPayoutContext
+
+instance Inject Q.LoadHelpersContextSelector RootSelector where
+  inject = injectSelector LoadHelpersContext
 
 instance Inject TransactionServerSelector RootSelector where
   inject = injectSelector MarloweTx
@@ -138,4 +144,5 @@ renderRootSelectorOTel dbName dbUser host port = \case
   LoadWalletContext sel -> renderLoadWalletContextSelectorOTel sel
   LoadMarloweContext sel -> renderLoadMarloweContextSelectorOTel sel
   LoadPayoutContext sel -> renderLoadPayoutContextSelectorOTel sel
+  LoadHelpersContext sel -> renderLoadHelpersContextSelectorOTel sel
   ContractStoreSelector sel -> renderContractStoreSelectorOTel sel

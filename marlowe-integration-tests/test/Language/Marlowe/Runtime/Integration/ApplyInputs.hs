@@ -1037,7 +1037,7 @@ utcTimeToPOSIXTime :: UTCTime -> POSIXTime
 utcTimeToPOSIXTime = POSIXTime . floor . (* 1000) . utcTimeToPOSIXSeconds
 
 mkRoleTokens :: [(TokenName, Wallet)] -> RoleTokensConfig
-mkRoleTokens = RoleTokensMint . mkMint . (fmap . fmap) ((,Nothing) . changeAddress . addresses) . NE.fromList
+mkRoleTokens = RoleTokensMint . mkMint . (fmap . fmap) ((,Nothing) . ToAddress . changeAddress . addresses) . NE.fromList
 
 submitCreate :: Wallet -> ContractCreated 'V1 -> Integration ()
 submitCreate wallet (ContractCreated era ContractCreatedInEra{..}) = void $ submit wallet era txBody

@@ -19,7 +19,21 @@ import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
 spec :: Spec
 spec = describe "Valid POST /contracts" do
-  it "returns the contract header" $ withLocalMarloweRuntime $ runIntegrationTest do
+  it "returns the contract header"
+    . specWithRolesConfig
+    $ Web.Mint . Map.singleton "PartyA" . flip Web.RoleTokenConfig Nothing . Web.ClosedRole
+  it "returns the contract header (open roles)"
+    . specWithRolesConfig
+    . const
+    . Web.Mint
+    $ Map.fromList
+      [ ("Thread", Web.RoleTokenConfig Web.ThreadRole Nothing)
+      , ("PartyA", Web.RoleTokenConfig Web.OpenRole Nothing)
+      ]
+
+specWithRolesConfig :: (Web.Address -> Web.RolesConfig) -> IO ()
+specWithRolesConfig roles =
+  withLocalMarloweRuntime $ runIntegrationTest do
     partyAWallet <- getGenesisWallet 0
     partyBWallet <- getGenesisWallet 1
 
@@ -45,7 +59,7 @@ spec = describe "Valid POST /contracts" do
           Web.PostContractsRequest
             { metadata = mempty
             , version = Web.V1
-            , roles = Just $ Web.Mint $ Map.singleton "PartyA" $ Web.RoleTokenSimple partyAWebChangeAddress
+            , roles = Just $ roles partyAWebChangeAddress
             , contract = ContractOrSourceId $ Left contract
             , minUTxODeposit = Nothing
             , tags = mempty

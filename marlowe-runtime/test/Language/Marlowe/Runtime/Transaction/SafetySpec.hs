@@ -2,27 +2,6 @@
 
 module Language.Marlowe.Runtime.Transaction.SafetySpec where
 
-import Data.List (isInfixOf, nub)
-import Data.Maybe (fromJust)
-import Language.Marlowe.Analysis.Safety.Types (SafetyError (..))
-import Language.Marlowe.Runtime.Core.Api (MarloweVersion (MarloweV1))
-import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts (..), getCurrentScripts)
-import Language.Marlowe.Runtime.Transaction.Api (Mint (..), RoleTokensConfig (..))
-import Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec ()
-import Language.Marlowe.Runtime.Transaction.Constraints (MarloweContext (..))
-import Language.Marlowe.Runtime.Transaction.ConstraintsSpec (protocolTestnet)
-import Language.Marlowe.Runtime.Transaction.Safety (
-  checkContract,
-  checkTransactions,
-  minAdaUpperBound,
-  noContinuations,
- )
-import Spec.Marlowe.Reference (readReferenceContracts)
-import Spec.Marlowe.Semantics.Arbitrary ()
-import Test.Hspec (Spec, describe, expectationFailure, it, runIO)
-import Test.Hspec.QuickCheck (prop)
-import Test.QuickCheck (counterexample, discard, elements, generate, sublistOf, suchThat, (===))
-
 import qualified Cardano.Api as Cardano (
   AddressInEra (..),
   AddressTypeInEra (..),
@@ -45,7 +24,10 @@ import Cardano.Api.Shelley (CardanoEra (..), ReferenceTxInsScriptsInlineDatumsSu
 import qualified Cardano.Api.Shelley as Shelley (ReferenceScript (..), StakeAddressReference (..))
 import Data.Either (fromRight)
 import Data.Foldable (for_)
-import qualified Data.Map.Strict as M (fromList, keys, lookup, mapKeys, toList)
+import Data.List (isInfixOf, nub)
+import qualified Data.Map.Strict as M (empty, fromList, keys, lookup, mapKeys, singleton, toList, (!))
+import Data.Maybe (fromJust)
+import Language.Marlowe.Analysis.Safety.Types (SafetyError (..))
 import Language.Marlowe.Core.V1.Merkle as V1 (MerkleizedContract (..), deepMerkleize, merkleizedContract)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1
@@ -65,6 +47,25 @@ import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain (
   TokenName (..),
   Tokens (..),
  )
+import Language.Marlowe.Runtime.Core.Api (MarloweVersion (MarloweV1))
+import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript (..), MarloweScripts (..), getCurrentScripts)
+import Language.Marlowe.Runtime.Transaction.Api (Mint (..), RoleTokensConfig (..))
+import Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec ()
+import Language.Marlowe.Runtime.Transaction.Constraints (
+  HelperScriptInfo (..),
+  HelperScriptState (HelperScriptState),
+  HelpersContext (..),
+  MarloweContext (..),
+ )
+import Language.Marlowe.Runtime.Transaction.ConstraintsSpec (protocolTestnet)
+import Language.Marlowe.Runtime.Transaction.Query.Helper (getHelperInfos)
+import Language.Marlowe.Runtime.Transaction.Safety (
+  checkContract,
+  checkTransactions,
+  minAdaUpperBound,
+  mkAdjustMinimumUtxo,
+  noContinuations,
+ )
 import qualified PlutusLedgerApi.V2 as Plutus (
   Address (..),
   Credential (..),
@@ -73,6 +74,11 @@ import qualified PlutusLedgerApi.V2 as Plutus (
   TokenName (..),
  )
 import qualified PlutusTx.Builtins as Plutus (fromBuiltin, lengthOfByteString, toBuiltin)
+import Spec.Marlowe.Reference (readReferenceContracts)
+import Spec.Marlowe.Semantics.Arbitrary ()
+import Test.Hspec (Spec, describe, expectationFailure, it, runIO)
+import Test.Hspec.QuickCheck (prop)
+import Test.QuickCheck (counterexample, discard, elements, generate, sublistOf, suchThat, (===))
 import Test.QuickCheck.Arbitrary (arbitrary)
 
 spec :: Spec
@@ -80,6 +86,8 @@ spec =
   do
     let testnet = Cardano.Testnet $ Cardano.NetworkMagic 1
         version = MarloweV1
+        adjustMinUtxo = mkAdjustMinimumUtxo ReferenceTxInsScriptsInlineDatumsInBabbageEra protocolTestnet MarloweV1
+        emptyHelpersContext = HelpersContext M.empty "" M.empty
         continuations = noContinuations version
         party = V1.Role "x"
         payee = V1.Party party
@@ -111,7 +119,16 @@ spec =
                       <$> bundleProtocolParams BabbageEra protocolTestnet
                     :: Cardano.Lovelace
                 contract = foldr payToken V1.Close tokens -- The tokens just need to appear somewhere in the contract.
-                actual = fromJust $ minAdaUpperBound protocolTestnet version contract continuations :: Cardano.Lovelace
+                actual =
+                  fromJust $
+                    minAdaUpperBound
+                      ReferenceTxInsScriptsInlineDatumsInBabbageEra
+                      protocolTestnet
+                      version
+                      (V1.emptyState 0)
+                      contract
+                      continuations
+                    :: Cardano.Lovelace
             counterexample ("Expected minUTxO = " <> show expected) $
               counterexample ("Actual minUTxO = " <> show actual) $
                 actual >= expected
@@ -290,16 +307,27 @@ spec =
           overspent _ = False
       for_ referenceContracts \(name, contract) -> it ("Passes for reference contract " <> name) do
         (policy, address) <- generate arbitrary
-        let minAda = maybe 0 toInteger $ minAdaUpperBound protocolTestnet version contract continuations
+        let minAda =
+              maybe 1_500_000 toInteger $
+                minAdaUpperBound
+                  ReferenceTxInsScriptsInlineDatumsInBabbageEra
+                  protocolTestnet
+                  version
+                  (V1.emptyState 0)
+                  contract
+                  mempty
         actual <-
           checkTransactions
             protocolTestnet
             ReferenceTxInsScriptsInlineDatumsInBabbageEra
             version
             marloweContext
+            emptyHelpersContext
             policy
+            Nothing
             address
-            minAda
+            (Chain.Assets (fromIntegral minAda) (Chain.Tokens mempty))
+            adjustMinUtxo
             contract
             continuations
         case actual of
@@ -313,7 +341,7 @@ spec =
       prop
         "Contract with prohibitive execution cost"
         do
-          let minAda = 3_000_000
+          let minAda = Chain.Assets 3_000_000 (Chain.Tokens mempty)
               policy = "46e79d4fbf0dd6766f8601fdec651ad708af7115fd8f7b5e14b622e5"
               address = "608db2b806ba9e7ae2909ae38afc6c1bce02f5df3e1cb1b06cbc80546f"
               ada = V1.Token "" ""
@@ -330,12 +358,74 @@ spec =
               ReferenceTxInsScriptsInlineDatumsInBabbageEra
               version
               marloweContext
+              emptyHelpersContext
               policy
+              Nothing
               address
               minAda
+              adjustMinUtxo
               contract
               continuations
           case actual of
             Right errs
               | all overspent errs -> pure ()
+            _otherwise -> expectationFailure $ "Unexpected result: " <> show actual
+      prop
+        "Contract with open roles"
+        do
+          let address = "608db2b806ba9e7ae2909ae38afc6c1bce02f5df3e1cb1b06cbc80546f"
+              helperPolicyId = "46e79d4fbf0dd6766f8601fdec651ad708af7115fd8f7b5e14b622e5"
+              currentHelperScripts = getHelperInfos helperScript networkId $ getCurrentScripts MarloweV1
+              helperScriptStates = M.singleton "Beneficiary" $ HelperScriptState (currentHelperScripts M.! OpenRoleScript) Nothing
+              helpersContext = HelpersContext{..}
+              benefactor = "Benefactor"
+              beneficiary = "Beneficiary"
+              initialValue =
+                Chain.Assets 3_000_000
+                  . Chain.Tokens
+                  . flip M.singleton 1
+                  $ Chain.AssetId helperPolicyId "Thread"
+              amount = V1.Constant 8_000_000
+              ada = V1.Token "" ""
+              contract =
+                V1.When
+                  [ V1.Case (V1.Deposit (V1.Role benefactor) (V1.Role benefactor) ada amount) $
+                      V1.When
+                        [ V1.Case
+                            (V1.Deposit (V1.Role beneficiary) (V1.Role beneficiary) ada amount)
+                            $ V1.Pay (V1.Role benefactor) (V1.Account (V1.Role beneficiary)) ada amount
+                            $ V1.When
+                              [ V1.Case
+                                  (V1.Notify V1.TrueObs)
+                                  V1.Close
+                              ]
+                              30_000
+                              V1.Close
+                        ]
+                        20_000
+                        V1.Close
+                  ]
+                  10_000
+                  V1.Close
+          actual <-
+            checkTransactions
+              protocolTestnet
+              ReferenceTxInsScriptsInlineDatumsInBabbageEra
+              version
+              marloweContext
+              helpersContext
+              helperPolicyId
+              (Just "Thread")
+              address
+              initialValue
+              adjustMinUtxo
+              contract
+              continuations
+          case actual of
+            -- Overspending or warnings are not a test failures.
+            Right errs
+              | all overspentOrWarning errs -> pure ()
+            -- An ambiguous time interval occurs when the timeouts have non-zero milliseconds are too close for there to be a valid slot for a transaction.
+            Left "ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed \"TEAmbiguousTimeIntervalError\")" -> pure ()
+            -- All other results are test failures.
             _otherwise -> expectationFailure $ "Unexpected result: " <> show actual

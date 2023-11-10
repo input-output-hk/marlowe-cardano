@@ -16,6 +16,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (
  )
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Transaction (
+  renderLoadHelpersContextSelectorOTel,
   renderLoadMarloweContextSelectorOTel,
   renderLoadPayoutContextSelectorOTel,
   renderLoadWalletContextSelectorOTel,
@@ -23,6 +24,7 @@ import Language.Marlowe.Runtime.Transaction (
  )
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import qualified Language.Marlowe.Runtime.Transaction.Query as Q
+import qualified Language.Marlowe.Runtime.Transaction.Query.Helper as Q
 import Language.Marlowe.Runtime.Transaction.Server
 import Network.Protocol.Driver.Trace (
   TcpClientSelector,
@@ -47,6 +49,7 @@ data RootSelector f where
   LoadWalletContext :: Q.LoadWalletContextSelector f -> RootSelector f
   LoadMarloweContext :: Q.LoadMarloweContextSelector f -> RootSelector f
   LoadPayoutContext :: Q.LoadPayoutContextSelector f -> RootSelector f
+  LoadHelpersContext :: Q.LoadHelpersContextSelector f -> RootSelector f
 
 instance Inject RootSelector RootSelector where
   inject = idInjectSelector
@@ -59,6 +62,9 @@ instance Inject Q.LoadMarloweContextSelector RootSelector where
 
 instance Inject Q.LoadPayoutContextSelector RootSelector where
   inject = injectSelector LoadPayoutContext
+
+instance Inject Q.LoadHelpersContextSelector RootSelector where
+  inject = injectSelector LoadHelpersContext
 
 instance Inject TransactionServerSelector RootSelector where
   inject = injectSelector App
@@ -74,3 +80,4 @@ renderRootSelectorOTel = \case
   LoadWalletContext sel -> renderLoadWalletContextSelectorOTel sel
   LoadMarloweContext sel -> renderLoadMarloweContextSelectorOTel sel
   LoadPayoutContext sel -> renderLoadPayoutContextSelectorOTel sel
+  LoadHelpersContext sel -> renderLoadHelpersContextSelectorOTel sel

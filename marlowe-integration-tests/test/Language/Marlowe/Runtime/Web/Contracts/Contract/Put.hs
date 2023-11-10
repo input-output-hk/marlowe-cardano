@@ -8,7 +8,7 @@ import Language.Marlowe.Runtime.Integration.Common
 import Language.Marlowe.Runtime.Integration.StandardContract (standardContract)
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses (..))
-import Language.Marlowe.Runtime.Web (ContractOrSourceId (..), RoleTokenConfig (RoleTokenSimple))
+import Language.Marlowe.Runtime.Web (ContractOrSourceId (..), Role (ClosedRole), RoleTokenConfig (..))
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Client (postContract, putContract)
 import Language.Marlowe.Runtime.Web.Common (signShelleyTransaction')
@@ -45,7 +45,7 @@ spec = describe "POST /contracts/{contractId}/transactions" do
           Web.PostContractsRequest
             { metadata = mempty
             , version = Web.V1
-            , roles = Just $ Web.Mint $ Map.singleton "PartyA" $ RoleTokenSimple partyAWebChangeAddress
+            , roles = Just $ Web.Mint $ Map.singleton "PartyA" $ RoleTokenConfig (ClosedRole partyAWebChangeAddress) Nothing
             , contract = ContractOrSourceId $ Left contract
             , minUTxODeposit = Nothing
             , tags = mempty

@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Language.Marlowe.Runtime.Transaction.Safety (
   Continuations,
@@ -8,6 +9,7 @@ module Language.Marlowe.Runtime.Transaction.Safety (
   checkTransactions,
   makeSystemHistory,
   minAdaUpperBound,
+  mkAdjustMinimumUtxo,
   noContinuations,
 ) where
 
@@ -27,19 +29,22 @@ import Language.Marlowe.Analysis.Safety.Ledger (
   checkNetworks,
   checkRoleNames,
   checkTokens,
-  worstMinimumUtxo',
+  worstValue,
  )
-import Language.Marlowe.Analysis.Safety.Transaction (findTransactions)
-import Language.Marlowe.Analysis.Safety.Types (SafetyError (..), Transaction (..))
+import Language.Marlowe.Analysis.Safety.Transaction (findTransactions, firstRoleAuthorizationAnnotator)
+import Language.Marlowe.Analysis.Safety.Types (SafetyError (..), Transaction (..), stripAnnotation)
 import Language.Marlowe.Runtime.Core.Api (
   Contract,
   MarloweTransactionMetadata (..),
   MarloweVersion (MarloweV1),
   TransactionScriptOutput (..),
  )
-import Language.Marlowe.Runtime.Transaction.Api (Mint (..), RoleTokensConfig (..))
-import Language.Marlowe.Runtime.Transaction.BuildConstraints (buildApplyInputsConstraints)
+import Language.Marlowe.Runtime.Transaction.Api (Destination (ToSelf), Mint (..), RoleTokensConfig (..))
+import Language.Marlowe.Runtime.Transaction.BuildConstraints (buildApplyInputsConstraints, safeLovelace)
 import Language.Marlowe.Runtime.Transaction.Constraints (
+  HelperScriptInfo (helperAddress),
+  HelperScriptState (..),
+  HelpersContext (..),
   MarloweContext (..),
   MarloweOutputConstraints (..),
   RoleTokenConstraints (..),
@@ -48,7 +53,7 @@ import Language.Marlowe.Runtime.Transaction.Constraints (
   solveConstraints,
  )
 
-import qualified Cardano.Api as Cardano (Lovelace, NetworkId (Mainnet))
+import qualified Cardano.Api as Cardano
 import qualified Cardano.Api.Shelley as C
 import qualified Cardano.Api.Shelley as Shelley (
   CardanoMode,
@@ -59,9 +64,24 @@ import qualified Cardano.Api.Shelley as Shelley (
  )
 import Control.Monad.IO.Class (MonadIO)
 import Data.Functor.Identity (runIdentity)
-import qualified Data.Map.Strict as M (Map, elems, empty, fromList, keys, map, mapKeys, singleton, size)
+import qualified Data.Map.Strict as M (
+  Map,
+  elems,
+  empty,
+  filter,
+  fromList,
+  fromSet,
+  intersection,
+  keys,
+  keysSet,
+  map,
+  mapKeys,
+  singleton,
+  size,
+  toList,
+ )
 import qualified Data.SOP.Counting as Ouroboros
-import qualified Data.Set as S (singleton)
+import qualified Data.Set as S (Set, intersection, map, singleton)
 import qualified Language.Marlowe.Core.V1.Merkle as V1 (MerkleizedContract (..))
 import qualified Language.Marlowe.Core.V1.Plate as V1 (extractAllWithContinuations)
 import qualified Language.Marlowe.Core.V1.Semantics as V1 (
@@ -72,10 +92,16 @@ import qualified Language.Marlowe.Core.V1.Semantics as V1 (
  )
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1 (Party (Address), State (..), Token (..))
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1 (deserialiseAddress)
+import qualified Language.Marlowe.Runtime.Cardano.Api as Chain (
+  assetsToCardanoValue,
+  fromCardanoDatumHash,
+  toCardanoScriptData,
+ )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain (
   Address (..),
   AssetId (..),
   Assets (..),
+  Datum (B),
   DatumHash (..),
   PolicyId (..),
   SlotNo (..),
@@ -85,6 +111,12 @@ import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain (
   TransactionOutput (..),
   TxOutRef,
   UTxOs (..),
+ )
+import qualified Language.Marlowe.Runtime.Plutus.V2.Api as Chain (
+  fromPlutusTokenName,
+  fromPlutusValue,
+  toPlutusCurrencySymbol,
+  toPlutusTokenName,
  )
 import qualified Ouroboros.Consensus.BlockchainTime as Ouroboros (RelativeTime (..), mkSlotLength, toRelativeTime)
 import qualified Ouroboros.Consensus.HardFork.History as Ouroboros (
@@ -107,7 +139,7 @@ import qualified PlutusLedgerApi.V2 as Plutus (
   fromBuiltin,
   toBuiltin,
  )
-import qualified PlutusTx.AssocMap as AM (toList)
+import qualified PlutusTx.AssocMap as AM (fromList, toList)
 
 -- FIXME: Relocate this definition when full support for Merkleization is added to Runtime.
 type Continuations v = M.Map Chain.DatumHash (Contract v)
@@ -124,17 +156,86 @@ remapContinuations
   -> M.Map Plutus.DatumHash contract
 remapContinuations = M.mapKeys $ Plutus.DatumHash . Plutus.toBuiltin . Chain.unDatumHash
 
--- | Compute a worst-case bound on the minimum UTxO value for a contract, assuming that the contract does not pay from the account in the initial state and that account only contains lovelace.
+-- | Compute a worst-case bound on the minimum UTxO value for a contract, assuming that the contract does not pay
+--   from the account in the initial state and that account only contains lovelace. Assume that a datum hash is
+--   present in the TxOut and that the address contains a stake credential.
 minAdaUpperBound
-  :: Shelley.ProtocolParameters
+  :: forall era v
+   . C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  -> Shelley.ProtocolParameters
   -> MarloweVersion v
+  -> V1.State
   -> Contract v
   -> Continuations v
   -> Maybe Cardano.Lovelace
-minAdaUpperBound Shelley.ProtocolParameters{protocolParamUTxOCostPerByte} MarloweV1 contract continuations =
-  fromInteger
-    . (\utxoCostPerByte -> worstMinimumUtxo' (toInteger utxoCostPerByte) contract $ remapContinuations continuations)
-    <$> protocolParamUTxOCostPerByte
+minAdaUpperBound era pps MarloweV1 state contract continuations =
+  minAdaBound era pps MarloweV1
+    . Chain.fromPlutusValue
+    . worstValue (Just state) contract
+    $ remapContinuations continuations
+
+-- | Adjust the ada in a TxOut upwards, if needed to satisfy the minimum UTxO ledger rule. Assume that a datum hash is
+-- present in the TxOut and that the address contains a stake credential.
+mkAdjustMinimumUtxo
+  :: forall era v
+   . C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  -> Shelley.ProtocolParameters
+  -> MarloweVersion v
+  -> Chain.Assets
+  -> Chain.Assets
+mkAdjustMinimumUtxo era pps MarloweV1 assets@Chain.Assets{ada, tokens} =
+  let minLovelace =
+        maybe 30_000_000 toInteger $ -- Safe for all UTxOs.
+          minAdaBound era pps MarloweV1 assets
+   in if minLovelace > toInteger ada
+        then Chain.Assets (fromInteger minLovelace) tokens
+        else assets
+
+-- | Compute a worst-case bound on the minimum TxOut value for assets. Assume that a datum hash is present in the
+--   TxOut and that the address contains a stake credential.
+minAdaBound
+  :: forall era v
+   . C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  -> Shelley.ProtocolParameters
+  -> MarloweVersion v
+  -> Chain.Assets
+  -> Maybe Cardano.Lovelace
+minAdaBound era pps MarloweV1 assets =
+  do
+    let -- Ugh, the era handling can be done much better, but this is how it's done elsewhere in the codebase.
+        multiAssetSupported :: C.MultiAssetSupportedInEra era
+        multiAssetSupported = case era of
+          C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.MultiAssetInBabbageEra
+          C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.MultiAssetInConwayEra
+        scriptDataSupported :: C.ScriptDataSupportedInEra era
+        scriptDataSupported = case era of
+          C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.ScriptDataInBabbageEra
+          C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.ScriptDataInConwayEra
+        shelleyBasedEra = case era of
+          C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.ShelleyBasedEraBabbage
+          C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.ShelleyBasedEraConway
+        cardanoEra = case era of
+          C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.BabbageEra
+          C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.ConwayEra
+    address <-
+      case era of
+        C.ReferenceTxInsScriptsInlineDatumsInBabbageEra ->
+          C.deserialiseAddress
+            (C.AsAddressInEra C.AsBabbageEra)
+            "addr1x8ur42seq20ytdzm33fhjf3c2pxskxf3gzxq706qk7p5muhc824pjq57gk69hrzn0ynrs5zdpvvnzsyvpul5pdurfheq28w2dx"
+        C.ReferenceTxInsScriptsInlineDatumsInConwayEra ->
+          C.deserialiseAddress
+            (C.AsAddressInEra C.AsConwayEra)
+            "addr1x8ur42seq20ytdzm33fhjf3c2pxskxf3gzxq706qk7p5muhc824pjq57gk69hrzn0ynrs5zdpvvnzsyvpul5pdurfheq28w2dx"
+    value <- Chain.assetsToCardanoValue assets
+    let txOut =
+          Cardano.TxOut
+            address
+            (Cardano.TxOutValue multiAssetSupported value)
+            (Cardano.TxOutDatumHash scriptDataSupported "45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0")
+            C.ReferenceScriptNone
+    bpps <- either (const Nothing) Just $ C.bundleProtocolParams cardanoEra pps
+    pure $ Cardano.calculateMinimumUTxO shelleyBasedEra txOut bpps
 
 -- | Check a contract for design errors and ledger violations.
 checkContract
@@ -153,11 +254,13 @@ checkContract network config MarloweV1 contract continuations =
           (RoleTokensNone, True) -> mempty
           (_, True) -> pure ContractHasNoRoles
           (RoleTokensMint mint, False) ->
-            let minted = Plutus.TokenName . Plutus.toBuiltin . Chain.unTokenName <$> M.keys (unMint mint)
+            let minted = Chain.toPlutusTokenName <$> M.keys (M.filter ((/= ToSelf) . fst) $ unMint mint)
                 missing = MissingRoleToken <$> filter (`notElem` minted) roles
                 extra = ExtraRoleToken <$> filter (`notElem` roles) minted
              in missing <> extra
-          _ -> mempty
+          (RoleTokensUsePolicy _, False) -> mempty
+          (RoleTokensUsePolicyWithOpenRoles _ _ openRoles, False) ->
+            ExtraRoleToken <$> filter (`notElem` roles) (Chain.toPlutusTokenName <$> openRoles)
       avoidDuplicateReport = True
       nameCheck = checkRoleNames avoidDuplicateReport Nothing contract continuations'
       tokenCheck = checkTokens Nothing contract continuations'
@@ -175,21 +278,43 @@ checkTransactions
   -> C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
   -> MarloweVersion v
   -> MarloweContext v
+  -> HelpersContext
   -> Chain.PolicyId
+  -> Maybe Chain.TokenName
   -> Chain.Address
-  -> Integer
+  -> Chain.Assets
+  -> (Chain.Assets -> Chain.Assets)
   -> Contract v
   -> Continuations v
   -> m (Either String [SafetyError])
-checkTransactions protocolParameters era version@MarloweV1 marloweContext rolesCurrency changeAddress minAda contract continuations =
+checkTransactions protocolParameters era version@MarloweV1 marloweContext helpersContext rolesCurrency threadRole changeAddress (Chain.Assets initialAda initialTokens) adjustMinUtxo contract continuations =
   runExceptT $
     do
       let changeAddress' = uncurry V1.Address . fromJust . V1.deserialiseAddress $ Chain.unAddress changeAddress
+          initialValue =
+            AM.fromList $
+              (V1.Token "" "", fromIntegral initialAda)
+                : [ (V1.Token (Chain.toPlutusCurrencySymbol p) (Chain.toPlutusTokenName n), fromIntegral quantity)
+                  | (Chain.AssetId p n, quantity) <- M.toList $ Chain.unTokens initialTokens
+                  ]
+          helperRoles = M.keysSet $ helperScriptStates helpersContext
+          intersectHelperRoles transaction@Transaction{txAnnotation} =
+            transaction{txAnnotation = S.intersection txAnnotation $ S.map Chain.toPlutusTokenName helperRoles}
       transactions <-
-        findTransactions False changeAddress' minAda . V1.MerkleizedContract contract $ remapContinuations continuations
+        findTransactions firstRoleAuthorizationAnnotator False changeAddress' initialValue . V1.MerkleizedContract contract $
+          remapContinuations continuations
       either throwE (pure . mconcat)
-        . forM transactions
-        $ checkTransaction protocolParameters era version marloweContext rolesCurrency changeAddress
+        . forM (filter (not . null . txAnnotation) $ intersectHelperRoles <$> transactions)
+        $ checkTransaction
+          protocolParameters
+          era
+          version
+          marloweContext
+          helpersContext
+          rolesCurrency
+          threadRole
+          changeAddress
+          adjustMinUtxo
 
 -- | Check a transaction for safety issues.
 checkTransaction
@@ -197,11 +322,14 @@ checkTransaction
   -> C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
   -> MarloweVersion v
   -> MarloweContext v
+  -> HelpersContext
   -> Chain.PolicyId
+  -> Maybe Chain.TokenName
   -> Chain.Address
-  -> Transaction
+  -> (Chain.Assets -> Chain.Assets)
+  -> Transaction (S.Set Plutus.TokenName)
   -> Either String [SafetyError]
-checkTransaction protocolParameters era version@MarloweV1 marloweContext@MarloweContext{..} (Chain.PolicyId rolesCurrency) changeAddress transaction@Transaction{..} =
+checkTransaction protocolParameters era version@MarloweV1 marloweContext@MarloweContext{..} helpersContext policyId@(Chain.PolicyId rolesCurrency) threadRole changeAddress adjustMinUtxo transaction@Transaction{..} =
   do
     let V1.TransactionInput{..} = txInput
         rolesCurrency' = V1.MarloweParams . Plutus.CurrencySymbol $ Plutus.toBuiltin rolesCurrency
@@ -251,11 +379,43 @@ checkTransaction protocolParameters era version@MarloweV1 marloweContext@Marlowe
               intervalEnd
               txInputs
     let walletContext = walletForConstraints version marloweContext changeAddress constraints
+        helpersContext' = helpersForRoles policyId threadRole txAnnotation adjustMinUtxo helpersContext
     pure
       . either
-        (pure . TransactionValidationError transaction . show)
-        (const $ TransactionWarning transaction <$> V1.txOutWarnings txOutput)
-      $ solveConstraints' era version (Left marloweContext') walletContext constraints
+        (pure . TransactionValidationError (stripAnnotation transaction) . show)
+        (const $ TransactionWarning (stripAnnotation transaction) <$> V1.txOutWarnings txOutput)
+      $ solveConstraints' era version (Left marloweContext') walletContext helpersContext' constraints
+
+-- | Create a helpers context for the specified helper roles.
+helpersForRoles
+  :: Chain.PolicyId
+  -> Maybe Chain.TokenName
+  -> S.Set Plutus.TokenName
+  -> (Chain.Assets -> Chain.Assets)
+  -> HelpersContext
+  -> HelpersContext
+helpersForRoles policyId threadRole helperRoles adjustMinUtxo helpersContext =
+  let activeHelperScripts =
+        M.toList
+          . M.intersection (helperScriptStates helpersContext)
+          . M.fromSet (const ())
+          $ S.map Chain.fromPlutusTokenName helperRoles
+      buildHelperState ix (role, helperScriptInfo -> helperScriptInfo) =
+        ( role
+        , let helperTxOutRef = helperTxOutRef' ix
+              address = helperAddress helperScriptInfo
+              assets = adjustMinUtxo . Chain.Assets safeLovelace . Chain.Tokens $ M.fromList [(Chain.AssetId policyId role, 1)]
+              datumHash =
+                Chain.fromCardanoDatumHash
+                  . C.hashScriptDataBytes
+                  . C.unsafeHashableScriptData
+                  . Chain.toCardanoScriptData
+                  <$> datum
+              datum = Chain.B . Chain.unTokenName <$> threadRole
+              helperTransactionOutput = Chain.TransactionOutput{..}
+           in HelperScriptState helperScriptInfo $ Just (helperTxOutRef, helperTransactionOutput)
+        )
+   in helpersContext{helperScriptStates = M.fromList $ uncurry buildHelperState <$> zip [0 ..] activeHelperScripts}
 
 -- | Create a wallet context that will satisfy the given constraints.
 walletForConstraints
@@ -404,3 +564,7 @@ scriptTxOutRef = "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
 -- | A dummy TxOut reference.
 fundingTxOutRef :: Int -> Chain.TxOutRef
 fundingTxOutRef = fromString . ("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF#" <>) . show . (2 +)
+
+-- | A dummy TxOut reference.
+helperTxOutRef' :: Int -> Chain.TxOutRef
+helperTxOutRef' = fromString . ("EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE#" <>) . show
