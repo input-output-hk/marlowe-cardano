@@ -39,7 +39,7 @@ packages:
 --marlowe-runtime
 --marlowe-runtime-cli
 --marlowe-runtime-web
---marlowe-test
+  marlowe-test
 
 --libs/aeson-record
 --libs/aeson-via-serialise
@@ -193,16 +193,26 @@ package freer-extras
 constraints:
   nothunks ==0.1.4
 
--- marlowe-cli only
-
--- When updated to 3.12.0 or newer, remove the cabal-generator override in nix/pkgs/haskell/haskell.nix
+-- Required until PLT-8148 is merged to the main branch.
 source-repository-package
   type: git
-  location: https://github.com/input-output-hk/cardano-addresses
-  tag: b6f2f3cef01a399376064194fd96711a5bdba4a7
-  --sha256: 10yj47gay72kx6v564qlfiigggcpqfdzrg61ii8p25m5n8ijz045
-  subdir: command-line
-          core
+  location: https://github.com/input-output-hk/marlowe
+  tag: 2ecc4c79a23275ae083b40c6bf28f5127d2e5390
+  --sha256: 0q6zasi052m2yxndpxx8lnb52wfqbf5ypi6nali1zjjgihz1nrqd
+  subdir: isabelle
+          haskell
+          marlowe-spec-test
+
+-- marlowe-cli only
+
+------ When updated to 3.12.0 or newer, remove the cabal-generator override in nix/pkgs/haskell/haskell.nix
+----source-repository-package
+----  type: git
+----  location: https://github.com/input-output-hk/cardano-addresses
+----  tag: b6f2f3cef01a399376064194fd96711a5bdba4a7
+----  --sha256: 10yj47gay72kx6v564qlfiigggcpqfdzrg61ii8p25m5n8ijz045
+----  subdir: command-line
+----          core
 
 -- FIXME: This was commented out for PLT-8148, but some constraints may need to be restored.
 ------ These constraints needed for plutus-apps
@@ -219,8 +229,8 @@ source-repository-package
 ----  plutus-core ^>=1.5,
 ----  text ^>=1.2
 
-source-repository-package
-  type: git
-  location: https://github.com/input-output-hk/actus-core
-  tag: 3bddfeb838c695adf2c6689b3beda3ef1019de7
-  --sha256: 12pahjijkym93sm1qh9l9jw6wlv3vf46l73hpdwrm25rz195hi47
+----source-repository-package
+----  type: git
+----  location: https://github.com/input-output-hk/actus-core
+----  tag: 3bddfeb838c695adf2c6689b3beda3ef1019de7
+----  --sha256: 12pahjijkym93sm1qh9l9jw6wlv3vf46l73hpdwrm25rz195hi47
