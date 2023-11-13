@@ -14,38 +14,39 @@ repository cardano-haskell-packages
 -- We duplicate the hackage index-state first for haskell.nix, even though cabal ignores it.
 -- This must always match the hackage index-state on the next line.
 -- See https://github.com/input-output-hk/haskell.nix/issues/1869#issuecomment-1449272480
-index-state: 2023-05-26T00:00:00Z
+index-state: 2023-11-14T00:00:00Z
 index-state:
-  , hackage.haskell.org      2023-05-26T00:00:00Z
-  , cardano-haskell-packages 2023-05-26T00:00:00Z
+  , hackage.haskell.org      2023-11-14T00:00:00Z
+  , cardano-haskell-packages 2023-11-14T00:00:00Z
 
+-- FIXME: This was commented out for PLT-8148, but needs to be restore before that branch is merged to main.
 packages:
-  async-components
-  cardano-integration
-  eventuo11y-extras
-  hasql-dynamic-syntax
+--async-components
+--cardano-integration
+--eventuo11y-extras
+--hasql-dynamic-syntax
   marlowe
-  marlowe-actus
-  marlowe-apps
-  marlowe-chain-sync
-  marlowe-cli
-  marlowe-client
-  marlowe-contracts
-  marlowe-integration
-  marlowe-integration-tests
-  marlowe-object
-  marlowe-protocols
-  marlowe-runtime
-  marlowe-runtime-cli
-  marlowe-runtime-web
-  marlowe-test
+--marlowe-actus
+--marlowe-apps
+--marlowe-chain-sync
+--marlowe-cli
+--marlowe-client
+--marlowe-contracts
+--marlowe-integration
+--marlowe-integration-tests
+--marlowe-object
+--marlowe-protocols
+--marlowe-runtime
+--marlowe-runtime-cli
+--marlowe-runtime-web
+--marlowe-test
 
-  libs/aeson-record
-  libs/aeson-via-serialise
+--libs/aeson-record
+--libs/aeson-via-serialise
   libs/base16-aeson
-  libs/plutus-ledger-aeson
-  libs/plutus-ledger-ada
-  libs/plutus-ledger-slot
+--libs/plutus-ledger-aeson
+--libs/plutus-ledger-ada
+--libs/plutus-ledger-slot
 
 tests: True
 
@@ -188,6 +189,10 @@ package plutus-script-utils
 package freer-extras
   optimization: False
 
+-- Required for the Plutus 1.15.0.0 packages.
+constraints:
+  nothunks ==0.1.4
+
 -- marlowe-cli only
 
 -- When updated to 3.12.0 or newer, remove the cabal-generator override in nix/pkgs/haskell/haskell.nix
@@ -199,20 +204,20 @@ source-repository-package
   subdir: command-line
           core
 
--- These constraints needed for plutus-apps
-constraints:
-  -- 0.3.6.2 switched from cryptonite to crypton, and this causes linker
-  -- failures when other packages depend on cryptonite.
-  -- Can be removed when this is resolved: https://github.com/snoyberg/http-client/issues/508
-  http-client-tls < 0.3.6.2,
-  ouroboros-consensus-cardano ^>=0.6,
-  ouroboros-network ^>=0.7,
-  ouroboros-network-framework ^>=0.6,
-  plutus-tx ^>=1.5,
-  plutus-ledger-api ^>=1.5,
-  plutus-core ^>=1.5,
-  text ^>=1.2
-
+-- FIXME: This was commented out for PLT-8148, but some constraints may need to be restored.
+------ These constraints needed for plutus-apps
+----constraints:
+----  -- 0.3.6.2 switched from cryptonite to crypton, and this causes linker
+----  -- failures when other packages depend on cryptonite.
+----  -- Can be removed when this is resolved: https://github.com/snoyberg/http-client/issues/508
+----  http-client-tls < 0.3.6.2,
+----  ouroboros-consensus-cardano ^>=0.6,
+----  ouroboros-network ^>=0.7,
+----  ouroboros-network-framework ^>=0.6,
+----  plutus-tx ^>=1.5,
+----  plutus-ledger-api ^>=1.5,
+----  plutus-core ^>=1.5,
+----  text ^>=1.2
 
 source-repository-package
   type: git

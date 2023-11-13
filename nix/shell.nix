@@ -29,7 +29,8 @@ in
     pkgs.jq
     pkgs.docker-compose
 
-    cabalProject.hsPkgs.hspec-golden.components.exes.hgold
+    # FIXME: This was commented out for PLT-8148, but needs to be restore before that branch is merged to main.
+    # cabalProject.hsPkgs.hspec-golden.components.exes.hgold
     repoRoot.nix.marlowe-cardano.scriv
   ];
 
