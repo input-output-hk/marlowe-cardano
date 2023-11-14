@@ -25,11 +25,11 @@ import Control.Monad.Trans.Writer (WriterT (runWriterT), tell)
 import Data.Bifunctor (first)
 import Data.Foldable (for_, traverse_)
 import Data.Function (on)
-import Data.Functor ((<&>))
 import Data.List (find, sortBy)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes, fromMaybe, listToMaybe, maybeToList)
+import qualified Data.Map.NonEmpty as NEMap
+import Data.Maybe (fromMaybe, listToMaybe, maybeToList)
 import Data.SOP.Counting (NonEmpty (..))
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -93,9 +93,11 @@ import Language.Marlowe.Runtime.Transaction.Api (
   CreateError (..),
   Destination (..),
   Mint (unMint),
+  MintRole (..),
   RoleTokensConfig (..),
   WithdrawError (..),
   encodeRoleTokenMetadata,
+  getTokenQuantities,
  )
 import Language.Marlowe.Runtime.Transaction.Constraints (
   TxConstraints (..),
@@ -191,7 +193,7 @@ buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx roles metadata m
   -- Output constraints.
 
   -- Role tokens minting and distribution.
-  policyId <- mintRoleTokens
+  policyId <- buildRoleTokenConstraints
 
   tell . requiresMetadata $ metadata{transactionMetadata = nftsMetadata policyId <> transactionMetadata metadata}
 
@@ -199,21 +201,17 @@ buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx roles metadata m
   (datum, assets) <- sendMarloweOutput policyId
 
   -- Open-role script output.
-  when hasOpenRoles $
-    sendOpenRoleOutputs policyId
+  sendOpenRoleOutputs policyId
 
   pure (datum, assets, policyId)
   where
     nftsMetadata (PolicyId policyId) = case roles of
-      RoleTokensMint (Map.toList . unMint -> minting) -> do
-        let tokensMetadata =
-              catMaybes $
-                minting <&> \case
-                  (tokenName, (_, Just roleTokenMetadata)) -> do
-                    let tokenName' = unTokenName tokenName
-                    -- From CIP-25: In version 2 the the raw bytes of the asset_name are used.
-                    Just (MetadataBytes tokenName', encodeRoleTokenMetadata roleTokenMetadata)
-                  _ -> Nothing
+      RoleTokensMint (unMint -> minting) -> do
+        let tokensMetadata = flip NEMap.foldMapWithKey minting \tokenName MintRole{..} ->
+              flip foldMap roleMetadata \roleTokenMetadata -> do
+                let tokenName' = unTokenName tokenName
+                -- From CIP-25: In version 2 the the raw bytes of the asset_name are used.
+                pure (MetadataBytes tokenName', encodeRoleTokenMetadata roleTokenMetadata)
         case tokensMetadata of
           [] -> mempty
           metadata' -> TransactionMetadata (Map.singleton 721 (MetadataMap [(MetadataBytes policyId, MetadataMap metadata')]))
@@ -238,19 +236,19 @@ buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx roles metadata m
     adaAsset (Assets amount _) = Assets amount mempty
 
     -- Role token distribution constraints
-    mintRoleTokens :: TxConstraintsBuilderM CreateError era 'V1 m PolicyId
-    mintRoleTokens = case roles of
-      RoleTokensUsePolicy policyId -> pure policyId
-      RoleTokensUsePolicyWithOpenRoles policyId _ _ -> pure policyId
-      RoleTokensMint (unMint -> minting) -> do
+    buildRoleTokenConstraints :: TxConstraintsBuilderM CreateError era 'V1 m PolicyId
+    buildRoleTokenConstraints = case roles of
+      RoleTokensUsePolicy policyId _ -> pure policyId
+      RoleTokensMint mint -> do
         let WalletContext{availableUtxos} = walletCtx
+            tokenQuantities = NEMap.toMap $ getTokenQuantities mint
             txLovelaceRequirementEstimate =
               adaAsset
                 . adjustMinUtxo
                 . Assets safeLovelace
                 . Tokens
-                . Map.fromList
-                $ (,1) . AssetId "" <$> Map.keys minting
+                . Map.mapKeysMonotonic (AssetId "")
+                $ tokenQuantities
             utxoAssets UTxO{transactionOutput = TransactionOutput{assets}} = assets
             possibleInput =
               ( find ((<) txLovelaceRequirementEstimate . utxoAssets) . sortBy (compare `on` utxoAssets) . toUTxOsList $ availableUtxos
@@ -258,7 +256,7 @@ buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx roles metadata m
                 <|> listToMaybe (toUTxOsList availableUtxos)
 
         UTxO txOutRef _ <- liftMaybe MintingUtxoSelectionFailed possibleInput
-        plutusScript <- lift $ lift $ mkRoleTokenMintingPolicy txOutRef $ 1 <$ minting
+        plutusScript <- lift $ lift $ mkRoleTokenMintingPolicy txOutRef $ fromIntegral <$> tokenQuantities
 
         (script, scriptHash) <- liftMaybe (MintingScriptDecodingFailed plutusScript) do
           script <- toCardanoPlutusScript plutusScript
@@ -278,20 +276,15 @@ buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx roles metadata m
                 (C.ExecutionUnits 0 0)
             policyId = PolicyId . unScriptHash $ scriptHash
 
-        for_ (Map.toList minting) \(tokenName, (destination, _)) ->
-          tell $ mustMintRoleToken txOutRef witness (AssetId policyId tokenName) destination
+        for_ (NEMap.toList $ unMint mint) \(tokenName, MintRole{..}) ->
+          for_ (NEMap.toList roleTokenRecipients) \(destination, quantity) ->
+            tell $ mustMintRoleToken txOutRef witness (AssetId policyId tokenName) destination quantity
         pure policyId
       RoleTokensNone -> do
         let -- We use ADA currency symbol as a placeholder which
             -- carries really no semantics in this context.
             uselessRolePolicyId = PolicyId . PV2.fromBuiltin . PV2.unCurrencySymbol $ PV2.adaSymbol
         pure uselessRolePolicyId
-
-    hasOpenRoles =
-      case roles of
-        RoleTokensUsePolicyWithOpenRoles{} -> True
-        RoleTokensMint (unMint -> minting) -> any ((== ToScript OpenRoleScript) . fst . snd) $ Map.toList minting
-        _ -> False
 
     sendOpenRoleOutputs policyId = do
       threadTokenName <-
@@ -370,11 +363,10 @@ initialMarloweStateV1 adjustMinUtxo roles policyId minAda walletCtx =
 
 roleNamesForDestination :: RoleTokensConfig -> Destination -> [TokenName]
 roleNamesForDestination roles destination =
-  case (destination, roles) of
-    (_, RoleTokensMint (unMint -> minting)) -> fmap fst $ filter ((== destination) . fst . snd) $ Map.toList minting
-    (ToSelf, RoleTokensUsePolicyWithOpenRoles _ selfName _) -> pure selfName
-    (ToScript OpenRoleScript, RoleTokensUsePolicyWithOpenRoles _ _ openRoleNames) -> openRoleNames
-    _ -> mempty
+  case roles of
+    RoleTokensNone -> []
+    RoleTokensMint (unMint -> minting) -> Map.keys $ NEMap.filter (NEMap.member destination . roleTokenRecipients) minting
+    (RoleTokensUsePolicy _ distribution) -> Map.keys $ Map.filter (Map.member destination) distribution
 
 type ApplyResults v = (UTCTime, UTCTime, Maybe (Assets, Datum v), Inputs v)
 

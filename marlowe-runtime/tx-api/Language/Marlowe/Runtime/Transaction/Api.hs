@@ -17,14 +17,15 @@ module Language.Marlowe.Runtime.Transaction.Api (
   ContractCreatedInEra (..),
   CreateBuildupError (..),
   CreateError (..),
+  Destination (..),
   InputsApplied (..),
   InputsAppliedInEra (..),
   JobId (..),
-  LoadMarloweContextError (..),
   LoadHelpersContextError (..),
+  LoadMarloweContextError (..),
   MarloweTxCommand (..),
-  Mint (unMint),
-  Destination (..),
+  Mint (..),
+  MintRole (..),
   NFTMetadataFile (..),
   RoleTokenMetadata (..),
   RoleTokensConfig (..),
@@ -37,6 +38,8 @@ module Language.Marlowe.Runtime.Transaction.Api (
   WithdrawTxInEra (..),
   decodeRoleTokenMetadata,
   encodeRoleTokenMetadata,
+  getTokenQuantities,
+  hasRecipient,
   mkMint,
 ) where
 
@@ -70,7 +73,6 @@ import Data.Binary.Put (Put, putWord8)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.List.NonEmpty (NonEmpty)
-import qualified Data.List.NonEmpty as NonEmpty
 import Data.Map (Map)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromJust, fromMaybe, maybeToList)
@@ -116,6 +118,9 @@ import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript)
 import Language.Marlowe.Runtime.History.Api (ExtractCreationError, ExtractMarloweTransactionError)
 import Network.HTTP.Media (MediaType)
 
+import Data.Function (on)
+import Data.Map.NonEmpty (NEMap)
+import qualified Data.Map.NonEmpty as NEMap
 import Network.Protocol.Codec.Spec (Variations (..), varyAp)
 import Network.Protocol.Handshake.Types (HasSignature (..))
 import Network.Protocol.Job.Types
@@ -274,21 +279,53 @@ data Destination
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary, ToJSON, Variations)
 
--- | Non empty mint request.
-newtype Mint = Mint {unMint :: Map TokenName (Destination, Maybe RoleTokenMetadata)}
+data MintRole = MintRole
+  { roleMetadata :: Maybe RoleTokenMetadata
+  , roleTokenRecipients :: NEMap Destination Chain.Quantity
+  }
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Binary, Semigroup, Monoid, ToJSON, Variations)
+  deriving anyclass (Binary, Variations)
 
-mkMint :: NonEmpty (TokenName, (Destination, Maybe RoleTokenMetadata)) -> Mint
-mkMint = Mint . Map.fromList . NonEmpty.toList
+instance (Binary k, Binary v) => Binary (NEMap k v) where
+  put = put . NEMap.toMap
+  get = maybe (fail "Unexpected empty map") pure . NEMap.nonEmptyMap =<< get
+
+instance (Variations k, Variations v) => Variations (NEMap k v) where
+  variations = NEMap.singleton <$> variations `varyAp` variations
+
+instance Semigroup MintRole where
+  a <> b =
+    MintRole
+      { roleMetadata = on (<|>) roleMetadata a b
+      , roleTokenRecipients = on (NEMap.unionWith (+)) roleTokenRecipients a b
+      }
+
+getTokenQuantities :: Mint -> NEMap TokenName Chain.Quantity
+getTokenQuantities = fmap (sum . roleTokenRecipients) . unMint
+
+hasRecipient :: Destination -> Mint -> Bool
+hasRecipient destination = any (NEMap.member destination . roleTokenRecipients) . unMint
+
+-- | Non empty mint request.
+newtype Mint = Mint {unMint :: NEMap TokenName MintRole}
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving newtype (Binary, Variations)
+
+instance Semigroup Mint where
+  a <> b =
+    Mint
+      { unMint = on (NEMap.unionWith (<>)) unMint a b
+      }
+
+mkMint :: NonEmpty (TokenName, MintRole) -> Mint
+mkMint = Mint . NEMap.fromList
 
 data RoleTokensConfig
   = RoleTokensNone
-  | RoleTokensUsePolicy PolicyId
+  | RoleTokensUsePolicy PolicyId (Map TokenName (Map Destination Chain.Quantity))
   | RoleTokensMint Mint
-  | RoleTokensUsePolicyWithOpenRoles PolicyId TokenName [TokenName]
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON, Variations)
+  deriving anyclass (Binary, Variations)
 
 data ContractCreated v where
   ContractCreated

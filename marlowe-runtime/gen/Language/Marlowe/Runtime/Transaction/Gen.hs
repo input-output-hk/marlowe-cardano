@@ -1,17 +1,18 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE ViewPatterns #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Marlowe.Runtime.Transaction.Gen where
 
 import Cardano.Api (CardanoEra (..), IsCardanoEra, cardanoEra)
-import Cardano.Api.Shelley (
-  ReferenceTxInsScriptsInlineDatumsSupportedInEra (..),
- )
+import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import Control.Applicative (liftA2)
 import qualified Data.ByteString.Char8 as BS
 import Data.Foldable (fold)
 import qualified Data.List.NonEmpty as NE
+import Data.Map.NonEmpty (NEMap)
+import qualified Data.Map.NonEmpty as NEMap
 import Data.Semigroup (Semigroup (..))
 import Language.Marlowe.Runtime.ChainSync.Gen ()
 import qualified Language.Marlowe.Runtime.Core.Api as Core
@@ -116,17 +117,29 @@ instance Arbitrary Destination where
       ]
   shrink = genericShrink
 
+instance (Ord k, Arbitrary k, Arbitrary v) => Arbitrary (NEMap k v) where
+  arbitrary = NEMap.insertMap <$> arbitrary <*> arbitrary <*> arbitrary
+  shrink (NEMap.deleteFindMin -> ((k, v), m)) =
+    fold
+      [ NEMap.insertMap <$> shrink k <*> pure v <*> pure m
+      , NEMap.insertMap k <$> shrink v <*> pure m
+      , NEMap.insertMap k v <$> shrink m
+      ]
+
+instance Arbitrary MintRole where
+  arbitrary = MintRole <$> arbitrary <*> arbitrary
+  shrink = genericShrink
+
 instance Arbitrary Mint where
-  arbitrary = mkMint <$> arbitrary
+  arbitrary = Mint <$> arbitrary
   shrink = genericShrink
 
 instance Arbitrary RoleTokensConfig where
   arbitrary =
     frequency
       [ (1, pure RoleTokensNone)
-      , (10, RoleTokensUsePolicy <$> arbitrary)
+      , (10, RoleTokensUsePolicy <$> arbitrary <*> arbitrary)
       , (10, RoleTokensMint <$> arbitrary)
-      , (10, RoleTokensUsePolicyWithOpenRoles <$> arbitrary <*> arbitrary <*> arbitrary)
       ]
   shrink = genericShrink
 

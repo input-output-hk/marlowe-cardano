@@ -57,6 +57,7 @@ import Data.Foldable (foldl')
 import Data.List (find)
 import Data.Map (Map)
 import qualified Data.Map as Map
+import qualified Data.Map.NonEmpty as NEMap
 import Data.Maybe (fromJust, fromMaybe)
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -110,6 +111,7 @@ import Language.Marlowe.Runtime.Transaction.Api (
   JobId (..),
   MarloweTxCommand (..),
   Mint (unMint),
+  MintRole (roleTokenRecipients),
   RoleTokensConfig (..),
   SubmitError (..),
   SubmitStatus (..),
@@ -392,11 +394,15 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
   threadRole <-
     case roleTokens of
       RoleTokensMint (unMint -> mint) ->
-        case Set.toList . Map.keysSet $ Map.filter ((== ToSelf) . fst) mint of
+        case Set.toList . Map.keysSet $ NEMap.filter (NEMap.member ToSelf . roleTokenRecipients) mint of
           [] -> pure Nothing
           [role] -> pure $ Just role
           _ -> throwE RequiresSingleThreadToken
-      RoleTokensUsePolicyWithOpenRoles _ role _ -> pure $ Just role
+      RoleTokensUsePolicy _ distribution ->
+        case Set.toList . Map.keysSet $ Map.filter (Map.member ToSelf) distribution of
+          [] -> pure Nothing
+          [role] -> pure $ Just role
+          _ -> throwE RequiresSingleThreadToken
       _ -> pure Nothing
   let -- Fast analysis of safety: examines bounds for transactions.
       contractSafetyErrors = checkContract networkId roleTokens version contract' continuations

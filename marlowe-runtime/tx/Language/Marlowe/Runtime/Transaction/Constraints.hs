@@ -25,6 +25,7 @@ module Language.Marlowe.Runtime.Transaction.Constraints (
   mustConsumeMarloweOutput,
   mustConsumePayout,
   mustMintRoleToken,
+  mustDistributeRoleToken,
   mustPayToAddress,
   mustPayToRole,
   mustSendMarloweOutput,
@@ -49,18 +50,7 @@ import Data.Function (on)
 import Data.Functor ((<&>))
 import Data.List (delete, find, minimumBy, nub)
 import Data.Map (Map)
-import qualified Data.Map as Map (
-  elems,
-  fromSet,
-  keysSet,
-  lookup,
-  mapWithKey,
-  member,
-  null,
-  singleton,
-  toList,
-  unionWith,
- )
+import qualified Data.Map as Map
 import qualified Data.Map.Strict as SMap (fromList, toList)
 import Data.Maybe (catMaybes, mapMaybe, maybeToList)
 import Data.Monoid (First (..), getFirst)
@@ -127,26 +117,28 @@ deriving instance Eq (TxConstraints era 'V1)
 -- | Constraints related to role tokens.
 data RoleTokenConstraints era
   = RoleTokenConstraintsNone
-  | MintRoleTokens Chain.TxOutRef (C.ScriptWitness C.WitCtxMint era) (Map Chain.AssetId Destination)
+  | MintRoleTokens Chain.TxOutRef (C.ScriptWitness C.WitCtxMint era) (Map Chain.AssetId (Map Destination Chain.Quantity))
+  | DistributeRoleTokens (Map Chain.AssetId (Map Destination Chain.Quantity))
   | SpendRoleTokens (Set Chain.AssetId)
   deriving (Eq, Show)
 
 instance Semigroup (RoleTokenConstraints era) where
   a <> RoleTokenConstraintsNone = a
-  MintRoleTokens _ _ a <> MintRoleTokens ref witness b = MintRoleTokens ref witness $ a <> b
+  MintRoleTokens _ _ a <> MintRoleTokens ref witness b =
+    MintRoleTokens ref witness $ Map.unionWith (Map.unionWith (+)) a b
   SpendRoleTokens a <> SpendRoleTokens b = SpendRoleTokens $ a <> b
   _ <> b = b
 
 instance Monoid (RoleTokenConstraints era) where
   mempty = RoleTokenConstraintsNone
 
--- | Require the transaction to mint 1 role token with the specified assetId and
--- send it to the given address. Additionally, require that the given UTXO is
--- consumed.
+-- | Require the transaction to mint the specified number of role tokens with the
+-- specified assetId and send them to the given destinations. Additionally, require that
+-- the given UTXO is consumed.
 --
 -- Requires that:
---   1. The transaction mints one token with the given assetId.
---   2. The transaction sends one token with the given assetId to the given address.
+--   1. The transaction mints at least n tokens with the given assetId.
+--   2. The transaction sends n tokens with the given assetId to the given destination.
 --   3. The output in rule 2 does not contain any other tokens aside from ADA.
 --   4. The transaction consumes the given TxOutRef.
 mustMintRoleToken
@@ -155,9 +147,28 @@ mustMintRoleToken
   -> C.ScriptWitness C.WitCtxMint era
   -> Chain.AssetId
   -> Destination
+  -> Chain.Quantity
   -> TxConstraints era v
-mustMintRoleToken txOutRef witness assetId destination =
-  mempty{roleTokenConstraints = MintRoleTokens txOutRef witness $ Map.singleton assetId destination}
+mustMintRoleToken txOutRef witness assetId destination quantity =
+  mempty
+    { roleTokenConstraints = MintRoleTokens txOutRef witness $ Map.singleton assetId $ Map.singleton destination quantity
+    }
+
+-- | Require the transaction to send the specified number of role tokens with the
+-- specified assetId to the given destinations.
+--
+-- Requires that:
+--   1. The transaction sends n tokens with the given assetId to the given destination.
+mustDistributeRoleToken
+  :: (Core.IsMarloweVersion v)
+  => Chain.AssetId
+  -> Destination
+  -> Chain.Quantity
+  -> TxConstraints era v
+mustDistributeRoleToken assetId destination quantity =
+  mempty
+    { roleTokenConstraints = DistributeRoleTokens $ Map.singleton assetId $ Map.singleton destination quantity
+    }
 
 -- | Require the transaction to spend a UTXO with 1 role token of the specified
 -- assetID. It also needs to send an identical output (same assets) to the
@@ -1063,6 +1074,7 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
       :: Set Chain.AssetId -> Either ConstraintError [(C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn era))]
     getWalletInputs helperRoles = case roleTokenConstraints of
       RoleTokenConstraintsNone -> pure []
+      DistributeRoleTokens _ -> pure [] -- Coin selection will handle these inputs.
       MintRoleTokens txOutRef _ _ -> do
         txIn <- note ToCardanoError $ toCardanoTxIn txOutRef
         _ <- note (MintingUtxoNotFound txOutRef) $ lookupUTxO txOutRef availableUtxos
@@ -1221,6 +1233,7 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
     getHelperInputs = case roleTokenConstraints of
       RoleTokenConstraintsNone -> pure []
       MintRoleTokens{} -> pure []
+      DistributeRoleTokens{} -> pure []
       SpendRoleTokens roleTokens -> catMaybes <$> mapM getHelperInput (Set.toList roleTokens)
 
     getHelperInput
@@ -1277,32 +1290,31 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
     getRoleTokenOutputs
       :: Set Chain.AssetId
       -> Either ConstraintError [Chain.TransactionOutput]
-    getRoleTokenOutputs helperRoles = case roleTokenConstraints of
-      RoleTokenConstraintsNone -> pure []
-      MintRoleTokens _ _ distribution ->
-        pure . mapMaybe snd . Map.toList $ flip
-          Map.mapWithKey
-          distribution
-          \assetId ->
-            \case
-              (ToAddress address) ->
-                Just $
-                  Chain.TransactionOutput
+    getRoleTokenOutputs helperRoles = go roleTokenConstraints
+      where
+        go = \case
+          RoleTokenConstraintsNone -> pure []
+          MintRoleTokens _ _ distribution -> go $ DistributeRoleTokens distribution
+          DistributeRoleTokens distribution -> pure $ flip Map.foldMapWithKey distribution \assetId ->
+            Map.foldMapWithKey \case
+              (ToAddress address) -> \quantity ->
+                [ Chain.TransactionOutput
                     address
-                    (Chain.Assets 0 $ Chain.Tokens $ Map.singleton assetId 1)
+                    (Chain.Assets 0 $ Chain.Tokens $ Map.singleton assetId quantity)
                     Nothing
                     Nothing
-              _ -> Nothing -- Output to self or to a helper script is handled elsewhere above.
-      SpendRoleTokens roleTokens -> do
-        let availTuples = map toUTxOTuple . toUTxOsList $ availableUtxos
-            roleTokens' = roleTokens Set.\\ helperRoles
-        -- Ignore ada role tokens because we don't specifically select an input for it, and balancing will refund all
-        -- spent Ada.
-        nub <$> forM (filter (not . isAda) $ Set.toList roleTokens') \token -> do
-          -- Find an element from availTuples where 'token' is in the assets.
-          let containsToken :: Chain.TransactionOutput -> Bool
-              containsToken = Map.member token . Chain.unTokens . Chain.tokens . Chain.assets
-          note (RoleTokenNotFound token) $ snd <$> find (containsToken . snd) availTuples
+                ]
+              _ -> const [] -- Output to self or to a helper script is handled elsewhere above.
+          SpendRoleTokens roleTokens -> do
+            let availTuples = map toUTxOTuple . toUTxOsList $ availableUtxos
+                roleTokens' = roleTokens Set.\\ helperRoles
+            -- Ignore ada role tokens because we don't specifically select an input for it, and balancing will refund all
+            -- spent Ada.
+            nub <$> forM (filter (not . isAda) $ Set.toList roleTokens') \token -> do
+              -- Find an element from availTuples where 'token' is in the assets.
+              let containsToken :: Chain.TransactionOutput -> Bool
+                  containsToken = Map.member token . Chain.unTokens . Chain.tokens . Chain.assets
+              note (RoleTokenNotFound token) $ snd <$> find (containsToken . snd) availTuples
 
     getPayoutOutputs :: Either ConstraintError [Chain.TransactionOutput]
     getPayoutOutputs = traverse (uncurry getPayoutOutput) $ Map.toList payToRoles
