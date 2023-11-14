@@ -1,4 +1,4 @@
-name: "Deploy"
+name: "Build, Push, and Deploy"
 env:
   CACHE_NAME: marlowe-temp
   ALLOWED_URIS: "https://github.com https://api.github.com"
@@ -74,9 +74,14 @@ jobs:
             tagAndPush "marlowe-scaling"
             tagAndPush "marlowe-oracle"
             tagAndPush "marlowe-finder"
-          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]
+          elif [[ "${{ github.ref }}" == "refs/tags/marlowe-runtime-web@v"* ]]
           then
-            export TAG=latest
+            # Strip "marlowe-runtime-web@v" prefix from tag name
+            export TAG=$(echo "${{ github.ref_name }}" | sed -e "s/^marlowe-runtime-web@v//")
+            echo TAG=$TAG
+            tagAndPush "marlowe-web-server"
+          else
+            export "TAG=${GITHUB_SHA::8}"
             echo TAG=$TAG
             tagAndPush "marlowe-chain-indexer"
             tagAndPush "marlowe-chain-sync"
@@ -90,10 +95,43 @@ jobs:
             tagAndPush "marlowe-scaling"
             tagAndPush "marlowe-oracle"
             tagAndPush "marlowe-finder"
+          fi
+
+  autocommit:
+    name: Auto Commit
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v2
+        with:
+          ref: main
+
+      - name: Update publish version
+        id: update
+        run: |
+          if [[ "${{ github.ref }}" == "refs/tags/runtime@v"* ]]
+          then
+            export TAG=$(echo "${{ github.ref_name }}" | sed -e "s/^runtime@v//")
+            echo TAG=$TAG
+            yq e -i '.instances.demo.webTag = env(TAG)' deploy/marlowe-runtime/values.yaml
           elif [[ "${{ github.ref }}" == "refs/tags/marlowe-runtime-web@v"* ]]
           then
-            # Strip "marlowe-runtime-web@v" prefix from tag name
             export TAG=$(echo "${{ github.ref_name }}" | sed -e "s/^marlowe-runtime-web@v//")
             echo TAG=$TAG
-            tagAndPush "marlowe-web-server"
+            yq e -i '.instances.demo.webTag = env(TAG)' deploy/marlowe-runtime/values.yaml
+          else
+            export "TAG=${GITHUB_SHA::8}"
+            echo TAG=$TAG
+            yq e -i '.instances.qa.tag = env(TAG)' deploy/marlowe-runtime/values.yaml
+            yq e -i '.instances.qa.webTag = env(TAG)' deploy/marlowe-runtime/values.yaml
           fi
+
+      - name: Commit changes
+        uses: EndBug/add-and-commit@v7
+        with:
+          default_author: github_actions
+          add: '.'
+          message: "[ci skip] deploy from ${{ steps.update.outputs.VERSION }}"
+          signoff: true
+          branch: main
