@@ -28,7 +28,7 @@ import GHC.Exts (toList)
 import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
 import qualified Language.Marlowe.Runtime.Web as Web
 import qualified Paths_marlowe_runtime_web
-import Servant
+import Servant hiding (Param)
 import Servant.OpenApi (toOpenApi)
 import Servant.Pagination
 
@@ -79,18 +79,26 @@ data OpenApiLintIssue = OpenApiLintIssue
   deriving (Show, Eq)
 
 lintOpenApi :: OpenApi -> [OpenApiLintIssue]
-lintOpenApi oa = definitionLints
+lintOpenApi oa = schemaDefinitionLints <> pathParametersLints
   where
     showStackTrace :: [Text] -> Text
     showStackTrace = Text.concat . List.intersperse "/" . List.reverse
 
-    definitions :: Definitions Schema
-    definitions = Optics.view (components . schemas) oa
+    schemaDefinitions :: Definitions Schema
+    schemaDefinitions = Optics.view (components . schemas) oa
+
+    paramDefinitions :: Definitions Param
+    paramDefinitions = Optics.view (components . parameters) oa
 
     schemaRef :: Referenced Schema -> Maybe Schema
     schemaRef = \case
       Inline s -> Just s
-      Ref (Reference ((`IOHM.lookup` definitions) -> s)) -> s
+      Ref (Reference ((`IOHM.lookup` schemaDefinitions) -> s)) -> s
+
+    paramRef :: Referenced Param -> Maybe Param
+    paramRef = \case
+      Inline s -> Just s
+      Ref (Reference ((`IOHM.lookup` paramDefinitions) -> s)) -> s
 
     schemaRule1Check :: [Text] -> Schema -> [OpenApiLintIssue]
     schemaRule1Check stackTrace s = do
@@ -110,7 +118,8 @@ lintOpenApi oa = definitionLints
           schemaAllOf :: Maybe [Referenced Schema]
           schemaAllOf = Optics.view allOf s
 
-      schemaRequiredField <- schemaRequiredFields
+      schemaRequiredField :: Text <- schemaRequiredFields
+
       let checkForType :: Referenced Schema -> Bool
           checkForType = Maybe.isJust . (checkIfPropertyHaveTypedef schemaRequiredField <=< schemaRef)
 
@@ -130,15 +139,18 @@ lintOpenApi oa = definitionLints
     lintSchema :: [Text] -> Schema -> [OpenApiLintIssue]
     lintSchema = schemaRule1Check
 
-    -- DONE:
-    definitionLints :: [OpenApiLintIssue]
-    definitionLints = do
-      let stackTrace = ["schemas", "components"]
-      (definitionName, definitionSchema) <- toList definitions
-      lintSchema (definitionName : stackTrace) definitionSchema
+    schemaDefinitionLints :: [OpenApiLintIssue]
+    schemaDefinitionLints = do
+      (definitionName, definitionSchema) <- toList schemaDefinitions
+      lintSchema [definitionName, "schemas", "components"] definitionSchema
 
--- TODO: path->param
--- TODO: path->operation*
+    -- DONE: path->param
+    pathParametersLints :: [OpenApiLintIssue]
+    pathParametersLints = do
+      (Text.pack -> path, endpoint) <- toList $ Optics.view paths oa
+      param :: Param <- Maybe.mapMaybe paramRef $ Optics.view parameters endpoint
+      s :: Schema <- Maybe.maybeToList (schemaRef =<< Optics.view schema param)
+      lintSchema [Optics.view name param, "parameters", path, "paths"] s
 
 openApi :: OpenApiWithEmptySecurity
 openApi =
