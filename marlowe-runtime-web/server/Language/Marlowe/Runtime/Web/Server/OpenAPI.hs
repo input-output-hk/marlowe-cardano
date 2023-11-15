@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE ViewPatterns #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 -- | This module defines the API and server for serving the Open API
@@ -10,11 +11,13 @@ module Language.Marlowe.Runtime.Web.Server.OpenAPI where
 import Control.Applicative ((<|>))
 import Control.Lens hiding (allOf, anyOf)
 import qualified Control.Lens as Optics
+import Control.Monad ((<=<))
 import qualified Control.Monad as Control
 import Data.Aeson
 import Data.Aeson.Lens
 import qualified Data.HashMap.Strict.InsOrd as IOHM
 import qualified Data.List as List
+import qualified Data.Maybe as Maybe
 import Data.OpenApi hiding (Server)
 import Data.String (fromString)
 import Data.Text (Text)
@@ -81,36 +84,61 @@ lintOpenApi oa = definitionLints
     showStackTrace :: [Text] -> Text
     showStackTrace = Text.concat . List.intersperse "/" . List.reverse
 
-    definitions :: [(Text, Schema)]
-    definitions = toList $ Optics.view (components . schemas) oa
+    definitions :: Definitions Schema
+    definitions = Optics.view (components . schemas) oa
+
+    schemaRef :: Referenced Schema -> Maybe Schema
+    schemaRef = \case
+      Inline s -> Just s
+      Ref (Reference ((`IOHM.lookup` definitions) -> s)) -> s
 
     schemaRule1Check :: [Text] -> Schema -> [OpenApiLintIssue]
     schemaRule1Check stackTrace s = do
-      let schemaRequiredFields = Optics.view required s
-      -- TODO: schemaType = Optics.view type_ s
-      Control.when (null schemaRequiredFields) []
-      let schemaProperties = Optics.view properties s
-      -- TODO: schemaAnyOf = Optics.view anyOf s
-      -- TODO: schemaOneOf = Optics.view oneOf s
-      -- TODO: schemaAllOf = Optics.view allOf s
+      let schemaRequiredFields :: [Text]
+          schemaRequiredFields = Optics.view required s
+
+          checkIfPropertyHaveTypedef :: Text -> Schema -> Maybe OpenApiType
+          checkIfPropertyHaveTypedef fieldName ss =
+            IOHM.lookup fieldName (Optics.view properties ss) >>= schemaRef >>= Optics.view type_
+
+          schemaAnyOf :: Maybe [Referenced Schema]
+          schemaAnyOf = Optics.view anyOf s
+
+          schemaOneOf :: Maybe [Referenced Schema]
+          schemaOneOf = Optics.view oneOf s
+
+          schemaAllOf :: Maybe [Referenced Schema]
+          schemaAllOf = Optics.view allOf s
+
       schemaRequiredField <- schemaRequiredFields
-      if IOHM.member schemaRequiredField schemaProperties
-        then mempty
-        else
-          pure $
-            OpenApiLintIssue
-              { trace = showStackTrace stackTrace
-              , message = "Missing type for required field '" <> schemaRequiredField <> "'!"
-              }
+      let checkForType :: Referenced Schema -> Bool
+          checkForType = Maybe.isJust . (checkIfPropertyHaveTypedef schemaRequiredField <=< schemaRef)
+
+          typeIsInProperties = Maybe.isJust $ checkIfPropertyHaveTypedef schemaRequiredField s
+          typeIsInEveryAnyOf = maybe False (and . fmap checkForType) schemaAnyOf
+          typeIsInEveryOneOf = maybe False (and . fmap checkForType) schemaOneOf
+          typeIsInOneAllOf = maybe False (or . fmap checkForType) schemaAllOf
+
+      Control.when (typeIsInProperties || typeIsInEveryAnyOf || typeIsInEveryOneOf || typeIsInOneAllOf) []
+
+      pure $
+        OpenApiLintIssue
+          { trace = showStackTrace stackTrace
+          , message = "Missing type for required field '" <> schemaRequiredField <> "'!"
+          }
 
     lintSchema :: [Text] -> Schema -> [OpenApiLintIssue]
     lintSchema = schemaRule1Check
 
+    -- DONE:
     definitionLints :: [OpenApiLintIssue]
     definitionLints = do
       let stackTrace = ["schemas", "components"]
-      (definitionName, definitionSchema) <- definitions
+      (definitionName, definitionSchema) <- toList definitions
       lintSchema (definitionName : stackTrace) definitionSchema
+
+-- TODO: path->param
+-- TODO: path->operation*
 
 openApi :: OpenApiWithEmptySecurity
 openApi =

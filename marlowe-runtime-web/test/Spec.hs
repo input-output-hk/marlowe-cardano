@@ -8,12 +8,13 @@
 
 module Main where
 
-import Control.Lens ((&), (.~))
+import Control.Lens ((&), (.~), (?~))
 import Control.Monad (replicateM)
 import Data.Aeson (ToJSON, Value (Null))
 import Data.Aeson.Encode.Pretty (encodePrettyToTextBuilder)
 import qualified Data.ByteString as BS
 import Data.Data (Typeable)
+import qualified Data.HashMap.Strict.InsOrd as IOHM
 import Data.Kind (Type)
 import Data.OpenApi hiding (version)
 import Data.Proxy
@@ -50,9 +51,144 @@ openAPISpec = do
       let actual = lintOpenApi mempty
           expected :: [OpenApiLintIssue] = []
       actual `shouldBe` expected
-    it "rejects object schemas with required fields which have no types" do
+    it "reports object schemas with required fields which have no types" do
       let definitions :: Definitions Schema
-          definitions = fromList [("mydefinition", mempty & required .~ ["myfield"])]
+          definitions =
+            fromList
+              [ ("mydefinition1", mempty & required .~ ["myfield1a"])
+              , ("mydefinition2", mempty & required .~ ["myfield2a", "myfield2b"])
+              ,
+                ( "mydefinition3"
+                , mempty
+                    & required .~ ["myfield3a", "myfield3b"]
+                    & properties .~ IOHM.singleton "myfield3a" (Inline mempty)
+                )
+              ,
+                ( "mydefinition4"
+                , mempty
+                    & type_ ?~ OpenApiBoolean
+                )
+              ,
+                ( "mydefinition5"
+                , mempty
+                )
+              ,
+                ( "mydefinition6"
+                , mempty
+                    & required .~ ["myfield6a", "myfield6b", "myfield6c"]
+                    & properties
+                      .~ fromList
+                        [ ("myfield6a", Ref (Reference "mydefinition4"))
+                        , ("myfield6b", Ref (Reference "mydefinition5"))
+                        , ("myfield6c", Ref (Reference "mydefinition?"))
+                        ]
+                )
+              ,
+                ( "mydefinition7"
+                , mempty
+                    & required .~ ["myfield7a"]
+                    & oneOf
+                      ?~ [ Inline
+                            ( mempty
+                                & properties
+                                  .~ fromList
+                                    [ ("myfield7a", Ref (Reference "mydefinition4"))
+                                    ]
+                            )
+                         , Inline
+                            ( mempty
+                                & properties
+                                  .~ fromList
+                                    [ ("myfield7a", Inline (mempty & type_ ?~ OpenApiInteger))
+                                    ]
+                            )
+                         ]
+                )
+              ,
+                ( "mydefinition8"
+                , mempty
+                    & required .~ ["myfield8a"]
+                    & oneOf
+                      ?~ [ Inline
+                            ( mempty
+                                & properties
+                                  .~ fromList
+                                    [ ("myfield8a", Ref (Reference "mydefinition4"))
+                                    ]
+                            )
+                         , Inline
+                            ( mempty
+                                & properties
+                                  .~ fromList
+                                    [ ("myfield8a", Inline mempty)
+                                    ]
+                            )
+                         ]
+                )
+              ,
+                ( "mydefinition9"
+                , mempty
+                    & required .~ ["myfield9a"]
+                    & anyOf
+                      ?~ [ Inline
+                            ( mempty
+                                & properties
+                                  .~ fromList
+                                    [ ("myfield9a", Ref (Reference "mydefinition4"))
+                                    ]
+                            )
+                         , Inline
+                            ( mempty
+                                & properties
+                                  .~ fromList
+                                    [ ("myfield9a", Inline (mempty & type_ ?~ OpenApiInteger))
+                                    ]
+                            )
+                         ]
+                )
+              ,
+                ( "mydefinition10"
+                , mempty
+                    & required .~ ["myfield10a"]
+                    & anyOf
+                      ?~ [ Inline
+                            ( mempty
+                                & properties
+                                  .~ fromList
+                                    [ ("myfield10a", Ref (Reference "mydefinition4"))
+                                    ]
+                            )
+                         , Inline
+                            ( mempty
+                                & properties
+                                  .~ fromList
+                                    [ ("myfield10a", Inline mempty)
+                                    ]
+                            )
+                         ]
+                )
+              ,
+                ( "mydefinition11"
+                , mempty
+                    & required .~ ["myfield11a"]
+                    & allOf
+                      ?~ [ Inline
+                            ( mempty
+                                & properties
+                                  .~ fromList
+                                    [ ("myfield11a", Ref (Reference "mydefinition4"))
+                                    ]
+                            )
+                         , Inline
+                            ( mempty
+                                & properties
+                                  .~ fromList
+                                    [ ("myfield11a", Inline mempty)
+                                    ]
+                            )
+                         ]
+                )
+              ]
           openApiSchema :: OpenApi
           openApiSchema = mempty & components . schemas .~ definitions
           actual :: [OpenApiLintIssue]
@@ -60,8 +196,40 @@ openAPISpec = do
           expected :: [OpenApiLintIssue]
           expected =
             [ OpenApiLintIssue
-                { trace = "components/schemas/mydefinition"
-                , message = "Missing type for required field 'myfield'!"
+                { trace = "components/schemas/mydefinition1"
+                , message = "Missing type for required field 'myfield1a'!"
+                }
+            , OpenApiLintIssue
+                { trace = "components/schemas/mydefinition2"
+                , message = "Missing type for required field 'myfield2a'!"
+                }
+            , OpenApiLintIssue
+                { trace = "components/schemas/mydefinition2"
+                , message = "Missing type for required field 'myfield2b'!"
+                }
+            , OpenApiLintIssue
+                { trace = "components/schemas/mydefinition3"
+                , message = "Missing type for required field 'myfield3a'!"
+                }
+            , OpenApiLintIssue
+                { trace = "components/schemas/mydefinition3"
+                , message = "Missing type for required field 'myfield3b'!"
+                }
+            , OpenApiLintIssue
+                { trace = "components/schemas/mydefinition6"
+                , message = "Missing type for required field 'myfield6b'!"
+                }
+            , OpenApiLintIssue
+                { trace = "components/schemas/mydefinition6"
+                , message = "Missing type for required field 'myfield6c'!"
+                }
+            , OpenApiLintIssue
+                { trace = "components/schemas/mydefinition8"
+                , message = "Missing type for required field 'myfield8a'!"
+                }
+            , OpenApiLintIssue
+                { trace = "components/schemas/mydefinition10"
+                , message = "Missing type for required field 'myfield10a'!"
                 }
             ]
       actual `shouldBe` expected
