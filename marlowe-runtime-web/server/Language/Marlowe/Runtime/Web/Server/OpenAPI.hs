@@ -79,7 +79,7 @@ data OpenApiLintIssue = OpenApiLintIssue
   deriving (Show, Eq)
 
 lintOpenApi :: OpenApi -> [OpenApiLintIssue]
-lintOpenApi oa = schemaDefinitionLints <> pathParametersLints
+lintOpenApi oa = schemaDefinitionLints <> pathParametersLints <> pathOperationLints
   where
     showStackTrace :: [Text] -> Text
     showStackTrace = Text.concat . List.intersperse "/" . List.reverse
@@ -139,18 +139,43 @@ lintOpenApi oa = schemaDefinitionLints <> pathParametersLints
     lintSchema :: [Text] -> Schema -> [OpenApiLintIssue]
     lintSchema = schemaRule1Check
 
+    lintParam :: [Text] -> Param -> [OpenApiLintIssue]
+    lintParam stacktrace param = do
+      s :: Schema <- Maybe.maybeToList (schemaRef =<< Optics.view schema param)
+      lintSchema (Optics.view name param : stacktrace) s
+
     schemaDefinitionLints :: [OpenApiLintIssue]
     schemaDefinitionLints = do
       (definitionName, definitionSchema) <- toList schemaDefinitions
       lintSchema [definitionName, "schemas", "components"] definitionSchema
 
-    -- DONE: path->param
     pathParametersLints :: [OpenApiLintIssue]
     pathParametersLints = do
       (Text.pack -> path, endpoint) <- toList $ Optics.view paths oa
       param :: Param <- Maybe.mapMaybe paramRef $ Optics.view parameters endpoint
-      s :: Schema <- Maybe.maybeToList (schemaRef =<< Optics.view schema param)
-      lintSchema [Optics.view name param, "parameters", path, "paths"] s
+      lintParam ["parameters", path, "paths"] param
+
+    -- DONE: path->operation*->param
+    -- TODO: path->operation*->request
+    -- TODO: path->operation*->response
+    pathOperationLints :: [OpenApiLintIssue]
+    pathOperationLints = do
+      (Text.pack -> path, endpoint) <- toList $ Optics.view paths oa
+      (operationName :: Text, operation :: Operation) <-
+        zip
+          ["get", "put", "post", "delete", "options", "head", "patch", "trace"]
+          $ Maybe.catMaybes
+            [ Optics.view get endpoint
+            , Optics.view put endpoint
+            , Optics.view post endpoint
+            , Optics.view delete endpoint
+            , Optics.view options endpoint
+            , Optics.view head_ endpoint
+            , Optics.view patch endpoint
+            , Optics.view Data.OpenApi.trace endpoint
+            ]
+      param :: Param <- Maybe.mapMaybe paramRef $ Optics.view parameters operation
+      lintParam ["parameters", operationName, path, "paths"] param
 
 openApi :: OpenApiWithEmptySecurity
 openApi =
