@@ -21,6 +21,7 @@ import Data.Foldable (for_)
 import Data.Function (on)
 import Data.Map (Map)
 import qualified Data.Map as Map
+import qualified Data.Map.NonEmpty as NEMap
 import Data.Maybe (maybeToList)
 import qualified Data.Maybe as Maybe
 import qualified Data.Set as Set
@@ -64,6 +65,7 @@ import Language.Marlowe.Runtime.Transaction.Api (
   InputsApplied (..),
   InputsAppliedInEra (..),
   MarloweTxCommand (..),
+  MintRole (..),
   WalletAddresses (..),
   WithdrawTx (..),
  )
@@ -119,7 +121,7 @@ serializeAddress = Text.unpack . Maybe.fromJust . ChainSync.Api.toBech32
 
 toCliArgs :: MarloweTxCommand Void err result -> [String]
 toCliArgs = \case
-  Create _ MarloweV1 WalletAddresses{changeAddress, extraAddresses} _ _ minAdaDeposit _ ->
+  Create _ MarloweV1 WalletAddresses{changeAddress, extraAddresses} _ _ _ minAdaDeposit _ ->
     ["create", "--change-address", serializeAddress changeAddress]
       <> do address <- Set.toList extraAddresses; ["--address", serializeAddress address]
       <> do
@@ -162,7 +164,7 @@ toCliArgs = \case
 
 marloweRuntimeJobClient :: MarloweTxCommand Void err result -> Integration result
 marloweRuntimeJobClient = \case
-  cmd@(Create _ MarloweV1 _ _ _ _ _) ->
+  cmd@(Create _ MarloweV1 _ _ _ _ _ _) ->
     runMarloweTxClient (JobClient.liftCommand cmd) >>= \case
       Left err -> error ("Some JobClient create error: " <> show err)
       Right result -> pure result
@@ -269,6 +271,7 @@ createSpec = describe "create" $
             Nothing
             MarloweV1
             addresses
+            Nothing
             Runtime.Transaction.Api.RoleTokensNone
             md
             Nothing
@@ -300,9 +303,10 @@ depositSpec = describe "deposit" $
           Nothing
           MarloweV1
           (addresses partyAWallet)
+          Nothing
           ( Runtime.Transaction.Api.RoleTokensMint $
               Runtime.Transaction.Api.mkMint $
-                pure ("Party A", (ToAddress . changeAddress $ addresses partyAWallet, Nothing))
+                pure ("Party A", MintRole Nothing $ NEMap.singleton (ToAddress . changeAddress $ addresses partyAWallet) 1)
           )
           (standardMetadata tags)
           Nothing
@@ -355,9 +359,10 @@ chooseSpec = describe "choose" $
           Nothing
           MarloweV1
           (addresses partyAWallet)
+          Nothing
           ( Runtime.Transaction.Api.RoleTokensMint $
               Runtime.Transaction.Api.mkMint $
-                pure ("Party A", (ToAddress . changeAddress $ addresses partyAWallet, Nothing))
+                pure ("Party A", MintRole Nothing $ NEMap.singleton (ToAddress . changeAddress $ addresses partyAWallet) 1)
           )
           (standardMetadata tags)
           Nothing
@@ -407,9 +412,10 @@ notifySpec = describe "notify" $
           Nothing
           MarloweV1
           (addresses partyAWallet)
+          Nothing
           ( Runtime.Transaction.Api.RoleTokensMint $
               Runtime.Transaction.Api.mkMint $
-                pure ("Party A", (ToAddress . changeAddress $ addresses partyAWallet, Nothing))
+                pure ("Party A", MintRole Nothing $ NEMap.singleton (ToAddress . changeAddress $ addresses partyAWallet) 1)
           )
           (standardMetadata tags)
           Nothing
@@ -482,9 +488,10 @@ applySpec = describe "apply" $
           Nothing
           MarloweV1
           (addresses partyAWallet)
+          Nothing
           ( Runtime.Transaction.Api.RoleTokensMint $
               Runtime.Transaction.Api.mkMint $
-                pure ("Party A", (ToAddress . changeAddress $ addresses partyAWallet, Nothing))
+                pure ("Party A", MintRole Nothing $ NEMap.singleton (ToAddress . changeAddress $ addresses partyAWallet) 1)
           )
           (standardMetadata tags)
           Nothing
@@ -541,9 +548,10 @@ withdrawSpec = describe "withdraw" $
           Nothing
           MarloweV1
           (addresses partyAWallet)
+          Nothing
           ( Runtime.Transaction.Api.RoleTokensMint $
               Runtime.Transaction.Api.mkMint $
-                pure ("Party A", (ToAddress . changeAddress $ addresses partyAWallet, Nothing))
+                pure ("Party A", MintRole Nothing $ NEMap.singleton (ToAddress . changeAddress $ addresses partyAWallet) 1)
           )
           (standardMetadata tags)
           Nothing

@@ -90,6 +90,7 @@ import Data.Bitraversable (Bitraversable (..))
 import Data.Function (on)
 import Data.Kind (Type)
 import Data.List (groupBy)
+import qualified Data.Map.NonEmpty as NEMap
 import Data.Set (Set)
 import qualified Language.Marlowe.Protocol.Query.Types as Query
 import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType, fromCardanoTxId)
@@ -791,8 +792,11 @@ instance HasDTO Tx.RoleTokensConfig where
 instance FromDTO Tx.RoleTokensConfig where
   fromDTO = \case
     Nothing -> pure Tx.RoleTokensNone
-    Just (Web.UsePolicy policy) -> Tx.RoleTokensUsePolicy <$> fromDTO policy
-    Just (Web.UsePolicyWithOpenRoles policy threadRoleName openRoleNames) -> Tx.RoleTokensUsePolicyWithOpenRoles <$> fromDTO policy <*> fromDTO threadRoleName <*> fromDTO openRoleNames
+    Just (Web.UsePolicy policy) -> Tx.RoleTokensUsePolicy <$> fromDTO policy <*> pure mempty
+    Just (Web.UsePolicyWithOpenRoles policy openRoleNames) ->
+      Tx.RoleTokensUsePolicy
+        <$> fromDTO policy
+        <*> (Map.fromList . fmap (,Map.singleton (Tx.ToScript OpenRoleScript) 1) <$> fromDTO openRoleNames)
     Just (Web.Mint mint) -> Tx.RoleTokensMint <$> fromDTO mint
 
 instance HasDTO Tx.Mint where
@@ -805,16 +809,12 @@ instance FromDTO Tx.Mint where
       <=< toNonEmpty
         . Map.toList
     where
-      convertConfig (Web.RoleTokenConfig role metadata) =
-        flip (,) <$> fromDTO metadata <*> case role of
+      convertConfig (Web.RoleTokenConfig role metadata) = do
+        destination <- case role of
           Web.ClosedRole address -> Tx.ToAddress <$> fromDTO address
-          Web.ThreadRole -> pure Tx.ToSelf
           Web.OpenRole -> pure $ Tx.ToScript Tx.OpenRoleScript
-
---    convertConfig = \case
---      (Web.RoleTokenConfig (Web.ClosedRole address) metadata) -> (,) <$> (Tx.ToAddress <$> fromDTO address) <*> fromDTO metadata
---      (Web.RoleTokenConfig Web.ThreadRole metadata) -> (Tx.ToSelf, ) <$> fromDTO metadata
---      (Web.RoleTokenConfig Web.OpenRole metadata) -> (Tx.ToScript Tx.OpenRoleScript, ) <$> fromDTO metadata
+        metadata' <- fromDTO metadata
+        pure $ Tx.MintRole metadata' $ NEMap.singleton destination 1
 
 instance HasDTO Tx.RoleTokenMetadata where
   type DTO Tx.RoleTokenMetadata = Web.TokenMetadata

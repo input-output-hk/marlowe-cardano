@@ -29,6 +29,7 @@ import Data.Functor (($>), (<&>))
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as Map
+import qualified Data.Map.NonEmpty as NEMap
 import Data.Maybe (catMaybes, fromJust)
 import qualified Data.Set as Set
 import Data.Void (Void)
@@ -332,6 +333,7 @@ mkCreateCommand testData (CreateCase stakeCredential wallet (roleTokens, metadat
     (mkStakeCredential testData stakeCredential)
     MarloweV1
     (mkWalletAddresses testData wallet)
+    Nothing
     (mkRoleTokensConfig testData roleTokens)
     (mkMarloweTxMetadata metadata)
     (mkMinLovelace minLovelace)
@@ -360,18 +362,21 @@ mkWalletAddresses TestData{..} = \case
 mkRoleTokensConfig :: TestData -> RoleTokenCase -> RoleTokensConfig
 mkRoleTokensConfig TestData{..} = \case
   NoRoleTokens -> RoleTokensNone
-  ExistingPolicyRoleTokens -> RoleTokensUsePolicy existingRoleTokenPolicy
+  ExistingPolicyRoleTokens -> RoleTokensUsePolicy existingRoleTokenPolicy mempty
   MintRoleTokensSimple ->
     RoleTokensMint $
       mkMint $
         NE.fromList
-          [ ("Role", (ToAddress $ changeAddress singleAddressInsufficientBalanceWallet, Nothing))
+          [ ("Role", MintRole Nothing $ NEMap.singleton (ToAddress $ changeAddress singleAddressInsufficientBalanceWallet) 1)
           ]
   MintRoleTokensMetadata ->
     RoleTokensMint $
       mkMint $
         NE.fromList
-          [ ("Role", (ToAddress $ changeAddress singleAddressInsufficientBalanceWallet, Just testNftMetadata))
+          [
+            ( "Role"
+            , MintRole (Just testNftMetadata) $ NEMap.singleton (ToAddress $ changeAddress singleAddressInsufficientBalanceWallet) 1
+            )
           ]
 
 testNftMetadata :: RoleTokenMetadata

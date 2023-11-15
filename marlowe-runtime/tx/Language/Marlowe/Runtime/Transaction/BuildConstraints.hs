@@ -252,7 +252,10 @@ buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx threadTokenName 
           )
       RoleTokensMint mint -> do
         let WalletContext{availableUtxos} = walletCtx
-            tokenQuantities = NEMap.toMap $ getTokenQuantities mint
+            threadTokenName' =
+              threadTokenName
+                <$ guard (any (NEMap.member (ToScript OpenRoleScript) . roleTokenRecipients) $ unMint mint)
+            tokenQuantities = maybe id (flip Map.insert 1) threadTokenName' $ NEMap.toMap $ getTokenQuantities mint
             txLovelaceRequirementEstimate =
               adaAsset
                 . adjustMinUtxo
@@ -293,11 +296,7 @@ buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx threadTokenName 
                   ToScript script' -> Right (AssetId policyId threadTokenName, script')
                   ToAddress addr -> Left addr
             tell $ mustMintRoleToken txOutRef witness (AssetId policyId tokenName) destination' quantity
-        pure
-          ( policyId
-          , AssetId policyId threadTokenName
-              <$ guard (any (NEMap.member (ToScript OpenRoleScript) . roleTokenRecipients) $ unMint mint)
-          )
+        pure (policyId, AssetId policyId <$> threadTokenName')
       RoleTokensNone -> do
         let -- We use ADA currency symbol as a placeholder which
             -- carries really no semantics in this context.

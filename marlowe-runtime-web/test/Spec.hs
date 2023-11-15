@@ -218,8 +218,7 @@ instance Arbitrary Web.PostContractsRequest where
       <*> arbitrary
       <*> arbitrary
       <*> arbitrary
-      -- size of 6 will result in a 1-layer deep contract being generated (this is
-      -- all we care about for the purposes of schema checking).
+      <*> arbitrary
       <*> arbitrary
       <*> arbitrary
   shrink = genericShrink
@@ -271,7 +270,6 @@ instance Arbitrary Web.Role where
     oneof
       [ Web.ClosedRole <$> arbitrary
       , pure Web.OpenRole
-      , pure Web.ThreadRole
       ]
   shrink = genericShrink
 

@@ -113,6 +113,7 @@ executable marlowe-integration-tests
     , marlowe-test
     , mtl
     , network-uri
+    , nonempty-containers ^>=0.3.4
     , pipes ^>=4.3.16
     , plutus-ledger-api
     , QuickCheck

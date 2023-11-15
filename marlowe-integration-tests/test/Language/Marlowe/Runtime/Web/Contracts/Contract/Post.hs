@@ -5,6 +5,7 @@ import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Functor (void)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
+import Data.Text (Text)
 import Data.Time (getCurrentTime, secondsToNominalDiffTime)
 import Language.Marlowe.Runtime.Integration.Common
 import Language.Marlowe.Runtime.Integration.StandardContract (standardContract)
@@ -20,19 +21,18 @@ import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 spec :: Spec
 spec = describe "Valid POST /contracts" do
   it "returns the contract header"
-    . specWithRolesConfig
+    . specWithRolesConfig Nothing
     $ Web.Mint . Map.singleton "PartyA" . flip Web.RoleTokenConfig Nothing . Web.ClosedRole
   it "returns the contract header (open roles)"
-    . specWithRolesConfig
+    . specWithRolesConfig (Just "Thread")
     . const
     . Web.Mint
     $ Map.fromList
-      [ ("Thread", Web.RoleTokenConfig Web.ThreadRole Nothing)
-      , ("PartyA", Web.RoleTokenConfig Web.OpenRole Nothing)
+      [ ("PartyA", Web.RoleTokenConfig Web.OpenRole Nothing)
       ]
 
-specWithRolesConfig :: (Web.Address -> Web.RolesConfig) -> IO ()
-specWithRolesConfig roles =
+specWithRolesConfig :: Maybe Text -> (Web.Address -> Web.RolesConfig) -> IO ()
+specWithRolesConfig threadTokenName roles =
   withLocalMarloweRuntime $ runIntegrationTest do
     partyAWallet <- getGenesisWallet 0
     partyBWallet <- getGenesisWallet 1
@@ -59,6 +59,7 @@ specWithRolesConfig roles =
           Web.PostContractsRequest
             { metadata = mempty
             , version = Web.V1
+            , threadTokenName
             , roles = Just $ roles partyAWebChangeAddress
             , contract = ContractOrSourceId $ Left contract
             , minUTxODeposit = Nothing

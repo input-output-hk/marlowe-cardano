@@ -139,7 +139,6 @@ instance ToDTO CreateError where
     CreateContractNotFound -> ApiError "Contract not found" "Not found" Null 404
     ProtocolParamNoUTxOCostPerByte -> ApiError "Unable to compute min Ada deposit bound" "Internal error" Null 500
     InsufficientMinAdaDeposit required -> ApiError "Min Ada deposit insufficient." "Bad Request" (object ["minimumRequiredDeposit" .= required]) 400
-    RequiresSingleThreadToken -> ApiError "Exactly one thread token name is required." "RequiresSingleThreadToken" Null 400
     CreateLoadHelpersContextFailed err -> ApiError ("Failed to load helper-script context: " <> show err) "CreateLoadHelperContextFailed" Null 503
 
 instance HasDTO ApplyInputsError where

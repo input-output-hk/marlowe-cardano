@@ -6,6 +6,7 @@ module Language.Marlowe.Runtime.Integration.StandardContract where
 import Cardano.Api (getTxId)
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Map as Map
+import qualified Data.Map.NonEmpty as NEMap
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Time (NominalDiffTime, UTCTime, addUTCTime, getCurrentTime, secondsToNominalDiffTime)
@@ -17,6 +18,7 @@ import Language.Marlowe.Protocol.Load.Client (pushContract)
 import Language.Marlowe.Protocol.Query.Types (PayoutHeader (..))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, TxId)
+import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Client (createContract, runMarloweLoadClient)
 import Language.Marlowe.Runtime.Core.Api (
   ContractId,
@@ -49,6 +51,7 @@ import Language.Marlowe.Runtime.Transaction.Api (
   Destination (ToAddress),
   InputsApplied (..),
   InputsAppliedInEra (..),
+  MintRole (..),
   RoleTokensConfig (..),
   WalletAddresses (changeAddress),
   WithdrawTx (..),
@@ -113,16 +116,30 @@ createStandardContract = createStandardContractWithTags mempty
 createStandardContractWithTags :: Set MarloweMetadataTag -> Wallet -> Wallet -> Integration (StandardContractInit 'V1)
 createStandardContractWithTags tags partyAWallet =
   createStandardContractWithTagsAndRolesConfig
-    (RoleTokensMint $ mkMint $ pure ("Party A", (ToAddress . changeAddress $ addresses partyAWallet, Nothing)))
+    Nothing
+    ( RoleTokensMint $
+        mkMint $
+          pure ("Party A", MintRole Nothing $ NEMap.singleton (ToAddress . changeAddress $ addresses partyAWallet) 1)
+    )
     tags
     partyAWallet
 
-createStandardContractWithRolesConfig :: RoleTokensConfig -> Wallet -> Wallet -> Integration (StandardContractInit 'V1)
-createStandardContractWithRolesConfig rolesConfig = createStandardContractWithTagsAndRolesConfig rolesConfig mempty
+createStandardContractWithRolesConfig
+  :: Maybe Chain.TokenName
+  -> RoleTokensConfig
+  -> Wallet
+  -> Wallet
+  -> Integration (StandardContractInit 'V1)
+createStandardContractWithRolesConfig threadName rolesConfig = createStandardContractWithTagsAndRolesConfig threadName rolesConfig mempty
 
 createStandardContractWithTagsAndRolesConfig
-  :: RoleTokensConfig -> Set MarloweMetadataTag -> Wallet -> Wallet -> Integration (StandardContractInit 'V1)
-createStandardContractWithTagsAndRolesConfig rolesConfig tags partyAWallet partyBWallet = do
+  :: Maybe Chain.TokenName
+  -> RoleTokensConfig
+  -> Set MarloweMetadataTag
+  -> Wallet
+  -> Wallet
+  -> Integration (StandardContractInit 'V1)
+createStandardContractWithTagsAndRolesConfig threadName rolesConfig tags partyAWallet partyBWallet = do
   partyBAddress <-
     expectJust "Failed to convert party B address" $ toPlutusAddress $ changeAddress $ addresses partyBWallet
   now <- liftIO getCurrentTime
@@ -133,6 +150,7 @@ createStandardContractWithTagsAndRolesConfig rolesConfig tags partyAWallet party
       Nothing
       MarloweV1
       (addresses partyAWallet)
+      threadName
       rolesConfig
       ( if Set.null tags
           then emptyMarloweTransactionMetadata

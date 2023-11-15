@@ -45,6 +45,7 @@ spec = describe "POST /contracts/{contractId}/transactions" do
           Web.PostContractsRequest
             { metadata = mempty
             , version = Web.V1
+            , threadTokenName = Nothing
             , roles = Just $ Web.Mint $ Map.singleton "PartyA" $ RoleTokenConfig (ClosedRole partyAWebChangeAddress) Nothing
             , contract = ContractOrSourceId $ Left contract
             , minUTxODeposit = Nothing

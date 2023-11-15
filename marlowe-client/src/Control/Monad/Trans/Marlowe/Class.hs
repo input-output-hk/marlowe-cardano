@@ -30,6 +30,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   DatumHash,
   Lovelace,
   StakeCredential,
+  TokenName,
   TxId,
   TxOutRef,
  )
@@ -214,6 +215,8 @@ createContract
   -- ^ The Marlowe version to use
   -> WalletAddresses
   -- ^ The wallet addresses to use when constructing the transaction
+  -> Maybe TokenName
+  -- ^ An optional thread token name. Defaults to an empty string.
   -> RoleTokensConfig
   -- ^ How to initialize role tokens
   -> MarloweTransactionMetadata
@@ -223,13 +226,14 @@ createContract
   -> Either (Contract v) DatumHash
   -- ^ The contract to run, or the hash of the contract to look up in the store.
   -> m (Either CreateError (ContractCreated v))
-createContract mStakeCredential version wallet roleTokens metadata lovelace contract =
+createContract mStakeCredential version wallet threadName roleTokens metadata lovelace contract =
   runMarloweTxClient $
     liftCommand $
       Create
         mStakeCredential
         version
         wallet
+        threadName
         roleTokens
         metadata
         lovelace

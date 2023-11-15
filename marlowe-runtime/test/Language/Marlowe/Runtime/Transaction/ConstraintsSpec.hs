@@ -1463,10 +1463,6 @@ shrinkDistribution = \case
           pure $ SendToScripts thread $ Map.delete thread dist'
       ]
 
-demoteDestination :: (Destination, a) -> Maybe (Chain.Address, a)
-demoteDestination (ToAddress addr, a) = Just (addr, a)
-demoteDestination _ = Nothing
-
 shrinkMarloweOutputConstraints :: MarloweOutputConstraints 'V1 -> [MarloweOutputConstraints 'V1]
 shrinkMarloweOutputConstraints = \case
   MarloweOutputConstraintsNone -> []

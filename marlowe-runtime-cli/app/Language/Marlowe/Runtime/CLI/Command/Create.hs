@@ -16,6 +16,7 @@ import qualified Data.ByteString.Char8 as BS8
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map (Map)
 import qualified Data.Map as Map
+import qualified Data.Map.NonEmpty as NEMap
 import Data.String (fromString)
 import Data.Text (pack)
 import qualified Data.Yaml as Yaml
@@ -53,6 +54,7 @@ import Language.Marlowe.Runtime.Transaction.Api (
   ContractCreatedInEra (..),
   CreateError,
   Destination (ToAddress),
+  MintRole (..),
   RoleTokenMetadata,
   RoleTokensConfig (..),
   mkMint,
@@ -236,14 +238,18 @@ runCreateCommand TxCommand{walletAddresses, signingMethod, tagsFile, metadataFil
     minting' <- case roles of
       Nothing -> pure RoleTokensNone
       Just (MintSimple tokens) -> do
-        let toNFT addr = (ToAddress addr, Nothing)
+        let toNFT addr = MintRole Nothing $ NEMap.singleton (ToAddress addr) 1
         pure $ RoleTokensMint $ mkMint $ fmap toNFT <$> tokens
-      Just (UseExistingPolicyId policyId) -> pure $ RoleTokensUsePolicy policyId
+      Just (UseExistingPolicyId policyId) -> pure $ RoleTokensUsePolicy policyId mempty
       Just (MintConfig roleTokensConfigFilePath) -> do
         configMap <- ExceptT $ liftIO $ first RolesConfigFileDecodingError <$> A.eitherDecodeFileStrict roleTokensConfigFilePath
         case Map.toList configMap of
           [] -> throwE $ RolesConfigFileDecodingError "Empty role token config"
-          (x : xs) -> pure $ RoleTokensMint $ mkMint $ fmap (\RoleConfig{..} -> (ToAddress address, Just metadata)) <$> x :| xs
+          (x : xs) ->
+            pure $
+              RoleTokensMint $
+                mkMint $
+                  fmap (\RoleConfig{..} -> MintRole (Just metadata) $ NEMap.singleton (ToAddress address) 1) <$> x :| xs
     (ContractId contractId, safetyErrors) <- run MarloweV1 minting'
     liftIO $
       if null safetyErrors
@@ -285,7 +291,7 @@ runCreateCommand TxCommand{walletAddresses, signingMethod, tagsFile, metadataFil
       ContractCreated era ContractCreatedInEra{contractId, txBody, safetyErrors} <-
         ExceptT $
           first CreateFailed
-            <$> createContract stakeCredential version walletAddresses rolesDistribution metadata minUTxO contract
+            <$> createContract stakeCredential version walletAddresses Nothing rolesDistribution metadata minUTxO contract
       case signingMethod of
         Manual outputFile -> do
           ExceptT @_ @_ @() $

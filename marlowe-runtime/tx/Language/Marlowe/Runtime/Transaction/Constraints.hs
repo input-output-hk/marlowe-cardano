@@ -1437,7 +1437,9 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
 
     solveTxMintValue :: Either ConstraintError (C.TxMintValue C.BuildTx era)
     solveTxMintValue = case roleTokenConstraints of
-      MintRoleTokens _ witness (SendToScripts thread distribution) -> go witness (Just thread) distribution
+      MintRoleTokens _ witness (SendToScripts thread distribution) -> go witness (Just thread) case traverse demoteDestination distribution of
+        Nothing -> distribution
+        Just distribution' -> Map.mapKeysMonotonic ToAddress <$> distribution'
       MintRoleTokens _ witness (SendToAddresses distribution) -> go witness Nothing (Map.mapKeysMonotonic ToAddress <$> distribution)
       _ -> pure C.TxMintNone
       where
@@ -1453,6 +1455,12 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
             C.TxMintValue multiAssetSupported value $
               C.BuildTxWith $
                 Map.fromSet (const witness) policyIds
+
+demoteDestination :: Map Destination Chain.Quantity -> Maybe (Map Chain.Address Chain.Quantity)
+demoteDestination dist =
+  Map.fromDistinctAscList <$> for (Map.toAscList dist) \case
+    (ToAddress addr, q) -> Just (addr, q)
+    _ -> Nothing
 
 isAda :: Chain.AssetId -> Bool
 isAda (Chain.AssetId "" "") = True

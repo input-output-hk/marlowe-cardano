@@ -74,6 +74,7 @@ postCreateTxBody PostContractsRequest{..} stakeAddressDTO changeAddressDTO mAddr
   collateralUtxos <-
     Set.fromList
       <$> fromDTOThrow (badRequest' "Invalid collateral header UTxO value") (maybe [] unCommaList mCollateralUtxos)
+  threadTokenName' <- fromDTOThrow (badRequest' "Invalid thread token name") threadTokenName
   roles' <- fromDTOThrow (badRequest' "Invalid roles value") roles
   transactionMetadata <- fromDTOThrow (badRequest' "Invalid metadata value") metadata
   marloweMetadata <-
@@ -85,6 +86,7 @@ postCreateTxBody PostContractsRequest{..} stakeAddressDTO changeAddressDTO mAddr
     stakeAddress
     v
     WalletAddresses{..}
+    threadTokenName'
     roles'
     MarloweTransactionMetadata{..}
     (Lovelace <$> minUTxODeposit)

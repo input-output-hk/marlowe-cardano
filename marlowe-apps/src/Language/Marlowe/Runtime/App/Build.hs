@@ -4,7 +4,6 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Language.Marlowe.Runtime.App.Build (
@@ -28,6 +27,7 @@ import Language.Marlowe.Runtime.Transaction.Api (
   InputsApplied (..),
   InputsAppliedInEra (..),
   MarloweTxCommand (ApplyInputs, Create, Withdraw),
+  MintRole (..),
   RoleTokensConfig (..),
   WalletAddresses (WalletAddresses),
   WithdrawTx (..),
@@ -37,6 +37,7 @@ import Language.Marlowe.Runtime.Transaction.Api (
 import Network.Protocol.Job.Client (liftCommand)
 
 import qualified Data.List.NonEmpty as NE (fromList)
+import qualified Data.Map.NonEmpty as NEMap
 import qualified Data.Map.Strict as M (Map, null, toList)
 import Data.Set (Set)
 import qualified Data.Set as S (fromList)
@@ -56,9 +57,11 @@ buildCreation version' contract roles minUtxo metadata' =
   let roles' =
         if M.null roles
           then RoleTokensNone
-          else RoleTokensMint . mkMint . fmap (second $ (,Nothing) . ToAddress) . NE.fromList . M.toList $ roles
+          else
+            RoleTokensMint . mkMint . fmap (second $ MintRole Nothing . flip NEMap.singleton 1 . ToAddress) . NE.fromList . M.toList $
+              roles
    in build show (\(ContractCreated era ContractCreatedInEra{..}) -> (contractId, TxBodyInEraWithReferenceScripts era txBody)) $
-        \w -> Create Nothing version' w roles' metadata' minUtxo $ Left contract
+        \w -> Create Nothing version' w Nothing roles' metadata' minUtxo $ Left contract
 
 buildApplication
   :: MarloweVersion v

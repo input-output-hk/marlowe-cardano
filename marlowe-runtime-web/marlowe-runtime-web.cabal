@@ -144,6 +144,7 @@ library server
     , marlowe-runtime:{marlowe-runtime, contract-api, discovery-api, proxy-api, sync-api, tx-api} ==0.0.5
     , monad-control ^>=1
     , mtl >=2.2 && <3
+    , nonempty-containers ^>=0.3.4
     , openapi3 >=3.2 && <4
     , pipes ^>=4.3.16
     , plutus-ledger-api ^>=1.5

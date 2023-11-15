@@ -783,6 +783,7 @@ data PostContractsRequest = PostContractsRequest
   , metadata :: Map Word64 Metadata
   , version :: MarloweVersion
   , roles :: Maybe RolesConfig
+  , threadTokenName :: Maybe Text
   , contract :: ContractOrSourceId
   , minUTxODeposit :: Maybe Word64
   }
@@ -818,7 +819,7 @@ instance ToSchema ContractOrSourceId where
 
 data RolesConfig
   = UsePolicy PolicyId
-  | UsePolicyWithOpenRoles PolicyId Text [Text]
+  | UsePolicyWithOpenRoles PolicyId [Text]
   | Mint (Map Text RoleTokenConfig)
   deriving (Show, Eq, Ord, Generic)
 
@@ -833,18 +834,17 @@ instance FromJSON RolesConfig where
                 do
                   script <- obj .: "script"
                   unless (script == ("OpenRole" :: String)) $ fail "AllowedValues: \"OpenRole\""
-                  UsePolicyWithOpenRoles <$> obj .: "policyId" <*> obj .: "threadRoleName" <*> obj .: "openRoleNames"
+                  UsePolicyWithOpenRoles <$> obj .: "policyId" <*> obj .: "openRoleNames"
            in parseOpen <|> parseMint
       )
       value
 
 instance ToJSON RolesConfig where
   toJSON (UsePolicy policy) = toJSON policy
-  toJSON (UsePolicyWithOpenRoles policy threadRoleName openRoleNames) =
+  toJSON (UsePolicyWithOpenRoles policy openRoleNames) =
     object
       [ "script" .= ("OpenRole" :: String)
       , "policyId" .= policy
-      , "threadRoleName" .= threadRoleName
       , "openRoleNames" .= openRoleNames
       ]
   toJSON (Mint configs) = toJSON configs
@@ -867,7 +867,6 @@ data RoleTokenConfig = RoleTokenConfig
 data Role
   = ClosedRole Address
   | OpenRole
-  | ThreadRole
   deriving (Show, Eq, Ord, Generic)
 
 instance FromJSON RoleTokenConfig where
@@ -880,9 +879,8 @@ instance FromJSON RoleTokenConfig where
           mScriptRole <- do
             mScript :: Maybe String <- obj .:? "script"
             for mScript \case
-              "ThreadRole" -> pure ThreadRole
               "OpenRole" -> pure OpenRole
-              _ -> fail "Expected one of \"ThreadRole\" or \'OpenRole\""
+              _ -> fail "Expected \'OpenRole\""
           metadata <- obj .:? "metadata"
           role <- case (mAddress, mScriptRole) of
             (Just address, _) -> pure $ ClosedRole address
@@ -924,7 +922,7 @@ instance ToSchema RoleTokenConfig where
           mempty
             & type_ ?~ OpenApiString
             & OpenApi.description ?~ "The type of script receiving the role token."
-            & enum_ ?~ ["ThreadRole", "OpenRole"]
+            & enum_ ?~ ["OpenRole"]
         openSchema =
           mempty
             & type_ ?~ OpenApiObject

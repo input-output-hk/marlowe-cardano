@@ -18,6 +18,7 @@ import Control.Monad.Reader (ask)
 import Data.Functor (void)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as Map
+import qualified Data.Map.NonEmpty as NEMap
 import Data.Maybe (fromJust)
 import qualified Data.Set as Set
 import Data.Time (UTCTime, addUTCTime, getCurrentTime, secondsToNominalDiffTime)
@@ -85,6 +86,7 @@ closedSpec = parallel $ describe "Closed contract" $ aroundAll setup do
             Nothing
             MarloweV1
             (addresses wallet)
+            Nothing
             RoleTokensNone
             emptyMarloweTransactionMetadata
             Nothing
@@ -134,6 +136,7 @@ closeSpec = parallel $ describe "Close contract" $ aroundAll setup do
         Nothing
         MarloweV1
         (addresses wallet)
+        Nothing
         RoleTokensNone
         emptyMarloweTransactionMetadata
         Nothing
@@ -279,6 +282,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
             Nothing
             MarloweV1
             (addresses wallet1)
+            Nothing
             (mkRoleTokens [("Role", wallet2)])
             emptyMarloweTransactionMetadata
             (Just 2_000_000)
@@ -290,6 +294,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
             Nothing
             MarloweV1
             (addresses wallet1)
+            Nothing
             RoleTokensNone
             emptyMarloweTransactionMetadata
             (Just 2_000_000)
@@ -301,6 +306,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
             Nothing
             MarloweV1
             (addresses wallet1)
+            Nothing
             (mkRoleTokens [("Role", wallet2)])
             emptyMarloweTransactionMetadata
             (Just 2_000_000)
@@ -312,6 +318,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
             Nothing
             MarloweV1
             (addresses wallet1)
+            Nothing
             RoleTokensNone
             emptyMarloweTransactionMetadata
             (Just 2_000_000)
@@ -323,6 +330,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
             Nothing
             MarloweV1
             (addresses wallet1)
+            Nothing
             (mkRoleTokens [("Role", wallet2)])
             emptyMarloweTransactionMetadata
             (Just 2_000_000)
@@ -341,6 +349,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
             Nothing
             MarloweV1
             (addresses wallet1)
+            Nothing
             (mkRoleTokens [("Role", wallet2)])
             emptyMarloweTransactionMetadata
             (Just 10_000_000)
@@ -364,6 +373,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
             Nothing
             MarloweV1
             (addresses wallet1)
+            Nothing
             (mkRoleTokens [("Role", wallet2)])
             emptyMarloweTransactionMetadata
             (Just 10_000_000)
@@ -509,6 +519,7 @@ whenTimeoutSpec = parallel $ describe "Timed out contracts" $ aroundAll setup do
             Nothing
             MarloweV1
             (addresses wallet)
+            Nothing
             RoleTokensNone
             emptyMarloweTransactionMetadata
             Nothing
@@ -520,6 +531,7 @@ whenTimeoutSpec = parallel $ describe "Timed out contracts" $ aroundAll setup do
             Nothing
             MarloweV1
             (addresses wallet)
+            Nothing
             RoleTokensNone
             emptyMarloweTransactionMetadata
             Nothing
@@ -534,6 +546,7 @@ whenTimeoutSpec = parallel $ describe "Timed out contracts" $ aroundAll setup do
             Nothing
             MarloweV1
             (addresses wallet)
+            Nothing
             RoleTokensNone
             emptyMarloweTransactionMetadata
             Nothing
@@ -630,6 +643,7 @@ whenEmptySpec = parallel $ describe "Empty When contracts" $ aroundAll setup do
             Nothing
             MarloweV1
             (addresses wallet)
+            Nothing
             RoleTokensNone
             emptyMarloweTransactionMetadata
             Nothing
@@ -898,6 +912,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
             Nothing
             MarloweV1
             (addresses wallet1)
+            Nothing
             (mkRoleTokens [("Role1", wallet1), ("Role2", wallet2)])
             emptyMarloweTransactionMetadata
             Nothing
@@ -954,6 +969,7 @@ merkleizedSpec = parallel $ describe "Merkleized contracts" $ aroundAll setup do
             Nothing
             MarloweV1
             (addresses wallet)
+            Nothing
             RoleTokensNone
             emptyMarloweTransactionMetadata
             Nothing
@@ -1019,6 +1035,7 @@ multiInputsSpec = parallel $ describe "Multi inputs" $ aroundAll setup do
             Nothing
             MarloweV1
             (addresses wallet)
+            Nothing
             (mkRoleTokens [("role", wallet)])
             emptyMarloweTransactionMetadata
             Nothing
@@ -1037,7 +1054,11 @@ utcTimeToPOSIXTime :: UTCTime -> POSIXTime
 utcTimeToPOSIXTime = POSIXTime . floor . (* 1000) . utcTimeToPOSIXSeconds
 
 mkRoleTokens :: [(TokenName, Wallet)] -> RoleTokensConfig
-mkRoleTokens = RoleTokensMint . mkMint . (fmap . fmap) ((,Nothing) . ToAddress . changeAddress . addresses) . NE.fromList
+mkRoleTokens =
+  RoleTokensMint
+    . mkMint
+    . (fmap . fmap) (MintRole Nothing . flip NEMap.singleton 1 . ToAddress . changeAddress . addresses)
+    . NE.fromList
 
 submitCreate :: Wallet -> ContractCreated 'V1 -> Integration ()
 submitCreate wallet (ContractCreated era ContractCreatedInEra{..}) = void $ submit wallet era txBody
