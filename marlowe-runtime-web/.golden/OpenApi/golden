@@ -2119,6 +2119,9 @@
                         },
                         "type": "object"
                     },
+                    "threadTokenName": {
+                        "type": "string"
+                    },
                     "version": {
                         "$ref": "#/components/schemas/MarloweVersion"
                     }
@@ -2212,7 +2215,6 @@
                             "script": {
                                 "description": "The type of script receiving the role token.",
                                 "enum": [
-                                    "ThreadRole",
                                     "OpenRole"
                                 ],
                                 "type": "string"
