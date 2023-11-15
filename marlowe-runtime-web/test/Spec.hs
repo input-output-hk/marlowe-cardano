@@ -265,7 +265,7 @@ instance Arbitrary Web.RoleTokenConfig where
   arbitrary = Web.RoleTokenConfig <$> arbitrary <*> arbitrary
   shrink = genericShrink
 
-instance Arbitrary Web.Role where
+instance Arbitrary Web.RoleTokenRecipient where
   arbitrary =
     oneof
       [ Web.ClosedRole <$> arbitrary

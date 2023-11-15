@@ -49,7 +49,6 @@ import Control.Error.Util (hush)
 import Control.Monad ((<=<))
 import Control.Monad.Except (MonadError, throwError)
 import Data.Aeson (Value (..))
-import Data.Bifunctor (bimap)
 import qualified Data.ByteString.Lazy as BSL
 import Data.Coerce (coerce)
 import Data.List.NonEmpty (NonEmpty (..))
@@ -231,6 +230,15 @@ instance FromDTO Chain.Tokens where
       . Map.toAscList
       . fmap Map.toAscList
       . Web.unTokens
+
+instance HasDTO Chain.Quantity where
+  type DTO Chain.Quantity = Word64
+
+instance ToDTO Chain.Quantity where
+  toDTO = Chain.unQuantity
+
+instance FromDTO Chain.Quantity where
+  fromDTO = pure . Chain.Quantity
 
 instance HasDTO Chain.Assets where
   type DTO Chain.Assets = Web.Assets
@@ -803,18 +811,23 @@ instance HasDTO Tx.Mint where
   type DTO Tx.Mint = Map Text Web.RoleTokenConfig
 
 instance FromDTO Tx.Mint where
-  fromDTO =
-    fmap Tx.mkMint
-      . traverse (sequence . bimap tokenNameToText convertConfig)
-      <=< toNonEmpty
-        . Map.toList
-    where
-      convertConfig (Web.RoleTokenConfig role metadata) = do
-        destination <- case role of
-          Web.ClosedRole address -> Tx.ToAddress <$> fromDTO address
-          Web.OpenRole -> pure $ Tx.ToScript Tx.OpenRoleScript
-        metadata' <- fromDTO metadata
-        pure $ Tx.MintRole metadata' $ NEMap.singleton destination 1
+  fromDTO = fmap Tx.Mint . NEMap.nonEmptyMap <=< fromDTO
+
+instance HasDTO Tx.Destination where
+  type DTO Tx.Destination = Web.RoleTokenRecipient
+
+instance FromDTO Tx.Destination where
+  fromDTO = \case
+    Web.ClosedRole addr -> Tx.ToAddress <$> fromDTO addr
+    Web.OpenRole -> pure $ Tx.ToScript Tx.OpenRoleScript
+
+instance HasDTO Tx.MintRole where
+  type DTO Tx.MintRole = Web.RoleTokenConfig
+
+instance FromDTO Tx.MintRole where
+  fromDTO (Web.RoleTokenConfig recipients metadata) = do
+    recipients' <- NEMap.nonEmptyMap =<< fromDTO recipients
+    Tx.MintRole <$> fromDTO metadata <*> pure recipients'
 
 instance HasDTO Tx.RoleTokenMetadata where
   type DTO Tx.RoleTokenMetadata = Web.TokenMetadata

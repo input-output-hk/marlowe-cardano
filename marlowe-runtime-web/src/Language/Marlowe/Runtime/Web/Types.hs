@@ -25,7 +25,10 @@ import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import Data.Char (isSpace)
 import Data.Foldable (fold)
 import Data.Map (Map)
+import qualified Data.Map as Map
 import Data.OpenApi (
+  AdditionalProperties (..),
+  HasAdditionalProperties (..),
   HasType (..),
   NamedSchema (..),
   OpenApiType (..),
@@ -827,7 +830,7 @@ instance FromJSON RolesConfig where
   parseJSON (String s) = UsePolicy <$> parseJSON (String s)
   parseJSON value =
     withObject
-      "RoleConfig"
+      "RolesConfig"
       ( \obj ->
           let parseMint = Mint <$> parseJSON value
               parseOpen =
@@ -859,22 +862,56 @@ instance ToSchema RolesConfig where
           & oneOf ?~ [policySchema, mintSchema]
 
 data RoleTokenConfig = RoleTokenConfig
-  { role :: Role
+  { recipients :: RoleTokenRecipients
   , metadata :: Maybe TokenMetadata
   }
   deriving (Show, Eq, Ord, Generic)
 
-data Role
+type RoleTokenRecipients = Map RoleTokenRecipient Word64
+
+data RoleTokenRecipient
   = ClosedRole Address
   | OpenRole
   deriving (Show, Eq, Ord, Generic)
 
+roleTokenRecipientToText :: RoleTokenRecipient -> Text
+roleTokenRecipientToText = \case
+  ClosedRole addr -> unAddress addr
+  OpenRole -> "OpenRole"
+
+roleTokenRecipientFromText :: Text -> RoleTokenRecipient
+roleTokenRecipientFromText = \case
+  "OpenRole" -> OpenRole
+  addr -> ClosedRole $ Address addr
+
+instance ToJSON RoleTokenRecipient where
+  toJSON = String . roleTokenRecipientToText
+
+instance ToJSONKey RoleTokenRecipient where
+  toJSONKey = toJSONKeyText roleTokenRecipientToText
+
+instance FromJSON RoleTokenRecipient where
+  parseJSON = withText "RoleTokenRecipient" $ pure . roleTokenRecipientFromText
+
+instance FromJSONKey RoleTokenRecipient where
+  fromJSONKey = FromJSONKeyText roleTokenRecipientFromText
+
 instance FromJSON RoleTokenConfig where
-  parseJSON (String s) = pure . flip RoleTokenConfig Nothing . ClosedRole $ Address s
+  parseJSON (String "OpenRole") =
+    pure
+      . flip RoleTokenConfig Nothing
+      $ Map.singleton OpenRole 1
+  parseJSON (String s) =
+    pure
+      . flip RoleTokenConfig Nothing
+      . flip Map.singleton 1
+      . ClosedRole
+      $ Address s
   parseJSON value =
     withObject
       "RoleTokenConfig"
       ( \obj -> do
+          mRecipients <- obj .:? "recipients"
           mAddress <- obj .:? "address"
           mScriptRole <- do
             mScript :: Maybe String <- obj .:? "script"
@@ -882,38 +919,45 @@ instance FromJSON RoleTokenConfig where
               "OpenRole" -> pure OpenRole
               _ -> fail "Expected \'OpenRole\""
           metadata <- obj .:? "metadata"
-          role <- case (mAddress, mScriptRole) of
-            (Just address, _) -> pure $ ClosedRole address
-            (_, Just scriptRole) -> pure scriptRole
-            _ -> fail "one of address or script required"
+          recipients <- case (mRecipients, mAddress, mScriptRole) of
+            (Just recipients, _, _) -> pure recipients
+            (_, Just address, _) -> pure $ Map.singleton (ClosedRole address) 1
+            (_, _, Just scriptRole) -> pure $ Map.singleton scriptRole 1
+            _ -> fail "one of recipients, address, or script required"
           pure RoleTokenConfig{..}
       )
       value
 
 instance ToJSON RoleTokenConfig where
-  toJSON (RoleTokenConfig (ClosedRole address) Nothing) = toJSON address
-  toJSON (RoleTokenConfig (ClosedRole address) config) =
+  toJSON (RoleTokenConfig recipients metadata) =
     object
-      [ "address" .= address
-      , "metadata" .= config
-      ]
-  toJSON (RoleTokenConfig scriptRole Nothing) =
-    object
-      ["script" .= show scriptRole]
-  toJSON (RoleTokenConfig scriptRole config) =
-    object
-      [ "script" .= show scriptRole
-      , "metadata" .= config
+      [ "recipients" .= recipients
+      , "metadata" .= metadata
       ]
 
 instance ToSchema RoleTokenConfig where
   declareNamedSchema _ = do
     simpleSchema <- declareSchemaRef (Proxy @Address)
     metadataSchema <- declareSchemaRef (Proxy @TokenMetadata)
-    let advancedSchema =
+    quantitySchema <- declareSchemaRef (Proxy @Word64)
+    let multiSchema =
           mempty
             & type_ ?~ OpenApiObject
-            & required .~ ["address", "metadata"]
+            & required .~ ["recipients"]
+            & properties
+              .~ [
+                   ( "recipients"
+                   , Inline $
+                      mempty
+                        & type_ ?~ OpenApiObject
+                        & additionalProperties ?~ AdditionalPropertiesSchema quantitySchema
+                   )
+                 , ("metadata", metadataSchema)
+                 ]
+        advancedSchema =
+          mempty
+            & type_ ?~ OpenApiObject
+            & required .~ ["address"]
             & properties
               .~ [ ("address", simpleSchema)
                  , ("metadata", metadataSchema)
@@ -934,7 +978,7 @@ instance ToSchema RoleTokenConfig where
     pure $
       NamedSchema (Just "RoleTokenConfig") $
         mempty
-          & oneOf ?~ [simpleSchema, Inline advancedSchema, Inline openSchema]
+          & oneOf ?~ [Inline multiSchema, simpleSchema, Inline advancedSchema, Inline openSchema]
 
 data TokenMetadata = TokenMetadata
   { name :: Text
