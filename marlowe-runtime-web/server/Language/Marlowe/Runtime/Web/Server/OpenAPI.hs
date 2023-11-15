@@ -90,6 +90,15 @@ lintOpenApi oa = schemaDefinitionLints <> pathParametersLints <> pathOperationLi
     paramDefinitions :: Definitions Param
     paramDefinitions = Optics.view (components . parameters) oa
 
+    requestBodyDefinitions :: Definitions RequestBody
+    requestBodyDefinitions = Optics.view (components . requestBodies) oa
+
+    responseDefinitions :: Definitions Response
+    responseDefinitions = Optics.view (components . responses) oa
+
+    headerDefinitions :: Definitions Data.OpenApi.Header
+    headerDefinitions = Optics.view (components . headers) oa
+
     schemaRef :: Referenced Schema -> Maybe Schema
     schemaRef = \case
       Inline s -> Just s
@@ -99,6 +108,21 @@ lintOpenApi oa = schemaDefinitionLints <> pathParametersLints <> pathOperationLi
     paramRef = \case
       Inline s -> Just s
       Ref (Reference ((`IOHM.lookup` paramDefinitions) -> s)) -> s
+
+    reqeuestBodyRef :: Referenced RequestBody -> Maybe RequestBody
+    reqeuestBodyRef = \case
+      Inline s -> Just s
+      Ref (Reference ((`IOHM.lookup` requestBodyDefinitions) -> s)) -> s
+
+    responseRef :: Referenced Response -> Maybe Response
+    responseRef = \case
+      Inline s -> Just s
+      Ref (Reference ((`IOHM.lookup` responseDefinitions) -> s)) -> s
+
+    headerRef :: Referenced Data.OpenApi.Header -> Maybe Data.OpenApi.Header
+    headerRef = \case
+      Inline s -> Just s
+      Ref (Reference ((`IOHM.lookup` headerDefinitions) -> s)) -> s
 
     schemaRule1Check :: [Text] -> Schema -> [OpenApiLintIssue]
     schemaRule1Check stackTrace s = do
@@ -124,11 +148,11 @@ lintOpenApi oa = schemaDefinitionLints <> pathParametersLints <> pathOperationLi
           checkForType = Maybe.isJust . (checkIfPropertyHaveTypedef schemaRequiredField <=< schemaRef)
 
           typeIsInProperties = Maybe.isJust $ checkIfPropertyHaveTypedef schemaRequiredField s
-          typeIsInEveryAnyOf = maybe False (and . fmap checkForType) schemaAnyOf
-          typeIsInEveryOneOf = maybe False (and . fmap checkForType) schemaOneOf
-          typeIsInOneAllOf = maybe False (or . fmap checkForType) schemaAllOf
+          typeIsInEveryAnyOfItem = maybe False (and . fmap checkForType) schemaAnyOf
+          typeIsInEveryOneOfItem = maybe False (and . fmap checkForType) schemaOneOf
+          typeIsInAnyAllOfItem = maybe False (or . fmap checkForType) schemaAllOf
 
-      Control.when (typeIsInProperties || typeIsInEveryAnyOf || typeIsInEveryOneOf || typeIsInOneAllOf) []
+      Control.when (typeIsInProperties || typeIsInEveryAnyOfItem || typeIsInEveryOneOfItem || typeIsInAnyAllOfItem) []
 
       pure $
         OpenApiLintIssue
@@ -144,6 +168,29 @@ lintOpenApi oa = schemaDefinitionLints <> pathParametersLints <> pathOperationLi
       s :: Schema <- Maybe.maybeToList (schemaRef =<< Optics.view schema param)
       lintSchema (Optics.view name param : stacktrace) s
 
+    lintMediaTypeObject :: [Text] -> MediaTypeObject -> [OpenApiLintIssue]
+    lintMediaTypeObject stacktrace mediaTypeObject =
+      lintSchema stacktrace =<< (Maybe.maybeToList $ schemaRef =<< Optics.view schema mediaTypeObject)
+
+    lintRequestBody :: [Text] -> RequestBody -> [OpenApiLintIssue]
+    lintRequestBody stacktrace request = do
+      (show -> Text.pack -> mediaType, bodyContent :: MediaTypeObject) <- toList $ Optics.view content request
+      lintMediaTypeObject (mediaType : stacktrace) bodyContent
+
+    lintHeader :: [Text] -> Data.OpenApi.Header -> [OpenApiLintIssue]
+    lintHeader stacktrace header =
+      lintSchema stacktrace =<< (Maybe.maybeToList $ schemaRef =<< Optics.view schema header)
+
+    lintResponse :: [Text] -> Response -> [OpenApiLintIssue]
+    lintResponse stacktrace res = do
+      let responseContentLints = do
+            (show -> Text.pack -> mediaType, responseContent :: MediaTypeObject) <- toList $ Optics.view content res
+            lintMediaTypeObject (mediaType : "content" : stacktrace) responseContent
+          responseHeadersLints = do
+            (headerName, headerRef -> maybeHeader) <- toList $ Optics.view headers res
+            lintHeader (headerName : stacktrace) =<< Maybe.maybeToList maybeHeader
+      responseContentLints <> responseHeadersLints
+
     schemaDefinitionLints :: [OpenApiLintIssue]
     schemaDefinitionLints = do
       (definitionName, definitionSchema) <- toList schemaDefinitions
@@ -155,9 +202,6 @@ lintOpenApi oa = schemaDefinitionLints <> pathParametersLints <> pathOperationLi
       param :: Param <- Maybe.mapMaybe paramRef $ Optics.view parameters endpoint
       lintParam ["parameters", path, "paths"] param
 
-    -- DONE: path->operation*->param
-    -- TODO: path->operation*->request
-    -- TODO: path->operation*->response
     pathOperationLints :: [OpenApiLintIssue]
     pathOperationLints = do
       (Text.pack -> path, endpoint) <- toList $ Optics.view paths oa
@@ -174,8 +218,22 @@ lintOpenApi oa = schemaDefinitionLints <> pathParametersLints <> pathOperationLi
             , Optics.view patch endpoint
             , Optics.view Data.OpenApi.trace endpoint
             ]
-      param :: Param <- Maybe.mapMaybe paramRef $ Optics.view parameters operation
-      lintParam ["parameters", operationName, path, "paths"] param
+
+      concat
+        [ do
+            param :: Param <- Maybe.mapMaybe paramRef $ Optics.view parameters operation
+            lintParam ["parameters", operationName, path, "paths"] param
+        , do
+            request :: RequestBody <- Maybe.maybeToList $ reqeuestBodyRef =<< Optics.view requestBody operation
+            lintRequestBody ["requestBody", operationName, path, "paths"] request
+        , do
+            defaultResponse :: Response <-
+              Maybe.maybeToList $ responseRef =<< Optics.view default_ (Optics.view responses operation)
+            lintResponse ["default", "responses", operationName, path, "paths"] defaultResponse
+        , do
+            (show -> Text.pack -> httpCode, responseRef -> maybeRes) <- toList $ Optics.view (responses . responses) operation
+            lintResponse [httpCode, "responses", operationName, path, "paths"] =<< Maybe.maybeToList maybeRes
+        ]
 
 openApi :: OpenApiWithEmptySecurity
 openApi =
