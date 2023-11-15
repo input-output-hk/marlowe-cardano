@@ -8,19 +8,17 @@ module Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec (
 ) where
 
 import Cardano.Api (BabbageEra, ConsensusMode (..), EraHistory (EraHistory), SlotNo (SlotNo))
+import qualified Cardano.Api as C
 import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import Control.Monad.Trans.Except (runExcept, runExceptT)
-import Data.Bifunctor (second)
-import Data.ByteString (ByteString)
-import qualified Data.ByteString as BS
 import Data.Function (on)
 import Data.Functor ((<&>))
 import Data.Functor.Identity (Identity (..))
-import Data.List (isPrefixOf, nub)
-import qualified Data.List.NonEmpty as NE
+import Data.List (isPrefixOf)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (maybeToList)
+import qualified Data.Map.NonEmpty as NEMap
+import Data.Maybe (fromJust, maybeToList)
 import Data.SOP.Counting (Exactly (..))
 import Data.SOP.Strict (K (..), NP (..))
 import qualified Data.Set as Set
@@ -31,6 +29,7 @@ import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics as Semantics
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as Semantics
+import Language.Marlowe.Runtime.Cardano.Api (fromCardanoPolicyId, toCardanoPlutusScript)
 import Language.Marlowe.Runtime.ChainSync.Api (Lovelace, PlutusScript (..), toUTxOsList)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (
@@ -50,9 +49,9 @@ import Language.Marlowe.Runtime.Transaction.Api (
   ApplyInputsError (..),
   CreateError,
   Destination (..),
+  Mint (..),
+  MintRole (..),
   RoleTokensConfig (..),
-  mkMint,
-  unMint,
  )
 import qualified Language.Marlowe.Runtime.Transaction.Api as Transaction.Api
 import Language.Marlowe.Runtime.Transaction.BuildConstraints (
@@ -62,7 +61,7 @@ import Language.Marlowe.Runtime.Transaction.BuildConstraints (
  )
 import qualified Language.Marlowe.Runtime.Transaction.BuildConstraints as BuildConstraints
 import Language.Marlowe.Runtime.Transaction.Constraints (
-  HelperOutputConstraints (..),
+  Distribution (..),
   MarloweInputConstraints (..),
   MarloweOutputConstraints (..),
   PayoutContext (..),
@@ -71,7 +70,7 @@ import Language.Marlowe.Runtime.Transaction.Constraints (
   WalletContext (..),
  )
 import qualified Language.Marlowe.Runtime.Transaction.Constraints as TxConstraints
-import Language.Marlowe.Runtime.Transaction.ConstraintsSpec (genRole)
+import qualified Language.Marlowe.Runtime.Transaction.Gen ()
 import Ouroboros.Consensus.BlockchainTime (RelativeTime (..), SystemStart (..), mkSlotLength)
 import Ouroboros.Consensus.HardFork.History (
   Bound (..),
@@ -84,7 +83,6 @@ import Ouroboros.Consensus.HardFork.History (
  )
 import PlutusLedgerApi.V1 (Address (Address), Credential (PubKeyCredential), PubKeyHash (PubKeyHash), fromBuiltin)
 import PlutusLedgerApi.V1.Time (POSIXTime (POSIXTime))
-import qualified PlutusLedgerApi.V2 as Plutus
 import qualified PlutusTx.AssocMap as AM
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Test.Hspec (Spec, shouldBe)
@@ -95,28 +93,23 @@ import Test.QuickCheck (
   Property,
   chooseInteger,
   counterexample,
-  discard,
   elements,
   forAllShrink,
   genericShrink,
   listOf,
-  listOf1,
   oneof,
   suchThat,
   (===),
+  (==>),
  )
 import qualified Test.QuickCheck as QuickCheck
 import Test.QuickCheck.Instances ()
-
-byteStringGen :: QuickCheck.Gen ByteString
-byteStringGen = BS.pack <$> QuickCheck.arbitrary
 
 spec :: Spec
 spec = do
   createSpec
   withdrawSpec
   buildApplyInputsConstraintsSpec
-  openRolesSpec
 
 createSpec :: Spec
 createSpec = Hspec.describe "buildCreateConstraints" do
@@ -129,19 +122,16 @@ createSpec = Hspec.describe "buildCreateConstraints" do
           MarloweV1 -> (fmap Semantics.marloweContract <$> result) === (Right $ Just $ contract args)
           :: Property
   Hspec.QuickCheck.prop "sends the minAda deposit to the marlowe output" \(SomeCreateArgs args) ->
-    let result = extractMarloweAssets <$> runBuildCreateConstraints args
+    let result = fmap Chain.ada . extractMarloweAssets <$> runBuildCreateConstraints args
      in case version args of
-          MarloweV1 -> result === (Right $ Just $ Chain.Assets (minAda args) mempty)
+          MarloweV1 -> result === (Right $ Just $ minAda args)
           :: Property
-  Hspec.QuickCheck.prop "sends minted role tokens" \(SomeCreateArgs args) ->
-    case roleTokensConfig args of
-      RoleTokensMint mint ->
-        let result = extractSentRoleTokens <$> runBuildCreateConstraints args
-            expected = fst <$> unMint mint
-         in case version args of
-              MarloweV1 -> result === Right expected
-              :: Property
-      _ -> discard
+  Hspec.QuickCheck.prop "sends minted role tokens to the right destinations" \(SomeCreateArgs args) ->
+    let result = extractSentRoleTokens <$> runBuildCreateConstraints args
+        expected = getRolesForAddresses $ roleTokensConfig args
+     in case version args of
+          MarloweV1 -> result === Right expected
+          :: Property
   Hspec.QuickCheck.prop "total balance == marlowe output assets" \(SomeCreateArgs args) ->
     let result = runBuildCreateConstraints args
         mDatum = extractMarloweDatum <$> result
@@ -180,6 +170,19 @@ createSpec = Hspec.describe "buildCreateConstraints" do
      in case version args of
           MarloweV1 -> result === Right (metadata args)
           :: Property
+  Hspec.QuickCheck.prop "Adds thread tokens to the initial state" \(SomeCreateArgs args) ->
+    hasOpenRoles args ==>
+      let threadTokenAssetId = Chain.AssetId (getPolicyId args) $ threadName args
+          constraints = runBuildCreateConstraints args
+          assets = extractMarloweAssets <$> constraints
+          result = (Map.lookup threadTokenAssetId . Chain.unTokens . Chain.tokens =<<) <$> assets
+       in case version args of
+            MarloweV1 ->
+              counterexample (show threadTokenAssetId)
+                . counterexample (show constraints)
+                . counterexample (show assets)
+                $ result === Right (Just 1)
+            :: Property
   where
     emptyStateProp :: (Eq a, Show a) => String -> (CreateArgs 'V1 -> Semantics.State -> a) -> Spec
     emptyStateProp name f = Hspec.QuickCheck.prop name \(SomeCreateArgs args) ->
@@ -193,15 +196,66 @@ createSpec = Hspec.describe "buildCreateConstraints" do
                 (Right (Just $ Semantics.emptyState 0))
             :: Property
 
+hasOpenRoles :: CreateArgs v -> Bool
+hasOpenRoles CreateArgs{..} = case roleTokensConfig of
+  RoleTokensNone -> False
+  RoleTokensMint (Mint mint) -> any (NEMap.member (ToScript OpenRoleScript) . roleTokenRecipients) mint
+  RoleTokensUsePolicy _ dist -> any (Map.member (ToScript OpenRoleScript)) dist
+
+testMintingValidator :: PlutusScript
+testMintingValidator = PlutusScript mempty
+
+getPolicyId :: CreateArgs v -> Chain.PolicyId
+getPolicyId CreateArgs{..} = case roleTokensConfig of
+  RoleTokensNone -> ""
+  RoleTokensUsePolicy p _ -> p
+  RoleTokensMint _ -> testRoleTokensPolicyId
+
+testRoleTokensPolicyId :: Chain.PolicyId
+testRoleTokensPolicyId =
+  fromCardanoPolicyId
+    . C.PolicyId
+    . C.hashScript
+    . C.PlutusScript C.PlutusScriptV2
+    . fromJust
+    $ toCardanoPlutusScript testMintingValidator
+
+getRolesForAddresses :: RoleTokensConfig -> Map (Chain.TokenName, Destination) Chain.Quantity
+getRolesForAddresses =
+  Map.filter (> 0) . \case
+    RoleTokensNone -> mempty
+    RoleTokensUsePolicy _ dist -> flattenMap dist
+    RoleTokensMint (Mint mint) -> flattenMap $ NEMap.toMap $ NEMap.toMap . roleTokenRecipients <$> mint
+
+flattenMap :: Map a (Map b c) -> Map (a, b) c
+flattenMap abc = Map.fromDistinctAscList do
+  (a, bc) <- Map.toAscList abc
+  (b, c) <- Map.toAscList bc
+  pure ((a, b), c)
+
+extractSentRoleTokens
+  :: TxConstraints BabbageEra v
+  -> Map (Chain.TokenName, Destination) Chain.Quantity
+extractSentRoleTokens TxConstraints{..} = case roleTokenConstraints of
+  RoleTokenConstraintsNone -> mempty
+  SpendRoleTokens{} -> mempty
+  MintRoleTokens _ _ mintPlan -> go mintPlan
+  DistributeRoleTokens mintPlan -> go mintPlan
+  where
+    go = \case
+      SendToScripts _ dist -> Map.fromList do
+        (Chain.AssetId _ token, dist') <- Map.toList dist
+        (dest, q) <- Map.toList dist'
+        pure ((token, dest), q)
+      SendToAddresses dist -> Map.fromList do
+        (Chain.AssetId _ token, dist') <- Map.toList dist
+        (addr, q) <- Map.toList dist'
+        pure ((token, ToAddress addr), q)
+
 extractMarloweDatum :: TxConstraints BabbageEra v -> Maybe (Datum v)
 extractMarloweDatum TxConstraints{..} = case marloweOutputConstraints of
   MarloweOutput _ datum -> Just datum
   _ -> Nothing
-
-extractSentRoleTokens :: TxConstraints BabbageEra v -> Map Chain.TokenName Destination
-extractSentRoleTokens TxConstraints{..} = case roleTokenConstraints of
-  MintRoleTokens _ _ distribution -> Map.mapKeys Chain.tokenName distribution
-  _ -> mempty
 
 extractMarloweAssets :: TxConstraints BabbageEra v -> Maybe Chain.Assets
 extractMarloweAssets TxConstraints{..} = case marloweOutputConstraints of
@@ -214,10 +268,11 @@ runBuildCreateConstraints CreateArgs{..} =
     <$> runIdentity
       ( buildCreateConstraints
           -- Since we don't actually run the script, we can just return empty bytes
-          (\_ _ -> pure $ PlutusScript mempty)
+          (\_ _ -> pure testMintingValidator)
           ReferenceTxInsScriptsInlineDatumsInBabbageEra
           version
           walletContext
+          threadName
           roleTokensConfig
           metadata
           minAda
@@ -228,6 +283,7 @@ runBuildCreateConstraints CreateArgs{..} =
 data CreateArgs v = CreateArgs
   { version :: MarloweVersion v
   , walletContext :: WalletContext
+  , threadName :: Chain.TokenName
   , roleTokensConfig :: RoleTokensConfig
   , metadata :: MarloweTransactionMetadata
   , minAda :: Lovelace
@@ -236,37 +292,34 @@ data CreateArgs v = CreateArgs
   deriving (Generic)
 
 instance Arbitrary (CreateArgs 'V1) where
-  arbitrary =
+  arbitrary = do
     CreateArgs MarloweV1
       <$> arbitrary `suchThat` notEmptyWalletContext
       <*> arbitrary
+      <*> (noMetadata <$> arbitrary)
       <*> arbitrary
       <*> ((+ safeLovelace) . Chain.Lovelace <$> arbitrary)
       <*> arbitrary
   shrink args@CreateArgs{..} =
     concat
-      [ [args{walletContext = x} | x <- shrink walletContext]
+      [ [args{contract = x} | x <- shrink contract]
+      , [args{walletContext = x} | x <- shrink walletContext]
+      , [args{threadName = x} | x <- shrink threadName]
       , [args{roleTokensConfig = x} | x <- shrink roleTokensConfig]
       , [args{metadata = x} | x <- shrink metadata]
-      , [args{contract = x} | x <- shrink contract]
       ]
+
+noMetadata :: RoleTokensConfig -> RoleTokensConfig
+noMetadata = \case
+  RoleTokensMint (Mint mint) -> RoleTokensMint $ Mint $ noMetadata' <$> mint
+  x -> x
+
+noMetadata' :: MintRole -> MintRole
+noMetadata' MintRole{..} = MintRole{roleMetadata = Nothing, ..}
 
 instance Arbitrary WalletContext where
   arbitrary = WalletContext <$> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink
-
-instance Arbitrary RoleTokensConfig where
-  arbitrary =
-    oneof
-      [ pure RoleTokensNone
-      , RoleTokensUsePolicy . Chain.PolicyId <$> byteStringGen
-      , RoleTokensMint . mkMint . NE.fromList <$> listOf1 ((,) <$> genRole <*> ((,Nothing) . ToAddress <$> arbitrary))
-      ]
-  shrink = \case
-    RoleTokensNone -> []
-    RoleTokensUsePolicy _ -> [RoleTokensNone]
-    RoleTokensMint _ -> [RoleTokensNone]
-    RoleTokensUsePolicyWithOpenRoles{} -> [RoleTokensNone]
 
 notEmptyWalletContext :: WalletContext -> Bool
 notEmptyWalletContext WalletContext{..} = not $ null $ toUTxOsList availableUtxos
@@ -302,7 +355,6 @@ withdrawSpec = Hspec.describe "buildWithdrawConstraints" do
                 , payToAddresses = Map.empty
                 , payToRoles = Map.empty
                 , marloweOutputConstraints = TxConstraints.MarloweOutputConstraintsNone
-                , helperOutputConstraints = mempty
                 , signatureConstraints = Set.empty
                 , metadataConstraints = emptyMarloweTransactionMetadata
                 }
@@ -772,97 +824,3 @@ buildApplyInputsConstraintsSpec =
           Left _ ->
             counterexample "Unexpected transaction failure" False
         :: QuickCheck.Gen Property
-
-openRolesSpec :: Spec
-openRolesSpec = Hspec.describe "Open Role Constraints" do
-  let runBuild CreateArgs{..} =
-        do
-          roleTokensConfig' <- genOpenRolesConfig
-          let result =
-                fmap snd . runIdentity $
-                  buildCreateConstraints
-                    (\_ _ -> pure $ PlutusScript mempty)
-                    ReferenceTxInsScriptsInlineDatumsInBabbageEra
-                    version
-                    walletContext
-                    roleTokensConfig'
-                    metadata
-                    minAda
-                    (\(Chain.Assets ada tokens) -> Chain.Assets ada tokens)
-                    contract
-              policyId =
-                case (version, extractMarloweDatum <$> result) of
-                  (MarloweV1, Right (Just datum)) -> Semantics.rolesCurrency $ Semantics.marloweParams datum
-                  _ -> ""
-              filterRoles destination =
-                case roleTokensConfig' of
-                  RoleTokensMint mint ->
-                    Set.fromList
-                      . fmap (Chain.AssetId . Chain.PolicyId . Plutus.fromBuiltin $ Plutus.unCurrencySymbol policyId)
-                      . Map.keys
-                      . Map.filter ((== destination) . fst)
-                      $ unMint mint
-                  _ -> mempty
-          pure (policyId, filterRoles ToSelf, filterRoles $ ToScript OpenRoleScript, result)
-      toChainPolicyId = Chain.PolicyId . Plutus.fromBuiltin . Plutus.unCurrencySymbol
-      toChainAssetId (Semantics.Token p n) =
-        Chain.AssetId
-          (toChainPolicyId p)
-          (Chain.TokenName . Plutus.fromBuiltin . Plutus.unTokenName $ n)
-  Hspec.QuickCheck.prop "adds thread tokens to initial state" \(SomeCreateArgs args) ->
-    do
-      (policyId, threadTokens, _, result) <- fmap (second extractMarloweDatum) <$> runBuild args
-      let isRoleToken ((_, Semantics.Token policy _), 1) = policy == policyId
-          isRoleToken _ = False
-          getThreadTokens =
-            Set.fromList
-              . fmap (toChainAssetId . snd . fst)
-              . filter isRoleToken
-              . AM.toList
-              . Semantics.accounts
-              . Semantics.marloweState
-      pure $
-        case version args of
-          MarloweV1 -> (maybe mempty getThreadTokens <$> result) === Right threadTokens
-        :: QuickCheck.Gen Property
-  Hspec.QuickCheck.prop "includes constraints for all open-role tokens" \(SomeCreateArgs args) ->
-    do
-      (policyId, _, openRoleTokens, result) <- fmap (second helperOutputConstraints) <$> runBuild args
-      let actual = Set.map (Chain.AssetId $ toChainPolicyId policyId) . Map.keysSet <$> result
-      pure $
-        case version args of
-          MarloweV1 -> actual === Right openRoleTokens
-        :: QuickCheck.Gen Property
-  Hspec.QuickCheck.prop "open-role datum references thread token" \(SomeCreateArgs args) ->
-    do
-      (_, threadTokens, _, result) <- fmap (second helperOutputConstraints) <$> runBuild args
-      let expected =
-            if result == Right mempty
-              then mempty
-              else Set.map (Chain.B . Chain.unTokenName . Chain.tokenName) threadTokens
-          actual = Set.fromList . foldr (\(HelperOutput _ datum) -> (datum :)) mempty <$> result
-      pure $
-        case version args of
-          MarloweV1 -> actual === Right expected
-        :: QuickCheck.Gen Property
-  Hspec.QuickCheck.prop "open-role validator UTxO contains open-role token" \(SomeCreateArgs args) ->
-    do
-      (_, _, openRoleTokens, result) <- fmap (second helperOutputConstraints) <$> runBuild args
-      let expected =
-            Map.fromList
-              . fmap (\token@(Chain.AssetId _ name) -> (name, Chain.Assets 0 . Chain.Tokens $ Map.singleton token 1))
-              $ Set.toList openRoleTokens
-          actual = fmap (\(HelperOutput (Chain.Assets _ tokens) _) -> Chain.Assets 0 tokens) <$> result
-      pure $
-        case version args of
-          MarloweV1 -> actual === Right expected
-        :: QuickCheck.Gen Property
-
-genOpenRolesConfig :: QuickCheck.Gen RoleTokensConfig
-genOpenRolesConfig =
-  do
-    roles <- nub <$> listOf1 genRole
-    destinations <- (ToSelf :) <$> listOf (oneof [pure $ ToScript OpenRoleScript, ToAddress <$> arbitrary])
-    pure $
-      RoleTokensMint . mkMint . NE.fromList $
-        zip roles ((,Nothing) <$> destinations)

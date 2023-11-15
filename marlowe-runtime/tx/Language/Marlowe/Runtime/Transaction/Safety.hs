@@ -255,12 +255,12 @@ checkContract network config MarloweV1 contract continuations =
           (_, True) -> pure ContractHasNoRoles
           (RoleTokensMint mint, False) ->
             let minted = Set.map Chain.toPlutusTokenName $ NESet.toSet $ NEMap.keysSet $ unMint mint
-                missing = MissingRoleToken <$> Set.toList (Set.difference minted roles)
-                extra = ExtraRoleToken <$> Set.toList (Set.difference roles minted)
+                missing = MissingRoleToken <$> Set.toList (Set.difference roles minted)
+                extra = ExtraRoleToken <$> Set.toList (Set.difference minted roles)
              in missing <> extra
           (RoleTokensUsePolicy _ distribution, False) -> do
             let distributedRoles = Set.map Chain.toPlutusTokenName $ M.keysSet distribution
-            extraRole <- Set.toList $ Set.difference roles distributedRoles
+            extraRole <- Set.toList $ Set.difference distributedRoles roles
             pure $ ExtraRoleToken extraRole
       avoidDuplicateReport = True
       nameCheck = checkRoleNames avoidDuplicateReport Nothing contract continuations'

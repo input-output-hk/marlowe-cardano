@@ -111,8 +111,7 @@ instance Arbitrary HelperScript where
 instance Arbitrary Destination where
   arbitrary =
     frequency
-      [ (30, ToAddress <$> arbitrary)
-      , (2, pure ToSelf)
+      [ (15, ToAddress <$> arbitrary)
       , (1, ToScript <$> arbitrary)
       ]
   shrink = genericShrink
@@ -141,7 +140,10 @@ instance Arbitrary RoleTokensConfig where
       , (10, RoleTokensUsePolicy <$> arbitrary <*> arbitrary)
       , (10, RoleTokensMint <$> arbitrary)
       ]
-  shrink = genericShrink
+  shrink = \case
+    RoleTokensNone -> []
+    RoleTokensUsePolicy policy dist -> uncurry RoleTokensUsePolicy <$> shrink (policy, dist)
+    RoleTokensMint mint -> RoleTokensMint <$> shrink mint
 
 instance Arbitrary SubmitStatus where
   arbitrary = elements [Submitting, Accepted]
@@ -201,7 +203,6 @@ instance Arbitrary CreateError where
       , CreateLoadMarloweContextFailed <$> arbitrary
       , CreateBuildupFailed <$> arbitrary
       , pure CreateToCardanoError
-      , pure RequiresSingleThreadToken
       ]
   shrink = genericShrink
 
@@ -347,6 +348,7 @@ instance ArbitraryCommand MarloweTxCommand where
         <*> arbitrary
         <*> arbitrary
         <*> arbitrary
+        <*> arbitrary
     TagApplyInputs Core.MarloweV1 ->
       ApplyInputs Core.MarloweV1
         <$> arbitrary
@@ -385,35 +387,43 @@ instance ArbitraryCommand MarloweTxCommand where
     TagWithdraw Core.MarloweV1 -> arbitrary
     TagSubmit -> arbitrary
   shrinkCommand = \case
-    Create staking Core.MarloweV1 wallet roleConfig meta minAda contract ->
+    Create staking Core.MarloweV1 wallet thread roleConfig meta minAda contract ->
       concat
         [ Create
             <$> shrink staking
             <*> pure Core.MarloweV1
             <*> pure wallet
+            <*> pure thread
             <*> pure roleConfig
             <*> pure meta
             <*> pure minAda
             <*> pure contract
         , Create staking Core.MarloweV1
             <$> shrink wallet
+            <*> pure thread
             <*> pure roleConfig
             <*> pure meta
             <*> pure minAda
             <*> pure contract
         , Create staking Core.MarloweV1 wallet
+            <$> shrink thread
+            <*> pure roleConfig
+            <*> pure meta
+            <*> pure minAda
+            <*> pure contract
+        , Create staking Core.MarloweV1 wallet thread
             <$> shrink roleConfig
             <*> pure meta
             <*> pure minAda
             <*> pure contract
-        , Create staking Core.MarloweV1 wallet roleConfig
+        , Create staking Core.MarloweV1 wallet thread roleConfig
             <$> shrink meta
             <*> pure minAda
             <*> pure contract
-        , Create staking Core.MarloweV1 wallet roleConfig meta
+        , Create staking Core.MarloweV1 wallet thread roleConfig meta
             <$> shrink minAda
             <*> pure contract
-        , Create staking Core.MarloweV1 wallet roleConfig meta minAda
+        , Create staking Core.MarloweV1 wallet thread roleConfig meta minAda
             <$> shrink contract
         ]
     ApplyInputs Core.MarloweV1 wallet contractId meta minValid maxValid inputs ->
@@ -480,6 +490,7 @@ instance CommandVariations MarloweTxCommand where
     TagCreate Core.MarloweV1 ->
       Create
         <$> variations
+          `varyAp` variations
           `varyAp` variations
           `varyAp` variations
           `varyAp` variations

@@ -5,6 +5,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedLists #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
@@ -28,7 +29,7 @@ module Language.Marlowe.Runtime.Transaction.Api (
   MintRole (..),
   NFTMetadataFile (..),
   RoleTokenMetadata (..),
-  RoleTokensConfig (..),
+  RoleTokensConfig (RoleTokensNone, RoleTokensUsePolicy, RoleTokensMint),
   SubmitError (..),
   SubmitStatus (..),
   Tag (..),
@@ -118,7 +119,11 @@ import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript)
 import Language.Marlowe.Runtime.History.Api (ExtractCreationError, ExtractMarloweTransactionError)
 import Network.HTTP.Media (MediaType)
 
+import Control.Monad (join)
+import Data.Binary.Get (label)
 import Data.Function (on)
+import Data.List (nub)
+import qualified Data.List.NonEmpty as NE
 import Data.Map.NonEmpty (NEMap)
 import qualified Data.Map.NonEmpty as NEMap
 import Network.Protocol.Codec.Spec (Variations (..), varyAp)
@@ -274,7 +279,6 @@ encodeRoleTokenMetadata = encodeNFTMetadataDetails
 
 data Destination
   = ToAddress Address
-  | ToSelf
   | ToScript HelperScript
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary, ToJSON, Variations)
@@ -322,10 +326,62 @@ mkMint = Mint . NEMap.fromList
 
 data RoleTokensConfig
   = RoleTokensNone
-  | RoleTokensUsePolicy PolicyId (Map TokenName (Map Destination Chain.Quantity))
-  | RoleTokensMint Mint
-  deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, Variations)
+  | UnsafeRoleTokensUsePolicy PolicyId (Map TokenName (Map Destination Chain.Quantity))
+  | UnsafeRoleTokensMint Mint
+  deriving stock (Show, Eq, Ord)
+
+instance Binary RoleTokensConfig where
+  put RoleTokensNone = putWord8 0
+  put (RoleTokensUsePolicy policy dist) = do
+    putWord8 1
+    put policy
+    put dist
+  put (RoleTokensMint mint) = do
+    putWord8 2
+    put mint
+  get = label "RoleTokensConfig" do
+    ctorIx <- getWord8
+    case ctorIx of
+      0 -> pure RoleTokensNone
+      1 -> label "RoleTokensUsePolicy" $ RoleTokensUsePolicy <$> get <*> get
+      2 -> label "RoleTokensMint" $ RoleTokensMint <$> get
+      _ -> fail $ "Unknown constructor index " <> show ctorIx
+
+instance Variations RoleTokensConfig where
+  variations =
+    join $
+      NE.fromList $
+        nub
+          [ pure RoleTokensNone
+          , RoleTokensUsePolicy <$> variations `varyAp` variations
+          , RoleTokensMint <$> variations
+          ]
+
+{-# COMPLETE RoleTokensNone, RoleTokensUsePolicy, RoleTokensMint #-}
+
+pattern RoleTokensUsePolicy
+  :: PolicyId
+  -> Map TokenName (Map Destination Chain.Quantity)
+  -> RoleTokensConfig
+pattern RoleTokensUsePolicy policy dist <- UnsafeRoleTokensUsePolicy policy dist
+  where
+    RoleTokensUsePolicy policy dist =
+      UnsafeRoleTokensUsePolicy policy $
+        Map.filter (not . Map.null) $
+          Map.filter (> 0) <$> dist
+
+pattern RoleTokensMint :: Mint -> RoleTokensConfig
+pattern RoleTokensMint mint <- UnsafeRoleTokensMint mint
+  where
+    RoleTokensMint (Mint mint) =
+      maybe RoleTokensNone (UnsafeRoleTokensMint . Mint)
+        . NEMap.nonEmptyMap
+        . NEMap.mapMaybe
+          ( \MintRole{..} -> do
+              recipients <- NEMap.nonEmptyMap $ NEMap.filter (> 0) roleTokenRecipients
+              pure MintRole{roleTokenRecipients = recipients, ..}
+          )
+        $ mint
 
 data ContractCreated v where
   ContractCreated
@@ -664,6 +720,8 @@ data MarloweTxCommand status err result where
     -- ^ The Marlowe version to use
     -> WalletAddresses
     -- ^ The wallet addresses to use when constructing the transaction
+    -> Maybe TokenName
+    -- ^ An optional thread token name that gets sent to the contract using the roles policy ID. Defaults to @""@.
     -> RoleTokensConfig
     -- ^ How to initialize role tokens
     -> MarloweTransactionMetadata
@@ -743,7 +801,7 @@ instance Command MarloweTxCommand where
     JobIdSubmit :: TxId -> JobId MarloweTxCommand SubmitStatus SubmitError BlockHeader
 
   tagFromCommand = \case
-    Create _ version _ _ _ _ _ -> TagCreate version
+    Create _ version _ _ _ _ _ _ -> TagCreate version
     ApplyInputs version _ _ _ _ _ _ -> TagApplyInputs version
     Withdraw version _ _ -> TagWithdraw version
     Submit _ _ -> TagSubmit
@@ -792,9 +850,10 @@ instance Command MarloweTxCommand where
     TagSubmit -> JobIdSubmit <$> get
 
   putCommand = \case
-    Create mStakeCredential MarloweV1 walletAddresses roles metadata minAda contract -> do
+    Create mStakeCredential MarloweV1 walletAddresses threadName roles metadata minAda contract -> do
       put mStakeCredential
       put walletAddresses
+      put threadName
       put roles
       put metadata
       put minAda
@@ -821,10 +880,11 @@ instance Command MarloweTxCommand where
     TagCreate MarloweV1 -> do
       mStakeCredential <- get
       walletAddresses <- get
+      threadName <- get
       roles <- get
       metadata <- get
       minAda <- get
-      Create mStakeCredential MarloweV1 walletAddresses roles metadata minAda <$> get
+      Create mStakeCredential MarloweV1 walletAddresses threadName roles metadata minAda <$> get
     TagApplyInputs version -> do
       walletAddresses <- get
       contractId <- get
@@ -951,7 +1011,6 @@ data CreateError
   | CreateContractNotFound
   | ProtocolParamNoUTxOCostPerByte
   | InsufficientMinAdaDeposit Lovelace
-  | RequiresSingleThreadToken
   deriving (Generic)
 
 deriving instance Eq CreateError
@@ -1039,10 +1098,11 @@ data SubmitStatus
 
 instance CommandEq MarloweTxCommand where
   commandEq = \case
-    Create stake MarloweV1 wallet roleTokenConfig metadata minAda contract -> \case
-      Create stake' MarloweV1 wallet' roleTokenConfig' metadata' minAda' contract' ->
+    Create stake MarloweV1 wallet threadName roleTokenConfig metadata minAda contract -> \case
+      Create stake' MarloweV1 wallet' threadName' roleTokenConfig' metadata' minAda' contract' ->
         stake == stake'
           && wallet == wallet'
+          && threadName == threadName'
           && roleTokenConfig == roleTokenConfig'
           && metadata == metadata'
           && minAda == minAda'
@@ -1115,7 +1175,7 @@ instance ShowCommand MarloweTxCommand where
 
   showsPrecCommand p =
     showParen (p >= 11) . \case
-      Create stake MarloweV1 wallet roleTokenConfig metadata minAda contract ->
+      Create stake MarloweV1 wallet threadName roleTokenConfig metadata minAda contract ->
         ( showString "Create"
             . showSpace
             . showsPrec 11 stake
@@ -1123,6 +1183,8 @@ instance ShowCommand MarloweTxCommand where
             . showsPrec 11 MarloweV1
             . showSpace
             . showsPrec 11 wallet
+            . showSpace
+            . showsPrec 11 threadName
             . showSpace
             . showsPrec 11 roleTokenConfig
             . showSpace

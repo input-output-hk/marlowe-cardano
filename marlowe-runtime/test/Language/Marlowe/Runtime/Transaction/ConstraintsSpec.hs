@@ -64,9 +64,10 @@ import Language.Marlowe.Runtime.Core.Api (
   toChainPayoutDatum,
  )
 import qualified Language.Marlowe.Runtime.Core.Gen ()
-import Language.Marlowe.Runtime.Core.ScriptRegistry (ReferenceScriptUtxo (..))
-import Language.Marlowe.Runtime.Transaction.Api (Destination (ToAddress))
+import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript (OpenRoleScript), ReferenceScriptUtxo (..))
+import Language.Marlowe.Runtime.Transaction.Api (Destination (..))
 import Language.Marlowe.Runtime.Transaction.Constraints
+import qualified Language.Marlowe.Runtime.Transaction.Gen ()
 import qualified Language.Marlowe.Scripts.Types as V1
 import Ouroboros.Consensus.BlockchainTime (RelativeTime (..), mkSlotLength)
 import Ouroboros.Consensus.HardFork.History (
@@ -102,8 +103,8 @@ spec = do
       protocol <- hedgehog genProtocolParameters
       scriptCtx <- genScriptContext marloweVersion constraints
       walletContext <- genWalletContext marloweVersion constraints
-      let (scriptContextStr, walletContextStr) = case marloweVersion of MarloweV1 -> (show scriptCtx, show walletContext)
-          marloweUtxo = case scriptCtx of
+      helpersContext <- genHelperContext constraints
+      let marloweUtxo = case scriptCtx of
             Left MarloweContext{scriptOutput = Just TransactionScriptOutput{..}} ->
               Chain.UTxOs $
                 Map.singleton utxo $
@@ -128,17 +129,14 @@ spec = do
               marloweVersion
               scriptCtx
               walletContext
-              (HelpersContext mempty "" mempty)
+              helpersContext
               constraints
-          mViolations = violations marloweVersion scriptCtx utxos constraints <$> result
+          mViolations = violations marloweVersion scriptCtx helpersContext utxos constraints <$> result
           theProperty :: Property
           theProperty = case marloweVersion of
             MarloweV1 -> Right [] === mViolations
       pure $
-        counterexample scriptContextStr $
-          counterexample walletContextStr $
-            counterexample (show utxos) $
-              either (const theProperty) (flip counterexample theProperty . show) result
+        either (const theProperty) (flip counterexample theProperty . show) result
 
   describe "adjustTxForMinUtxo" do
     prop "Marlowe output is NOT adjusted" do
@@ -851,6 +849,31 @@ spec = do
                         else label "non-balanceable test cases" True
                     Left _ -> label "non-balanceable test cases" True
 
+genHelperContext :: TxConstraints BabbageEra v -> Gen HelpersContext
+genHelperContext TxConstraints{..} = do
+  scriptHash <- hedgehog genScriptHash
+  let address =
+        fromCardanoAddressAny $
+          AddressShelley $
+            makeShelleyAddress Mainnet (PaymentCredentialByScript scriptHash) NoStakeAddress
+  utxo <- genReferenceScriptUtxo address
+  let openRoleInfo = HelperScriptInfo OpenRoleScript address utxo $ fromCardanoScriptHash scriptHash
+  pure
+    HelpersContext
+      { currentHelperScripts = Map.singleton OpenRoleScript openRoleInfo
+      , helperPolicyId = case roleTokenConstraints of
+          MintRoleTokens _ _ dist -> go dist
+          DistributeRoleTokens dist -> go dist
+          _ -> ""
+      , helperScriptStates = mempty
+      }
+  where
+    go = \case
+      SendToAddresses dist -> case Map.keys dist of
+        Chain.AssetId p _ : _ -> p
+        [] -> ""
+      SendToScripts (Chain.AssetId p _) _ -> p
+
 -- Generate a wallet that always has a pure ADA value of 7 and a value
 -- with a minimum ADA plus zero or more "nuisance" tokens
 genWalletWithNuisance :: MarloweVersion v -> TxConstraints BabbageEra v -> Word64 -> Gen WalletContext
@@ -1079,16 +1102,15 @@ emptyTxBodyContent =
 violations
   :: MarloweVersion v
   -> Either (MarloweContext v) PayoutContext
+  -> HelpersContext
   -> Chain.UTxOs
   -> TxConstraints BabbageEra v
   -> TxBodyContent BuildTx BabbageEra
   -> [String]
-violations marloweVersion scriptCtx utxos constraints txBodyContent =
+violations marloweVersion scriptCtx helpersContext utxos constraints txBodyContent =
   fold
-    [ case scriptCtx of
-        Left marloweContext ->
-          ("mustMintRoleToken: " <>) <$> mustMintRoleTokenViolations marloweVersion marloweContext constraints txBodyContent
-        _ -> []
+    [ ("mustMintRoleToken: " <>)
+        <$> mustMintRoleTokenViolations marloweVersion helpersContext constraints txBodyContent
     , ("mustSpendRoleToken: " <>) <$> mustSpendRoleTokenViolations marloweVersion utxos constraints txBodyContent
     , ("mustPayToAddress: " <>) <$> mustPayToAddressViolations marloweVersion constraints txBodyContent
     , case scriptCtx of
@@ -1117,8 +1139,12 @@ check :: (Alternative m) => Bool -> a -> m a
 check condition msg = msg <$ guard (not condition)
 
 mustMintRoleTokenViolations
-  :: MarloweVersion v -> MarloweContext v -> TxConstraints BabbageEra v -> TxBodyContent BuildTx BabbageEra -> [String]
-mustMintRoleTokenViolations MarloweV1 MarloweContext{..} TxConstraints{..} TxBodyContent{..} =
+  :: MarloweVersion v
+  -> HelpersContext
+  -> TxConstraints BabbageEra v
+  -> TxBodyContent BuildTx BabbageEra
+  -> [String]
+mustMintRoleTokenViolations MarloweV1 HelpersContext{..} TxConstraints{..} TxBodyContent{..} =
   fold
     [ mintsTheCorrectNumberOfTokens
     , distributesTokensCorrectly
@@ -1132,44 +1158,58 @@ mustMintRoleTokenViolations MarloweV1 MarloweContext{..} TxConstraints{..} TxBod
           ("UTxO not consumed: " <> show (Chain.renderTxOutRef txOutRef))
       _ -> []
 
+    checkDistribution expected = do
+      (assetId, roleDistribution) <- Map.toList expected
+      let tally = \case
+            TxOut address (TxOutValue MultiAssetInBabbageEra value) datum _ ->
+              case fromCardanoQuantity $ selectAsset value (toCardanoAssetId assetId) of
+                0 -> id
+                q -> Map.insert (fromCardanoAddressInEra BabbageEra address) (q, snd $ fromCardanoTxOutDatum datum)
+            _ -> id
+      let actualDistribution = foldr tally mempty txOuts
+      (("roleToken: " <> show assetId <> ": ") <>) <$> do
+        address <- Set.toList $ Set.union (Map.keysSet roleDistribution) (Map.keysSet actualDistribution)
+        (("address: " <> show address <> ": ") <>) <$> do
+          case (Map.lookup address roleDistribution, Map.lookup address actualDistribution) of
+            (Nothing, Nothing) -> []
+            (Just q, Nothing) -> pure $ "Expected to receive " <> show q <> " tokens, nothing sent"
+            (Nothing, Just q) -> pure $ "Not expected to receive tokens, got " <> show q
+            (Just q, Just q') -> check (q == q') ("Expected to receive " <> show q <> " tokens, got " <> show q')
+
+    resolveDestination = \case
+      ToAddress addr -> addr
+      ToScript script -> maybe (error "open roles script not found") helperAddress $ Map.lookup script currentHelperScripts
+
+    addDatum (Chain.AssetId _ (Chain.TokenName thread)) = \case
+      ToAddress _ -> (,Nothing)
+      ToScript _ -> (,Just $ Chain.B thread)
+
+    expectedDistribution = \case
+      SendToAddresses dist -> fmap (,Nothing) <$> dist
+      SendToScripts thread dist ->
+        Map.mapKeys resolveDestination . Map.mapWithKey (addDatum thread) <$> dist
+
     distributesTokensCorrectly = case roleTokenConstraints of
-      MintRoleTokens _ _ distribution -> do
-        (assetId, distribution) <- Map.toList distribution
-        (("roleToken: " <> show assetId <> ": ") <>) <$> do
-          let cardanoAssetId = toCardanoAssetId assetId
-              matches (TxOut outAddress (TxOutValue MultiAssetInBabbageEra value) _ _)
-                | selectAsset value cardanoAssetId > 0 = Just (fromCardanoAddressInEra BabbageEra outAddress, value)
-                | otherwise = Nothing
-              matches (TxOut _ (TxOutAdaOnly era _) _ _) = case era of {}
-          let matchingOuts = Map.fromList $ mapMaybe matches txOuts
-          case matchingOuts of
-            [(outAddress, value)] -> do
-              fold
-                [ check
-                    (fmap fst (valueToList value) == [cardanoAssetId])
-                    ("Output contains extra tokens: " <> show (fmap fst (valueToList value)))
-                , check
-                    (selectAsset value cardanoAssetId == 1)
-                    ("Output quantity for token expected to equal 1, was: " <> show (selectAsset value cardanoAssetId))
-                , check
-                    (ToAddress (fromCardanoAddressInEra BabbageEra outAddress) == address)
-                    ("Output sent to wrong address: " <> show outAddress)
-                ]
-            [] -> pure "No outputs contain role token"
-            _ -> pure "Multiple outputs contain role token"
-      _ -> []
+      MintRoleTokens _ _ dist -> checkDistribution $ expectedDistribution dist
+      DistributeRoleTokens dist -> checkDistribution $ expectedDistribution dist
+      SpendRoleTokens{} -> []
+      RoleTokenConstraintsNone -> []
 
     mintsTheCorrectNumberOfTokens = case roleTokenConstraints of
-      MintRoleTokens _ _ distribution -> case txMintValue of
-        TxMintNone
-          | Map.null distribution -> []
-          | otherwise -> ["No tokens minted"]
-        TxMintValue MultiAssetInBabbageEra value _ -> do
-          (assetId, quantity) <- Map.toList $ sum <$> distribution
-          (("roleToken: " <> show assetId <> ": ") <>) <$> do
-            let cardanoAssetId = toCardanoAssetId assetId
-            let quantityMinted = fromCardanoQuantity $ selectAsset value cardanoAssetId
-            check (quantityMinted == quantity) ("Expected to mint " <> show quantity <> " token(s), found " <> show quantityMinted)
+      MintRoleTokens _ _ dist -> do
+        let mintedQuantities = case dist of
+              SendToAddresses dist' -> sum <$> dist'
+              SendToScripts _ dist' -> sum <$> dist'
+        case txMintValue of
+          TxMintNone
+            | Map.null mintedQuantities -> []
+            | otherwise -> ["No tokens minted"]
+          TxMintValue MultiAssetInBabbageEra value _ -> do
+            (assetId, quantity) <- Map.toList mintedQuantities
+            (("roleToken: " <> show assetId <> ": ") <>) <$> do
+              let cardanoAssetId = toCardanoAssetId assetId
+              let quantityMinted = fromCardanoQuantity $ selectAsset value cardanoAssetId
+              check (quantityMinted == quantity) ("Expected to mint " <> show quantity <> " token(s), found " <> show quantityMinted)
       _ -> []
 
 mustSpendRoleTokenViolations
@@ -1371,7 +1411,7 @@ instance Show SomeTxConstraints where
 instance Arbitrary SomeTxConstraints where
   arbitrary =
     oneof
-      [ SomeTxConstraints MarloweV1 <$> genV1MarloweConstraints
+      [ SomeTxConstraints MarloweV1 <$> (genV1MarloweConstraints =<< arbitrary)
       , SomeTxConstraints MarloweV1 <$> genV1PayoutConstraints
       ]
   shrink (SomeTxConstraints marloweVersion constraints) =
@@ -1405,22 +1445,27 @@ shrinkMap shrinkItem = fmap Map.fromDistinctAscList . shrinkList (traverse shrin
 shrinkRoleTokenConstraints :: RoleTokenConstraints BabbageEra -> [RoleTokenConstraints BabbageEra]
 shrinkRoleTokenConstraints = \case
   RoleTokenConstraintsNone -> []
-  MintRoleTokens ref witness distribution ->
-    RoleTokenConstraintsNone
-      : DistributeRoleTokens distribution
-      : (MintRoleTokens ref witness <$> shrinkMap shrinkDistribution distribution)
-  DistributeRoleTokens distribution ->
-    RoleTokenConstraintsNone
-      : (DistributeRoleTokens <$> shrinkMap shrinkDistribution distribution)
-  SpendRoleTokens roleTokens ->
-    RoleTokenConstraintsNone
-      : (SpendRoleTokens <$> shrinkSet shrinkNothing roleTokens)
+  MintRoleTokens ref witness dist ->
+    DistributeRoleTokens dist : (MintRoleTokens ref witness <$> shrinkDistribution dist)
+  DistributeRoleTokens dist -> DistributeRoleTokens <$> shrinkDistribution dist
+  SpendRoleTokens roleTokens -> SpendRoleTokens <$> shrinkSet shrinkNothing roleTokens
 
-shrinkDistribution :: Map Destination Chain.Quantity -> [Map Destination Chain.Quantity]
-shrinkDistribution = shrinkMap \q -> do
-  q' <- shrink q
-  guard $ q' > 0
-  pure q'
+shrinkDistribution :: Distribution -> [Distribution]
+shrinkDistribution = \case
+  SendToAddresses dist -> SendToAddresses <$> shrinkMap (shrinkMap shrink) dist
+  SendToScripts thread dist ->
+    fold
+      [ do
+          thread' <- shrink thread
+          pure $ SendToScripts thread' $ Map.delete thread' dist
+      , do
+          dist' <- shrinkMap (shrinkMap shrink) dist
+          pure $ SendToScripts thread $ Map.delete thread dist'
+      ]
+
+demoteDestination :: (Destination, a) -> Maybe (Chain.Address, a)
+demoteDestination (ToAddress addr, a) = Just (addr, a)
+demoteDestination _ = Nothing
 
 shrinkMarloweOutputConstraints :: MarloweOutputConstraints 'V1 -> [MarloweOutputConstraints 'V1]
 shrinkMarloweOutputConstraints = \case
@@ -1431,24 +1476,27 @@ shrinkMarloweOutputConstraints = \case
       , [MarloweOutput assets datum' | datum' <- shrink datum]
       ]
 
-genV1MarloweConstraints :: Gen (TxConstraints BabbageEra 'V1)
-genV1MarloweConstraints = sized \n ->
+genV1MarloweConstraints :: Chain.AssetId -> Gen (TxConstraints BabbageEra 'V1)
+genV1MarloweConstraints threadToken = sized \n ->
   frequency
-    [ (n, resize (n `div` 2) $ (<>) <$> genV1MarloweConstraints <*> genV1MarloweConstraints)
+    [ (n, resize (n `div` 2) $ (<>) <$> genV1MarloweConstraints threadToken <*> genV1MarloweConstraints threadToken)
     , (1, pure mempty)
     ,
       ( 1
       , mustMintRoleToken
           <$> arbitrary
           <*> genMintScriptWitness
-          <*> genRoleToken False
-          <*> (ToAddress <$> arbitrary)
-          <*> arbitrary `suchThat` (> 0)
+          <*> genRoleToken threadToken False
+          <*> frequency
+            [ (15, Left <$> arbitrary)
+            , (1, Right . (threadToken,) <$> arbitrary)
+            ]
+          <*> arbitrary
       )
-    , (1, mustSpendRoleToken <$> genRoleToken True)
+    , (1, mustSpendRoleToken <$> genRoleToken threadToken True)
     , (1, mustPayToAddress <$> arbitrary <*> arbitrary)
     , (1, mustSendMarloweOutput <$> arbitrary <*> genDatum)
-    , (1, mustPayToRole <$> arbitrary <*> genRoleToken True)
+    , (1, mustPayToRole <$> arbitrary <*> genRoleToken threadToken True)
     , (1, uncurry mustConsumeMarloweOutput <$> genValidityInterval <*> genInputs)
     , (1, requiresSignature <$> arbitrary)
     , (1, requiresMetadata <$> arbitrary)
@@ -1459,7 +1507,7 @@ genV1PayoutConstraints = sized \n ->
   frequency
     [ (n, resize (n `div` 2) $ (<>) <$> genV1PayoutConstraints <*> genV1PayoutConstraints)
     , (1, pure mempty)
-    , (1, mustSpendRoleToken <$> genRoleToken True)
+    , (1, mustSpendRoleToken <$> (flip genRoleToken True =<< arbitrary))
     , (1, mustPayToAddress <$> arbitrary <*> arbitrary)
     , (1, mustConsumePayout <$> arbitrary)
     , (1, requiresSignature <$> arbitrary)
@@ -1499,14 +1547,11 @@ genMintScriptWitness =
         <*> (ExecutionUnits <$> (fromIntegral @Word32 <$> arbitrary) <*> (fromIntegral @Word32 <$> arbitrary))
     ]
 
-genRoleToken :: Bool -> Gen Chain.AssetId
-genRoleToken includeAda =
+genRoleToken :: Chain.AssetId -> Bool -> Gen Chain.AssetId
+genRoleToken (Chain.AssetId p _) includeAda =
   oneof $
     catMaybes
-      [ pure $
-          Chain.AssetId
-            <$> (hedgehog $ fromCardanoPolicyId . PolicyId <$> genScriptHash)
-            <*> genRole
+      [ pure $ Chain.AssetId p <$> genRole
       , guard includeAda $> pure (Chain.AssetId "" "")
       ]
 
@@ -1589,7 +1634,9 @@ genPayoutOutputs scriptAddresses TxConstraints{..} = (<>) <$> required <*> arbit
     required =
       Map.fromList <$> for (Set.toList payoutInputConstraints) \payout ->
         (payout,)
-          <$> genTransactionOutput (elements scriptAddresses) (Just . toChainPayoutDatum MarloweV1 <$> genRoleToken True)
+          <$> genTransactionOutput
+            (elements scriptAddresses)
+            (Just . toChainPayoutDatum MarloweV1 <$> (flip genRoleToken True =<< arbitrary))
 
 genReferenceScriptUtxo :: Chain.Address -> Gen ReferenceScriptUtxo
 genReferenceScriptUtxo address =
@@ -1625,7 +1672,7 @@ shrinkWalletUtxos TxConstraints{..} collateralUtxos = filter (isValid . Chain.un
     hasRoleTokens = case roleTokenConstraints of
       RoleTokenConstraintsNone -> const True
       MintRoleTokens txOutRef _ _ -> Map.member txOutRef
-      DistributeRoleTokens distribution -> \availableUtxos -> case Chain.Tokens $ sum <$> distribution of
+      DistributeRoleTokens distribution -> \availableUtxos -> case toTokens distribution of
         requiredTotals -> case foldMap Chain.assets availableUtxos of
           walletAssets -> walletAssets `sufficient` assetsFromTokens requiredTotals
       SpendRoleTokens roleTokens ->
@@ -1633,6 +1680,12 @@ shrinkWalletUtxos TxConstraints{..} collateralUtxos = filter (isValid . Chain.un
           . Set.difference roleTokens
           . foldMap (Map.keysSet . Chain.unTokens . (.assets.tokens))
     hasCollateralUtxos = Set.null . Set.difference collateralUtxos . Map.keysSet
+
+toTokens :: Distribution -> Chain.Tokens
+toTokens =
+  Chain.Tokens . \case
+    SendToAddresses dist -> sum <$> dist
+    SendToScripts thread dist -> Map.insert thread 1 $ sum <$> dist
 
 sufficient :: Chain.Assets -> Chain.Assets -> Bool
 sufficient available required =
@@ -1668,7 +1721,12 @@ genWalletUtxos TxConstraints{..} = (<>) <$> required <*> extra
     required = case roleTokenConstraints of
       RoleTokenConstraintsNone -> pure mempty
       MintRoleTokens txOutRef _ _ -> Chain.UTxOs . Map.singleton txOutRef <$> genTransactionOutput arbitrary (pure Nothing)
-      MintRoleTokens txOutRef _ _ -> Chain.UTxOs . Map.singleton txOutRef <$> genTransactionOutput arbitrary (pure Nothing)
+      DistributeRoleTokens distribution ->
+        fold <$> for (Map.toList $ Chain.unTokens $ toTokens distribution) \(roleToken, q) -> do
+          txOutRef <- arbitrary
+          txOut <- genTransactionOutput arbitrary (pure Nothing)
+          let roleTokenAssets = Chain.Assets 0 $ Chain.Tokens $ Map.singleton roleToken q
+          pure $ Chain.UTxOs $ Map.singleton txOutRef $ txOut{Chain.assets = Chain.assets txOut <> roleTokenAssets}
       SpendRoleTokens roleTokens ->
         fold <$> for (Set.toList roleTokens) \roleToken -> do
           txOutRef <- arbitrary
