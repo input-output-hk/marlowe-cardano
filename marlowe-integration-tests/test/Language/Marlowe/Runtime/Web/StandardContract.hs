@@ -27,8 +27,8 @@ import Language.Marlowe.Runtime.Web (
   CreateTxEnvelope,
   PayoutHeader (..),
   PayoutStatus (..),
-  Role (ClosedRole),
   RoleTokenConfig (..),
+  RoleTokenRecipient (ClosedRole),
   WithdrawTxEnvelope,
  )
 import qualified Language.Marlowe.Runtime.Web as Web
@@ -107,7 +107,11 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
         { metadata = mempty
         , version = Web.V1
         , threadTokenName = Nothing
-        , roles = Just $ Web.Mint $ Map.singleton "Party A" $ RoleTokenConfig (ClosedRole partyAWebChangeAddress) Nothing
+        , roles =
+            Just
+              . Web.Mint
+              . Map.singleton "Party A"
+              $ RoleTokenConfig (Map.singleton (ClosedRole partyAWebChangeAddress) 1) Nothing
         , contract = ContractOrSourceId $ Right contractSourceId
         , minUTxODeposit = Nothing
         , tags = tags

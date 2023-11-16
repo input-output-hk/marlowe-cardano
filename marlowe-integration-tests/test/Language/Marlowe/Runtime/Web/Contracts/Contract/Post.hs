@@ -22,13 +22,13 @@ spec :: Spec
 spec = describe "Valid POST /contracts" do
   it "returns the contract header"
     . specWithRolesConfig Nothing
-    $ Web.Mint . Map.singleton "PartyA" . flip Web.RoleTokenConfig Nothing . Web.ClosedRole
+    $ Web.Mint . Map.singleton "PartyA" . flip Web.RoleTokenConfig Nothing . flip Map.singleton 1 . Web.ClosedRole
   it "returns the contract header (open roles)"
     . specWithRolesConfig (Just "Thread")
     . const
     . Web.Mint
     $ Map.fromList
-      [ ("PartyA", Web.RoleTokenConfig Web.OpenRole Nothing)
+      [ ("PartyA", Web.RoleTokenConfig (Map.singleton Web.OpenRole 1) Nothing)
       ]
 
 specWithRolesConfig :: Maybe Text -> (Web.Address -> Web.RolesConfig) -> IO ()
