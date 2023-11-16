@@ -323,9 +323,8 @@ instance Semigroup Mint where
       }
 
 mkMint :: NonEmpty (TokenName, Maybe RoleTokenMetadata, Destination, Chain.Quantity) -> Mint
-mkMint =
-  Mint . foldMap1 \(token, metadata, dest, quantity) ->
-    NEMap.singleton token $ MintRole metadata $ NEMap.singleton dest quantity
+mkMint = foldMap1 \(token, metadata, dest, quantity) ->
+  Mint $ NEMap.singleton token $ MintRole metadata $ NEMap.singleton dest quantity
 
 data RoleTokensConfig
   = RoleTokensNone

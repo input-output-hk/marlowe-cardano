@@ -675,7 +675,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
           emptyMarloweTransactionMetadata
           [NormalInput INotify]
     liftIO $ scriptOutput output `shouldBe` Nothing
-  it "should accept the correct deposit from wallet 1" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
+  it "should accept a Role1 deposit from wallet 1" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
     wallet <- getGenesisWallet 0
     InputsApplied _ InputsAppliedInEra{output} <-
       expectRight "Failed to apply inputs"
@@ -686,7 +686,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
           emptyMarloweTransactionMetadata
           [NormalInput $ IDeposit (Role "Role1") (Role "Role1") ada 1_000_000]
     liftIO $ scriptOutput output `shouldBe` Nothing
-  it "should reject wallet2's deposit from wallet 1" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
+  it "should reject a Role2 deposit from wallet 1" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
     wallet <- getGenesisWallet 0
     result <-
       applyInputs
@@ -710,7 +710,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
           [NormalInput $ IDeposit address address ada 1_000_000]
     SubmitFailed msg <- expectLeft "Expected a failure" =<< submit' wallet era txBody
     liftIO $ msg `shouldContain` "MissingRequiredSigners"
-  it "should accept the correct deposit from wallet 2" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
+  it "should accept a Role2 deposit from wallet 2" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
     wallet <- getGenesisWallet 1
     InputsApplied _ InputsAppliedInEra{output} <-
       expectRight "Failed to apply inputs"
@@ -721,7 +721,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
           emptyMarloweTransactionMetadata
           [NormalInput $ IDeposit (Role "Role2") (Role "Role2") ada 1_000_000]
     liftIO $ scriptOutput output `shouldBe` Nothing
-  it "should reject wallet1's deposit from wallet 2" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
+  it "should reject a Role1 deposit from wallet 2" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
     wallet <- getGenesisWallet 1
     result <-
       applyInputs
@@ -745,7 +745,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
           [NormalInput $ IDeposit address address ada 1_000_000]
     SubmitFailed msg <- expectLeft "Expected a failure" =<< submit' wallet era txBody
     liftIO $ msg `shouldContain` "MissingRequiredSigners"
-  it "should accept the correct deposit from wallet 3" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{contractId}) -> do
+  it "should accept wallet3's deposit from wallet 3" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{contractId}) -> do
     wallet <- getGenesisWallet 2
     let address = Types.Address Address.testnet $ fromJust $ toPlutusAddress $ changeAddress $ addresses wallet
     InputsApplied _ InputsAppliedInEra{output} <-
@@ -757,17 +757,18 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
           emptyMarloweTransactionMetadata
           [NormalInput $ IDeposit address address ada 1_000_000]
     liftIO $ scriptOutput output `shouldBe` Nothing
-  it "should reject wallet1's deposit from wallet 3" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
+  it "should accept a Role1 deposit from wallet 3" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
     wallet <- getGenesisWallet 2
-    result <-
-      applyInputs
-        MarloweV1
-        (addresses wallet)
-        contractId
-        emptyMarloweTransactionMetadata
-        [NormalInput $ IDeposit (Role "Role1") (Role "Role1") ada 1_000_000]
-    liftIO $ result `shouldBe` Left (ApplyInputsConstraintError $ RoleTokenNotFound $ AssetId rolesCurrency "Role1")
-  it "should reject wallet2's deposit from wallet 3" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
+    InputsApplied _ InputsAppliedInEra{output} <-
+      expectRight "Failed to apply inputs"
+        =<< applyInputs
+          MarloweV1
+          (addresses wallet)
+          contractId
+          emptyMarloweTransactionMetadata
+          [NormalInput $ IDeposit (Role "Role1") (Role "Role1") ada 1_000_000]
+    liftIO $ scriptOutput output `shouldBe` Nothing
+  it "should reject a Role2 deposit from wallet 3" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
     wallet <- getGenesisWallet 2
     result <-
       applyInputs
@@ -777,7 +778,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
         emptyMarloweTransactionMetadata
         [NormalInput $ IDeposit (Role "Role2") (Role "Role2") ada 1_000_000]
     liftIO $ result `shouldBe` Left (ApplyInputsConstraintError $ RoleTokenNotFound $ AssetId rolesCurrency "Role2")
-  it "should accept the correct choice from wallet 1" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
+  it "should accept a Role1 choice from wallet 1" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
     wallet <- getGenesisWallet 0
     InputsApplied _ InputsAppliedInEra{output} <-
       expectRight "Failed to apply inputs"
@@ -788,7 +789,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
           emptyMarloweTransactionMetadata
           [NormalInput $ IChoice (ChoiceId "choice1" (Role "Role1")) 0]
     liftIO $ scriptOutput output `shouldBe` Nothing
-  it "should reject wallet2's choice from wallet 1" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
+  it "should reject a Role2 choice from wallet 1" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
     wallet <- getGenesisWallet 0
     result <-
       applyInputs
@@ -812,7 +813,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
           [NormalInput $ IChoice (ChoiceId "choice3" address) 0]
     SubmitFailed msg <- expectLeft "Expected a failure" =<< submit' wallet era txBody
     liftIO $ msg `shouldContain` "MissingRequiredSigners"
-  it "should accept the correct choice from wallet 2" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
+  it "should accept a Role2 choice from wallet 2" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
     wallet <- getGenesisWallet 1
     InputsApplied _ InputsAppliedInEra{output} <-
       expectRight "Failed to apply inputs"
@@ -823,7 +824,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
           emptyMarloweTransactionMetadata
           [NormalInput $ IChoice (ChoiceId "choice2" (Role "Role2")) 0]
     liftIO $ scriptOutput output `shouldBe` Nothing
-  it "should reject wallet1's choice from wallet 2" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
+  it "should reject a Role1 choice from wallet 2" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
     wallet <- getGenesisWallet 1
     result <-
       applyInputs
@@ -859,17 +860,18 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
           emptyMarloweTransactionMetadata
           [NormalInput $ IChoice (ChoiceId "choice3" address) 0]
     liftIO $ scriptOutput output `shouldBe` Nothing
-  it "should reject wallet1's choice from wallet 3" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
+  it "should accept a Role1 choice from wallet 3" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
     wallet <- getGenesisWallet 2
-    result <-
-      applyInputs
-        MarloweV1
-        (addresses wallet)
-        contractId
-        emptyMarloweTransactionMetadata
-        [NormalInput $ IChoice (ChoiceId "choice1" (Role "Role1")) 0]
-    liftIO $ result `shouldBe` Left (ApplyInputsConstraintError $ RoleTokenNotFound $ AssetId rolesCurrency "Role1")
-  it "should reject wallet2's choice from wallet 3" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
+    InputsApplied _ InputsAppliedInEra{output} <-
+      expectRight "Failed to apply inputs"
+        =<< applyInputs
+          MarloweV1
+          (addresses wallet)
+          contractId
+          emptyMarloweTransactionMetadata
+          [NormalInput $ IChoice (ChoiceId "choice1" (Role "Role1")) 0]
+    liftIO $ scriptOutput output `shouldBe` Nothing
+  it "should reject a Role2 choice from wallet 3" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
     wallet <- getGenesisWallet 2
     result <-
       applyInputs
@@ -912,7 +914,12 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
             MarloweV1
             (addresses wallet1)
             Nothing
-            (mkRoleTokens [("Role1", wallet1), ("Role2", wallet2)])
+            ( mkRoleTokens
+                [ ("Role1", wallet1)
+                , ("Role1", wallet3)
+                , ("Role2", wallet2)
+                ]
+            )
             emptyMarloweTransactionMetadata
             Nothing
             (Left $ When cases (utcTimeToPOSIXTime $ addUTCTime (secondsToNominalDiffTime 100) startTime) Close)
