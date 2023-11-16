@@ -87,7 +87,6 @@ executable marlowe-runtime-cli
     , monad-control
     , mtl
     , network
-    , nonempty-containers ^>=0.3.4
     , optparse-applicative
     , pipes
     , plutus-ledger-api

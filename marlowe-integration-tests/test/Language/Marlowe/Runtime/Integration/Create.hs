@@ -29,7 +29,6 @@ import Data.Functor (($>), (<&>))
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as Map
-import qualified Data.Map.NonEmpty as NEMap
 import Data.Maybe (catMaybes, fromJust)
 import qualified Data.Set as Set
 import Data.Void (Void)
@@ -367,16 +366,13 @@ mkRoleTokensConfig TestData{..} = \case
     RoleTokensMint $
       mkMint $
         NE.fromList
-          [ ("Role", MintRole Nothing $ NEMap.singleton (ToAddress $ changeAddress singleAddressInsufficientBalanceWallet) 1)
+          [ ("Role", Nothing, ToAddress $ changeAddress singleAddressInsufficientBalanceWallet, 1)
           ]
   MintRoleTokensMetadata ->
     RoleTokensMint $
       mkMint $
         NE.fromList
-          [
-            ( "Role"
-            , MintRole (Just testNftMetadata) $ NEMap.singleton (ToAddress $ changeAddress singleAddressInsufficientBalanceWallet) 1
-            )
+          [ ("Role", Just testNftMetadata, ToAddress $ changeAddress singleAddressInsufficientBalanceWallet, 1)
           ]
 
 testNftMetadata :: RoleTokenMetadata

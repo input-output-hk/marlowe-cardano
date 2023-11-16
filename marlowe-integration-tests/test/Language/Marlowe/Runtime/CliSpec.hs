@@ -21,7 +21,6 @@ import Data.Foldable (for_)
 import Data.Function (on)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import qualified Data.Map.NonEmpty as NEMap
 import Data.Maybe (maybeToList)
 import qualified Data.Maybe as Maybe
 import qualified Data.Set as Set
@@ -65,7 +64,6 @@ import Language.Marlowe.Runtime.Transaction.Api (
   InputsApplied (..),
   InputsAppliedInEra (..),
   MarloweTxCommand (..),
-  MintRole (..),
   WalletAddresses (..),
   WithdrawTx (..),
  )
@@ -306,7 +304,7 @@ depositSpec = describe "deposit" $
           Nothing
           ( Runtime.Transaction.Api.RoleTokensMint $
               Runtime.Transaction.Api.mkMint $
-                pure ("Party A", MintRole Nothing $ NEMap.singleton (ToAddress . changeAddress $ addresses partyAWallet) 1)
+                pure ("Party A", Nothing, ToAddress $ changeAddress $ addresses partyAWallet, 1)
           )
           (standardMetadata tags)
           Nothing
@@ -362,7 +360,7 @@ chooseSpec = describe "choose" $
           Nothing
           ( Runtime.Transaction.Api.RoleTokensMint $
               Runtime.Transaction.Api.mkMint $
-                pure ("Party A", MintRole Nothing $ NEMap.singleton (ToAddress . changeAddress $ addresses partyAWallet) 1)
+                pure ("Party A", Nothing, ToAddress $ changeAddress $ addresses partyAWallet, 1)
           )
           (standardMetadata tags)
           Nothing
@@ -415,7 +413,7 @@ notifySpec = describe "notify" $
           Nothing
           ( Runtime.Transaction.Api.RoleTokensMint $
               Runtime.Transaction.Api.mkMint $
-                pure ("Party A", MintRole Nothing $ NEMap.singleton (ToAddress . changeAddress $ addresses partyAWallet) 1)
+                pure ("Party A", Nothing, ToAddress $ changeAddress $ addresses partyAWallet, 1)
           )
           (standardMetadata tags)
           Nothing
@@ -491,7 +489,7 @@ applySpec = describe "apply" $
           Nothing
           ( Runtime.Transaction.Api.RoleTokensMint $
               Runtime.Transaction.Api.mkMint $
-                pure ("Party A", MintRole Nothing $ NEMap.singleton (ToAddress . changeAddress $ addresses partyAWallet) 1)
+                pure ("Party A", Nothing, ToAddress $ changeAddress $ addresses partyAWallet, 1)
           )
           (standardMetadata tags)
           Nothing
@@ -551,7 +549,7 @@ withdrawSpec = describe "withdraw" $
           Nothing
           ( Runtime.Transaction.Api.RoleTokensMint $
               Runtime.Transaction.Api.mkMint $
-                pure ("Party A", MintRole Nothing $ NEMap.singleton (ToAddress . changeAddress $ addresses partyAWallet) 1)
+                pure ("Party A", Nothing, ToAddress $ changeAddress $ addresses partyAWallet, 1)
           )
           (standardMetadata tags)
           Nothing

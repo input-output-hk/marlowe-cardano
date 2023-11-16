@@ -6,7 +6,6 @@ module Language.Marlowe.Runtime.Integration.StandardContract where
 import Cardano.Api (getTxId)
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Map as Map
-import qualified Data.Map.NonEmpty as NEMap
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Time (NominalDiffTime, UTCTime, addUTCTime, getCurrentTime, secondsToNominalDiffTime)
@@ -51,7 +50,6 @@ import Language.Marlowe.Runtime.Transaction.Api (
   Destination (ToAddress),
   InputsApplied (..),
   InputsAppliedInEra (..),
-  MintRole (..),
   RoleTokensConfig (..),
   WalletAddresses (changeAddress),
   WithdrawTx (..),
@@ -119,7 +117,7 @@ createStandardContractWithTags tags partyAWallet =
     Nothing
     ( RoleTokensMint $
         mkMint $
-          pure ("Party A", MintRole Nothing $ NEMap.singleton (ToAddress . changeAddress $ addresses partyAWallet) 1)
+          pure ("Party A", Nothing, ToAddress . changeAddress $ addresses partyAWallet, 1)
     )
     tags
     partyAWallet

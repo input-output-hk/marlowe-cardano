@@ -16,7 +16,6 @@ import qualified Data.ByteString.Char8 as BS8
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map (Map)
 import qualified Data.Map as Map
-import qualified Data.Map.NonEmpty as NEMap
 import Data.String (fromString)
 import Data.Text (pack)
 import qualified Data.Yaml as Yaml
@@ -54,7 +53,6 @@ import Language.Marlowe.Runtime.Transaction.Api (
   ContractCreatedInEra (..),
   CreateError,
   Destination (ToAddress),
-  MintRole (..),
   RoleTokenMetadata,
   RoleTokensConfig (..),
   mkMint,
@@ -238,8 +236,8 @@ runCreateCommand TxCommand{walletAddresses, signingMethod, tagsFile, metadataFil
     minting' <- case roles of
       Nothing -> pure RoleTokensNone
       Just (MintSimple tokens) -> do
-        let toNFT addr = MintRole Nothing $ NEMap.singleton (ToAddress addr) 1
-        pure $ RoleTokensMint $ mkMint $ fmap toNFT <$> tokens
+        let toNFT (token, addr) = (token, Nothing, ToAddress addr, 1)
+        pure $ RoleTokensMint $ mkMint $ toNFT <$> tokens
       Just (UseExistingPolicyId policyId) -> pure $ RoleTokensUsePolicy policyId mempty
       Just (MintConfig roleTokensConfigFilePath) -> do
         configMap <- ExceptT $ liftIO $ first RolesConfigFileDecodingError <$> A.eitherDecodeFileStrict roleTokensConfigFilePath
@@ -249,7 +247,7 @@ runCreateCommand TxCommand{walletAddresses, signingMethod, tagsFile, metadataFil
             pure $
               RoleTokensMint $
                 mkMint $
-                  fmap (\RoleConfig{..} -> MintRole (Just metadata) $ NEMap.singleton (ToAddress address) 1) <$> x :| xs
+                  (\(token, RoleConfig{..}) -> (token, Just metadata, ToAddress address, 1)) <$> x :| xs
     (ContractId contractId, safetyErrors) <- run MarloweV1 minting'
     liftIO $
       if null safetyErrors

@@ -126,6 +126,7 @@ import Data.List (nub)
 import qualified Data.List.NonEmpty as NE
 import Data.Map.NonEmpty (NEMap)
 import qualified Data.Map.NonEmpty as NEMap
+import Data.Semigroup.Foldable (Foldable1 (foldMap1))
 import Network.Protocol.Codec.Spec (Variations (..), varyAp)
 import Network.Protocol.Handshake.Types (HasSignature (..))
 import Network.Protocol.Job.Types
@@ -321,8 +322,10 @@ instance Semigroup Mint where
       { unMint = on (NEMap.unionWith (<>)) unMint a b
       }
 
-mkMint :: NonEmpty (TokenName, MintRole) -> Mint
-mkMint = Mint . NEMap.fromList
+mkMint :: NonEmpty (TokenName, Maybe RoleTokenMetadata, Destination, Chain.Quantity) -> Mint
+mkMint =
+  Mint . foldMap1 \(token, metadata, dest, quantity) ->
+    NEMap.singleton token $ MintRole metadata $ NEMap.singleton dest quantity
 
 data RoleTokensConfig
   = RoleTokensNone

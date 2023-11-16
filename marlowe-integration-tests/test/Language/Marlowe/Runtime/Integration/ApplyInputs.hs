@@ -18,7 +18,6 @@ import Control.Monad.Reader (ask)
 import Data.Functor (void)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as Map
-import qualified Data.Map.NonEmpty as NEMap
 import Data.Maybe (fromJust)
 import qualified Data.Set as Set
 import Data.Time (UTCTime, addUTCTime, getCurrentTime, secondsToNominalDiffTime)
@@ -1057,7 +1056,7 @@ mkRoleTokens :: [(TokenName, Wallet)] -> RoleTokensConfig
 mkRoleTokens =
   RoleTokensMint
     . mkMint
-    . (fmap . fmap) (MintRole Nothing . flip NEMap.singleton 1 . ToAddress . changeAddress . addresses)
+    . fmap (\(token, Wallet{..}) -> (token, Nothing, ToAddress $ changeAddress addresses, 1))
     . NE.fromList
 
 submitCreate :: Wallet -> ContractCreated 'V1 -> Integration ()

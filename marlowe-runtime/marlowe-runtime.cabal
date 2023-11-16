@@ -524,6 +524,7 @@ library tx-api
     , nonempty-containers ^>=0.3.4
     , plutus-core ^>=1.5
     , plutus-ledger-api ^>=1.5
+    , semigroupoids ^>=5.3
     , text ^>=1.2
     , time >=1.9 && <2
 
