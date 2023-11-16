@@ -43,7 +43,17 @@ import PlutusLedgerApi.V2 (
 import PlutusTx.Builtins (BuiltinByteString)
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryAssocMap, arbitraryPositiveInteger)
 import Spec.Marlowe.Semantics.Orphans ()
-import Test.Tasty.QuickCheck (Arbitrary (..), Gen, chooseInt, frequency, resize, sized, suchThat, vectorOf)
+import Test.Tasty.QuickCheck (
+  Arbitrary (..),
+  Gen,
+  chooseInt,
+  frequency,
+  getNonNegative,
+  resize,
+  sized,
+  suchThat,
+  vectorOf,
+ )
 
 import qualified Data.ByteString as BS (ByteString, pack)
 import qualified Data.ByteString.Char8 as BS8 (pack)
@@ -73,7 +83,7 @@ instance Arbitrary Data where
             , do
                 subDataCount <- chooseInt (0, floor $ sqrt @Double $ fromIntegral size)
                 let subDatumSize = size `quot` subDataCount
-                Constr <$> arbitrary <*> vectorOf subDataCount (resize subDatumSize arbitrary)
+                Constr <$> (getNonNegative <$> arbitrary) <*> vectorOf subDataCount (resize subDatumSize arbitrary)
             )
           ,
             ( 2
