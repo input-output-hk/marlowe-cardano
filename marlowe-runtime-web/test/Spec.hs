@@ -10,9 +10,11 @@ module Main where
 
 import Control.Lens ((&), (.~), (?~))
 import Control.Monad (replicateM)
+import Control.Monad.Reader (ReaderT (runReaderT), runReader)
 import Data.Aeson (ToJSON, Value (Null))
 import Data.Aeson.Encode.Pretty (encodePrettyToTextBuilder)
 import qualified Data.ByteString as BS
+import Data.Coerce (coerce)
 import Data.Data (Typeable)
 import qualified Data.HashMap.Strict.InsOrd as IOHM
 import Data.Kind (Type)
@@ -22,14 +24,22 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Internal.Builder as TB
 import qualified Data.Text.Lazy as TL
-import GHC.Exts (fromList)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics (Input (..))
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Object.Gen ()
 import Language.Marlowe.Runtime.Transaction.Gen ()
 import Language.Marlowe.Runtime.Web (ContractOrSourceId (..), WithRuntimeStatus)
 import qualified Language.Marlowe.Runtime.Web as Web
-import Language.Marlowe.Runtime.Web.Server.OpenAPI (OpenApiLintIssue (..), lintOpenApi, openApi)
+import Language.Marlowe.Runtime.Web.Server.OpenAPI (
+  OpenApiLintEnvironment (..),
+  OpenApiLintIssue (..),
+  OpenApiWithEmptySecurity (..),
+  lintOpenApi,
+  lookupFieldType,
+  lookupType,
+  openApi,
+  schemaRule1Check,
+ )
 import Servant.API
 import Servant.OpenApi
 import Spec.Marlowe.Semantics.Arbitrary ()
@@ -47,192 +57,291 @@ main = hspec do
 openAPISpec :: Spec
 openAPISpec = do
   focus do
+    it "finds no problems with the Marlowe Runtime OpenApi Schema" do
+      let actual = lintOpenApi $ coerce openApi
+          expected :: [OpenApiLintIssue] = []
+      actual `shouldBe` expected
+
+    describe "lookupType" do
+      it "test 00" do
+        let linterEnv :: OpenApiLintEnvironment
+            linterEnv = OpenApiLintEnvironment mempty
+            input :: Schema
+            input = mempty
+            actual = runReader (lookupType input) linterEnv
+            expected = []
+        actual `shouldBe` expected
+
+      it "test 01" do
+        let linterEnv :: OpenApiLintEnvironment
+            linterEnv = OpenApiLintEnvironment mempty
+            input :: Schema
+            input = mempty & type_ ?~ OpenApiBoolean
+            actual = runReader (lookupType input) linterEnv
+            expected = [OpenApiBoolean]
+        actual `shouldBe` expected
+
+      it "test 02" do
+        let linterEnv :: OpenApiLintEnvironment
+            linterEnv = OpenApiLintEnvironment mempty
+            input :: Schema
+            input =
+              mempty
+                & oneOf
+                  ?~ [ Inline (mempty & type_ ?~ OpenApiString)
+                     , Inline (mempty & type_ ?~ OpenApiString)
+                     , Inline (mempty & type_ ?~ OpenApiBoolean)
+                     ]
+            actual = runReader (lookupType input) linterEnv
+            expected = [OpenApiString, OpenApiBoolean]
+        actual `shouldBe` expected
+
+      it "test 03" do
+        let linterEnv :: OpenApiLintEnvironment
+            linterEnv = OpenApiLintEnvironment mempty
+            input :: Schema
+            input =
+              mempty
+                & oneOf
+                  ?~ [ Ref (Reference "mydef")
+                     , Inline (mempty & type_ ?~ OpenApiString)
+                     , Inline (mempty & type_ ?~ OpenApiBoolean)
+                     ]
+            actual = runReader (lookupType input) linterEnv
+            expected = []
+        actual `shouldBe` expected
+
+      it "test 04" do
+        let linterEnv :: OpenApiLintEnvironment
+            linterEnv =
+              OpenApiLintEnvironment $
+                IOHM.fromList
+                  [ ("mydef", mempty & type_ ?~ OpenApiInteger)
+                  ]
+            input :: Schema
+            input =
+              mempty
+                & oneOf
+                  ?~ [ Ref (Reference "mydef")
+                     , Inline (mempty & type_ ?~ OpenApiString)
+                     , Inline (mempty & type_ ?~ OpenApiBoolean)
+                     ]
+            actual = runReader (lookupType input) linterEnv
+            expected = [OpenApiInteger, OpenApiString, OpenApiBoolean]
+        actual `shouldBe` expected
+
+    describe "lookupFieldType" do
+      it "test 00" do
+        let linterEnv :: OpenApiLintEnvironment
+            linterEnv = OpenApiLintEnvironment mempty
+            input :: Schema
+            input = mempty
+            actual = runReader (lookupFieldType "hey" input) linterEnv
+            expected = Nothing
+        actual `shouldBe` expected
+
+      it "test 01" do
+        let linterEnv :: OpenApiLintEnvironment
+            linterEnv = OpenApiLintEnvironment mempty
+            input :: Schema
+            input = mempty & properties .~ IOHM.fromList [("hey", Inline (mempty & description ?~ "no type!"))]
+            actual = runReader (lookupFieldType "hey" input) linterEnv
+            expected = Nothing
+        actual `shouldBe` expected
+
+      it "test 02" do
+        let linterEnv :: OpenApiLintEnvironment
+            linterEnv = OpenApiLintEnvironment mempty
+            input :: Schema
+            input = mempty & properties .~ IOHM.fromList [("hey", Inline (mempty & type_ ?~ OpenApiBoolean))]
+            actual = runReader (lookupFieldType "hey" input) linterEnv
+            expected = Just [OpenApiBoolean]
+        actual `shouldBe` expected
+
+      it "test 03" do
+        let linterEnv :: OpenApiLintEnvironment
+            linterEnv = OpenApiLintEnvironment mempty
+            input :: Schema
+            input = mempty & oneOf ?~ [Inline (mempty & properties .~ IOHM.fromList [])]
+            actual = runReader (lookupFieldType "hey" input) linterEnv
+            expected = Nothing
+        actual `shouldBe` expected
+
+      it "test 04" do
+        let linterEnv :: OpenApiLintEnvironment
+            linterEnv = OpenApiLintEnvironment mempty
+            input :: Schema
+            input =
+              mempty & oneOf ?~ [Inline (mempty & properties .~ IOHM.fromList [("hey", Inline (mempty & description ?~ "no type!"))])]
+            actual = runReader (lookupFieldType "hey" input) linterEnv
+            expected = Nothing
+        actual `shouldBe` expected
+
+      it "test 05" do
+        let linterEnv :: OpenApiLintEnvironment
+            linterEnv = OpenApiLintEnvironment mempty
+            input :: Schema
+            input =
+              mempty & oneOf ?~ [Inline (mempty & properties .~ IOHM.fromList [("hey", Inline (mempty & type_ ?~ OpenApiBoolean))])]
+            actual = runReader (lookupFieldType "hey" input) linterEnv
+            expected = Just [OpenApiBoolean]
+        actual `shouldBe` expected
+
+      it "test 06" do
+        let linterEnv :: OpenApiLintEnvironment
+            linterEnv = OpenApiLintEnvironment mempty
+            input :: Schema
+            input =
+              mempty
+                & oneOf
+                  ?~ [ Inline
+                        ( mempty
+                            & properties
+                              .~ IOHM.fromList
+                                [ ("hey", Inline (mempty & type_ ?~ OpenApiInteger))
+                                ]
+                        )
+                     ]
+            actual = runReader (lookupFieldType "hey" input) linterEnv
+            expected = Just [OpenApiInteger]
+        actual `shouldBe` expected
+
+      it "test 07" do
+        let linterEnv :: OpenApiLintEnvironment
+            linterEnv = OpenApiLintEnvironment mempty
+            input :: Schema
+            input =
+              mempty
+                & oneOf
+                  ?~ [ Inline
+                        ( mempty
+                            & properties
+                              .~ IOHM.fromList
+                                [ ("hey", Inline (mempty & description ?~ "no type!"))
+                                ]
+                        )
+                     ]
+            actual = runReader (lookupFieldType "hey" input) linterEnv
+            expected = Nothing
+        actual `shouldBe` expected
+
+      it "test 08" do
+        let linterEnv :: OpenApiLintEnvironment
+            linterEnv =
+              OpenApiLintEnvironment $
+                IOHM.fromList
+                  [ ("yo", mempty & type_ ?~ OpenApiString)
+                  ]
+            input :: Schema
+            input =
+              mempty
+                & oneOf
+                  ?~ [ Inline
+                        ( mempty
+                            & properties
+                              .~ IOHM.fromList
+                                [ ("hey", Ref (Reference "yo"))
+                                ]
+                        )
+                     ]
+            actual = runReader (lookupFieldType "hey" input) linterEnv
+            expected = Just [OpenApiString]
+        actual `shouldBe` expected
+
+      it "test 09" do
+        let linterEnv :: OpenApiLintEnvironment
+            linterEnv =
+              OpenApiLintEnvironment $
+                IOHM.fromList
+                  [ ("yo", mempty & type_ ?~ OpenApiString)
+                  , ("sup", mempty & description ?~ "no type!")
+                  ]
+            input :: Schema
+            input =
+              mempty
+                & oneOf
+                  ?~ [ Inline
+                        ( mempty
+                            & properties
+                              .~ IOHM.fromList
+                                [ ("hey", Ref (Reference "sup"))
+                                ]
+                        )
+                     ]
+            actual = runReader (lookupFieldType "hey" input) linterEnv
+            expected = Nothing
+        actual `shouldBe` expected
+
+      it "test 10" do
+        let linterEnv :: OpenApiLintEnvironment
+            linterEnv =
+              OpenApiLintEnvironment $
+                IOHM.fromList
+                  [ ("yo", mempty & type_ ?~ OpenApiString)
+                  , ("sup", mempty & oneOf ?~ [Ref (Reference "yo")])
+                  ]
+            input :: Schema
+            input =
+              mempty
+                & properties
+                  .~ IOHM.fromList
+                    [ ("hey", Ref (Reference "sup"))
+                    ]
+            actual = runReader (lookupFieldType "hey" input) linterEnv
+            expected = Just [OpenApiString]
+        actual `shouldBe` expected
+
+      it "test 11" do
+        let linterEnv :: OpenApiLintEnvironment
+            linterEnv =
+              OpenApiLintEnvironment $
+                IOHM.fromList
+                  [ ("yo", mempty & type_ ?~ OpenApiString)
+                  , ("sup", mempty & oneOf ?~ [Ref (Reference "yo")])
+                  , ("bye", mempty & properties .~ IOHM.fromList [("hey", Inline (mempty & type_ ?~ OpenApiBoolean))])
+                  ]
+            input :: Schema
+            input =
+              mempty
+                & oneOf
+                  ?~ [ Inline (mempty & properties .~ IOHM.fromList [("hey", Ref (Reference "sup"))])
+                     , Inline (mempty & properties .~ IOHM.fromList [("hey", Ref (Reference "yo"))])
+                     , Inline (mempty & properties .~ IOHM.fromList [("hey", Inline (mempty & type_ ?~ OpenApiInteger))])
+                     , Ref (Reference "bye")
+                     ]
+            actual = runReader (lookupFieldType "hey" input) linterEnv
+            expected = Just [OpenApiString, OpenApiInteger, OpenApiBoolean]
+        actual `shouldBe` expected
+
+    describe "schemaRule1Check" do
+      it "test 00" do
+        let linterEnv :: OpenApiLintEnvironment
+            linterEnv = OpenApiLintEnvironment mempty
+            input :: Schema
+            input = mempty
+            actual = runReaderT (schemaRule1Check [] input) linterEnv
+            expected = []
+        actual `shouldBe` expected
+
+      it "test 01" do
+        let linterEnv :: OpenApiLintEnvironment
+            linterEnv = OpenApiLintEnvironment mempty
+            input :: Schema
+            input = mempty & required .~ ["myfield"]
+            actual = runReaderT (schemaRule1Check ["huey", "dewey", "louie"] input) linterEnv
+            expected =
+              [ OpenApiLintIssue
+                  { trace = "louie/dewey/huey"
+                  , message = "Missing type for required field 'myfield'!"
+                  }
+              ]
+        actual `shouldBe` expected
+
     it "finds no problems with empty schema" do
       let actual = lintOpenApi mempty
           expected :: [OpenApiLintIssue] = []
       actual `shouldBe` expected
-    it "reports object schemas with required fields which have no types" do
-      let definitions :: Definitions Schema
-          definitions =
-            fromList
-              [ ("mydefinition1", mempty & required .~ ["myfield1a"])
-              , ("mydefinition2", mempty & required .~ ["myfield2a", "myfield2b"])
-              ,
-                ( "mydefinition3"
-                , mempty
-                    & required .~ ["myfield3a", "myfield3b"]
-                    & properties .~ IOHM.singleton "myfield3a" (Inline mempty)
-                )
-              ,
-                ( "mydefinition4"
-                , mempty
-                    & type_ ?~ OpenApiBoolean
-                )
-              ,
-                ( "mydefinition5"
-                , mempty
-                )
-              ,
-                ( "mydefinition6"
-                , mempty
-                    & required .~ ["myfield6a", "myfield6b", "myfield6c"]
-                    & properties
-                      .~ fromList
-                        [ ("myfield6a", Ref (Reference "mydefinition4"))
-                        , ("myfield6b", Ref (Reference "mydefinition5"))
-                        , ("myfield6c", Ref (Reference "mydefinition?"))
-                        ]
-                )
-              ,
-                ( "mydefinition7"
-                , mempty
-                    & required .~ ["myfield7a"]
-                    & oneOf
-                      ?~ [ Inline
-                            ( mempty
-                                & properties
-                                  .~ fromList
-                                    [ ("myfield7a", Ref (Reference "mydefinition4"))
-                                    ]
-                            )
-                         , Inline
-                            ( mempty
-                                & properties
-                                  .~ fromList
-                                    [ ("myfield7a", Inline (mempty & type_ ?~ OpenApiInteger))
-                                    ]
-                            )
-                         ]
-                )
-              ,
-                ( "mydefinition8"
-                , mempty
-                    & required .~ ["myfield8a"]
-                    & oneOf
-                      ?~ [ Inline
-                            ( mempty
-                                & properties
-                                  .~ fromList
-                                    [ ("myfield8a", Ref (Reference "mydefinition4"))
-                                    ]
-                            )
-                         , Inline
-                            ( mempty
-                                & properties
-                                  .~ fromList
-                                    [ ("myfield8a", Inline mempty)
-                                    ]
-                            )
-                         ]
-                )
-              ,
-                ( "mydefinition9"
-                , mempty
-                    & required .~ ["myfield9a"]
-                    & anyOf
-                      ?~ [ Inline
-                            ( mempty
-                                & properties
-                                  .~ fromList
-                                    [ ("myfield9a", Ref (Reference "mydefinition4"))
-                                    ]
-                            )
-                         , Inline
-                            ( mempty
-                                & properties
-                                  .~ fromList
-                                    [ ("myfield9a", Inline (mempty & type_ ?~ OpenApiInteger))
-                                    ]
-                            )
-                         ]
-                )
-              ,
-                ( "mydefinition10"
-                , mempty
-                    & required .~ ["myfield10a"]
-                    & anyOf
-                      ?~ [ Inline
-                            ( mempty
-                                & properties
-                                  .~ fromList
-                                    [ ("myfield10a", Ref (Reference "mydefinition4"))
-                                    ]
-                            )
-                         , Inline
-                            ( mempty
-                                & properties
-                                  .~ fromList
-                                    [ ("myfield10a", Inline mempty)
-                                    ]
-                            )
-                         ]
-                )
-              ,
-                ( "mydefinition11"
-                , mempty
-                    & required .~ ["myfield11a"]
-                    & allOf
-                      ?~ [ Inline
-                            ( mempty
-                                & properties
-                                  .~ fromList
-                                    [ ("myfield11a", Ref (Reference "mydefinition4"))
-                                    ]
-                            )
-                         , Inline
-                            ( mempty
-                                & properties
-                                  .~ fromList
-                                    [ ("myfield11a", Inline mempty)
-                                    ]
-                            )
-                         ]
-                )
-              ]
-          openApiSchema :: OpenApi
-          openApiSchema = mempty & components . schemas .~ definitions
-          actual :: [OpenApiLintIssue]
-          actual = lintOpenApi openApiSchema
-          expected :: [OpenApiLintIssue]
-          expected =
-            [ OpenApiLintIssue
-                { trace = "components/schemas/mydefinition1"
-                , message = "Missing type for required field 'myfield1a'!"
-                }
-            , OpenApiLintIssue
-                { trace = "components/schemas/mydefinition2"
-                , message = "Missing type for required field 'myfield2a'!"
-                }
-            , OpenApiLintIssue
-                { trace = "components/schemas/mydefinition2"
-                , message = "Missing type for required field 'myfield2b'!"
-                }
-            , OpenApiLintIssue
-                { trace = "components/schemas/mydefinition3"
-                , message = "Missing type for required field 'myfield3a'!"
-                }
-            , OpenApiLintIssue
-                { trace = "components/schemas/mydefinition3"
-                , message = "Missing type for required field 'myfield3b'!"
-                }
-            , OpenApiLintIssue
-                { trace = "components/schemas/mydefinition6"
-                , message = "Missing type for required field 'myfield6b'!"
-                }
-            , OpenApiLintIssue
-                { trace = "components/schemas/mydefinition6"
-                , message = "Missing type for required field 'myfield6c'!"
-                }
-            , OpenApiLintIssue
-                { trace = "components/schemas/mydefinition8"
-                , message = "Missing type for required field 'myfield8a'!"
-                }
-            , OpenApiLintIssue
-                { trace = "components/schemas/mydefinition10"
-                , message = "Missing type for required field 'myfield10a'!"
-                }
-            ]
-      actual `shouldBe` expected
+
   validateEveryToJSONWithPatternChecker patternChecker (Proxy @(WrapContractBodies (RetractRuntimeStatus Web.API)))
   it "Should match the golden test" do
     defaultGolden "OpenApi" $

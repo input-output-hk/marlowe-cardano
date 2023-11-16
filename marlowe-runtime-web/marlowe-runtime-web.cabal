@@ -213,6 +213,7 @@ test-suite marlowe-runtime-web-test
     , marlowe-runtime-web:{marlowe-runtime-web, server}
     , marlowe-runtime:gen
     , marlowe-test
+    , mtl >=2.2 && <3
     , openapi3 >=3.2 && <4
     , QuickCheck
     , quickcheck-instances

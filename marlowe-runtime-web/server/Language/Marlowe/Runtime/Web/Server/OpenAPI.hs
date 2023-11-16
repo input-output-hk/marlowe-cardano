@@ -11,8 +11,9 @@ module Language.Marlowe.Runtime.Web.Server.OpenAPI where
 import Control.Applicative ((<|>))
 import Control.Lens hiding (allOf, anyOf)
 import qualified Control.Lens as Optics
-import Control.Monad ((<=<))
-import qualified Control.Monad as Control
+import Control.Monad.Reader (ReaderT (runReaderT))
+import qualified Control.Monad.Reader as Reader
+import qualified Control.Monad.Trans as Trans
 import Data.Aeson
 import Data.Aeson.Lens
 import qualified Data.HashMap.Strict.InsOrd as IOHM
@@ -78,12 +79,68 @@ data OpenApiLintIssue = OpenApiLintIssue
   }
   deriving (Show, Eq)
 
+showStackTrace :: [Text] -> Text
+showStackTrace = Text.concat . List.intersperse "/" . List.reverse
+
+newtype OpenApiLintEnvironment = OpenApiLintEnvironment
+  { schemaDefinitions :: Definitions Schema
+  }
+
+lookupSchema :: (Monad m) => Referenced Schema -> ReaderT OpenApiLintEnvironment m (Maybe Schema)
+lookupSchema = \case
+  Inline ss -> pure $ Just ss
+  Ref (Reference ref) -> do
+    defs :: Definitions Schema <- Reader.asks schemaDefinitions
+    pure $ IOHM.lookup ref defs
+
+lookupType :: forall m. (Monad m) => Schema -> ReaderT OpenApiLintEnvironment m [OpenApiType]
+lookupType s =
+  let lookupSchemaType = Maybe.maybeToList $ Optics.view type_ s
+      lookupOneOfType = case Optics.view oneOf s of
+        Just refs -> do
+          lookups :: [Maybe Schema] <- traverse lookupSchema refs
+          if any Maybe.isNothing lookups
+            then pure []
+            else List.nub . concat <$> traverse lookupType (Maybe.catMaybes lookups)
+        Nothing -> pure []
+   in if null lookupSchemaType
+        then lookupOneOfType
+        else pure lookupSchemaType
+
+lookupFieldType :: forall m. (Monad m) => Text -> Schema -> ReaderT OpenApiLintEnvironment m (Maybe [OpenApiType])
+lookupFieldType fieldName =
+  let loop :: Schema -> ReaderT OpenApiLintEnvironment m (Maybe [OpenApiType])
+      loop s =
+        case IOHM.lookup fieldName (Optics.view properties s) of
+          Just ref -> lookupSchema ref >>= maybe (pure Nothing) (fmap (\x -> if null x then Nothing else Just x) . lookupType)
+          Nothing -> case Optics.view oneOf s of
+            Just s' -> do
+              s'' :: [Maybe Schema] <- traverse lookupSchema s'
+              if all Maybe.isJust s''
+                then do
+                  tjosan <- traverse loop (Maybe.catMaybes s'')
+                  pure $ List.nub . concat <$> sequence tjosan
+                else pure Nothing
+            Nothing -> pure Nothing
+   in loop
+
+schemaRule1Check :: [Text] -> Schema -> ReaderT OpenApiLintEnvironment [] OpenApiLintIssue
+schemaRule1Check stacktrace s = do
+  schemaRequiredField :: Text <- Trans.lift $ Optics.view required s
+  mFieldType <- lookupFieldType schemaRequiredField s
+  case mFieldType of
+    Just _ -> Trans.lift []
+    Nothing ->
+      Trans.lift
+        [ OpenApiLintIssue
+            { trace = showStackTrace stacktrace
+            , message = "Missing type for required field '" <> schemaRequiredField <> "'!"
+            }
+        ]
+
 lintOpenApi :: OpenApi -> [OpenApiLintIssue]
 lintOpenApi oa = schemaDefinitionLints <> pathParametersLints <> pathOperationLints
   where
-    showStackTrace :: [Text] -> Text
-    showStackTrace = Text.concat . List.intersperse "/" . List.reverse
-
     schemaDefinitions :: Definitions Schema
     schemaDefinitions = Optics.view (components . schemas) oa
 
@@ -124,44 +181,8 @@ lintOpenApi oa = schemaDefinitionLints <> pathParametersLints <> pathOperationLi
       Inline s -> Just s
       Ref (Reference ((`IOHM.lookup` headerDefinitions) -> s)) -> s
 
-    schemaRule1Check :: [Text] -> Schema -> [OpenApiLintIssue]
-    schemaRule1Check stackTrace s = do
-      let schemaRequiredFields :: [Text]
-          schemaRequiredFields = Optics.view required s
-
-          checkIfPropertyHaveTypedef :: Text -> Schema -> Maybe OpenApiType
-          checkIfPropertyHaveTypedef fieldName ss =
-            IOHM.lookup fieldName (Optics.view properties ss) >>= schemaRef >>= Optics.view type_
-
-          schemaAnyOf :: Maybe [Referenced Schema]
-          schemaAnyOf = Optics.view anyOf s
-
-          schemaOneOf :: Maybe [Referenced Schema]
-          schemaOneOf = Optics.view oneOf s
-
-          schemaAllOf :: Maybe [Referenced Schema]
-          schemaAllOf = Optics.view allOf s
-
-      schemaRequiredField :: Text <- schemaRequiredFields
-
-      let checkForType :: Referenced Schema -> Bool
-          checkForType = Maybe.isJust . (checkIfPropertyHaveTypedef schemaRequiredField <=< schemaRef)
-
-          typeIsInProperties = Maybe.isJust $ checkIfPropertyHaveTypedef schemaRequiredField s
-          typeIsInEveryAnyOfItem = maybe False (and . fmap checkForType) schemaAnyOf
-          typeIsInEveryOneOfItem = maybe False (and . fmap checkForType) schemaOneOf
-          typeIsInAnyAllOfItem = maybe False (or . fmap checkForType) schemaAllOf
-
-      Control.when (typeIsInProperties || typeIsInEveryAnyOfItem || typeIsInEveryOneOfItem || typeIsInAnyAllOfItem) []
-
-      pure $
-        OpenApiLintIssue
-          { trace = showStackTrace stackTrace
-          , message = "Missing type for required field '" <> schemaRequiredField <> "'!"
-          }
-
     lintSchema :: [Text] -> Schema -> [OpenApiLintIssue]
-    lintSchema = schemaRule1Check
+    lintSchema stacktrace s = runReaderT (schemaRule1Check stacktrace s) (OpenApiLintEnvironment schemaDefinitions)
 
     lintParam :: [Text] -> Param -> [OpenApiLintIssue]
     lintParam stacktrace param = do
@@ -228,7 +249,7 @@ lintOpenApi oa = schemaDefinitionLints <> pathParametersLints <> pathOperationLi
             lintRequestBody ["requestBody", operationName, path, "paths"] request
         , do
             defaultResponse :: Response <-
-              Maybe.maybeToList $ responseRef =<< Optics.view default_ (Optics.view responses operation)
+              Maybe.maybeToList $ responseRef =<< Optics.view (responses . default_) operation
             lintResponse ["default", "responses", operationName, path, "paths"] defaultResponse
         , do
             (show -> Text.pack -> httpCode, responseRef -> maybeRes) <- toList $ Optics.view (responses . responses) operation
