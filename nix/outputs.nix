@@ -27,7 +27,6 @@ in
     project.flake
   )
 
-  # Extra flake outputs
   {
     devShells.profiled = project.variants.profiled.devShell;
 
@@ -42,12 +41,13 @@ in
     packages.integration-tests = repoRoot.nix.marlowe-cardano.integration-tests;
 
     checks.check-validators = repoRoot.nix.marlowe-cardano.check-validators;
-
-    hydraJobs.operables = repoRoot.nix.marlowe-cardano.deploy.operables;
-    hydraJobs.oci-images = repoRoot.nix.marlowe-cardano.deploy.oci-images;
   }
 
-  # hydraJobs for linux only
+  (lib.optionalAttrs (system != "aarch64-darwin") {
+    hydraJobs.operables = repoRoot.nix.marlowe-cardano.deploy.operables;
+    hydraJobs.oci-images = repoRoot.nix.marlowe-cardano.deploy.oci-images;
+  })
+
   (lib.optionalAttrs pkgs.stdenv.isLinux {
     hydraJobs.static = static;
     hydraJobs.allStatic = allStatic;
