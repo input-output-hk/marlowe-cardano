@@ -5015,15 +5015,16 @@
         "nixpkgs": [
           "nixpkgs"
         ],
+        "nixpkgs-stable": "nixpkgs-stable",
         "pre-commit-hooks-nix": "pre-commit-hooks-nix",
         "sphinxcontrib-haddock": "sphinxcontrib-haddock"
       },
       "locked": {
-        "lastModified": 1698065888,
-        "narHash": "sha256-5MC+MsarxLwlJsI+Rwm29OfNL/ph4aqiNRWBZ9sB1wM=",
+        "lastModified": 1699537966,
+        "narHash": "sha256-MGGza+vZDRjKj31WhQJDt7CqVVdrFkgkXIcqr0gDiU8=",
         "owner": "input-output-hk",
         "repo": "iogx",
-        "rev": "81476eb708f525324050f03cd1cf064ba80e02fc",
+        "rev": "c6ce7f034717ed0c0e9c6dd8fa2f898a15439627",
         "type": "github"
       },
       "original": {
@@ -7171,6 +7172,22 @@
     },
     "nixpkgs-stable": {
       "locked": {
+        "lastModified": 1690680713,
+        "narHash": "sha256-NXCWA8N+GfSQyoN7ZNiOgq/nDJKOp5/BHEpiZP8sUZw=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "b81af66deb21f73a70c67e5ea189568af53b1e8c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "b81af66deb21f73a70c67e5ea189568af53b1e8c",
+        "type": "github"
+      }
+    },
+    "nixpkgs-stable_2": {
+      "locked": {
         "lastModified": 1685801374,
         "narHash": "sha256-otaSUoFEMM+LjBI1XL/xGB5ao6IwnZOXc47qhIgJe8U=",
         "owner": "NixOS",
@@ -7185,7 +7202,7 @@
         "type": "github"
       }
     },
-    "nixpkgs-stable_2": {
+    "nixpkgs-stable_3": {
       "locked": {
         "lastModified": 1685801374,
         "narHash": "sha256-otaSUoFEMM+LjBI1XL/xGB5ao6IwnZOXc47qhIgJe8U=",
@@ -9050,7 +9067,7 @@
         "flake-utils": "flake-utils_35",
         "gitignore": "gitignore",
         "nixpkgs": "nixpkgs_69",
-        "nixpkgs-stable": "nixpkgs-stable"
+        "nixpkgs-stable": "nixpkgs-stable_2"
       },
       "locked": {
         "lastModified": 1696846637,
@@ -9072,7 +9089,7 @@
         "flake-utils": "flake-utils_39",
         "gitignore": "gitignore_2",
         "nixpkgs": "nixpkgs_71",
-        "nixpkgs-stable": "nixpkgs-stable_2"
+        "nixpkgs-stable": "nixpkgs-stable_3"
       },
       "locked": {
         "lastModified": 1692274144,

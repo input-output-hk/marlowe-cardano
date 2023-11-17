@@ -31,5 +31,3 @@ nix run .\#oci-images.x86_64-linux.marlowe-chain-sync.copyToRegistry
 `
 ### Nomad Tasks and Environment
 Nomad tasks for each service are in `./nomadTasks.nix`. These are meant to be put together in a Nomad environment. They can be configured with Nomad's meta stanza.
-
-The Nomad environment in `./nomadEnv.nix` puts the tasks together, configures ports and services for each task, and creates tasks for each Cardano environment.
