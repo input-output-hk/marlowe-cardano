@@ -1,4 +1,4 @@
-{ inputs, pkgs, lib, ... }:
+{ repoRoot, inputs, pkgs, lib, system }:
 
 let
   cabalProject = inputs.self.cabalProject;
