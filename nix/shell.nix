@@ -15,11 +15,11 @@ in
 
 
   packages = [
-    inputs.cardano-world.cardano.packages.cardano-address
-    inputs.cardano-node.packages.cardano-node
-    inputs.cardano-node.packages.cardano-cli
+    # inputs.cardano-world.cardano.packages.cardano-address
+    # inputs.cardano-node.packages.cardano-node
+    # inputs.cardano-node.packages.cardano-cli
 
-    inputs.marlowe-plutus.packages.marlowe-minting-validator
+    # inputs.marlowe-plutus.packages.marlowe-minting-validator
 
     pkgs.z3
     pkgs.sqitchPg
@@ -65,11 +65,11 @@ in
       group = "marlowe";
     };
 
-    refresh-validators = {
-      exec = scripts.refresh-validators;
-      description = "Pull the latest validators from the marlowe-plutus flake input.";
-      group = "marlowe";
-    };
+    # refresh-validators = {
+    #   exec = scripts.refresh-validators;
+    #   description = "Pull the latest validators from the marlowe-plutus flake input.";
+    #   group = "marlowe";
+    # };
   };
 
 

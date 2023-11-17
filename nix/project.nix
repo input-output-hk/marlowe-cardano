@@ -5,6 +5,9 @@ let
   cabalProject = pkgs.haskell-nix.cabalProject' ({ config, pkgs, ... }:
     let
       mkIfDarwin = lib.mkIf pkgs.stdenv.hostPlatform.isDarwin;
+      # When `isCross` is `true`, it means that we are cross-compiling the project.
+      # WARNING You must use the `pkgs` coming from cabalProject' for `isCross` to work.
+      isCross = pkgs.stdenv.hostPlatform != pkgs.stdenv.buildPlatform;
     in
     {
       name = "marlowe-cardano";
@@ -30,6 +33,26 @@ let
         dontStrip = false;
 
         packages = {
+          # async-components
+          # cardano-integration
+          # eventuo11y-extras
+          # hasql-dynamic-syntax
+          # marlowe
+          # marlowe-actus
+          # marlowe-apps
+          # marlowe-chain-sync
+          # marlowe-cli
+          # marlowe-client
+          # marlowe-contracts
+          # marlowe-integration
+          # marlowe-integration-tests
+          # marlowe-object
+          # marlowe-protocols
+          # marlowe-runtime
+          # marlowe-runtime-cli
+          # marlowe-runtime-web
+          # marlowe-test
+
           # Fix missing executables on the paths of the test runners. This is arguably
           # a bug, and the fix is a bit of a hack.
           marlowe.components.tests.marlowe-test.preCheck = ''
@@ -94,6 +117,7 @@ let
   project = lib.iogx.mkHaskellProject {
     inherit cabalProject;
     shellArgs = repoRoot.nix.shell;
+    includeMingwW64HydraJobs = true;
   };
 
 in
