@@ -182,7 +182,20 @@ currentV1Scripts =
     , helperScriptUTxOs =
         Map.fromList
           [
-            ( (OpenRoleScript, preprodNetworkId)
+            ( (OpenRoleScript, mainnetNetworkId)
+            , ReferenceScriptUtxo
+                { txOutRef = "78848686b42a5b051dd3c4c6847b4e93df1c8f4d98a5fdda941751d44bf6dd15#0"
+                , txOut =
+                    Chain.TransactionOutput
+                      { address = fromJust $ fromBech32 "addr1z9l4w7djneh0kss4drg2php6ynflsvmal7x3w5nrc95uvhz7e4q926apsvcd6kn33cpx95k8jsmrj7v0k62rczvz8urqrl2z0l"
+                      , assets = Assets 20_032_880 mempty
+                      , datum = Nothing
+                      , datumHash = Nothing
+                      }
+                , script = either (error . show) id $ deserialiseFromCBOR (AsPlutusScript AsPlutusScriptV2) currentV1OpenRoleScriptCBOR
+                }
+            )
+          , ( (OpenRoleScript, preprodNetworkId)
             , ReferenceScriptUtxo
                 { txOutRef = "5f325073371633102979e661077bc2c24a6e0cdc02b95f181a453e7a3ec2344f#0"
                 , txOut =
