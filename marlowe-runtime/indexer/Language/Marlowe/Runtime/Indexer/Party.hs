@@ -21,6 +21,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Foldable (Foldable (..))
 import Data.Int (Int16, Int64)
+import Data.List (nub)
 import Data.Maybe (fromJust)
 import Data.Semigroup (Max (..))
 import qualified Data.Set as Set
@@ -32,11 +33,12 @@ import Hasql.TH (resultlessStatement, singletonStatement, vectorStatement)
 import qualified Hasql.Transaction as T
 import qualified Hasql.Transaction.Sessions as T
 import Language.Marlowe.Core.V1.Plate (Extract (..))
-import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party (..))
+import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party (..), State (..))
 import Language.Marlowe.Core.V1.Semantics.Types.Address (serialiseAddress)
 import Language.Marlowe.Runtime.ChainSync.Api (SlotNo (..), TxId (..), TxOutRef (..), fromDatum)
 import Language.Marlowe.Runtime.Core.Api (ContractId (..))
 import qualified PlutusLedgerApi.V2 as PV2
+import qualified PlutusTx.AssocMap as Map
 import UnliftIO (throwIO)
 
 indexParties :: (MonadIO m, WithLog env Message m) => Connection -> m ()
@@ -93,6 +95,7 @@ loadContracts fromSlot =
           COALESCE(createTxOut.txId, applyTx.createTxId) :: bytea,
           COALESCE(createTxOut.txIx, applyTx.createTxIx) :: smallint,
           contractTxOut.contract :: bytea,
+          contractTxOut.state :: bytea,
           blocks.slotNo :: bigint,
           contractTxOut.rolesCurrency :: bytea
         FROM marlowe.contractTxOut
@@ -110,12 +113,14 @@ loadContracts fromSlot =
           AND contractTxOutPartyRole.txId IS NULL
       |]
 
-decodeContractTxOut :: (ByteString, Int16, ByteString, Int16, ByteString, Int64, ByteString) -> ContractTxOut
-decodeContractTxOut (txId, txIx, createTxId, createTxIx, contract, slotNo, rolesCurrency) =
+decodeContractTxOut
+  :: (ByteString, Int16, ByteString, Int16, ByteString, ByteString, Int64, ByteString) -> ContractTxOut
+decodeContractTxOut (txId, txIx, createTxId, createTxIx, contract, state, slotNo, rolesCurrency) =
   ContractTxOut
     { contractOut = TxOutRef (TxId txId) (fromIntegral txIx)
     , contractId = ContractId $ TxOutRef (TxId createTxId) (fromIntegral createTxIx)
     , contract = fromJust $ fromDatum $ runGet get $ LBS.fromStrict contract
+    , state = fromJust $ fromDatum $ runGet get $ LBS.fromStrict state
     , slotNo = fromIntegral slotNo
     , rolesCurrency
     }
@@ -123,7 +128,9 @@ decodeContractTxOut (txId, txIx, createTxId, createTxIx, contract, slotNo, roles
 toEntries :: ContractTxOut -> (Max SlotNo, [ContractTxOutParty])
 toEntries ContractTxOut{..} =
   ( Max slotNo
-  , [ContractTxOutParty{..} | party <- Set.toList $ extractAll contract]
+  , nub $
+      [ContractTxOutParty{..} | party <- Set.toList $ extractAll contract]
+        <> [ContractTxOutParty{..} | party <- fmap fst . Map.keys $ accounts state]
   )
 
 commitParties :: [ContractTxOutParty] -> T.Transaction ()
@@ -215,6 +222,7 @@ data ContractTxOut = ContractTxOut
   { contractOut :: TxOutRef
   , contractId :: ContractId
   , contract :: Contract
+  , state :: State
   , rolesCurrency :: ByteString
   , slotNo :: SlotNo
   }
@@ -225,3 +233,4 @@ data ContractTxOutParty = ContractTxOutParty
   , rolesCurrency :: ByteString
   , party :: Party
   }
+  deriving (Eq)

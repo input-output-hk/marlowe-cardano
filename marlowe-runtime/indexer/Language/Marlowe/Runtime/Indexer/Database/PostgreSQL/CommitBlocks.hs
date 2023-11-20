@@ -22,6 +22,7 @@ import Hasql.TH (resultlessStatement)
 import qualified Hasql.Transaction as H
 import Language.Marlowe.Core.V1.Plate (Extract (..))
 import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams (..))
+import Language.Marlowe.Core.V1.Semantics.Types (Party, State (..))
 import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.Core.Api (
   ContractId (..),
@@ -43,6 +44,7 @@ import Language.Marlowe.Runtime.History.Api (
 import Language.Marlowe.Runtime.Indexer.Party (ContractTxOutParty (ContractTxOutParty), commitParties)
 import Language.Marlowe.Runtime.Indexer.Types
 import PlutusLedgerApi.V2 (CurrencySymbol (..), fromBuiltin)
+import qualified PlutusTx.AssocMap as AMap
 
 commitBlocks :: [MarloweBlock] -> H.Transaction ()
 commitBlocks blocks = do
@@ -283,7 +285,7 @@ transactionScriptOutputToRows contractId blockHeader@BlockHeader{..} payoutValid
     , toStrict $ runPut $ put $ toDatum marloweState
     , roleTokenMintingPolicyId
     , ContractTxOutParty TxOutRef{..} contractId roleTokenMintingPolicyId
-        <$> Set.toList (extractAll marloweContract)
+        <$> Set.toList (extractAll marloweContract <> stateParties marloweState)
     )
   , assetsToTxOutAssetRows blockHeader txId' txIx' assets
   )
@@ -292,6 +294,9 @@ transactionScriptOutputToRows contractId blockHeader@BlockHeader{..} payoutValid
     MarloweData{..} = datum
     txId' = unTxId txId
     txIx' = fromIntegral txIx
+
+stateParties :: State -> Set.Set Party
+stateParties State{..} = Set.fromList . fmap fst $ AMap.keys accounts
 
 type CreateTxOutRow =
   ( ByteString -- txId
