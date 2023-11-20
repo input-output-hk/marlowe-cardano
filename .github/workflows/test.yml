@@ -61,9 +61,8 @@ jobs:
       - if: ${{ steps.cache-results.outputs.cache-hit != 'true' }}
         name: Run tests
         run: |
-          result/bin/marlowe-integration-tests --strict > ~/integration-tests.log
+          result/bin/marlowe-integration-tests --strict | tee ~/integration-tests.log
           echo $? > ~/integration-tests.status
-          cat ~/integration-tests.log
           exit $(cat ~/integration-tests.status)
         env:
           MARLOWE_RT_TEST_DB_HOST: localhost
