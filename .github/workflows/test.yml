@@ -61,6 +61,7 @@ jobs:
       - if: ${{ steps.cache-results.outputs.cache-hit != 'true' }}
         name: Run tests
         run: |
+          set -o pipefail
           result/bin/marlowe-integration-tests --strict | tee ~/integration-tests.log
           echo $? > ~/integration-tests.status
           exit $(cat ~/integration-tests.status)
