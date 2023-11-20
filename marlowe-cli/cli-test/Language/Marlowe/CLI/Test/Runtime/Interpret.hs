@@ -465,7 +465,7 @@ interpret ro@RuntimeCreateContract{..} = do
     Just roleCurrency -> do
       Currency{ccPolicyId = cardanoPolicyId} <- getCurrency roleCurrency
       let policyId = MRCA.fromCardanoPolicyId cardanoPolicyId
-      pure $ RoleTokensUsePolicy policyId
+      pure $ RoleTokensUsePolicy policyId mempty
     Nothing -> pure RoleTokensNone
 
   let (contract, possibleContinuations) = case roMerkleize of
@@ -513,6 +513,7 @@ interpret ro@RuntimeCreateContract{..} = do
             Nothing
             MarloweV1
             walletAddresses
+            Nothing
             roleTokensConfig
             marloweTransactionMetadata
             minLovelace

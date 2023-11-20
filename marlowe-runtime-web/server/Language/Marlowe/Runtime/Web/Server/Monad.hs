@@ -137,9 +137,9 @@ loadTransaction contractId txId = do
 
 -- | Create a contract.
 createContract :: CreateContract ServerM
-createContract stakeCredential version addresses roles metadata minUTxODeposit contract = do
+createContract stakeCredential version addresses threadName roles metadata minUTxODeposit contract = do
   AppEnv{_eventBackend = backend, _createContract = create} <- ask
-  liftBackendM backend $ create stakeCredential version addresses roles metadata minUTxODeposit contract
+  liftBackendM backend $ create stakeCredential version addresses threadName roles metadata minUTxODeposit contract
 
 -- | Apply inputs to a contract.
 applyInputs :: ApplyInputs ServerM

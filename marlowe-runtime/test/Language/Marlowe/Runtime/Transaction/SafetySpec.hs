@@ -25,6 +25,7 @@ import qualified Cardano.Api.Shelley as Shelley (ReferenceScript (..), StakeAddr
 import Data.Either (fromRight)
 import Data.Foldable (for_)
 import Data.List (isInfixOf, nub)
+import qualified Data.Map.NonEmpty as NEMap
 import qualified Data.Map.Strict as M (empty, fromList, keys, lookup, mapKeys, singleton, toList, (!))
 import Data.Maybe (fromJust)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError (..))
@@ -49,6 +50,7 @@ import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain (
  )
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion (MarloweV1))
 import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript (..), MarloweScripts (..), getCurrentScripts)
+import Language.Marlowe.Runtime.Plutus.V2.Api (fromPlutusTokenName)
 import Language.Marlowe.Runtime.Transaction.Api (Mint (..), RoleTokensConfig (..))
 import Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec ()
 import Language.Marlowe.Runtime.Transaction.Constraints (
@@ -78,7 +80,7 @@ import Spec.Marlowe.Reference (readReferenceContracts)
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Test.Hspec (Spec, describe, expectationFailure, it, runIO)
 import Test.Hspec.QuickCheck (prop)
-import Test.QuickCheck (counterexample, discard, elements, generate, sublistOf, suchThat, (===))
+import Test.QuickCheck (counterexample, discard, elements, generate, sublistOf, suchThat, (===), (==>))
 import Test.QuickCheck.Arbitrary (arbitrary)
 
 spec :: Spec
@@ -142,34 +144,32 @@ spec =
                 case roleTokensConfig of
                   RoleTokensNone -> actual === []
                   _ -> actual === [ContractHasNoRoles]
-        prop "Contract with roles from minting" $ \roleTokensConfig ->
-          case roleTokensConfig of
-            RoleTokensMint mint ->
-              let roles = Plutus.TokenName . Plutus.toBuiltin . Chain.unTokenName <$> M.keys (unMint mint)
-                  contract = foldr payRole V1.Close roles
-                  actual = checkContract testnet roleTokensConfig version contract continuations
-               in counterexample ("Contract = " <> show contract) $
-                    actual === mempty
-            _ -> discard
+        prop "Contract with roles from minting" $ \mint ->
+          let roles = Plutus.TokenName . Plutus.toBuiltin . Chain.unTokenName <$> M.keys (NEMap.toMap $ unMint mint)
+              contract = foldr payRole V1.Close roles
+              actual = checkContract testnet (RoleTokensMint mint) version contract continuations
+           in counterexample ("Contract = " <> show contract) $
+                actual === mempty
         prop "Contract with roles missing from minting" $ \roleTokensConfig extra ->
           case roleTokensConfig of
             RoleTokensMint mint ->
-              let roles = Plutus.TokenName . Plutus.toBuiltin . Chain.unTokenName <$> M.keys (unMint mint)
-                  contract = foldr payRole V1.Close $ extra <> roles
-                  actual = checkContract testnet roleTokensConfig version contract continuations
-                  expected =
-                    (MissingRoleToken <$> nub extra)
-                      <> [RoleNameTooLong role | role@(Plutus.TokenName name) <- nub extra, Plutus.lengthOfByteString name > 32]
-               in counterexample ("Contract = " <> show contract)
-                    . counterexample ("Actual = " <> show actual)
-                    . counterexample ("Expected = " <> show expected)
-                    $ actual `same` expected
+              all (\t -> not (NEMap.member (fromPlutusTokenName t) $ unMint mint)) extra ==>
+                let roles = Plutus.TokenName . Plutus.toBuiltin . Chain.unTokenName <$> M.keys (NEMap.toMap $ unMint mint)
+                    contract = foldr payRole V1.Close $ extra <> roles
+                    actual = checkContract testnet roleTokensConfig version contract continuations
+                    expected =
+                      (MissingRoleToken <$> nub extra)
+                        <> [RoleNameTooLong role | role@(Plutus.TokenName name) <- nub extra, Plutus.lengthOfByteString name > 32]
+                 in counterexample ("Contract = " <> show contract)
+                      . counterexample ("Actual = " <> show actual)
+                      . counterexample ("Expected = " <> show expected)
+                      $ actual `same` expected
             _ -> discard
         prop "Contract with extra roles for minting" $ \roleTokensConfig ->
           case roleTokensConfig of
             RoleTokensMint mint ->
               do
-                let roles' = Plutus.TokenName . Plutus.toBuiltin . Chain.unTokenName <$> M.keys (unMint mint)
+                let roles' = Plutus.TokenName . Plutus.toBuiltin . Chain.unTokenName <$> M.keys (NEMap.toMap $ unMint mint)
                 roles <- sublistOf roles' `suchThat` (not . null)
                 let extra = filter (`notElem` roles) roles'
                     contract = foldr payRole V1.Close roles
@@ -183,7 +183,7 @@ spec =
             _ -> discard
         prop "Contract with role name too long" $ \roles ->
           let contract = foldr payRole V1.Close roles
-              actual = checkContract testnet (RoleTokensUsePolicy "") version contract continuations
+              actual = checkContract testnet (RoleTokensUsePolicy "" mempty) version contract continuations
               expected =
                 if null roles
                   then [ContractHasNoRoles]
@@ -194,7 +194,7 @@ spec =
                 $ actual `same` expected
         prop "Contract with illegal token" $ \tokens ->
           let contract = foldr payToken V1.Close tokens
-              actual = checkContract testnet (RoleTokensUsePolicy "") version contract continuations
+              actual = checkContract testnet (RoleTokensUsePolicy "" mempty) version contract continuations
               expected =
                 if contract == V1.Close
                   then [ContractHasNoRoles]
@@ -230,7 +230,7 @@ spec =
                 relevant (InvalidCurrencySymbol _) = False
                 relevant (TokenNameTooLong _) = False
                 relevant _ = True
-                actual = filter relevant $ checkContract testnet (RoleTokensUsePolicy "") version mcContract (M.fromList remaining)
+                actual = filter relevant $ checkContract testnet (RoleTokensUsePolicy "" mempty) version mcContract (M.fromList remaining)
                 expected = MissingContinuation . Plutus.DatumHash . Plutus.toBuiltin . Chain.unDatumHash . fst <$> missing
             pure
               . counterexample ("Contract = " <> show mcContract)

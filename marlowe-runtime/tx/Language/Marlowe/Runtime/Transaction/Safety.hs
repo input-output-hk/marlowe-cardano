@@ -16,7 +16,6 @@ module Language.Marlowe.Runtime.Transaction.Safety (
 import Control.Monad (forM)
 import Control.Monad.Trans.Except (runExceptT, throwE)
 import Data.Bifunctor (bimap, first)
-import Data.Foldable (toList)
 import Data.Maybe (fromJust)
 import Data.SOP.Strict (K (..), NP (..))
 import Data.String (fromString)
@@ -39,7 +38,7 @@ import Language.Marlowe.Runtime.Core.Api (
   MarloweVersion (MarloweV1),
   TransactionScriptOutput (..),
  )
-import Language.Marlowe.Runtime.Transaction.Api (Destination (ToSelf), Mint (..), RoleTokensConfig (..))
+import Language.Marlowe.Runtime.Transaction.Api (Mint (..), RoleTokensConfig (..))
 import Language.Marlowe.Runtime.Transaction.BuildConstraints (buildApplyInputsConstraints, safeLovelace)
 import Language.Marlowe.Runtime.Transaction.Constraints (
   HelperScriptInfo (helperAddress),
@@ -64,15 +63,14 @@ import qualified Cardano.Api.Shelley as Shelley (
  )
 import Control.Monad.IO.Class (MonadIO)
 import Data.Functor.Identity (runIdentity)
+import qualified Data.Map.NonEmpty as NEMap
 import qualified Data.Map.Strict as M (
   Map,
   elems,
   empty,
-  filter,
   fromList,
   fromSet,
   intersection,
-  keys,
   keysSet,
   map,
   mapKeys,
@@ -82,6 +80,8 @@ import qualified Data.Map.Strict as M (
  )
 import qualified Data.SOP.Counting as Ouroboros
 import qualified Data.Set as S (Set, intersection, map, singleton)
+import qualified Data.Set as Set
+import qualified Data.Set.NonEmpty as NESet
 import qualified Language.Marlowe.Core.V1.Merkle as V1 (MerkleizedContract (..))
 import qualified Language.Marlowe.Core.V1.Plate as V1 (extractAllWithContinuations)
 import qualified Language.Marlowe.Core.V1.Semantics as V1 (
@@ -234,8 +234,8 @@ minAdaBound era pps MarloweV1 assets =
             (Cardano.TxOutValue multiAssetSupported value)
             (Cardano.TxOutDatumHash scriptDataSupported "45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0")
             C.ReferenceScriptNone
-    bpps <- either (const Nothing) Just $ C.bundleProtocolParams cardanoEra pps
-    pure $ Cardano.calculateMinimumUTxO shelleyBasedEra txOut bpps
+    params <- either (const Nothing) Just $ C.bundleProtocolParams cardanoEra pps
+    pure $ Cardano.calculateMinimumUTxO shelleyBasedEra txOut params
 
 -- | Check a contract for design errors and ledger violations.
 checkContract
@@ -247,20 +247,21 @@ checkContract
   -> [SafetyError]
 checkContract network config MarloweV1 contract continuations =
   let continuations' = remapContinuations continuations
-      roles = toList $ V1.extractAllWithContinuations contract continuations'
+      roles = V1.extractAllWithContinuations contract continuations'
       mintCheck =
-        case (config, null roles) of
+        case (config, Set.null roles) of
           (RoleTokensNone, False) -> pure MissingRolesCurrency
           (RoleTokensNone, True) -> mempty
           (_, True) -> pure ContractHasNoRoles
           (RoleTokensMint mint, False) ->
-            let minted = Chain.toPlutusTokenName <$> M.keys (M.filter ((/= ToSelf) . fst) $ unMint mint)
-                missing = MissingRoleToken <$> filter (`notElem` minted) roles
-                extra = ExtraRoleToken <$> filter (`notElem` roles) minted
+            let minted = Set.map Chain.toPlutusTokenName $ NESet.toSet $ NEMap.keysSet $ unMint mint
+                missing = MissingRoleToken <$> Set.toList (Set.difference roles minted)
+                extra = ExtraRoleToken <$> Set.toList (Set.difference minted roles)
              in missing <> extra
-          (RoleTokensUsePolicy _, False) -> mempty
-          (RoleTokensUsePolicyWithOpenRoles _ _ openRoles, False) ->
-            ExtraRoleToken <$> filter (`notElem` roles) (Chain.toPlutusTokenName <$> openRoles)
+          (RoleTokensUsePolicy _ distribution, False) -> do
+            let distributedRoles = Set.map Chain.toPlutusTokenName $ M.keysSet distribution
+            extraRole <- Set.toList $ Set.difference distributedRoles roles
+            pure $ ExtraRoleToken extraRole
       avoidDuplicateReport = True
       nameCheck = checkRoleNames avoidDuplicateReport Nothing contract continuations'
       tokenCheck = checkTokens Nothing contract continuations'

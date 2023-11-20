@@ -4,7 +4,6 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Language.Marlowe.Runtime.App.Build (
@@ -13,7 +12,7 @@ module Language.Marlowe.Runtime.App.Build (
   buildWithdrawal,
 ) where
 
-import Data.Bifunctor (bimap, second)
+import Data.Bifunctor (bimap)
 import Data.Time (UTCTime, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Data.Void (Void)
@@ -56,9 +55,11 @@ buildCreation version' contract roles minUtxo metadata' =
   let roles' =
         if M.null roles
           then RoleTokensNone
-          else RoleTokensMint . mkMint . fmap (second $ (,Nothing) . ToAddress) . NE.fromList . M.toList $ roles
+          else
+            RoleTokensMint . mkMint . fmap (\(token, addr) -> (token, Nothing, ToAddress addr, 1)) . NE.fromList . M.toList $
+              roles
    in build show (\(ContractCreated era ContractCreatedInEra{..}) -> (contractId, TxBodyInEraWithReferenceScripts era txBody)) $
-        \w -> Create Nothing version' w roles' metadata' minUtxo $ Left contract
+        \w -> Create Nothing version' w Nothing roles' metadata' minUtxo $ Left contract
 
 buildApplication
   :: MarloweVersion v

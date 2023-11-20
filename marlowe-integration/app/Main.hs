@@ -56,6 +56,7 @@ main = withLocalMarloweRuntime \MarloweRuntime{..} -> do
         Web.PostContractsRequest
           { metadata = mempty
           , tags = mempty
+          , threadTokenName = Nothing
           , version = Web.V1
           , roles = Nothing
           , contract = ContractOrSourceId $ Left V1.Close

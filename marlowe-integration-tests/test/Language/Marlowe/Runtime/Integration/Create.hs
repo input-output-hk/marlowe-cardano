@@ -254,13 +254,16 @@ roleTokenSpec = \case
                 TxOutValue _ value' -> Set.fromList $ fst <$> valueToList value'
       tokensOutput `shouldBe` Set.singleton C.AdaAssetId
   -- Metadata checks done with other metadata checks.
-  _ -> Just do
+  testCase -> Just do
     it "Should mint the required tokens" \(_, ContractCreated _ ContractCreatedInEra{..}) -> do
-      let mintedTokenNames = case txBody of
+      let mintedTokens = case txBody of
             TxBody TxBodyContent{..} -> case txMintValue of
               TxMintNone -> mempty
-              TxMintValue _ value _ -> Map.keysSet $ unTokens $ tokens $ assetsFromCardanoValue value
-      mintedTokenNames `shouldBe` Set.singleton (AssetId rolesCurrency "Role")
+              TxMintValue _ value _ -> tokens $ assetsFromCardanoValue value
+          expectedTokens = case testCase of
+            MintRoleTokensMultiple -> Tokens $ Map.singleton (AssetId rolesCurrency "Role") 3
+            _ -> Tokens $ Map.singleton (AssetId rolesCurrency "Role") 1
+      mintedTokens `shouldBe` expectedTokens
     it "Should distribute the role tokens" \(TestData{..}, ContractCreated era ContractCreatedInEra{..}) -> do
       let tokenDistribution = case txBody of
             TxBody TxBodyContent{..} ->
@@ -275,8 +278,14 @@ roleTokenSpec = \case
                     $ unTokens
                     $ tokens
                     $ fromCardanoTxOutValue value
-      tokenDistribution
-        `shouldBe` Map.singleton (changeAddress singleAddressInsufficientBalanceWallet, AssetId rolesCurrency "Role") 1
+          expectedDistribution = case testCase of
+            MintRoleTokensMultiple ->
+              Map.fromList
+                [ ((changeAddress singleAddressInsufficientBalanceWallet, AssetId rolesCurrency "Role"), 2)
+                , ((changeAddress multiAddressInsufficientBalanceWallet, AssetId rolesCurrency "Role"), 1)
+                ]
+            _ -> Map.singleton (changeAddress singleAddressInsufficientBalanceWallet, AssetId rolesCurrency "Role") 1
+      tokenDistribution `shouldBe` expectedDistribution
 
 metadataSpec :: RoleTokenCase -> MetadataCase -> Maybe (SpecWith (TestData, ContractCreated 'V1))
 metadataSpec roleTokens metadataCase = Just do
@@ -332,6 +341,7 @@ mkCreateCommand testData (CreateCase stakeCredential wallet (roleTokens, metadat
     (mkStakeCredential testData stakeCredential)
     MarloweV1
     (mkWalletAddresses testData wallet)
+    Nothing
     (mkRoleTokensConfig testData roleTokens)
     (mkMarloweTxMetadata metadata)
     (mkMinLovelace minLovelace)
@@ -360,18 +370,25 @@ mkWalletAddresses TestData{..} = \case
 mkRoleTokensConfig :: TestData -> RoleTokenCase -> RoleTokensConfig
 mkRoleTokensConfig TestData{..} = \case
   NoRoleTokens -> RoleTokensNone
-  ExistingPolicyRoleTokens -> RoleTokensUsePolicy existingRoleTokenPolicy
+  ExistingPolicyRoleTokens -> RoleTokensUsePolicy existingRoleTokenPolicy mempty
   MintRoleTokensSimple ->
     RoleTokensMint $
       mkMint $
         NE.fromList
-          [ ("Role", (ToAddress $ changeAddress singleAddressInsufficientBalanceWallet, Nothing))
+          [ ("Role", Nothing, ToAddress $ changeAddress singleAddressInsufficientBalanceWallet, 1)
           ]
   MintRoleTokensMetadata ->
     RoleTokensMint $
       mkMint $
         NE.fromList
-          [ ("Role", (ToAddress $ changeAddress singleAddressInsufficientBalanceWallet, Just testNftMetadata))
+          [ ("Role", Just testNftMetadata, ToAddress $ changeAddress singleAddressInsufficientBalanceWallet, 1)
+          ]
+  MintRoleTokensMultiple ->
+    RoleTokensMint $
+      mkMint $
+        NE.fromList
+          [ ("Role", Nothing, ToAddress $ changeAddress singleAddressInsufficientBalanceWallet, 2)
+          , ("Role", Nothing, ToAddress $ changeAddress multiAddressInsufficientBalanceWallet, 1)
           ]
 
 testNftMetadata :: RoleTokenMetadata
@@ -489,6 +506,7 @@ data RoleTokenCase
   = NoRoleTokens
   | ExistingPolicyRoleTokens
   | MintRoleTokensSimple
+  | MintRoleTokensMultiple
   | MintRoleTokensMetadata
   deriving (Show, Eq, Enum, Bounded)
 

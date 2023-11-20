@@ -232,7 +232,8 @@ spec = describe "Basic scenarios" do
           Nothing
           MarloweV1
           (wallet.addresses)
-          (RoleTokensUsePolicy "")
+          Nothing
+          (RoleTokensUsePolicy "" mempty)
           emptyMarloweTransactionMetadata
           Nothing
           (Left contract)
