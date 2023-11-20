@@ -219,3 +219,15 @@ source-repository-package
   location: https://github.com/input-output-hk/actus-core
   tag: 3bddfeb838c695adf2c6689b3beda3ef1019de7
   --sha256: 12pahjijkym93sm1qh9l9jw6wlv3vf46l73hpdwrm25rz195hi47
+
+
+source-repository-package
+  type: git
+  location: https://github.com/zeme-wana/hs-opentelemetry
+  tag: a90d18142dbb6464c44fad953ad6f6b6da4d18ec
+  --sha256: 07nxk0dp5zdng77xq7yw7w3zp183dg03ridhkix4pnvh72s95qbc
+  subdir: sdk
+          api 
+
+
+-- nix-prefetch-git --rev a90d18142dbb6464c44fad953ad6f6b6da4d18ec https://www.github.com/zeme-wana/hs-opentelemetry
