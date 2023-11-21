@@ -6,11 +6,11 @@ module Main where
 import Control.Concurrent.STM (retry)
 #else
 import Control.Concurrent.STM (atomically, newEmptyTMVarIO, putTMVar, takeTMVar)
+import System.Posix (Handler (..), installHandler, sigINT)
 #endif
 import GHC.IO.Handle (hSetBuffering)
 import Language.Marlowe.Runtime.CLI.Command
 import System.IO (BufferMode (..), stderr, stdout)
-import System.Posix (Handler (..), installHandler, sigINT)
 
 main :: IO ()
 main = do

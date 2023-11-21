@@ -31,6 +31,12 @@ let
 
         packages = {
 
+          hs-opentelemetry-sdk.preBuild = ''
+            ls -lah 
+            cat hs-opentelemetry-sdk.cabal
+            cat src/OpenTelemetry/Resource/Process/Detector.hs
+          '';
+
           # Fix missing executables on the paths of the test runners. This is arguably
           # a bug, and the fix is a bit of a hack.
           marlowe.components.tests.marlowe-test.preCheck = ''
