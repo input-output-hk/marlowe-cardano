@@ -114,6 +114,7 @@ jobs:
           then
             export TAG=$(echo "${{ github.ref_name }}" | sed -e "s/^runtime@v//")
             echo TAG=$TAG
+            yq e -i '.instances.demo.tag = env(TAG)' deploy/marlowe-runtime/values.yaml
             yq e -i '.instances.demo.webTag = env(TAG)' deploy/marlowe-runtime/values.yaml
           elif [[ "${{ github.ref }}" == "refs/tags/marlowe-runtime-web@v"* ]]
           then
