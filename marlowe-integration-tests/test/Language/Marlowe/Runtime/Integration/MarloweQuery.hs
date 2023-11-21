@@ -203,10 +203,10 @@ applyVariation filterSym = \case
 
 partyAddressesForContract :: RefSym GetHeaders -> Set PartyAddress
 partyAddressesForContract = \case
-  Contract1 -> Set.singleton Wallet2
-  Contract2 -> Set.singleton Wallet1
-  Contract3 -> Set.singleton Wallet2
-  Contract4 -> mempty -- wallet 1 is not a *visible* party address of contract 4 due to merkleization.
+  Contract1 -> Set.fromList [Wallet1, Wallet2]
+  Contract2 -> Set.fromList [Wallet1, Wallet2]
+  Contract3 -> Set.fromList [Wallet1, Wallet2]
+  Contract4 -> Set.singleton Wallet2 -- wallet 1 is not a *visible* party address of contract 4 due to merkleization.
 
 instance PaginatedQuery GetWithdrawals where
   type Filter GetWithdrawals = WithdrawalFilter

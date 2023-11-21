@@ -314,6 +314,7 @@ library indexer
     , mtl >=2.2 && <3
     , nonempty-containers ^>=0.3.4
     , plutus-ledger-api ^>=1.5
+    , plutus-tx ^>=1.5
     , stm ^>=2.5
     , text ^>=1.2
     , time >=1.9 && <2
