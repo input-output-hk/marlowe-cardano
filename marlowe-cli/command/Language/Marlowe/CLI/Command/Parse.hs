@@ -532,7 +532,7 @@ publishingStrategyOpt =
       )
 
 parseSecond :: O.ReadM Second
-parseSecond = fromInteger <$> O.auto
+parseSecond = O.auto <|> (fromInteger <$> O.auto)
 
 parseMarloweValuePair :: O.ReadM (Token, Integer)
 parseMarloweValuePair = O.eitherReader $ \s ->

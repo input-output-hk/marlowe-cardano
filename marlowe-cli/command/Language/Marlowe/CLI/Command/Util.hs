@@ -373,7 +373,7 @@ cleanOptions network socket =
           <> O.help "Address to receive ADA in excess of fee."
       )
     <*> txBodyFileOpt
-    <*> (O.optional . O.option O.auto)
+    <*> (O.optional . O.option parseSecond)
       ( O.long "submit"
           <> O.metavar "SECONDS"
           <> O.help "Also submit the transaction, and wait for confirmation."
@@ -421,7 +421,7 @@ mintOptions network socket =
           <> O.help "The slot number after which minting is no longer possible."
       )
     <*> txBodyFileOpt
-    <*> (O.optional . O.option O.auto)
+    <*> (O.optional . O.option parseSecond)
       ( O.long "submit"
           <> O.metavar "SECONDS"
           <> O.help "Also submit the transaction, and wait for confirmation."
@@ -484,7 +484,7 @@ burnOptions network socket =
           <> O.metavar "SLOT_NO"
           <> O.help "The slot number after which miniting is no longer possible."
       )
-    <*> (O.optional . O.option O.auto)
+    <*> (O.optional . O.option parseSecond)
       ( O.long "submit"
           <> O.metavar "SECONDS"
           <> O.help "Also submit the transaction, and wait for confirmation."

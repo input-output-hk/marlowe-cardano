@@ -641,7 +641,7 @@ withdrawOptions network socket =
       ( O.long "metadata-file" <> O.metavar "METADATA_FILE" <> O.help "JSON file containing metadata."
       )
     <*> txBodyFileOpt
-    <*> (O.optional . O.option O.auto)
+    <*> (O.optional . O.option parseSecond)
       ( O.long "submit"
           <> O.metavar "SECONDS"
           <> O.help "Also submit the transaction, and wait for confirmation."
@@ -695,7 +695,7 @@ autoRunOptions network socket =
       ( O.long "metadata-file" <> O.metavar "METADATA_FILE" <> O.help "JSON file containing metadata."
       )
     <*> txBodyFileOpt
-    <*> (O.optional . O.option O.auto)
+    <*> (O.optional . O.option parseSecond)
       ( O.long "submit"
           <> O.metavar "SECONDS"
           <> O.help "Also submit the transaction, and wait for confirmation."
@@ -766,7 +766,7 @@ autoWithdrawOptions network socket =
       ( O.long "metadata-file" <> O.metavar "METADATA_FILE" <> O.help "JSON file containing metadata."
       )
     <*> txBodyFileOpt
-    <*> (O.optional . O.option O.auto)
+    <*> (O.optional . O.option parseSecond)
       ( O.long "submit"
           <> O.metavar "SECONDS"
           <> O.help "Also submit the transaction, and wait for confirmation."
