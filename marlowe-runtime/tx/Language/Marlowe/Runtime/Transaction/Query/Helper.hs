@@ -19,6 +19,7 @@ import Control.Monad.Event.Class (
   withEventFields,
  )
 import qualified Data.Map as Map
+import qualified Data.Map.NonEmpty as NEMap
 import Data.Maybe (fromJust, mapMaybe)
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -64,6 +65,7 @@ import Language.Marlowe.Runtime.Plutus.V2.Api (fromPlutusCurrencySymbol)
 import Language.Marlowe.Runtime.Transaction.Api (
   Destination (..),
   LoadHelpersContextError (..),
+  MintRole (roleTokenRecipients),
   RoleTokensConfig (..),
   unMint,
  )
@@ -120,25 +122,24 @@ loadHelpersContext getCurrentScripts _ networkId _ desiredVersion (Right Nothing
       , helperScriptStates = mempty
       }
 loadHelpersContext getCurrentScripts _ networkId _ desiredVersion (Left (rolesCurrency, roleTokens)) =
-  -- TODO: Generalize beyoned open roles when other helper script types are supported.
+  -- TODO: Generalize beyond open roles when other helper script types are supported.
   case (OpenRoleScript `Map.lookup` current, roleTokens) of
     (Just _, RoleTokensNone) ->
       pure . Right $ HelpersContext current rolesCurrency mempty
-    (Just _, RoleTokensUsePolicy _) ->
-      pure . Right $ HelpersContext current rolesCurrency mempty
+    (Just helperScriptInfo, RoleTokensUsePolicy _ distribution) ->
+      pure
+        . Right
+        . HelpersContext current rolesCurrency
+        . Map.map (const $ HelperScriptState helperScriptInfo Nothing)
+        . Map.filter (Map.member (ToScript OpenRoleScript))
+        $ distribution
     (Just helperScriptInfo, RoleTokensMint mint) ->
       pure
         . Right
         . HelpersContext current rolesCurrency
         . Map.map (const $ HelperScriptState helperScriptInfo Nothing)
-        . Map.filter ((== ToScript OpenRoleScript) . fst)
+        . NEMap.filter (NEMap.member (ToScript OpenRoleScript) . roleTokenRecipients)
         $ unMint mint
-    (Just helperScriptInfo, RoleTokensUsePolicyWithOpenRoles policyId _ openRoleNames) ->
-      pure
-        . Right
-        . HelpersContext current policyId
-        . Map.fromList
-        $ (,HelperScriptState helperScriptInfo Nothing) <$> openRoleNames
     (Nothing, _) -> pure . Right $ HelpersContext current "" mempty
   where
     current = getHelperInfos helperScript networkId $ getCurrentScripts desiredVersion

@@ -17,6 +17,7 @@ import Language.Marlowe.Protocol.Load.Client (pushContract)
 import Language.Marlowe.Protocol.Query.Types (PayoutHeader (..))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, TxId)
+import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Client (createContract, runMarloweLoadClient)
 import Language.Marlowe.Runtime.Core.Api (
   ContractId,
@@ -113,16 +114,30 @@ createStandardContract = createStandardContractWithTags mempty
 createStandardContractWithTags :: Set MarloweMetadataTag -> Wallet -> Wallet -> Integration (StandardContractInit 'V1)
 createStandardContractWithTags tags partyAWallet =
   createStandardContractWithTagsAndRolesConfig
-    (RoleTokensMint $ mkMint $ pure ("Party A", (ToAddress . changeAddress $ addresses partyAWallet, Nothing)))
+    Nothing
+    ( RoleTokensMint $
+        mkMint $
+          pure ("Party A", Nothing, ToAddress . changeAddress $ addresses partyAWallet, 1)
+    )
     tags
     partyAWallet
 
-createStandardContractWithRolesConfig :: RoleTokensConfig -> Wallet -> Wallet -> Integration (StandardContractInit 'V1)
-createStandardContractWithRolesConfig rolesConfig = createStandardContractWithTagsAndRolesConfig rolesConfig mempty
+createStandardContractWithRolesConfig
+  :: Maybe Chain.TokenName
+  -> RoleTokensConfig
+  -> Wallet
+  -> Wallet
+  -> Integration (StandardContractInit 'V1)
+createStandardContractWithRolesConfig threadName rolesConfig = createStandardContractWithTagsAndRolesConfig threadName rolesConfig mempty
 
 createStandardContractWithTagsAndRolesConfig
-  :: RoleTokensConfig -> Set MarloweMetadataTag -> Wallet -> Wallet -> Integration (StandardContractInit 'V1)
-createStandardContractWithTagsAndRolesConfig rolesConfig tags partyAWallet partyBWallet = do
+  :: Maybe Chain.TokenName
+  -> RoleTokensConfig
+  -> Set MarloweMetadataTag
+  -> Wallet
+  -> Wallet
+  -> Integration (StandardContractInit 'V1)
+createStandardContractWithTagsAndRolesConfig threadName rolesConfig tags partyAWallet partyBWallet = do
   partyBAddress <-
     expectJust "Failed to convert party B address" $ toPlutusAddress $ changeAddress $ addresses partyBWallet
   now <- liftIO getCurrentTime
@@ -133,6 +148,7 @@ createStandardContractWithTagsAndRolesConfig rolesConfig tags partyAWallet party
       Nothing
       MarloweV1
       (addresses partyAWallet)
+      threadName
       rolesConfig
       ( if Set.null tags
           then emptyMarloweTransactionMetadata

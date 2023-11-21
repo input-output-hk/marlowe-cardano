@@ -12,9 +12,15 @@ import Test.Hspec (Spec, describe)
 
 spec :: Spec
 spec = describe "Open roles" do
-  basicScenarioWithCreator
-    . createStandardContractWithRolesConfig
-    . RoleTokensMint
-    . mkMint
-    $ pure ("Thread", (ToSelf, Nothing))
-      <> pure ("Party A", (ToScript OpenRoleScript, Nothing))
+  describe "single token" do
+    basicScenarioWithCreator
+      . createStandardContractWithRolesConfig (Just "Thread")
+      . RoleTokensMint
+      . mkMint
+      $ pure ("Party A", Nothing, ToScript OpenRoleScript, 1)
+  describe "multiple tokens" do
+    basicScenarioWithCreator
+      . createStandardContractWithRolesConfig (Just "Thread")
+      . RoleTokensMint
+      . mkMint
+      $ pure ("Party A", Nothing, ToScript OpenRoleScript, 2)

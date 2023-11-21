@@ -1,17 +1,18 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE ViewPatterns #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Marlowe.Runtime.Transaction.Gen where
 
 import Cardano.Api (CardanoEra (..), IsCardanoEra, cardanoEra)
-import Cardano.Api.Shelley (
-  ReferenceTxInsScriptsInlineDatumsSupportedInEra (..),
- )
+import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import Control.Applicative (liftA2)
 import qualified Data.ByteString.Char8 as BS
 import Data.Foldable (fold)
 import qualified Data.List.NonEmpty as NE
+import Data.Map.NonEmpty (NEMap)
+import qualified Data.Map.NonEmpty as NEMap
 import Data.Semigroup (Semigroup (..))
 import Language.Marlowe.Runtime.ChainSync.Gen ()
 import qualified Language.Marlowe.Runtime.Core.Api as Core
@@ -110,25 +111,39 @@ instance Arbitrary HelperScript where
 instance Arbitrary Destination where
   arbitrary =
     frequency
-      [ (30, ToAddress <$> arbitrary)
-      , (2, pure ToSelf)
+      [ (15, ToAddress <$> arbitrary)
       , (1, ToScript <$> arbitrary)
       ]
   shrink = genericShrink
 
+instance (Ord k, Arbitrary k, Arbitrary v) => Arbitrary (NEMap k v) where
+  arbitrary = NEMap.insertMap <$> arbitrary <*> arbitrary <*> arbitrary
+  shrink (NEMap.deleteFindMin -> ((k, v), m)) =
+    fold
+      [ NEMap.insertMap <$> shrink k <*> pure v <*> pure m
+      , NEMap.insertMap k <$> shrink v <*> pure m
+      , NEMap.insertMap k v <$> shrink m
+      ]
+
+instance Arbitrary MintRole where
+  arbitrary = MintRole <$> arbitrary <*> arbitrary
+  shrink = genericShrink
+
 instance Arbitrary Mint where
-  arbitrary = mkMint <$> arbitrary
+  arbitrary = Mint <$> arbitrary
   shrink = genericShrink
 
 instance Arbitrary RoleTokensConfig where
   arbitrary =
     frequency
       [ (1, pure RoleTokensNone)
-      , (10, RoleTokensUsePolicy <$> arbitrary)
+      , (10, RoleTokensUsePolicy <$> arbitrary <*> arbitrary)
       , (10, RoleTokensMint <$> arbitrary)
-      , (10, RoleTokensUsePolicyWithOpenRoles <$> arbitrary <*> arbitrary <*> arbitrary)
       ]
-  shrink = genericShrink
+  shrink = \case
+    RoleTokensNone -> []
+    RoleTokensUsePolicy policy dist -> uncurry RoleTokensUsePolicy <$> shrink (policy, dist)
+    RoleTokensMint mint -> RoleTokensMint <$> shrink mint
 
 instance Arbitrary SubmitStatus where
   arbitrary = elements [Submitting, Accepted]
@@ -188,7 +203,6 @@ instance Arbitrary CreateError where
       , CreateLoadMarloweContextFailed <$> arbitrary
       , CreateBuildupFailed <$> arbitrary
       , pure CreateToCardanoError
-      , pure RequiresSingleThreadToken
       ]
   shrink = genericShrink
 
@@ -334,6 +348,7 @@ instance ArbitraryCommand MarloweTxCommand where
         <*> arbitrary
         <*> arbitrary
         <*> arbitrary
+        <*> arbitrary
     TagApplyInputs Core.MarloweV1 ->
       ApplyInputs Core.MarloweV1
         <$> arbitrary
@@ -372,35 +387,43 @@ instance ArbitraryCommand MarloweTxCommand where
     TagWithdraw Core.MarloweV1 -> arbitrary
     TagSubmit -> arbitrary
   shrinkCommand = \case
-    Create staking Core.MarloweV1 wallet roleConfig meta minAda contract ->
+    Create staking Core.MarloweV1 wallet thread roleConfig meta minAda contract ->
       concat
         [ Create
             <$> shrink staking
             <*> pure Core.MarloweV1
             <*> pure wallet
+            <*> pure thread
             <*> pure roleConfig
             <*> pure meta
             <*> pure minAda
             <*> pure contract
         , Create staking Core.MarloweV1
             <$> shrink wallet
+            <*> pure thread
             <*> pure roleConfig
             <*> pure meta
             <*> pure minAda
             <*> pure contract
         , Create staking Core.MarloweV1 wallet
+            <$> shrink thread
+            <*> pure roleConfig
+            <*> pure meta
+            <*> pure minAda
+            <*> pure contract
+        , Create staking Core.MarloweV1 wallet thread
             <$> shrink roleConfig
             <*> pure meta
             <*> pure minAda
             <*> pure contract
-        , Create staking Core.MarloweV1 wallet roleConfig
+        , Create staking Core.MarloweV1 wallet thread roleConfig
             <$> shrink meta
             <*> pure minAda
             <*> pure contract
-        , Create staking Core.MarloweV1 wallet roleConfig meta
+        , Create staking Core.MarloweV1 wallet thread roleConfig meta
             <$> shrink minAda
             <*> pure contract
-        , Create staking Core.MarloweV1 wallet roleConfig meta minAda
+        , Create staking Core.MarloweV1 wallet thread roleConfig meta minAda
             <$> shrink contract
         ]
     ApplyInputs Core.MarloweV1 wallet contractId meta minValid maxValid inputs ->
@@ -467,6 +490,7 @@ instance CommandVariations MarloweTxCommand where
     TagCreate Core.MarloweV1 ->
       Create
         <$> variations
+          `varyAp` variations
           `varyAp` variations
           `varyAp` variations
           `varyAp` variations

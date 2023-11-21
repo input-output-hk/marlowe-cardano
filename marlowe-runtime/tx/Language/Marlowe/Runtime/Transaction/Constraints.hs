@@ -2,7 +2,9 @@
 {-# LANGUAGE EmptyDataDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Language.Marlowe.Runtime.Transaction.Constraints (
   ConstraintError (..),
@@ -11,10 +13,10 @@ module Language.Marlowe.Runtime.Transaction.Constraints (
   HelpersContext (..),
   HelperScriptState (..),
   HelperScriptInfo (..),
-  HelperOutputConstraints (..),
   MarloweInputConstraints (..),
   MarloweOutputConstraints (..),
-  RoleTokenConstraints (..),
+  RoleTokenConstraints (RoleTokenConstraintsNone, MintRoleTokens, DistributeRoleTokens, SpendRoleTokens),
+  Distribution (..),
   SolveConstraints,
   TxConstraints (..),
   WalletContext (..),
@@ -25,10 +27,10 @@ module Language.Marlowe.Runtime.Transaction.Constraints (
   mustConsumeMarloweOutput,
   mustConsumePayout,
   mustMintRoleToken,
+  mustDistributeRoleToken,
   mustPayToAddress,
   mustPayToRole,
   mustSendMarloweOutput,
-  mustSendHelperOutput,
   mustSpendRoleToken,
   requiresMetadata,
   requiresSignature,
@@ -41,31 +43,25 @@ import Cardano.Api (IsCardanoEra (..), IsShelleyBasedEra (..), MultiAssetSupport
 import qualified Cardano.Api as C
 import qualified Cardano.Api.Shelley as C
 import Control.Applicative ((<|>))
-import Control.Error (note)
+import Control.Error (hoistMaybe, note, noteT, runExceptT)
 import Control.Monad (forM, unless, when, (<=<))
+import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.Aeson (ToJSON)
 import Data.Crosswalk (Crosswalk (sequenceL))
 import Data.Function (on)
 import Data.Functor ((<&>))
 import Data.List (delete, find, minimumBy, nub)
 import Data.Map (Map)
-import qualified Data.Map as Map (
-  elems,
-  fromSet,
-  keysSet,
-  lookup,
-  mapWithKey,
-  member,
-  null,
-  singleton,
-  toList,
-  unionWith,
- )
+import qualified Data.Map as Map
+import Data.Map.NonEmpty (NEMap)
+import qualified Data.Map.NonEmpty as NEMap
 import qualified Data.Map.Strict as SMap (fromList, toList)
 import Data.Maybe (catMaybes, mapMaybe, maybeToList)
 import Data.Monoid (First (..), getFirst)
 import Data.Set (Set)
 import qualified Data.Set as Set
+import Data.Set.NonEmpty (NESet)
+import qualified Data.Set.NonEmpty as NESet
 import Data.Traversable (for)
 import GHC.Generics (Generic)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
@@ -116,7 +112,6 @@ data TxConstraints era v = TxConstraints
   , payToAddresses :: Map Chain.Address Chain.Assets
   , payToRoles :: Map (Core.PayoutDatum v) Chain.Assets
   , marloweOutputConstraints :: MarloweOutputConstraints v
-  , helperOutputConstraints :: Map Chain.TokenName HelperOutputConstraints
   , signatureConstraints :: Set Chain.PaymentKeyHash
   , metadataConstraints :: Core.MarloweTransactionMetadata
   }
@@ -127,37 +122,126 @@ deriving instance Eq (TxConstraints era 'V1)
 -- | Constraints related to role tokens.
 data RoleTokenConstraints era
   = RoleTokenConstraintsNone
-  | MintRoleTokens Chain.TxOutRef (C.ScriptWitness C.WitCtxMint era) (Map Chain.AssetId Destination)
-  | SpendRoleTokens (Set Chain.AssetId)
+  | NEMintRoleTokens Chain.TxOutRef (C.ScriptWitness C.WitCtxMint era) NEDistribution
+  | NEDistributeRoleTokens NEDistribution
+  | NESpendRoleTokens (NESet Chain.AssetId)
   deriving (Eq, Show)
+
+{-# COMPLETE RoleTokenConstraintsNone, MintRoleTokens, DistributeRoleTokens, SpendRoleTokens #-}
+
+pattern DistributeRoleTokens :: Distribution -> RoleTokenConstraints era
+pattern DistributeRoleTokens dist <- NEDistributeRoleTokens (toDistribution -> dist)
+  where
+    DistributeRoleTokens dist =
+      maybe RoleTokenConstraintsNone NEDistributeRoleTokens $ nonEmptyDistribution dist
+
+pattern MintRoleTokens
+  :: Chain.TxOutRef
+  -> C.ScriptWitness C.WitCtxMint era
+  -> Distribution
+  -> RoleTokenConstraints era
+pattern MintRoleTokens out wit dist <- NEMintRoleTokens out wit (toDistribution -> dist)
+  where
+    MintRoleTokens out wit dist =
+      maybe RoleTokenConstraintsNone (NEMintRoleTokens out wit) $ nonEmptyDistribution dist
+
+pattern SpendRoleTokens :: Set Chain.AssetId -> RoleTokenConstraints era
+pattern SpendRoleTokens roles <- NESpendRoleTokens (NESet.toSet -> roles)
+  where
+    SpendRoleTokens roles =
+      maybe RoleTokenConstraintsNone NESpendRoleTokens $ NESet.nonEmptySet roles
 
 instance Semigroup (RoleTokenConstraints era) where
   a <> RoleTokenConstraintsNone = a
   MintRoleTokens _ _ a <> MintRoleTokens ref witness b = MintRoleTokens ref witness $ a <> b
+  DistributeRoleTokens a <> DistributeRoleTokens b = DistributeRoleTokens $ a <> b
   SpendRoleTokens a <> SpendRoleTokens b = SpendRoleTokens $ a <> b
   _ <> b = b
 
 instance Monoid (RoleTokenConstraints era) where
   mempty = RoleTokenConstraintsNone
 
--- | Require the transaction to mint 1 role token with the specified assetId and
--- send it to the given address. Additionally, require that the given UTXO is
--- consumed.
+data NEDistribution
+  = NESendToAddresses (NEMap Chain.AssetId (NEMap Chain.Address Chain.Quantity))
+  | NESendToScripts Chain.AssetId (NEMap Chain.AssetId (NEMap Destination Chain.Quantity))
+  deriving (Eq, Show)
+
+nonEmptyDistribution :: Distribution -> Maybe NEDistribution
+nonEmptyDistribution = \case
+  SendToAddresses dist ->
+    fmap NESendToAddresses
+      . NEMap.nonEmptyMap
+      . Map.mapMaybe (NEMap.nonEmptyMap . Map.filter (> 0))
+      $ dist
+  SendToScripts thread dist ->
+    fmap (NESendToScripts thread)
+      . NEMap.nonEmptyMap
+      . Map.mapMaybe (NEMap.nonEmptyMap . Map.filter (> 0))
+      $ dist
+
+toDistribution :: NEDistribution -> Distribution
+toDistribution = \case
+  NESendToAddresses dist -> SendToAddresses $ NEMap.toMap $ NEMap.toMap <$> dist
+  NESendToScripts thread dist -> SendToScripts thread $ NEMap.toMap $ NEMap.toMap <$> dist
+
+data Distribution
+  = SendToAddresses (Map Chain.AssetId (Map Chain.Address Chain.Quantity))
+  | SendToScripts Chain.AssetId (Map Chain.AssetId (Map Destination Chain.Quantity))
+  deriving (Eq, Show)
+
+instance Semigroup Distribution where
+  SendToAddresses dist <> SendToAddresses dist' =
+    SendToAddresses $ Map.unionWith (Map.unionWith (+)) dist dist'
+  SendToScripts _ dist <> SendToScripts thread dist' =
+    SendToScripts thread $ Map.unionWith (Map.unionWith (+)) dist dist'
+  SendToScripts thread dist <> SendToAddresses dist' =
+    SendToScripts thread $ Map.unionWith (Map.unionWith (+)) dist (Map.mapKeysMonotonic ToAddress <$> dist')
+  SendToAddresses dist <> SendToScripts thread dist' =
+    SendToScripts thread $ Map.unionWith (Map.unionWith (+)) (Map.mapKeysMonotonic ToAddress <$> dist) dist'
+
+-- | Require the transaction to mint the specified number of role tokens with the
+-- specified assetId and send them to the given destinations. Additionally, require that
+-- the given UTXO is consumed. Additionally, mint one of the given thread tokens if specified.
 --
 -- Requires that:
---   1. The transaction mints one token with the given assetId.
---   2. The transaction sends one token with the given assetId to the given address.
+--   1. The transaction mints at least n tokens with the given assetId.
+--   2. The transaction sends n tokens with the given assetId to the given destination.
 --   3. The output in rule 2 does not contain any other tokens aside from ADA.
 --   4. The transaction consumes the given TxOutRef.
+--   5. The transaction mints 1 of thread token with the specified name if specified.
 mustMintRoleToken
   :: (Core.IsMarloweVersion v)
   => Chain.TxOutRef
   -> C.ScriptWitness C.WitCtxMint era
   -> Chain.AssetId
-  -> Destination
+  -> Either Chain.Address (Chain.AssetId, HelperScript)
+  -> Chain.Quantity
   -> TxConstraints era v
-mustMintRoleToken txOutRef witness assetId destination =
-  mempty{roleTokenConstraints = MintRoleTokens txOutRef witness $ Map.singleton assetId destination}
+mustMintRoleToken txOutRef witness assetId destination quantity =
+  mempty
+    { roleTokenConstraints =
+        MintRoleTokens txOutRef witness case destination of
+          Left addr -> SendToAddresses $ Map.singleton assetId $ Map.singleton addr quantity
+          Right (thread, script) -> SendToScripts thread $ Map.singleton assetId $ Map.singleton (ToScript script) quantity
+    }
+
+-- | Require the transaction to send the specified number of role tokens with the
+-- specified assetId to the given destinations.
+--
+-- Requires that:
+--   1. The transaction sends n tokens with the given assetId to the given destination.
+mustDistributeRoleToken
+  :: (Core.IsMarloweVersion v)
+  => Chain.AssetId
+  -> Either Chain.Address (Chain.AssetId, HelperScript)
+  -> Chain.Quantity
+  -> TxConstraints era v
+mustDistributeRoleToken assetId destination quantity =
+  mempty
+    { roleTokenConstraints = DistributeRoleTokens case destination of
+        Left addr -> SendToAddresses $ Map.singleton assetId $ Map.singleton addr quantity
+        Right (thread, script) -> SendToScripts thread $ Map.singleton assetId $ Map.singleton (ToScript script) quantity
+    }
 
 -- | Require the transaction to spend a UTXO with 1 role token of the specified
 -- assetID. It also needs to send an identical output (same assets) to the
@@ -184,12 +268,6 @@ instance Semigroup (MarloweOutputConstraints v) where
 
 instance Monoid (MarloweOutputConstraints v) where
   mempty = MarloweOutputConstraintsNone
-
-data HelperOutputConstraints
-  = HelperOutput Chain.Assets Chain.Datum
-
-deriving instance Show HelperOutputConstraints
-deriving instance Eq HelperOutputConstraints
 
 -- | Require the transaction to send the specified assets to the address.
 --
@@ -220,11 +298,6 @@ mustPayToAddress assets address = mempty{payToAddresses = Map.singleton address 
 mustSendMarloweOutput :: (Core.IsMarloweVersion v) => Chain.Assets -> Core.Datum v -> TxConstraints era v
 mustSendMarloweOutput assets datum =
   mempty{marloweOutputConstraints = MarloweOutput assets datum}
-
-mustSendHelperOutput
-  :: (Core.IsMarloweVersion v) => Chain.TokenName -> Chain.Assets -> Chain.Datum -> TxConstraints era v
-mustSendHelperOutput helper assets datum =
-  mempty{helperOutputConstraints = Map.singleton helper $ HelperOutput assets datum}
 
 -- | Require the transaction to send an output to the payout script address
 -- with the given assets and the given datum.
@@ -315,7 +388,6 @@ instance (Core.IsMarloweVersion v) => Semigroup (TxConstraints era v) where
         , payToAddresses = on (Map.unionWith (<>)) payToAddresses a b
         , payToRoles = on (Map.unionWith (<>)) payToRoles a b
         , marloweOutputConstraints = on (<>) marloweOutputConstraints a b
-        , helperOutputConstraints = on (<>) helperOutputConstraints a b
         , signatureConstraints = on (<>) signatureConstraints a b
         , metadataConstraints =
             MarloweTransactionMetadata
@@ -334,7 +406,6 @@ instance (Core.IsMarloweVersion v) => Monoid (TxConstraints era v) where
         , payToAddresses = mempty
         , payToRoles = mempty
         , marloweOutputConstraints = mempty
-        , helperOutputConstraints = mempty
         , signatureConstraints = mempty
         , metadataConstraints = emptyMarloweTransactionMetadata
         }
@@ -996,7 +1067,7 @@ solveInitialTxBodyContent
   -> HelpersContext
   -> TxConstraints era v
   -> Either ConstraintError (C.TxBodyContent C.BuildTx era)
-solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..} HelpersContext{helperPolicyId, helperScriptStates} TxConstraints{..} = do
+solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..} HelpersContext{..} TxConstraints{..} = do
   (txIns, requiredPayoutScriptHashes, helperTxInReferences, helperRoles) <- solveTxIns
   txInsReference <- solveTxInsReference requiredPayoutScriptHashes helperTxInReferences
   txOuts <- solveTxOuts helperRoles
@@ -1063,6 +1134,7 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
       :: Set Chain.AssetId -> Either ConstraintError [(C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn era))]
     getWalletInputs helperRoles = case roleTokenConstraints of
       RoleTokenConstraintsNone -> pure []
+      DistributeRoleTokens _ -> pure [] -- Coin selection will handle these inputs.
       MintRoleTokens txOutRef _ _ -> do
         txIn <- note ToCardanoError $ toCardanoTxIn txOutRef
         _ <- note (MintingUtxoNotFound txOutRef) $ lookupUTxO txOutRef availableUtxos
@@ -1221,6 +1293,7 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
     getHelperInputs = case roleTokenConstraints of
       RoleTokenConstraintsNone -> pure []
       MintRoleTokens{} -> pure []
+      DistributeRoleTokens{} -> pure []
       SpendRoleTokens roleTokens -> catMaybes <$> mapM getHelperInput (Set.toList roleTokens)
 
     getHelperInput
@@ -1253,15 +1326,6 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
               pure ((txIn, C.BuildTxWith $ C.ScriptWitness C.ScriptWitnessForSpending scriptWitness), (role, referenceScriptTxIn))
         _ -> pure Nothing
 
-    getHelperOutputs :: Either ConstraintError [Chain.TransactionOutput]
-    getHelperOutputs = uncurry getHelperOutput `mapM` Map.toList helperOutputConstraints
-
-    getHelperOutput :: Chain.TokenName -> HelperOutputConstraints -> Either ConstraintError Chain.TransactionOutput
-    getHelperOutput helperRole (HelperOutput assets datum) =
-      case helperScriptInfo <$> helperRole `Map.lookup` helperScriptStates of
-        Just HelperScriptInfo{..} -> Right $ Chain.TransactionOutput helperAddress assets Nothing $ Just datum
-        Nothing -> Left $ HelperScriptNotFound helperRole
-
     getMerkleizedContinuationOutputs :: [Chain.TransactionOutput]
     getMerkleizedContinuationOutputs = case marloweInputConstraints of
       MarloweInput _ _ inputs -> case marloweVersion of
@@ -1277,32 +1341,42 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
     getRoleTokenOutputs
       :: Set Chain.AssetId
       -> Either ConstraintError [Chain.TransactionOutput]
-    getRoleTokenOutputs helperRoles = case roleTokenConstraints of
-      RoleTokenConstraintsNone -> pure []
-      MintRoleTokens _ _ distribution ->
-        pure . mapMaybe snd . Map.toList $ flip
-          Map.mapWithKey
-          distribution
-          \assetId ->
-            \case
-              (ToAddress address) ->
-                Just $
-                  Chain.TransactionOutput
-                    address
-                    (Chain.Assets 0 $ Chain.Tokens $ Map.singleton assetId 1)
-                    Nothing
-                    Nothing
-              _ -> Nothing -- Output to self or to a helper script is handled elsewhere above.
-      SpendRoleTokens roleTokens -> do
-        let availTuples = map toUTxOTuple . toUTxOsList $ availableUtxos
-            roleTokens' = roleTokens Set.\\ helperRoles
-        -- Ignore ada role tokens because we don't specifically select an input for it, and balancing will refund all
-        -- spent Ada.
-        nub <$> forM (filter (not . isAda) $ Set.toList roleTokens') \token -> do
-          -- Find an element from availTuples where 'token' is in the assets.
-          let containsToken :: Chain.TransactionOutput -> Bool
-              containsToken = Map.member token . Chain.unTokens . Chain.tokens . Chain.assets
-          note (RoleTokenNotFound token) $ snd <$> find (containsToken . snd) availTuples
+    getRoleTokenOutputs helperRoles = go roleTokenConstraints
+      where
+        go = \case
+          RoleTokenConstraintsNone -> pure []
+          MintRoleTokens _ _ dist -> go $ DistributeRoleTokens dist
+          DistributeRoleTokens (SendToAddresses distribution) ->
+            go $ DistributeRoleTokens $ SendToScripts (Chain.AssetId "" "") $ Map.mapKeysMonotonic ToAddress <$> distribution
+          DistributeRoleTokens (SendToScripts (Chain.AssetId _ threadToken) dist) -> sequence $ runExceptT do
+            (assetId, dist') <- lift $ Map.toList dist
+            (dest, q) <- lift $ Map.toList dist'
+            address <- case dest of
+              ToAddress a -> pure a
+              ToScript script ->
+                noteT (HelperScriptNotFound $ Chain.tokenName assetId)
+                  . hoistMaybe
+                  . Map.lookup script
+                  $ helperAddress <$> currentHelperScripts
+            pure
+              Chain.TransactionOutput
+                { address
+                , assets = Chain.Assets 0 $ Chain.Tokens $ Map.singleton assetId q
+                , datumHash = Nothing
+                , datum = case dest of
+                    ToAddress _ -> Nothing
+                    ToScript _ -> Just $ Chain.B $ Chain.unTokenName threadToken
+                }
+          SpendRoleTokens roleTokens -> do
+            let availTuples = map toUTxOTuple . toUTxOsList $ availableUtxos
+                roleTokens' = roleTokens Set.\\ helperRoles
+            -- Ignore ada role tokens because we don't specifically select an input for it, and balancing will refund all
+            -- spent Ada.
+            nub <$> forM (filter (not . isAda) $ Set.toList roleTokens') \token -> do
+              -- Find an element from availTuples where 'token' is in the assets.
+              let containsToken :: Chain.TransactionOutput -> Bool
+                  containsToken = Map.member token . Chain.unTokens . Chain.tokens . Chain.assets
+              note (RoleTokenNotFound token) $ snd <$> find (containsToken . snd) availTuples
 
     getPayoutOutputs :: Either ConstraintError [Chain.TransactionOutput]
     getPayoutOutputs = traverse (uncurry getPayoutOutput) $ Map.toList payToRoles
@@ -1325,14 +1399,12 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
         roleTokenOutputs <- getRoleTokenOutputs helperRoles
         marloweOutput <- getMarloweOutput
         payoutOutputs <- getPayoutOutputs
-        helperOutputs <- getHelperOutputs
         pure $
           concat
             [ maybeToList marloweOutput
             , getMerkleizedContinuationOutputs
             , roleTokenOutputs
             , payoutOutputs
-            , helperOutputs
             , getAddressOutputs
             ]
 
@@ -1365,19 +1437,30 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
 
     solveTxMintValue :: Either ConstraintError (C.TxMintValue C.BuildTx era)
     solveTxMintValue = case roleTokenConstraints of
-      MintRoleTokens _ witness distribution -> do
-        let assetIds = Map.keysSet distribution
-        let tokens = Map.fromSet (const 1) assetIds
-        policyIds <-
-          note ToCardanoError $
-            Set.fromAscList
-              <$> traverse (toCardanoPolicyId . Chain.policyId) (Set.toAscList assetIds)
-        value <- note ToCardanoError $ tokensToCardanoValue $ Chain.Tokens tokens
-        pure $
-          C.TxMintValue multiAssetSupported value $
-            C.BuildTxWith $
-              Map.fromSet (const witness) policyIds
+      MintRoleTokens _ witness (SendToScripts thread distribution) -> go witness (Just thread) case traverse demoteDestination distribution of
+        Nothing -> distribution
+        Just distribution' -> Map.mapKeysMonotonic ToAddress <$> distribution'
+      MintRoleTokens _ witness (SendToAddresses distribution) -> go witness Nothing (Map.mapKeysMonotonic ToAddress <$> distribution)
       _ -> pure C.TxMintNone
+      where
+        go witness thread distribution = do
+          let tokens = maybe id (flip Map.insert 1) thread $ sum <$> distribution
+          let assetIds = Map.keysSet tokens
+          policyIds <-
+            note ToCardanoError $
+              Set.fromAscList
+                <$> traverse (toCardanoPolicyId . Chain.policyId) (Set.toAscList assetIds)
+          value <- note ToCardanoError $ tokensToCardanoValue $ Chain.Tokens tokens
+          pure $
+            C.TxMintValue multiAssetSupported value $
+              C.BuildTxWith $
+                Map.fromSet (const witness) policyIds
+
+demoteDestination :: Map Destination Chain.Quantity -> Maybe (Map Chain.Address Chain.Quantity)
+demoteDestination dist =
+  Map.fromDistinctAscList <$> for (Map.toAscList dist) \case
+    (ToAddress addr, q) -> Just (addr, q)
+    _ -> Nothing
 
 isAda :: Chain.AssetId -> Bool
 isAda (Chain.AssetId "" "") = True

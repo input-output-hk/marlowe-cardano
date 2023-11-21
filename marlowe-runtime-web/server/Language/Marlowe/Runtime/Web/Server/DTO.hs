@@ -49,7 +49,6 @@ import Control.Error.Util (hush)
 import Control.Monad ((<=<))
 import Control.Monad.Except (MonadError, throwError)
 import Data.Aeson (Value (..))
-import Data.Bifunctor (bimap)
 import qualified Data.ByteString.Lazy as BSL
 import Data.Coerce (coerce)
 import Data.List.NonEmpty (NonEmpty (..))
@@ -90,6 +89,7 @@ import Data.Bitraversable (Bitraversable (..))
 import Data.Function (on)
 import Data.Kind (Type)
 import Data.List (groupBy)
+import qualified Data.Map.NonEmpty as NEMap
 import Data.Set (Set)
 import qualified Language.Marlowe.Protocol.Query.Types as Query
 import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType, fromCardanoTxId)
@@ -230,6 +230,15 @@ instance FromDTO Chain.Tokens where
       . Map.toAscList
       . fmap Map.toAscList
       . Web.unTokens
+
+instance HasDTO Chain.Quantity where
+  type DTO Chain.Quantity = Word64
+
+instance ToDTO Chain.Quantity where
+  toDTO = Chain.unQuantity
+
+instance FromDTO Chain.Quantity where
+  fromDTO = pure . Chain.Quantity
 
 instance HasDTO Chain.Assets where
   type DTO Chain.Assets = Web.Assets
@@ -791,30 +800,34 @@ instance HasDTO Tx.RoleTokensConfig where
 instance FromDTO Tx.RoleTokensConfig where
   fromDTO = \case
     Nothing -> pure Tx.RoleTokensNone
-    Just (Web.UsePolicy policy) -> Tx.RoleTokensUsePolicy <$> fromDTO policy
-    Just (Web.UsePolicyWithOpenRoles policy threadRoleName openRoleNames) -> Tx.RoleTokensUsePolicyWithOpenRoles <$> fromDTO policy <*> fromDTO threadRoleName <*> fromDTO openRoleNames
+    Just (Web.UsePolicy policy) -> Tx.RoleTokensUsePolicy <$> fromDTO policy <*> pure mempty
+    Just (Web.UsePolicyWithOpenRoles policy openRoleNames) ->
+      Tx.RoleTokensUsePolicy
+        <$> fromDTO policy
+        <*> (Map.fromList . fmap (,Map.singleton (Tx.ToScript OpenRoleScript) 1) <$> fromDTO openRoleNames)
     Just (Web.Mint mint) -> Tx.RoleTokensMint <$> fromDTO mint
 
 instance HasDTO Tx.Mint where
   type DTO Tx.Mint = Map Text Web.RoleTokenConfig
 
 instance FromDTO Tx.Mint where
-  fromDTO =
-    fmap Tx.mkMint
-      . traverse (sequence . bimap tokenNameToText convertConfig)
-      <=< toNonEmpty
-        . Map.toList
-    where
-      convertConfig (Web.RoleTokenConfig role metadata) =
-        flip (,) <$> fromDTO metadata <*> case role of
-          Web.ClosedRole address -> Tx.ToAddress <$> fromDTO address
-          Web.ThreadRole -> pure Tx.ToSelf
-          Web.OpenRole -> pure $ Tx.ToScript Tx.OpenRoleScript
+  fromDTO = fmap Tx.Mint . NEMap.nonEmptyMap <=< fromDTO
 
---    convertConfig = \case
---      (Web.RoleTokenConfig (Web.ClosedRole address) metadata) -> (,) <$> (Tx.ToAddress <$> fromDTO address) <*> fromDTO metadata
---      (Web.RoleTokenConfig Web.ThreadRole metadata) -> (Tx.ToSelf, ) <$> fromDTO metadata
---      (Web.RoleTokenConfig Web.OpenRole metadata) -> (Tx.ToScript Tx.OpenRoleScript, ) <$> fromDTO metadata
+instance HasDTO Tx.Destination where
+  type DTO Tx.Destination = Web.RoleTokenRecipient
+
+instance FromDTO Tx.Destination where
+  fromDTO = \case
+    Web.ClosedRole addr -> Tx.ToAddress <$> fromDTO addr
+    Web.OpenRole -> pure $ Tx.ToScript Tx.OpenRoleScript
+
+instance HasDTO Tx.MintRole where
+  type DTO Tx.MintRole = Web.RoleTokenConfig
+
+instance FromDTO Tx.MintRole where
+  fromDTO (Web.RoleTokenConfig recipients metadata) = do
+    recipients' <- NEMap.nonEmptyMap =<< fromDTO recipients
+    Tx.MintRole <$> fromDTO metadata <*> pure recipients'
 
 instance HasDTO Tx.RoleTokenMetadata where
   type DTO Tx.RoleTokenMetadata = Web.TokenMetadata

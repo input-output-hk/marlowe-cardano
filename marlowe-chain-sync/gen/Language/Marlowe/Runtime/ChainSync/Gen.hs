@@ -163,7 +163,7 @@ instance Arbitrary PolicyId where
   arbitrary = PolicyId . unScriptHash <$> arbitrary
 
 instance Arbitrary TokenName where
-  arbitrary = TokenName <$> genBytes
+  arbitrary = TokenName . BS.take 32 <$> genBytes
   shrink = genericShrink
 
 instance Arbitrary Datum where

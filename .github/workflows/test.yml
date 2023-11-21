@@ -63,7 +63,8 @@ jobs:
         run: |
           result/bin/marlowe-integration-tests --strict > ~/integration-tests.log
           echo $? > ~/integration-tests.status
-          exit $?
+          cat ~/integration-tests.log
+          exit $(cat ~/integration-tests.status)
         env:
           MARLOWE_RT_TEST_DB_HOST: localhost
           MARLOWE_RT_TEST_CLEANUP_DATABASE: "False"
@@ -77,8 +78,8 @@ jobs:
             /tmp/workspaces
             !/tmp/workspaces/**/*.socket
       - if: ${{ steps.cache-results.outputs.cache-hit == 'true' }}
-        name: Display cached test results
+        name: Display test results
         run: |
-          echo "Using cached test results. Test log:"
+          echo "Test log:"
           cat ~/integration-tests.log
           exit $(cat ~/integration-tests.status)

@@ -236,14 +236,18 @@ runCreateCommand TxCommand{walletAddresses, signingMethod, tagsFile, metadataFil
     minting' <- case roles of
       Nothing -> pure RoleTokensNone
       Just (MintSimple tokens) -> do
-        let toNFT addr = (ToAddress addr, Nothing)
-        pure $ RoleTokensMint $ mkMint $ fmap toNFT <$> tokens
-      Just (UseExistingPolicyId policyId) -> pure $ RoleTokensUsePolicy policyId
+        let toNFT (token, addr) = (token, Nothing, ToAddress addr, 1)
+        pure $ RoleTokensMint $ mkMint $ toNFT <$> tokens
+      Just (UseExistingPolicyId policyId) -> pure $ RoleTokensUsePolicy policyId mempty
       Just (MintConfig roleTokensConfigFilePath) -> do
         configMap <- ExceptT $ liftIO $ first RolesConfigFileDecodingError <$> A.eitherDecodeFileStrict roleTokensConfigFilePath
         case Map.toList configMap of
           [] -> throwE $ RolesConfigFileDecodingError "Empty role token config"
-          (x : xs) -> pure $ RoleTokensMint $ mkMint $ fmap (\RoleConfig{..} -> (ToAddress address, Just metadata)) <$> x :| xs
+          (x : xs) ->
+            pure $
+              RoleTokensMint $
+                mkMint $
+                  (\(token, RoleConfig{..}) -> (token, Just metadata, ToAddress address, 1)) <$> x :| xs
     (ContractId contractId, safetyErrors) <- run MarloweV1 minting'
     liftIO $
       if null safetyErrors
@@ -285,7 +289,7 @@ runCreateCommand TxCommand{walletAddresses, signingMethod, tagsFile, metadataFil
       ContractCreated era ContractCreatedInEra{contractId, txBody, safetyErrors} <-
         ExceptT $
           first CreateFailed
-            <$> createContract stakeCredential version walletAddresses rolesDistribution metadata minUTxO contract
+            <$> createContract stakeCredential version walletAddresses Nothing rolesDistribution metadata minUTxO contract
       case signingMethod of
         Manual outputFile -> do
           ExceptT @_ @_ @() $

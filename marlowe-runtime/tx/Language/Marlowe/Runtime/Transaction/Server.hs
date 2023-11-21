@@ -57,6 +57,7 @@ import Data.Foldable (foldl')
 import Data.List (find)
 import Data.Map (Map)
 import qualified Data.Map as Map
+import qualified Data.Map.NonEmpty as NEMap
 import Data.Maybe (fromJust, fromMaybe)
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -98,18 +99,19 @@ import Language.Marlowe.Runtime.Core.Api (
   fromChainPayoutDatum,
   withMarloweVersion,
  )
-import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts (..))
+import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript (..), MarloweScripts (..))
 import Language.Marlowe.Runtime.Transaction.Api (
   ApplyInputsError (..),
   ContractCreated (..),
   ContractCreatedInEra (..),
   CreateError (..),
-  Destination (ToSelf),
+  Destination (..),
   InputsApplied (..),
   InputsAppliedInEra (..),
   JobId (..),
   MarloweTxCommand (..),
   Mint (unMint),
+  MintRole (roleTokenRecipients),
   RoleTokensConfig (..),
   SubmitError (..),
   SubmitStatus (..),
@@ -226,7 +228,7 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                       (toLedgerEpochInfo eraHistory)
                       protocolParameters
               case command of
-                Create mStakeCredential version addresses roles metadata minAda contract ->
+                Create mStakeCredential version addresses threadRole roles metadata minAda contract ->
                   withEvent ExecCreate \_ ->
                     execCreate
                       mkRoleTokenMintingPolicy
@@ -241,6 +243,7 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                       mStakeCredential
                       version
                       addresses
+                      threadRole
                       roles
                       metadata
                       minAda
@@ -309,23 +312,28 @@ execCreate
   -> Maybe Chain.StakeCredential
   -> MarloweVersion v
   -> WalletAddresses
+  -> Maybe Chain.TokenName
   -> RoleTokensConfig
   -> MarloweTransactionMetadata
   -> Maybe Chain.Lovelace
   -> Either (Contract v) DatumHash
   -> NominalDiffTime
   -> m (ServerStCmd MarloweTxCommand Void CreateError (ContractCreated v) m ())
-execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts solveConstraints protocolParameters loadWalletContext loadHelpersContext networkId mStakeCredential version addresses roleTokens metadata optMinAda contract analysisTimeout = execExceptT do
+execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts solveConstraints protocolParameters loadWalletContext loadHelpersContext networkId mStakeCredential version addresses threadRole roleTokens metadata optMinAda contract analysisTimeout = execExceptT do
   referenceInputsSupported <- referenceInputsSupportedInEra (CreateEraUnsupported $ AnyCardanoEra era) era
   let adjustMinUtxo = mkAdjustMinimumUtxo referenceInputsSupported protocolParameters version
+  let threadRole' = fromMaybe "" threadRole
   walletContext <- lift $ loadWalletContext addresses
   (_, dummyState) <-
     except $
       initialMarloweState
         adjustMinUtxo
         version
-        roleTokens
-        "00000000000000000000000000000000000000000000000000000000"
+        ( Chain.AssetId "00000000000000000000000000000000000000000000000000000000" threadRole' <$ guard case roleTokens of
+            RoleTokensNone -> False
+            RoleTokensMint (unMint -> mint) -> any (NEMap.member (ToScript OpenRoleScript) . roleTokenRecipients) mint
+            RoleTokensUsePolicy _ distribution -> any (Map.member (ToScript OpenRoleScript)) distribution
+        )
         (fromMaybe 0 optMinAda)
         walletContext
   (contract', continuations) <- case contract of
@@ -350,6 +358,7 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
         referenceInputsSupported
         version
         walletContext
+        threadRole'
         roleTokens
         metadata
         minAda
@@ -389,15 +398,6 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
       ExceptT $
         loadHelpersContext version $
           Left (rolesCurrency, roleTokens)
-  threadRole <-
-    case roleTokens of
-      RoleTokensMint (unMint -> mint) ->
-        case Set.toList . Map.keysSet $ Map.filter ((== ToSelf) . fst) mint of
-          [] -> pure Nothing
-          [role] -> pure $ Just role
-          _ -> throwE RequiresSingleThreadToken
-      RoleTokensUsePolicyWithOpenRoles _ role _ -> pure $ Just role
-      _ -> pure Nothing
   let -- Fast analysis of safety: examines bounds for transactions.
       contractSafetyErrors = checkContract networkId roleTokens version contract' continuations
       limitAnalysisTime =

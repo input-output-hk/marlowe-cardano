@@ -241,6 +241,7 @@ library gen
     , marlowe-runtime:{marlowe-runtime, discovery-api, history-api, tx-api} ==0.0.5
     , marlowe-test ==0.2.0.0
     , network-uri >=2.6 && <3
+    , nonempty-containers ^>=0.3.4
     , QuickCheck >=2.14 && <3
     , quickcheck-instances ^>=0.3.29
 
@@ -520,8 +521,10 @@ library tx-api
     , marlowe-protocols ==0.2.1.0
     , marlowe-runtime:{marlowe-runtime, history-api} ==0.0.5
     , network-uri >=2.6 && <3
+    , nonempty-containers ^>=0.3.4
     , plutus-core ^>=1.5
     , plutus-ledger-api ^>=1.5
+    , semigroupoids ^>=5.3
     , text ^>=1.2
     , time >=1.9 && <2
 
@@ -560,6 +563,7 @@ library tx
     , marlowe-chain-sync:{marlowe-chain-sync, plutus-compat} ==0.0.5
     , marlowe-protocols ==0.2.1.0
     , marlowe-runtime:{marlowe-runtime, contract-api, history-api, tx-api} ==0.0.5
+    , nonempty-containers ^>=0.3.4
     , ouroboros-consensus ^>=0.7
     , ouroboros-network-api ^>=0.5
     , plutus-ledger-api ^>=1.5
@@ -869,6 +873,7 @@ test-suite marlowe-runtime-test
     , marlowe-runtime:{marlowe-runtime, contract, contract-api, discovery-api, gen, history-api, sync, sync-api, tx, tx-api} ==0.0.5
     , marlowe-test ==0.2.0.0
     , network-uri >=2.6 && <3
+    , nonempty-containers ^>=0.3.4
     , ouroboros-consensus ^>=0.7
     , plutus-ledger-api ^>=1.5
     , plutus-tx ^>=1.5
