@@ -31,11 +31,17 @@ let
 
         packages = {
 
-          hs-opentelemetry-sdk.preBuild = ''
-            ls -lah 
-            cat hs-opentelemetry-sdk.cabal
-            cat src/OpenTelemetry/Resource/Process/Detector.hs
-          '';
+          # hs-opentelemetry-sdk.preUnpack = ''
+          #   echo ${pkgs.diffutils}
+          #   export PATH=${lib.makeBinPath [ pkgs.git pkgs.diffutils ]}:$PATH
+          # '';
+
+          # hs-opentelemetry-sdk.patches = [../__tmp__/patch.patch];
+
+          # hs-opentelemetry-sdk.preBuild = ''
+          #   echo "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          #   ${pkgs.git}/bin/git status
+          # '';
 
           # Fix missing executables on the paths of the test runners. This is arguably
           # a bug, and the fix is a bit of a hack.

@@ -221,13 +221,22 @@ source-repository-package
   --sha256: 12pahjijkym93sm1qh9l9jw6wlv3vf46l73hpdwrm25rz195hi47
 
 
--- source-repository-package
---   type: git
---   location: https://github.com/zeme-wana/hs-opentelemetry
---   tag: 08946bdab9a7383f6cb26e211aaf2b74ae986fe9
---   --sha256: 0sipaqyh38ig1h1la8gnyk4kq6f7k87rl84va12fxqqvzmwkb349
---   subdir: sdk
---           api 
+source-repository-package
+  type: git
+  location: https://github.com/zeme-wana/hs-opentelemetry
+  tag: 8e7c0da1943872c25f8f4f906fe2f2cb6d2c83cb
+  --sha256: 0xs0i1cx6ncl3c1hkfdlnhwd0w8pizvfng47spklnzmssykgc8qq
+  subdir: sdk
+          api 
+          otlp
+          instrumentation/conduit
+          instrumentation/cloudflare
+          instrumentation/hspec
+          instrumentation/http-client
+          instrumentation/persistent
+          instrumentation/postgresql-simple
+          instrumentation/yesod
+          instrumentation/wai
 
 
--- nix-prefetch-git --rev 08946bdab9a7383f6cb26e211aaf2b74ae986fe9 https://www.github.com/zeme-wana/hs-opentelemetry
+-- nix-prefetch-git --rev 8e7c0da1943872c25f8f4f906fe2f2cb6d2c83cb https://www.github.com/zeme-wana/hs-opentelemetry
