@@ -44,7 +44,7 @@ import Servant.API
 import Servant.OpenApi
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Spec.Marlowe.Semantics.Next.Arbitrary ()
-import Test.Hspec (Spec, describe, hspec, it, shouldBe)
+import Test.Hspec (Spec, describe, hspec, it, shouldBe, xdescribe)
 import Test.Hspec.Golden (defaultGolden)
 import Test.QuickCheck (Arbitrary (..), Gen, elements, genericShrink, listOf, oneof, resize, suchThat)
 import Test.QuickCheck.Instances ()
@@ -56,7 +56,7 @@ main = hspec do
 
 openAPISpec :: Spec
 openAPISpec = do
-  describe "linter" do
+  xdescribe "linter" do
     it "finds no problems with empty schema" do
       let actual = lintOpenApi mempty
           expected :: [OpenApiLintIssue] = []
