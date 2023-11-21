@@ -2528,7 +2528,8 @@
                 "required": [
                     "tx_interval",
                     "tx_inputs"
-                ]
+                ],
+                "type": "object"
             },
             "TransactionOutput": {
                 "description": "Marlowe transaction output.",

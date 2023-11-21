@@ -665,6 +665,7 @@ instance ToSchema V1.TransactionInput where
             & description ?~ "Marlowe transaction input."
             & required .~ fmap fst [intervalSchema, inputsSchema]
             & properties .~ [intervalSchema, inputsSchema]
+            & type_ ?~ OpenApiObject
 
 instance ToSchema V1.TransactionOutput where
   declareNamedSchema _ =
