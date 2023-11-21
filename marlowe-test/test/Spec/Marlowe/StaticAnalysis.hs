@@ -15,7 +15,7 @@ module Spec.Marlowe.StaticAnalysis (
   tests,
 ) where
 
-import Test.Tasty (TestTree, defaultMain, testGroup)
+import Test.Tasty (TestTree, testGroup)
 
 import qualified Spec.Marlowe.StaticAnalysis.Regression (tests)
 
