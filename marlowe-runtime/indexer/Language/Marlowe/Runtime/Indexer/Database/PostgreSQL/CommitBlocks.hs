@@ -22,7 +22,7 @@ import Hasql.TH (resultlessStatement)
 import qualified Hasql.Transaction as H
 import Language.Marlowe.Core.V1.Plate (Extract (..))
 import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams (..))
-import Language.Marlowe.Core.V1.Semantics.Types (Party, State (..))
+import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId (..), Party, State (..))
 import Language.Marlowe.Runtime.ChainSync.Api
 import Language.Marlowe.Runtime.Core.Api (
   ContractId (..),
@@ -296,7 +296,13 @@ transactionScriptOutputToRows contractId blockHeader@BlockHeader{..} payoutValid
     txIx' = fromIntegral txIx
 
 stateParties :: State -> Set.Set Party
-stateParties State{..} = Set.fromList . fmap fst $ AMap.keys accounts
+stateParties State{..} =
+  Set.fromList $
+    (fst <$> AMap.keys accounts)
+      <> (choiceParty <$> AMap.keys choices)
+
+choiceParty :: ChoiceId -> Party
+choiceParty (ChoiceId _ party) = party
 
 type CreateTxOutRow =
   ( ByteString -- txId

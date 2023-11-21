@@ -33,7 +33,7 @@ import Hasql.TH (resultlessStatement, singletonStatement, vectorStatement)
 import qualified Hasql.Transaction as T
 import qualified Hasql.Transaction.Sessions as T
 import Language.Marlowe.Core.V1.Plate (Extract (..))
-import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party (..), State (..))
+import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId (..), Contract, Party (..), State (..))
 import Language.Marlowe.Core.V1.Semantics.Types.Address (serialiseAddress)
 import Language.Marlowe.Runtime.ChainSync.Api (SlotNo (..), TxId (..), TxOutRef (..), fromDatum)
 import Language.Marlowe.Runtime.Core.Api (ContractId (..))
@@ -131,7 +131,11 @@ toEntries ContractTxOut{..} =
   , nub $
       [ContractTxOutParty{..} | party <- Set.toList $ extractAll contract]
         <> [ContractTxOutParty{..} | party <- fmap fst . Map.keys $ accounts state]
+        <> [ContractTxOutParty{..} | party <- fmap choiceParty . Map.keys $ choices state]
   )
+
+choiceParty :: ChoiceId -> Party
+choiceParty (ChoiceId _ party) = party
 
 commitParties :: [ContractTxOutParty] -> T.Transaction ()
 commitParties parties =
