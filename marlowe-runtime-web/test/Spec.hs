@@ -67,7 +67,6 @@ openAPISpec = do
           expected :: [OpenApiLintIssue] = []
       actual `shouldBe` expected
 
-  xdescribe "linter" do
     describe "lookupType" do
       it "test 00" do
         let linterEnv :: OpenApiLintEnvironment
@@ -78,6 +77,8 @@ openAPISpec = do
             expected = []
         actual `shouldBe` expected
 
+  xdescribe "linter" do
+    describe "lookupType" do
       it "test 01" do
         let linterEnv :: OpenApiLintEnvironment
             linterEnv = OpenApiLintEnvironment mempty
