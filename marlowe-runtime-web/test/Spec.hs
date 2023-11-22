@@ -76,9 +76,6 @@ openAPISpec = do
             actual = runReader (lookupType input) linterEnv
             expected = []
         actual `shouldBe` expected
-
-  xdescribe "linter" do
-    describe "lookupType" do
       it "test 01" do
         let linterEnv :: OpenApiLintEnvironment
             linterEnv = OpenApiLintEnvironment mempty
@@ -137,6 +134,7 @@ openAPISpec = do
             expected = [OpenApiInteger, OpenApiString, OpenApiBoolean]
         actual `shouldBe` expected
 
+  xdescribe "linter" do
     describe "lookupFieldType" do
       it "test 00" do
         let linterEnv :: OpenApiLintEnvironment
