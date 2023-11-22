@@ -56,12 +56,12 @@ main = hspec do
 
 openAPISpec :: Spec
 openAPISpec = do
-  xdescribe "linter" do
-    it "finds no problems with empty schema" do
-      let actual = lintOpenApi mempty
-          expected :: [OpenApiLintIssue] = []
-      actual `shouldBe` expected
+  it "finds no problems with empty schema" do
+    let actual = lintOpenApi mempty
+        expected :: [OpenApiLintIssue] = []
+    actual `shouldBe` expected
 
+  xdescribe "linter" do
     it "finds no problems with the Marlowe Runtime OpenApi Schema" do
       let actual = lintOpenApi $ coerce openApi
           expected :: [OpenApiLintIssue] = []
