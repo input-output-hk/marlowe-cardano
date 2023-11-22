@@ -729,7 +729,7 @@ submitOptions network socket =
               )
         )
     <*> requiredSignersOpt
-    <*> (O.optional . O.option O.auto)
+    <*> (O.optional . O.option parseSecond)
       ( O.long "timeout"
           <> O.metavar "SECONDS"
           <> O.help "Also submit the transaction, and wait for confirmation."
