@@ -44,7 +44,7 @@ import Servant.API
 import Servant.OpenApi
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Spec.Marlowe.Semantics.Next.Arbitrary ()
-import Test.Hspec (Spec, describe, hspec, it, shouldBe, xdescribe)
+import Test.Hspec (Spec, describe, hspec, it, shouldBe)
 import Test.Hspec.Golden (defaultGolden)
 import Test.QuickCheck (Arbitrary (..), Gen, elements, genericShrink, listOf, oneof, resize, suchThat)
 import Test.QuickCheck.Instances ()
@@ -327,8 +327,6 @@ openAPISpec = do
             expected = []
         actual `shouldBe` expected
 
-  xdescribe "linter" do
-    describe "schemaRule1Check" do
       it "test 01" do
         let linterEnv :: OpenApiLintEnvironment
             linterEnv = OpenApiLintEnvironment mempty
