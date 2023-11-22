@@ -134,7 +134,6 @@ openAPISpec = do
             expected = [OpenApiInteger, OpenApiString, OpenApiBoolean]
         actual `shouldBe` expected
 
-  xdescribe "linter" do
     describe "lookupFieldType" do
       it "test 00" do
         let linterEnv :: OpenApiLintEnvironment
@@ -318,6 +317,7 @@ openAPISpec = do
             expected = Just [OpenApiString, OpenApiInteger, OpenApiBoolean]
         actual `shouldBe` expected
 
+  xdescribe "linter" do
     describe "schemaRule1Check" do
       it "test 00" do
         let linterEnv :: OpenApiLintEnvironment
