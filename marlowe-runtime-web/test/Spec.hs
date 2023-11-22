@@ -62,12 +62,12 @@ openAPISpec = do
           expected :: [OpenApiLintIssue] = []
       actual `shouldBe` expected
 
-  xdescribe "linter" do
     it "finds no problems with the Marlowe Runtime OpenApi Schema" do
       let actual = lintOpenApi $ coerce openApi
           expected :: [OpenApiLintIssue] = []
       actual `shouldBe` expected
 
+  xdescribe "linter" do
     describe "lookupType" do
       it "test 00" do
         let linterEnv :: OpenApiLintEnvironment
