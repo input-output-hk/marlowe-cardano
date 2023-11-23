@@ -80,7 +80,7 @@ emptyTrace :: IO ()
 emptyTrace = do
   let contract = Close
   result <- warningsTrace contract
-  assertBool "Empty trace" $ isRight result && isNothing (fromRight Nothing result)
+  assertBool "Close passes static analysis" $ isRight result && isNothing (fromRight Nothing result)
 
 nonPositivePay :: IO ()
 nonPositivePay = do
