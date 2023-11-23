@@ -280,7 +280,9 @@ data TxOutRef = TxOutRef
 instance FromHttpApiData TxOutRef where
   parseUrlPiece t = case splitOn "#" t of
     [idText, ixText] -> TxOutRef <$> parseUrlPiece idText <*> parseUrlPiece ixText
-    _ -> Left "Expected [a-fA-F0-9]{64}#[0-9]+"
+    _ -> case parseUrlPiece @TxId t of
+      Right _ -> Left "Expected [a-fA-F0-9]{64}#[0-9]+ (hint: do you need to URL-encode the '#' as \"%23\"?)"
+      _ -> Left "Expected [a-fA-F0-9]{64}#[0-9]+"
 
 instance ToHttpApiData TxOutRef where
   toUrlPiece TxOutRef{..} = toUrlPiece txId <> "#" <> toUrlPiece txIx
