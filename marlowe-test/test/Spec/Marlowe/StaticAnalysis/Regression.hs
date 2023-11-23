@@ -126,7 +126,7 @@ assertionFailed :: IO ()
 assertionFailed = do
   let contract = Let "x" (Constant 1) (Assert (ValueEQ (UseValue "x") (Constant 2)) Close)
   result <- getWarning contract
-  assertBool "Detect partial pay" $ maybe False isTransactionAssertionFailed result
+  assertBool "Detect wrong assertion" $ maybe False isTransactionAssertionFailed result
 
 -- The current UI drops in instrumentation in the form of assertions and then checks for AssertionFailed
 reachability :: IO ()
