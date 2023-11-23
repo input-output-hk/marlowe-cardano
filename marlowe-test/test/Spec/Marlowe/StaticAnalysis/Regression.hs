@@ -1,6 +1,6 @@
 -----------------------------------------------------------------------------
 --
--- Module      :  $Headers
+-- Module      :  Spec.Marlowe.StaticAnalysis.Regression
 -- License     :  Apache 2.0
 --
 -- Stability   :  Experimental
