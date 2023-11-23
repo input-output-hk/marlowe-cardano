@@ -15,9 +15,7 @@ module Spec.Marlowe.StaticAnalysis.Regression (
   tests,
 ) where
 
-import Control.Monad (
-  join,
- )
+import Control.Monad (join)
 import Language.Marlowe.Util (ada)
 import Test.Tasty (TestTree, testGroup)
 import Prelude
