@@ -156,7 +156,7 @@ reachability = do
               )
           )
   result <- getWarning contract
-  assertBool "Detect unreachable path" $ maybe False isTransactionAssertionFailed result
+  assertBool "Detect reachable path" $ maybe False isTransactionAssertionFailed result
   let contract2 =
         Let
           "x"
