@@ -61,9 +61,10 @@ isTransactionAssertionFailed _ = False
 
 getWarning :: Contract -> IO (Maybe TransactionWarning)
 getWarning contract =
-  warningsTrace contract <&> \res -> do
-    (_, _, t) <- join $ hush res
-    listToMaybe t
+  do res <- warningsTrace contract
+     return $ case res of
+                Right (Just (_, _, (w:_))) -> Just w
+                _ -> Nothing
 
 analysisWorks :: IO ()
 analysisWorks = do
