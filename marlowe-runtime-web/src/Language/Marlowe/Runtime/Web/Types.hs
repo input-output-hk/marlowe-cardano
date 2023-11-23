@@ -16,6 +16,8 @@ import Control.Applicative ((<|>))
 import Control.Lens hiding ((.=))
 import Control.Monad (unless, (<=<))
 import Data.Aeson
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.KeyMap as AMap
 import Data.Aeson.Text (encodeToLazyText)
 import Data.Aeson.Types (Parser, parseFail, toJSONKeyText)
 import Data.Bifunctor (first)
@@ -988,18 +990,27 @@ data TokenMetadata = TokenMetadata
   , mediaType :: Maybe Text
   , description :: Maybe Text
   , files :: Maybe [TokenMetadataFile]
+  , additionalProps :: Aeson.Object
   }
   deriving (Show, Eq, Ord, Generic)
 
 instance FromJSON TokenMetadata where
   parseJSON = withObject "TokenMetadata" \obj -> do
     imageJSON <- obj .: "image"
+    let additionalProps =
+          AMap.delete "name"
+            . AMap.delete "image"
+            . AMap.delete "mediaType"
+            . AMap.delete "description"
+            . AMap.delete "files"
+            $ obj
     TokenMetadata
       <$> obj .: "name"
       <*> uriFromJSON imageJSON
       <*> obj .:? "mediaType"
       <*> obj .:? "description"
       <*> obj .:? "files"
+      <*> pure additionalProps
 
 instance ToJSON TokenMetadata where
   toJSON TokenMetadata{..} =

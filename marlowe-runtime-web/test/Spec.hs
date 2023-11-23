@@ -579,6 +579,7 @@ instance Arbitrary Web.TokenMetadata where
       <*> arbitrary
       <*> arbitrary
       <*> arbitrary
+      <*> arbitrary
   shrink = genericShrink
 
 instance Arbitrary Web.TokenMetadataFile where

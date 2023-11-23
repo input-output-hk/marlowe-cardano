@@ -64,7 +64,15 @@ import qualified Cardano.Api as C
 import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import qualified Cardano.Api.Shelley as CS
 import Control.Applicative ((<|>))
-import Data.Aeson (ToJSON (..), Value (..), object, (.!=), (.:!), (.=))
+import Data.Aeson (
+  ToJSON (..),
+  Value (..),
+  object,
+  (.!=),
+  (.:?),
+  (.=),
+  (<?>),
+ )
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as Aeson.KeyMap
 import Data.Aeson.Types ((.:))
@@ -120,13 +128,18 @@ import Language.Marlowe.Runtime.History.Api (ExtractCreationError, ExtractMarlow
 import Network.HTTP.Media (MediaType)
 
 import Control.Monad (join)
+import qualified Data.Aeson.Key as Key
+import qualified Data.Aeson.KeyMap as Aeson
+import Data.Bifunctor (Bifunctor (..))
 import Data.Binary.Get (label)
 import Data.Function (on)
+import Data.Key (forWithKey)
 import Data.List (nub)
 import qualified Data.List.NonEmpty as NE
 import Data.Map.NonEmpty (NEMap)
 import qualified Data.Map.NonEmpty as NEMap
 import Data.Semigroup.Foldable (Foldable1 (foldMap1))
+import qualified Data.Set as Set
 import Network.Protocol.Codec.Spec (Variations (..), varyAp)
 import Network.Protocol.Handshake.Types (HasSignature (..))
 import Network.Protocol.Job.Types
@@ -187,6 +200,7 @@ data RoleTokenMetadata = RoleTokenMetadata
   , mediaType :: Maybe MediaType
   , description :: Maybe Text
   , files :: [NFTMetadataFile]
+  , additionalProperties :: Map Text Metadata
   }
   deriving stock (Show, Eq, Ord, Generic)
   deriving (Binary, Variations)
@@ -203,15 +217,26 @@ instance Aeson.ToJSON RoleTokenMetadata where
           <> case files of
             [] -> []
             _ -> [("files", toJSON files)]
+          <> Map.toList (Map.mapKeys Key.fromText $ toJSON <$> additionalProperties)
 
 instance Aeson.FromJSON RoleTokenMetadata where
-  parseJSON = Aeson.withObject "RoleTokenMetadata" \x ->
+  parseJSON = Aeson.withObject "RoleTokenMetadata" \x -> do
+    let additionalProperties =
+          Map.mapKeys Key.toText . Map.withoutKeys (Aeson.toMap x) $
+            Set.fromList
+              [ "name"
+              , "image"
+              , "mediaType"
+              , "description"
+              , "files"
+              ]
     RoleTokenMetadata
       <$> x .: "name"
       <*> (parseJsonUri =<< x .: "image")
-      <*> x .:! "mediaType"
-      <*> x .:! "description"
-      <*> x .:! "files" .!= []
+      <*> x .:? "mediaType"
+      <*> x .:? "description"
+      <*> x .:? "files" .!= []
+      <*> forWithKey additionalProperties \key value -> Aeson.parseJSON value <?> Aeson.Types.Key (Key.fromText key)
 
 decodeRoleTokenMetadata :: Metadata -> Maybe RoleTokenMetadata
 decodeRoleTokenMetadata = parseNFTMetadataDetails
@@ -227,6 +252,15 @@ decodeRoleTokenMetadata = parseNFTMetadataDetails
           parseManyFileDetails = parseMetadataList parseNFTMetadataFile
           parseFileDetails md = parseSingleFileDetails md <|> parseManyFileDetails md
           files = fromMaybe [] $ parseFileDetails =<< Map.lookup "files" textKeyMap
+          additionalProperties =
+            Map.withoutKeys textKeyMap $
+              Set.fromList
+                [ "name"
+                , "image"
+                , "mediaType"
+                , "description"
+                , "files"
+                ]
       Just $ RoleTokenMetadata{..}
 
     parseNFTMetadataFile :: Metadata -> Maybe NFTMetadataFile
@@ -263,6 +297,7 @@ encodeRoleTokenMetadata = encodeNFTMetadataDetails
               [(MetadataText "files", encodeNFTMetadataFile fileDetails)]
             fileDetails ->
               [(MetadataText "files", MetadataList $ fmap encodeNFTMetadataFile fileDetails)]
+          <> fmap (first MetadataText) (Map.toList additionalProperties)
 
     encodeNFTMetadataFile :: NFTMetadataFile -> Metadata
     encodeNFTMetadataFile NFTMetadataFile{..} =

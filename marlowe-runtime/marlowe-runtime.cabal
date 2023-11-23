@@ -517,6 +517,7 @@ library tx-api
     , cardano-api ^>=8.2
     , containers ^>=0.6.5
     , http-media ^>=0.8
+    , keys
     , marlowe-cardano ==0.2.0.0
     , marlowe-chain-sync ==0.0.5
     , marlowe-protocols ==0.2.1.0
