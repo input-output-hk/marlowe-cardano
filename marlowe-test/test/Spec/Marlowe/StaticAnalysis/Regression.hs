@@ -15,15 +15,11 @@ module Spec.Marlowe.StaticAnalysis.Regression (
   tests,
 ) where
 
-import Control.Monad (join)
 import Language.Marlowe.Util (ada)
 import Test.Tasty (TestTree, testGroup)
 import Prelude
 
-import Control.Error (listToMaybe)
-import Control.Error.Util (hush)
 import Data.Either (fromRight, isRight)
-import Data.Functor ((<&>))
 import Data.Maybe (isNothing)
 import Language.Marlowe (
   Action (..),
@@ -61,10 +57,11 @@ isTransactionAssertionFailed _ = False
 
 getWarning :: Contract -> IO (Maybe TransactionWarning)
 getWarning contract =
-  do res <- warningsTrace contract
-     return $ case res of
-                Right (Just (_, _, (w:_))) -> Just w
-                _ -> Nothing
+  do
+    res <- warningsTrace contract
+    return $ case res of
+      Right (Just (_, _, w : _)) -> Just w
+      _ -> Nothing
 
 analysisWorks :: IO ()
 analysisWorks = do
@@ -72,7 +69,7 @@ analysisWorks = do
         If
           (DivValue (Constant n) (Constant d) `ValueGE` Constant 5)
           Close
-          (Pay alicePk (Party alicePk) ada (Constant (-100)) Close)
+          (Pay alicePk (Party alicePk) Language.Marlowe.Util.ada (Constant (-100)) Close)
   result <- warningsTrace (contract 10 11)
   assertBool "Analyse a contract" $ isRight result
 
@@ -84,7 +81,7 @@ emptyTrace = do
 
 nonPositivePay :: IO ()
 nonPositivePay = do
-  let contract n = Pay alicePk (Party alicePk) ada (Constant n) Close
+  let contract n = Pay alicePk (Party alicePk) Language.Marlowe.Util.ada (Constant n) Close
   result <- getWarning $ contract (-100)
   assertBool "Detect negative pay" $ maybe False isTransactionNonPositivePay result
   result2 <- getWarning $ contract 0
@@ -92,7 +89,7 @@ nonPositivePay = do
 
 partialPay :: IO ()
 partialPay = do
-  let contract = Pay alicePk (Party alicePk) ada (Constant 100) Close
+  let contract = Pay alicePk (Party alicePk) Language.Marlowe.Util.ada (Constant 100) Close
   result <- getWarning contract
   assertBool "Detect partial pay" $ maybe False isTransactionPartialPay result
 
@@ -189,7 +186,10 @@ fundsOnClose :: IO ()
 fundsOnClose = do
   let contract =
         When
-          [Case (Deposit alicePk alicePk ada (Constant 100)) (Assert (ValueEQ (AvailableMoney alicePk ada) (Constant 0)) Close)]
+          [ Case
+              (Deposit alicePk alicePk Language.Marlowe.Util.ada (Constant 100))
+              (Assert (ValueEQ (AvailableMoney alicePk Language.Marlowe.Util.ada) (Constant 0)) Close)
+          ]
           1699974289397
           Close
   result <- getWarning contract
