@@ -83,11 +83,10 @@ emptyTrace = do
 
 nonPositivePay :: IO ()
 nonPositivePay = do
-  let contract = Pay alicePk (Party alicePk) ada (Constant (-100)) Close
-  result <- getWarning contract
+  let contract n = Pay alicePk (Party alicePk) ada (Constant n) Close
+  result <- getWarning $ contract (-100)
   assertBool "Detect negative pay" $ maybe False isTransactionNonPositivePay result
-  let contract2 = Pay alicePk (Party alicePk) ada (Constant 0) Close
-  result2 <- getWarning contract2
+  result2 <- getWarning $ contract 0
   assertBool "Detect zero pay" $ maybe False isTransactionNonPositivePay result2
 
 partialPay :: IO ()
