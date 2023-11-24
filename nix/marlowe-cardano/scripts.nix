@@ -25,7 +25,7 @@ in
   refresh-validators = ''
     cd $(git rev-parse --show-toplevel)
     mkdir -p marlowe/scripts
-    cp ${inputs.marlowe-plutus.packages.validators}/* marlowe/scripts
+    cp ${inputs.marlowe-plutus.packages.validators}/*.plutus marlowe/scripts/
     chmod u+w marlowe/scripts/*
   '';
 
