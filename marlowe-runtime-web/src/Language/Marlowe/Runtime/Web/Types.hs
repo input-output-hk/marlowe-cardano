@@ -1014,13 +1014,14 @@ instance FromJSON TokenMetadata where
 
 instance ToJSON TokenMetadata where
   toJSON TokenMetadata{..} =
-    object
-      [ ("name", toJSON name)
-      , ("image", uriToJSON image)
-      , ("mediaType", toJSON mediaType)
-      , ("description", toJSON description)
-      , ("files", toJSON files)
+    object $
+      [ "name" .= name
+      , "image" .= uriToJSON image
+      , "mediaType" .= mediaType
+      , "description" .= description
+      , "files" .= files
       ]
+        <> AMap.toList additionalProps
 
 instance ToSchema TokenMetadata where
   declareNamedSchema _ = do

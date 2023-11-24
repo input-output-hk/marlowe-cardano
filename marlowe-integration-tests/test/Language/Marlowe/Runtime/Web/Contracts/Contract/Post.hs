@@ -1,25 +1,43 @@
+{-# LANGUAGE GADTs #-}
+
 module Language.Marlowe.Runtime.Web.Contracts.Contract.Post where
 
 import Control.Monad.IO.Class (MonadIO (liftIO))
 
+import Cardano.Api (
+  AsType (..),
+  TxBody (..),
+  TxBodyContent (..),
+  TxMetadata (TxMetadata),
+  TxMetadataInEra (..),
+  TxMetadataSupportedInEra (TxMetadataInBabbageEra),
+  TxMetadataValue (..),
+  deserialiseFromTextEnvelope,
+ )
+import Data.Aeson (Value (String))
+import qualified Data.Aeson.Key as Key
+import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Functor (void)
 import qualified Data.Map.Strict as Map
+import Data.Maybe (fromJust)
 import qualified Data.Set as Set
 import Data.Text (Text)
 import Data.Time (getCurrentTime, secondsToNominalDiffTime)
+import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.Integration.Common
 import Language.Marlowe.Runtime.Integration.StandardContract (standardContract)
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses (..))
-import Language.Marlowe.Runtime.Web (ContractOrSourceId (..))
+import Language.Marlowe.Runtime.Web (ContractOrSourceId (..), CreateTxEnvelope (..))
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Client (postContract)
-import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO (toDTO))
-import Test.Hspec (Spec, describe, it)
+import Language.Marlowe.Runtime.Web.Server.DTO (FromDTO (..), ToDTO (toDTO))
+import Network.URI (parseURI)
+import Test.Hspec (Spec, describe, it, shouldBe)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
 spec :: Spec
-spec = describe "Valid POST /contracts" do
+spec = describe "POST /contracts" do
   it "returns the contract header"
     . specWithRolesConfig Nothing
     $ Web.Mint . Map.singleton "PartyA" . flip Web.RoleTokenConfig Nothing . flip Map.singleton 1 . Web.ClosedRole
@@ -30,6 +48,7 @@ spec = describe "Valid POST /contracts" do
     $ Map.fromList
       [ ("PartyA", Web.RoleTokenConfig (Map.singleton Web.OpenRole 1) Nothing)
       ]
+  bugPLT8712
 
 specWithRolesConfig :: Maybe Text -> (Web.Address -> Web.RolesConfig) -> IO ()
 specWithRolesConfig threadTokenName roles =
@@ -68,3 +87,68 @@ specWithRolesConfig threadTokenName roles =
     case result of
       Left _ -> fail $ "Expected 200 response code - got " <> show result
       Right _ -> pure ()
+
+bugPLT8712 :: Spec
+bugPLT8712 = do
+  describe "[BUG] PLT-8712: Runtime drops field from minting metadata" do
+    it "Marlowe Runtime supports additional properties" $ withLocalMarloweRuntime $ runIntegrationTest do
+      wallet <- getGenesisWallet 0
+      either (fail . show) pure =<< runWebClient do
+        let walletAddress = toDTO $ changeAddress $ addresses wallet
+        CreateTxEnvelope{..} <-
+          postContract
+            Nothing
+            walletAddress
+            Nothing
+            Nothing
+            Web.PostContractsRequest
+              { metadata = mempty
+              , version = Web.V1
+              , threadTokenName = Nothing
+              , roles =
+                  Just $
+                    Web.Mint $
+                      Map.singleton "Test Role" $
+                        Web.RoleTokenConfig
+                          { recipients = Map.singleton Web.OpenRole 1
+                          , metadata =
+                              Just
+                                Web.TokenMetadata
+                                  { name = "Name"
+                                  , image = fromJust $ parseURI "https://example.com"
+                                  , mediaType = Just "image/png"
+                                  , description = Just "Test description"
+                                  , files = Nothing
+                                  , additionalProps =
+                                      KeyMap.fromList
+                                        [ (Key.fromText "url", String "https://example.com")
+                                        ]
+                                  }
+                          }
+              , contract = ContractOrSourceId $ Left V1.Close
+              , minUTxODeposit = Nothing
+              , tags = mempty
+              }
+        liftIO do
+          textEnvelope <- expectJust "Failed to convert text envelope" $ fromDTO txEnvelope
+          TxBody TxBodyContent{..} <-
+            expectRight "Failed to deserialise tx body" $
+              deserialiseFromTextEnvelope (AsTxBody AsBabbageEra) textEnvelope
+          case txMetadata of
+            TxMetadataNone -> fail "expected metadata"
+            TxMetadataInEra TxMetadataInBabbageEra (TxMetadata m) -> do
+              TxMetaMap [(TxMetaBytes _, tokenMetadata)] <- expectJust "Failed to lookup metadata" $ Map.lookup 721 m
+              let expected =
+                    TxMetaMap
+                      [
+                        ( TxMetaBytes "Test Role"
+                        , TxMetaMap
+                            [ (TxMetaText "name", TxMetaText "Name")
+                            , (TxMetaText "image", TxMetaList [TxMetaText "https://example.com"])
+                            , (TxMetaText "mediaType", TxMetaText "image/png")
+                            , (TxMetaText "description", TxMetaList [TxMetaText "Test description"])
+                            , (TxMetaText "url", TxMetaText "https://example.com")
+                            ]
+                        )
+                      ]
+              tokenMetadata `shouldBe` expected
