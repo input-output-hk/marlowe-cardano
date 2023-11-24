@@ -5093,15 +5093,16 @@
           "marlowe-plutus",
           "nixpkgs"
         ],
+        "nixpkgs-stable": "nixpkgs-stable_3",
         "pre-commit-hooks-nix": "pre-commit-hooks-nix_2",
         "sphinxcontrib-haddock": "sphinxcontrib-haddock_2"
       },
       "locked": {
-        "lastModified": 1698059777,
-        "narHash": "sha256-0e7HvCbEridOf2yxjVhiZLVSl6dNoWlxd/fq1/Mtexg=",
+        "lastModified": 1699537966,
+        "narHash": "sha256-MGGza+vZDRjKj31WhQJDt7CqVVdrFkgkXIcqr0gDiU8=",
         "owner": "input-output-hk",
         "repo": "iogx",
-        "rev": "a504383df278b9160b673b1ae9e5c483b155352c",
+        "rev": "c6ce7f034717ed0c0e9c6dd8fa2f898a15439627",
         "type": "github"
       },
       "original": {
@@ -5568,16 +5569,15 @@
         ]
       },
       "locked": {
-        "lastModified": 1700187187,
-        "narHash": "sha256-tms4xC4zpSrH6bM5TJppiaTUPb03QmcfyG5jVnqpXIk=",
+        "lastModified": 1700840588,
+        "narHash": "sha256-la++iMMrXETGXekYl6BGi+/t0lL/8bUFWiHdFtlOyXY=",
         "owner": "input-output-hk",
         "repo": "marlowe-plutus",
-        "rev": "4a1396deea2322c78ae337085ffce296935d9430",
+        "rev": "45e1da07a6152b2c0220d9f333f2f2a1b7c48d20",
         "type": "github"
       },
       "original": {
         "owner": "input-output-hk",
-        "ref": "PLT-8148",
         "repo": "marlowe-plutus",
         "type": "github"
       }
@@ -7256,6 +7256,22 @@
       }
     },
     "nixpkgs-stable_3": {
+      "locked": {
+        "lastModified": 1690680713,
+        "narHash": "sha256-NXCWA8N+GfSQyoN7ZNiOgq/nDJKOp5/BHEpiZP8sUZw=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "b81af66deb21f73a70c67e5ea189568af53b1e8c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "b81af66deb21f73a70c67e5ea189568af53b1e8c",
+        "type": "github"
+      }
+    },
+    "nixpkgs-stable_4": {
       "locked": {
         "lastModified": 1685801374,
         "narHash": "sha256-otaSUoFEMM+LjBI1XL/xGB5ao6IwnZOXc47qhIgJe8U=",
@@ -9142,7 +9158,7 @@
         "flake-utils": "flake-utils_38",
         "gitignore": "gitignore_2",
         "nixpkgs": "nixpkgs_71",
-        "nixpkgs-stable": "nixpkgs-stable_3"
+        "nixpkgs-stable": "nixpkgs-stable_4"
       },
       "locked": {
         "lastModified": 1696846637,
