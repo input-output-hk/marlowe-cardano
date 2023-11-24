@@ -33,6 +33,7 @@ import Data.OpenApi (
   HasAdditionalProperties (..),
   HasType (..),
   NamedSchema (..),
+  OpenApiItems (..),
   OpenApiType (..),
   Reference (..),
   Referenced (..),
@@ -502,11 +503,39 @@ newtype Metadata = Metadata {unMetadata :: Value}
   deriving newtype (ToJSON, FromJSON)
 
 instance ToSchema Metadata where
-  declareNamedSchema _ =
+  declareNamedSchema _ = do
+    integerSchema <- declareSchemaRef $ Proxy @Integer
+    let metadataSchema = Ref $ Reference "Metadata"
+        binaryTextSchema =
+          mempty
+            & OpenApi.description ?~ "Hex-encoded binary data of up to 64 bytes"
+            & OpenApi.type_ ?~ OpenApiString
+            & OpenApi.pattern ?~ "0x[A-Fa-f0-9]{0,128}"
+        plainTextSchema =
+          mempty
+            & OpenApi.description ?~ "Text data of up to 64 characters"
+            & OpenApi.type_ ?~ OpenApiString
+        metadataArraySchema =
+          mempty
+            & OpenApi.description ?~ "Array of metadata values"
+            & OpenApi.type_ ?~ OpenApiArray
+            & OpenApi.items ?~ OpenApiItemsObject metadataSchema
+        metadataObjectSchema =
+          mempty
+            & OpenApi.description ?~ "Object of metadata values"
+            & OpenApi.type_ ?~ OpenApiObject
+            & OpenApi.additionalProperties ?~ AdditionalPropertiesSchema metadataSchema
     pure $
       NamedSchema (Just "Metadata") $
         mempty
-          & OpenApi.description ?~ "An arbitrary JSON value for storage in a metadata key"
+          & OpenApi.description ?~ "Arbitrary JSON-encoded transaction metadata"
+          & oneOf
+            ?~ [ integerSchema
+               , Inline binaryTextSchema
+               , Inline plainTextSchema
+               , Inline metadataArraySchema
+               , Inline metadataObjectSchema
+               ]
 
 data TxHeader = TxHeader
   { contractId :: TxOutRef
@@ -1027,6 +1056,7 @@ instance ToSchema TokenMetadata where
   declareNamedSchema _ = do
     stringSchema <- declareSchemaRef (Proxy @Text)
     filesSchema <- declareSchemaRef (Proxy @[TokenMetadataFile])
+    metadataSchema <- declareSchemaRef (Proxy @Metadata)
     pure $
       NamedSchema (Just "TokenMetadata") $
         mempty
@@ -1040,6 +1070,7 @@ instance ToSchema TokenMetadata where
                , ("description", stringSchema)
                , ("files", filesSchema)
                ]
+          & additionalProperties ?~ AdditionalPropertiesSchema metadataSchema
 
 data TokenMetadataFile = TokenMetadataFile
   { name :: Text
