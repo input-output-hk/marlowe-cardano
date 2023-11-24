@@ -281,7 +281,7 @@ checkTransactions
   -> MarloweContext v
   -> HelpersContext
   -> Chain.PolicyId
-  -> Maybe Chain.TokenName
+  -> Chain.TokenName
   -> Chain.Address
   -> Chain.Assets
   -> (Chain.Assets -> Chain.Assets)
@@ -325,7 +325,7 @@ checkTransaction
   -> MarloweContext v
   -> HelpersContext
   -> Chain.PolicyId
-  -> Maybe Chain.TokenName
+  -> Chain.TokenName
   -> Chain.Address
   -> (Chain.Assets -> Chain.Assets)
   -> Transaction (S.Set Plutus.TokenName)
@@ -390,7 +390,7 @@ checkTransaction protocolParameters era version@MarloweV1 marloweContext@Marlowe
 -- | Create a helpers context for the specified helper roles.
 helpersForRoles
   :: Chain.PolicyId
-  -> Maybe Chain.TokenName
+  -> Chain.TokenName
   -> S.Set Plutus.TokenName
   -> (Chain.Assets -> Chain.Assets)
   -> HelpersContext
@@ -412,7 +412,7 @@ helpersForRoles policyId threadRole helperRoles adjustMinUtxo helpersContext =
                   . C.unsafeHashableScriptData
                   . Chain.toCardanoScriptData
                   <$> datum
-              datum = Chain.B . Chain.unTokenName <$> threadRole
+              datum = Just $ Chain.B $ Chain.unTokenName threadRole
               helperTransactionOutput = Chain.TransactionOutput{..}
            in HelperScriptState helperScriptInfo $ Just (helperTxOutRef, helperTransactionOutput)
         )

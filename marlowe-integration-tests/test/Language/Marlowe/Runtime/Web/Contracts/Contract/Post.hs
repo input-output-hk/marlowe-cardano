@@ -22,8 +22,9 @@ import qualified Data.Map.Strict as Map
 import Data.Maybe (fromJust)
 import qualified Data.Set as Set
 import Data.Text (Text)
-import Data.Time (getCurrentTime, secondsToNominalDiffTime)
+import Data.Time (addUTCTime, getCurrentTime, secondsToNominalDiffTime)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
+import Language.Marlowe.Runtime.Integration.ApplyInputs (utcTimeToPOSIXTime)
 import Language.Marlowe.Runtime.Integration.Common
 import Language.Marlowe.Runtime.Integration.StandardContract (standardContract)
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
@@ -49,6 +50,7 @@ spec = describe "POST /contracts" do
       [ ("PartyA", Web.RoleTokenConfig (Map.singleton Web.OpenRole 1) Nothing)
       ]
   bugPLT8712
+  bugPLT8713
 
 specWithRolesConfig :: Maybe Text -> (Web.Address -> Web.RolesConfig) -> IO ()
 specWithRolesConfig threadTokenName roles =
@@ -152,3 +154,41 @@ bugPLT8712 = do
                         )
                       ]
               tokenMetadata `shouldBe` expected
+
+bugPLT8713 :: Spec
+bugPLT8713 = do
+  describe "[BUG] PLT-8713: Open-role input application fails when contract has stake address" do
+    it "Marlowe Runtime supports stake addresses for open role contracts" $ withLocalMarloweRuntime $ runIntegrationTest do
+      wallet <- getGenesisWallet 0
+      now <- liftIO getCurrentTime
+      either (fail . show) pure =<< runWebClient do
+        let walletAddress = toDTO $ changeAddress $ addresses wallet
+        let contract =
+              V1.When
+                [ V1.Case (V1.Deposit (V1.Role "Test Role") (V1.Role "Test Role") (V1.Token "" "") (V1.Constant 1)) V1.Close
+                ]
+                (utcTimeToPOSIXTime $ addUTCTime (secondsToNominalDiffTime 1000) now)
+                V1.Close
+        CreateTxEnvelope{..} <-
+          postContract
+            (Just $ Web.StakeAddress "stake_test1uqx07tvec6fuff78s7v456fx94ukmpvh4x6tynjhmqwta8cg0kx6f")
+            walletAddress
+            Nothing
+            Nothing
+            Web.PostContractsRequest
+              { metadata = mempty
+              , version = Web.V1
+              , threadTokenName = Nothing
+              , roles =
+                  Just $
+                    Web.Mint $
+                      Map.singleton "Test Role" $
+                        Web.RoleTokenConfig
+                          { recipients = Map.singleton Web.OpenRole 1
+                          , metadata = Nothing
+                          }
+              , contract = ContractOrSourceId $ Left contract
+              , minUTxODeposit = Nothing
+              , tags = mempty
+              }
+        liftIO $ safetyErrors `shouldBe` []

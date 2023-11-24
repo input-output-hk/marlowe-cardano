@@ -416,7 +416,7 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
               marloweContext
               helpersContext
               rolesCurrency
-              threadRole
+              threadRole'
               (changeAddress addresses)
               assets
               adjustMinUtxo
