@@ -192,6 +192,8 @@ test-suite marlowe-test
     Spec.Marlowe.Serialization.CoreJson
     Spec.Marlowe.Serialization.ExtendedJson
     Spec.Marlowe.Service.Isabelle
+    Spec.Marlowe.StaticAnalysis
+    Spec.Marlowe.StaticAnalysis.Regression
 
   build-depends:
     , aeson >=2 && <3
