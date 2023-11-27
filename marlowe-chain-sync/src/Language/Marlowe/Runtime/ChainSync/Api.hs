@@ -41,7 +41,8 @@ import qualified Cardano.Ledger.BaseTypes as Base
 import Cardano.Ledger.Credential (ptrCertIx, ptrSlotNo, ptrTxIx)
 import Cardano.Ledger.Slot (EpochSize)
 import Codec.Serialise (deserialiseOrFail, serialise)
-import Control.Monad (guard, join, (<=<), (>=>))
+import Control.Applicative ((<|>))
+import Control.Monad (guard, join, when, (<=<), (>=>))
 import Data.Aeson (
   FromJSON (..),
   FromJSONKey (..),
@@ -55,23 +56,27 @@ import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Aeson.Text (encodeToLazyText)
-import Data.Aeson.Types (parseFail, toJSONKeyText)
+import Data.Aeson.Types (Parser, parseFail, toJSONKeyText)
+import qualified Data.Attoparsec.ByteString.Char8 as Atto
 import Data.Bifunctor (Bifunctor (..), bimap)
 import Data.Binary (Binary (..), get, getWord8, put, putWord8)
 import Data.ByteString (ByteString)
+import qualified Data.ByteString as BS
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
-import qualified Data.ByteString.Char8 as BS
+import qualified Data.ByteString.Char8 as BSC
 import Data.Foldable (Foldable (..))
 import Data.Function (on)
 import Data.Functor (($>))
 import Data.Hashable (Hashable)
+import Data.List (sortOn)
 import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (fromJust, mapMaybe)
+import Data.Maybe (fromJust, fromMaybe, mapMaybe)
 import Data.Proxy (Proxy (..))
 import qualified Data.SOP.Counting as Counting
 import Data.SOP.Strict (K (..), NP (..))
+import qualified Data.Scientific as Scientific
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Set.NonEmpty (NESet)
@@ -80,6 +85,7 @@ import Data.String (IsString (..))
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
+import qualified Data.Text.Encoding as T
 import qualified Data.Text.Lazy as TL
 import Data.Time (UTCTime (..), diffTimeToPicoseconds, picosecondsToDiffTime)
 import Data.Time.Calendar.OrdinalDate (fromOrdinalDateValid, toOrdinalDate)
@@ -244,6 +250,72 @@ instance Variations Metadata where
 
 instance ToJSON Metadata where
   toJSON = metadataValueToJsonNoSchema . toCardanoMetadata
+
+-- TODO replace with metadataValueFromJsonNoSchema when it is exported!
+instance FromJSON Metadata where
+  parseJSON = go
+    where
+      go
+        :: Aeson.Value
+        -> Parser Metadata
+      go Aeson.Null = fail "Null not allowed"
+      go Aeson.Bool{} = fail "Booleans not allowed"
+      go (Aeson.Number d) =
+        case Scientific.floatingOrInteger d :: Either Double Integer of
+          Left _ -> fail "not an integer"
+          Right n -> pure $ MetadataNumber n
+      go (Aeson.String s)
+        | Just s' <- T.stripPrefix "0x" s
+        , let bs' = T.encodeUtf8 s'
+        , Right bs <- decodeBase16 bs'
+        , not (BSC.any (\c -> c >= 'A' && c <= 'F') bs') =
+            pure $ MetadataBytes bs
+      go (Aeson.String s) = pure $ MetadataText s
+      go (Aeson.Array vs) = fmap MetadataList . traverse go $ Vector.toList vs
+      go (Aeson.Object kvs) =
+        fmap MetadataMap
+          . traverse (\(k, v) -> (,) (parseKey k) <$> go v)
+          . sortOn fst
+          . fmap (first Key.toText)
+          $ KeyMap.toList kvs
+
+      parseKey :: Text -> Metadata
+      parseKey s =
+        fromMaybe (MetadataText s) $
+          parseAll
+            ( (MetadataNumber <$> pSigned <* Atto.endOfInput)
+                <|> (MetadataBytes <$> pBytes <* Atto.endOfInput)
+            )
+            s
+
+      parseAll :: Atto.Parser a -> Text -> Maybe a
+      parseAll p =
+        either (const Nothing) Just
+          . Atto.parseOnly p
+          . T.encodeUtf8
+
+      pUnsigned :: Atto.Parser Integer
+      pUnsigned = do
+        bs <- Atto.takeWhile1 Atto.isDigit
+        -- no redundant leading 0s allowed, or we cannot round-trip properly
+        guard (not (BS.length bs > 1 && BSC.head bs == '0'))
+        return $! BS.foldl' step 0 bs
+        where
+          step a w = a * 10 + fromIntegral (w - 48)
+
+      pSigned :: Atto.Parser Integer
+      pSigned = Atto.signed pUnsigned
+
+      pBytes :: Atto.Parser ByteString
+      pBytes = do
+        _ <- Atto.string "0x"
+        remaining <- Atto.takeByteString
+        when (BSC.any hexUpper remaining) $ fail ("Unexpected uppercase hex characters in " <> show remaining)
+        case decodeBase16 remaining of
+          Right bs -> return bs
+          _ -> fail ("Expecting base16 encoded string, found: " <> show remaining)
+        where
+          hexUpper c = c >= 'A' && c <= 'F'
 
 toCardanoMetadata :: Metadata -> C.TxMetadataValue
 toCardanoMetadata = \case
@@ -553,16 +625,16 @@ newtype TokenName = TokenName {unTokenName :: ByteString}
   deriving newtype (Show, IsString, Binary, Variations, Hashable)
 
 instance ToJSONKey TokenName where
-  toJSONKey = toJSONKeyText $ T.pack . BS.unpack . unTokenName
+  toJSONKey = toJSONKeyText $ T.pack . BSC.unpack . unTokenName
 
 instance ToJSON TokenName where
-  toJSON = Aeson.String . T.pack . BS.unpack . unTokenName
+  toJSON = Aeson.String . T.pack . BSC.unpack . unTokenName
 
 instance FromJSON TokenName where
-  parseJSON = Aeson.withText "TokenName" (pure . TokenName . BS.pack . T.unpack)
+  parseJSON = Aeson.withText "TokenName" (pure . TokenName . BSC.pack . T.unpack)
 
 instance FromJSONKey TokenName where
-  fromJSONKey = FromJSONKeyText (TokenName . BS.pack . T.unpack)
+  fromJSONKey = FromJSONKeyText (TokenName . BSC.pack . T.unpack)
 
 newtype Quantity = Quantity {unQuantity :: Word64}
   deriving stock (Show, Eq, Ord, Generic)

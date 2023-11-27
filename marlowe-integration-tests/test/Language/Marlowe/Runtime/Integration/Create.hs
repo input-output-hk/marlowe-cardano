@@ -399,6 +399,7 @@ testNftMetadata =
     , mediaType = Just "image/png"
     , files = []
     , description = Nothing
+    , additionalProperties = mempty
     }
 
 mkMarloweTxMetadata :: MetadataCase -> MarloweTransactionMetadata

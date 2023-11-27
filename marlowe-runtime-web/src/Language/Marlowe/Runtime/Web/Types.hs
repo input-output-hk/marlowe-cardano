@@ -16,6 +16,8 @@ import Control.Applicative ((<|>))
 import Control.Lens hiding ((.=))
 import Control.Monad (unless, (<=<))
 import Data.Aeson
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.KeyMap as AMap
 import Data.Aeson.Text (encodeToLazyText)
 import Data.Aeson.Types (Parser, parseFail, toJSONKeyText)
 import Data.Bifunctor (first)
@@ -31,6 +33,7 @@ import Data.OpenApi (
   HasAdditionalProperties (..),
   HasType (..),
   NamedSchema (..),
+  OpenApiItems (..),
   OpenApiType (..),
   Reference (..),
   Referenced (..),
@@ -500,11 +503,39 @@ newtype Metadata = Metadata {unMetadata :: Value}
   deriving newtype (ToJSON, FromJSON)
 
 instance ToSchema Metadata where
-  declareNamedSchema _ =
+  declareNamedSchema _ = do
+    integerSchema <- declareSchemaRef $ Proxy @Integer
+    let metadataSchema = Ref $ Reference "Metadata"
+        binaryTextSchema =
+          mempty
+            & OpenApi.description ?~ "Hex-encoded binary data of up to 64 bytes"
+            & OpenApi.type_ ?~ OpenApiString
+            & OpenApi.pattern ?~ "0x[A-Fa-f0-9]{0,128}"
+        plainTextSchema =
+          mempty
+            & OpenApi.description ?~ "Text data of up to 64 characters"
+            & OpenApi.type_ ?~ OpenApiString
+        metadataArraySchema =
+          mempty
+            & OpenApi.description ?~ "Array of metadata values"
+            & OpenApi.type_ ?~ OpenApiArray
+            & OpenApi.items ?~ OpenApiItemsObject metadataSchema
+        metadataObjectSchema =
+          mempty
+            & OpenApi.description ?~ "Object of metadata values"
+            & OpenApi.type_ ?~ OpenApiObject
+            & OpenApi.additionalProperties ?~ AdditionalPropertiesSchema metadataSchema
     pure $
       NamedSchema (Just "Metadata") $
         mempty
-          & OpenApi.description ?~ "An arbitrary JSON value for storage in a metadata key"
+          & OpenApi.description ?~ "Arbitrary JSON-encoded transaction metadata"
+          & oneOf
+            ?~ [ integerSchema
+               , Inline binaryTextSchema
+               , Inline plainTextSchema
+               , Inline metadataArraySchema
+               , Inline metadataObjectSchema
+               ]
 
 data TxHeader = TxHeader
   { contractId :: TxOutRef
@@ -988,33 +1019,44 @@ data TokenMetadata = TokenMetadata
   , mediaType :: Maybe Text
   , description :: Maybe Text
   , files :: Maybe [TokenMetadataFile]
+  , additionalProps :: Aeson.Object
   }
   deriving (Show, Eq, Ord, Generic)
 
 instance FromJSON TokenMetadata where
   parseJSON = withObject "TokenMetadata" \obj -> do
     imageJSON <- obj .: "image"
+    let additionalProps =
+          AMap.delete "name"
+            . AMap.delete "image"
+            . AMap.delete "mediaType"
+            . AMap.delete "description"
+            . AMap.delete "files"
+            $ obj
     TokenMetadata
       <$> obj .: "name"
       <*> uriFromJSON imageJSON
       <*> obj .:? "mediaType"
       <*> obj .:? "description"
       <*> obj .:? "files"
+      <*> pure additionalProps
 
 instance ToJSON TokenMetadata where
   toJSON TokenMetadata{..} =
-    object
-      [ ("name", toJSON name)
-      , ("image", uriToJSON image)
-      , ("mediaType", toJSON mediaType)
-      , ("description", toJSON description)
-      , ("files", toJSON files)
+    object $
+      [ "name" .= name
+      , "image" .= uriToJSON image
+      , "mediaType" .= mediaType
+      , "description" .= description
+      , "files" .= files
       ]
+        <> AMap.toList additionalProps
 
 instance ToSchema TokenMetadata where
   declareNamedSchema _ = do
     stringSchema <- declareSchemaRef (Proxy @Text)
     filesSchema <- declareSchemaRef (Proxy @[TokenMetadataFile])
+    metadataSchema <- declareSchemaRef (Proxy @Metadata)
     pure $
       NamedSchema (Just "TokenMetadata") $
         mempty
@@ -1028,33 +1070,43 @@ instance ToSchema TokenMetadata where
                , ("description", stringSchema)
                , ("files", filesSchema)
                ]
+          & additionalProperties ?~ AdditionalPropertiesSchema metadataSchema
 
 data TokenMetadataFile = TokenMetadataFile
   { name :: Text
   , src :: URI
   , mediaType :: Text
+  , additionalProps :: Aeson.Object
   }
   deriving (Show, Eq, Ord, Generic)
 
 instance FromJSON TokenMetadataFile where
   parseJSON = withObject "TokenMetadataFile" \obj -> do
     srcJSON <- obj .: "src"
+    let additionalProps =
+          AMap.delete "name"
+            . AMap.delete "mediaType"
+            . AMap.delete "src"
+            $ obj
     TokenMetadataFile
       <$> obj .: "name"
       <*> uriFromJSON srcJSON
       <*> obj .: "mediaType"
+      <*> pure additionalProps
 
 instance ToJSON TokenMetadataFile where
   toJSON TokenMetadataFile{..} =
-    object
+    object $
       [ ("name", toJSON name)
       , ("src", uriToJSON src)
       , ("mediaType", toJSON mediaType)
       ]
+        <> AMap.toList additionalProps
 
 instance ToSchema TokenMetadataFile where
   declareNamedSchema _ = do
     stringSchema <- declareSchemaRef (Proxy @Text)
+    metadataSchema <- declareSchemaRef (Proxy @Metadata)
     pure $
       NamedSchema (Just "TokenMetadataFile") $
         mempty
@@ -1065,6 +1117,7 @@ instance ToSchema TokenMetadataFile where
                , ("src", stringSchema)
                , ("mediaType", stringSchema)
                ]
+          & additionalProperties ?~ AdditionalPropertiesSchema metadataSchema
 
 uriFromJSON :: Value -> Parser URI
 uriFromJSON = withText "URI" $ maybe (parseFail "invalid URI") pure . parseURI . T.unpack
