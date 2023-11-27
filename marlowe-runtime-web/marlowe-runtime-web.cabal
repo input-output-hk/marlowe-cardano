@@ -133,6 +133,7 @@ library server
     , eventuo11y-extras ==0.1.1.0
     , exceptions >=0.10 && <0.12
     , http-media ^>=0.8
+    , http-types
     , insert-ordered-containers >=0.2.5 && <0.3
     , lens >=5.2 && <6
     , lens-aeson ^>=1.2

@@ -8,7 +8,6 @@ import Colog.Message (Message)
 import Control.Arrow ((&&&))
 import Control.Concurrent.Component (runComponent_)
 import Control.Concurrent.Component.Run (runAppMTraced)
-import Control.Exception (Exception (fromException))
 import Control.Monad.Reader (ask)
 import Control.Monad.Trans.Marlowe (MarloweT (..))
 import Data.Function (on)
@@ -21,16 +20,11 @@ import Data.Version (showVersion)
 import Language.Marlowe.Runtime.Client (connectToMarloweRuntimeTraced)
 import Language.Marlowe.Runtime.Web.Server
 import Network.HTTP.Types
-import Network.Protocol.Codec (DeserializeError (DeserializeError))
 import Network.Protocol.Driver.Trace (TcpClientSelector, renderTcpClientSelectorOTel, sockAddrToAttributes)
 import Network.Socket (PortNumber)
 import Network.Wai
 import Network.Wai.Handler.Warp (
-  defaultOnExceptionResponse,
-  defaultSettings,
-  runSettings,
-  setOnExceptionResponse,
-  setPort,
+  run,
  )
 import Observe.Event (injectSelector)
 import Observe.Event.Render.OpenTelemetry (OTelRendered (..), RenderSelectorOTel)
@@ -53,7 +47,7 @@ main = do
         ServerDependencies
           { openAPIEnabled
           , accessControlAllowOriginAll
-          , runApplication = runSettings (setPort (fromIntegral port) $ setOnExceptionResponse onExceptionResponse defaultSettings)
+          , runApplication = run $ fromIntegral port
           , connector
           }
     runComponent_ server dependencies
@@ -63,13 +57,6 @@ main = do
         { libraryName = "marlowe-web-server"
         , libraryVersion = fromString $ showVersion version
         }
-    onExceptionResponse e
-      | Just DeserializeError{} <- fromException e =
-          responseLBS
-            badGateway502
-            [(hContentType, "text/plain; charset=utf-8")]
-            ("Bad Gateway / " <> (fromString $ show e))
-      | otherwise = defaultOnExceptionResponse e
 
 concurrentLogger :: (MonadUnliftIO m) => IO (LogAction m Message)
 concurrentLogger = do

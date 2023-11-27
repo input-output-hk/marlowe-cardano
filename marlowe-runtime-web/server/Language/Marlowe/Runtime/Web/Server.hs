@@ -22,14 +22,16 @@ module Language.Marlowe.Runtime.Web.Server (
   serverWithOpenAPI,
 ) where
 
-import Colog (cmap, fmtMessage, logTextStdout)
+import Colog (LogAction, Message, cmap, fmtMessage, logException, logTextStdout, usingLoggerT)
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Run (AppM (..))
+import Control.Exception (Exception (..), SomeException (..), catch)
 import Control.Monad.Event.Class
 import Control.Monad.IO.Unlift (liftIO, withRunInIO)
 import Control.Monad.Reader (ReaderT (ReaderT), runReaderT)
 import Data.Aeson (Value (..), (.=))
 import Data.Aeson.Types (object)
+import Data.String (IsString (..))
 import Data.String.Conversions (cs)
 import Language.Marlowe.Protocol.Client (MarloweRuntimeClient (..))
 import Language.Marlowe.Protocol.Query.Client (getStatus)
@@ -71,9 +73,12 @@ import Language.Marlowe.Runtime.Web.Server.TxClient (
   Withdraw,
   txClient,
  )
+import Network.HTTP.Types (hContentType)
+import Network.HTTP.Types.Status (badGateway502, internalServerError500)
 import Network.Protocol.Connection (Connector, runConnector)
+import Network.Protocol.Driver.Untyped (RecvError)
 import Network.Protocol.Handshake.Types (Handshake)
-import Network.Wai (Request, Response)
+import Network.Wai (Request, Response, responseLBS)
 import qualified Network.Wai as WAI
 import Network.Wai.Middleware.Cors (CorsResourcePolicy (..), cors, simpleCorsResourcePolicy)
 import Observe.Event (reference)
@@ -262,10 +267,26 @@ webServer = component_ "web-server" \WebServerDependencies{..} -> withRunInIO \r
       let getStatusIO = runInIO $ toDTO <$> runConnector connector (RunMarloweQueryClient getStatus)
       let _requestParent = reference ev
       let _logAction = cmap fmtMessage logTextStdout
+      let middleware = corsMiddleware accessControlAllowOriginAll . exceptionMiddleware _logAction
       let mkApp
-            | openAPIEnabled =
-                corsMiddleware accessControlAllowOriginAll $ serveServerM getStatusIO apiWithOpenApi AppEnv{..} serverWithOpenAPI
-            | otherwise = corsMiddleware accessControlAllowOriginAll $ serveServerM getStatusIO Web.api AppEnv{..} REST.server
-      liftIO $ mkApp req \res -> runInIO do
+            | openAPIEnabled = serveServerM getStatusIO apiWithOpenApi AppEnv{..} serverWithOpenAPI
+            | otherwise = serveServerM getStatusIO Web.api AppEnv{..} REST.server
+      liftIO $ middleware mkApp req \res -> runInIO do
         addField ev $ ResField res
         liftIO $ handleRes res
+
+exceptionMiddleware :: LogAction IO Message -> WAI.Middleware
+exceptionMiddleware logAction app req res =
+  app req res `catch` \(SomeException ex) -> usingLoggerT logAction do
+    logException ex
+    liftIO $
+      res $
+        responseLBS
+          ( case fromException @RecvError (SomeException ex) of
+              Nothing -> case fromException @IOError (SomeException ex) of
+                Nothing -> internalServerError500
+                Just{} -> badGateway502
+              Just{} -> badGateway502
+          )
+          [(hContentType, "text/plain; charset=utf-8")]
+          (fromString $ show ex)
