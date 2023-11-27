@@ -311,11 +311,12 @@ encodeRoleTokenMetadata = encodeNFTMetadataDetails
 
     encodeNFTMetadataFile :: NFTMetadataFile -> Metadata
     encodeNFTMetadataFile NFTMetadataFile{..} =
-      MetadataMap
+      MetadataMap $
         [ (MetadataText "name", MetadataText name)
         , (MetadataText "mediaType", encodeMediaType mediaType)
         , (MetadataText "src", encodeText $ fromString $ Network.uriToString id src "")
         ]
+          <> fmap (first MetadataText) (Map.toList additionalProperties)
 
     encodeMediaType :: MediaType -> Metadata
     encodeMediaType = MetadataText . Text.pack . show
