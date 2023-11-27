@@ -283,7 +283,9 @@ exceptionMiddleware logAction app req res =
       res $
         responseLBS
           ( case fromException @RecvError (SomeException ex) of
-              Nothing -> internalServerError500
+              Nothing -> case fromException @IOError (SomeException ex) of
+                Nothing -> internalServerError500
+                Just{} -> badGateway502
               Just{} -> badGateway502
           )
           [(hContentType, "text/plain; charset=utf-8")]
