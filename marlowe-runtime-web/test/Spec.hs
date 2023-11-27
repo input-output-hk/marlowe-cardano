@@ -46,7 +46,7 @@ import Spec.Marlowe.Semantics.Arbitrary ()
 import Spec.Marlowe.Semantics.Next.Arbitrary ()
 import Test.Hspec (Spec, describe, hspec, it, shouldBe)
 import Test.Hspec.Golden (defaultGolden)
-import Test.QuickCheck (Arbitrary (..), Gen, elements, genericShrink, listOf, oneof, resize, suchThat)
+import Test.QuickCheck (Arbitrary (..), Gen, chooseInt, elements, genericShrink, listOf, oneof, resize, sized, suchThat)
 import Test.QuickCheck.Instances ()
 import Text.Regex.Posix ((=~))
 
@@ -578,11 +578,26 @@ instance Arbitrary Web.TokenMetadata where
       <*> arbitrary
       <*> arbitrary
       <*> arbitrary
+      <*> oneof
+        [ pure Nothing
+        , Just <$> sized \size -> do
+            len <- chooseInt (0, size)
+            case len of
+              0 -> pure []
+              _ -> do
+                let itemSize = size `div` len
+                resize itemSize $ replicateM len arbitrary
+        ]
       <*> arbitrary
   shrink = genericShrink
 
 instance Arbitrary Web.TokenMetadataFile where
-  arbitrary = Web.TokenMetadataFile <$> arbitrary <*> arbitrary <*> arbitrary
+  arbitrary =
+    Web.TokenMetadataFile
+      <$> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
   shrink = genericShrink
 
 instance Arbitrary Web.Address where

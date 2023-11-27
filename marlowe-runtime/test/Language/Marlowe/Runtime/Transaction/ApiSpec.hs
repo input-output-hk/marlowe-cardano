@@ -88,8 +88,10 @@ roleTokenMetadataMetadataRoundtrip = Gen.checkCoverage \metadata@RoleTokenMetada
       Gen.cover 20.0 (maybe False (not . Text.null) description) "has not empty description" $
         Gen.cover 5.0 (Maybe.isNothing mediaType) "has no mediaType" $
           Gen.cover 5.0 (Text.null name) "has empty name" $
-            Gen.cover 30.0 (not $ Text.null name) "has name" do
-              decodeRoleTokenMetadata (encodeRoleTokenMetadata metadata) `shouldBe` Just metadata
+            Gen.cover 30.0 (not $ Text.null name) "has name" $
+              let encoded = encodeRoleTokenMetadata metadata
+               in Gen.counterexample (show encoded) $
+                    decodeRoleTokenMetadata encoded `shouldBe` Just metadata
 
 mediaTypeJSONInstancesTests :: Gen.Property
 mediaTypeJSONInstancesTests =
@@ -113,7 +115,8 @@ cip25MetadataDetailsJSONRelationGen = do
   (mediaType, mediaTypeJSON) <- Gen.oneof [pure (Nothing, Nothing), (Just *** Just) <$> mediaTypeJSONRelationGen]
   description <- Gen.oneof [pure Nothing, pure (Just ""), Just . fromString <$> Gen.listOf1 Gen.arbitrary]
   (files, filesJSON) <- cip25MetadataFileDetailsJSONRelationGen
-  let json =
+  let additionalProperties = mempty -- Here we don't test roundtrip for additional properties, which is not in invertible in general.
+      json =
         Aeson.Object $
           Aeson.KeyMap.fromList $
             [ ("name", Aeson.String name)
@@ -144,7 +147,8 @@ cip25MetadataFileDetailsJSONRelationGen = do
           name <- Gen.oneof [pure "", fromString <$> Gen.listOf1 Gen.arbitrary]
           (mediaType, mediaTypeJSON) <- mediaTypeJSONRelationGen
           (src, srcJSON) <- uriJSONRelationGen
-          let json =
+          let additionalProperties = mempty -- Here we don't test roundtrip for additional properties, which is not in invertible in general.
+              json =
                 Aeson.Object
                   [ ("name", Aeson.String name)
                   , ("mediaType", mediaTypeJSON)

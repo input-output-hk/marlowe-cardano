@@ -29,6 +29,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.ByteString.Short (fromShort)
 import qualified Data.List.NonEmpty as NE
+import qualified Data.Map as Map
 import Data.Maybe (mapMaybe)
 import Data.SOP.Counting (Exactly (..))
 import Data.SOP.Strict (K (..), NP (..))
@@ -107,14 +108,14 @@ instance Arbitrary ValidityRange where
 instance Arbitrary Metadata where
   arbitrary =
     oneofStructured
-      [ (Node, MetadataMap <$> listOf (resized (`div` 10) arbitrary))
+      [ (Node, MetadataMap . Map.toList . Map.fromList <$> listOf (resized (`div` 10) arbitrary))
       , (Node, MetadataList <$> listOf (resized (`div` 10) arbitrary))
       , (Leaf, MetadataNumber <$> arbitrary)
       , (Leaf, MetadataBytes <$> genBytes)
       , (Leaf, MetadataText . T.pack <$> arbitrary)
       ]
   shrink = \case
-    MetadataMap ds -> MetadataMap <$> shrink ds
+    MetadataMap ds -> MetadataMap . Map.toList <$> shrink (Map.fromList ds)
     MetadataList ds -> MetadataList <$> shrink ds
     MetadataNumber _ -> []
     MetadataBytes bytes -> MetadataBytes . BS.pack <$> shrinkList shrink (BS.unpack bytes)

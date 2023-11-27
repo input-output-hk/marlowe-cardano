@@ -1435,7 +1435,35 @@
                 "type": "string"
             },
             "Metadata": {
-                "description": "An arbitrary JSON value for storage in a metadata key"
+                "description": "Arbitrary JSON-encoded transaction metadata",
+                "oneOf": [
+                    {
+                        "type": "integer"
+                    },
+                    {
+                        "description": "Hex-encoded binary data of up to 64 bytes",
+                        "pattern": "0x[A-Fa-f0-9]{0,128}",
+                        "type": "string"
+                    },
+                    {
+                        "description": "Text data of up to 64 characters",
+                        "type": "string"
+                    },
+                    {
+                        "description": "Array of metadata values",
+                        "items": {
+                            "$ref": "#/components/schemas/Metadata"
+                        },
+                        "type": "array"
+                    },
+                    {
+                        "additionalProperties": {
+                            "$ref": "#/components/schemas/Metadata"
+                        },
+                        "description": "Object of metadata values",
+                        "type": "object"
+                    }
+                ]
             },
             "Next": {
                 "description": "Describe the reducibility (Can be Reduced ?) and the applicability (Can Inputs be Applied ?) for a given contract.",
@@ -2359,6 +2387,9 @@
                 "type": "object"
             },
             "TokenMetadata": {
+                "additionalProperties": {
+                    "$ref": "#/components/schemas/Metadata"
+                },
                 "description": "Metadata for an NFT, as described by https://cips.cardano.org/cips/cip25/",
                 "properties": {
                     "description": {
@@ -2387,6 +2418,9 @@
                 "type": "object"
             },
             "TokenMetadataFile": {
+                "additionalProperties": {
+                    "$ref": "#/components/schemas/Metadata"
+                },
                 "properties": {
                     "mediaType": {
                         "type": "string"

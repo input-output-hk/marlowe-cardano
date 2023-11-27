@@ -85,6 +85,8 @@ import Language.Marlowe.Protocol.Query.Types (
 import Cardano.Ledger.Alonzo.Core (TxWits)
 import Cardano.Ledger.Binary (Annotator, DecCBOR (..), Decoder, decodeFullAnnotator, serialize')
 import Cardano.Ledger.Core (EraTxWits, eraProtVerLow)
+import qualified Data.Aeson.Key as Key
+import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Bitraversable (Bitraversable (..))
 import Data.Function (on)
 import Data.Kind (Type)
@@ -840,6 +842,7 @@ instance FromDTO Tx.RoleTokenMetadata where
       <*> case files of
         Nothing -> pure []
         Just files' -> fromDTO files'
+      <*> traverse fromDTO (Map.mapKeys Key.toText $ KeyMap.toMap $ Web.Metadata <$> additionalProps)
 
 instance HasDTO MediaType where
   type DTO MediaType = Text
@@ -852,7 +855,10 @@ instance HasDTO Tx.NFTMetadataFile where
 
 instance FromDTO Tx.NFTMetadataFile where
   fromDTO Web.TokenMetadataFile{..} =
-    Tx.NFTMetadataFile name <$> fromDTO mediaType <*> pure src
+    Tx.NFTMetadataFile name
+      <$> fromDTO mediaType
+      <*> pure src
+      <*> traverse fromDTO (Map.mapKeys Key.toText $ KeyMap.toMap $ Web.Metadata <$> additionalProps)
 
 instance HasDTO Query.Order where
   type DTO Query.Order = Pagination.RangeOrder

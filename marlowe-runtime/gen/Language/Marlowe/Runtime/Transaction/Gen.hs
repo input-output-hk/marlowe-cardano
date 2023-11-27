@@ -80,8 +80,6 @@ instance Arbitrary Network.URI where
       charNumberGen :: Gen Char
       charNumberGen = elements ['0' .. '9']
 
-  shrink = genericShrink
-
 instance Arbitrary WalletAddresses where
   arbitrary = WalletAddresses <$> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink
@@ -90,6 +88,7 @@ instance Arbitrary NFTMetadataFile where
   arbitrary =
     NFTMetadataFile
       <$> arbitrary
+      <*> arbitrary
       <*> arbitrary
       <*> arbitrary
   shrink = genericShrink
@@ -101,6 +100,7 @@ instance Arbitrary RoleTokenMetadata where
       <*> arbitrary
       <*> frequency [(1, pure Nothing), (9, arbitrary)]
       <*> frequency [(1, pure (Just "")), (1, pure Nothing), (8, arbitrary)]
+      <*> arbitrary
       <*> arbitrary
   shrink = genericShrink
 
