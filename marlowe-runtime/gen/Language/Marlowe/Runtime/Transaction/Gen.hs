@@ -90,6 +90,7 @@ instance Arbitrary NFTMetadataFile where
       <$> arbitrary
       <*> arbitrary
       <*> arbitrary
+      <*> arbitrary
   shrink = genericShrink
 
 instance Arbitrary RoleTokenMetadata where

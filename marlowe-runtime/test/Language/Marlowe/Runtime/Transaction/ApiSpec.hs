@@ -147,7 +147,8 @@ cip25MetadataFileDetailsJSONRelationGen = do
           name <- Gen.oneof [pure "", fromString <$> Gen.listOf1 Gen.arbitrary]
           (mediaType, mediaTypeJSON) <- mediaTypeJSONRelationGen
           (src, srcJSON) <- uriJSONRelationGen
-          let json =
+          let additionalProperties = mempty -- Here we don't test roundtrip for additional properties, which is not in invertible in general.
+              json =
                 Aeson.Object
                   [ ("name", Aeson.String name)
                   , ("mediaType", mediaTypeJSON)

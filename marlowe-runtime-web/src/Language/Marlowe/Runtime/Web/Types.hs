@@ -1076,28 +1076,37 @@ data TokenMetadataFile = TokenMetadataFile
   { name :: Text
   , src :: URI
   , mediaType :: Text
+  , additionalProps :: Aeson.Object
   }
   deriving (Show, Eq, Ord, Generic)
 
 instance FromJSON TokenMetadataFile where
   parseJSON = withObject "TokenMetadataFile" \obj -> do
     srcJSON <- obj .: "src"
+    let additionalProps =
+          AMap.delete "name"
+            . AMap.delete "mediaType"
+            . AMap.delete "src"
+            $ obj
     TokenMetadataFile
       <$> obj .: "name"
       <*> uriFromJSON srcJSON
       <*> obj .: "mediaType"
+      <*> pure additionalProps
 
 instance ToJSON TokenMetadataFile where
   toJSON TokenMetadataFile{..} =
-    object
+    object $
       [ ("name", toJSON name)
       , ("src", uriToJSON src)
       , ("mediaType", toJSON mediaType)
       ]
+        <> AMap.toList additionalProps
 
 instance ToSchema TokenMetadataFile where
   declareNamedSchema _ = do
     stringSchema <- declareSchemaRef (Proxy @Text)
+    metadataSchema <- declareSchemaRef (Proxy @Metadata)
     pure $
       NamedSchema (Just "TokenMetadataFile") $
         mempty
@@ -1108,6 +1117,7 @@ instance ToSchema TokenMetadataFile where
                , ("src", stringSchema)
                , ("mediaType", stringSchema)
                ]
+          & additionalProperties ?~ AdditionalPropertiesSchema metadataSchema
 
 uriFromJSON :: Value -> Parser URI
 uriFromJSON = withText "URI" $ maybe (parseFail "invalid URI") pure . parseURI . T.unpack

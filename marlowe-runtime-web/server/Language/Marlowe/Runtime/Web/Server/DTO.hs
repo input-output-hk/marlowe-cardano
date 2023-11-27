@@ -855,7 +855,10 @@ instance HasDTO Tx.NFTMetadataFile where
 
 instance FromDTO Tx.NFTMetadataFile where
   fromDTO Web.TokenMetadataFile{..} =
-    Tx.NFTMetadataFile name <$> fromDTO mediaType <*> pure src
+    Tx.NFTMetadataFile name
+      <$> fromDTO mediaType
+      <*> pure src
+      <*> traverse fromDTO (Map.mapKeys Key.toText $ KeyMap.toMap $ Web.Metadata <$> additionalProps)
 
 instance HasDTO Query.Order where
   type DTO Query.Order = Pagination.RangeOrder

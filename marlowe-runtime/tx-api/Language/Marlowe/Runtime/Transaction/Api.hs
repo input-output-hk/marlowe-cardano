@@ -171,6 +171,7 @@ data NFTMetadataFile = NFTMetadataFile
   { name :: Text
   , mediaType :: MediaType
   , src :: Network.URI
+  , additionalProperties :: Map Text Metadata
   }
   deriving stock (Show, Eq, Ord, Generic)
   deriving (Binary, Variations)
@@ -188,11 +189,19 @@ parseJsonUri (Text.unpack -> s) =
   maybe (fail $ s <> " is not a valid URI!") pure $ Network.parseURI s
 
 instance Aeson.FromJSON NFTMetadataFile where
-  parseJSON = Aeson.withObject "NFTMetadataFile" \x ->
+  parseJSON = Aeson.withObject "NFTMetadataFile" \x -> do
+    let additionalProperties =
+          Map.mapKeys Key.toText . Map.withoutKeys (Aeson.toMap x) $
+            Set.fromList
+              [ "name"
+              , "mediaType"
+              , "src"
+              ]
     NFTMetadataFile
       <$> x .: "name"
       <*> x .: "mediaType"
       <*> (parseJsonUri =<< x .: "src")
+      <*> forWithKey additionalProperties \key value -> Aeson.parseJSON value <?> Aeson.Types.Key (Key.fromText key)
 
 data RoleTokenMetadata = RoleTokenMetadata
   { name :: Text
@@ -269,6 +278,7 @@ decodeRoleTokenMetadata = parseNFTMetadataDetails
       name <- parseMetadataText =<< Map.lookup "name" textKeyMap
       mediaType <- parseMediaType =<< Map.lookup "mediaType" textKeyMap
       src <- Network.parseURI . Text.unpack =<< parseSplittableText =<< Map.lookup "src" textKeyMap
+      let additionalProperties = Map.withoutKeys textKeyMap $ Set.fromList ["name", "mediaType", "src"]
       Just $ NFTMetadataFile{..}
 
     parseMediaType :: Metadata -> Maybe MediaType
