@@ -1235,7 +1235,7 @@ findMarloweScriptsRefs
 findMarloweScriptsRefs queryCtx publishingStrategy printStats = do
   marloweValidator <- readMarloweValidator @_ @lang
   payoutValidator <- readRolePayoutValidator @_ @lang
-  openRoleValidator <- readRolePayoutValidator @_ @lang
+  openRoleValidator <- readOpenRoleValidator @_ @lang
   let marloweHash = hashScript $ PS.toScript marloweValidator
       payoutHash = hashScript $ PS.toScript payoutValidator
       openRoleHash = hashScript $ PS.toScript openRoleValidator
