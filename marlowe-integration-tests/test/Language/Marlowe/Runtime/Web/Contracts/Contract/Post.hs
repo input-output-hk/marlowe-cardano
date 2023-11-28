@@ -165,7 +165,14 @@ bugPLT8713 = do
         let walletAddress = toDTO $ changeAddress $ addresses wallet
         let contract =
               V1.When
-                [ V1.Case (V1.Deposit (V1.Role "Test Role") (V1.Role "Test Role") (V1.Token "" "") (V1.Constant 1)) V1.Close
+                [ V1.Case
+                    (V1.Deposit (V1.Role "Test Role") (V1.Role "Test Role") (V1.Token "" "") (V1.Constant 1))
+                    ( V1.When
+                        [ V1.Case (V1.Notify V1.TrueObs) V1.Close
+                        ]
+                        (utcTimeToPOSIXTime $ addUTCTime (secondsToNominalDiffTime 1000) now)
+                        V1.Close
+                    )
                 ]
                 (utcTimeToPOSIXTime $ addUTCTime (secondsToNominalDiffTime 1000) now)
                 V1.Close
