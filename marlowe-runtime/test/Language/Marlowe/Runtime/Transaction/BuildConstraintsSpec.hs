@@ -7,7 +7,21 @@ module Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec (
   spec,
 ) where
 
-import Cardano.Api (BabbageEra, ConsensusMode (..), EraHistory (EraHistory), SlotNo (SlotNo))
+import Cardano.Api (
+  AssetId (..),
+  AssetName (..),
+  BabbageEra,
+  ConsensusMode (..),
+  EraHistory (EraHistory),
+  MultiAssetSupportedInEra (..),
+  SlotNo (SlotNo),
+  TxBody (..),
+  TxBodyContent (..),
+  TxOut (..),
+  TxOutValue (..),
+  selectAsset,
+  toLedgerEpochInfo,
+ )
 import qualified Cardano.Api as C
 import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import Control.Monad.Trans.Except (runExcept, runExceptT)
@@ -19,6 +33,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Map.NonEmpty as NEMap
 import Data.Maybe (fromJust, maybeToList)
+import Data.Monoid (Sum (..))
 import Data.SOP.Counting (Exactly (..))
 import Data.SOP.Strict (K (..), NP (..))
 import qualified Data.Set as Set
@@ -26,11 +41,13 @@ import Data.Time (UTCTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
 import Data.Traversable (for)
 import GHC.Generics (Generic)
+import qualified Language.Marlowe as V1
 import qualified Language.Marlowe.Core.V1.Semantics as Semantics
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as Semantics
-import Language.Marlowe.Runtime.Cardano.Api (fromCardanoPolicyId, toCardanoPlutusScript)
-import Language.Marlowe.Runtime.ChainSync.Api (Lovelace, PlutusScript (..), toUTxOsList)
+import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1
+import Language.Marlowe.Runtime.Cardano.Api (fromCardanoPolicyId, toCardanoPlutusScript, toCardanoPolicyId)
+import Language.Marlowe.Runtime.ChainSync.Api (Lovelace, PlutusScript (..), fromBech32, toUTxOsList)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (
   Contract,
@@ -42,7 +59,12 @@ import Language.Marlowe.Runtime.Core.Api (
   emptyMarloweTransactionMetadata,
  )
 import qualified Language.Marlowe.Runtime.Core.Api as Core.Api
-import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript (..))
+import Language.Marlowe.Runtime.Core.ScriptRegistry (
+  HelperScript (..),
+  ReferenceScriptUtxo (..),
+  node812V1MarloweScript,
+  node812V1PayoutScript,
+ )
 import Language.Marlowe.Runtime.Plutus.V2.Api (fromPlutusValue, toAssetId)
 import Language.Marlowe.Runtime.Transaction.Api (
   ApplyInputsConstraintsBuildupError (..),
@@ -62,14 +84,18 @@ import Language.Marlowe.Runtime.Transaction.BuildConstraints (
 import qualified Language.Marlowe.Runtime.Transaction.BuildConstraints as BuildConstraints
 import Language.Marlowe.Runtime.Transaction.Constraints (
   Distribution (..),
+  HelpersContext (..),
+  MarloweContext (..),
   MarloweInputConstraints (..),
   MarloweOutputConstraints (..),
   PayoutContext (..),
   RoleTokenConstraints (..),
   TxConstraints (..),
   WalletContext (..),
+  solveConstraints,
  )
 import qualified Language.Marlowe.Runtime.Transaction.Constraints as TxConstraints
+import Language.Marlowe.Runtime.Transaction.ConstraintsSpec (protocolTestnet)
 import qualified Language.Marlowe.Runtime.Transaction.Gen ()
 import Ouroboros.Consensus.BlockchainTime (RelativeTime (..), SystemStart (..), mkSlotLength)
 import Ouroboros.Consensus.HardFork.History (
@@ -85,7 +111,7 @@ import PlutusLedgerApi.V1 (Address (Address), Credential (PubKeyCredential), Pub
 import PlutusLedgerApi.V1.Time (POSIXTime (POSIXTime))
 import qualified PlutusTx.AssocMap as AM
 import Spec.Marlowe.Semantics.Arbitrary ()
-import Test.Hspec (Spec, shouldBe)
+import Test.Hspec (Spec, it, shouldBe)
 import qualified Test.Hspec as Hspec
 import qualified Test.Hspec.QuickCheck as Hspec.QuickCheck
 import Test.QuickCheck (
@@ -824,3 +850,279 @@ buildApplyInputsConstraintsSpec =
           Left _ ->
             counterexample "Unexpected transaction failure" False
         :: QuickCheck.Gen Property
+    it "[BUG] PLT-8793: Outputs correct number of role tokens" do
+      let inputs = [V1.IDeposit (V1.Role "Receiver") (V1.Role "Sender") (V1.Token "" "") 5_000_000_000]
+          previousOutput :: TransactionScriptOutput 'V1
+          previousOutput =
+            TransactionScriptOutput
+              { address = fromJust $ fromBech32 "addr_test1wrv9l2du900ajl27hk79u07xda68vgfugrppkua5zftlp8g0l9djk"
+              , assets =
+                  Chain.Assets
+                    { ada = 2_000_000
+                    , tokens = mempty
+                    }
+              , utxo = Chain.TxOutRef "4240f052b02797b0ba51d549fa0a02aad5b377382682215d36e3bd999f0117c5" 1
+              , datum =
+                  V1.MarloweData
+                    { marloweParams = V1.MarloweParams "177246d7a843c1bd64d87e152608147257f657a0525f273208e9d173"
+                    , marloweContract =
+                        V1.When
+                          [ V1.Case
+                              ( V1.Deposit
+                                  (V1.Role "Receiver")
+                                  (V1.Role "Sender")
+                                  (V1.Token "" "")
+                                  (V1.Constant 5000000000)
+                              )
+                              (V1.When [V1.Case (V1.Notify V1.TrueObs) V1.Close] 1700772840000 V1.Close)
+                          ]
+                          1700772840000
+                          V1.Close
+                    , marloweState =
+                        V1.State
+                          { accounts =
+                              AM.fromList
+                                [
+                                  (
+                                    ( uncurry V1.Address $
+                                        fromJust $
+                                          V1.deserialiseAddressBech32
+                                            "addr_test1qq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupcvluken35ncjnu0puetf5jvttedkze02d5kf890kquh60slacjyp"
+                                    , V1.Token "" ""
+                                    )
+                                  , 2_000_000
+                                  )
+                                ]
+                          , choices = AM.empty
+                          , boundValues = AM.empty
+                          , minTime = 0
+                          }
+                    }
+              }
+          result =
+            runExcept $
+              snd
+                <$> buildApplyInputsConstraints
+                  (const $ pure Nothing)
+                  systemStart
+                  eraHistory
+                  MarloweV1
+                  previousOutput
+                  (Chain.SlotNo 1_000_000)
+                  emptyMarloweTransactionMetadata
+                  Nothing
+                  Nothing
+                  (Semantics.NormalInput <$> inputs)
+      constraints <- either (fail . show) pure result
+      let marloweContext =
+            MarloweContext
+              { scriptOutput = Just previousOutput
+              , marloweAddress = fromJust $ fromBech32 "addr_test1wrv9l2du900ajl27hk79u07xda68vgfugrppkua5zftlp8g0l9djk"
+              , payoutAddress = Chain.Address "7010ec7e02d25f5836b3e1098e0d4d8389e71d7a97a57aa737adc1d1fa"
+              , marloweScriptHash = "d85fa9bc2bdfd97d5ebdbc5e3fc66f7476213c40c21b73b41257f09d"
+              , payoutScriptHash = "10ec7e02d25f5836b3e1098e0d4d8389e71d7a97a57aa737adc1d1fa"
+              , marloweScriptUTxO =
+                  ReferenceScriptUtxo
+                    { txOutRef = "c59678b6892ba0fbeeaaec22d4cbde17026ff614ed47cea02c47752e5853ebc8#1"
+                    , txOut =
+                        Chain.TransactionOutput
+                          { address = fromJust $ fromBech32 "addr_test1vz53mawjqyzly4zdd7yr97s4wkef0y3jtzfzvtc2xr4rv4skmmd6n"
+                          , assets = Chain.Assets 53_461_240 mempty
+                          , datum = Nothing
+                          , datumHash = Nothing
+                          }
+                    , script = node812V1MarloweScript
+                    }
+              , payoutScriptUTxO =
+                  ReferenceScriptUtxo
+                    { txOutRef = "c59678b6892ba0fbeeaaec22d4cbde17026ff614ed47cea02c47752e5853ebc8#2"
+                    , txOut =
+                        Chain.TransactionOutput
+                          { address = fromJust $ fromBech32 "addr_test1vrkl3n9lfzzrkh7xsvg3apja297f5hsvdl8kawa8a5868mqecyjgc"
+                          , assets = Chain.Assets 12_249_020 mempty
+                          , datum = Nothing
+                          , datumHash = Nothing
+                          }
+                    , script = node812V1PayoutScript
+                    }
+              }
+          mkWalletOutput ada tokens =
+            Chain.TransactionOutput
+              { address =
+                  fromJust $
+                    fromBech32
+                      "addr_test1qq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupcvluken35ncjnu0puetf5jvttedkze02d5kf890kquh60slacjyp"
+              , assets = Chain.Assets ada $ Chain.Tokens $ Map.fromList do
+                  (quantity, policy, Chain.Base16 token) <- tokens
+                  pure (Chain.AssetId policy $ Chain.TokenName token, quantity)
+              , datumHash = Nothing
+              , datum = Nothing
+              }
+          walletContext =
+            WalletContext
+              { availableUtxos =
+                  Chain.UTxOs $
+                    Map.fromList
+                      [
+                        ( "09ba5a347fc9d9290865ef0fac634988106db9cc7caf54e7c2578bcdcd327a14#1"
+                        , mkWalletOutput 1172320 [(1, "28a9d34903993185694b03d50246a4c16c2b505616b6036222e1499b", "4e69752053656c6c6572")]
+                        )
+                      ,
+                        ( "09ba5a347fc9d9290865ef0fac634988106db9cc7caf54e7c2578bcdcd327a14#2"
+                        , mkWalletOutput 1172320 [(1, "8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d", "4265617247617264656e")]
+                        )
+                      , ("11650cb360dc061358464906a266bc1f7368949a9697801f810343d8507f4e7a#4", mkWalletOutput 2000000 [])
+                      ,
+                        ( "28baba9a4f7642f8315ce89146457228e36e672a9de192154363386ffe11b895#3"
+                        , mkWalletOutput
+                            1935190
+                            [ (1, "285e6ade72ec0f11965c3c077e1c68d1e21ec3eecbd0da32948ca222", "546872656164")
+                            , (1, "82e4a99993453eab26698daa558da44d88caa12a796c864149570ac1", "53656c6c6572")
+                            , (1, "82e4a99993453eab26698daa558da44d88caa12a796c864149570ac1", "546872656164")
+                            , (1, "87c3d209c1ff0e25eed4766472dfb6884dd1a7a64c0c1f6bd5fd0ef7", "616e617263686f73796e646963616c")
+                            , (1, "87c3d209c1ff0e25eed4766472dfb6884dd1a7a64c0c1f6bd5fd0ef7", "6d61726c6f77652d6f7261636c65")
+                            , (1, "87c3d209c1ff0e25eed4766472dfb6884dd1a7a64c0c1f6bd5fd0ef7", "777368616b65737065617265")
+                            , (997, "8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d", "4265617247617264656e")
+                            , (1, "8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d", "632e6d61726c6f7765")
+                            ]
+                        )
+                      ,
+                        ( "30fe07b15cd809ef34bdf90d84ca673644454258b0ca79631d6b0c67d2e339fd#1"
+                        , mkWalletOutput 1168010 [(1, "7c5d08a9c1951ebaa3f515a23200db8d579898bace6ca50d55490751", "4e6975204275796572")]
+                        )
+                      ,
+                        ( "30fe07b15cd809ef34bdf90d84ca673644454258b0ca79631d6b0c67d2e339fd#2"
+                        , mkWalletOutput 1172320 [(1, "8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d", "4265617247617264656e")]
+                        )
+                      , ("35119844de7f629474fb68c8ad099529a8c7922aa46c48e81350d24ed79a41b6#1", mkWalletOutput 2000000 [])
+                      ,
+                        ( "3c3ff0811369ceeab1303b323672497158c10847bd94958cca250a9e0a64fb1b#1"
+                        , mkWalletOutput 1146460 [(1, "87c3d209c1ff0e25eed4766472dfb6884dd1a7a64c0c1f6bd5fd0ef7", "666261636f6e")]
+                        )
+                      ,
+                        ( "3f6a0e686cb1612f616b6bd0fce89090bf0f9aa6bfe4969a02ab94f88f752ff1#3"
+                        , mkWalletOutput 2000000 [(1, "28a9d34903993185694b03d50246a4c16c2b505616b6036222e1499b", "4e697520436f6e7472616374")]
+                        )
+                      , ("4240f052b02797b0ba51d549fa0a02aad5b377382682215d36e3bd999f0117c5#0", mkWalletOutput 23184951 [])
+                      ,
+                        ( "4240f052b02797b0ba51d549fa0a02aad5b377382682215d36e3bd999f0117c5#3"
+                        , mkWalletOutput 1155080 [(1, "177246d7a843c1bd64d87e152608147257f657a0525f273208e9d173", "53656e646572")]
+                        )
+                      ,
+                        ( "505dc761e42bb1a7c09e3d7cc5257416ca4f67120d5fa842264782dc1ad350bc#1"
+                        , mkWalletOutput 1172320 [(1, "87c3d209c1ff0e25eed4766472dfb6884dd1a7a64c0c1f6bd5fd0ef7", "66756e6374696f6e616c6c79")]
+                        )
+                      , ("5625d9c7fc3dc260d185fbc08afc167d028f99b68a271fa210fa5453763a0302#4", mkWalletOutput 2000000 [])
+                      ,
+                        ( "562824d40bee708014e607003590e9a8e108c99d52f30826a2b7d35b5cc9c0f9#1"
+                        , mkWalletOutput 1168010 [(1, "b09a293a0b25384026f7adf873e06cbfdaa01daef267a49fb33dd897", "4e6975204275796572")]
+                        )
+                      ,
+                        ( "82f95c3963a748fa6fe069062544b341ec6e31f1cf3eabf75985c88fd8db158e#1"
+                        , mkWalletOutput 1172320 [(1, "7c5d08a9c1951ebaa3f515a23200db8d579898bace6ca50d55490751", "4e69752053656c6c6572")]
+                        )
+                      ,
+                        ( "8596492cd2eca8385863231eeaa5e261cbc88275e5b5c271bce8dfd829dda734#1"
+                        , mkWalletOutput 1155080 [(1, "87c3d209c1ff0e25eed4766472dfb6884dd1a7a64c0c1f6bd5fd0ef7", "6d68657262657274")]
+                        )
+                      ,
+                        ( "96c204856fc7c5e51bc4ba60e45ff3c40653c760ad4f25677ca8cbc57ab1521c#2"
+                        , mkWalletOutput 1189560 [(1, "f24109f3c799f2061938ea6bc5fc6c39e081296910e062e56ddc2228", "746563686e6f73796e646963616c")]
+                        )
+                      ,
+                        ( "9bf7b0fab9f9e560fd585973c5a3acf1c208bd9a66c7b6cc8b4c066c1adf9365#1"
+                        , mkWalletOutput 1172320 [(1, "b09a293a0b25384026f7adf873e06cbfdaa01daef267a49fb33dd897", "4e69752053656c6c6572")]
+                        )
+                      ,
+                        ( "aa0e76faf3032c4b90bf2a981817989c42b4f0e12a3d0f6b749f6fe203f0afce#1"
+                        , mkWalletOutput 1150770 [(1, "87c3d209c1ff0e25eed4766472dfb6884dd1a7a64c0c1f6bd5fd0ef7", "65646576657265")]
+                        )
+                      ,
+                        ( "ae6e50699314c1fe022ec47db6f6f5bc052e9a011862f19a3ebfa96c544ac747#1"
+                        , mkWalletOutput 1159390 [(1, "87c3d209c1ff0e25eed4766472dfb6884dd1a7a64c0c1f6bd5fd0ef7", "66626561756d6f6e74")]
+                        )
+                      , ("aef5b62f60c46819c776356198a1472acd267c5be14a798cc473ba118750ed24#2", mkWalletOutput 2000000 [])
+                      ,
+                        ( "b266865a97cef99146c61bca96ff3c3b5bae0b9a46982640c128fb90a248b33b#3"
+                        , mkWalletOutput 2000000 [(1, "7c5d08a9c1951ebaa3f515a23200db8d579898bace6ca50d55490751", "4e697520436f6e7472616374")]
+                        )
+                      ,
+                        ( "b3e4a0547abaf51e46816fcf402bbf682f5a6caac4e4079fb9cb65e3ada1d38d#1"
+                        , mkWalletOutput 1155080 [(1, "87c3d209c1ff0e25eed4766472dfb6884dd1a7a64c0c1f6bd5fd0ef7", "6a77656273746572")]
+                        )
+                      , ("b666e5f6d235981ab6d711711c860e098a08a608020d950117c934b2834e53c4#0", mkWalletOutput 146528488242 [])
+                      , ("b666e5f6d235981ab6d711711c860e098a08a608020d950117c934b2834e53c4#1", mkWalletOutput 2000000 [])
+                      ,
+                        ( "b7352637d367d1dad2a3a8e049b4e08492b50b2d167c7b60e2ef1ebbd67abf04#1"
+                        , mkWalletOutput
+                            1995530
+                            [ (1, "87c3d209c1ff0e25eed4766472dfb6884dd1a7a64c0c1f6bd5fd0ef7", "6563617279")
+                            , (1991, "8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d", "476c6f6265")
+                            , (2015000, "8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d", "484f534b59")
+                            , (1015, "8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d", "5377616e")
+                            , (1, "8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d", "64656c6179666565646261636b")
+                            , (1, "8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d", "662e62656175666f6e74")
+                            , (1, "8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d", "6761696e")
+                            , (1, "8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d", "6c656761746f")
+                            , (1, "8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d", "6e6f7465")
+                            , (1, "8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d", "7265736f6e616e6365")
+                            , (1, "8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d", "726f6f6d")
+                            , (1, "8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d", "736f756e64")
+                            , (1, "8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d", "7370656564")
+                            , (1, "8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d", "766f77656c")
+                            , (250000000, "9772ff715b691c0444f333ba1db93b055c0864bec48fff92d1f2a7fe", "446a65645f746573744d6963726f555344")
+                            ]
+                        )
+                      , ("b7352637d367d1dad2a3a8e049b4e08492b50b2d167c7b60e2ef1ebbd67abf04#2", mkWalletOutput 16567348 [])
+                      , ("b98464f6a1eeded278c911f0baa86c015cae9f539c3b8bcba34318451815d6e2#0", mkWalletOutput 3446503894 [])
+                      ,
+                        ( "e0421270883f718ae9d6e8cb82adc6a0fb8cf079491ff67faeea2d65c88d1e31#1"
+                        , mkWalletOutput
+                            1271450
+                            [ (1, "87c3d209c1ff0e25eed4766472dfb6884dd1a7a64c0c1f6bd5fd0ef7", "616e617263686f73796e64692d64616f")
+                            , (1, "87c3d209c1ff0e25eed4766472dfb6884dd1a7a64c0c1f6bd5fd0ef7", "636d61726c6f7765")
+                            , (1, "87c3d209c1ff0e25eed4766472dfb6884dd1a7a64c0c1f6bd5fd0ef7", "6a6c756d6c6579")
+                            ]
+                        )
+                      , ("ecd9821ee33d490847484ad54ca209ad03721009bfece621d01293232cbe5909#0", mkWalletOutput 8004204456 [])
+                      ,
+                        ( "f474411379cdcc45c14484798e2f035b0bd4ca78ef35a14ef07c39935d0a36b2#3"
+                        , mkWalletOutput 2000000 [(1, "b09a293a0b25384026f7adf873e06cbfdaa01daef267a49fb33dd897", "4e697520436f6e7472616374")]
+                        )
+                      , ("f52718d219e1d90d318b68ae8d51092c66c0c676f6a925e249df5e5efe099f0c#0", mkWalletOutput 27386015026 [])
+                      , ("fa0d85e4fce4f993075800e8c0b5f286611cb6566a3a42c5b4ccdee95e90ff2c#1", mkWalletOutput 2000000 [])
+                      , ("fde1e7735f001959798c1f9318d4f247fcc4a6d14942c8b487c36a45bf2a6443#0", mkWalletOutput 300098570 [])
+                      ]
+              , collateralUtxos = mempty
+              , changeAddress =
+                  fromJust $
+                    fromBech32
+                      "addr_test1qq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupcvluken35ncjnu0puetf5jvttedkze02d5kf890kquh60slacjyp"
+              }
+          helpersContext =
+            HelpersContext
+              { currentHelperScripts = mempty
+              , helperPolicyId = "177246d7a843c1bd64d87e152608147257f657a0525f273208e9d173"
+              , helperScriptStates = mempty
+              }
+          solveResult =
+            solveConstraints
+              systemStart
+              (toLedgerEpochInfo eraHistory)
+              protocolTestnet
+              ReferenceTxInsScriptsInlineDatumsInBabbageEra
+              MarloweV1
+              (Left marloweContext)
+              walletContext
+              helpersContext
+              constraints
+      TxBody TxBodyContent{..} <- either (fail . show) pure solveResult
+      let roleTokenOutputCount = getSum $ flip foldMap txOuts \case
+            TxOut _ (TxOutValue MultiAssetInBabbageEra value) _ _ ->
+              Sum $
+                selectAsset value $
+                  AssetId
+                    (fromJust $ toCardanoPolicyId "177246d7a843c1bd64d87e152608147257f657a0525f273208e9d173")
+                    (AssetName "Sender")
+            TxOut _ (TxOutAdaOnly era _) _ _ -> case era of {}
+      roleTokenOutputCount `shouldBe` 1
