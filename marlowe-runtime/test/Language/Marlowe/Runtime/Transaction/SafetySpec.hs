@@ -324,7 +324,7 @@ spec =
             marloweContext
             emptyHelpersContext
             policy
-            Nothing
+            ""
             address
             (Chain.Assets (fromIntegral minAda) (Chain.Tokens mempty))
             adjustMinUtxo
@@ -360,7 +360,7 @@ spec =
               marloweContext
               emptyHelpersContext
               policy
-              Nothing
+              ""
               address
               minAda
               adjustMinUtxo
@@ -415,7 +415,7 @@ spec =
               marloweContext
               helpersContext
               helperPolicyId
-              (Just "Thread")
+              "Thread"
               address
               initialValue
               adjustMinUtxo
