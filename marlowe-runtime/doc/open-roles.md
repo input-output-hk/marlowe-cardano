@@ -28,11 +28,10 @@ If role tokens are minted when the contract is created, specify the *thread role
 
 ```yaml
 roles:
-  Thread:
-    script: ThreadRole
   Buyer:
     script: OpenRole
   Seller: addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j
+threadRoleName: Thread
 ```
 
 ### Pre-minted open roles
@@ -43,9 +42,9 @@ If role tokens have already been minted and are held in the wallet of the contra
 roles:
   script: OpenRole
   policyId: ac5591a09baca1e04b5b2f086210cd1a9451032e02c1a327d13ee767
-  threadRoleName: Thread
   openRoleNames:
     - Buyer
+threadRoleName: Thread
 ```
 
 ### Distribution of open-role tokens
