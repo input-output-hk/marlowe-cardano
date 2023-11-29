@@ -542,7 +542,28 @@ instance ToSchema State where
               & type_ ?~ OpenApiArray
               & items ?~ OpenApiItemsObject accountSchema
     choicesSchema <- declareSchemaRef $ Proxy @[(ChoiceId, Integer)]
-    boundValuesSchema <- declareSchemaRef $ Proxy @[(String, Integer)]
+    let boundValueSchema :: Referenced Schema
+        boundValueSchema =
+          Inline $
+            mempty
+              & type_ ?~ OpenApiArray
+              & minItems ?~ 2
+              & maxItems ?~ 2
+              & items
+                ?~ OpenApiItemsObject
+                  ( Inline $
+                      mempty
+                        & oneOf
+                          ?~ [ Inline $ mempty & type_ ?~ OpenApiString
+                             , Inline $ mempty & type_ ?~ OpenApiInteger
+                             ]
+                  )
+    let boundValuesSchema :: Referenced Schema
+        boundValuesSchema =
+          Inline $
+            mempty
+              & type_ ?~ OpenApiArray
+              & items ?~ OpenApiItemsObject boundValueSchema
     integerSchema <- declareSchemaRef $ Proxy @Integer
     let accounts = ("accounts", accountsSchema)
     let choices = ("choices", choicesSchema)

@@ -1389,14 +1389,16 @@
                     },
                     "boundValues": {
                         "items": {
-                            "items": [
-                                {
-                                    "type": "string"
-                                },
-                                {
-                                    "type": "integer"
-                                }
-                            ],
+                            "items": {
+                                "oneOf": [
+                                    {
+                                        "type": "string"
+                                    },
+                                    {
+                                        "type": "integer"
+                                    }
+                                ]
+                            },
                             "maxItems": 2,
                             "minItems": 2,
                             "type": "array"
