@@ -966,7 +966,14 @@ instance ToSchema P.StakingCredential where
   declareNamedSchema _ =
     do
       credentialSchema <- declareSchemaRef $ Proxy @P.Credential
-      integerTripletSchema <- declareSchemaRef $ Proxy @(Integer, Integer, Integer)
+      let integerTripletSchema :: Referenced Schema
+          integerTripletSchema =
+            Inline $
+              mempty
+                & type_ ?~ OpenApiArray
+                & maxItems ?~ 3
+                & minItems ?~ 3
+                & items ?~ OpenApiItemsObject (Inline $ mempty & type_ ?~ OpenApiInteger)
       let stakingHashSchema =
             mempty
               & type_ ?~ OpenApiObject

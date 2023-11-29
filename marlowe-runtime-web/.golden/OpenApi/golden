@@ -2076,17 +2076,9 @@
                         "description": "A Plutus staking pointer.",
                         "properties": {
                             "stakingHash": {
-                                "items": [
-                                    {
-                                        "type": "integer"
-                                    },
-                                    {
-                                        "type": "integer"
-                                    },
-                                    {
-                                        "type": "integer"
-                                    }
-                                ],
+                                "items": {
+                                    "type": "integer"
+                                },
                                 "maxItems": 3,
                                 "minItems": 3,
                                 "type": "array"
