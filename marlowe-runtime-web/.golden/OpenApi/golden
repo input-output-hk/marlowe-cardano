@@ -1407,14 +1407,16 @@
                     },
                     "choices": {
                         "items": {
-                            "items": [
-                                {
-                                    "$ref": "#/components/schemas/ChoiceId"
-                                },
-                                {
-                                    "type": "integer"
-                                }
-                            ],
+                            "items": {
+                                "oneOf": [
+                                    {
+                                        "$ref": "#/components/schemas/ChoiceId"
+                                    },
+                                    {
+                                        "type": "integer"
+                                    }
+                                ]
+                            },
                             "maxItems": 2,
                             "minItems": 2,
                             "type": "array"

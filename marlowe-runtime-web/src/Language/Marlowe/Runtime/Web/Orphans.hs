@@ -5,9 +5,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Language.Marlowe.Runtime.Web.Orphans (
-
-) where
+module Language.Marlowe.Runtime.Web.Orphans () where
 
 import Control.Lens ((&), (.~), (?~))
 import Data.Data (Typeable)
@@ -541,7 +539,29 @@ instance ToSchema State where
             mempty
               & type_ ?~ OpenApiArray
               & items ?~ OpenApiItemsObject accountSchema
-    choicesSchema <- declareSchemaRef $ Proxy @[(ChoiceId, Integer)]
+    choiceIdSchema <- declareSchemaRef $ Proxy @ChoiceId
+    let choiceSchema :: Referenced Schema
+        choiceSchema =
+          Inline $
+            mempty
+              & type_ ?~ OpenApiArray
+              & minItems ?~ 2
+              & maxItems ?~ 2
+              & items
+                ?~ OpenApiItemsObject
+                  ( Inline $
+                      mempty
+                        & oneOf
+                          ?~ [ choiceIdSchema
+                             , Inline $ mempty & type_ ?~ OpenApiInteger
+                             ]
+                  )
+    let choicesSchema :: Referenced Schema
+        choicesSchema =
+          Inline $
+            mempty
+              & type_ ?~ OpenApiArray
+              & items ?~ OpenApiItemsObject choiceSchema
     let boundValueSchema :: Referenced Schema
         boundValueSchema =
           Inline $
