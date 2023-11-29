@@ -1359,24 +1359,28 @@
                 "properties": {
                     "accounts": {
                         "items": {
-                            "items": [
-                                {
-                                    "items": [
-                                        {
-                                            "$ref": "#/components/schemas/Party"
+                            "items": {
+                                "oneOf": [
+                                    {
+                                        "items": {
+                                            "oneOf": [
+                                                {
+                                                    "$ref": "#/components/schemas/Party"
+                                                },
+                                                {
+                                                    "$ref": "#/components/schemas/Token"
+                                                }
+                                            ]
                                         },
-                                        {
-                                            "$ref": "#/components/schemas/Token"
-                                        }
-                                    ],
-                                    "maxItems": 2,
-                                    "minItems": 2,
-                                    "type": "array"
-                                },
-                                {
-                                    "type": "integer"
-                                }
-                            ],
+                                        "maxItems": 2,
+                                        "minItems": 2,
+                                        "type": "array"
+                                    },
+                                    {
+                                        "type": "integer"
+                                    }
+                                ]
+                            },
                             "maxItems": 2,
                             "minItems": 2,
                             "type": "array"

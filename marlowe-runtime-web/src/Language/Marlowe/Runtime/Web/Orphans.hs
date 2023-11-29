@@ -15,6 +15,8 @@ import Data.OpenApi (
   HasDescription (description),
   HasEnum (enum_),
   HasFormat (format),
+  HasMaxItems (maxItems),
+  HasMinItems (minItems),
   HasOneOf (oneOf),
   HasProperties (properties),
   HasRequired (required),
@@ -502,7 +504,43 @@ instance ToSchema Contract where
 
 instance ToSchema State where
   declareNamedSchema _ = do
-    accountsSchema <- declareSchemaRef $ Proxy @[((AccountId, Token), Integer)]
+    accountIdSchema <- declareSchemaRef $ Proxy @AccountId
+    tokenSchema <- declareSchemaRef $ Proxy @Token
+    let accountSchemaInner :: Referenced Schema
+        accountSchemaInner =
+          Inline $
+            mempty
+              & type_ ?~ OpenApiArray
+              & minItems ?~ 2
+              & maxItems ?~ 2
+              & items
+                ?~ OpenApiItemsObject
+                  ( Inline $
+                      mempty
+                        & oneOf ?~ [accountIdSchema, tokenSchema]
+                  )
+    let accountSchemaOuter :: Referenced Schema
+        accountSchemaOuter =
+          Inline $
+            mempty
+              & oneOf
+                ?~ [ accountSchemaInner
+                   , Inline $ mempty & type_ ?~ OpenApiInteger
+                   ]
+    let accountSchema :: Referenced Schema
+        accountSchema =
+          Inline $
+            mempty
+              & type_ ?~ OpenApiArray
+              & minItems ?~ 2
+              & maxItems ?~ 2
+              & items ?~ OpenApiItemsObject accountSchemaOuter
+    let accountsSchema :: Referenced Schema
+        accountsSchema =
+          Inline $
+            mempty
+              & type_ ?~ OpenApiArray
+              & items ?~ OpenApiItemsObject accountSchema
     choicesSchema <- declareSchemaRef $ Proxy @[(ChoiceId, Integer)]
     boundValuesSchema <- declareSchemaRef $ Proxy @[(String, Integer)]
     integerSchema <- declareSchemaRef $ Proxy @Integer
