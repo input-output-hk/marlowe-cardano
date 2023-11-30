@@ -67,6 +67,7 @@ jobs:
             --end-at-tip
 
   marlowe-scaling:
+    if: false
     runs-on: ubuntu-latest
     # Dependency disabled pending automatic deploys
     # needs: [check-deploy]
