@@ -20,11 +20,12 @@ import qualified Data.HashMap.Strict.InsOrd as IOHM
 import qualified Data.List as List
 import qualified Data.Maybe as Maybe
 import Data.OpenApi hiding (Server)
+import Data.OpenApi.Internal (OpenApiSpecVersion (..))
 import Data.String (fromString)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text as Text
-import Data.Version (showVersion)
+import Data.Version (makeVersion, showVersion)
 import GHC.Exts (toList)
 import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
 import qualified Language.Marlowe.Runtime.Web as Web
@@ -276,6 +277,7 @@ openApi =
            , "https://marlowe-runtime-mainnet-web.scdev.aws.iohkdev.io"
            , "http://localhost:3780"
            ]
+      & openapi .~ OpenApiSpecVersion (makeVersion [3, 1, 0])
 
 server :: (Applicative m) => ServerT API m
 server = pure openApi

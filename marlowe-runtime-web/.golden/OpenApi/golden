@@ -3275,7 +3275,7 @@
         "title": "Marlowe Runtime REST API",
         "version": "0.0.5.1"
     },
-    "openapi": "3.0.0",
+    "openapi": "3.1.0",
     "paths": {
         "/contracts": {
             "get": {
