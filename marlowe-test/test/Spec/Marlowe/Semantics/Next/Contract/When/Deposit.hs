@@ -27,7 +27,7 @@ import Spec.Marlowe.Semantics.Arbitrary ()
 import Spec.Marlowe.Semantics.Next.Contract.When (indexedCaseActions)
 
 data EvaluatedDeposit
-  = EvaluatedDeposit Party AccountId Token Integer IsMerkleizedContinuation
+  = EvaluatedDeposit AccountId Party Token Integer IsMerkleizedContinuation
   deriving (Show, Eq, Ord)
 
 instance Injective EvaluatedDeposit CanDeposit where
