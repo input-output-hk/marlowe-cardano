@@ -24,7 +24,7 @@ import Language.Marlowe.Core.V1.Next.Indexed (CaseIndex (CaseIndex), Indexed (..
 import Language.Marlowe.Core.V1.Next.IsMerkleizedContinuation (IsMerkleizedContinuation)
 import Prelude
 
-data CanDeposit = CanDeposit Party AccountId Token Integer IsMerkleizedContinuation
+data CanDeposit = CanDeposit AccountId Party Token Integer IsMerkleizedContinuation
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Pretty)
 
@@ -33,8 +33,8 @@ instance FromJSON (Indexed CanDeposit) where
     Indexed
       <$> (CaseIndex <$> v .: "case_index")
       <*> ( CanDeposit
-              <$> v .: "party"
-              <*> v .: "into_account"
+              <$> v .: "into_account"
+              <*> v .: "party"
               <*> v .: "of_token"
               <*> v .: "can_deposit"
               <*> v .: "is_merkleized_continuation"
@@ -42,7 +42,7 @@ instance FromJSON (Indexed CanDeposit) where
   parseJSON _ = fail "CanDeposit must be either an object"
 
 instance ToJSON (Indexed CanDeposit) where
-  toJSON (Indexed caseIndex (CanDeposit party accountId token quantity isMerkleizedContinuation)) =
+  toJSON (Indexed caseIndex (CanDeposit accountId party token quantity isMerkleizedContinuation)) =
     object
       [ "party" .= party
       , "can_deposit" .= quantity

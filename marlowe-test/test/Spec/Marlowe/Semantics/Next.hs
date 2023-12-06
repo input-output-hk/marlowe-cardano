@@ -1,5 +1,8 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Spec.Marlowe.Semantics.Next (
@@ -11,9 +14,19 @@ import Data.List (group, nubBy, sort)
 import Data.Maybe (fromJust, isNothing, mapMaybe)
 import Data.Types.Isomorphic (Injective (to))
 
+import Data.Aeson (ToJSON (..), encode, object, (.=))
+import qualified Data.Aeson as Aeson
 import Data.Function (on)
 import Data.Semigroup (All (..))
-import Language.Marlowe (Case, evalObservation, evalValue)
+import GHC.Generics (Generic)
+import Language.Marlowe (
+  Case (..),
+  Contract (Close),
+  Environment (Environment),
+  TimeInterval,
+  evalObservation,
+  evalValue,
+ )
 import Language.Marlowe.Core.V1.Next (Next (..), next)
 import Language.Marlowe.Core.V1.Next.Applicables (
   ApplicableInputs (choices, deposits, notifyMaybe),
@@ -23,8 +36,14 @@ import Language.Marlowe.Core.V1.Next.Applicables (
 import Language.Marlowe.Core.V1.Next.Applicables.CanChoose (compactAdjoinedBounds, overlaps)
 import Language.Marlowe.Core.V1.Next.CanReduce (CanReduce (..))
 import Language.Marlowe.Core.V1.Next.Indexed (getCaseIndex, sameIndexedValue)
-import Language.Marlowe.Core.V1.Semantics.Types (Action (..), Contract, Environment, State, Value (..), getAction)
-import Spec.Marlowe.Semantics.Arbitrary ()
+import Language.Marlowe.Core.V1.Semantics.Types (
+  Action (..),
+  State (State, minTime),
+  Value (..),
+  getAction,
+ )
+import qualified PlutusLedgerApi.V2 as PV2
+import Spec.Marlowe.Semantics.Arbitrary (arbitraryNonnegativeInteger)
 import Spec.Marlowe.Semantics.Next.Common.Isomorphism ()
 import Spec.Marlowe.Semantics.Next.Common.QuickCheck (forAllSuchThat)
 import Spec.Marlowe.Semantics.Next.Common.Tuple (uncurry3)
@@ -40,7 +59,15 @@ import Spec.Marlowe.Semantics.Next.Contract.Generator (
 import Spec.Marlowe.Semantics.Next.Contract.When.Choice (onlyIndexedChoices)
 import Spec.Marlowe.Semantics.Next.Contract.When.Deposit (evaluateDeposits, hasNoIdenticalEvaluatedDeposits)
 import Spec.Marlowe.Semantics.Next.Contract.When.Notify (firstNotifyTrueIndex)
-import Test.QuickCheck (Arbitrary (..), forAllShrink, withMaxSuccess, (===))
+import Test.QuickCheck (
+  Arbitrary (..),
+  Gen,
+  Property,
+  forAllShrink,
+  genericShrink,
+  withMaxSuccess,
+  (===),
+ )
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck (testProperty)
 
@@ -131,8 +158,50 @@ tests =
                       compactAdjoinedBounds indexedChoices === compactAdjoinedBounds canChooseList
                 ]
             ]
+        , testProperty "JSON representation is compatible with Core" propJSON
         ]
     ]
+
+propJSON :: ToApplicableArgs -> Property
+propJSON (ToApplicableArgs env state case_) = encode actual === encode expected
+  where
+    actual = toJSON $ mkApplicablesWhen env state [case_]
+    expected =
+      object
+        [ "deposits"
+            .= case getAction case_ of
+              Deposit a p t v ->
+                pure $
+                  object
+                    [ "party" .= p
+                    , "can_deposit" .= v
+                    , "of_token" .= t
+                    , "into_account" .= a
+                    , "case_index" .= (0 :: Int)
+                    , "is_merkleized_continuation" .= False
+                    ]
+              _ -> []
+        , "choices" .= ([] :: [Aeson.Value])
+        ]
+
+data ToApplicableArgs = ToApplicableArgs Environment State (Case Contract)
+  deriving (Eq, Show, Generic)
+
+instance Arbitrary ToApplicableArgs where
+  arbitrary = do
+    state <- arbitrary
+    interval <- genTimeInterval state
+    let env = Environment interval
+    action <- Deposit <$> arbitrary <*> arbitrary <*> arbitrary <*> (Constant <$> arbitrary)
+    pure $ ToApplicableArgs env state $ Case action Close
+  shrink = genericShrink
+
+genTimeInterval :: State -> Gen TimeInterval
+genTimeInterval State{..} = do
+  dStart <- arbitraryNonnegativeInteger
+  let start = PV2.getPOSIXTime minTime + dStart
+  duration <- arbitraryNonnegativeInteger
+  pure (PV2.POSIXTime start, PV2.POSIXTime $ start + duration)
 
 onlyFalseNotifies :: Environment -> State -> [Case Contract] -> Bool
 onlyFalseNotifies env state = not . any (isTrueNotify env state . getAction)
