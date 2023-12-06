@@ -1,4 +1,12 @@
 
+<a id='changelog-0.2.1.0'></a>
+# 0.2.1.0 — 2023-12-06
+
+### Fixed
+
+- Order of parties in CanDeposit corrected - the account holder and depositing
+  party were swapped in the JSON representation.
+
 <a id='changelog-0.2.0.0'></a>
 # 0.2.0.0 — 2023-09-22
 

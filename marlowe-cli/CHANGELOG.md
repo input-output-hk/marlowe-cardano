@@ -1,4 +1,13 @@
 
+<a id='changelog-0.2.0.0'></a>
+# 0.2.0.0 — 2023-12-06
+
+## Fixed
+
+- Fixed `marlowe-cli` flags `--submit` and `--timeout` so they are consistent and so that the parser accepts an integer with or without the `s` suffix.
+
+- The `marlowe-cli transaction find-published` now reports correct information on the open-role validator.
+
 <a id='changelog-0.1.0.0'></a>
 # 0.1.0.0 — 2023-09-22
 

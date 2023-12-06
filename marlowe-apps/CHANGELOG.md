@@ -1,4 +1,18 @@
 
+<a id='changelog-0.4.0.0'></a>
+# 0.4.0.0 — 2023-12-06
+
+## Changed
+
+- Fixed `marlowe-apps` and `marlowe-finder` to handle new Marlowe chain sync protocol semantics where payout redemption is present in the event stream.
+
+- [BREAKING] Output of marlowe-finder has changed. It now outputs JSON objects with the following event types:
+  - `"NewBlock"` when a new block in the chain is encountered.
+  - `"NewContract"` when a new contract is found.
+  - `"InputsApplied"` when inputs are applied to a contract.
+  - `"PayoutsWithdrawn"` when role payouts are withdrawn from a payout validator.
+- Performance of marlowe-finder improved significantly.
+
 <a id='changelog-0.3.0.0'></a>
 # 0.3.0.0 — 2023-09-22
 

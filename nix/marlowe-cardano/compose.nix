@@ -80,8 +80,8 @@ let
   '';
 
   # We assume that all the components are versioned together.
-  marloweRuntimeVersion = "0.0.5";
-  marloweRuntimeWebVersion = "0.0.5.1";
+  marloweRuntimeVersion = "0.0.6";
+  marloweRuntimeWebVersion = "0.0.6";
   symlinks = runCommand "symlinks" { } ''
     mkdir -p $out
     ln -sv ${run-sqitch}/bin/run-sqitch $out

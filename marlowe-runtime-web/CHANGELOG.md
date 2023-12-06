@@ -1,4 +1,19 @@
 
+<a id='changelog-0.0.6'></a>
+# 0.0.6 — 2023-12-06
+
+## Added
+
+- Added support for creating and applying input to "open role" contracts.
+
+## Changed
+
+- Fixed errors and added clarification to Open API documentation.
+
+## Fixed
+
+- 5xx responses do not include CORS headers.
+
 <a id='changelog-0.0.5.1'></a>
 # 0.0.5.1 — 2023-10-17
 

@@ -1,4 +1,58 @@
 
+<a id='changelog-0.0.6'></a>
+# 0.0.6 — 2023-12-06
+
+## Added
+
+- New bulk sync protocol which allows clients to subscribe to all events from
+  all marlowe contracts.
+
+- Garbage collection added to `marlowe-contract`
+
+- More documentation in --help text
+
+- Added support for creating and applying input to "open role" contracts.
+
+- Safety analysis support for open-role contracts.
+
+- `marlowe-chain-copy` executable for efficiently seeding a new chain database.
+
+- Support for advanced role token distribution.
+  - Mint multiple tokens per role
+  - Send tokens to multiple recipients.
+
+- Arbitrary extra properties can be added to role token metadata.
+
+- Published Marlowe validators compiled under plutus-1.15.0.0.
+
+## Changed
+
+- Min lovelace deposit is optional, and a default will be computed if omitted.
+
+- Improve signal-to-noise ratio of chain sync protocol logging.
+
+- Dropped `asset` table from `chain` schema, inlining fields into `assetOut`
+  and `assetMint`.
+- Improved sync performance of `marlowe-chain-indexer` by switching from
+  `INSERT` to `COPY`.
+- Internal: consolidated database row extraction logic for cardano blocks into
+  reusable modules.
+
+- Improved sync performance of `marlowe-indexer`.
+
+- `marlowe-indexer` now indexes contracts by parties in the accounts as well as
+  the contract.
+
+## Fixed
+
+- Building a transaction for a contract that uses ADA role tokens fails.
+
+- The `TransactionInput` definition in the generated OpenApi schema for Marlowe Runtime Web is now explicitly typed as an `object`.
+
+- Safety checks fail when open roles and default thread token name are used.
+
+- The generated OpenApi schema represented tuples as heterogenous arrays which was not allowed with OpenApi specification 3.0.0. The schema was set to target OpenApi specification 3.1.0.
+
 <a id='changelog-0.0.5'></a>
 # 0.0.5 — 2023-09-22
 

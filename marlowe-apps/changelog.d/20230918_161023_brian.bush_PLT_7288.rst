@@ -1,4 +1,0 @@
-Changed
--------
-
-- Fixed `marlowe-apps` and `marlowe-finder` to handle new Marlowe chain sync protocol semantics where payout redemption is present in the event stream.
