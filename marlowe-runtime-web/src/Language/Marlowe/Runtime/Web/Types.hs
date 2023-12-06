@@ -27,7 +27,6 @@ import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import Data.Char (isSpace)
 import Data.Foldable (fold)
 import Data.Map (Map)
-import qualified Data.Map as Map
 import Data.OpenApi (
   AdditionalProperties (..),
   HasAdditionalProperties (..),
@@ -59,7 +58,6 @@ import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text.Lazy as TL
 import Data.Time (UTCTime)
 import Data.Time.Format.ISO8601 (iso8601Show)
-import Data.Traversable (for)
 import Data.Version (Version)
 import Data.Word (Word16, Word32, Word64)
 import GHC.Exts (IsList)
@@ -898,7 +896,7 @@ data RoleTokenConfig = RoleTokenConfig
   { recipients :: RoleTokenRecipients
   , metadata :: Maybe TokenMetadata
   }
-  deriving (Show, Eq, Ord, Generic)
+  deriving (Show, Eq, Ord, FromJSON, ToJSON, Generic)
 
 type RoleTokenRecipients = Map RoleTokenRecipient Word64
 
@@ -928,45 +926,6 @@ instance FromJSON RoleTokenRecipient where
 
 instance FromJSONKey RoleTokenRecipient where
   fromJSONKey = FromJSONKeyText roleTokenRecipientFromText
-
-instance FromJSON RoleTokenConfig where
-  parseJSON (String "OpenRole") =
-    pure
-      . flip RoleTokenConfig Nothing
-      $ Map.singleton OpenRole 1
-  parseJSON (String s) =
-    pure
-      . flip RoleTokenConfig Nothing
-      . flip Map.singleton 1
-      . ClosedRole
-      $ Address s
-  parseJSON value =
-    withObject
-      "RoleTokenConfig"
-      ( \obj -> do
-          mRecipients <- obj .:? "recipients"
-          mAddress <- obj .:? "address"
-          mScriptRole <- do
-            mScript :: Maybe String <- obj .:? "script"
-            for mScript \case
-              "OpenRole" -> pure OpenRole
-              _ -> fail "Expected \'OpenRole\""
-          metadata <- obj .:? "metadata"
-          recipients <- case (mRecipients, mAddress, mScriptRole) of
-            (Just recipients, _, _) -> pure recipients
-            (_, Just address, _) -> pure $ Map.singleton (ClosedRole address) 1
-            (_, _, Just scriptRole) -> pure $ Map.singleton scriptRole 1
-            _ -> fail "one of recipients, address, or script required"
-          pure RoleTokenConfig{..}
-      )
-      value
-
-instance ToJSON RoleTokenConfig where
-  toJSON (RoleTokenConfig recipients metadata) =
-    object
-      [ "recipients" .= recipients
-      , "metadata" .= metadata
-      ]
 
 instance ToSchema RoleTokenConfig where
   declareNamedSchema _ = do
