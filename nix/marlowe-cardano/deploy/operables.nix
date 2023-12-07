@@ -459,7 +459,7 @@ in
         --transfer-port "$TRANSFER_PORT" \
         --chain-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
         --chain-sync-query-port "$MARLOWE_CHAIN_SYNC_QUERY_PORT" \
-        --marlowe-sync-host "$MARLOWE_CHAIN_SYNC_HOST" \
+        --marlowe-sync-host "$SYNC_HOST" \
         --marlowe-bulk-port "$MARLOWE_BULK_SYNC_PORT" \
         --store-dir "$STORE_DIR" \
         --http-port "$HTTP_PORT" \
