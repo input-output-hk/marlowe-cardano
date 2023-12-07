@@ -221,7 +221,7 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
       mconcat
         [ O.fullDesc
         , O.progDescDoc $ Just description
-        , O.header "marlowe-chain-indexer: Chain query and sync server for the Marlowe Runtime."
+        , O.header "marlowe-chain-sync: Chain query and sync server for the Marlowe Runtime."
         ]
 
 description :: Doc ann

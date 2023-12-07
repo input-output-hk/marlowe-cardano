@@ -331,7 +331,7 @@ getOptions = do
       mconcat
         [ fullDesc
         , progDescDoc $ Just description
-        , header "marlowe-tx: Transaction creation server for the Marlowe Runtime."
+        , header "marlowe-contract: Contract storage service for the Marlowe Runtime."
         ]
 
 description :: Doc ann
