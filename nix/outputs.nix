@@ -29,6 +29,14 @@ in
 
   # Extra flake outputs
   {
+    testContainer = lib.iogx.mkContainerFromCabalExe {
+      exe = inputs.self.packages.marlowe-chain-indexer;
+      name = "marlowe-chain-indexer";
+      description = "Test description";
+      packages = [ pkgs.jq ];
+      sourceUrl = "https://github.com/input-output-hk/marlowe-cardano";
+    };
+
     devShells.profiled = project.variants.profiled.devShell;
 
     inherit static allStatic;

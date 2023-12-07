@@ -19,7 +19,10 @@
     cardano-world.url = "github:input-output-hk/cardano-world/d22f50fc77d23e2612ca2b313a098dd0b48834d4";
 
     iogx = {
-      url = "github:input-output-hk/iogx";
+      type = "github";
+      owner = "input-output-hk";
+      repo = "iogx";
+      ref = "containerFromCabalExe";
       inputs.hackage.follows = "hackage";
       inputs.CHaP.follows = "CHaP";
       inputs.haskell-nix.follows = "haskell-nix";
