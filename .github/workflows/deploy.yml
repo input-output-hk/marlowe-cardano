@@ -1,4 +1,4 @@
-name: "Build, Push, and Deploy"
+name: "Deploy"
 env:
   CACHE_NAME: marlowe-temp
   ALLOWED_URIS: "https://github.com https://api.github.com"
@@ -98,6 +98,7 @@ jobs:
           fi
 
   autocommit:
+    if: false
     name: Auto Commit
     needs: publish
     runs-on: ubuntu-latest
