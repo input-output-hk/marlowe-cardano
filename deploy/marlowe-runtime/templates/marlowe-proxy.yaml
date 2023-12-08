@@ -58,7 +58,6 @@ spec:
         properties:
           annotations:
             "external-dns.alpha.kubernetes.io/hostname": "marlowe-runtime-{{ . }}.{{ $instance.parentDomain }}"
-            "service.beta.kubernetes.io/aws-load-balancer-name": "marlowe-runtime-{{ . }}-{{ $instanceName }}"
             "service.beta.kubernetes.io/aws-load-balancer-nlb-target-type": "instance"
             "service.beta.kubernetes.io/aws-load-balancer-scheme": "internet-facing"
             "service.beta.kubernetes.io/aws-load-balancer-type": "external"
