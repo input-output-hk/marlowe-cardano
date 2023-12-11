@@ -26,5 +26,5 @@ releaseName: marlowe-runtime
 databaseName: marlowe-runtime-database
 
 otelExporter:
-  url: http://k8s-monitoring-grafana-agent
+  url: http://k8s-monitoring-grafana-agent.grafana-agent
   port: 4318
