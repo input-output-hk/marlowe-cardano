@@ -46,7 +46,7 @@ spec:
         - name: HTTP_PORT
           value: "3786"
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
-          value: {{ $.Values.otelExporterURL }}:{{ $.Values.otelExporterPort }}
+          value: {{ $.Values.otelExporter.url }}:{{ $.Values.otelExporter.port }}
         - name: OTEL_SERVICE_NAME
           value: marlowe-proxy-{{ . }}-{{ $instanceName }}
         cpu: "0.5"

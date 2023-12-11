@@ -26,7 +26,7 @@ spec:
       - name: HTTP_PORT
         value: "3782"
       - name: OTEL_EXPORTER_OTLP_ENDPOINT
-        value: {{ $.Values.otelExporterURL }}:{{ $.Values.otelExporterPort }}
+        value: {{ $.Values.otelExporter.url }}:{{ $.Values.otelExporter.port }}
       - name: OTEL_SERVICE_NAME
         value: marlowe-chain-sync-{{ $network }}-{{ $instanceName }}
       - name: CARDANO_NODE_SOCKET_PATH
@@ -36,7 +36,7 @@ spec:
       - name: DB_NAME
         value: chainsync_{{ $instanceName }}_{{ $network }}
       - name: DB_HOST
-        value: {{ $.Values.databaseHost }}:5432
+        value: {{ $instance.databaseHost }}:5432
       - name: DB_USER
         valueFrom:
           secretKeyRef:
