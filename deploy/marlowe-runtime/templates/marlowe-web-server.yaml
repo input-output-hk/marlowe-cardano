@@ -22,7 +22,7 @@ spec:
         - name: RUNTIME_PORT
           value: "3701"
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
-          value: {{ $.Values.otelExporterURL }}:{{ $.Values.otelExporterPort }}
+          value: {{ $.Values.otelExporter.url }}:{{ $.Values.otelExporter.port }}
         - name: OTEL_SERVICE_NAME
           value: marlowe-web-server-{{ . }}-{{ $instanceName }}
         cpu: "0.5"

@@ -10,12 +10,14 @@ instances:
     tag: 0.0.6-rc2
     repo: ghcr.io
     org: input-output-hk
+    databaseHost: prod-marlowe-runtime-db-new.csguv6v6ban1.us-east-1.rds.amazonaws.com
   demo:
     parentDomain: demo.scdev.aws.iohkdev.io
     webTag: 0.0.5.1
     tag: 0.0.5
     repo: ghcr.io
     org: input-output-hk
+    databaseHost: prod-marlowe-runtime-db.csguv6v6ban1.us-east-1.rds.amazonaws.com
 
 namespace: marlowe-staging
 
@@ -23,8 +25,6 @@ releaseName: marlowe-runtime
 
 databaseName: marlowe-runtime-database
 
-databaseHost: prod-marlowe-runtime-db.csguv6v6ban1.us-east-1.rds.amazonaws.com
-
-otelExporterURL: http://grafana-agent.grafana-agent
-
-otelExporterPort: 4318
+otelExporter:
+  url: http://k8s-monitoring-grafana-agent.grafana-agent
+  port: 4318
