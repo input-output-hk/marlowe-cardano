@@ -17,7 +17,7 @@ instances:
     tag: 0.0.5
     repo: ghcr.io
     org: input-output-hk
-    databaseHost: prod-marlowe-runtime-db.csguv6v6ban1.us-east-1.rds.amazonaws.com
+    databaseHost: prod-marlowe-runtime-db-new.csguv6v6ban1.us-east-1.rds.amazonaws.com
 
 namespace: marlowe-staging
 
