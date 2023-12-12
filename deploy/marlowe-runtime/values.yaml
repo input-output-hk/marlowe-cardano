@@ -19,6 +19,8 @@ instances:
     org: input-output-hk
     databaseHost: prod-marlowe-runtime-db-new.csguv6v6ban1.us-east-1.rds.amazonaws.com
 
+instanceClass: t3.medium
+
 namespace: marlowe-staging
 
 releaseName: marlowe-runtime
