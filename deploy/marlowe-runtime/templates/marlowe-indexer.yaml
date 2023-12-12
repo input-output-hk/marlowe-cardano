@@ -1,5 +1,5 @@
 {{- range $instanceName, $instance := .Values.instances }}
-{{- range $.Values.networks }}
+{{- range $network := $.Values.networks }}
 ---
 apiVersion: core.oam.dev/v1beta1
 kind: Application
@@ -43,7 +43,7 @@ spec:
         allocateDatabase:
           storage: 400
           instanceClass: {{ $.Values.instaceClass }}
-        name: marlowe-indexer-{{ $network }} 
+        name: marlowe-indexer-{{ $network }}
   policies:
   - name: local-{{ $.Values.namespace }}
     properties:
