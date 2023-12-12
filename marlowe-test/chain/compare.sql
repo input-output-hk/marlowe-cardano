@@ -199,6 +199,9 @@ create temporary table x_metadata as
         or c_tx.metadata is     null and c_tx.metadata is not null
         or position(right(encode(c_tx.metadata, 'hex'), -4) in encode(m_tx.metadata, 'hex')) = 0
       )
+      and not (
+        c_tx.metadata = '\xa0' and c_tx.metadata is null
+      )
 ;
 commit;
 select
@@ -206,7 +209,7 @@ select
   from x_metadata
 ;
 \copy (select * from x_metadata order by 1, 2, 3) to 'out/metadata-discrepancies.csv' CSV HEADER
-    
+
 
 \qecho
 \qecho TxOut comparison.
@@ -332,7 +335,7 @@ select
   group by comparison
 ;
 \copy (select * from x_datum order by 2, 3, 4, 1) to 'out/datum-discrepancies.csv' CSV HEADER
-  
+
 
 \qecho
 \qecho TxIn comparison.
@@ -416,74 +419,6 @@ select
 
 
 \qecho
-\qecho Asset comparison.
-\qecho
-
-begin;
-drop table if exists cmp_asset;
-create temporary table cmp_asset as
-  select
-      'chainindex' :: varchar as "source"
-    , policyid
-    , name
-    from max_slotno
-    inner join chain.assetmint
-      on slotno <= max_slotno
-    inner join chain.asset
-      on assetid = id
-  union  -- NB: We need `union` instead of `union all` here because assets may be minted more than once.
-  select
-      'dbsync'
-    , multi_asset.policy
-    , multi_asset.name
-    from max_slotno
-    inner join public.block
-      on block.slot_no <= max_slotno
-    inner join public.tx
-      on tx.block_id = block.id
-    inner join public.ma_tx_mint
-      on ma_tx_mint.tx_id = tx.id
-    inner join public.multi_asset
-      on multi_asset.id = ident
-    where
-      block_no > 0
-;
-commit;
-select
-    source as "Source"
-  , count(*) as "Count of Asset Records"
-  from cmp_asset
-  group by source
-;
-
-begin;
-drop table if exists x_asset;
-create temporary table x_asset as
-  select 'chainindex-dbsync' :: varchar as "comparison", *
-    from (
-      select policyid, name from cmp_asset where source = 'chainindex'
-      except
-      select policyid, name from cmp_asset where source = 'dbsync'
-    ) as mc_asset
-  union all
-  select 'dbsync-chainindex', *
-    from (
-      select policyid, name from cmp_asset where source = 'dbsync'
-      except
-      select policyid, name from cmp_asset where source = 'chainindex'
-    ) as cm_asset
-;
-commit;
-select
-    comparison as "Discrepancy"
-  , count(*) as "Count of Asset Records"
-  from x_asset
-  group by comparison
-;
-\copy (select * from x_asset order by 2, 3, 1) to 'out/asset-discrepancies.csv' CSV HEADER
-
-
-\qecho
 \qecho Asset mint comparison.
 \qecho
 
@@ -500,8 +435,6 @@ create temporary table cmp_asset_mint as
     from max_slotno
     inner join chain.assetmint
       on slotno <= max_slotno
-    inner join chain.asset
-      on assetid = id
   union
   select
       'dbsync'
@@ -562,20 +495,6 @@ select
 \qecho
 
 begin;
-drop table if exists xref_asset;
-create temporary table xref_asset as
-  select
-      asset.id as "chainindex_id"
-    , multi_asset.id as "dbsync_id"
-    , asset.policyid
-    , asset.name
-    from chain.asset
-    inner join public.multi_asset
-      on (asset.policyid, asset.name) = (multi_asset.policy, multi_asset.name)
-;
-commit;
-
-begin;
 drop table if exists cmp_asset_out;
 create temporary table cmp_asset_out as
   select
@@ -583,20 +502,20 @@ create temporary table cmp_asset_out as
     , txoutid
     , txoutix
     , slotno
-    , assetid
+    , policyid
+    , name
     , quantity
     from max_slotno
     inner join chain.assetout
       on slotno <= max_slotno
-    inner join chain.asset
-      on assetid = id
   union
   select
       'dbsync' :: varchar as "source"
     , tx.hash
     , tx_out.index
     , block.slot_no
-    , chainindex_id
+    , multi_asset.policy
+    , multi_asset.name
     , ma_tx_out.quantity
     from max_slotno
     inner join public.block as block
@@ -607,8 +526,8 @@ create temporary table cmp_asset_out as
       on tx_out.tx_id = tx.id
     inner join public.ma_tx_out
       on ma_tx_out.tx_out_id = tx_out.id
-    inner join xref_asset
-      on dbsync_id = ma_tx_out.ident
+    inner join public.multi_asset
+      on multi_asset.id = ident
     where
       block_no > 0
 ;
@@ -625,16 +544,16 @@ drop table if exists x_asset_out;
 create temporary table x_asset_out as
   select 'chainindex-dbsync' as "comparison", *
     from (
-      select txoutid, txoutix, slotno, assetid, quantity from cmp_asset_out where source = 'chainindex'
+      select txoutid, txoutix, slotno, policyid, name, quantity from cmp_asset_out where source = 'chainindex'
       except
-      select txoutid, txoutix, slotno, assetid, quantity from cmp_asset_out where source = 'dbsync'
+      select txoutid, txoutix, slotno, policyid, name, quantity from cmp_asset_out where source = 'dbsync'
     ) as mc_asset_out
   union all
   select 'dbsync-chainindex', *
     from (
-      select txoutid, txoutix, slotno, assetid, quantity from cmp_asset_out where source = 'dbsync'
+      select txoutid, txoutix, slotno, policyid, name, quantity from cmp_asset_out where source = 'dbsync'
       except
-      select txoutid, txoutix, slotno, assetid, quantity from cmp_asset_out where source = 'chainindex'
+      select txoutid, txoutix, slotno, policyid, name, quantity from cmp_asset_out where source = 'chainindex'
     ) as cm_asset_out
 ;
 commit;
@@ -644,7 +563,7 @@ select
   from x_asset_out
   group by comparison
 ;
-\copy (select * from x_asset_out order by 2, 3, 4, 5, 6, 1) to 'out/assetout-discrepancies.csv' CSV HEADER
+\copy (select * from x_asset_out order by 2, 3, 4, 5, 6, 7, 1) to 'out/assetout-discrepancies.csv' CSV HEADER
 
 
 \qecho
@@ -688,12 +607,6 @@ create temporary table x_summary as
     , (select count(*) from x_txin where comparison = 'chainindex-dbsync')
     , (select count(*) from x_txin where comparison = 'dbsync-chainindex')
     , (select count(*) from x_txin) > 0
-  union all
-  select
-      'asset'
-    , (select count(*) from x_asset where comparison = 'chainindex-dbsync')
-    , (select count(*) from x_asset where comparison = 'dbsync-chainindex')
-    , (select count(*) from x_asset) > 0
   union all
   select
       'assetmint'
