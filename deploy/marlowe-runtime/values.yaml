@@ -1,7 +1,6 @@
 networks:
   - preprod
   - preview
-  - mainnet
 
 instances:
   qa:
