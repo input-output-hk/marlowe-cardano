@@ -98,7 +98,6 @@ jobs:
           fi
 
   autocommit:
-    if: false
     name: Auto Commit
     needs: publish
     runs-on: ubuntu-latest
