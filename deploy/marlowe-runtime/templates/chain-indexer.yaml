@@ -14,7 +14,7 @@ spec:
   - name: chain-indexer-{{ $network }}-{{ $instanceName }}
     type: webservice
     properties:
-      cpu: "0.5"
+      cpu: "1"
       env:
       - name: NODE_CONFIG
         value: /node-config/network/{{ $network }}/cardano-node/config.json
