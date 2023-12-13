@@ -42,7 +42,7 @@ spec:
       properties:
         allocateDatabase:
           storage: 400
-          instanceClass: t3.medium
+          instanceClass: db.t3.medium
         name: marlowe-indexer-{{ $network }}
   policies:
   - name: local-{{ $.Values.namespace }}
