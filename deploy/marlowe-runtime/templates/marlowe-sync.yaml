@@ -13,10 +13,6 @@ spec:
   components:
   - name: marlowe-sync-{{ $network }}-{{ $instanceName }}
     type: webservice
-    traits: 
-    - type: postgres-instance
-      properties:
-        name: marlowe-indexer-{{ $network }}
     properties:
       env:
       - name: HOST
@@ -75,6 +71,10 @@ spec:
       - expose: true
         port: 3784
         protocol: TCP
+    traits: 
+    - type: postgres-instance
+      properties:
+        name: marlowe-indexer-{{ $network }}
   policies:
   - name: local-{{ $.Values.namespace }}
     properties:
