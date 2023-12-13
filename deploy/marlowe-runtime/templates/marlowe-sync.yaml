@@ -75,6 +75,9 @@ spec:
     - type: postgres-instance
       properties:
         name: marlowe-indexer-{{ $network }}
+      dependencies:
+      - name: marlowe-indexer
+        repository: "file://./marlowe-indexer"
   policies:
   - name: local-{{ $.Values.namespace }}
     properties:
