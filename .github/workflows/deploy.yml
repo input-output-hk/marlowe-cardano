@@ -107,6 +107,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           ref: main
+          token: ${{ secrets.GH_PAT }}
 
       - name: Update publish version
         id: update
