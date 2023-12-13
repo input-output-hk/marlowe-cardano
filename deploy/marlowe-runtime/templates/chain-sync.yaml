@@ -13,6 +13,10 @@ spec:
   components:
   - name: chain-sync-{{ $network }}-{{ $instanceName }}
     type: webservice
+    traits: 
+      - type: postgres-instance
+        properties:
+          name: chain-indexer-{{ $network }}
     properties:
       env:
       - name: HOST
