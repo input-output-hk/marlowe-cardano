@@ -67,6 +67,10 @@ spec:
             resources:
               requests:
                 storage: 200Gi
+      - type: k8s-update-strategy
+        properties:
+          strategy:
+            type: Recreate
   policies:
   - name: local-{{ $.Values.namespace }}
     properties:
