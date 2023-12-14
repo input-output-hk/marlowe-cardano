@@ -34,6 +34,12 @@ spec:
         - name: ipc
           mountPath: /ipc
     traits:
+    - type: postgres-instance
+      properties:
+        allocateDatabase:
+          storage: 400
+          instanceClass: db.t3.medium
+        name: chain-indexer-{{ $network }}    
     - type: init-container
       properties:
         name: node-config-cloner
@@ -57,13 +63,6 @@ spec:
         volumes:
         - name: ipc
           path: /ipc
-    - type: postgres-instance
-      properties:
-        # This trait definition will create a new RDS instance
-        allocateDatabase:
-          storage: 400
-          instanceClass: db.t3.medium
-        name: chain-indexer-{{ $network }}
   policies:
   - name: local-{{ $.Values.namespace }}
     properties:

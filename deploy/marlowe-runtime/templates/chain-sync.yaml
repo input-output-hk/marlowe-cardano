@@ -81,9 +81,6 @@ spec:
     - type: postgres-instance
       properties:
         name: chain-indexer-{{ $network }}
-      dependencies:
-      - name: chain-indexer
-        repository: "file://./chain-indexer"
   policies:
   - name: local-{{ $.Values.namespace }}
     properties:
