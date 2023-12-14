@@ -58,7 +58,7 @@ spec:
     traits: 
     - type: postgres-instance
       properties:
-        name: marlowe-indexer-{{ $network }}
+        name: dev-marlowe-indexer-{{ $network }}
   policies:
   - name: local-{{ $.Values.namespace }}
     properties:

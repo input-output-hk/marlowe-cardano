@@ -80,7 +80,7 @@ spec:
           path: /ipc
     - type: postgres-instance
       properties:
-        name: chain-indexer-{{ $network }}
+        name: dev-chain-indexer-{{ $network }}
   policies:
   - name: local-{{ $.Values.namespace }}
     properties:

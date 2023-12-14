@@ -39,7 +39,7 @@ spec:
         allocateDatabase:
           storage: 400
           instanceClass: db.t3.medium
-        name: chain-indexer-{{ $network }}    
+        name: dev-chain-indexer-{{ $network }}    
     - type: init-container
       properties:
         name: node-config-cloner
