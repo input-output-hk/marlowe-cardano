@@ -62,7 +62,7 @@ spec:
         # This trait definition will create a new RDS instance
         allocateDatabase:
           storage: 400
-          instanceClass: {{ $.Values.instanceClass }}
+          instanceClass: db.t3.medium
         name: chain-indexer-{{ $network }}
   policies:
   - name: local-{{ $.Values.namespace }}
