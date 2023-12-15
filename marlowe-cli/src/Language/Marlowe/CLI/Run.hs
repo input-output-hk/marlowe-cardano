@@ -879,7 +879,7 @@ withdrawFunds connection marloweOutFile roleName collateral inputs outputs chang
         outputs'
         (Just collateral)
         changeAddress
-        (mtRange marloweOut)
+        Nothing
         (hashSigningKey <$> signingKeys)
         TxMintNone
         metadata
