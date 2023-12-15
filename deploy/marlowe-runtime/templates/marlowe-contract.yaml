@@ -39,10 +39,6 @@ spec:
           value: "1800s" # 30 minutes
         - name: HTTP_PORT
           value: "3787"
-        - name: OTEL_EXPORTER_OTLP_ENDPOINT
-          value: {{ $.Values.otelExporter.url }}:{{ $.Values.otelExporter.port }}
-        - name: OTEL_SERVICE_NAME
-          value: marlowe-contract-{{ . }}-{{ $instanceName }}
         cpu: "0.5"
         image: {{ $instance.repo }}/{{ $instance.org }}/marlowe-contract:{{ $instance.tag }}
         imagePullPolicy: Always

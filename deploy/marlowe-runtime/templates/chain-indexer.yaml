@@ -22,10 +22,6 @@ spec:
         value: /ipc/node.socket
       - name: HTTP_PORT
         value: "3781"
-      - name: OTEL_EXPORTER_OTLP_ENDPOINT
-        value: {{ $.Values.otelExporter.url }}:{{ $.Values.otelExporter.port }}
-      - name: OTEL_SERVICE_NAME
-        value: marlowe-chain-indexer-{{ $network }}-{{ $instanceName }}
       image: {{ $instance.repo }}/{{ $instance.org }}/marlowe-chain-indexer:{{ $instance.tag }}
       imagePullPolicy: Always
       memory: 8Gi

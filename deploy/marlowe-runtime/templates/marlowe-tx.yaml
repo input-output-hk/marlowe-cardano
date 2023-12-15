@@ -33,10 +33,6 @@ spec:
           value: "3728"
         - name: HTTP_PORT
           value: "3785"
-        - name: OTEL_EXPORTER_OTLP_ENDPOINT
-          value: {{ $.Values.otelExporter.url }}:{{ $.Values.otelExporter.port }}
-        - name: OTEL_SERVICE_NAME
-          value: marlowe-tx-{{ . }}-{{ $instanceName }}
         cpu: "0.5"
         image: {{ $instance.repo }}/{{ $instance.org }}/marlowe-tx:{{ $instance.tag }}
         imagePullPolicy: Always

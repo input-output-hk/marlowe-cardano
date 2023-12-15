@@ -45,10 +45,6 @@ spec:
           value: "3726"
         - name: HTTP_PORT
           value: "3786"
-        - name: OTEL_EXPORTER_OTLP_ENDPOINT
-          value: {{ $.Values.otelExporter.url }}:{{ $.Values.otelExporter.port }}
-        - name: OTEL_SERVICE_NAME
-          value: marlowe-proxy-{{ . }}-{{ $instanceName }}
         cpu: "0.5"
         image: {{ $instance.repo }}/{{ $instance.org }}/marlowe-proxy:{{ $instance.tag }}
         imagePullPolicy: Always
@@ -57,7 +53,7 @@ spec:
       - type: expose
         properties:
           annotations:
-            "external-dns.alpha.kubernetes.io/hostname": "marlowe-runtime-{{ . }}.{{ $instance.parentDomain }}"
+            "external-dns.alpha.kubernetes.io/hostname": "dev-marlowe-runtime-{{ . }}.{{ $instance.parentDomain }}"
             "service.beta.kubernetes.io/aws-load-balancer-nlb-target-type": "instance"
             "service.beta.kubernetes.io/aws-load-balancer-scheme": "internet-facing"
             "service.beta.kubernetes.io/aws-load-balancer-type": "external"

@@ -21,10 +21,6 @@ spec:
           value: marlowe-proxy-{{ . }}-{{ $instanceName }}.{{ $.Values.namespace }}
         - name: RUNTIME_PORT
           value: "3701"
-        - name: OTEL_EXPORTER_OTLP_ENDPOINT
-          value: {{ $.Values.otelExporter.url }}:{{ $.Values.otelExporter.port }}
-        - name: OTEL_SERVICE_NAME
-          value: marlowe-web-server-{{ . }}-{{ $instanceName }}
         cpu: "0.5"
         image: {{ $instance.repo }}/{{ $instance.org }}/marlowe-web-server:{{ $instance.webTag }}
         imagePullPolicy: Always
