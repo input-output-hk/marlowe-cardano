@@ -40,7 +40,7 @@ import Language.Marlowe.CLI.Command.Parse (
 import Language.Marlowe.CLI.Examples (makeExample)
 import Language.Marlowe.CLI.IO (decodeFileStrict)
 import Language.Marlowe.CLI.Types (CliError (..), SomeTimeout, toMarloweExtendedTimeout, toMarloweTimeout)
-import Language.Marlowe.Extended.V1 as E (Contract (..), Party, Token, Value (..))
+import Language.Marlowe.Extended.V1 as E (Contract (..), Party, Token (..), Value (..))
 import Language.Marlowe.Util (ada)
 import Marlowe.Contracts (coveredCall, escrow, swap, trivial, zeroCouponBond)
 
@@ -455,7 +455,7 @@ templateSwapOptions =
       )
     <*> O.option
       parseToken
-      ( O.long "a-token" <> O.metavar "TOKEN" <> O.help "The first party's token."
+      ( O.long "a-token" <> O.value (Token "" "") <> O.metavar "TOKEN" <> O.help "The first party's token (default is ada)."
       )
     <*> O.option
       O.auto
@@ -473,7 +473,7 @@ templateSwapOptions =
       )
     <*> O.option
       parseToken
-      ( O.long "b-token" <> O.metavar "TOKEN" <> O.help "The second party's token."
+      ( O.long "b-token" <> O.value (Token "" "") <> O.metavar "TOKEN" <> O.help "The second party's token. (default is ada)"
       )
     <*> O.option
       O.auto
