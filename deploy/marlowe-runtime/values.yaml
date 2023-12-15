@@ -5,8 +5,8 @@ networks:
 instances:
   qa:
     parentDomain: scdev.aws.iohkdev.io
-    webTag: d3829976
-    tag: d3829976
+    webTag: f18535fb
+    tag: f18535fb
     repo: ghcr.io
     org: input-output-hk
     databaseHost: prod-marlowe-runtime-db.csguv6v6ban1.us-east-1.rds.amazonaws.com
