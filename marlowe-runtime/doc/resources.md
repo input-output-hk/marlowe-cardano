@@ -13,17 +13,17 @@ The table below provides guidance on the memory and CPU resources required for M
 2. Running 500 Marlowe contracts in parallel at the maximum possible transaction-building and -submission rate.
 3. Querying the history of all Marlowe contracts at the maximum rate.
 
-| Service                 | Memory  | CPU (cores) |
-|-------------------------|--------:|------------:|
-| `marlowe-chain-indexer` | 4000 MB |       100 % |
-| `marlowe-chain-sync`    | 2500 MB |        25 % |
-| `marlowe-indexer`       | 2000 MB |       100 % |
-| `marlowe-sync`          |   50 MB |        25 % |
-| `marlowe-contract`      |   25 MB |        50 % |
-| `marlowe-tx`            | 1000 MB |       100 % |
-| `marlowe-proxy`         |  100 MB |        50 % |
-| `marlowe-web-server`    |   50 MB |        10 % |
-| Total                   | 9000 MB |       500 % |
+| Service                 | Memory   | CPU (cores) |
+|-------------------------|---------:|------------:|
+| `marlowe-chain-indexer` | 11000 MB |       100 % |
+| `marlowe-chain-sync`    |  1000 MB |        25 % |
+| `marlowe-indexer`       |  1000 MB |       150 % |
+| `marlowe-sync`          |   200 MB |        25 % |
+| `marlowe-contract`      |    50 MB |        50 % |
+| `marlowe-tx`            |   750 MB |       100 % |
+| `marlowe-proxy`         |   200 MB |        50 % |
+| `marlowe-web-server`    |    50 MB |        10 % |
+| Total                   | 12000 MB |       400 % |
 
 
 ## Sync times
@@ -35,6 +35,8 @@ On a 32-core Intel i9 with 4000 MHz dual-channel DDRS memory and 7000 MB/s SSDs,
 | `marlowe-chain-indexer` | 510 min |   7 min |  16 min |
 | `marlowe-indexer`       |   3 min |   1 min |   2 min |
 
+However, sync types vary strongly with hardware ressources: for example, an AWS EC2 `c4.4xlarge` instance takes 38 hours to sync `mainnet`.
+
 
 ## PostgreSQL
 
@@ -42,8 +44,8 @@ The table below lists the maximum size of the Marlowe Runtime database schemas f
 
 | Schema    | `mainnet` | `preprod` | `preview` |
 |-----------|----------:|----------:|----------:|
-| `chain`   |    200 GB |     10 GB |      2 GB |
-| `marlowe` |      2 MB |      5 MB |    300 MB |
+| `chain`   |    300 GB |     11 GB |      3 GB |
+| `marlowe` |      8 MB |      6 MB |    400 MB |
 | `sqitch`  |    200 kB |    200 kB |    200 kB |
 | Total     |    200 GB |     10 GB |      3 GB |
 
