@@ -15,22 +15,20 @@ in
 
 
   packages = [
-    # inputs.cardano-world.cardano.packages.cardano-address
-    # inputs.cardano-node.packages.cardano-node
-    # inputs.cardano-node.packages.cardano-cli
+    cabalProject.hsPkgs.cardano-addresses-cli.components.exes.cardano-address
+    cabalProject.hsPkgs.hspec-golden.components.exes.hgold
 
-    # inputs.marlowe-plutus.packages.marlowe-minting-validator
+    repoRoot.nix.marlowe-cardano.cardano-tools.cardano-node
+    repoRoot.nix.marlowe-cardano.cardano-tools.cardano-cli
+
+    inputs.marlowe-plutus.packages.marlowe-minting-validator
 
     pkgs.z3
     pkgs.sqitchPg
     pkgs.postgresql
     pkgs.scriv
-
     pkgs.jq
     pkgs.docker-compose
-
-    cabalProject.hsPkgs.hspec-golden.components.exes.hgold
-    repoRoot.nix.marlowe-cardano.scriv
   ];
 
 
@@ -65,11 +63,11 @@ in
       group = "marlowe";
     };
 
-    # refresh-validators = {
-    #   exec = scripts.refresh-validators;
-    #   description = "Pull the latest validators from the marlowe-plutus flake input.";
-    #   group = "marlowe";
-    # };
+    refresh-validators = {
+      exec = scripts.refresh-validators;
+      description = "Pull the latest validators from the marlowe-plutus flake input.";
+      group = "marlowe";
+    };
   };
 
 

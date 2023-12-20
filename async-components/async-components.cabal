@@ -64,6 +64,6 @@ library
     , hs-opentelemetry-sdk ==0.0.3.4
     , mtl >=2.2 && <3
     , servant-client ^>=0.19
-    , servant-server ^>=0.19
+    , servant-server >=0.19
     , unliftio ^>=0.2.1
     , warp >=3.3 && <4

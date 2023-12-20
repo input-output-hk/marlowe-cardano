@@ -3,8 +3,8 @@
 let
   cabalProject = inputs.self.cabalProject;
 
-  cardano-cli = inputs.cardano-node.packages.cardano-cli;
-  cardano-node = inputs.cardano-node.packages.cardano-node;
+  cardano-cli = repoRoot.nix.marlowe-cardano.cardano-tools.cardano-cli;
+  cardano-node = repoRoot.nix.marlowe-cardano.cardano-tools.cardano-node;
   marlowe-minting-validator = inputs.marlowe-plutus.packages.marlowe-minting-validator;
 
   marlowe-runtime-cli = cabalProject.hsPkgs.marlowe-runtime-cli.components.exes.marlowe-runtime-cli;
@@ -14,9 +14,7 @@ let
     cardano-cli
     cardano-node
     marlowe-minting-validator
-
     marlowe-runtime-cli
-
     pkgs.z3
     pkgs.sqitchPg
     pkgs.postgresql
