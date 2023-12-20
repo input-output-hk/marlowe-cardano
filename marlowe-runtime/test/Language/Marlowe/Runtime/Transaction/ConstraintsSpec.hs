@@ -1068,10 +1068,9 @@ genWalletWithAsset marloweVersion constraints minLovelace = do
   txOutRef <- arbitrary
   stubAddress <- arbitrary
   assets <- genAtLeastThisMuchAda minLovelace
-  collateral <- Set.fromList <$> sublistOf [txOutRef]
   let txOut = Chain.TransactionOutput stubAddress assets Nothing Nothing
       utxos = Chain.UTxOs $ Map.singleton txOutRef txOut
-  pure $ wc{availableUtxos = utxos, collateralUtxos = UseCollateralUtxos collateral}
+  pure $ wc{availableUtxos = utxos, collateralUtxos = UseCollateralUtxos $ Set.singleton txOutRef}
 
 -- A simple TxBodyContent that's completely empty
 emptyTxBodyContent :: TxBodyContent BuildTx BabbageEra
