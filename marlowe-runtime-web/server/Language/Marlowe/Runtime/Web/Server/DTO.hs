@@ -113,6 +113,7 @@ import Language.Marlowe.Runtime.Core.Api (
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import qualified Language.Marlowe.Runtime.Core.Api as Core.Api (Payout (..))
 import qualified Language.Marlowe.Runtime.Discovery.Api as Discovery
+import Language.Marlowe.Runtime.Transaction.Api (CollateralUtxos (..))
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx (..), TempTxStatus (..))
@@ -153,6 +154,19 @@ instance (FromDTO k, FromDTO a) => FromDTO (Map k a) where
 
 instance (ToDTO k, ToDTO a) => ToDTO (Map k a) where
   toDTO = Map.mapKeysMonotonic toDTO . fmap toDTO
+
+instance HasDTO CollateralUtxos where
+  type DTO CollateralUtxos = Web.CollateralUtxos
+
+instance FromDTO CollateralUtxos where
+  fromDTO = \case
+    Web.UseAnyCollateralUtxos -> pure UseAnyCollateralUtxos
+    Web.UseCollateralUtxos utxos -> UseCollateralUtxos <$> fromDTO utxos
+
+instance ToDTO CollateralUtxos where
+  toDTO = \case
+    UseAnyCollateralUtxos -> Web.UseAnyCollateralUtxos
+    UseCollateralUtxos utxos -> Web.UseCollateralUtxos $ toDTO utxos
 
 instance HasDTO (Set a) where
   type DTO (Set a) = Set (DTO a)

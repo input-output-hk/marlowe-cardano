@@ -58,7 +58,7 @@ createCloseContract Wallet{..} = do
   let WalletAddresses{..} = addresses
   let webChangeAddress = toDTO changeAddress
   let webExtraAddresses = Set.map toDTO extraAddresses
-  let webCollateralUtxos = Set.map toDTO collateralUtxos
+  let webCollateralUtxos = toDTO collateralUtxos
 
   Web.CreateTxEnvelope{txEnvelope, ..} <-
     postContract
@@ -86,7 +86,7 @@ applyCloseTransaction Wallet{..} contractId = do
   let WalletAddresses{..} = addresses
   let webChangeAddress = toDTO changeAddress
   let webExtraAddresses = Set.map toDTO extraAddresses
-  let webCollateralUtxos = Set.map toDTO collateralUtxos
+  let webCollateralUtxos = toDTO collateralUtxos
   Web.ApplyInputsTxEnvelope{transactionId, txEnvelope} <-
     postTransaction
       webChangeAddress
@@ -174,7 +174,7 @@ withdraw Wallet{..} payouts = do
   let WalletAddresses{..} = addresses
   let webChangeAddress = toDTO changeAddress
   let webExtraAddresses = Set.map toDTO extraAddresses
-  let webCollateralUtxos = Set.map toDTO collateralUtxos
+  let webCollateralUtxos = toDTO collateralUtxos
 
   postWithdrawal
     webChangeAddress
@@ -192,7 +192,7 @@ applyInputs Wallet{..} contractId inputs = do
   let WalletAddresses{..} = addresses
   let webChangeAddress = toDTO changeAddress
   let webExtraAddresses = Set.map toDTO extraAddresses
-  let webCollateralUtxos = Set.map toDTO collateralUtxos
+  let webCollateralUtxos = toDTO collateralUtxos
 
   postTransaction
     webChangeAddress

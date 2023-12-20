@@ -2,7 +2,10 @@ module Language.Marlowe.Runtime.CLI.Command.Tx where
 
 import qualified Data.Set as Set
 import Language.Marlowe.Runtime.CLI.Option (parseAddress, txOutRefParser)
-import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses (WalletAddresses))
+import Language.Marlowe.Runtime.Transaction.Api (
+  CollateralUtxos (..),
+  WalletAddresses (WalletAddresses),
+ )
 import Options.Applicative
 
 data TxCommand cmd = TxCommand
@@ -83,11 +86,18 @@ txCommandParser metadataSupported subCommandParser =
               , metavar "ADDRESS"
               ]
     collateralUtxosParser =
-      fmap Set.fromList $
-        many $
-          option txOutRefParser $
+      asum
+        [ flag' UseAnyCollateralUtxos $
             mconcat
-              [ long "collateral-utxo"
-              , help "A UTXO which may be used as a collateral input"
-              , metavar "UTXO"
+              [ long "use-any-collateral"
+              , help "Flag indicating that any wallet UTxO can be used as collateral."
               ]
+        , fmap (UseCollateralUtxos . Set.fromList) $
+            many $
+              option txOutRefParser $
+                mconcat
+                  [ long "collateral-utxo"
+                  , help "A UTXO which may be used as a collateral input"
+                  , metavar "UTXO"
+                  ]
+        ]

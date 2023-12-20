@@ -115,6 +115,7 @@ import Language.Marlowe.Runtime.Core.Api (
 import Language.Marlowe.Runtime.Core.Api qualified as R
 import Language.Marlowe.Runtime.Plutus.V2.Api qualified as MRPA
 import Language.Marlowe.Runtime.Transaction.Api (
+  CollateralUtxos (..),
   RoleTokensConfig (RoleTokensNone, RoleTokensUsePolicy),
   WalletAddresses (WalletAddresses, changeAddress, collateralUtxos, extraAddresses),
   WithdrawTx (..),
@@ -326,7 +327,7 @@ withdraw ro contractId tokenName walletNickname Wallet{_waAddress, _waSigningKey
           WalletAddresses
             { changeAddress = changeAddress
             , extraAddresses = mempty
-            , collateralUtxos = mempty
+            , collateralUtxos = UseAnyCollateralUtxos
             }
     let isWithdrawn = Just False
     let contractIds = Set.singleton contractId
@@ -481,7 +482,7 @@ interpret ro@RuntimeCreateContract{..} = do
           WalletAddresses
             { changeAddress = changeAddress
             , extraAddresses = mempty
-            , collateralUtxos = mempty
+            , collateralUtxos = UseAnyCollateralUtxos
             }
     possibleRuntimeContract <-
       if roMerkleize == Just RuntimeSide
@@ -637,7 +638,7 @@ interpret ro@RuntimeApplyInputs{..} = do
           WalletAddresses
             { changeAddress = changeAddress
             , extraAddresses = mempty
-            , collateralUtxos = mempty
+            , collateralUtxos = UseAnyCollateralUtxos
             }
     Marlowe.Class.applyInputs'
       MarloweV1

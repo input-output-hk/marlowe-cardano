@@ -104,6 +104,7 @@ import Language.Marlowe.Runtime.Core.Api (
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader (..))
 import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep (..), MarloweBlock)
 import Language.Marlowe.Runtime.Transaction.Api (
+  CollateralUtxos (..),
   ContractCreated (..),
   ContractCreatedInEra (..),
   InputsApplied (..),
@@ -158,7 +159,11 @@ allocateWallet balances = do
       pure (address, WitnessPaymentKey signingKey, collateralUtxos)
   pure
     Wallet
-      { addresses = WalletAddresses (head addresses) (Set.fromList $ tail addresses) (fold collateralUtxos)
+      { addresses =
+          WalletAddresses
+            (head addresses)
+            (Set.fromList $ tail addresses)
+            (UseCollateralUtxos $ fold collateralUtxos)
       , signingKeys
       }
 

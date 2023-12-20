@@ -29,7 +29,7 @@ spec = describe "POST /contracts/{contractId}/withdrawal" do
       let WalletAddresses{..} = addresses partyAWallet
       let webChangeAddress = toDTO changeAddress
       let webExtraAddresses = Set.map toDTO extraAddresses
-      let webCollateralUtxos = Set.map toDTO collateralUtxos
+      let webCollateralUtxos = toDTO collateralUtxos
 
       StandardContractInit{contractCreated, makeInitialDeposit} <- createStandardContract partyAWallet partyBWallet
       StandardContractFundsDeposited{chooseGimmeTheMoney} <- makeInitialDeposit

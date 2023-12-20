@@ -52,6 +52,7 @@ import Data.OpenApi (
 import qualified Data.OpenApi as OpenApi
 import Data.OpenApi.Schema (ToSchema (..))
 import Data.Set (Set)
+import qualified Data.Set as Set
 import Data.String (IsString (..))
 import Data.Text (Text, intercalate, splitOn)
 import qualified Data.Text as T
@@ -189,6 +190,28 @@ instance ToParamSchema StakeAddress where
       & type_ ?~ OpenApiString
       & OpenApi.description ?~ "A cardano stake address, in Bech32 format"
       & example ?~ "stake1ux7lyy9nhecm033qsmel9awnr22up6jadlzkrxufr78w82gsfsn0d"
+
+data CollateralUtxos
+  = UseAnyCollateralUtxos
+  | UseCollateralUtxos (Set TxOutRef)
+  deriving (Show, Eq, Ord, Generic)
+
+instance FromHttpApiData CollateralUtxos where
+  parseUrlPiece t
+    | T.toLower t == "any" = pure UseAnyCollateralUtxos
+    | otherwise = UseCollateralUtxos . Set.fromList . unCommaList <$> parseUrlPiece t
+
+instance ToHttpApiData CollateralUtxos where
+  toUrlPiece = \case
+    UseAnyCollateralUtxos -> "Any"
+    UseCollateralUtxos utxos -> toUrlPiece $ CommaList $ Set.toList utxos
+
+instance ToParamSchema CollateralUtxos where
+  toParamSchema _ =
+    mempty
+      & type_ ?~ OpenApiString
+      & OpenApi.description
+        ?~ "Either \"Any\" to indicate any wallet UTxOs can be used as collateral, or a comma-separated list of TxOutRefs in the form [0-9a-fA-F]{64}#[1-9][0-9]*"
 
 newtype CommaList a = CommaList {unCommaList :: [a]}
   deriving (Eq, Ord, Generic, Functor)

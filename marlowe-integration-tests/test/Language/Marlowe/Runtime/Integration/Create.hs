@@ -198,26 +198,27 @@ collateralSpec _ addresses = \case
   OneCollateralUTxOInsufficient -> Just do
     it "Should fail if there is insufficient collateral" $ const pending
   OneCollateralUTxOSufficient -> Just do
-    it "Should only spend the one collateral UTxO" \(TestData{..}, ContractCreated _ ContractCreatedInEra{..}) -> do
-      let collateral = case txBody of
-            TxBody TxBodyContent{..} -> case txInsCollateral of
-              TxInsCollateralNone -> mempty
-              TxInsCollateral _ collateralTxIns -> Set.fromList $ fromCardanoTxIn <$> collateralTxIns
-      collateral `shouldBe` collateralUtxos case addresses of
-        SingleAddress -> singleAddressSufficientBalanceOneSufficientCollateralWallet
-        MultiAddress -> multiAddressSufficientBalanceOneSufficientCollateralWallet
+    it "Should only spend the one collateral UTxO" \(TestData{..}, ContractCreated _ ContractCreatedInEra{..}) ->
+      case txBody of
+        TxBody TxBodyContent{..} -> case txInsCollateral of
+          TxInsCollateralNone -> pure ()
+          TxInsCollateral _ collateralTxIns -> do
+            let collateral = UseCollateralUtxos $ Set.fromList $ fromCardanoTxIn <$> collateralTxIns
+            collateral `shouldBe` collateralUtxos case addresses of
+              SingleAddress -> singleAddressSufficientBalanceOneSufficientCollateralWallet
+              MultiAddress -> multiAddressSufficientBalanceOneSufficientCollateralWallet
   MultipleCollateralUTxOsInsufficient -> Just do
     it "Should fail if there is insufficient collateral" $ const pending
   MultipleCollateralUTxOsSufficient -> Just do
     it "Should only spend the one collateral UTxO" \(TestData{..}, ContractCreated _ ContractCreatedInEra{..}) -> do
-      let collateral = case txBody of
-            TxBody TxBodyContent{..} -> case txInsCollateral of
-              TxInsCollateralNone -> mempty
-              TxInsCollateral _ collateralTxIns -> Set.fromList $ fromCardanoTxIn <$> collateralTxIns
-          availableCollateral = collateralUtxos case addresses of
-            SingleAddress -> singleAddressSufficientBalanceMultiSufficientCollateralWallet
-            MultiAddress -> multiAddressSufficientBalanceMultiSufficientCollateralWallet
-      Set.toList availableCollateral `shouldContain` Set.toList collateral
+      case txBody of
+        TxBody TxBodyContent{..} -> case txInsCollateral of
+          TxInsCollateralNone -> pure ()
+          TxInsCollateral _ collateralTxIns -> do
+            let collateral = UseCollateralUtxos $ Set.fromList $ fromCardanoTxIn <$> collateralTxIns
+            collateral `shouldBe` collateralUtxos case addresses of
+              SingleAddress -> singleAddressSufficientBalanceMultiSufficientCollateralWallet
+              MultiAddress -> multiAddressSufficientBalanceMultiSufficientCollateralWallet
 
 roleTokenSpec :: RoleTokenCase -> Maybe (SpecWith (TestData, ContractCreated v))
 roleTokenSpec = \case

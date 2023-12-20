@@ -616,7 +616,7 @@ instance (ToSchema a) => ToSchema (ListObject a)
 type PostTxAPI api =
   Header' '[Required, Strict] "X-Change-Address" Address
     :> Header "X-Address" (CommaList Address)
-    :> Header "X-Collateral-UTxO" (CommaList TxOutRef)
+    :> Header "X-Collateral-UTxO" CollateralUtxos
     :> api
 
 class ParseHttpApiData a where

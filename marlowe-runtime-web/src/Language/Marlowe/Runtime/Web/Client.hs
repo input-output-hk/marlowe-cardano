@@ -160,7 +160,7 @@ postContractStatus
   :: Maybe StakeAddress
   -> Address
   -> Maybe (Set Address)
-  -> Maybe (Set TxOutRef)
+  -> Maybe CollateralUtxos
   -> PostContractsRequest
   -> ClientM (RuntimeStatus, CreateTxEnvelope CardanoTxBody)
 postContractStatus stakeAddress changeAddress otherAddresses collateralUtxos request = do
@@ -171,7 +171,7 @@ postContractStatus stakeAddress changeAddress otherAddresses collateralUtxos req
       request
       changeAddress
       (setToCommaList <$> otherAddresses)
-      (setToCommaList <$> collateralUtxos)
+      collateralUtxos
   status <- extractStatus response
   pure (status, retractLink $ getResponse response)
 
@@ -179,7 +179,7 @@ postContract
   :: Maybe StakeAddress
   -> Address
   -> Maybe (Set Address)
-  -> Maybe (Set TxOutRef)
+  -> Maybe CollateralUtxos
   -> PostContractsRequest
   -> ClientM (CreateTxEnvelope CardanoTxBody)
 postContract = (fmap . fmap . fmap . fmap . fmap) snd . postContractStatus
@@ -188,7 +188,7 @@ postContractCreateTxStatus
   :: Maybe StakeAddress
   -> Address
   -> Maybe (Set Address)
-  -> Maybe (Set TxOutRef)
+  -> Maybe CollateralUtxos
   -> PostContractsRequest
   -> ClientM (RuntimeStatus, CreateTxEnvelope CardanoTx)
 postContractCreateTxStatus stakeAddress changeAddress otherAddresses collateralUtxos request = do
@@ -199,7 +199,7 @@ postContractCreateTxStatus stakeAddress changeAddress otherAddresses collateralU
       request
       changeAddress
       (setToCommaList <$> otherAddresses)
-      (setToCommaList <$> collateralUtxos)
+      collateralUtxos
   status <- extractStatus response
   pure (status, retractLink $ getResponse response)
 
@@ -207,7 +207,7 @@ postContractCreateTx
   :: Maybe StakeAddress
   -> Address
   -> Maybe (Set Address)
-  -> Maybe (Set TxOutRef)
+  -> Maybe CollateralUtxos
   -> PostContractsRequest
   -> ClientM (CreateTxEnvelope CardanoTx)
 postContractCreateTx = (fmap . fmap . fmap . fmap . fmap) snd . postContractCreateTxStatus
@@ -334,7 +334,7 @@ getWithdrawals = (fmap . fmap) snd . getWithdrawalsStatus
 postWithdrawalStatus
   :: Address
   -> Maybe (Set Address)
-  -> Maybe (Set TxOutRef)
+  -> Maybe CollateralUtxos
   -> PostWithdrawalsRequest
   -> ClientM (RuntimeStatus, WithdrawTxEnvelope CardanoTxBody)
 postWithdrawalStatus changeAddress otherAddresses collateralUtxos request = do
@@ -345,14 +345,14 @@ postWithdrawalStatus changeAddress otherAddresses collateralUtxos request = do
       request
       changeAddress
       (setToCommaList <$> otherAddresses)
-      (setToCommaList <$> collateralUtxos)
+      collateralUtxos
   status <- extractStatus response
   pure (status, retractLink $ getResponse response)
 
 postWithdrawal
   :: Address
   -> Maybe (Set Address)
-  -> Maybe (Set TxOutRef)
+  -> Maybe CollateralUtxos
   -> PostWithdrawalsRequest
   -> ClientM (WithdrawTxEnvelope CardanoTxBody)
 postWithdrawal = (fmap . fmap . fmap . fmap) snd . postWithdrawalStatus
@@ -360,7 +360,7 @@ postWithdrawal = (fmap . fmap . fmap . fmap) snd . postWithdrawalStatus
 postWithdrawalCreateTxStatus
   :: Address
   -> Maybe (Set Address)
-  -> Maybe (Set TxOutRef)
+  -> Maybe CollateralUtxos
   -> PostWithdrawalsRequest
   -> ClientM (RuntimeStatus, WithdrawTxEnvelope CardanoTx)
 postWithdrawalCreateTxStatus changeAddress otherAddresses collateralUtxos request = do
@@ -371,14 +371,14 @@ postWithdrawalCreateTxStatus changeAddress otherAddresses collateralUtxos reques
       request
       changeAddress
       (setToCommaList <$> otherAddresses)
-      (setToCommaList <$> collateralUtxos)
+      collateralUtxos
   status <- extractStatus response
   pure (status, retractLink $ getResponse response)
 
 postWithdrawalCreateTx
   :: Address
   -> Maybe (Set Address)
-  -> Maybe (Set TxOutRef)
+  -> Maybe CollateralUtxos
   -> PostWithdrawalsRequest
   -> ClientM (WithdrawTxEnvelope CardanoTx)
 postWithdrawalCreateTx = (fmap . fmap . fmap . fmap) snd . postWithdrawalCreateTxStatus
@@ -488,7 +488,7 @@ getTransactions = (fmap . fmap) snd . getTransactionsStatus
 postTransactionStatus
   :: Address
   -> Maybe (Set Address)
-  -> Maybe (Set TxOutRef)
+  -> Maybe CollateralUtxos
   -> TxOutRef
   -> PostTransactionsRequest
   -> ClientM (RuntimeStatus, ApplyInputsTxEnvelope CardanoTxBody)
@@ -501,14 +501,14 @@ postTransactionStatus changeAddress otherAddresses collateralUtxos contractId re
       request
       changeAddress
       (setToCommaList <$> otherAddresses)
-      (setToCommaList <$> collateralUtxos)
+      collateralUtxos
   status <- extractStatus response
   pure (status, retractLink $ getResponse response)
 
 postTransaction
   :: Address
   -> Maybe (Set Address)
-  -> Maybe (Set TxOutRef)
+  -> Maybe CollateralUtxos
   -> TxOutRef
   -> PostTransactionsRequest
   -> ClientM (ApplyInputsTxEnvelope CardanoTxBody)
@@ -517,7 +517,7 @@ postTransaction = (fmap . fmap . fmap . fmap . fmap) snd . postTransactionStatus
 postTransactionCreateTxStatus
   :: Address
   -> Maybe (Set Address)
-  -> Maybe (Set TxOutRef)
+  -> Maybe CollateralUtxos
   -> TxOutRef
   -> PostTransactionsRequest
   -> ClientM (RuntimeStatus, ApplyInputsTxEnvelope CardanoTx)
@@ -529,14 +529,14 @@ postTransactionCreateTxStatus changeAddress otherAddresses collateralUtxos contr
       request
       changeAddress
       (setToCommaList <$> otherAddresses)
-      (setToCommaList <$> collateralUtxos)
+      collateralUtxos
   status <- extractStatus response
   pure (status, retractLink $ getResponse response)
 
 postTransactionCreateTx
   :: Address
   -> Maybe (Set Address)
-  -> Maybe (Set TxOutRef)
+  -> Maybe CollateralUtxos
   -> TxOutRef
   -> PostTransactionsRequest
   -> ClientM (ApplyInputsTxEnvelope CardanoTx)

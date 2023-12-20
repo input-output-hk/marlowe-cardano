@@ -116,7 +116,9 @@ loadWalletContext runQuery WalletAddresses{..} =
     let addresses = Set.insert changeAddress extraAddresses
     addField ev $ ForAddresses addresses
     availableUtxos@(UTxOs (Map.keys -> txOutRefs)) <- runQuery $ GetUTxOsAtAddresses addresses
-    let collateralUtxos' = Set.filter (flip elem txOutRefs) collateralUtxos
+    let collateralUtxos' = case collateralUtxos of
+          UseAnyCollateralUtxos -> UseAnyCollateralUtxos
+          UseCollateralUtxos c -> UseCollateralUtxos $ Set.filter (flip elem txOutRefs) c
         walletContext =
           WalletContext
             { availableUtxos = availableUtxos

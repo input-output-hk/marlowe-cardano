@@ -38,7 +38,7 @@ import Language.Marlowe.Runtime.Core.Api (
   MarloweVersion (MarloweV1),
   TransactionScriptOutput (..),
  )
-import Language.Marlowe.Runtime.Transaction.Api (Mint (..), RoleTokensConfig (..))
+import Language.Marlowe.Runtime.Transaction.Api (CollateralUtxos (..), Mint (..), RoleTokensConfig (..))
 import Language.Marlowe.Runtime.Transaction.BuildConstraints (buildApplyInputsConstraints, safeLovelace)
 import Language.Marlowe.Runtime.Transaction.Constraints (
   HelperScriptInfo (helperAddress),
@@ -440,7 +440,7 @@ walletForConstraints MarloweV1 MarloweContext{scriptOutput} changeAddress TxCons
       requiredValue = roles <> payments <> scriptOutgoing <> negateAssets scriptIncoming
       bufferValue = makeLovelace 50_000_000 -- Generously cover min-UTxO and fee.
       workaround = True
-      collateralUtxos = S.singleton collateralTxOutRef
+      collateralUtxos = UseCollateralUtxos $ S.singleton collateralTxOutRef
       availableUtxos =
         Chain.UTxOs $
           M.fromList $

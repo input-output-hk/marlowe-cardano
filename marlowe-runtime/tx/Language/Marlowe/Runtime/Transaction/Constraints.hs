@@ -100,7 +100,7 @@ import Language.Marlowe.Runtime.Core.Api (
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript, ReferenceScriptUtxo (..))
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
-import Language.Marlowe.Runtime.Transaction.Api (ConstraintError (..), Destination (..))
+import Language.Marlowe.Runtime.Transaction.Api (CollateralUtxos (..), ConstraintError (..), Destination (..))
 import qualified Language.Marlowe.Scripts.Types as V1
 import Ouroboros.Consensus.BlockchainTime (SystemStart)
 
@@ -415,7 +415,7 @@ data WalletContext = WalletContext
   { availableUtxos :: Chain.UTxOs
   -- ^ The UTXO set of the wallet that can be used for coin selection and
   -- satisfying constraints.
-  , collateralUtxos :: Set Chain.TxOutRef
+  , collateralUtxos :: CollateralUtxos
   -- ^ The subset of keys in 'availableUtxos' that may be used for collateral.
   , changeAddress :: Chain.Address
   -- ^ The change address of the wallet.
@@ -719,15 +719,15 @@ selectCoins era protocol marloweVersion scriptCtx walletCtx@WalletContext{..} he
         C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.MultiAssetInConwayEra
 
   collateral <-
-    let candidateCollateral =
-          if Set.null collateralUtxos
-            then utxos -- Use any UTxO if the wallet did not constrain collateral.
-            else -- The filter below is safe because, by the definition of `WalletContext`,
+    let candidateCollateral = case collateralUtxos of
+          UseAnyCollateralUtxos -> utxos
+          UseCollateralUtxos use ->
+            -- The filter below is safe because, by the definition of `WalletContext`,
             -- the `collateralUtxos` are an improper subset of `availableUtxos`. Also
             -- note that the definition of `WalletContext` does not *require* that
             -- every UTxO specified as collateral be used: it just states that those
             -- UTxOs are *available* for use as collateral.
-              filter (flip Set.member collateralUtxos . fromCardanoTxIn . fst) utxos
+            filter (flip Set.member use . fromCardanoTxIn . fst) utxos
         isPlutusScriptWitness C.PlutusScriptWitness{} = True
         isPlutusScriptWitness _ = False
         hasPlutusScriptWitness :: (C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn era)) -> Bool

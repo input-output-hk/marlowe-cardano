@@ -13,6 +13,7 @@
 module Language.Marlowe.Runtime.Transaction.Api (
   ApplyInputsConstraintsBuildupError (..),
   ApplyInputsError (..),
+  CollateralUtxos (..),
   ConstraintError (..),
   ContractCreated (..),
   ContractCreatedInEra (..),
@@ -1016,9 +1017,22 @@ getTxBody = do
 data WalletAddresses = WalletAddresses
   { changeAddress :: Address
   , extraAddresses :: Set Address
-  , collateralUtxos :: Set TxOutRef
+  , collateralUtxos :: CollateralUtxos
   }
   deriving (Eq, Show, Generic, Binary, ToJSON, Variations)
+
+data CollateralUtxos
+  = UseCollateralUtxos (Set Chain.TxOutRef)
+  | UseAnyCollateralUtxos
+  deriving (Eq, Show, Generic, Binary, ToJSON, Variations)
+
+instance Semigroup CollateralUtxos where
+  UseAnyCollateralUtxos <> _ = UseAnyCollateralUtxos
+  _ <> UseAnyCollateralUtxos = UseAnyCollateralUtxos
+  UseCollateralUtxos a <> UseCollateralUtxos b = UseCollateralUtxos $ a <> b
+
+instance Monoid CollateralUtxos where
+  mempty = UseCollateralUtxos mempty
 
 -- | Errors that can occur when trying to solve the constraints.
 data ConstraintError

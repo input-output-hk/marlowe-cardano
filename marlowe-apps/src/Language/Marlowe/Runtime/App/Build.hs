@@ -21,6 +21,7 @@ import Language.Marlowe.Runtime.App.Types (Client, TxBodyInEraWithReferenceScrip
 import Language.Marlowe.Runtime.ChainSync.Api (Address, Lovelace (..), TokenName, TxOutRef)
 import Language.Marlowe.Runtime.Core.Api (ContractId, IsMarloweVersion (..), MarloweTransactionMetadata, MarloweVersion)
 import Language.Marlowe.Runtime.Transaction.Api (
+  CollateralUtxos (..),
   ContractCreated (..),
   ContractCreatedInEra (..),
   Destination (ToAddress),
@@ -99,7 +100,7 @@ build
   -> [TxOutRef]
   -> Client (Either String a)
 build showError getBody command addresses change collaterals =
-  let command' = command $ WalletAddresses change (S.fromList addresses) (S.fromList collaterals)
+  let command' = command $ WalletAddresses change (S.fromList addresses) (UseCollateralUtxos $ S.fromList collaterals)
    in fmap (bimap showError getBody)
         . runMarloweTxClient
         $ liftCommand command'

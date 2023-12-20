@@ -65,7 +65,7 @@ import Language.Marlowe.Runtime.Core.Api (
  )
 import qualified Language.Marlowe.Runtime.Core.Gen ()
 import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript (OpenRoleScript), ReferenceScriptUtxo (..))
-import Language.Marlowe.Runtime.Transaction.Api (Destination (..))
+import Language.Marlowe.Runtime.Transaction.Api (CollateralUtxos (..), Destination (..))
 import Language.Marlowe.Runtime.Transaction.Constraints
 import qualified Language.Marlowe.Runtime.Transaction.Gen ()
 import qualified Language.Marlowe.Scripts.Types as V1
@@ -397,9 +397,9 @@ spec = do
           eligible :: [(Chain.TxOutRef, Chain.TransactionOutput)]
           eligible =
             SMap.toList
-              . ( if Set.null $ collateralUtxos walletContext
-                    then id
-                    else SMap.filterWithKey $ const . flip Set.member (collateralUtxos walletContext)
+              . ( case collateralUtxos walletContext of
+                    UseAnyCollateralUtxos -> id
+                    UseCollateralUtxos use -> SMap.filterWithKey $ const . flip Set.member use
                 )
               . Chain.unUTxOs
               $ availableUtxos walletContext
@@ -804,9 +804,9 @@ spec = do
                             . availableUtxos
                             $ walletContext
                       , txInsCollateral =
-                          TxInsCollateral CollateralInBabbageEra $
-                            mapMaybe toCardanoTxIn . Set.toList . collateralUtxos $
-                              walletContext
+                          TxInsCollateral CollateralInBabbageEra case collateralUtxos walletContext of
+                            UseAnyCollateralUtxos -> mempty
+                            UseCollateralUtxos utxos -> mapMaybe toCardanoTxIn $ Set.toList utxos
                       }
                in {-  Explanation of the pass/fail criteria below. From a discussion
                       between Dino Morelli and Brian Bush 2023-Jan
@@ -888,7 +888,7 @@ genWalletWithNuisance marloweVersion' constraints' minLovelace = do
       adaTxOut = Chain.TransactionOutput someAddress adaAssets Nothing Nothing
       nuisanceTxOut = Chain.TransactionOutput someAddress nuisanceAssets Nothing Nothing
       utxos = Chain.UTxOs $ Map.fromList [(adaTxOutRef, adaTxOut), (nuisanceTxOutRef, nuisanceTxOut)]
-  pure $ wc{availableUtxos = utxos, collateralUtxos = collateral}
+  pure $ wc{availableUtxos = utxos, collateralUtxos = UseCollateralUtxos collateral}
 
 -- Simulate constraints specifying the tx must cover a 500ADA output
 -- after coin selection. This exists to force selection to consume the
@@ -1071,7 +1071,7 @@ genWalletWithAsset marloweVersion constraints minLovelace = do
   collateral <- Set.fromList <$> sublistOf [txOutRef]
   let txOut = Chain.TransactionOutput stubAddress assets Nothing Nothing
       utxos = Chain.UTxOs $ Map.singleton txOutRef txOut
-  pure $ wc{availableUtxos = utxos, collateralUtxos = collateral}
+  pure $ wc{availableUtxos = utxos, collateralUtxos = UseCollateralUtxos collateral}
 
 -- A simple TxBodyContent that's completely empty
 emptyTxBodyContent :: TxBodyContent BuildTx BabbageEra
@@ -1661,7 +1661,7 @@ shrinkWallet constraints WalletContext{..} =
         <*> pure changeAddress
     ]
 
-shrinkWalletUtxos :: TxConstraints BabbageEra v -> Set.Set Chain.TxOutRef -> Chain.UTxOs -> [Chain.UTxOs]
+shrinkWalletUtxos :: TxConstraints BabbageEra v -> CollateralUtxos -> Chain.UTxOs -> [Chain.UTxOs]
 shrinkWalletUtxos TxConstraints{..} collateralUtxos = filter (isValid . Chain.unUTxOs) . shrink
   where
     isValid availableUtxos = hasRoleTokens availableUtxos && hasCollateralUtxos availableUtxos
@@ -1675,7 +1675,9 @@ shrinkWalletUtxos TxConstraints{..} collateralUtxos = filter (isValid . Chain.un
         Set.null
           . Set.difference roleTokens
           . foldMap (Map.keysSet . Chain.unTokens . (.assets.tokens))
-    hasCollateralUtxos = Set.null . Set.difference collateralUtxos . Map.keysSet
+    hasCollateralUtxos = case collateralUtxos of
+      UseAnyCollateralUtxos -> const False
+      UseCollateralUtxos use -> Set.null . Set.difference use . Map.keysSet
 
 toTokens :: Distribution -> Chain.Tokens
 toTokens =
@@ -1708,7 +1710,7 @@ genWalletContext :: MarloweVersion v -> TxConstraints BabbageEra v -> Gen Wallet
 genWalletContext MarloweV1 constraints =
   WalletContext
     <$> genWalletUtxos constraints
-    <*> pure mempty
+    <*> pure UseAnyCollateralUtxos
     <*> arbitrary
 
 genWalletUtxos :: TxConstraints BabbageEra 'V1 -> Gen Chain.UTxOs

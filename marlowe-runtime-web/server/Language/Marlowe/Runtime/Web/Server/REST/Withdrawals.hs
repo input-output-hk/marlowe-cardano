@@ -47,15 +47,16 @@ postCreateTxBody
   :: PostWithdrawalsRequest
   -> Address
   -> Maybe (CommaList Address)
-  -> Maybe (CommaList TxOutRef)
+  -> Maybe CollateralUtxos
   -> ServerM TxBodyInAnyEra
 postCreateTxBody PostWithdrawalsRequest{..} changeAddressDTO mAddresses mCollateralUtxos = do
   changeAddress <- fromDTOThrow (badRequest' "Invalid change address value") changeAddressDTO
   extraAddresses <-
     Set.fromList <$> fromDTOThrow (badRequest' "Invalid addresses header value") (maybe [] unCommaList mAddresses)
   collateralUtxos <-
-    Set.fromList
-      <$> fromDTOThrow (badRequest' "Invalid collateral header UTxO value") (maybe [] unCommaList mCollateralUtxos)
+    fromDTOThrow
+      (badRequest' "Invalid collateral header UTxO value")
+      (fromMaybe (UseCollateralUtxos mempty) mCollateralUtxos)
   payouts' <- fromDTOThrow (badRequest' "Invalid payouts") payouts
   withdraw MarloweV1 WalletAddresses{..} payouts' >>= \case
     Left err -> throwDTOError err
@@ -66,7 +67,7 @@ postCreateTxBodyResponse
   :: PostWithdrawalsRequest
   -> Address
   -> Maybe (CommaList Address)
-  -> Maybe (CommaList TxOutRef)
+  -> Maybe CollateralUtxos
   -> ServerM (PostWithdrawalsResponse CardanoTxBody)
 postCreateTxBodyResponse req changeAddressDTO mAddresses mCollateralUtxos = do
   TxBodyInAnyEra txBody <- postCreateTxBody req changeAddressDTO mAddresses mCollateralUtxos
@@ -78,7 +79,7 @@ postCreateTxResponse
   :: PostWithdrawalsRequest
   -> Address
   -> Maybe (CommaList Address)
-  -> Maybe (CommaList TxOutRef)
+  -> Maybe CollateralUtxos
   -> ServerM (PostWithdrawalsResponse CardanoTx)
 postCreateTxResponse req changeAddressDTO mAddresses mCollateralUtxos = do
   TxBodyInAnyEra txBody <- postCreateTxBody req changeAddressDTO mAddresses mCollateralUtxos

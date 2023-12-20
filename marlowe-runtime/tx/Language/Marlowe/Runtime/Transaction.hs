@@ -37,7 +37,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion (..), renderContractId)
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts, ReferenceScriptUtxo (..))
-import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
+import Language.Marlowe.Runtime.Transaction.Api (CollateralUtxos (..), MarloweTxCommand)
 import Language.Marlowe.Runtime.Transaction.BuildConstraints (MkRoleTokenMintingPolicy)
 import Language.Marlowe.Runtime.Transaction.Chain
 import Language.Marlowe.Runtime.Transaction.Constraints (MarloweContext (..), PayoutContext (..), WalletContext (..))
@@ -158,9 +158,9 @@ renderLoadWalletContextSelectorOTel = \case
                   )
               , Just
                   ( "marlowe.tx.wallet_collateral_utxo"
-                  , toAttribute $
-                      fmap renderTxOutRef $
-                        Set.toList collateralUtxos
+                  , case collateralUtxos of
+                      UseAnyCollateralUtxos -> "any"
+                      UseCollateralUtxos utxo -> toAttribute $ fmap renderTxOutRef $ Set.toList utxo
                   )
               , ("marlowe.tx.wallet_change_address",) . toAttribute <$> toBech32 changeAddress
               ]

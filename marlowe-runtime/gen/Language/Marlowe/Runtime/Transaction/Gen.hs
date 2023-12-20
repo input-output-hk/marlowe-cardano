@@ -84,6 +84,14 @@ instance Arbitrary WalletAddresses where
   arbitrary = WalletAddresses <$> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink
 
+instance Arbitrary CollateralUtxos where
+  arbitrary =
+    frequency
+      [ (1, pure UseAnyCollateralUtxos)
+      , (5, UseCollateralUtxos <$> arbitrary)
+      ]
+  shrink = genericShrink
+
 instance Arbitrary NFTMetadataFile where
   arbitrary =
     NFTMetadataFile

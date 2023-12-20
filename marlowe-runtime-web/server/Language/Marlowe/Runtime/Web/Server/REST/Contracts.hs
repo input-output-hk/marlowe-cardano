@@ -63,7 +63,7 @@ postCreateTxBody
   -> Maybe StakeAddress
   -> Address
   -> Maybe (CommaList Address)
-  -> Maybe (CommaList TxOutRef)
+  -> Maybe CollateralUtxos
   -> ServerM (ContractId, TxBodyInAnyEra, [SafetyError])
 postCreateTxBody PostContractsRequest{..} stakeAddressDTO changeAddressDTO mAddresses mCollateralUtxos = do
   SomeMarloweVersion v@MarloweV1 <- fromDTOThrow (badRequest' "Unsupported Marlowe version") version
@@ -72,8 +72,9 @@ postCreateTxBody PostContractsRequest{..} stakeAddressDTO changeAddressDTO mAddr
   extraAddresses <-
     Set.fromList <$> fromDTOThrow (badRequest' "Invalid addresses header value") (maybe [] unCommaList mAddresses)
   collateralUtxos <-
-    Set.fromList
-      <$> fromDTOThrow (badRequest' "Invalid collateral header UTxO value") (maybe [] unCommaList mCollateralUtxos)
+    fromDTOThrow
+      (badRequest' "Invalid collateral header UTxO value")
+      (fromMaybe (UseCollateralUtxos mempty) mCollateralUtxos)
   threadTokenName' <- fromDTOThrow (badRequest' "Invalid thread token name") threadTokenName
   roles' <- fromDTOThrow (badRequest' "Invalid roles value") roles
   transactionMetadata <- fromDTOThrow (badRequest' "Invalid metadata value") metadata
@@ -103,7 +104,7 @@ postCreateTxBodyResponse
   -> PostContractsRequest
   -> Address
   -> Maybe (CommaList Address)
-  -> Maybe (CommaList TxOutRef)
+  -> Maybe CollateralUtxos
   -> ServerM (PostContractsResponse CardanoTxBody)
 postCreateTxBodyResponse stakeAddressDTO req changeAddressDTO mAddresses mCollateralUtxos = do
   (contractId, TxBodyInAnyEra txBody, safetyErrors) <-
@@ -117,7 +118,7 @@ postCreateTxResponse
   -> PostContractsRequest
   -> Address
   -> Maybe (CommaList Address)
-  -> Maybe (CommaList TxOutRef)
+  -> Maybe CollateralUtxos
   -> ServerM (PostContractsResponse CardanoTx)
 postCreateTxResponse stakeAddressDTO req changeAddressDTO mAddresses mCollateralUtxos = do
   (contractId, TxBodyInAnyEra txBody, safetyErrors) <-

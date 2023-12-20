@@ -62,7 +62,7 @@ specWithRolesConfig threadTokenName roles =
       let partyAWalletAddresses = addresses partyAWallet
       let partyAWebChangeAddress = toDTO $ changeAddress partyAWalletAddresses
       let partyAWebExtraAddresses = Set.map toDTO $ extraAddresses partyAWalletAddresses
-      let partyAWebCollateralUtxos = Set.map toDTO $ collateralUtxos partyAWalletAddresses
+      let partyAWebCollateralUtxos = toDTO $ collateralUtxos partyAWalletAddresses
 
       let partyBWalletAddresses = addresses partyBWallet
 
