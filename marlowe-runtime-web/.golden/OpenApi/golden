@@ -3548,7 +3548,7 @@
                         "name": "X-Collateral-UTxO",
                         "required": false,
                         "schema": {
-                            "description": "A comma-separated list of values",
+                            "description": "Either \"Any\" to indicate any wallet UTxOs can be used as collateral, or a comma-separated list of TxOutRefs in the form [0-9a-fA-F]{64}#[1-9][0-9]*",
                             "type": "string"
                         }
                     }
@@ -5140,7 +5140,7 @@
                         "name": "X-Collateral-UTxO",
                         "required": false,
                         "schema": {
-                            "description": "A comma-separated list of values",
+                            "description": "Either \"Any\" to indicate any wallet UTxOs can be used as collateral, or a comma-separated list of TxOutRefs in the form [0-9a-fA-F]{64}#[1-9][0-9]*",
                             "type": "string"
                         }
                     }
@@ -6406,7 +6406,7 @@
                         "name": "X-Collateral-UTxO",
                         "required": false,
                         "schema": {
-                            "description": "A comma-separated list of values",
+                            "description": "Either \"Any\" to indicate any wallet UTxOs can be used as collateral, or a comma-separated list of TxOutRefs in the form [0-9a-fA-F]{64}#[1-9][0-9]*",
                             "type": "string"
                         }
                     }
