@@ -1,0 +1,15 @@
+{ repoRoot, inputs, pkgs, lib, system }:
+
+# TODO Remove this file once cardano-node can build aarch64-darwin.
+
+{
+  cardano-node =
+    if system == "aarch64-darwin"
+    then inputs.cardano-node.packages.x86_64-darwin.cardano-node
+    else inputs.cardano-node.packages.${system}.cardano-node;
+
+  cardano-cli =
+    if system == "aarch64-darwin"
+    then inputs.cardano-node.packages.x86_64-darwin.cardano-cli
+    else inputs.cardano-node.packages.${system}.cardano-cli;
+}

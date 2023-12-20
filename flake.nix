@@ -16,8 +16,6 @@
 
     cardano-node.url = "github:input-output-hk/cardano-node?ref=8.1.2";
 
-    cardano-world.url = "github:input-output-hk/cardano-world/d22f50fc77d23e2612ca2b313a098dd0b48834d4";
-
     iogx = {
       url = "github:input-output-hk/iogx";
       inputs.hackage.follows = "hackage";
@@ -48,7 +46,7 @@
   outputs = inputs: inputs.iogx.lib.mkFlake {
     inherit inputs;
     repoRoot = ./.;
-    systems = [ "x86_64-linux" "x86_64-darwin" ];
+    systems = [ "x86_64-linux" "x86_64-darwin" "aarch64-darwin" ];
     outputs = import ./nix/outputs.nix;
   };
 

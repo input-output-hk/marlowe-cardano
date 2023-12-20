@@ -5,6 +5,9 @@ let
   cabalProject = pkgs.haskell-nix.cabalProject' ({ config, pkgs, ... }:
     let
       mkIfDarwin = lib.mkIf pkgs.stdenv.hostPlatform.isDarwin;
+      # When `isCross` is `true`, it means that we are cross-compiling the project.
+      # WARNING You must use the `pkgs` coming from cabalProject' for `isCross` to work.
+      isCross = pkgs.stdenv.hostPlatform != pkgs.stdenv.buildPlatform;
     in
     {
       name = "marlowe-cardano";

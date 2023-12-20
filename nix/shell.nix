@@ -15,9 +15,11 @@ in
 
 
   packages = [
-    inputs.cardano-world.cardano.packages.cardano-address
-    inputs.cardano-node.packages.cardano-node
-    inputs.cardano-node.packages.cardano-cli
+    cabalProject.hsPkgs.cardano-addresses-cli.components.exes.cardano-address
+    cabalProject.hsPkgs.hspec-golden.components.exes.hgold
+
+    repoRoot.nix.marlowe-cardano.cardano-tools.cardano-node
+    repoRoot.nix.marlowe-cardano.cardano-tools.cardano-cli
 
     inputs.marlowe-plutus.packages.marlowe-minting-validator
 
@@ -25,12 +27,8 @@ in
     pkgs.sqitchPg
     pkgs.postgresql
     pkgs.scriv
-
     pkgs.jq
     pkgs.docker-compose
-
-    cabalProject.hsPkgs.hspec-golden.components.exes.hgold
-    repoRoot.nix.marlowe-cardano.scriv
   ];
 
 
