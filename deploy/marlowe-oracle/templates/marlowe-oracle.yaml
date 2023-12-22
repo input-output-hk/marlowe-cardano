@@ -1,0 +1,47 @@
+{{- range $index, $network := .Values.networks }}
+---
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: marlowe-oracle-{{ $network }}
+  namespace: marlowe-production
+spec:
+  components:
+    - name: marlowe-oracle-{{ $network }}
+      type: webservice
+      properties:
+        env:
+          - name: MARLOWE_RT_HOST
+            value: marlowe-proxy-{{ $network }}-qa.marlowe-staging
+          - name: ADDRESS
+            valueFrom:
+              secretKeyRef:
+                name: marlowe-oracle-{{ $network }}
+                key: address
+          - name: KEYFILE
+            value: /oracle-key/skey
+        image: ghcr.io/input-output-hk/marlowe-oracle:{{ $.Values.images.stagingTag }}
+        imagePullPolicy: Always
+        volumeMounts:
+          secret:
+            - name: oracle-key
+              mountPath: /oracle-key
+              secretName: marlowe-oracle-{{ $network }}
+  policies:
+    - name: staging
+      type: topology
+      properties:
+        clusters:
+          - local
+        namespace: marlowe-production
+
+  workflow:
+    steps:
+      - meta:
+          alias: Deploy To staging
+        name: staging
+        properties:
+          policies:
+            - staging
+        type: deploy
+{{- end }}

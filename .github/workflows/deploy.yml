@@ -127,6 +127,7 @@ jobs:
             echo TAG=$TAG
             yq e -i '.instances.qa.tag = env(TAG)' deploy/marlowe-runtime/values.yaml
             yq e -i '.instances.qa.webTag = env(TAG)' deploy/marlowe-runtime/values.yaml
+            yq e -i '.images.stagingTag = env(TAG)' deploy/marlowe-oracle/values.yaml
           fi
 
       - name: Commit changes

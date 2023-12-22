@@ -1,0 +1,7 @@
+apiVersion: v2
+name: marlowe-oracle
+version: v1.0.0
+description: Run an oracle for Marlowe contracts
+home: https://marlowe.iohk.io
+sources:
+  - https://github.com/input-output-hk/marlowe-cardano
