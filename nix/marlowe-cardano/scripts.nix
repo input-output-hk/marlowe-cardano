@@ -26,7 +26,6 @@ in
     cd $(git rev-parse --show-toplevel)
     mkdir -p marlowe/scripts
     cp ${inputs.marlowe-plutus.packages.validators}/*.plutus marlowe/scripts/
-    mv marlowe/scripts/marlowe-openroles.plutus marlowe/scripts/open-role.plutus
     chmod u+w marlowe/scripts/*
   '';
 
