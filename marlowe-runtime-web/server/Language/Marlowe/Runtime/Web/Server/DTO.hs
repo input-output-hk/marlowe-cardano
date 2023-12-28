@@ -686,6 +686,12 @@ instance FromDTO Chain.StakeCredential where
       . deserialiseAddress AsStakeAddress
       . Web.unStakeAddress
 
+instance HasDTO Chain.ScriptHash where
+  type DTO Chain.ScriptHash = Web.ScriptHash
+
+instance ToDTO Chain.ScriptHash where
+  toDTO = coerce
+
 instance HasDTO (TxBody era) where
   type DTO (TxBody era) = Web.TextEnvelope
 
