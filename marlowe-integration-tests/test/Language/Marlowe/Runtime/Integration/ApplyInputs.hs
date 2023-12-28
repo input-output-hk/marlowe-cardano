@@ -23,6 +23,7 @@ import qualified Data.Set as Set
 import Data.Time (UTCTime, addUTCTime, getCurrentTime, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Language.Marlowe.Core.V1.Semantics (MarloweData (..))
+import qualified Language.Marlowe.Core.V1.Semantics as Semantics
 import Language.Marlowe.Core.V1.Semantics.Types hiding (TokenName)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Types
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as Address
@@ -492,7 +493,8 @@ whenTimeoutSpec = parallel $ describe "Timed out contracts" $ aroundAll setup do
           emptyMarloweTransactionMetadata
           [NormalInput INotify]
       liftIO $
-        result `shouldBe` Left (ApplyInputsConstraintsBuildupFailed $ MarloweComputeTransactionFailed "TEApplyNoMatchError")
+        result
+          `shouldBe` Left (ApplyInputsConstraintsBuildupFailed $ MarloweComputeTransactionFailed Semantics.TEApplyNoMatchError)
   describe "Timed out continuation" do
     it "should contain no output" $ runAsIntegration \TimeoutTestData{..} -> do
       InputsApplied _ InputsAppliedInEra{..} <- pure depth2InnerTimeoutApplied
@@ -597,7 +599,8 @@ whenEmptySpec = parallel $ describe "Empty When contracts" $ aroundAll setup do
         emptyMarloweTransactionMetadata
         []
     liftIO $
-      result `shouldBe` Left (ApplyInputsConstraintsBuildupFailed $ MarloweComputeTransactionFailed "TEUselessTransaction")
+      result
+        `shouldBe` Left (ApplyInputsConstraintsBuildupFailed $ MarloweComputeTransactionFailed Semantics.TEUselessTransaction)
   it "should not accept a notify" $ runAsIntegration \contractId -> do
     wallet <- getGenesisWallet 0
     result <-
@@ -608,7 +611,8 @@ whenEmptySpec = parallel $ describe "Empty When contracts" $ aroundAll setup do
         emptyMarloweTransactionMetadata
         [NormalInput INotify]
     liftIO $
-      result `shouldBe` Left (ApplyInputsConstraintsBuildupFailed $ MarloweComputeTransactionFailed "TEApplyNoMatchError")
+      result
+        `shouldBe` Left (ApplyInputsConstraintsBuildupFailed $ MarloweComputeTransactionFailed Semantics.TEApplyNoMatchError)
   it "should not accept a deposit" $ runAsIntegration \contractId -> do
     wallet <- getGenesisWallet 0
     result <-
@@ -619,7 +623,8 @@ whenEmptySpec = parallel $ describe "Empty When contracts" $ aroundAll setup do
         emptyMarloweTransactionMetadata
         [NormalInput $ IDeposit (Role "Role") (Role "Role") ada 1_000_000]
     liftIO $
-      result `shouldBe` Left (ApplyInputsConstraintsBuildupFailed $ MarloweComputeTransactionFailed "TEApplyNoMatchError")
+      result
+        `shouldBe` Left (ApplyInputsConstraintsBuildupFailed $ MarloweComputeTransactionFailed Semantics.TEApplyNoMatchError)
   it "should not accept a choice" $ runAsIntegration \contractId -> do
     wallet <- getGenesisWallet 0
     result <-
@@ -630,7 +635,8 @@ whenEmptySpec = parallel $ describe "Empty When contracts" $ aroundAll setup do
         emptyMarloweTransactionMetadata
         [NormalInput $ IChoice (ChoiceId "Choice" (Role "Role")) 0]
     liftIO $
-      result `shouldBe` Left (ApplyInputsConstraintsBuildupFailed $ MarloweComputeTransactionFailed "TEApplyNoMatchError")
+      result
+        `shouldBe` Left (ApplyInputsConstraintsBuildupFailed $ MarloweComputeTransactionFailed Semantics.TEApplyNoMatchError)
   where
     setup :: ActionWith (MarloweRuntime, ContractId) -> IO ()
     setup runTests = withLocalMarloweRuntime $ runIntegrationTest do
@@ -663,7 +669,8 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
         emptyMarloweTransactionMetadata
         []
     liftIO $
-      result `shouldBe` Left (ApplyInputsConstraintsBuildupFailed $ MarloweComputeTransactionFailed "TEUselessTransaction")
+      result
+        `shouldBe` Left (ApplyInputsConstraintsBuildupFailed $ MarloweComputeTransactionFailed Semantics.TEUselessTransaction)
   it "should accept a notify" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
     wallet <- getGenesisWallet 0
     InputsApplied _ InputsAppliedInEra{output} <-
@@ -949,7 +956,8 @@ merkleizedSpec = parallel $ describe "Merkleized contracts" $ aroundAll setup do
         contractId
         emptyMarloweTransactionMetadata
         [MerkleizedInput INotify wrongHash Close]
-    liftIO $ result `shouldBe` Left (ApplyInputsConstraintsBuildupFailed $ MarloweComputeTransactionFailed "TEHashMismatch")
+    liftIO $
+      result `shouldBe` Left (ApplyInputsConstraintsBuildupFailed $ MarloweComputeTransactionFailed Semantics.TEHashMismatch)
   it "should reject an input with an incorrect continuation" $ runAsIntegration \contractId -> do
     wallet <- getGenesisWallet 0
     ApplyInputsConstraintError (BalancingError msg) <-
@@ -1026,7 +1034,8 @@ multiInputsSpec = parallel $ describe "Multi inputs" $ aroundAll setup do
         , NormalInput $ IDeposit (Role "role") (Role "role") ada 1_000_000
         ]
     liftIO $
-      result `shouldBe` Left (ApplyInputsConstraintsBuildupFailed $ MarloweComputeTransactionFailed "TEApplyNoMatchError")
+      result
+        `shouldBe` Left (ApplyInputsConstraintsBuildupFailed $ MarloweComputeTransactionFailed Semantics.TEApplyNoMatchError)
   where
     setup :: ActionWith (MarloweRuntime, (UTCTime, ContractId)) -> IO ()
     setup runTests = withLocalMarloweRuntime $ runIntegrationTest do

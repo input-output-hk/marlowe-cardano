@@ -65,7 +65,7 @@ import Language.Marlowe.Runtime.Core.Api (
  )
 import qualified Language.Marlowe.Runtime.Core.Gen ()
 import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript (OpenRoleScript), ReferenceScriptUtxo (..))
-import Language.Marlowe.Runtime.Transaction.Api (Destination (..))
+import Language.Marlowe.Runtime.Transaction.Api (CoinSelectionError (NoCollateralFound), Destination (..))
 import Language.Marlowe.Runtime.Transaction.Constraints
 import qualified Language.Marlowe.Runtime.Transaction.Gen ()
 import qualified Language.Marlowe.Scripts.Types as V1
@@ -481,9 +481,8 @@ spec = do
                 Right txBodyContent' ->
                   counterexample "Non-Plutus transaction should not have collateral" $
                     txInsCollateral txBodyContent' `shouldBe` TxInsCollateralNone
-                Left (CoinSelectionFailed message) ->
-                  counterexample "Non-Plutus coin selection should not fail due to lack of collateral" $
-                    message `shouldNotSatisfy` isPrefixOf "No collateral found in "
+                Left (CoinSelectionFailed (NoCollateralFound _)) ->
+                  counterexample "Non-Plutus coin selection should not fail due to lack of collateral" True
                 Left _ -> counterexample "Coin selection may fail for reasons unrelated to collateral" True
 
       pure $
