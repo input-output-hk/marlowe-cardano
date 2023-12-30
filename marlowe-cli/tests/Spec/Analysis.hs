@@ -194,17 +194,17 @@ expected False =
         A..= A.object
           [ "Memory"
               A..= A.object
-                [ "Actual" A..= (11408534 :: Integer)
+                [ "Actual" A..= (12394112 :: Integer)
                 , "Invalid" A..= False
                 , "Maximum" A..= (14000000 :: Integer)
-                , "Percentage" A..= (100 * 11408534 / 14000000 :: Double)
+                , "Percentage" A..= (100 * 12394112 / 14000000 :: Double)
                 ]
           , "Steps"
               A..= A.object
-                [ "Actual" A..= (3029993662 :: Integer)
+                [ "Actual" A..= (3230247457 :: Integer)
                 , "Invalid" A..= False
                 , "Maximum" A..= (10000000000 :: Integer)
-                , "Percentage" A..= (100 * 3029993662 / 10000000000 :: Double)
+                , "Percentage" A..= (100 * 3230247457 / 10000000000 :: Double)
                 ]
           ]
     ]
@@ -214,17 +214,17 @@ expected True =
         A..= A.object
           [ "Memory"
               A..= A.object
-                [ "Actual" A..= (12252358 :: Integer)
+                [ "Actual" A..= (13563828 :: Integer)
                 , "Invalid" A..= False
                 , "Maximum" A..= (14000000 :: Integer)
-                , "Percentage" A..= (100 * 12252358 / 14000000 :: Double)
+                , "Percentage" A..= (100 * 13563828 / 14000000 :: Double)
                 ]
           , "Steps"
               A..= A.object
-                [ "Actual" A..= (3309056741 :: Integer)
+                [ "Actual" A..= (3628849926 :: Integer)
                 , "Invalid" A..= False
                 , "Maximum" A..= (10000000000 :: Integer)
-                , "Percentage" A..= (100 * 3309056741 / 10000000000 :: Double)
+                , "Percentage" A..= (100 * 3628849926 / 10000000000 :: Double)
                 ]
           ]
     ]
