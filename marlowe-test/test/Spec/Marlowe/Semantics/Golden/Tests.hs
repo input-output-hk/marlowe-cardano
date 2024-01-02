@@ -74,7 +74,7 @@ testGolden name printIt contract valids invalids =
 printValids :: Contract -> IO ()
 printValids contract =
   do
-    Right is <- getAllInputs contract
+    Right is <- getAllInputs contract Nothing
     sequence_
       [ case playTrace t contract i of
         Error{} -> pure ()
