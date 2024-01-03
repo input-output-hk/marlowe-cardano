@@ -13,7 +13,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -50,7 +49,7 @@ import Language.Marlowe.Analysis.Safety.Transaction (
   unitAnnotator,
  )
 import Language.Marlowe.Analysis.Safety.Types (Transaction (..))
-import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage (..), toScriptLanguageInEra)
+import Language.Marlowe.CLI.Cardano.Api.PlutusScript (toScriptLanguageInEra)
 import Language.Marlowe.CLI.IO (decodeFileStrict, liftCli, liftCliIO, liftCliMaybe)
 import Language.Marlowe.CLI.Run (marloweAddressFromCardanoAddress, toCardanoAddressInEra, toCardanoValue)
 import Language.Marlowe.CLI.Types (
@@ -107,6 +106,7 @@ import Language.Marlowe.Scripts.Types (marloweTxInputsFromInputs)
 
 import Cardano.Api (bundleProtocolParams, unsafeHashableScriptData)
 import Cardano.Api qualified as Api
+import Cardano.Api qualified as C
 import Cardano.Api.Shelley qualified as Api
 import Cardano.Ledger.Credential qualified as Shelley
 import Control.Monad.Writer (WriterT (..))
@@ -207,7 +207,7 @@ data ContractInstance lang era = ContractInstance
 analyzeImpl
   :: forall m lang era
    . (Api.IsShelleyBasedEra era)
-  => (IsPlutusScriptLanguage lang)
+  => (C.IsPlutusScriptLanguage lang)
   => (MonadError CliError m)
   => (MonadIO m)
   => Api.ScriptDataSupportedInEra era
@@ -558,7 +558,7 @@ calcMarloweTxExBudgets protocol ContractInstance{..} transactionsPath lockedRole
 checkTransactionSizes
   :: forall lang era m
    . (Api.IsShelleyBasedEra era)
-  => (IsPlutusScriptLanguage lang)
+  => (C.IsPlutusScriptLanguage lang)
   => (MonadError CliError m)
   => (MonadIO m)
   => Api.ScriptDataSupportedInEra era
@@ -591,7 +591,7 @@ checkTransactionSizes era protocol ci transactions verbose =
 checkTransactionSize
   :: forall lang era m
    . (Api.IsShelleyBasedEra era)
-  => (IsPlutusScriptLanguage lang)
+  => (C.IsPlutusScriptLanguage lang)
   => (MonadError CliError m)
   => (MonadIO m)
   => Api.ScriptDataSupportedInEra era
@@ -628,7 +628,7 @@ checkTransactionSize era protocol ContractInstance{..} (Transaction marloweState
               . Api.ScriptWitness Api.ScriptWitnessForSpending
               $ Api.PlutusScriptWitness
                 scriptInEra
-                (plutusScriptVersion @lang)
+                C.plutusScriptVersion
                 (validatorInfoScriptOrReference ciSemanticsValidator)
                 (Api.ScriptDatumForTxIn . unsafeHashableScriptData . Api.fromPlutusData $ P.toData inDatum)
                 (unsafeHashableScriptData . Api.fromPlutusData $ P.toData redeemer)

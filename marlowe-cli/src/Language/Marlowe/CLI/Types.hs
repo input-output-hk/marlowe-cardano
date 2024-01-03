@@ -212,11 +212,6 @@ import Data.Time.Units (Second)
 import GHC.Exts (IsString (fromString))
 import GHC.Natural (Natural)
 import Language.Marlowe.CLI.Cardano.Api (toMultiAssetSupportedInEra, withShelleyBasedEra)
-import Language.Marlowe.CLI.Cardano.Api.PlutusScript (
-  IsPlutusScriptLanguage,
-  plutusScriptVersion,
-  withPlutusScriptVersion,
- )
 import Language.Marlowe.Core.V1.Semantics.Types qualified as M
 import Language.Marlowe.Extended.V1 qualified as E
 
@@ -268,7 +263,7 @@ somePaymentSigningKeyToTxWitness (SomePaymentSigningKeyGenesisUTxO skey) =
 -- | A marlowe transaction in an existentially quantified era
 data SomeMarloweTransaction
   = forall era lang.
-    (IsPlutusScriptLanguage lang) =>
+    (C.IsPlutusScriptLanguage lang) =>
     SomeMarloweTransaction
       (PlutusScriptVersion lang)
       (ScriptDataSupportedInEra era)
@@ -278,7 +273,7 @@ data SomeMarloweTransaction
 type MarlowePlutusVersion = C.PlutusScriptV2
 
 marlowePlutusVersion :: PlutusScriptVersion MarlowePlutusVersion
-marlowePlutusVersion = plutusScriptVersion
+marlowePlutusVersion = C.plutusScriptVersion
 
 doWithCardanoEra :: forall era m a. (MonadReader (CliEnv era) m) => ((IsCardanoEra era) => m a) -> m a
 doWithCardanoEra m = askEra >>= \era -> withCardanoEra era m
@@ -403,7 +398,14 @@ instance ToJSON SomeMarloweTransaction where
               C.PlutusScriptV3 -> "PlutusScriptV3"
          in [ "era" .= eraStr
             , "plutusVersion" .= plutusVersionStr
-            , "tx" .= withPlutusScriptVersion plutusVersion (toJSON tx)
+            , "tx"
+                .= ( ( case plutusVersion of
+                        C.PlutusScriptV1 -> toJSON tx
+                        C.PlutusScriptV2 -> toJSON tx
+                        C.PlutusScriptV3 -> toJSON tx
+                     )
+                      :: Value
+                   )
             ]
 
 instance FromJSON SomeMarloweTransaction where
@@ -446,7 +448,7 @@ data MarloweTransaction lang era = MarloweTransaction
   }
   deriving (Eq, Generic, Show)
 
-instance (IsPlutusScriptLanguage lang, IsShelleyBasedEra era) => ToJSON (MarloweTransaction lang era) where
+instance (C.IsPlutusScriptLanguage lang, IsShelleyBasedEra era) => ToJSON (MarloweTransaction lang era) where
   toJSON MarloweTransaction{..} =
     object
       [ "marloweValidator" .= toJSON mtValidator
@@ -491,7 +493,7 @@ data MarloweInfo lang era = MarloweInfo
   }
   deriving (Eq, Generic, Show)
 
-instance (IsPlutusScriptLanguage lang, IsShelleyBasedEra era) => ToJSON (MarloweInfo lang era) where
+instance (C.IsPlutusScriptLanguage lang, IsShelleyBasedEra era) => ToJSON (MarloweInfo lang era) where
   toJSON MarloweInfo{..} =
     object
       [ "validator" .= toJSON miValidatorInfo
@@ -533,20 +535,20 @@ data ValidatorInfo lang era = ValidatorInfo
 
 -- Let's extract validatorAddress build up from the above
 validatorAddress
-  :: (IsPlutusScriptLanguage lang)
+  :: (C.IsPlutusScriptLanguage lang)
   => PlutusScript lang
   -> ScriptDataSupportedInEra era
   -> CS.NetworkId
   -> CS.StakeAddressReference
   -> AddressInEra era
 validatorAddress viScript era network stake = do
-  let viHash = C.hashScript (C.PlutusScript plutusScriptVersion viScript)
+  let viHash = C.hashScript (C.PlutusScript C.plutusScriptVersion viScript)
       paymentCredential = C.PaymentCredentialByScript viHash
   withShelleyBasedEra era $ C.makeShelleyAddressInEra network paymentCredential stake
 
 -- | Build validator info.
 validatorInfo
-  :: (IsPlutusScriptLanguage lang)
+  :: (C.IsPlutusScriptLanguage lang)
   => C.PlutusScript lang
   -- ^ The validator.
   -> Maybe TxIn
@@ -563,7 +565,7 @@ validatorInfo
   -- ^ The validator information, or an error message.
 validatorInfo viScript viTxIn era protocolVersion costModel network stake = do
   let C.PlutusScriptSerialised viBytes = viScript
-      viHash = C.hashScript (C.PlutusScript plutusScriptVersion viScript)
+      viHash = C.hashScript (C.PlutusScript C.plutusScriptVersion viScript)
       viAddress = validatorAddress viScript era network stake
       viSize = SBS.length viBytes
 
@@ -574,7 +576,7 @@ validatorInfo viScript viTxIn era protocolVersion costModel network stake = do
 
 validatorInfo'
   :: (MonadError CliError m)
-  => (IsPlutusScriptLanguage lang)
+  => (C.IsPlutusScriptLanguage lang)
   => C.PlutusScript lang
   -> Maybe C.TxIn
   -> ScriptDataSupportedInEra era
@@ -590,13 +592,13 @@ validatorInfoScriptOrReference ValidatorInfo{..} = case viTxIn of
   Just txIn -> C.PReferenceScript txIn Nothing
   Nothing -> C.PScript viScript
 
-instance (IsPlutusScriptLanguage lang, IsShelleyBasedEra era) => ToJSON (ValidatorInfo lang era) where
+instance (C.IsPlutusScriptLanguage lang, IsShelleyBasedEra era) => ToJSON (ValidatorInfo lang era) where
   toJSON ValidatorInfo{..} = do
     object
       [ "address" .= serialiseAddress viAddress
       , "hash" .= toJSON viHash
       , "script"
-          .= toJSON (serialiseToTextEnvelope Nothing (PlutusScript (plutusScriptVersion :: PlutusScriptVersion lang) viScript))
+          .= toJSON (serialiseToTextEnvelope Nothing (PlutusScript (C.plutusScriptVersion :: PlutusScriptVersion lang) viScript))
       , "size" .= toJSON viSize
       , "txIn" .= toJSON viTxIn
       , "cost" .= toJSON viCost

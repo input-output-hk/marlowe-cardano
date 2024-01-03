@@ -63,9 +63,7 @@ import Cardano.Api (
   LocalNodeClientProtocols (..),
   LocalNodeConnectInfo (..),
   PaymentCredential (..),
-  PlutusScriptVersion (..),
   PolicyId,
-  Script (..),
   ScriptHash,
   SerialiseAsRawBytes (..),
   ShelleyBasedEra (..),
@@ -131,7 +129,7 @@ import Data.List.Extra (mconcatMap)
 import Data.Map.Strict qualified as M (elems, filter, null, toList)
 import Data.Maybe (catMaybes, fromMaybe, isJust)
 import Data.Set qualified as S (singleton, toList)
-import Language.Marlowe.CLI.Export (readMarloweValidator, readRolePayoutValidator)
+import Language.Marlowe.CLI.Cardano.Api.PlutusScript (toScript)
 import Language.Marlowe.CLI.Sync.Types (
   MarloweAddress (..),
   MarloweEvent (..),
@@ -143,6 +141,7 @@ import Language.Marlowe.CLI.Transaction (querySlotConfig)
 import Language.Marlowe.CLI.Types (CliEnv, CliError (..))
 import Language.Marlowe.Client (marloweParams)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract (..), Input (..), TimeInterval)
+import Language.Marlowe.Scripts (marloweValidator, payoutValidator)
 import Language.Marlowe.Scripts.Types (MarloweInput, MarloweTxInput (..))
 import Language.Marlowe.Util (dataHash)
 import Plutus.V1.Ledger.Slot (Slot (..))
@@ -527,12 +526,10 @@ extractMarlowe
   -> IO ()
   -- ^ Action to output potential Marlowe transactions.
 extractMarlowe _ printer slotConfig includeAll meBlock tx = do
-  marloweValidator <- readMarloweValidator
-  payoutValidator <- readRolePayoutValidator
   mapM_ printer $
     classifyMarlowe
-      (hashScript $ PlutusScript PlutusScriptV2 marloweValidator)
-      (hashScript $ PlutusScript PlutusScriptV2 payoutValidator)
+      (hashScript $ toScript marloweValidator)
+      (hashScript $ toScript payoutValidator)
       slotConfig
       includeAll
       meBlock

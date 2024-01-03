@@ -80,7 +80,6 @@ import Language.Marlowe.CLI.Cardano.Api (
   toPlutusProtocolVersion,
   txOutValueValue,
  )
-import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage)
 import Language.Marlowe.CLI.Cardano.Api.Value (
   lovelaceToPlutusValue,
   toPlutusValue,
@@ -377,19 +376,18 @@ liftCliEither = liftIO . liftEitherIO . first fromCLIError
 -- Useful helper to use the interpreter as a part of the test runner.
 -- We don't run runtime monitor thread here because we don't need it.
 execWalletOperations
-  :: forall era lang m resource
+  :: forall era m resource
    . (IsShelleyBasedEra era)
-  => (IsPlutusScriptLanguage lang)
   => (MonadIO m)
-  => (MonadReader (Env lang era resource) m)
-  => InterpretState lang era
+  => (MonadReader (Env C.PlutusScriptV2 era resource) m)
+  => InterpretState C.PlutusScriptV2 era
   -> [Wallet.WalletOperation]
   -> m
       ( Either
           ( TestRunnerError
-          , InterpretState lang era
+          , InterpretState C.PlutusScriptV2 era
           )
-          (InterpretState lang era)
+          (InterpretState C.PlutusScriptV2 era)
       )
 execWalletOperations interpretState operations =
   runExceptT
@@ -482,12 +480,11 @@ type TestInterpreterM lang era a =
 --  * `Right` - close the loop imidiatelly. It is a definite result.
 --  * `Left` - possibly try again. the result is not definite and retry could change it.
 interpretTest
-  :: forall lang era
+  :: forall era
    . (IsShelleyBasedEra era)
-  => (IsPlutusScriptLanguage lang)
   => [TestOperation]
-  -> PrevResult (TestResult lang era) (TestResult lang era)
-  -> TestInterpreterM lang era (Either (TestResult lang era) (TestResult lang era))
+  -> PrevResult (TestResult C.PlutusScriptV2 era) (TestResult C.PlutusScriptV2 era)
+  -> TestInterpreterM C.PlutusScriptV2 era (Either (TestResult C.PlutusScriptV2 era) (TestResult C.PlutusScriptV2 era))
 interpretTest testOperations (PrevResult possiblePrevResult) = do
   stateRef <- views envResource snd
   (testEnv, possibleRuntimeMonitor) <- setupTestInterpretEnv
@@ -606,9 +603,8 @@ acquireTestInterpretContext = do
 releaseTestInterpretContext
   :: (MonadIO m)
   => (IsShelleyBasedEra era)
-  => (IsPlutusScriptLanguage lang)
-  => (MonadReader (TestRunnerEnv lang era) m)
-  => TestInterpretContext lang era
+  => (MonadReader (TestRunnerEnv C.PlutusScriptV2 era) m)
+  => TestInterpretContext C.PlutusScriptV2 era
   -> m ()
 releaseTestInterpretContext (stateRef, faucet) =
   -- In the last phase we execute two cleanup operations
@@ -638,11 +634,10 @@ releaseTestInterpretContext (stateRef, faucet) =
 type TestRunnerM lang era a = ReaderT (TestRunnerEnv lang era) IO a
 
 runTest
-  :: forall era lang
-   . (IsPlutusScriptLanguage lang)
-  => (IsShelleyBasedEra era)
+  :: forall era
+   . (IsShelleyBasedEra era)
   => (FilePath, TestCase)
-  -> TestRunnerM lang era ()
+  -> TestRunnerM C.PlutusScriptV2 era ()
 runTest (testFile, testCase@TestCase{testName, operations = testOperations}) = do
   liftIO $ hPutStrLn stderr ""
   liftIO $ hPutStrLn stderr $ "***** Test " <> coerce testName <> " *****"
@@ -700,11 +695,10 @@ type TestSuiteRunnerInternalEnv lang era =
   Env lang era (TVar (MasterFaucet era))
 
 acquireFaucets
-  :: forall era lang m
+  :: forall era m
    . (IsShelleyBasedEra era)
   => (MonadIO m)
-  => (IsPlutusScriptLanguage lang)
-  => (MonadReader (TestSuiteRunnerInternalEnv lang era) m)
+  => (MonadReader (TestSuiteRunnerInternalEnv C.PlutusScriptV2 era) m)
   => TestFaucetBudget
   -> FaucetsNumber
   -> m (TVar [TestRunnerFaucet era])
@@ -759,11 +753,10 @@ acquireFaucets (TestFaucetBudget testFaucetBudget) (FaucetsNumber faucetNumber) 
   liftIO $ newTVarIO subfaucets
 
 releaseFaucets
-  :: forall era lang m
+  :: forall era m
    . (IsShelleyBasedEra era)
   => (MonadIO m)
-  => (IsPlutusScriptLanguage lang)
-  => (MonadReader (TestSuiteRunnerInternalEnv lang era) m)
+  => (MonadReader (TestSuiteRunnerInternalEnv C.PlutusScriptV2 era) m)
   => TVar [TestRunnerFaucet era]
   -> m ()
 releaseFaucets subfaucetsRef = do
@@ -901,12 +894,11 @@ unmaskedReleaseBracket' before after thing =
 makeLenses ''TestSuiteResult
 
 runTests
-  :: forall era lang
+  :: forall era
    . (IsShelleyBasedEra era)
-  => (IsPlutusScriptLanguage lang)
   => [(FilePath, TestCase)]
   -> MaxConcurrentRunners
-  -> TestSuiteRunnerM lang era (TestSuiteResult lang era)
+  -> TestSuiteRunnerM C.PlutusScriptV2 era (TestSuiteResult C.PlutusScriptV2 era)
 runTests tests (MaxConcurrentRunners maxConcurrentRunners) = do
   protocolParams <- view envProtocolParams
   let concurrentRunners = min maxConcurrentRunners (length tests)

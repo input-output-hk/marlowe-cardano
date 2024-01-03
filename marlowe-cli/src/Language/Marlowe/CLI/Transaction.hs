@@ -221,13 +221,8 @@ import Language.Marlowe.CLI.Cardano.Api (
  )
 import Language.Marlowe.CLI.Cardano.Api qualified as MCA
 import Language.Marlowe.CLI.Cardano.Api.Address.ProofOfBurn (permanentPublisher)
-import Language.Marlowe.CLI.Cardano.Api.PlutusScript as PS
-import Language.Marlowe.CLI.Export (
-  buildValidatorInfo,
-  readMarloweValidator,
-  readOpenRoleValidator,
-  readRolePayoutValidator,
- )
+import Language.Marlowe.CLI.Cardano.Api.PlutusScript (toScript, toScriptLanguageInEra)
+import Language.Marlowe.CLI.Export (buildValidatorInfo)
 import Language.Marlowe.CLI.IO (
   decodeFileBuiltinData,
   decodeFileStrict,
@@ -296,6 +291,7 @@ import Language.Marlowe.CLI.Types (
   withShelleyBasedEra,
  )
 import Language.Marlowe.CLI.Types qualified as PayToScript (PayToScript (value))
+import Language.Marlowe.Scripts
 import Ouroboros.Consensus.HardFork.History (interpreterToEpochInfo)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
 import PlutusLedgerApi.V1 (Datum (..), POSIXTime (..), Redeemer (..), TokenName (..), fromBuiltin, toData)
@@ -891,7 +887,7 @@ buildIncoming connection scriptAddress signingKeyFiles outputDatumFile outputVal
 
 buildReferenceScript
   :: forall era lang m
-   . (IsPlutusScriptLanguage lang)
+   . (C.IsPlutusScriptLanguage lang)
   => (MonadError CliError m)
   => (MonadReader (CliEnv era) m)
   => PlutusScript lang
@@ -903,7 +899,7 @@ buildReferenceScript plutusScript = do
   let refScript =
         ReferenceScript referenceTxInsScriptsInlineDatumsSupportedInEra
           . toScriptInAnyLang
-          . PS.toScript
+          . toScript
           $ plutusScript
   pure refScript
 
@@ -933,7 +929,7 @@ buildScriptPublishingInfo
   => (MonadError CliError m)
   => (C.IsShelleyBasedEra era)
   => (MonadReader (CliEnv era) m)
-  => (IsPlutusScriptLanguage lang)
+  => (C.IsPlutusScriptLanguage lang)
   => QueryExecutionContext era
   -> PlutusScript lang
   -> PublishingStrategy era
@@ -944,7 +940,7 @@ buildScriptPublishingInfo queryCtx plutusScript publishingStrategy = do
   protocolVersion <- getProtocolVersion queryCtx
   costModel <- getPV2CostModelParams queryCtx
   let networkId = queryContextNetworkId queryCtx
-      scriptHash = hashScript . PS.toScript $ plutusScript
+      scriptHash = hashScript . toScript $ plutusScript
       publisher = publisherAddress scriptHash publishingStrategy era networkId
 
   -- Stake information in this context is probably meaningless. We assign real staking when we use a reference.
@@ -955,8 +951,8 @@ buildScriptPublishingInfo queryCtx plutusScript publishingStrategy = do
   pure (minAda, publisher, referenceScriptInfo)
 
 buildPublishingImpl
-  :: forall era lang m
-   . (MonadError CliError m, IsPlutusScriptLanguage lang)
+  :: forall era m
+   . (MonadError CliError m)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
   => (C.IsShelleyBasedEra era)
@@ -971,15 +967,12 @@ buildPublishingImpl
   -> PublishingStrategy era
   -> CoinSelectionStrategy
   -> PrintStats
-  -> m ([TxBody era], MarloweScriptsRefs lang era)
+  -> m ([TxBody era], MarloweScriptsRefs C.PlutusScriptV2 era)
 buildPublishingImpl buildupCtx signingKey expires changeAddress publishingStrategy coinSelectionStrategy (PrintStats printStats) = do
   let queryCtx = toQueryContext buildupCtx
-  marloweValidator <- readMarloweValidator
-  payoutValidator <- readRolePayoutValidator
-  openRoleValidator <- readOpenRoleValidator
-  pm <- buildScriptPublishingInfo @lang queryCtx marloweValidator publishingStrategy
-  pp <- buildScriptPublishingInfo @lang queryCtx payoutValidator publishingStrategy
-  po <- buildScriptPublishingInfo @lang queryCtx openRoleValidator publishingStrategy
+  pm <- buildScriptPublishingInfo queryCtx marloweValidator publishingStrategy
+  pp <- buildScriptPublishingInfo queryCtx payoutValidator publishingStrategy
+  po <- buildScriptPublishingInfo queryCtx openRolesValidator publishingStrategy
 
   let buildPublishedScriptTxOut (minAda, publisher, referenceValidator) = do
         referenceScript <- buildReferenceScript $ viScript referenceValidator
@@ -1002,7 +995,7 @@ buildPublishingImpl buildupCtx signingKey expires changeAddress publishingStrate
         (txBodyContent, txBody) <-
           buildBodyWithContent
             queryCtx
-            ([] :: [PayFromScript lang])
+            ([] :: [PayFromScript C.PlutusScriptV2])
             Nothing
             []
             inputs
@@ -1039,8 +1032,8 @@ buildPublishingImpl buildupCtx signingKey expires changeAddress publishingStrate
             C.TxBody C.TxBodyContent{txOuts} = txBody
             script =
               C.ScriptInAnyLang
-                (C.PlutusScriptLanguage $ plutusScriptVersion @lang)
-                (C.PlutusScript (plutusScriptVersion @lang) plutusV2Script)
+                (C.PlutusScriptLanguage C.plutusScriptVersion)
+                (toScript plutusV2Script)
 
             match (ix, txOut@(C.TxOut _ _ _ referenceScript)) = case referenceScript of
               C.ReferenceScript _ txOutScript ->
@@ -1112,8 +1105,8 @@ buildPublishingImpl buildupCtx signingKey expires changeAddress publishingStrate
 
 -- CLI command handler.
 buildPublishing
-  :: forall era lang m
-   . (MonadError CliError m, IsPlutusScriptLanguage lang)
+  :: forall era m
+   . (MonadError CliError m)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
   => (C.IsShelleyBasedEra era)
@@ -1134,7 +1127,7 @@ buildPublishing connection signingKeyFile expires changeAddress strategy (TxBody
   let strategy' = fromMaybe (PublishAtAddress changeAddress) strategy
   signingKey <- readSigningKey signingKeyFile
   (txBodies, _) <-
-    buildPublishingImpl @era @lang
+    buildPublishingImpl @era
       (mkNodeTxBuildup connection timeout)
       signingKey
       expires
@@ -1150,12 +1143,11 @@ buildPublishing connection signingKeyFile expires changeAddress strategy (TxBody
     void $ submitTxBody txBuildupCtx txBody [signingKey]
 
 publishImpl
-  :: forall lang era m
+  :: forall era m
    . (MonadError CliError m)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
   => (C.IsShelleyBasedEra era)
-  => (IsPlutusScriptLanguage lang)
   => TxBuildupContext era
   -- ^ The connection info for the local node.
   -> SomePaymentSigningKey
@@ -1167,10 +1159,10 @@ publishImpl
   -> PublishingStrategy era
   -> CoinSelectionStrategy
   -> PrintStats
-  -> m ([TxBody era], MarloweScriptsRefs lang era)
+  -> m ([TxBody era], MarloweScriptsRefs C.PlutusScriptV2 era)
 publishImpl txBuildupCtx signingKey expires changeAddress publishingStrategy coinSelectionStrategy printStats = do
   (txBodies, _) <-
-    buildPublishingImpl @era @lang
+    buildPublishingImpl @era
       txBuildupCtx
       signingKey
       expires
@@ -1189,9 +1181,8 @@ publishImpl txBuildupCtx signingKey expires changeAddress publishingStrategy coi
   pure (txBodies, refs)
 
 findScriptRef
-  :: forall lang era m
+  :: forall era m
    . (MonadReader (CliEnv era) m)
-  => (IsPlutusScriptLanguage lang)
   => (C.IsShelleyBasedEra era)
   => (MonadIO m)
   => (MonadError CliError m)
@@ -1200,7 +1191,7 @@ findScriptRef
   -> ScriptHash
   -> PublishingStrategy era
   -> PrintStats
-  -> m (Maybe (AnUTxO era, ValidatorInfo lang era))
+  -> m (Maybe (AnUTxO era, ValidatorInfo C.PlutusScriptV2 era))
 findScriptRef queryCtx scriptHash publishingStrategy (PrintStats printStats) = do
   era <- askEra
   let networkId = queryContextNetworkId queryCtx
@@ -1216,14 +1207,14 @@ findScriptRef queryCtx scriptHash publishingStrategy (PrintStats printStats) = d
         <> show scriptHash
 
   runMaybeT do
-    let query = FindReferenceScript (plutusScriptVersion @lang) scriptHash
+    let query = FindReferenceScript C.plutusScriptVersion scriptHash
     (u@(AnUTxO (txIn, _)), script) <- MaybeT $ selectUtxosImpl queryCtx publisher query
     i <- lift $ buildValidatorInfo queryCtx script (Just txIn) NoStakeAddress
     pure (u, i)
 
 findMarloweScriptsRefs
-  :: forall era lang m
-   . (MonadReader (CliEnv era) m, IsPlutusScriptLanguage lang)
+  :: forall era m
+   . (MonadReader (CliEnv era) m)
   => (MonadIO m)
   => (MonadError CliError m)
   => (C.IsShelleyBasedEra era)
@@ -1231,14 +1222,11 @@ findMarloweScriptsRefs
   -- ^ Either already selected UTxOs or connection info to select UTxOs.
   -> PublishingStrategy era
   -> PrintStats
-  -> m (Maybe (MarloweScriptsRefs lang era))
+  -> m (Maybe (MarloweScriptsRefs C.PlutusScriptV2 era))
 findMarloweScriptsRefs queryCtx publishingStrategy printStats = do
-  marloweValidator <- readMarloweValidator @_ @lang
-  payoutValidator <- readRolePayoutValidator @_ @lang
-  openRoleValidator <- readOpenRoleValidator @_ @lang
-  let marloweHash = hashScript $ PS.toScript marloweValidator
-      payoutHash = hashScript $ PS.toScript payoutValidator
-      openRoleHash = hashScript $ PS.toScript openRoleValidator
+  let marloweHash = hashScript $ toScript marloweValidator
+      payoutHash = hashScript $ toScript payoutValidator
+      openRoleHash = hashScript $ toScript openRolesValidator
 
   runMaybeT do
     m <- MaybeT $ findScriptRef queryCtx marloweHash publishingStrategy printStats
@@ -1248,8 +1236,8 @@ findMarloweScriptsRefs queryCtx publishingStrategy printStats = do
 
 -- | CLI Command handler.
 findPublished
-  :: forall era lang m
-   . (C.IsShelleyBasedEra era, IsPlutusScriptLanguage lang)
+  :: forall era m
+   . (C.IsShelleyBasedEra era)
   => (MonadReader (CliEnv era) m)
   => (MonadIO m)
   => (MonadError CliError m)
@@ -1258,7 +1246,7 @@ findPublished
   -> m ()
 findPublished queryCtx publishingStrategy = do
   let publishingStrategy' = fromMaybe (PublishPermanently NoStakeAddress) publishingStrategy
-  findMarloweScriptsRefs @era @lang queryCtx publishingStrategy' (PrintStats True) >>= \case
+  findMarloweScriptsRefs @era queryCtx publishingStrategy' (PrintStats True) >>= \case
     Just (MarloweScriptsRefs (mu, mi) (ru, ri) (ou, oi)) -> do
       let refJSON (AnUTxO (i, _)) ValidatorInfo{viHash} =
             A.object
@@ -1465,7 +1453,7 @@ hashSigningKey =
 buildBody
   :: forall era lang m
    . (MonadError CliError m)
-  => (IsPlutusScriptLanguage lang)
+  => (C.IsPlutusScriptLanguage lang)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
   => QueryExecutionContext era
@@ -1521,7 +1509,7 @@ buildBody queryCtx payFromScript payToScript extraInputs inputs outputs collater
 buildBodyWithContent
   :: forall era lang m
    . (MonadError CliError m)
-  => (IsPlutusScriptLanguage lang)
+  => (C.IsPlutusScriptLanguage lang)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
   => QueryExecutionContext era
@@ -1756,7 +1744,7 @@ type TxInEra era = (TxIn, BuildTxWith BuildTx (Witness WitCtxTxIn era))
 scriptWitness
   :: forall era lang m
    . (MonadError CliError m)
-  => (IsPlutusScriptLanguage lang)
+  => (C.IsPlutusScriptLanguage lang)
   => ScriptDataSupportedInEra era
   -> PayFromScript lang
   -- ^ The payment information.
@@ -1770,7 +1758,7 @@ scriptWitness era PayFromScript{..} = do
     BuildTxWith . ScriptWitness ScriptWitnessForSpending $
       C.PlutusScriptWitness
         scriptInEra
-        (plutusScriptVersion @lang)
+        C.plutusScriptVersion
         script
         datum'
         (C.unsafeHashableScriptData $ fromPlutusData $ toData redeemer)
@@ -1780,7 +1768,7 @@ scriptWitness era PayFromScript{..} = do
 redeemScript
   :: forall era lang m
    . (MonadError CliError m)
-  => (IsPlutusScriptLanguage lang)
+  => (C.IsPlutusScriptLanguage lang)
   => ScriptDataSupportedInEra era
   -> PayFromScript lang
   -- ^ The payment information.

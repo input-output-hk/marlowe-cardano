@@ -22,6 +22,8 @@ module Language.Marlowe.CLI.Command.Contract (
 
 import Cardano.Api (NetworkId (..), StakeAddressReference (..))
 import Control.Monad.Except (MonadError, MonadIO)
+import Control.Monad.Reader.Class (MonadReader)
+import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
 import Language.Marlowe.CLI.Command.Parse (
   parseCurrencySymbol,
@@ -36,15 +38,11 @@ import Language.Marlowe.CLI.Export (
   exportMarloweValidator,
   exportRedeemer,
  )
+import Language.Marlowe.CLI.IO (getDefaultCostModel)
 import Language.Marlowe.CLI.Types (CliEnv, CliError)
 import Language.Marlowe.Client (defaultMarloweParams, marloweParams)
-import PlutusLedgerApi.V1 (CurrencySymbol, ProtocolVersion)
-
-import Cardano.Api qualified as C
-import Control.Monad.Reader.Class (MonadReader)
-import Data.Map qualified as Map
-import Language.Marlowe.CLI.IO (getDefaultCostModel)
 import Options.Applicative qualified as O
+import PlutusLedgerApi.V1 (CurrencySymbol, ProtocolVersion)
 
 -- | Marlowe CLI commands and options for exporting data.
 data ContractCommand
@@ -131,7 +129,7 @@ runContractCommand command =
         stake' = fromMaybe NoStakeAddress $ stake command
     case command of
       Export{..} ->
-        exportMarlowe @_ @C.PlutusScriptV2
+        exportMarlowe @_
           marloweParams'
           protocolVersion
           (Map.elems costModel)
@@ -142,9 +140,9 @@ runContractCommand command =
           inputFiles
           outputFile
           printStats
-      ExportAddress{} -> exportMarloweAddress @_ @C.PlutusScriptV2 network' stake'
+      ExportAddress{} -> exportMarloweAddress @_ network' stake'
       ExportValidator{..} ->
-        exportMarloweValidator @_ @C.PlutusScriptV2
+        exportMarloweValidator @_
           protocolVersion
           (Map.elems costModel)
           network'

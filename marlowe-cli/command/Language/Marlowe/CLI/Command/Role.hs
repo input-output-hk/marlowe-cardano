@@ -21,7 +21,6 @@ module Language.Marlowe.CLI.Command.Role (
 ) where
 
 import Cardano.Api (NetworkId (..), StakeAddressReference (..))
-import Cardano.Api qualified as C
 import Control.Monad.Except (MonadError, MonadIO)
 import Control.Monad.Reader.Class (MonadReader)
 import Data.Map qualified as Map
@@ -100,9 +99,9 @@ runRoleCommand command =
     let network' = network command
         stake' = fromMaybe NoStakeAddress $ stake command
     case command of
-      ExportAddress{} -> exportRoleAddress @_ @C.PlutusScriptV2 network' stake'
+      ExportAddress{} -> exportRoleAddress @_ network' stake'
       ExportValidator{..} -> do
-        exportRoleValidator @_ @C.PlutusScriptV2
+        exportRoleValidator @_
           protocolVersion
           (Map.elems costModel)
           network'

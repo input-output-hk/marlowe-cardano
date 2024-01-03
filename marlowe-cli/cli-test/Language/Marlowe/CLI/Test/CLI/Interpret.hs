@@ -66,7 +66,6 @@ import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe, isJust, mapMaybe, maybeToList)
 import Data.Text qualified as Text
 import Data.Traversable (for)
-import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage)
 import Language.Marlowe.CLI.Run (
   autoRunTransactionImpl,
   autoWithdrawFundsImpl,
@@ -171,14 +170,13 @@ toOneLineJSON :: forall a. (A.ToJSON a) => a -> String
 toOneLineJSON = Text.unpack . A.renderValue . A.toJSON
 
 autoRunTransaction
-  :: forall era env lang m st
+  :: forall era env m st
    . (IsShelleyBasedEra era)
-  => (IsPlutusScriptLanguage lang)
-  => (InterpretMonad env st m lang era)
+  => (InterpretMonad env st m C.PlutusScriptV2 era)
   => Maybe CurrencyNickname
   -> WalletNickname
-  -> Maybe (MarloweTransaction lang era, C.TxIn)
-  -> MarloweTransaction lang era
+  -> Maybe (MarloweTransaction C.PlutusScriptV2 era, C.TxIn)
+  -> MarloweTransaction C.PlutusScriptV2 era
   -> Bool
   -> m (C.TxBody era, Maybe C.TxIn)
 autoRunTransaction currency defaultSubmitter prev curr@MarloweTransaction{..} invalid = do
@@ -242,7 +240,7 @@ autoRunTransaction currency defaultSubmitter prev curr@MarloweTransaction{..} in
                     OutputQueryResult{oqrMatching = fromUTxO -> (AnUTxO (txIn, _) : _)} -> do
                       let scriptOrReference = validatorInfoScriptOrReference openRoleValidatorInfo
                           redeemer = P.Redeemer $ P.toBuiltinData P.emptyByteString
-                          payFromOpenRole :: PayFromScript lang
+                          payFromOpenRole :: PayFromScript C.PlutusScriptV2
                           payFromOpenRole = buildPayFromScript scriptOrReference Nothing redeemer txIn
 
                       pure ([], [payFromOpenRole])
@@ -299,13 +297,12 @@ autoRunTransaction currency defaultSubmitter prev curr@MarloweTransaction{..} in
       throwError $ testExecutionFailed' "[AutoRun] Multiple Marlowe outputs detected - unable to handle them yet."
 
 publishCurrentValidators
-  :: forall env era lang st m
+  :: forall env era st m
    . (C.IsShelleyBasedEra era)
-  => (IsPlutusScriptLanguage lang)
-  => (InterpretMonad env st m lang era)
+  => (InterpretMonad env st m C.PlutusScriptV2 era)
   => Maybe Bool
   -> Maybe WalletNickname
-  -> m (MarloweScriptsRefs lang era)
+  -> m (MarloweScriptsRefs C.PlutusScriptV2 era)
 publishCurrentValidators publishPermanently possiblePublisher = do
   let walletNickname = fromMaybe faucetNickname possiblePublisher
 
@@ -321,7 +318,7 @@ publishCurrentValidators publishPermanently possiblePublisher = do
       fnName = "publishCurrentValidators"
       logTraceMsg' = logStoreLabeledMsg fnName
       queryCtx = toQueryContext txBuildupCtx
-  runCli era fnName (findMarloweScriptsRefs @_ @lang queryCtx publishingStrategy printStats) >>= \case
+  runCli era fnName (findMarloweScriptsRefs @_ queryCtx publishingStrategy printStats) >>= \case
     Just marloweScriptRefs@(MarloweScriptsRefs (AnUTxO (mTxIn, _), mv) (AnUTxO (pTxIn, _), pv) (AnUTxO (orTxIn, _), orv)) -> do
       let logValidatorInfo ValidatorInfo{..} =
             logTraceMsg' $ Text.unpack (C.serialiseAddress viAddress)
@@ -353,10 +350,9 @@ publishCurrentValidators publishPermanently possiblePublisher = do
       pure refs
 
 interpret
-  :: forall env era lang st m
+  :: forall env era st m
    . (C.IsShelleyBasedEra era)
-  => (IsPlutusScriptLanguage lang)
-  => (InterpretMonad env st m lang era)
+  => (InterpretMonad env st m C.PlutusScriptV2 era)
   => CLIOperation
   -> m ()
 interpret co@Initialize{..} = do
@@ -501,7 +497,7 @@ interpret AutoRun{..} = do
             drop l whole
           Nothing -> whole
       step mTh mt = do
-        let prev :: Maybe (MarloweTransaction lang era, C.TxIn)
+        let prev :: Maybe (MarloweTransaction C.PlutusScriptV2 era, C.TxIn)
             prev = do
               pmt <- overAnyMarloweThread getCLIMarloweThreadTransaction <$> mTh
               txIn <- overAnyMarloweThread marloweThreadTxIn =<< mTh
@@ -547,7 +543,7 @@ interpret co@Withdraw{..} = do
   txBuildupCtx <- view txBuildupContextL
   txBodies <- foldMapMFlipped roles \role -> do
     let lastWithdrawalCheckPoint = Map.lookup role _ciWithdrawalsCheckPoints
-        threadTransactions :: [(MarloweTransaction lang era, C.TxId)]
+        threadTransactions :: [(MarloweTransaction C.PlutusScriptV2 era, C.TxId)]
         threadTransactions = do
           let step item acc = (getCLIMarloweThreadTransaction item, C.getTxId . getCLIMarloweThreadTxBody $ item) : acc
           overAnyMarloweThread (foldrMarloweThread step []) marloweThread

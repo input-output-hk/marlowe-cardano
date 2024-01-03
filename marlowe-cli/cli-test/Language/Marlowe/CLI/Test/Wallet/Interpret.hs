@@ -10,7 +10,6 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module Language.Marlowe.CLI.Test.Wallet.Interpret where
@@ -60,7 +59,6 @@ import Data.Tuple.Extra (uncurry3)
 import Language.Marlowe.CLI.Cardano.Api (toReferenceTxInsScriptsInlineDatumsSupportedInEra, toTxOutDatumInline)
 import Language.Marlowe.CLI.Cardano.Api.Value (lovelaceToPlutusValue, toCurrencySymbol, toPlutusValue)
 import Language.Marlowe.CLI.Cardano.Api.Value qualified as CV
-import Language.Marlowe.CLI.Export (readOpenRoleValidator)
 import Language.Marlowe.CLI.IO (readSigningKey, submitTxBody')
 import Language.Marlowe.CLI.Run (toCardanoPolicyId)
 import Language.Marlowe.CLI.Sync (toPlutusAddress)
@@ -132,6 +130,7 @@ import Language.Marlowe.CLI.Types (
 import Language.Marlowe.CLI.Types qualified as CT
 import Language.Marlowe.Cardano (marloweNetworkFromCaradnoNetworkId)
 import Language.Marlowe.Core.V1.Semantics.Types qualified as M
+import Language.Marlowe.Scripts (openRolesValidator)
 import PlutusLedgerApi.V1 (CurrencySymbol, TokenName)
 import PlutusLedgerApi.V1.Value (valueOf)
 import PlutusLedgerApi.V1.Value qualified as P
@@ -235,8 +234,7 @@ openRoleValidatorAddress
 openRoleValidatorAddress = do
   era <- view eraL
   networkId <- getNetworkId
-  openRoleScript <- readOpenRoleValidator @_ @C.PlutusScriptV2
-  pure $ validatorAddress openRoleScript era networkId NoStakeAddress
+  pure $ validatorAddress openRolesValidator era networkId NoStakeAddress
 
 getNetworkId
   :: forall env st m era

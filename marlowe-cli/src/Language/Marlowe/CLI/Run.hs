@@ -104,7 +104,6 @@ import Data.Tuple.Extra (uncurry3)
 import Data.Type.Equality (type (:~:) (..))
 import Language.Marlowe.CLI.Cardano.Api (adjustMinimumUTxO, toTxOutDatumInTx)
 import Language.Marlowe.CLI.Cardano.Api.Address (toShelleyStakeReference)
-import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage (plutusScriptVersion))
 import Language.Marlowe.CLI.Export (
   buildMarloweDatum,
   buildRedeemer,
@@ -328,7 +327,7 @@ initializeTransaction connection marloweParams slotConfig protocolVersion costMo
           printStats
     maybeWriteJson outputFile $
       SomeMarloweTransaction
-        (plutusScriptVersion :: PlutusScriptVersion MarlowePlutusVersion)
+        (C.plutusScriptVersion :: PlutusScriptVersion MarlowePlutusVersion)
         era
         marloweTransaction
 
@@ -339,7 +338,7 @@ initializeTransactionImpl
   => (MonadIO m)
   => (C.IsShelleyBasedEra era)
   => (MonadReader (CliEnv era) m)
-  => (IsPlutusScriptLanguage lang)
+  => (C.IsPlutusScriptLanguage lang)
   => MarloweParams
   -- ^ The Marlowe contract parameters.
   -> SlotConfig
@@ -362,7 +361,7 @@ initializeTransactionImpl
   -- ^ Whether to print statistics about the validator.
   -> m (MarloweTransaction lang era)
   -- ^ Action to return a MarloweTransaction
-initializeTransactionImpl marloweParams mtSlotConfig protocolVersion costModelParams network stake mtContract mtState refs merkleize printStats = case plutusScriptVersion @lang of
+initializeTransactionImpl marloweParams mtSlotConfig protocolVersion costModelParams network stake mtContract mtState refs merkleize printStats = case C.plutusScriptVersion @lang of
   PlutusScriptV1 -> throwError "Plutus Script V1 not supported"
   PlutusScriptV3 -> throwError "Plutus Script V3 not supported"
   PlutusScriptV2 -> do
@@ -639,12 +638,12 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
     SomeMarloweTransaction _ era' marloweOut' <- decodeFileStrict marloweOutFile
     era <- askEra @era
     signingKeys <- mapM readSigningKey signingKeyFiles
-    let go :: forall lang. (IsPlutusScriptLanguage lang) => MarloweTransaction lang era -> m TxId
+    let go :: forall lang. (C.IsPlutusScriptLanguage lang) => MarloweTransaction lang era -> m TxId
         go marloweOut'' = do
           marloweInBundle' <- case marloweInBundle of
             Nothing -> pure Nothing
             Just (marloweInFile, marloweTxIn, collateralTxIn) -> do
-              marloweIn <- readMarloweTransactionFile (plutusScriptVersion :: PlutusScriptVersion lang) marloweInFile
+              marloweIn <- readMarloweTransactionFile (C.plutusScriptVersion :: PlutusScriptVersion lang) marloweInFile
               pure $ Just (marloweIn, marloweTxIn, collateralTxIn)
 
           (body :: TxBody era) <-
@@ -682,7 +681,7 @@ testSameEra = \case
 runTransactionImpl
   :: forall era lang m
    . (MonadError CliError m, CS.IsCardanoEra era)
-  => (IsPlutusScriptLanguage lang)
+  => (C.IsPlutusScriptLanguage lang)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
   => TxBuildupContext era
@@ -923,12 +922,12 @@ autoRunTransaction connection marloweInBundle marloweOutFile changeAddress signi
     SomeMarloweTransaction _ era' marloweOut' <- decodeFileStrict marloweOutFile
     era <- askEra @era
     signingKeys <- mapM readSigningKey signingKeyFiles
-    let go :: forall lang. (IsPlutusScriptLanguage lang) => MarloweTransaction lang era -> m TxId
+    let go :: forall lang. (C.IsPlutusScriptLanguage lang) => MarloweTransaction lang era -> m TxId
         go marloweOut'' = do
           marloweInBundle' <- case marloweInBundle of
             Nothing -> pure Nothing
             Just (marloweInFile, marloweTxIn) -> do
-              marloweIn <- readMarloweTransactionFile (plutusScriptVersion :: PlutusScriptVersion lang) marloweInFile
+              marloweIn <- readMarloweTransactionFile (C.plutusScriptVersion :: PlutusScriptVersion lang) marloweInFile
               pure $ Just (marloweIn, marloweTxIn)
 
           (body :: TxBody era) <-
@@ -954,7 +953,7 @@ autoRunTransaction connection marloweInBundle marloweOutFile changeAddress signi
 autoRunTransactionImpl
   :: forall era lang m
    . (MonadError CliError m, CS.IsCardanoEra era)
-  => (IsPlutusScriptLanguage lang)
+  => (C.IsPlutusScriptLanguage lang)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
   => TxBuildupContext era
@@ -1196,7 +1195,7 @@ autoWithdrawFunds connection marloweOutFile roleName changeAddress signingKeyFil
     era <- askEra
     -- Read the Marlowe transaction information that was used to populate the role-payout address.
     SomeMarloweTransaction _ era' marloweOut <- decodeFileStrict marloweOutFile
-    let go :: forall lang. (IsPlutusScriptLanguage lang) => MarloweTransaction lang era -> m TxId
+    let go :: forall lang. (C.IsPlutusScriptLanguage lang) => MarloweTransaction lang era -> m TxId
         go marloweOut' = do
           -- Read the signing keys.
           signingKeys <- mapM readSigningKey signingKeyFiles
@@ -1235,7 +1234,7 @@ autoWithdrawFundsImpl
    . (MonadError CliError m, CS.IsCardanoEra era)
   => (MonadReader (CliEnv era) m)
   => (MonadIO m)
-  => (IsPlutusScriptLanguage lang)
+  => (C.IsPlutusScriptLanguage lang)
   => TxBuildupContext era
   -- ^ The connection info for the local node.
   -> Token
