@@ -30,7 +30,11 @@ import Language.Marlowe.Analysis.Safety.Ledger (
   checkTokens,
   worstValue,
  )
-import Language.Marlowe.Analysis.Safety.Transaction (findTransactions, firstRoleAuthorizationAnnotator)
+import Language.Marlowe.Analysis.Safety.Transaction (
+  CurrentState (NotInitialized),
+  findTransactions,
+  firstRoleAuthorizationAnnotator,
+ )
 import Language.Marlowe.Analysis.Safety.Types (SafetyError (..), Transaction (..), stripAnnotation)
 import Language.Marlowe.Runtime.Core.Api (
   Contract,
@@ -301,9 +305,10 @@ checkTransactions protocolParameters era version@MarloweV1 marloweContext helper
           helperRoles = M.keysSet $ helperScriptStates helpersContext
           intersectHelperRoles transaction@Transaction{txAnnotation} =
             transaction{txAnnotation = S.intersection txAnnotation $ S.map Chain.toPlutusTokenName helperRoles}
-      transactions <-
-        findTransactions firstRoleAuthorizationAnnotator False changeAddress' initialValue . V1.MerkleizedContract contract $
-          remapContinuations continuations
+      transactions <- do
+        let state = NotInitialized changeAddress' initialValue
+            contract' = V1.MerkleizedContract contract $ remapContinuations continuations
+        findTransactions firstRoleAuthorizationAnnotator False contract' state
       either throwE (pure . mconcat)
         . forM (filter (not . null . txAnnotation) $ intersectHelperRoles <$> transactions)
         $ checkTransaction

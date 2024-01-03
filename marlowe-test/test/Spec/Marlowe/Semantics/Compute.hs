@@ -186,7 +186,7 @@ arbitraryValid =
         do
           mcContract <- arbitrary `suchThat` (/= Close)
           (time, inputs') <-
-            case unsafePerformIO $ getAllInputs mcContract of
+            case unsafePerformIO $ getAllInputs mcContract Nothing of
               Right candidates -> elements candidates
               Left _ -> discard
           let -- TODO: Generalize to arbitrary starting state.

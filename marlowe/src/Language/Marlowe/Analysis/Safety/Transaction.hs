@@ -27,6 +27,7 @@ module Language.Marlowe.Analysis.Safety.Transaction (
   findTransactions',
   foldTransactionsM,
   inputsRequiredRoles,
+  CurrentState (..),
   LockedRoles (..),
   MarloweExBudget (..),
   TxInSpec (..),
@@ -40,7 +41,7 @@ module Language.Marlowe.Analysis.Safety.Transaction (
 ) where
 
 import Control.Monad.Except (MonadError (throwError), MonadIO (..), foldM, liftEither, liftIO)
-import Data.Bifunctor (first, second)
+import Data.Bifunctor (first)
 import Data.List (nub, nubBy)
 import Data.String (IsString (..))
 import Language.Marlowe.Analysis.Safety.Ledger (worstMinimumUtxo')
@@ -62,8 +63,6 @@ import Language.Marlowe.Core.V1.Semantics (
   totalBalance,
  )
 import Language.Marlowe.Core.V1.Semantics.Types (
-  Action (Deposit),
-  Case (Case),
   ChoiceId (ChoiceId),
   Contract (..),
   InputContent (IChoice, IDeposit),
@@ -71,7 +70,6 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   Payee (Party),
   State (..),
   Token (..),
-  Value (Constant),
   getInputContent,
  )
 import Language.Marlowe.FindInputs (getAllInputs)
@@ -546,6 +544,14 @@ calcValidatorsExBudget evaluationContext creatorAddress txInSpecs txOutSpecs (in
     pure (name, exBudget)
   pure $ M.fromList pairs
 
+data CurrentState
+  = -- | Either externally initialized initial state or state
+    -- from the middle of the middle of the contract execution.
+    AlreadyInitialized State
+  | -- | The contract creator and value for the account
+    -- (possibly min ADA and thread token).
+    NotInitialized Party (AM.Map Token Integer)
+
 -- | Visit transactions along all execution paths of a a contract.
 foldTransactionsM
   :: (Monad m)
@@ -569,28 +575,33 @@ findTransactions
   -- ^ Function for annotating transaction paths.
   -> Bool
   -- ^ Throw an error if all required continuations are not present.
-  -> Party
-  -- ^ The contract creator.
-  -> AM.Map Token Integer
-  -- ^ The initial lovelace for the creator's account.
   -> MerkleizedContract
   -- ^ The bundle of contract information.
+  -> CurrentState
+  -- ^ The current state of the contract.
   -> m [Transaction a]
   -- ^ Action for computing the initial state, initial contract, perhaps-merkleized input, and the output for the transactions.
-findTransactions annotate requireContinuations creatorAddress initialValue mc@MerkleizedContract{..} =
+findTransactions annotate requireContinuations mc@MerkleizedContract{..} currentState =
   do
     let prune (Transaction s c i _ a) (Transaction s' c' i' _ a') = s == s' && c == c' && i == i' && a == a'
-    paths <- findPaths requireContinuations creatorAddress initialValue mc
+    let state = case currentState of
+          AlreadyInitialized st -> st
+          NotInitialized creatorAddress initialValue -> do
+            let initialAccounts = AM.fromList $ first (creatorAddress,) <$> AM.toList initialValue
+                minTime = 0
+            State initialAccounts AM.empty AM.empty minTime
+
+    paths <- findPaths requireContinuations mc state
+
     nubBy prune
       . concat
       <$> sequence
-        [ findTransactionPath mcContinuations state mcContract $ annotate inputs
-        | let initialAccounts = AM.fromList $ first (creatorAddress,) <$> AM.toList initialValue
-        , (minTime, inputs) <- paths
-        , let state = State initialAccounts AM.empty AM.empty minTime
+        [ findTransactionPath mcContinuations mcContract state $ annotate inputs
+        | (_, inputs) <- paths
         ]
 
 -- | Find transactions along all execution paths of a contract.
+-- | The state is initialized for min ADA account by using default costing model.
 findTransactions'
   :: (Eq a)
   => (IsString e)
@@ -612,7 +623,10 @@ findTransactions' annotate requireContinuations mc@MerkleizedContract{..} =
             (P.PubKeyCredential "88888888888888888888888888888888888888888888888888888888")
             (Just . P.StakingHash $ P.PubKeyCredential "99999999999999999999999999999999999999999999999999999999")
       minAda = AM.singleton (Token "" "") $ worstMinimumUtxo' utxoCostPerByte mcContract mcContinuations
-   in findTransactions annotate requireContinuations creatorAddress minAda mc
+      initialAccounts = AM.fromList $ first (creatorAddress,) <$> AM.toList minAda
+      minTime = 0
+      state = AlreadyInitialized (State initialAccounts AM.empty AM.empty minTime)
+   in findTransactions annotate requireContinuations mc state
 
 -- | Find the transactions corresponding to a path of demerkleized inputs.
 findTransactionPath
@@ -620,15 +634,15 @@ findTransactionPath
   => (MonadError e m)
   => Continuations
   -- ^ The continuations of the contact.
-  -> State
-  -- ^ The initial contract.
   -> Contract
+  -- ^ The initial contract.
+  -> State
   -- ^ The initial state.
   -> [(TransactionInput, a)]
   -- ^ The path of demerkleized inputs.
   -> m [Transaction a]
   -- ^ Action for computing the perhaps-merkleized input and the output for the transaction.
-findTransactionPath continuations state contract =
+findTransactionPath continuations contract state =
   let go ((state', contract'), previous) (input, annotation) =
         do
           (input', output) <- findTransaction continuations state' contract' input
@@ -664,29 +678,16 @@ findPaths
   => (MonadIO m)
   => Bool
   -- ^ Throw an error if all required continuations are not present.
-  -> Party
-  -- ^ The creator.
-  -> AM.Map Token Integer
-  -- ^ The initial value in the creator's account.
   -> MerkleizedContract
   -- ^ The bundle of contract information.
+  -> State
+  -- ^ The state of the contract.
   -> m [(P.POSIXTime, [TransactionInput])]
   -- ^ The paths through the Marlowe contract.
-findPaths requireContinuations creatorAddress initialValue MerkleizedContract{..} =
-  do
-    let forever = 4_102_444_800_000 {- 1 Jan 2100 -}
-    -- Add an initial deposit so that `getAllInputs` accounts for the initial state in its analysis.
-        deposit token quantity continuation =
-          When [Case (Deposit creatorAddress creatorAddress token $ Constant quantity) continuation] forever Close
-        initializations = length $ AM.toList initialValue
-        contract = foldr (uncurry deposit) mcContract $ AM.toList initialValue
-    paths <-
-      liftEither . first (fromString . show)
-        =<< liftIO . getAllInputs
-        =<< demerkleizeContract mcContinuations (deepDemerkleize requireContinuations contract)
-    pure
-      . filter (not . null . snd) -- Discard the input that is only the initial deposits.
-      $ second (drop initializations) <$> paths -- Discard the initial deposit from each path.
+findPaths requireContinuations MerkleizedContract{..} state =
+  liftEither . first (fromString . show)
+    =<< liftIO . flip getAllInputs (Just state)
+    =<< demerkleizeContract mcContinuations (deepDemerkleize requireContinuations mcContract)
 
 -- | Do not annotate.
 unitAnnotator
