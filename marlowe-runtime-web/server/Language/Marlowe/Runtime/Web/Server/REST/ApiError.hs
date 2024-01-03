@@ -394,6 +394,7 @@ instance ToDTO ApplyInputsError where
     ApplyInputsConstraintError err -> constraintErrorToApiError err
     ApplyInputsLoadMarloweContextFailed err -> loadMarloweContextErrorToApiError err
     ApplyInputsConstraintsBuildupFailed err -> applyInputsConstraintsBuildupErrorToApiError err
+    ApplyInputsContractContinuationNotFound -> ApiError "Contract continuation not found" "ContractContinuationNotFound" Null 404
     ScriptOutputNotFound -> ApiError "Script output not found" "ScriptOutputNotFound" Null 400
     SlotConversionFailed _ -> ApiError "Slot conversion failed" "SlotConversionFailed" Null 400
     TipAtGenesis -> ApiError "Internal error" "TipAtGenesis" Null 500

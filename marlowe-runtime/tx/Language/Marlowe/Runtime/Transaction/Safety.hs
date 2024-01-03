@@ -1,7 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE ViewPatterns #-}
 
 module Language.Marlowe.Runtime.Transaction.Safety (
   Continuations,
@@ -16,7 +15,6 @@ module Language.Marlowe.Runtime.Transaction.Safety (
 import Control.Monad (forM)
 import Control.Monad.Trans.Except (runExceptT, throwE)
 import Data.Bifunctor (bimap, first)
-import Data.Maybe (fromJust)
 import Data.SOP.Strict (K (..), NP (..))
 import Data.String (fromString)
 import Data.Time (UTCTime, addUTCTime, secondsToNominalDiffTime)
@@ -31,13 +29,14 @@ import Language.Marlowe.Analysis.Safety.Ledger (
   worstValue,
  )
 import Language.Marlowe.Analysis.Safety.Transaction (
-  CurrentState (NotInitialized),
+  CurrentState (AlreadyInitialized),
   findTransactions,
   firstRoleAuthorizationAnnotator,
  )
 import Language.Marlowe.Analysis.Safety.Types (SafetyError (..), Transaction (..), stripAnnotation)
 import Language.Marlowe.Runtime.Core.Api (
   Contract,
+  Datum,
   MarloweTransactionMetadata (..),
   MarloweVersion (MarloweV1),
   TransactionScriptOutput (..),
@@ -87,15 +86,14 @@ import qualified Data.Set as S (Set, intersection, map, singleton)
 import qualified Data.Set as Set
 import qualified Data.Set.NonEmpty as NESet
 import qualified Language.Marlowe.Core.V1.Merkle as V1 (MerkleizedContract (..))
-import qualified Language.Marlowe.Core.V1.Plate as V1 (extractAllWithContinuations)
+import qualified Language.Marlowe.Core.V1.Plate as V1 (extractRoleNames)
 import qualified Language.Marlowe.Core.V1.Semantics as V1 (
   MarloweData (..),
   MarloweParams (..),
   TransactionInput (..),
   TransactionOutput (..),
  )
-import qualified Language.Marlowe.Core.V1.Semantics.Types as V1 (Party (Address), State (..), Token (..))
-import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1 (deserialiseAddress)
+import qualified Language.Marlowe.Core.V1.Semantics.Types as V1 (State (..), Token (..))
 import qualified Language.Marlowe.Runtime.Cardano.Api as Chain (
   assetsToCardanoValue,
   fromCardanoDatumHash,
@@ -116,10 +114,10 @@ import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain (
   TxOutRef,
   UTxOs (..),
  )
+import Language.Marlowe.Runtime.Plutus.V2.Api (fromPlutusCurrencySymbol)
 import qualified Language.Marlowe.Runtime.Plutus.V2.Api as Chain (
   fromPlutusTokenName,
   fromPlutusValue,
-  toPlutusCurrencySymbol,
   toPlutusTokenName,
  )
 import qualified Ouroboros.Consensus.BlockchainTime as Ouroboros (RelativeTime (..), mkSlotLength, toRelativeTime)
@@ -143,7 +141,7 @@ import qualified PlutusLedgerApi.V2 as Plutus (
   fromBuiltin,
   toBuiltin,
  )
-import qualified PlutusTx.AssocMap as AM (fromList, toList)
+import qualified PlutusTx.AssocMap as AM (toList)
 
 -- FIXME: Relocate this definition when full support for Merkleization is added to Runtime.
 type Continuations v = M.Map Chain.DatumHash (Contract v)
@@ -244,37 +242,50 @@ minAdaBound era pps MarloweV1 assets =
 -- | Check a contract for design errors and ledger violations.
 checkContract
   :: Cardano.NetworkId
-  -> RoleTokensConfig
+  -> Maybe RoleTokensConfig
   -> MarloweVersion v
   -> Contract v
+  -> V1.State
   -> Continuations v
   -> [SafetyError]
-checkContract network config MarloweV1 contract continuations =
+checkContract network rolesTokenConfig MarloweV1 contract state continuations =
   let continuations' = remapContinuations continuations
-      roles = V1.extractAllWithContinuations contract continuations'
-      mintCheck =
-        case (config, Set.null roles) of
-          (RoleTokensNone, False) -> pure MissingRolesCurrency
-          (RoleTokensNone, True) -> mempty
-          (_, True) -> pure ContractHasNoRoles
-          (RoleTokensMint mint, False) ->
-            let minted = Set.map Chain.toPlutusTokenName $ NESet.toSet $ NEMap.keysSet $ unMint mint
-                missing = MissingRoleToken <$> Set.toList (Set.difference roles minted)
-                extra = ExtraRoleToken <$> Set.toList (Set.difference minted roles)
-             in missing <> extra
-          (RoleTokensUsePolicy _ distribution, False) -> do
-            let distributedRoles = Set.map Chain.toPlutusTokenName $ M.keysSet distribution
-            extraRole <- Set.toList $ Set.difference distributedRoles roles
-            pure $ ExtraRoleToken extraRole
+      mintCheck = flip foldMap rolesTokenConfig \cfg ->
+        checkMinting cfg MarloweV1 contract state continuations
       avoidDuplicateReport = True
-      nameCheck = checkRoleNames avoidDuplicateReport Nothing contract continuations'
-      tokenCheck = checkTokens Nothing contract continuations'
+      nameCheck = checkRoleNames avoidDuplicateReport (Just state) contract continuations'
+      tokenCheck = checkTokens (Just state) contract continuations'
       continuationCheck = checkContinuations contract continuations'
       networksCheck =
-        checkNetwork (network == Cardano.Mainnet) Nothing contract continuations'
-          <> snd (checkNetworks Nothing contract continuations')
-      addressCheck = checkAddresses Nothing contract continuations'
+        checkNetwork (network == Cardano.Mainnet) (Just state) contract continuations'
+          <> snd (checkNetworks (Just state) contract continuations')
+      addressCheck = checkAddresses (Just state) contract continuations'
    in mintCheck <> nameCheck <> tokenCheck <> continuationCheck <> networksCheck <> addressCheck
+
+-- | Let's extract a part which only validates minting from the above
+checkMinting
+  :: RoleTokensConfig
+  -> MarloweVersion v
+  -> Contract v
+  -> V1.State
+  -> Continuations v
+  -> [SafetyError]
+checkMinting config MarloweV1 contract state continuations = do
+  let continuations' = remapContinuations continuations
+      roles = V1.extractRoleNames (Just state) contract continuations'
+  case (config, Set.null roles) of
+    (RoleTokensNone, False) -> pure MissingRolesCurrency
+    (RoleTokensNone, True) -> mempty
+    (_, True) -> pure ContractHasNoRoles
+    (RoleTokensMint mint, False) ->
+      let minted = Set.map Chain.toPlutusTokenName $ NESet.toSet $ NEMap.keysSet $ unMint mint
+          missing = MissingRoleToken <$> Set.toList (Set.difference roles minted)
+          extra = ExtraRoleToken <$> Set.toList (Set.difference minted roles)
+       in missing <> extra
+    (RoleTokensUsePolicy _ distribution, False) -> do
+      let distributedRoles = Set.map Chain.toPlutusTokenName $ M.keysSet distribution
+      extraRole <- Set.toList $ Set.difference distributedRoles roles
+      pure $ ExtraRoleToken extraRole
 
 -- | Mock-execute all possible transactions for a contract.
 checkTransactions
@@ -284,31 +295,26 @@ checkTransactions
   -> MarloweVersion v
   -> MarloweContext v
   -> HelpersContext
-  -> Chain.PolicyId
   -> Chain.TokenName
   -> Chain.Address
-  -> Chain.Assets
   -> (Chain.Assets -> Chain.Assets)
-  -> Contract v
+  -> Datum v
   -> Continuations v
   -> m (Either String [SafetyError])
-checkTransactions protocolParameters era version@MarloweV1 marloweContext helpersContext rolesCurrency threadRole changeAddress (Chain.Assets initialAda initialTokens) adjustMinUtxo contract continuations =
+checkTransactions protocolParameters era version@MarloweV1 marloweContext helpersContext threadRole changeAddress adjustMinUtxo datum continuations =
   runExceptT $
     do
-      let changeAddress' = uncurry V1.Address . fromJust . V1.deserialiseAddress $ Chain.unAddress changeAddress
-          initialValue =
-            AM.fromList $
-              (V1.Token "" "", fromIntegral initialAda)
-                : [ (V1.Token (Chain.toPlutusCurrencySymbol p) (Chain.toPlutusTokenName n), fromIntegral quantity)
-                  | (Chain.AssetId p n, quantity) <- M.toList $ Chain.unTokens initialTokens
-                  ]
-          helperRoles = M.keysSet $ helperScriptStates helpersContext
+      let helperRoles = M.keysSet $ helperScriptStates helpersContext
           intersectHelperRoles transaction@Transaction{txAnnotation} =
             transaction{txAnnotation = S.intersection txAnnotation $ S.map Chain.toPlutusTokenName helperRoles}
+          V1.MarloweData{marloweState = state, marloweParams = params, marloweContract = contract} = datum
+          V1.MarloweParams{rolesCurrency} = params
+          rolesCurrency' = fromPlutusCurrencySymbol rolesCurrency
+
       transactions <- do
-        let state = NotInitialized changeAddress' initialValue
+        let state' = AlreadyInitialized state
             contract' = V1.MerkleizedContract contract $ remapContinuations continuations
-        findTransactions firstRoleAuthorizationAnnotator False contract' state
+        findTransactions firstRoleAuthorizationAnnotator False contract' state'
       either throwE (pure . mconcat)
         . forM (filter (not . null . txAnnotation) $ intersectHelperRoles <$> transactions)
         $ checkTransaction
@@ -317,7 +323,7 @@ checkTransactions protocolParameters era version@MarloweV1 marloweContext helper
           version
           marloweContext
           helpersContext
-          rolesCurrency
+          rolesCurrency'
           threadRole
           changeAddress
           adjustMinUtxo
@@ -401,12 +407,13 @@ helpersForRoles
   -> HelpersContext
   -> HelpersContext
 helpersForRoles policyId threadRole helperRoles adjustMinUtxo helpersContext =
-  let activeHelperScripts =
+  let activeHelperScripts :: [(Chain.TokenName, HelperScriptState)]
+      activeHelperScripts =
         M.toList
           . M.intersection (helperScriptStates helpersContext)
           . M.fromSet (const ())
           $ S.map Chain.fromPlutusTokenName helperRoles
-      buildHelperState ix (role, helperScriptInfo -> helperScriptInfo) =
+      buildHelperState ix (role, helperScriptState) =
         ( role
         , let helperTxOutRef = helperTxOutRef' ix
               address = helperAddress helperScriptInfo

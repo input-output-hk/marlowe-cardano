@@ -637,6 +637,7 @@ data InputsAppliedInEra era v = InputsAppliedInEra
   , invalidHereafter :: UTCTime
   , inputs :: Inputs v
   , txBody :: TxBody era
+  , safetyErrors :: [SafetyError]
   }
 
 deriving instance Show (InputsAppliedInEra BabbageEra 'V1)
@@ -655,6 +656,7 @@ instance (IsShelleyBasedEra era) => Variations (InputsAppliedInEra era 'V1) wher
         `varyAp` variations
         `varyAp` variations
         `varyAp` variations
+        `varyAp` variations
 
 instance (IsCardanoEra era) => Binary (InputsAppliedInEra era 'V1) where
   put InputsAppliedInEra{..} = do
@@ -666,6 +668,7 @@ instance (IsCardanoEra era) => Binary (InputsAppliedInEra era 'V1) where
     put invalidHereafter
     putInputs MarloweV1 inputs
     putTxBody txBody
+    put safetyErrors
   get = do
     let version = MarloweV1
     contractId <- get
@@ -676,6 +679,7 @@ instance (IsCardanoEra era) => Binary (InputsAppliedInEra era 'V1) where
     invalidHereafter <- get
     inputs <- getInputs MarloweV1
     txBody <- getTxBody
+    safetyErrors <- get
     pure InputsAppliedInEra{..}
 
 data WithdrawTx v where
@@ -755,6 +759,7 @@ instance (IsCardanoEra era) => ToJSON (InputsAppliedInEra era 'V1) where
       , "invalid-hereafter" .= invalidHereafter
       , "inputs" .= inputs
       , "tx-body" .= serialiseToTextEnvelope Nothing txBody
+      , "safety-errors" .= safetyErrors
       ]
 
 -- | The low-level runtime API for building and submitting transactions.
@@ -1091,6 +1096,7 @@ data CreateBuildupError
 data ApplyInputsError
   = ApplyInputsEraUnsupported AnyCardanoEra
   | ApplyInputsConstraintError ConstraintError
+  | ApplyInputsContractContinuationNotFound
   | ScriptOutputNotFound
   | ApplyInputsLoadMarloweContextFailed LoadMarloweContextError
   | ApplyInputsLoadHelpersContextFailed LoadHelpersContextError

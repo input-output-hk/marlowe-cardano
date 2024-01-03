@@ -312,6 +312,7 @@ instance (ArbitraryMarloweVersion v, IsCardanoEra era) => Arbitrary (InputsAppli
       <*> arbitrary
       <*> arbitrary
       <*> hedgehog (genTxBody cardanoEra)
+      <*> arbitrary
   shrink InputsAppliedInEra{..} =
     fold
       [ [InputsAppliedInEra{..}{InputsAppliedInEra.metadata = metadata'} | metadata' <- shrink metadata]

@@ -62,9 +62,11 @@ import Data.Maybe (fromJust, fromMaybe)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Time (NominalDiffTime, UTCTime, nominalDiffTimeToSeconds)
+import Data.Traversable (for)
 import Data.Void (Void)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError (SafetyAnalysisTimeout))
 import qualified Language.Marlowe.Core.V1.Semantics as V1
+import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.Cardano.Api (
   fromCardanoAddressInEra,
   fromCardanoLovelace,
@@ -78,7 +80,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   BlockHeader,
   ChainSyncQuery (..),
   Credential (..),
-  DatumHash,
+  DatumHash (..),
   TxId (..),
   fromCardanoTxMetadata,
  )
@@ -100,6 +102,7 @@ import Language.Marlowe.Runtime.Core.Api (
   withMarloweVersion,
  )
 import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript (..), MarloweScripts (..))
+import qualified Language.Marlowe.Runtime.Plutus.V2.Api (fromPlutusCurrencySymbol)
 import Language.Marlowe.Runtime.Transaction.Api (
   ApplyInputsError (..),
   ContractCreated (..),
@@ -157,6 +160,7 @@ import Network.Protocol.Job.Server (
 import Network.Protocol.Query.Client (QueryClient, request)
 import Observe.Event.Explicit (addField)
 import Ouroboros.Consensus.BlockchainTime (SystemStart)
+import qualified PlutusLedgerApi.V2 as PV2
 import UnliftIO (MonadUnliftIO, atomically, throwIO)
 import UnliftIO.Concurrent (forkFinally)
 import Witherable (mapMaybe)
@@ -258,10 +262,12 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                         getTip
                         systemStart
                         eraHistory
+                        protocolParameters
                         solveConstraints
                         loadWalletContext
                         loadMarloweContext
                         loadHelpersContext
+                        networkId
                         version
                         addresses
                         contractId
@@ -269,6 +275,7 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                         invalidBefore
                         invalidHereafter
                         inputs
+                        analysisTimeout
                 Withdraw version addresses payouts ->
                   withEvent ExecWithdraw \_ ->
                     execWithdraw
@@ -399,7 +406,9 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
         loadHelpersContext version $
           Left (rolesCurrency, roleTokens)
   let -- Fast analysis of safety: examines bounds for transactions.
-      contractSafetyErrors = checkContract networkId roleTokens version contract' continuations
+      V1.MarloweData{marloweState} = case version of
+        MarloweV1 -> datum
+      contractSafetyErrors = checkContract networkId (Just roleTokens) version contract' marloweState continuations
       limitAnalysisTime =
         liftIO
           . fmap (either Right id)
@@ -415,12 +424,10 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
               version
               marloweContext
               helpersContext
-              rolesCurrency
               threadRole'
               (changeAddress addresses)
-              assets
               adjustMinUtxo
-              contract'
+              datum
               continuations
           )
   txBody <-
@@ -494,10 +501,12 @@ execApplyInputs
   -> STM Chain.ChainPoint
   -> SystemStart
   -> EraHistory CardanoMode
+  -> ProtocolParameters
   -> SolveConstraints
   -> LoadWalletContext m
   -> LoadMarloweContext m
   -> LoadHelpersContext m
+  -> NetworkId
   -> MarloweVersion v
   -> WalletAddresses
   -> ContractId
@@ -505,6 +514,7 @@ execApplyInputs
   -> Maybe UTCTime
   -> Maybe UTCTime
   -> Inputs v
+  -> NominalDiffTime
   -> m (ServerStCmd MarloweTxCommand Void ApplyInputsError (InputsApplied v) m ())
 execApplyInputs
   era
@@ -512,17 +522,20 @@ execApplyInputs
   getTip
   systemStart
   eraHistory
+  protocolParamaters
   solveConstraints
   loadWalletContext
   loadMarloweContext
   loadHelpersContext
-  version
+  networkId
+  version@MarloweV1
   addresses
   contractId
   metadata
   invalidBefore'
   invalidHereafter'
-  inputs = execExceptT do
+  inputs
+  analysisTimeout = execExceptT do
     referenceInputsSupported <- referenceInputsSupportedInEra (ApplyInputsEraUnsupported $ AnyCardanoEra era) era
     marloweContext@MarloweContext{..} <-
       withExceptT ApplyInputsLoadMarloweContextFailed $
@@ -540,7 +553,8 @@ execApplyInputs
       except $ maybe (Left ScriptOutputNotFound) Right scriptOutput
     let (contract, state) = case version of
           MarloweV1 -> case inputDatum of
-            V1.MarloweData{..} -> (marloweContract, marloweState)
+            V1.MarloweData{..} -> do
+              (marloweContract, marloweState)
         merkleizeInputs' = fmap hush . runConnector contractQueryConnector . merkleizeInputs contract state
     ((invalidBefore, invalidHereafter, mAssetsAndDatum, inputs'), constraints) <-
       buildApplyInputsConstraints
@@ -566,6 +580,40 @@ execApplyInputs
             { payouts = findPayouts version payoutAddress txBody
             , scriptOutput = buildOutput <$> mAssetsAndDatum <*> findMarloweOutput marloweAddress txBody
             }
+
+    continuations <-
+      lift (getContractContinuations contractQueryConnector contract) >>= \case
+        Nothing -> throwE ApplyInputsContractContinuationNotFound
+        Just c -> pure c
+
+    let -- Fast analysis of safety: examines bounds for transactions.
+        -- FIXME: This check will ignore any safety issue related to the minting policy and tokens.
+        contractSafetyErrors = checkContract networkId Nothing version contract state continuations
+        limitAnalysisTime =
+          liftIO
+            . fmap (either Right id)
+            . race ([SafetyAnalysisTimeout] <$ threadDelay (floor $ nominalDiffTimeToSeconds analysisTimeout * 1_000_000))
+    -- Slow analysis of safety: examines all possible transactions.
+    transactionSafetyErrors <- case mAssetsAndDatum of
+      Nothing -> pure []
+      Just (_, datum) ->
+        ExceptT $
+          first CreateSafetyAnalysisError
+            <$> limitAnalysisTime
+              ( checkTransactions
+                  protocolParameters
+                  referenceInputsSupported
+                  version
+                  marloweContext
+                  helpersContext
+                  threadRole'
+                  (changeAddress addresses)
+                  adjustMinUtxo
+                  datum
+                  continuations
+              )
+    let safetyErrors = []
+
     pure $
       InputsApplied referenceInputsSupported $
         InputsAppliedInEra
@@ -576,6 +624,76 @@ execApplyInputs
           , inputs = inputs'
           , ..
           }
+
+--     let
+--       contractSafetyErrors = checkContract networkId roleTokens version contract continuations
+--     safetyErrors <- case mAssetsAndDatum of
+--       Nothing -> pure []
+--       Just (assets, datum) -> do
+--         let -- Fast analysis of safety: examines bounds for transactions.
+--             adjustMinUtxo = mkAdjustMinimumUtxo referenceInputsSupported protocolParameters version
+--             limitAnalysisTime =
+--               liftIO
+--                 . fmap (either Right id)
+--                 . race ([SafetyAnalysisTimeout] <$ threadDelay (floor $ nominalDiffTimeToSeconds analysisTimeout * 1_000_000))
+--             rolesCurrency' = fromPlutusCurrencySymbol rolesCurrency
+--         -- Slow analysis of safety: examines all possible transactions.
+--         ExceptT $
+--           first CreateSafetyAnalysisError
+--             <$> limitAnalysisTime
+--               ( checkTransactions
+--                   protocolParameters
+--                   referenceInputsSupported
+--                   version
+--                   marloweContext
+--                   helpersContext
+--                   rolesCurrency'
+--                   threadRole'
+--                   (changeAddress addresses)
+--                   assets
+--                   adjustMinUtxo
+--                   contract'
+--                   continuations
+--               )
+
+-- | Build up continuations closure map for a contract.
+-- We don't want to just compute the root hash of the contract and ask the store for the closure because
+-- we can have more granular merkleization in the future which sometimes does not merkleize every step
+-- in the contract. In other words the root hash could be missing from the store.
+getContractContinuations
+  :: (Monad m)
+  => Connector (QueryClient ContractRequest) m
+  -> V1.Contract
+  -> m (Maybe (Map DatumHash V1.Contract))
+getContractContinuations contractQueryConnector contract = runMaybeT do
+  let getCaseContinuationHashes (V1.MerkleizedCase _ h) = [h]
+      getCaseContinuationHashes (V1.Case _ continuation) = getContractContinuationHashes continuation
+
+      getContractContinuationHashes (V1.When cases _ continuation) =
+        foldMap getCaseContinuationHashes cases <> getContractContinuationHashes continuation
+      getContractContinuationHashes (V1.If _ trueContinuation falseContinuation) =
+        getContractContinuationHashes trueContinuation <> getContractContinuationHashes falseContinuation
+      getContractContinuationHashes (V1.Pay _ _ _ _ continuation) = getContractContinuationHashes continuation
+      getContractContinuationHashes (V1.Let _ _ continuation) = getContractContinuationHashes continuation
+      getContractContinuationHashes V1.Close = []
+      getContractContinuationHashes (V1.Assert _ continuation) = getContractContinuationHashes continuation
+
+      toDatumHash = DatumHash . PV2.fromBuiltin
+
+      childrenHashes :: Set DatumHash
+      childrenHashes = Set.fromList . fmap toDatumHash $ getContractContinuationHashes contract
+
+      getContract' = MaybeT . runConnector contractQueryConnector . getContract
+
+  childContracts :: [Contract.ContractWithAdjacency] <- for (Set.toList childrenHashes) getContract'
+  let childrenClosure = flip foldMap childContracts \Contract.ContractWithAdjacency{closure} -> closure
+
+  (closureContracts :: [Contract.ContractWithAdjacency]) <- do
+    let hs = Set.toList $ Set.difference childrenClosure childrenHashes
+    for hs getContract'
+  let allContracts = childContracts <> closureContracts
+      continuations = Map.fromList $ flip fmap allContracts \Contract.ContractWithAdjacency{contract = c, contractHash = ch} -> (ch, c)
+  pure continuations
 
 execWithdraw
   :: forall era v m
