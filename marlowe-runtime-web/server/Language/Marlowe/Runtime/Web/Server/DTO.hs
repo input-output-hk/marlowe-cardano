@@ -23,17 +23,20 @@ import Cardano.Api (
   SerialiseAsCBOR,
   ShelleyBasedEra (..),
   TextEnvelope (..),
+  TextEnvelopeCddl (..),
   TextEnvelopeType (..),
   Tx,
   TxBody,
   deserialiseAddress,
   deserialiseFromCBOR,
   deserialiseFromTextEnvelope,
+  deserialiseTxLedgerCddl,
   getTxId,
   metadataValueToJsonNoSchema,
   proxyToAsType,
   serialiseToCBOR,
   serialiseToTextEnvelope,
+  serialiseTxLedgerCddl,
  )
 import Cardano.Api.Byron (HasTextEnvelope (textEnvelopeType))
 import Cardano.Api.Shelley (
@@ -697,12 +700,10 @@ instance HasDTO (Tx era) where
   type DTO (Tx era) = Web.TextEnvelope
 
 instance (IsCardanoEra era) => ToDTO (Tx era) where
-  toDTO = toDTO . serialiseToTextEnvelope Nothing
+  toDTO = toDTO . serialiseTxLedgerCddl
 
 instance (IsCardanoEra era) => FromDTO (Tx era) where
-  fromDTO = hush . deserialiseFromTextEnvelope asType <=< fromDTO
-    where
-      asType = AsTx $ cardanoEraToAsType $ cardanoEra @era
+  fromDTO = hush . deserialiseTxLedgerCddl (cardanoEra @era) <=< fromDTO
 
 newtype ShelleyTxWitness era = ShelleyTxWitness (TxWits (ShelleyLedgerEra era))
 
@@ -794,6 +795,36 @@ instance FromDTO TextEnvelope where
           { teType = TextEnvelopeType $ T.unpack teType
           , teDescription = fromString $ T.unpack teDescription
           , teRawCBOR = Web.unBase16 teCborHex
+          }
+
+instance HasDTO TextEnvelopeCddl where
+  type DTO TextEnvelopeCddl = Web.TextEnvelope
+
+instance ToDTO TextEnvelopeCddl where
+  toDTO
+    TextEnvelopeCddl
+      { teCddlType
+      , teCddlDescription
+      , teCddlRawCBOR
+      } =
+      Web.TextEnvelope
+        { teType = teCddlType
+        , teDescription = teCddlDescription
+        , teCborHex = Web.Base16 teCddlRawCBOR
+        }
+
+instance FromDTO TextEnvelopeCddl where
+  fromDTO
+    Web.TextEnvelope
+      { teType
+      , teDescription
+      , teCborHex
+      } =
+      Just
+        TextEnvelopeCddl
+          { teCddlType = teType
+          , teCddlDescription = teDescription
+          , teCddlRawCBOR = Web.unBase16 teCborHex
           }
 
 instance HasDTO Tx.RoleTokensConfig where
