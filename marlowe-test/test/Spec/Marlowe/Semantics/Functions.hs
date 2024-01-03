@@ -942,7 +942,7 @@ checkComputeTransaction =
             TransactionOutput{} -> True
             e -> error $ show (time, contract, inputs, e)
     either (error . ("`getAllInputs` failed with " <>) . show) (all play)
-      <$> run (getAllInputs contract)
+      <$> run (getAllInputs contract Nothing)
 
 -- | Test `Language.Marlowe.Core.V1.Semantics.playTrace` somewhat tautologically ☹️.
 checkPlayTrace :: Property

@@ -117,7 +117,7 @@ processContract
 processContract contractFile pathsFile =
   do
     contract <- ExceptT $ first show <$> eitherDecodeFileStrict contractFile
-    traces <- ExceptT $ first show <$> getAllInputs contract
+    traces <- ExceptT $ first show <$> getAllInputs contract Nothing
     paths <- runTransactions contract `mapM` traces
     lift $ encodeFile pathsFile paths
 
