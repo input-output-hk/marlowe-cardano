@@ -39,6 +39,7 @@ import Control.Monad.Except (liftEither, runExceptT)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..))
+import Data.Aeson qualified as A
 import Data.Bifunctor qualified as Bifunctor
 import Data.ByteString.Base16.Aeson (EncodeBase16 (..))
 import Data.Coerce (coerce)
@@ -74,7 +75,7 @@ import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (
 import Language.Marlowe.CLI.Test.ExecutionMode (queryByAddress, queryUTxOs)
 import Language.Marlowe.CLI.Test.ExecutionMode qualified as EM
 import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError (..), assertionFailed', testExecutionFailed')
-import Language.Marlowe.CLI.Test.Log (Label, logStoreLabeledMsg, logTxBody, throwLabeledError)
+import Language.Marlowe.CLI.Test.Log (Label, logStoreLabeledMsg, logStoreMsgWith, logTxBody, throwLabeledError)
 import Language.Marlowe.CLI.Test.Report qualified as Report
 import Language.Marlowe.CLI.Test.Wallet.Types (
   Asset (Asset),
@@ -661,8 +662,10 @@ interpret wo@Mint{..} = do
         pure $ ScriptAddressRecipient addr datum
     pure (destAddress, Just woMinLovelace, tokens)
 
-  logStoreLabeledMsg wo $
-    "Minting currency " <> coerce woCurrencyNickname <> " with tokens distribution: " <> show woTokenDistribution
+  logStoreMsgWith
+    ("Mint-Distribution" :: String)
+    ("Minting currency " <> coerce woCurrencyNickname <> " with tokens distribution: " <> show woTokenDistribution)
+    [("distribution", A.toJSON woTokenDistribution)]
   logStoreLabeledMsg wo $ "The issuer is " <> coerce issuerNickname
   let mintingAction =
         CT.Mint
@@ -679,7 +682,10 @@ interpret wo@Mint{..} = do
         woMintingExpirationSlot
         printStats
 
-  logStoreLabeledMsg wo $ "This currency symbol is " <> show policy
+  logStoreMsgWith
+    ("Mint-Policy-Id" :: String)
+    ("This currency symbol is " <> show policy)
+    [("policyId", A.toJSON policy)]
   let currencySymbol = toCurrencySymbol policy
       currency = Currency currencySymbol (Just issuerNickname) woMintingExpirationSlot policy
 

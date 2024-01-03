@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE EmptyDataDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -79,6 +80,7 @@ import Language.Marlowe.Runtime.Cardano.Api (
   toCardanoTxOut',
   toCardanoTxOutDatum',
   toCardanoTxOutValue,
+  tokensFromCardanoValue,
   tokensToCardanoValue,
  )
 import Language.Marlowe.Runtime.Cardano.Feature (withShelleyBasedEra)
@@ -100,7 +102,7 @@ import Language.Marlowe.Runtime.Core.Api (
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript, ReferenceScriptUtxo (..))
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
-import Language.Marlowe.Runtime.Transaction.Api (ConstraintError (..), Destination (..))
+import Language.Marlowe.Runtime.Transaction.Api (CoinSelectionError (..), ConstraintError (..), Destination (..))
 import qualified Language.Marlowe.Scripts.Types as V1
 import Ouroboros.Consensus.BlockchainTime (SystemStart)
 
@@ -632,7 +634,7 @@ findMinUtxo era protocol (chAddress, mbDatum, origValue) =
     dummyTxOut <- makeTxOut multiAssetSupported chAddress datum revisedValue C.ReferenceScriptNone
     case C.calculateMinimumUTxO (shelleyBasedEra @era) dummyTxOut <$> C.bundleProtocolParams (cardanoEra @era) protocol of
       Right minValue -> pure $ C.lovelaceToValue minValue
-      Left e -> Left . CoinSelectionFailed $ show e
+      Left e -> Left . CalculateMinUtxoFailed $ show e
 
 -- | Ensure that the minimum UTxO requirement is satisfied for outputs.
 ensureMinUtxo
@@ -743,7 +745,8 @@ selectCoins era protocol marloweVersion scriptCtx walletCtx@WalletContext{..} he
             )
             candidateCollateral of
             (txIn, _) : _ -> pure $ C.TxInsCollateral collateralSupported [txIn]
-            [] -> Left . CoinSelectionFailed $ "No collateral found in " <> show utxos <> "."
+            [] -> do
+              Left . CoinSelectionFailed $ NoCollateralFound (Set.fromList $ map (fromCardanoTxIn . fst) utxos)
           else pure C.TxInsCollateralNone -- No collateral is needed unless a Plutus script is being executed.
 
   -- Bound the lovelace that must be included with change
@@ -792,22 +795,20 @@ selectCoins era protocol marloweVersion scriptCtx walletCtx@WalletContext{..} he
   unless (snd (matchingCoins targetSelectionValue universe) == 0)
     . Left
     . CoinSelectionFailed
-    $ "Insufficient tokens available for coin selection: "
-      <> show targetSelectionValue
-      <> " required, but "
-      <> show universe
-      <> " available."
+    $ do
+      let missingValues = C.valueToList $ targetSelectionValue <> C.negateValue universe
+          missingTokens = tokensFromCardanoValue $ C.valueFromList $ filter ((> C.Quantity 0) . snd) missingValues
+      InsufficientTokens missingTokens
 
   -- Ensure that coin selection for lovelace is possible.
   -- unless (C.selectLovelace targetSelectionValue <= C.selectLovelace universe)
   unless (C.selectLovelace targetSelectionValue <= C.selectLovelace universe)
     . Left
     . CoinSelectionFailed
-    $ "Insufficient lovelace available for coin selection: "
-      <> show targetSelectionValue
-      <> " required, but "
-      <> show universe
-      <> " available."
+    $ do
+      let C.Lovelace required = C.selectLovelace targetSelectionValue
+          C.Lovelace available = C.selectLovelace universe
+      InsufficientLovelace required available
 
   -- Satisfy the native-token requirements.
   let -- Sort the UTxOs by their deficit, excess, and lovelace in priority order.

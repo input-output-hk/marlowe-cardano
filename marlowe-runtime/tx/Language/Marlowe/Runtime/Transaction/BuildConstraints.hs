@@ -483,7 +483,7 @@ buildApplyInputsConstraintsV1 merkleizeInputs systemStart eraHistory marloweOutp
   tell $ mustConsumeMarloweOutput @'V1 invalidBefore' invalidHereafter' $ V1.txInputs transactionInput'
 
   (possibleContinuation, payments) <- case V1.computeTransaction transactionInput' state contract of
-    V1.Error err -> lift $ throwE $ ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed $ show err)
+    V1.Error err -> lift $ throwE $ ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed err)
     V1.TransactionOutput _ payments _ V1.Close ->
       pure (Nothing, payments)
     V1.TransactionOutput _ payments state' contract' ->

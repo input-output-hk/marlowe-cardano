@@ -166,6 +166,14 @@ instance Arbitrary LoadHelpersContextError where
   arbitrary = HelperScriptNotFoundInRegistry <$> arbitrary
   shrink = genericShrink
 
+instance Arbitrary CoinSelectionError where
+  arbitrary =
+    oneof
+      [ NoCollateralFound <$> arbitrary
+      , InsufficientLovelace <$> arbitrary <*> arbitrary
+      , InsufficientTokens <$> arbitrary
+      ]
+
 instance Arbitrary ConstraintError where
   arbitrary =
     oneof

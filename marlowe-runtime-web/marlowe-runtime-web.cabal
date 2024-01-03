@@ -143,7 +143,7 @@ library server
     , marlowe-object ==0.2.0.1
     , marlowe-protocols ==0.3.0.0
     , marlowe-runtime-web ==0.0.6
-    , marlowe-runtime:{marlowe-runtime, contract-api, discovery-api, proxy-api, sync-api, tx-api} ==0.0.6
+    , marlowe-runtime:{marlowe-runtime, contract-api, discovery-api, history-api, proxy-api, sync-api, tx-api} ==0.0.6
     , monad-control ^>=1
     , mtl >=2.2 && <3
     , nonempty-containers ^>=0.3.4
