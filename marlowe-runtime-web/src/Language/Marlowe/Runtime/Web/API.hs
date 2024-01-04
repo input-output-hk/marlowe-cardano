@@ -63,7 +63,6 @@ import Data.Text.Encoding (encodeUtf8)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract)
 import Language.Marlowe.Object.Types (Label, ObjectBundle)
 import Language.Marlowe.Runtime.Web.Types
-import Network.HTTP.Media ((//))
 import Network.Wai (mapResponseHeaders)
 import Pipes (Producer)
 import Servant
@@ -244,24 +243,11 @@ instance HasNamedLink ContractHeader API "transactions" where
       "contracts" :> Capture "contractId" TxOutRef :> "transactions" :> GetTransactionsAPI
   namedLink _ _ mkLink ContractHeader{..} = guard (status == Confirmed) $> mkLink contractId
 
-type PostContractsResponse tx = WithLink "contract" (CreateTxEnvelope tx)
+type PostContractsResponse = WithLink "contract" CreateTxEnvelope
 
-data TxJSON a
-
-data ContractTx
-
-instance Accept (TxJSON ContractTx) where
-  contentType _ = "application" // "vendor.iog.marlowe-runtime.contract-tx-json"
-
-instance MimeRender (TxJSON ContractTx) (PostContractsResponse CardanoTx) where
-  mimeRender _ = encode . toJSON
-
-instance MimeUnrender (TxJSON ContractTx) (PostContractsResponse CardanoTx) where
-  mimeUnrender _ = eitherDecode
-
-instance HasNamedLink (CreateTxEnvelope tx) API "contract" where
+instance HasNamedLink CreateTxEnvelope API "contract" where
   type
-    Endpoint (CreateTxEnvelope tx) API "contract" =
+    Endpoint CreateTxEnvelope API "contract" =
       "contracts" :> Capture "contractId" TxOutRef :> GetContractAPI
   namedLink _ _ mkLink CreateTxEnvelope{..} = Just $ mkLink contractId
 
@@ -278,9 +264,8 @@ type PostContractsAPI =
         '[Optional, Strict, Description "Where to send staking rewards for the Marlowe script outputs of this contract."]
         "X-Stake-Address"
         StakeAddress
-    :> ( ReqBody '[JSON] PostContractsRequest :> PostTxAPI (PostCreated '[JSON] (PostContractsResponse CardanoTxBody))
-          :<|> ReqBody '[JSON] PostContractsRequest :> PostTxAPI (PostCreated '[TxJSON ContractTx] (PostContractsResponse CardanoTx))
-       )
+    :> ReqBody '[JSON] PostContractsRequest
+    :> PostTxAPI (PostCreated '[JSON] PostContractsResponse)
 
 -- | /contracts/:contractId sub-API
 type ContractAPI =
@@ -369,17 +354,6 @@ type TransactionsAPI =
     :<|> PostTransactionsAPI
     :<|> Capture "transactionId" TxId :> TransactionAPI
 
-data ApplyInputsTx
-
-instance Accept (TxJSON ApplyInputsTx) where
-  contentType _ = "application" // "vendor.iog.marlowe-runtime.apply-inputs-tx-json"
-
-instance MimeRender (TxJSON ApplyInputsTx) (PostTransactionsResponse CardanoTx) where
-  mimeRender _ = encode . toJSON
-
-instance MimeUnrender (TxJSON ApplyInputsTx) (PostTransactionsResponse CardanoTx) where
-  mimeUnrender _ = eitherDecode
-
 -- | POST /contracts/:contractId/transactions sub-API
 type PostTransactionsAPI =
   Summary "Apply inputs to contract"
@@ -389,16 +363,14 @@ type PostTransactionsAPI =
         \To submit the signed transaction, use the PUT /contracts/{contractId}/transactions/{transactionId} endpoint."
     :> OperationId "applyInputsToContract"
     :> RenameResponseSchema "ApplyInputsResponse"
-    :> ( ReqBody '[JSON] PostTransactionsRequest :> PostTxAPI (PostCreated '[JSON] (PostTransactionsResponse CardanoTxBody))
-          :<|> ReqBody '[JSON] PostTransactionsRequest
-            :> PostTxAPI (PostCreated '[TxJSON ApplyInputsTx] (PostTransactionsResponse CardanoTx))
-       )
+    :> ReqBody '[JSON] PostTransactionsRequest
+    :> PostTxAPI (PostCreated '[JSON] PostTransactionsResponse)
 
-type PostTransactionsResponse tx = WithLink "transaction" (ApplyInputsTxEnvelope tx)
+type PostTransactionsResponse = WithLink "transaction" ApplyInputsTxEnvelope
 
-instance HasNamedLink (ApplyInputsTxEnvelope tx) API "transaction" where
+instance HasNamedLink ApplyInputsTxEnvelope API "transaction" where
   type
-    Endpoint (ApplyInputsTxEnvelope tx) API "transaction" =
+    Endpoint ApplyInputsTxEnvelope API "transaction" =
       "contracts"
         :> Capture "contractId" TxOutRef
         :> "transactions"
@@ -450,7 +422,7 @@ type GetTransactionAPI =
 
 type GetTransactionResponse = WithLink "previous" (WithLink "next" Tx)
 
-type PutSignedTxAPI = ReqBody '[JSON] TextEnvelope :> PutAccepted '[JSON] NoContent
+type PutSignedTxAPI = ReqBody '[JSON] TxWitness :> PutAccepted '[JSON] NoContent
 
 instance HasNamedLink Tx API "previous" where
   type
@@ -554,27 +526,14 @@ type PostWithdrawalsAPI =
         \To submit the signed transaction, use the PUT /withdrawals/{withdrawalId} endpoint."
     :> OperationId "withdrawPayouts"
     :> RenameResponseSchema "WithdrawPayoutsResponse"
-    :> ( ReqBody '[JSON] PostWithdrawalsRequest :> PostTxAPI (PostCreated '[JSON] (PostWithdrawalsResponse CardanoTxBody))
-          :<|> ReqBody '[JSON] PostWithdrawalsRequest
-            :> PostTxAPI (PostCreated '[TxJSON WithdrawTx] (PostWithdrawalsResponse CardanoTx))
-       )
+    :> ReqBody '[JSON] PostWithdrawalsRequest
+    :> PostTxAPI (PostCreated '[JSON] PostWithdrawalsResponse)
 
-type PostWithdrawalsResponse tx = WithLink "withdrawal" (WithdrawTxEnvelope tx)
+type PostWithdrawalsResponse = WithLink "withdrawal" WithdrawTxEnvelope
 
-data WithdrawTx
-
-instance Accept (TxJSON WithdrawTx) where
-  contentType _ = "application" // "vendor.iog.marlowe-runtime.withdraw-tx-json"
-
-instance MimeRender (TxJSON WithdrawTx) (PostWithdrawalsResponse CardanoTx) where
-  mimeRender _ = encode . toJSON
-
-instance MimeUnrender (TxJSON WithdrawTx) (PostWithdrawalsResponse CardanoTx) where
-  mimeUnrender _ = eitherDecode
-
-instance HasNamedLink (WithdrawTxEnvelope tx) API "withdrawal" where
+instance HasNamedLink WithdrawTxEnvelope API "withdrawal" where
   type
-    Endpoint (WithdrawTxEnvelope tx) API "withdrawal" =
+    Endpoint WithdrawTxEnvelope API "withdrawal" =
       "withdrawals" :> Capture "withdrawalId" TxId :> GetWithdrawalAPI
   namedLink _ _ mkLink WithdrawTxEnvelope{..} = Just $ mkLink withdrawalId
 

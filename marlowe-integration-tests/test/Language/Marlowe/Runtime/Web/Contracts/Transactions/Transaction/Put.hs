@@ -68,7 +68,7 @@ spec = describe "PUT /contracts/{contractId}/transactions/{transaction}" do
 
       let inputs = [NormalInput $ IDeposit partyA partyA ada 100_000_000]
 
-      Web.ApplyInputsTxEnvelope{transactionId, txEnvelope} <-
+      Web.ApplyInputsTxEnvelope{transactionId, tx} <-
         postTransaction
           partyAWebChangeAddress
           (Just partyAWebExtraAddresses)
@@ -82,7 +82,7 @@ spec = describe "PUT /contracts/{contractId}/transactions/{transaction}" do
             , inputs
             , tags = mempty
             }
-      applyTx <- liftIO $ signShelleyTransaction' txEnvelope signingKeys
+      applyTx <- liftIO $ signShelleyTransaction' tx signingKeys
       putTransaction contractId transactionId applyTx
     case result of
       Left _ -> fail $ "Expected 200 response code - got " <> show result

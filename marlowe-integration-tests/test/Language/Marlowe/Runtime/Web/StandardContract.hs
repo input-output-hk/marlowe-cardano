@@ -22,7 +22,6 @@ import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses (..))
 import Language.Marlowe.Runtime.Web (
   ApplyInputsTxEnvelope,
   BlockHeader,
-  CardanoTxBody,
   ContractOrSourceId (..),
   CreateTxEnvelope,
   PayoutHeader (..),
@@ -49,31 +48,31 @@ import Servant.Client.Streaming (ClientM)
 
 data StandardContractInit = StandardContractInit
   { makeInitialDeposit :: ClientM StandardContractFundsDeposited
-  , contractCreated :: CreateTxEnvelope CardanoTxBody
+  , contractCreated :: CreateTxEnvelope
   , createdBlock :: BlockHeader
   }
 
 data StandardContractFundsDeposited = StandardContractFundsDeposited
   { chooseGimmeTheMoney :: ClientM StandardContractChoiceMade
-  , initialFundsDeposited :: ApplyInputsTxEnvelope CardanoTxBody
+  , initialFundsDeposited :: ApplyInputsTxEnvelope
   , initialDepositBlock :: BlockHeader
   }
 
 data StandardContractChoiceMade = StandardContractChoiceMade
   { sendNotify :: ClientM StandardContractNotified
-  , gimmeTheMoneyChosen :: ApplyInputsTxEnvelope CardanoTxBody
+  , gimmeTheMoneyChosen :: ApplyInputsTxEnvelope
   , choiceBlock :: BlockHeader
   }
 
 data StandardContractNotified = StandardContractNotified
   { makeReturnDeposit :: ClientM StandardContractClosed
-  , notified :: ApplyInputsTxEnvelope CardanoTxBody
+  , notified :: ApplyInputsTxEnvelope
   , notifiedBlock :: BlockHeader
   }
 
 data StandardContractClosed = StandardContractClosed
-  { withdrawPartyAFunds :: ClientM (WithdrawTxEnvelope CardanoTxBody, BlockHeader)
-  , returnDeposited :: ApplyInputsTxEnvelope CardanoTxBody
+  { withdrawPartyAFunds :: ClientM (WithdrawTxEnvelope, BlockHeader)
+  , returnDeposited :: ApplyInputsTxEnvelope
   , returnDepositBlock :: BlockHeader
   }
 

@@ -4,10 +4,8 @@
 -- | This module defines a server for the /contracts REST API.
 module Language.Marlowe.Runtime.Web.Server.REST.Contracts where
 
-import Cardano.Api (BabbageEra, ConwayEra, TxBody, makeSignedTransaction)
-import qualified Cardano.Api as Cardano
+import Cardano.Api (TxBody, makeSignedTransaction)
 import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
-import Cardano.Ledger.Alonzo.TxWits (AlonzoTxWits (..))
 import Data.Aeson (Value (Null))
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
@@ -15,6 +13,7 @@ import qualified Data.Set as Set
 import Data.Text (Text)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError)
 import Language.Marlowe.Protocol.Query.Types (ContractFilter (..), Page (..))
+import Language.Marlowe.Runtime.Cardano.Feature (ShelleyFeature (..), withShelleyBasedEra)
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash (..), Lovelace (..))
 import Language.Marlowe.Runtime.Core.Api (
   ContractId,
@@ -47,14 +46,13 @@ import qualified Language.Marlowe.Runtime.Web.Server.REST.Contracts.Next as Next
 import qualified Language.Marlowe.Runtime.Web.Server.REST.Transactions as Transactions
 import Language.Marlowe.Runtime.Web.Server.REST.Withdrawals (TxBodyInAnyEra (..))
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx (TempTx), TempTxStatus (Unsigned))
-import Language.Marlowe.Runtime.Web.Server.Util (makeSignedTxWithWitnessKeys)
 import Servant
 import Servant.Pagination
 
 server :: ServerT ContractsAPI ServerM
 server =
   get
-    :<|> (\stakeAddress -> postCreateTxBodyResponse stakeAddress :<|> postCreateTxResponse stakeAddress)
+    :<|> post
     :<|> contractServer
     :<|> ContractSources.server
 
@@ -98,28 +96,14 @@ postCreateTxBody PostContractsRequest{..} stakeAddressDTO changeAddressDTO mAddr
       Right
         (ContractCreated ReferenceTxInsScriptsInlineDatumsInConwayEra ContractCreatedInEra{contractId, txBody, safetyErrors}) -> pure (contractId, TxBodyInAnyEra txBody, safetyErrors)
 
-postCreateTxBodyResponse
+post
   :: Maybe StakeAddress
   -> PostContractsRequest
   -> Address
   -> Maybe (CommaList Address)
   -> Maybe (CommaList TxOutRef)
-  -> ServerM (PostContractsResponse CardanoTxBody)
-postCreateTxBodyResponse stakeAddressDTO req changeAddressDTO mAddresses mCollateralUtxos = do
-  (contractId, TxBodyInAnyEra txBody, safetyErrors) <-
-    postCreateTxBody req stakeAddressDTO changeAddressDTO mAddresses mCollateralUtxos
-  let (contractId', txBody') = toDTO (contractId, txBody)
-  let body = CreateTxEnvelope contractId' txBody' safetyErrors
-  pure $ IncludeLink (Proxy @"contract") body
-
-postCreateTxResponse
-  :: Maybe StakeAddress
-  -> PostContractsRequest
-  -> Address
-  -> Maybe (CommaList Address)
-  -> Maybe (CommaList TxOutRef)
-  -> ServerM (PostContractsResponse CardanoTx)
-postCreateTxResponse stakeAddressDTO req changeAddressDTO mAddresses mCollateralUtxos = do
+  -> ServerM PostContractsResponse
+post stakeAddressDTO req changeAddressDTO mAddresses mCollateralUtxos = do
   (contractId, TxBodyInAnyEra txBody, safetyErrors) <-
     postCreateTxBody req stakeAddressDTO changeAddressDTO mAddresses mCollateralUtxos
   let tx = makeSignedTransaction [] txBody
@@ -168,8 +152,8 @@ getOne contractId = do
       let contractState = either toDTO toDTO result
       pure $ IncludeLink (Proxy @"transactions") contractState
 
-put :: TxOutRef -> TextEnvelope -> ServerM NoContent
-put contractId body = do
+put :: TxOutRef -> TxWitness -> ServerM NoContent
+put contractId txWitness = do
   contractId' <- fromDTOThrow (badRequest' "Invalid contract id value") contractId
 
   loadContract contractId' >>= \case
@@ -182,43 +166,9 @@ put contractId body = do
   where
     handleLoaded
       :: Core.ContractId -> ReferenceTxInsScriptsInlineDatumsSupportedInEra era -> TxBody era -> ServerM NoContent
-    handleLoaded contractId' ReferenceTxInsScriptsInlineDatumsInBabbageEra txBody = do
-      (req :: Maybe (Either (Cardano.Tx BabbageEra) (ShelleyTxWitness BabbageEra))) <- case teType body of
-        "Tx BabbageEra" -> pure $ Left <$> fromDTO body
-        "ShelleyTxWitness BabbageEra" -> pure $ Right <$> fromDTO body
-        _ ->
-          throwError $ badRequest' "Unknown envelope type - allowed types are: \"Tx BabbageEra\", \"ShelleyTxWitness BabbageEra\""
-
-      tx <- case req of
-        Nothing -> throwError $ badRequest' "Invalid text envelope cbor value"
-        Just (Left tx) -> pure tx
-        -- It seems that wallets provide nearly empty `TxWitness` back. Here is a quote from `CIP-30` docs:
-        -- > Only the portion of the witness set that were signed as a result of this call are returned to
-        -- > encourage dApps to verify the contents returned by this endpoint while building the final transaction.
-        Just (Right (ShelleyTxWitness (AlonzoTxWits wtKeys _ _ _ _))) -> do
-          case makeSignedTxWithWitnessKeys txBody wtKeys of
-            Just tx -> pure tx
-            Nothing -> throwError $ badRequest' "Invalid witness keys"
-      submitContract contractId' ReferenceTxInsScriptsInlineDatumsInBabbageEra tx >>= \case
-        Nothing -> pure NoContent
-        Just err -> throwError $ ApiError.toServerError $ ApiError (show err) "SubmissionError" Null 403
-    handleLoaded contractId' ReferenceTxInsScriptsInlineDatumsInConwayEra txBody = do
-      (req :: Maybe (Either (Cardano.Tx ConwayEra) (ShelleyTxWitness ConwayEra))) <- case teType body of
-        "Tx ConwayEra" -> pure $ Left <$> fromDTO body
-        "ShelleyTxWitness ConwayEra" -> pure $ Right <$> fromDTO body
-        _ ->
-          throwError $ badRequest' "Unknown envelope type - allowed types are: \"Tx ConwayEra\", \"ShelleyTxWitness ConwayEra\""
-
-      tx <- case req of
-        Nothing -> throwError $ badRequest' "Invalid text envelope cbor value"
-        Just (Left tx) -> pure tx
-        -- It seems that wallets provide nearly empty `TxWitness` back. Here is a quote from `CIP-30` docs:
-        -- > Only the portion of the witness set that were signed as a result of this call are returned to
-        -- > encourage dApps to verify the contents returned by this endpoint while building the final transaction.
-        Just (Right (ShelleyTxWitness (AlonzoTxWits wtKeys _ _ _ _))) -> do
-          case makeSignedTxWithWitnessKeys txBody wtKeys of
-            Just tx -> pure tx
-            Nothing -> throwError $ badRequest' "Invalid witness keys"
-      submitContract contractId' ReferenceTxInsScriptsInlineDatumsInConwayEra tx >>= \case
+    handleLoaded contractId' era txBody = withShelleyBasedEra (shelleyBasedEraOfFeature era) do
+      txWitness' <- fromDTOThrow (badRequest' "Invalid tx witness") txWitness
+      let tx = makeSignedTransaction [txWitness'] txBody
+      submitContract contractId' era tx >>= \case
         Nothing -> pure NoContent
         Just err -> throwError $ ApiError.toServerError $ ApiError (show err) "SubmissionError" Null 403

@@ -177,7 +177,6 @@
                 "type": "object"
             },
             "ApplyInputsTxEnvelope": {
-                "description": "The \"type\" property of \"tx\" must be \"Tx BabbageEra\" or \"Tx ConwayEra\"",
                 "properties": {
                     "contractId": {
                         "$ref": "#/components/schemas/TxOutRef"
@@ -186,7 +185,7 @@
                         "$ref": "#/components/schemas/TxId"
                     },
                     "tx": {
-                        "$ref": "#/components/schemas/TextEnvelope"
+                        "$ref": "#/components/schemas/UnwitnessedTx"
                     }
                 },
                 "required": [
@@ -811,7 +810,7 @@
                         "type": "object"
                     },
                     "txBody": {
-                        "$ref": "#/components/schemas/TextEnvelope"
+                        "$ref": "#/components/schemas/UnwitnessedTx"
                     },
                     "unclaimedPayouts": {
                         "items": {
@@ -859,30 +858,7 @@
                 ],
                 "type": "object"
             },
-            "CreateTxBodyEnvelope": {
-                "description": "The \"type\" property of \"txBody\" must be \"TxBody BabbageEra\" or \"TxBody ConwayEra\"",
-                "properties": {
-                    "contractId": {
-                        "$ref": "#/components/schemas/TxOutRef"
-                    },
-                    "safetyErrors": {
-                        "items": {
-                            "$ref": "#/components/schemas/SafetyError"
-                        },
-                        "type": "array"
-                    },
-                    "txBody": {
-                        "$ref": "#/components/schemas/TextEnvelope"
-                    }
-                },
-                "required": [
-                    "contractId",
-                    "txBody"
-                ],
-                "type": "object"
-            },
             "CreateTxEnvelope": {
-                "description": "The \"type\" property of \"tx\" must be \"Tx BabbageEra\" or \"Tx ConwayEra\"",
                 "properties": {
                     "contractId": {
                         "$ref": "#/components/schemas/TxOutRef"
@@ -894,12 +870,13 @@
                         "type": "array"
                     },
                     "tx": {
-                        "$ref": "#/components/schemas/TextEnvelope"
+                        "$ref": "#/components/schemas/UnwitnessedTx"
                     }
                 },
                 "required": [
                     "contractId",
-                    "tx"
+                    "tx",
+                    "safetyErrors"
                 ],
                 "type": "object"
             },
@@ -2350,26 +2327,6 @@
                     "fatal"
                 ]
             },
-            "TextEnvelope": {
-                "properties": {
-                    "cborHex": {
-                        "type": "string"
-                    },
-                    "description": {
-                        "type": "string"
-                    },
-                    "type": {
-                        "description": "What type of data is encoded in the CBOR Hex. Valid values include \"Tx <era>\", \"TxBody <era>\", and \"ShelleyTxWitness <era>\" where <era> is one of \"BabbageEra\", \"ConwayEra\".",
-                        "type": "string"
-                    }
-                },
-                "required": [
-                    "type",
-                    "description",
-                    "cborHex"
-                ],
-                "type": "object"
-            },
             "Token": {
                 "description": "A token with a currency symbol (minting policy ID) and token name.",
                 "properties": {
@@ -2786,7 +2743,7 @@
                         "$ref": "#/components/schemas/TxId"
                     },
                     "txBody": {
-                        "$ref": "#/components/schemas/TextEnvelope"
+                        "$ref": "#/components/schemas/UnwitnessedTx"
                     }
                 },
                 "required": [
@@ -2866,10 +2823,58 @@
                 ],
                 "type": "string"
             },
+            "TxWitness": {
+                "properties": {
+                    "cborHex": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "type": {
+                        "description": "What type of data is encoded in the CBOR Hex.",
+                        "enum": [
+                            "TxWitness BabbageEra",
+                            "TxWitness ConwayEra"
+                        ],
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "type",
+                    "description",
+                    "cborHex"
+                ],
+                "type": "object"
+            },
             "UTCTime": {
                 "example": "2016-07-22T00:00:00Z",
                 "format": "yyyy-mm-ddThh:MM:ssZ",
                 "type": "string"
+            },
+            "UnwitnessedTx": {
+                "properties": {
+                    "cborHex": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "type": {
+                        "description": "What type of data is encoded in the CBOR Hex.",
+                        "enum": [
+                            "Unwitnessed Tx BabbageEra",
+                            "Unwitnessed Tx ConwayEra"
+                        ],
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "type",
+                    "description",
+                    "cborHex"
+                ],
+                "type": "object"
             },
             "Value": {
                 "description": "A time-varying expression that evaluates to a boolean",
@@ -3188,27 +3193,10 @@
                 ],
                 "type": "object"
             },
-            "WithdrawTxBodyEnvelope": {
-                "description": "The \"type\" property of \"txBody\" must be \"TxBody BabbageEra\" or \"TxBody ConwayEra\"",
-                "properties": {
-                    "txBody": {
-                        "$ref": "#/components/schemas/TextEnvelope"
-                    },
-                    "withdrawalId": {
-                        "$ref": "#/components/schemas/TxId"
-                    }
-                },
-                "required": [
-                    "withdrawalId",
-                    "txBody"
-                ],
-                "type": "object"
-            },
             "WithdrawTxEnvelope": {
-                "description": "The \"type\" property of \"tx\" must be \"Tx BabbageEra\" or \"Tx ConwayEra\"",
                 "properties": {
                     "tx": {
-                        "$ref": "#/components/schemas/TextEnvelope"
+                        "$ref": "#/components/schemas/UnwitnessedTx"
                     },
                     "withdrawalId": {
                         "$ref": "#/components/schemas/TxId"
@@ -3565,7 +3553,7 @@
                 "responses": {
                     "201": {
                         "content": {
-                            "application/vendor.iog.marlowe-runtime.contract-tx-json": {
+                            "application/json;charset=utf-8": {
                                 "schema": {
                                     "$ref": "#/components/schemas/CreateContractResponse"
                                 }
@@ -4556,7 +4544,7 @@
                     "content": {
                         "application/json;charset=utf-8": {
                             "schema": {
-                                "$ref": "#/components/schemas/TextEnvelope"
+                                "$ref": "#/components/schemas/TxWitness"
                             }
                         }
                     }
@@ -5157,7 +5145,7 @@
                 "responses": {
                     "201": {
                         "content": {
-                            "application/vendor.iog.marlowe-runtime.apply-inputs-tx-json": {
+                            "application/json;charset=utf-8": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ApplyInputsResponse"
                                 }
@@ -5502,7 +5490,7 @@
                     "content": {
                         "application/json;charset=utf-8": {
                             "schema": {
-                                "$ref": "#/components/schemas/TextEnvelope"
+                                "$ref": "#/components/schemas/TxWitness"
                             }
                         }
                     }
@@ -6423,7 +6411,7 @@
                 "responses": {
                     "201": {
                         "content": {
-                            "application/vendor.iog.marlowe-runtime.withdraw-tx-json": {
+                            "application/json;charset=utf-8": {
                                 "schema": {
                                     "$ref": "#/components/schemas/WithdrawPayoutsResponse"
                                 }
@@ -6743,7 +6731,7 @@
                     "content": {
                         "application/json;charset=utf-8": {
                             "schema": {
-                                "$ref": "#/components/schemas/TextEnvelope"
+                                "$ref": "#/components/schemas/TxWitness"
                             }
                         }
                     }

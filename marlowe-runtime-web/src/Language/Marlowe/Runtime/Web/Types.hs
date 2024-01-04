@@ -375,7 +375,7 @@ data ContractState = ContractState
   , state :: Maybe Semantics.State
   , utxo :: Maybe TxOutRef
   , assets :: Assets
-  , txBody :: Maybe TextEnvelope
+  , txBody :: Maybe UnwitnessedTx
   , unclaimedPayouts :: [Payout]
   }
   deriving (Show, Eq, Generic)
@@ -571,7 +571,7 @@ data Tx = Tx
   , consumingTx :: Maybe TxId
   , invalidBefore :: UTCTime
   , invalidHereafter :: UTCTime
-  , txBody :: Maybe TextEnvelope
+  , txBody :: Maybe UnwitnessedTx
   }
   deriving (Show, Eq, Generic)
 
@@ -620,172 +620,105 @@ instance ToJSON BlockHeader
 instance FromJSON BlockHeader
 instance ToSchema BlockHeader
 
-data CardanoTx
-data CardanoTxBody
-
-data WithdrawTxEnvelope tx = WithdrawTxEnvelope
+data WithdrawTxEnvelope = WithdrawTxEnvelope
   { withdrawalId :: TxId
-  , txEnvelope :: TextEnvelope
+  , tx :: UnwitnessedTx
   }
-  deriving (Show, Eq, Ord, Generic)
+  deriving (Show, Eq, Ord, Generic, ToJSON, FromJSON, ToSchema)
 
-instance ToJSON (WithdrawTxEnvelope CardanoTx) where
-  toJSON WithdrawTxEnvelope{..} =
-    object
-      [ ("withdrawalId", toJSON withdrawalId)
-      , ("tx", toJSON txEnvelope)
-      ]
-instance ToJSON (WithdrawTxEnvelope CardanoTxBody) where
-  toJSON WithdrawTxEnvelope{..} =
-    object
-      [ ("withdrawalId", toJSON withdrawalId)
-      , ("txBody", toJSON txEnvelope)
-      ]
-
-instance FromJSON (WithdrawTxEnvelope CardanoTx) where
-  parseJSON = withObject "WithdrawTxEnvelope" \obj ->
-    WithdrawTxEnvelope
-      <$> obj .: "withdrawalId"
-      <*> obj .: "tx"
-
-instance FromJSON (WithdrawTxEnvelope CardanoTxBody) where
-  parseJSON = withObject "WithdrawTxEnvelope" \obj ->
-    WithdrawTxEnvelope
-      <$> obj .: "withdrawalId"
-      <*> obj .: "txBody"
-
-instance ToSchema (WithdrawTxEnvelope CardanoTx) where
-  declareNamedSchema _ = do
-    withdrawalIdSchema <- declareSchemaRef (Proxy :: Proxy TxId)
-    txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
-    return $
-      NamedSchema (Just "WithdrawTxEnvelope") $
-        mempty
-          & type_ ?~ OpenApiObject
-          & OpenApi.description ?~ "The \"type\" property of \"tx\" must be \"Tx BabbageEra\" or \"Tx ConwayEra\""
-          & properties
-            .~ [ ("withdrawalId", withdrawalIdSchema)
-               , ("tx", txEnvelopeSchema)
-               ]
-          & required .~ ["withdrawalId", "tx"]
-
-instance ToSchema (WithdrawTxEnvelope CardanoTxBody) where
-  declareNamedSchema _ = do
-    withdrawalIdSchema <- declareSchemaRef (Proxy :: Proxy TxId)
-    txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
-    return $
-      NamedSchema (Just "WithdrawTxBodyEnvelope") $
-        mempty
-          & type_ ?~ OpenApiObject
-          & OpenApi.description ?~ "The \"type\" property of \"txBody\" must be \"TxBody BabbageEra\" or \"TxBody ConwayEra\""
-          & properties
-            .~ [ ("withdrawalId", withdrawalIdSchema)
-               , ("txBody", txEnvelopeSchema)
-               ]
-          & required .~ ["withdrawalId", "txBody"]
-
-data CreateTxEnvelope tx = CreateTxEnvelope
+data CreateTxEnvelope = CreateTxEnvelope
   { contractId :: TxOutRef
-  , txEnvelope :: TextEnvelope
+  , tx :: UnwitnessedTx
   , safetyErrors :: [SafetyError]
   }
-  deriving (Show, Eq, Generic)
+  deriving (Show, Eq, Generic, ToJSON, FromJSON, ToSchema)
 
-instance ToJSON (CreateTxEnvelope CardanoTx) where
-  toJSON CreateTxEnvelope{..} =
-    object
-      [ ("contractId", toJSON contractId)
-      , ("tx", toJSON txEnvelope)
-      , ("safetyErrors", toJSON safetyErrors)
-      ]
-instance ToJSON (CreateTxEnvelope CardanoTxBody) where
-  toJSON CreateTxEnvelope{..} =
-    object
-      [ ("contractId", toJSON contractId)
-      , ("txBody", toJSON txEnvelope)
-      , ("safetyErrors", toJSON safetyErrors)
-      ]
+data ApplyInputsTxEnvelope = ApplyInputsTxEnvelope
+  { contractId :: TxOutRef
+  , transactionId :: TxId
+  , tx :: UnwitnessedTx
+  }
+  deriving (Show, Eq, Ord, Generic, ToJSON, FromJSON, ToSchema)
 
-instance FromJSON (CreateTxEnvelope CardanoTx) where
-  parseJSON = withObject "CreateTxEnvelope" \obj ->
-    CreateTxEnvelope
-      <$> obj .: "contractId"
-      <*> obj .: "tx"
-      <*> obj .: "safetyErrors"
-
-instance FromJSON (CreateTxEnvelope CardanoTxBody) where
-  parseJSON = withObject "CreateTxEnvelope" \obj ->
-    CreateTxEnvelope
-      <$> obj .: "contractId"
-      <*> obj .: "txBody"
-      <*> obj .: "safetyErrors"
-
-instance ToSchema (CreateTxEnvelope CardanoTx) where
-  declareNamedSchema _ = do
-    contractIdSchema <- declareSchemaRef (Proxy :: Proxy TxOutRef)
-    txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
-    safetyErrorsSchema <- declareSchemaRef (Proxy :: Proxy [SafetyError])
-    return $
-      NamedSchema (Just "CreateTxEnvelope") $
-        mempty
-          & type_ ?~ OpenApiObject
-          & OpenApi.description ?~ "The \"type\" property of \"tx\" must be \"Tx BabbageEra\" or \"Tx ConwayEra\""
-          & properties
-            .~ [ ("contractId", contractIdSchema)
-               , ("tx", txEnvelopeSchema)
-               , ("safetyErrors", safetyErrorsSchema)
-               ]
-          & required .~ ["contractId", "tx"]
-
-instance ToSchema (CreateTxEnvelope CardanoTxBody) where
-  declareNamedSchema _ = do
-    contractIdSchema <- declareSchemaRef (Proxy :: Proxy TxOutRef)
-    txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
-    safetyErrorsSchema <- declareSchemaRef (Proxy :: Proxy [SafetyError])
-    return $
-      NamedSchema (Just "CreateTxBodyEnvelope") $
-        mempty
-          & type_ ?~ OpenApiObject
-          & OpenApi.description ?~ "The \"type\" property of \"txBody\" must be \"TxBody BabbageEra\" or \"TxBody ConwayEra\""
-          & properties
-            .~ [ ("contractId", contractIdSchema)
-               , ("txBody", txEnvelopeSchema)
-               , ("safetyErrors", safetyErrorsSchema)
-               ]
-          & required .~ ["contractId", "txBody"]
-
-data TextEnvelope = TextEnvelope
-  { teType :: Text
-  , teDescription :: Text
-  , teCborHex :: Base16
+data UnwitnessedTx = UnwitnessedTx
+  { utType :: Text
+  , utDescription :: Text
+  , utCborHex :: Base16
   }
   deriving (Show, Eq, Ord, Generic)
 
-instance ToJSON TextEnvelope where
-  toJSON TextEnvelope{..} =
+instance ToJSON UnwitnessedTx where
+  toJSON UnwitnessedTx{..} =
     object
-      [ ("type", toJSON teType)
-      , ("description", toJSON teDescription)
-      , ("cborHex", toJSON teCborHex)
+      [ ("type", toJSON utType)
+      , ("description", toJSON utDescription)
+      , ("cborHex", toJSON utCborHex)
       ]
 
-instance FromJSON TextEnvelope where
-  parseJSON = withObject "TextEnvelope" \obj ->
-    TextEnvelope
+instance FromJSON UnwitnessedTx where
+  parseJSON = withObject "UnwitnessedTx" \obj ->
+    UnwitnessedTx
       <$> obj .: "type"
       <*> obj .: "description"
       <*> obj .: "cborHex"
 
-instance ToSchema TextEnvelope where
+instance ToSchema UnwitnessedTx where
   declareNamedSchema _ = do
     textSchema <- declareSchemaRef (Proxy @Text)
     let typeSchema =
           mempty
             & type_ ?~ OpenApiString
-            & OpenApi.description
-              ?~ "What type of data is encoded in the CBOR Hex. Valid values include \"Tx <era>\", \"TxBody <era>\", and \"ShelleyTxWitness <era>\" where <era> is one of \"BabbageEra\", \"ConwayEra\"."
+            & OpenApi.description ?~ "What type of data is encoded in the CBOR Hex."
+            & enum_
+              ?~ [ "Unwitnessed Tx BabbageEra"
+                 , "Unwitnessed Tx ConwayEra"
+                 ]
     pure $
-      NamedSchema (Just "TextEnvelope") $
+      NamedSchema (Just "UnwitnessedTx") $
+        mempty
+          & type_ ?~ OpenApiObject
+          & required .~ ["type", "description", "cborHex"]
+          & properties
+            .~ [ ("type", Inline typeSchema)
+               , ("description", textSchema)
+               , ("cborHex", textSchema)
+               ]
+
+data TxWitness = TxWitness
+  { twType :: Text
+  , twDescription :: Text
+  , twCborHex :: Base16
+  }
+  deriving (Show, Eq, Ord, Generic)
+
+instance ToJSON TxWitness where
+  toJSON TxWitness{..} =
+    object
+      [ ("type", toJSON twType)
+      , ("description", toJSON twDescription)
+      , ("cborHex", toJSON twCborHex)
+      ]
+
+instance FromJSON TxWitness where
+  parseJSON = withObject "TxWitness" \obj ->
+    TxWitness
+      <$> obj .: "type"
+      <*> obj .: "description"
+      <*> obj .: "cborHex"
+
+instance ToSchema TxWitness where
+  declareNamedSchema _ = do
+    textSchema <- declareSchemaRef (Proxy @Text)
+    let typeSchema =
+          mempty
+            & type_ ?~ OpenApiString
+            & OpenApi.description ?~ "What type of data is encoded in the CBOR Hex."
+            & enum_
+              ?~ [ "TxWitness BabbageEra"
+                 , "TxWitness ConwayEra"
+                 ]
+    pure $
+      NamedSchema (Just "TxWitness") $
         mempty
           & type_ ?~ OpenApiObject
           & required .~ ["type", "description", "cborHex"]
@@ -1138,76 +1071,6 @@ data PostTransactionsRequest = PostTransactionsRequest
 instance FromJSON PostTransactionsRequest
 instance ToJSON PostTransactionsRequest
 instance ToSchema PostTransactionsRequest
-
-data ApplyInputsTxEnvelope tx = ApplyInputsTxEnvelope
-  { contractId :: TxOutRef
-  , transactionId :: TxId
-  , txEnvelope :: TextEnvelope
-  }
-  deriving (Show, Eq, Ord, Generic)
-
-instance ToJSON (ApplyInputsTxEnvelope CardanoTx) where
-  toJSON ApplyInputsTxEnvelope{..} =
-    object
-      [ ("contractId", toJSON contractId)
-      , ("transactionId", toJSON transactionId)
-      , ("tx", toJSON txEnvelope)
-      ]
-instance ToJSON (ApplyInputsTxEnvelope CardanoTxBody) where
-  toJSON ApplyInputsTxEnvelope{..} =
-    object
-      [ ("contractId", toJSON contractId)
-      , ("transactionId", toJSON transactionId)
-      , ("txBody", toJSON txEnvelope)
-      ]
-
-instance FromJSON (ApplyInputsTxEnvelope CardanoTx) where
-  parseJSON = withObject "ApplyInputsTxEnvelope" \obj -> do
-    contractId <- obj .: "contractId"
-    transactionId <- obj .: "transactionId"
-    txEnvelope <- obj .: "tx"
-    pure ApplyInputsTxEnvelope{..}
-
-instance FromJSON (ApplyInputsTxEnvelope CardanoTxBody) where
-  parseJSON = withObject "ApplyInputsTxEnvelope" \obj -> do
-    contractId <- obj .: "contractId"
-    transactionId <- obj .: "transactionId"
-    txEnvelope <- obj .: "txBody"
-    pure ApplyInputsTxEnvelope{..}
-
-instance ToSchema (ApplyInputsTxEnvelope CardanoTx) where
-  declareNamedSchema _ = do
-    contractIdSchema <- declareSchemaRef (Proxy :: Proxy TxOutRef)
-    transactionIdSchema <- declareSchemaRef (Proxy :: Proxy TxId)
-    txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
-    return $
-      NamedSchema (Just "ApplyInputsTxEnvelope") $
-        mempty
-          & type_ ?~ OpenApiObject
-          & OpenApi.description ?~ "The \"type\" property of \"tx\" must be \"Tx BabbageEra\" or \"Tx ConwayEra\""
-          & properties
-            .~ [ ("contractId", contractIdSchema)
-               , ("transactionId", transactionIdSchema)
-               , ("tx", txEnvelopeSchema)
-               ]
-          & required .~ ["contractId", "transactionId", "tx"]
-
-instance ToSchema (ApplyInputsTxEnvelope CardanoTxBody) where
-  declareNamedSchema _ = do
-    contractIdSchema <- declareSchemaRef (Proxy :: Proxy TxOutRef)
-    transactionIdSchema <- declareSchemaRef (Proxy :: Proxy TxId)
-    txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
-    return $
-      NamedSchema (Just "ApplyInputsTxEnvelope") $
-        mempty
-          & type_ ?~ OpenApiObject
-          & OpenApi.description ?~ "The \"type\" property of \"txBody\" must be \"TxBody BabbageEra\" or \"TxBody ConwayEra\""
-          & properties
-            .~ [ ("contractId", contractIdSchema)
-               , ("transactionId", transactionIdSchema)
-               , ("txBody", txEnvelopeSchema)
-               ]
-          & required .~ ["contractId", "transactionId", "txBody"]
 
 data NetworkId
   = Mainnet

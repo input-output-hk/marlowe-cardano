@@ -30,18 +30,12 @@ module Language.Marlowe.Runtime.Web.Client (
   getWithdrawalsStatus,
   healthcheck,
   postContract,
-  postContractCreateTx,
-  postContractCreateTxStatus,
   postContractSource,
   postContractSourceStatus,
   postContractStatus,
   postTransaction,
-  postTransactionCreateTx,
-  postTransactionCreateTxStatus,
   postTransactionStatus,
   postWithdrawal,
-  postWithdrawalCreateTx,
-  postWithdrawalCreateTxStatus,
   postWithdrawalStatus,
   putContract,
   putContractStatus,
@@ -162,12 +156,12 @@ postContractStatus
   -> Maybe (Set Address)
   -> Maybe (Set TxOutRef)
   -> PostContractsRequest
-  -> ClientM (RuntimeStatus, CreateTxEnvelope CardanoTxBody)
+  -> ClientM (RuntimeStatus, CreateTxEnvelope)
 postContractStatus stakeAddress changeAddress otherAddresses collateralUtxos request = do
-  let (_ :<|> getPost :<|> _) :<|> _ = client
-  let (postContractCreateTxBody' :<|> _) = getPost stakeAddress
+  let (_ :<|> postContract' :<|> _) :<|> _ = client
   response <-
-    postContractCreateTxBody'
+    postContract'
+      stakeAddress
       request
       changeAddress
       (setToCommaList <$> otherAddresses)
@@ -181,36 +175,8 @@ postContract
   -> Maybe (Set Address)
   -> Maybe (Set TxOutRef)
   -> PostContractsRequest
-  -> ClientM (CreateTxEnvelope CardanoTxBody)
+  -> ClientM CreateTxEnvelope
 postContract = (fmap . fmap . fmap . fmap . fmap) snd . postContractStatus
-
-postContractCreateTxStatus
-  :: Maybe StakeAddress
-  -> Address
-  -> Maybe (Set Address)
-  -> Maybe (Set TxOutRef)
-  -> PostContractsRequest
-  -> ClientM (RuntimeStatus, CreateTxEnvelope CardanoTx)
-postContractCreateTxStatus stakeAddress changeAddress otherAddresses collateralUtxos request = do
-  let (_ :<|> getPost :<|> _) :<|> _ = client
-  let (_ :<|> postContractCreateTx') = getPost stakeAddress
-  response <-
-    postContractCreateTx'
-      request
-      changeAddress
-      (setToCommaList <$> otherAddresses)
-      (setToCommaList <$> collateralUtxos)
-  status <- extractStatus response
-  pure (status, retractLink $ getResponse response)
-
-postContractCreateTx
-  :: Maybe StakeAddress
-  -> Address
-  -> Maybe (Set Address)
-  -> Maybe (Set TxOutRef)
-  -> PostContractsRequest
-  -> ClientM (CreateTxEnvelope CardanoTx)
-postContractCreateTx = (fmap . fmap . fmap . fmap . fmap) snd . postContractCreateTxStatus
 
 postContractSourceStatus
   :: Label
@@ -293,7 +259,7 @@ getContractNextStatus contractId validityStart validityEnd parties = do
 getContractNext :: TxOutRef -> UTCTime -> UTCTime -> [Party] -> ClientM Next
 getContractNext = (fmap . fmap . fmap . fmap) snd . getContractNextStatus
 
-putContractStatus :: TxOutRef -> TextEnvelope -> ClientM RuntimeStatus
+putContractStatus :: TxOutRef -> TxWitness -> ClientM RuntimeStatus
 putContractStatus contractId tx = do
   let contractsClient :<|> _ = client
   let _ :<|> _ :<|> contractApi :<|> _ = contractsClient
@@ -301,7 +267,7 @@ putContractStatus contractId tx = do
   response <- putContract' tx
   extractStatus response
 
-putContract :: TxOutRef -> TextEnvelope -> ClientM ()
+putContract :: TxOutRef -> TxWitness -> ClientM ()
 putContract = fmap void . putContractStatus
 
 getWithdrawalsStatus
@@ -336,10 +302,10 @@ postWithdrawalStatus
   -> Maybe (Set Address)
   -> Maybe (Set TxOutRef)
   -> PostWithdrawalsRequest
-  -> ClientM (RuntimeStatus, WithdrawTxEnvelope CardanoTxBody)
+  -> ClientM (RuntimeStatus, WithdrawTxEnvelope)
 postWithdrawalStatus changeAddress otherAddresses collateralUtxos request = do
   let _ :<|> withdrawalsClient :<|> _ = client
-  let _ :<|> (postWithdrawal' :<|> _) :<|> _ = withdrawalsClient
+  let _ :<|> postWithdrawal' :<|> _ = withdrawalsClient
   response <-
     postWithdrawal'
       request
@@ -354,34 +320,8 @@ postWithdrawal
   -> Maybe (Set Address)
   -> Maybe (Set TxOutRef)
   -> PostWithdrawalsRequest
-  -> ClientM (WithdrawTxEnvelope CardanoTxBody)
+  -> ClientM WithdrawTxEnvelope
 postWithdrawal = (fmap . fmap . fmap . fmap) snd . postWithdrawalStatus
-
-postWithdrawalCreateTxStatus
-  :: Address
-  -> Maybe (Set Address)
-  -> Maybe (Set TxOutRef)
-  -> PostWithdrawalsRequest
-  -> ClientM (RuntimeStatus, WithdrawTxEnvelope CardanoTx)
-postWithdrawalCreateTxStatus changeAddress otherAddresses collateralUtxos request = do
-  let _ :<|> withdrawalsClient :<|> _ = client
-  let _ :<|> (_ :<|> postWithdrawalCreateTx') :<|> _ = withdrawalsClient
-  response <-
-    postWithdrawalCreateTx'
-      request
-      changeAddress
-      (setToCommaList <$> otherAddresses)
-      (setToCommaList <$> collateralUtxos)
-  status <- extractStatus response
-  pure (status, retractLink $ getResponse response)
-
-postWithdrawalCreateTx
-  :: Address
-  -> Maybe (Set Address)
-  -> Maybe (Set TxOutRef)
-  -> PostWithdrawalsRequest
-  -> ClientM (WithdrawTxEnvelope CardanoTx)
-postWithdrawalCreateTx = (fmap . fmap . fmap . fmap) snd . postWithdrawalCreateTxStatus
 
 getWithdrawalStatus :: TxId -> ClientM (RuntimeStatus, Withdrawal)
 getWithdrawalStatus withdrawalId = do
@@ -395,7 +335,7 @@ getWithdrawalStatus withdrawalId = do
 getWithdrawal :: TxId -> ClientM Withdrawal
 getWithdrawal = fmap snd . getWithdrawalStatus
 
-putWithdrawalStatus :: TxId -> TextEnvelope -> ClientM RuntimeStatus
+putWithdrawalStatus :: TxId -> TxWitness -> ClientM RuntimeStatus
 putWithdrawalStatus withdrawalId tx = do
   let _ :<|> withdrawalsClient :<|> _ = client
   let _ :<|> _ :<|> contractApi = withdrawalsClient
@@ -403,7 +343,7 @@ putWithdrawalStatus withdrawalId tx = do
   response <- putWithdrawal' tx
   extractStatus response
 
-putWithdrawal :: TxId -> TextEnvelope -> ClientM ()
+putWithdrawal :: TxId -> TxWitness -> ClientM ()
 putWithdrawal = fmap void . putWithdrawalStatus
 
 getPayoutsStatus
@@ -491,11 +431,11 @@ postTransactionStatus
   -> Maybe (Set TxOutRef)
   -> TxOutRef
   -> PostTransactionsRequest
-  -> ClientM (RuntimeStatus, ApplyInputsTxEnvelope CardanoTxBody)
+  -> ClientM (RuntimeStatus, ApplyInputsTxEnvelope)
 postTransactionStatus changeAddress otherAddresses collateralUtxos contractId request = do
   let contractsClient :<|> _ = client
   let _ :<|> _ :<|> contractApi :<|> _ = contractsClient
-  let _ :<|> _ :<|> _ :<|> _ :<|> (postTransaction' :<|> _) :<|> _ = contractApi contractId
+  let _ :<|> _ :<|> _ :<|> _ :<|> postTransaction' :<|> _ = contractApi contractId
   response <-
     postTransaction'
       request
@@ -511,36 +451,8 @@ postTransaction
   -> Maybe (Set TxOutRef)
   -> TxOutRef
   -> PostTransactionsRequest
-  -> ClientM (ApplyInputsTxEnvelope CardanoTxBody)
+  -> ClientM ApplyInputsTxEnvelope
 postTransaction = (fmap . fmap . fmap . fmap . fmap) snd . postTransactionStatus
-
-postTransactionCreateTxStatus
-  :: Address
-  -> Maybe (Set Address)
-  -> Maybe (Set TxOutRef)
-  -> TxOutRef
-  -> PostTransactionsRequest
-  -> ClientM (RuntimeStatus, ApplyInputsTxEnvelope CardanoTx)
-postTransactionCreateTxStatus changeAddress otherAddresses collateralUtxos contractId request = do
-  let (_ :<|> _ :<|> contractApi :<|> _) :<|> _ = client
-  let _ :<|> _ :<|> _ :<|> _ :<|> (_ :<|> postTransactionCreateTx') :<|> _ = contractApi contractId
-  response <-
-    postTransactionCreateTx'
-      request
-      changeAddress
-      (setToCommaList <$> otherAddresses)
-      (setToCommaList <$> collateralUtxos)
-  status <- extractStatus response
-  pure (status, retractLink $ getResponse response)
-
-postTransactionCreateTx
-  :: Address
-  -> Maybe (Set Address)
-  -> Maybe (Set TxOutRef)
-  -> TxOutRef
-  -> PostTransactionsRequest
-  -> ClientM (ApplyInputsTxEnvelope CardanoTx)
-postTransactionCreateTx = (fmap . fmap . fmap . fmap . fmap) snd . postTransactionCreateTxStatus
 
 getTransactionStatus :: TxOutRef -> TxId -> ClientM (RuntimeStatus, Tx)
 getTransactionStatus contractId transactionId = do
@@ -555,7 +467,7 @@ getTransactionStatus contractId transactionId = do
 getTransaction :: TxOutRef -> TxId -> ClientM Tx
 getTransaction = (fmap . fmap) snd . getTransactionStatus
 
-putTransactionStatus :: TxOutRef -> TxId -> TextEnvelope -> ClientM RuntimeStatus
+putTransactionStatus :: TxOutRef -> TxId -> TxWitness -> ClientM RuntimeStatus
 putTransactionStatus contractId transactionId tx = do
   let contractsClient :<|> _ = client
   let _ :<|> _ :<|> contractApi :<|> _ = contractsClient
@@ -564,7 +476,7 @@ putTransactionStatus contractId transactionId tx = do
   response <- putTransaction' tx
   extractStatus response
 
-putTransaction :: TxOutRef -> TxId -> TextEnvelope -> ClientM ()
+putTransaction :: TxOutRef -> TxId -> TxWitness -> ClientM ()
 putTransaction = (fmap . fmap) void . putTransactionStatus
 
 setToCommaList :: Set a -> CommaList a

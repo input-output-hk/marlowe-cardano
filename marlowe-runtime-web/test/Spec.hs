@@ -536,15 +536,15 @@ instance Arbitrary Web.PostTransactionsRequest where
       <*> arbitraryNormal -- FIXME: This should handle merkleized input, too.
   shrink = genericShrink
 
-instance Arbitrary (Web.CreateTxEnvelope tx) where
+instance Arbitrary Web.CreateTxEnvelope where
   arbitrary = Web.CreateTxEnvelope <$> arbitrary <*> arbitrary <*> resize 5 arbitrary
   shrink = genericShrink
 
-instance Arbitrary (Web.WithdrawTxEnvelope tx) where
+instance Arbitrary Web.WithdrawTxEnvelope where
   arbitrary = Web.WithdrawTxEnvelope <$> arbitrary <*> arbitrary
   shrink = genericShrink
 
-instance Arbitrary (Web.ApplyInputsTxEnvelope tx) where
+instance Arbitrary Web.ApplyInputsTxEnvelope where
   arbitrary = Web.ApplyInputsTxEnvelope <$> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink
 
@@ -612,8 +612,12 @@ instance (Arbitrary a) => Arbitrary (Web.ListObject a) where
   arbitrary = Web.ListObject <$> arbitrary
   shrink = genericShrink
 
-instance Arbitrary Web.TextEnvelope where
-  arbitrary = Web.TextEnvelope <$> arbitrary <*> arbitrary <*> arbitrary
+instance Arbitrary Web.TxWitness where
+  arbitrary = Web.TxWitness "TxWitness BabbageEra" <$> arbitrary <*> arbitrary
+  shrink = genericShrink
+
+instance Arbitrary Web.UnwitnessedTx where
+  arbitrary = Web.UnwitnessedTx "Unwitnessed Tx BabbageEra" <$> arbitrary <*> arbitrary
   shrink = genericShrink
 
 instance Arbitrary Web.TxOutRef where

@@ -6,15 +6,14 @@
 -- | This module defines a server for the /withdrawals REST API.
 module Language.Marlowe.Runtime.Web.Server.REST.Withdrawals where
 
-import Cardano.Api (BabbageEra, ConwayEra, IsCardanoEra, TxBody, getTxId, makeSignedTransaction)
-import qualified Cardano.Api as Cardano
+import Cardano.Api (IsCardanoEra, TxBody, getTxId, makeSignedTransaction)
 import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
-import Cardano.Ledger.Alonzo.TxWits (AlonzoTxWits (..))
 import Data.Aeson (Value (..))
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 import Language.Marlowe.Protocol.Query.Types (Page (..), WithdrawalFilter (..))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
+import Language.Marlowe.Runtime.Cardano.Feature (ShelleyFeature (..), withShelleyBasedEra)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion (..))
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses (..), WithdrawTx (..), WithdrawTxInEra (..))
@@ -30,26 +29,25 @@ import Language.Marlowe.Runtime.Web.Server.REST.ApiError (
  )
 import qualified Language.Marlowe.Runtime.Web.Server.REST.ApiError as ApiError
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx (..), TempTxStatus (..))
-import Language.Marlowe.Runtime.Web.Server.Util
 import Servant
 import Servant.Pagination
 
 server :: ServerT WithdrawalsAPI ServerM
 server =
   get
-    :<|> (postCreateTxBodyResponse :<|> postCreateTxResponse)
+    :<|> post
     :<|> withdrawalServer
 
 data TxBodyInAnyEra where
   TxBodyInAnyEra :: (IsCardanoEra era) => TxBody era -> TxBodyInAnyEra
 
-postCreateTxBody
+post
   :: PostWithdrawalsRequest
   -> Address
   -> Maybe (CommaList Address)
   -> Maybe (CommaList TxOutRef)
-  -> ServerM TxBodyInAnyEra
-postCreateTxBody PostWithdrawalsRequest{..} changeAddressDTO mAddresses mCollateralUtxos = do
+  -> ServerM PostWithdrawalsResponse
+post PostWithdrawalsRequest{..} changeAddressDTO mAddresses mCollateralUtxos = do
   changeAddress <- fromDTOThrow (badRequest' "Invalid change address value") changeAddressDTO
   extraAddresses <-
     Set.fromList <$> fromDTOThrow (badRequest' "Invalid addresses header value") (maybe [] unCommaList mAddresses)
@@ -57,31 +55,11 @@ postCreateTxBody PostWithdrawalsRequest{..} changeAddressDTO mAddresses mCollate
     Set.fromList
       <$> fromDTOThrow (badRequest' "Invalid collateral header UTxO value") (maybe [] unCommaList mCollateralUtxos)
   payouts' <- fromDTOThrow (badRequest' "Invalid payouts") payouts
-  withdraw MarloweV1 WalletAddresses{..} payouts' >>= \case
-    Left err -> throwDTOError err
-    Right (WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra WithdrawTxInEra{txBody}) -> pure $ TxBodyInAnyEra txBody
-    Right (WithdrawTx ReferenceTxInsScriptsInlineDatumsInConwayEra WithdrawTxInEra{txBody}) -> pure $ TxBodyInAnyEra txBody
-
-postCreateTxBodyResponse
-  :: PostWithdrawalsRequest
-  -> Address
-  -> Maybe (CommaList Address)
-  -> Maybe (CommaList TxOutRef)
-  -> ServerM (PostWithdrawalsResponse CardanoTxBody)
-postCreateTxBodyResponse req changeAddressDTO mAddresses mCollateralUtxos = do
-  TxBodyInAnyEra txBody <- postCreateTxBody req changeAddressDTO mAddresses mCollateralUtxos
-  let (withdrawalId, txBody') = toDTO (fromCardanoTxId $ getTxId txBody, txBody)
-  let body = WithdrawTxEnvelope withdrawalId txBody'
-  pure $ IncludeLink (Proxy @"withdrawal") body
-
-postCreateTxResponse
-  :: PostWithdrawalsRequest
-  -> Address
-  -> Maybe (CommaList Address)
-  -> Maybe (CommaList TxOutRef)
-  -> ServerM (PostWithdrawalsResponse CardanoTx)
-postCreateTxResponse req changeAddressDTO mAddresses mCollateralUtxos = do
-  TxBodyInAnyEra txBody <- postCreateTxBody req changeAddressDTO mAddresses mCollateralUtxos
+  TxBodyInAnyEra txBody <-
+    withdraw MarloweV1 WalletAddresses{..} payouts' >>= \case
+      Left err -> throwDTOError err
+      Right (WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra WithdrawTxInEra{txBody}) -> pure $ TxBodyInAnyEra txBody
+      Right (WithdrawTx ReferenceTxInsScriptsInlineDatumsInConwayEra WithdrawTxInEra{txBody}) -> pure $ TxBodyInAnyEra txBody
   let tx = makeSignedTransaction [] txBody
   let (withdrawalId, tx') = toDTO (fromCardanoTxId $ getTxId txBody, tx)
   let body = WithdrawTxEnvelope withdrawalId tx'
@@ -120,8 +98,8 @@ getOne withdrawalId = do
     Nothing -> throwError $ notFound' "Withdrawal not found"
     Just result -> pure $ either toDTO toDTO result
 
-put :: TxId -> TextEnvelope -> ServerM NoContent
-put withdrawalId body = do
+put :: TxId -> TxWitness -> ServerM NoContent
+put withdrawalId txWitness = do
   withdrawalId' <- fromDTOThrow (badRequest' "Invalid withdrawal id value") withdrawalId
   loadWithdrawal withdrawalId' >>= \case
     Nothing -> throwError $ notFound' "Withdrawal not found"
@@ -132,37 +110,9 @@ put withdrawalId body = do
           ApiError "Withdrawal already submitted" "WithdrawalAlreadySubmitted" Null 409
   where
     handleLoaded :: Chain.TxId -> ReferenceTxInsScriptsInlineDatumsSupportedInEra era -> TxBody era -> ServerM NoContent
-    handleLoaded withdrawalId' ReferenceTxInsScriptsInlineDatumsInBabbageEra txBody = do
-      (req :: Maybe (Either (Cardano.Tx BabbageEra) (ShelleyTxWitness BabbageEra))) <- case teType body of
-        "Tx BabbageEra" -> pure $ Left <$> fromDTO body
-        "ShelleyTxWitness BabbageEra" -> pure $ Right <$> fromDTO body
-        _ ->
-          throwError $ badRequest' "Unknown envelope type - allowed types are: \"Tx BabbageEra\", \"ShelleyTxWitness BabbageEra\""
-
-      tx <- case req of
-        Nothing -> throwError $ badRequest' "Invalid text envelope cbor value"
-        Just (Left tx) -> pure tx
-        Just (Right (ShelleyTxWitness (AlonzoTxWits wtKeys _ _ _ _))) ->
-          case makeSignedTxWithWitnessKeys txBody wtKeys of
-            Just tx -> pure tx
-            Nothing -> throwError $ badRequest' "Invalid witness keys"
-      submitWithdrawal withdrawalId' ReferenceTxInsScriptsInlineDatumsInBabbageEra tx >>= \case
-        Nothing -> pure NoContent
-        Just err -> throwError $ ApiError.toServerError $ ApiError (show err) "SubmissionError" Null 403
-    handleLoaded withdrawalId' ReferenceTxInsScriptsInlineDatumsInConwayEra txBody = do
-      (req :: Maybe (Either (Cardano.Tx ConwayEra) (ShelleyTxWitness ConwayEra))) <- case teType body of
-        "Tx ConwayEra" -> pure $ Left <$> fromDTO body
-        "ShelleyTxWitness ConwayEra" -> pure $ Right <$> fromDTO body
-        _ ->
-          throwError $ badRequest' "Unknown envelope type - allowed types are: \"Tx ConwayEra\", \"ShelleyTxWitness ConwayEra\""
-
-      tx <- case req of
-        Nothing -> throwError $ badRequest' "Invalid text envelope cbor value"
-        Just (Left tx) -> pure tx
-        Just (Right (ShelleyTxWitness (AlonzoTxWits wtKeys _ _ _ _))) ->
-          case makeSignedTxWithWitnessKeys txBody wtKeys of
-            Just tx -> pure tx
-            Nothing -> throwError $ badRequest' "Invalid witness keys"
-      submitWithdrawal withdrawalId' ReferenceTxInsScriptsInlineDatumsInConwayEra tx >>= \case
+    handleLoaded withdrawalId' era txBody = withShelleyBasedEra (shelleyBasedEraOfFeature era) do
+      txWitness' <- fromDTOThrow (badRequest' "Invalid tx witness") txWitness
+      let tx = makeSignedTransaction [txWitness'] txBody
+      submitWithdrawal withdrawalId' era tx >>= \case
         Nothing -> pure NoContent
         Just err -> throwError $ ApiError.toServerError $ ApiError (show err) "SubmissionError" Null 403
