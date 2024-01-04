@@ -1,5 +1,4 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -63,8 +62,8 @@ measure
   -> Int
   -> S.Set ContractId
   -> MarloweT IO [Benchmark]
-measure count batchSize contractIds =
-  let batches = take count . chunksOf batchSize $ toList contractIds
+measure parallelism batchSize contractIds =
+  let batches = take parallelism . chunksOf batchSize $ toList contractIds
    in forConcurrently batches $
         run "Sync"
 

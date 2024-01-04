@@ -48,9 +48,9 @@ measure
   :: Int
   -> Int
   -> MarloweT IO ([Benchmark], S.Set ContractId)
-measure count maxContracts =
+measure parallelism maxContracts =
   second head . unzip
-    <$> replicateConcurrently count (run "HeaderSync" maxContracts)
+    <$> replicateConcurrently parallelism (run "HeaderSync" maxContracts)
 
 run
   :: String
