@@ -2,7 +2,8 @@ module Language.Marlowe.Runtime.Core.ScriptRegistrySpec (
   spec,
 ) where
 
-import Cardano.Api (AsType (..), File (..), hashScript, readFileTextEnvelope)
+import Cardano.Api (hashScript)
+import qualified Cardano.Api as C
 import Control.Monad (unless)
 import Data.Foldable (traverse_)
 import qualified Data.Map.Strict as Map
@@ -10,8 +11,7 @@ import qualified Data.Set as Set
 import Language.Marlowe.Runtime.ChainSync.Api (fromCardanoScriptHash)
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion, withSomeMarloweVersion)
 import Language.Marlowe.Runtime.Core.ScriptRegistry
-import Paths_marlowe_cardano (getDataFileName)
-import System.FilePath ((</>))
+import Language.Marlowe.Scripts (marloweValidator, openRolesValidator, payoutValidator)
 import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe)
 
 spec :: Spec
@@ -36,15 +36,12 @@ scriptSetSpec marloweVersion = do
             , "but it does not."
             ]
     it "Should specify the correct current scripts" do
-      payoutScriptPath <- getDataFileName $ "scripts" </> "marlowe-rolepayout.plutus"
-      marloweScriptPath <- getDataFileName $ "scripts" </> "marlowe-semantics.plutus"
-      openRoleScriptPath <- getDataFileName $ "scripts" </> "open-role.plutus"
-      Right payoutScriptBytes <- readFileTextEnvelope (AsScript AsPlutusScriptV2) $ File payoutScriptPath
-      Right marloweScriptBytes <- readFileTextEnvelope (AsScript AsPlutusScriptV2) $ File marloweScriptPath
-      Right openRoleScriptBytes <- readFileTextEnvelope (AsScript AsPlutusScriptV2) $ File openRoleScriptPath
-      let payoutScript = fromCardanoScriptHash $ hashScript payoutScriptBytes
-      let marloweScript = fromCardanoScriptHash $ hashScript marloweScriptBytes
-      let helperScripts = Map.singleton OpenRoleScript . fromCardanoScriptHash $ hashScript openRoleScriptBytes
+      let payoutScript = fromCardanoScriptHash $ hashScript $ C.PlutusScript C.plutusScriptVersion payoutValidator
+      let marloweScript = fromCardanoScriptHash $ hashScript $ C.PlutusScript C.plutusScriptVersion marloweValidator
+      let helperScripts =
+            Map.singleton OpenRoleScript . fromCardanoScriptHash $
+              hashScript $
+                C.PlutusScript C.plutusScriptVersion openRolesValidator
       let marloweScriptUTxOs = mempty
       let payoutScriptUTxOs = mempty
       let helperScriptUTxOs = mempty

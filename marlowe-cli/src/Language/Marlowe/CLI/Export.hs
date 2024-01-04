@@ -19,9 +19,6 @@ module Language.Marlowe.CLI.Export (
   buildAddress,
   buildValidatorInfo,
   exportAddress,
-  readMarloweValidator,
-  readRolePayoutValidator,
-  readOpenRoleValidator,
 
   -- * Contract and Transaction
   buildMarlowe,
@@ -64,11 +61,8 @@ module Language.Marlowe.CLI.Export (
 
 import Cardano.Api (
   AddressInEra,
-  AsType (..),
-  File (..),
   NetworkId,
   PaymentCredential (..),
-  PlutusScriptVersion (..),
   Script (PlutusScript),
   ScriptDataJsonSchema (..),
   ScriptDataSupportedInEra (..),
@@ -77,12 +71,11 @@ import Cardano.Api (
   hashScript,
   hashScriptDataBytes,
   makeShelleyAddressInEra,
-  readFileTextEnvelope,
   scriptDataToJson,
   serialiseAddress,
   unsafeHashableScriptData,
  )
-import Cardano.Api.Shelley (PlutusScript (..), fromPlutusData)
+import Cardano.Api.Shelley (fromPlutusData)
 import Control.Monad (join, when)
 import Control.Monad.Except (MonadError, MonadIO, liftEither, liftIO)
 import Data.Aeson (encode)
@@ -126,17 +119,15 @@ import Codec.Serialise (serialise)
 import Control.Monad.Reader (MonadReader)
 import Data.ByteString.Short qualified as SBS
 import Language.Marlowe.CLI.Cardano.Api qualified as C
-import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage (plutusScriptVersion))
-import Language.Marlowe.CLI.Cardano.Api.PlutusScript qualified as PlutusScript
+import Language.Marlowe.CLI.Cardano.Api.PlutusScript (withPlutusScriptVersion)
+import Language.Marlowe.Scripts (marloweValidator, openRolesValidator, payoutValidator)
 import Language.Marlowe.Scripts.Types (marloweTxInputsFromInputs)
-import Paths_marlowe_cardano (getDataFileName)
 import PlutusLedgerApi.Common (ProtocolVersion)
 import PlutusLedgerApi.V1 (DatumHash (..), toBuiltin, toData)
-import System.FilePath ((</>))
 
 -- | Build comprehensive information about a Marlowe contract and transaction.
 buildMarlowe
-  :: (MonadIO m, IsPlutusScriptLanguage lang)
+  :: (MonadIO m)
   => MarloweParams
   -> ScriptDataSupportedInEra era
   -> ProtocolVersion
@@ -152,11 +143,10 @@ buildMarlowe
   -- ^ The contract's state.
   -> [Input]
   -- ^ The contract's input,
-  -> m (Either CliError (MarloweInfo lang era))
+  -> m (Either CliError (MarloweInfo CS.PlutusScriptV2 era))
   -- ^ The contract and transaction information, or an error message.
 buildMarlowe marloweParams era protocolVersion costModel network stake contract state inputs =
   do
-    marloweValidator <- readMarloweValidator
     pure do
       miValidatorInfo <-
         validatorInfo' marloweValidator Nothing era protocolVersion costModel network stake
@@ -166,8 +156,8 @@ buildMarlowe marloweParams era protocolVersion costModel network stake contract 
 
 -- | Export to a file the comprehensive information about a Marlowe contract and transaction.
 exportMarlowe
-  :: forall m lang era
-   . (MonadError CliError m, IsPlutusScriptLanguage lang, MonadIO m, MonadReader (CliEnv era) m)
+  :: forall m era
+   . (MonadError CliError m, MonadIO m, MonadReader (CliEnv era) m)
   => MarloweParams
   -- ^ The Marlowe contract parameters.
   -> ProtocolVersion
@@ -197,7 +187,7 @@ exportMarlowe marloweParams protocolVersion costModel network stake contractFile
     marloweInfo@MarloweInfo{..} <-
       liftEither
         =<< join
-          (asksEra \era -> buildMarlowe @m @lang marloweParams era protocolVersion costModel network stake contract state inputs)
+          (asksEra \era -> buildMarlowe @m marloweParams era protocolVersion costModel network stake contract state inputs)
     let ValidatorInfo{..} = miValidatorInfo
         DatumInfo{..} = miDatumInfo
         RedeemerInfo{..} = miRedeemerInfo
@@ -215,27 +205,10 @@ exportMarlowe marloweParams protocolVersion costModel network stake contractFile
         hPutStrLn stderr $ "Redeemer size: " <> show riSize
         hPutStrLn stderr $ "Total size: " <> show (viSize + diSize + riSize)
 
-readMarloweValidator :: (MonadIO m, IsPlutusScriptLanguage lang) => m (PlutusScript lang)
-readMarloweValidator = readValidator "marlowe-semantics.plutus"
-
-readRolePayoutValidator :: (MonadIO m, IsPlutusScriptLanguage lang) => m (PlutusScript lang)
-readRolePayoutValidator = readValidator "marlowe-rolepayout.plutus"
-
-readOpenRoleValidator :: (MonadIO m, IsPlutusScriptLanguage lang) => m (PlutusScript lang)
-readOpenRoleValidator = readValidator "open-role.plutus"
-
-readValidator :: forall lang m. (MonadIO m, IsPlutusScriptLanguage lang) => FilePath -> m (PlutusScript lang)
-readValidator scriptFile = liftIO do
-  path <- getDataFileName $ "scripts" </> scriptFile
-  case plutusScriptVersion @lang of
-    PlutusScriptV1 -> either (fail . show) pure =<< readFileTextEnvelope (AsPlutusScript AsPlutusScriptV1) (File path)
-    PlutusScriptV2 -> either (fail . show) pure =<< readFileTextEnvelope (AsPlutusScript AsPlutusScriptV2) (File path)
-    PlutusScriptV3 -> either (fail . show) pure =<< readFileTextEnvelope (AsPlutusScript AsPlutusScriptV3) (File path)
-
 -- | Print information about a Marlowe contract and transaction.
 printMarlowe
   :: forall m lang era
-   . (MonadError CliError m, MonadIO m, IsPlutusScriptLanguage lang)
+   . (MonadError CliError m, MonadIO m, CS.IsPlutusScriptLanguage lang)
   => MarloweParams
   -- ^ The Marlowe contract parameters.
   -> ScriptDataSupportedInEra era
@@ -257,7 +230,7 @@ printMarlowe
 printMarlowe marloweParams era protocolVersion costModel network stake contract state inputs =
   do
     MarloweInfo{..} <-
-      liftEither =<< buildMarlowe @_ @lang marloweParams era protocolVersion costModel network stake contract state inputs
+      liftEither =<< buildMarlowe @_ marloweParams era protocolVersion costModel network stake contract state inputs
     let ValidatorInfo{..} = miValidatorInfo
         DatumInfo{..} = miDatumInfo
         RedeemerInfo{..} = miRedeemerInfo
@@ -271,10 +244,9 @@ printMarlowe marloweParams era protocolVersion costModel network stake contract 
         putStrLn $ "Inputs: " <> show inputs
         putStrLn ""
         putStrLn $
-          "Validator: " <> LBS8.unpack case plutusScriptVersion @lang of
-            PlutusScriptV1 -> encode $ C.serialiseToTextEnvelope Nothing viScript
-            PlutusScriptV2 -> encode $ C.serialiseToTextEnvelope Nothing viScript
-            PlutusScriptV3 -> encode $ C.serialiseToTextEnvelope Nothing viScript
+          "Validator: "
+            <> LBS8.unpack
+              (withPlutusScriptVersion (CS.plutusScriptVersion @lang) $ encode $ C.serialiseToTextEnvelope Nothing viScript)
         putStrLn ""
         putStrLn $ "Validator address: " <> T.unpack (withCardanoEra era $ serialiseAddress viAddress)
         putStrLn ""
@@ -303,8 +275,9 @@ printMarlowe marloweParams era protocolVersion costModel network stake contract 
 
 -- | Compute the address of a validator.
 buildAddress
-  :: forall era
-   . SBS.ShortByteString
+  :: forall lang era
+   . (CS.IsPlutusScriptLanguage lang)
+  => CS.PlutusScript lang
   -- ^ The validator.
   -> ScriptDataSupportedInEra era
   -> NetworkId
@@ -314,7 +287,7 @@ buildAddress
   -> AddressInEra era
   -- ^ The script address.
 buildAddress script era network stake =
-  let viScript = PlutusScript PlutusScriptV2 (PlutusScriptSerialised script)
+  let viScript = PlutusScript CS.plutusScriptVersion script
    in withShelleyBasedEra era $
         makeShelleyAddressInEra
           network
@@ -323,8 +296,8 @@ buildAddress script era network stake =
 
 -- | Compute the address of a Marlowe contract.
 buildMarloweAddress
-  :: forall m lang era
-   . (MonadIO m, IsPlutusScriptLanguage lang)
+  :: forall m era
+   . (MonadIO m)
   => ScriptDataSupportedInEra era
   -> NetworkId
   -- ^ The network ID.
@@ -333,15 +306,13 @@ buildMarloweAddress
   -> m (AddressInEra era)
   -- ^ The script address.
 buildMarloweAddress era network stake = do
-  PlutusScriptSerialised marloweValidator <- readMarloweValidator @_ @lang
   pure $ buildAddress marloweValidator era network stake
 
 -- | Print the address of a validator.
 exportAddress
-  :: forall era m
-   . (MonadIO m)
-  => (MonadReader (CliEnv era) m)
-  => SBS.ShortByteString
+  :: forall era lang m
+   . (MonadIO m, MonadReader (CliEnv era) m, CS.IsPlutusScriptLanguage lang)
+  => CS.PlutusScript lang
   -- ^ The validator.
   -> NetworkId
   -- ^ The network ID.
@@ -356,8 +327,8 @@ exportAddress validator network stake = do
 
 -- | Print the address of a Marlowe contract.
 exportMarloweAddress
-  :: forall m lang era
-   . (MonadIO m, MonadReader (CliEnv era) m, IsPlutusScriptLanguage lang)
+  :: forall m era
+   . (MonadIO m, MonadReader (CliEnv era) m)
   => NetworkId
   -- ^ The network ID.
   -> StakeAddressReference
@@ -365,11 +336,10 @@ exportMarloweAddress
   -> m ()
   -- ^ Action to print the script address.
 exportMarloweAddress network stake = do
-  PlutusScriptSerialised marloweValidator <- readMarloweValidator @_ @lang
   exportAddress marloweValidator network stake
 
 buildValidatorInfo
-  :: (MonadReader (CliEnv era) m, MonadIO m, MonadError CliError m, IsPlutusScriptLanguage lang)
+  :: (MonadReader (CliEnv era) m, MonadIO m, MonadError CliError m, CS.IsPlutusScriptLanguage lang)
   => QueryExecutionContext era
   -> CS.PlutusScript lang
   -> Maybe C.TxIn
@@ -386,9 +356,9 @@ buildValidatorInfo queryCtx plutusScript txIn stake = do
 -- | Export to a file the validator information.
 exportValidatorImpl
   :: forall lang era m
-   . (MonadError CliError m, MonadReader (CliEnv era) m, IsPlutusScriptLanguage lang)
+   . (MonadError CliError m, MonadReader (CliEnv era) m, CS.IsPlutusScriptLanguage lang)
   => (MonadIO m)
-  => SBS.ShortByteString
+  => CS.PlutusScript lang
   -> ProtocolVersion
   -> [Integer]
   -- ^ The cost model parameters.
@@ -404,12 +374,11 @@ exportValidatorImpl
   -- ^ Whether to print statistics about the validator.
   -> m ()
   -- ^ Action to export the validator information to a file.
-exportValidatorImpl validator protocolVersion costModel network stake outputFile printHash printStats =
+exportValidatorImpl plutusScript protocolVersion costModel network stake outputFile printHash printStats =
   do
     era <- askEra
-    let plutusScript = PlutusScriptSerialised @lang validator
     ValidatorInfo{..} <- validatorInfo' plutusScript Nothing era protocolVersion costModel network stake
-    maybeWriteTextEnvelope outputFile $ PlutusScript.toScript plutusScript
+    maybeWriteTextEnvelope outputFile $ C.PlutusScript C.plutusScriptVersion plutusScript
     doWithCardanoEra $
       liftIO $
         do
@@ -431,7 +400,7 @@ exportValidatorImpl validator protocolVersion costModel network stake outputFile
 
 -- | Current Marlowe validator information.
 marloweValidatorInfo
-  :: (MonadIO m, IsPlutusScriptLanguage lang)
+  :: (MonadIO m)
   => ScriptDataSupportedInEra era
   -- ^ The era to build he validator in.
   -> ProtocolVersion
@@ -441,16 +410,15 @@ marloweValidatorInfo
   -- ^ The network ID.
   -> StakeAddressReference
   -- ^ The stake address.
-  -> m (Either CliError (ValidatorInfo lang era))
+  -> m (Either CliError (ValidatorInfo CS.PlutusScriptV2 era))
   -- ^ The validator information, or an error message.
 marloweValidatorInfo script prot costModel network stake = do
-  marloweValidator <- readMarloweValidator
   pure $ validatorInfo' marloweValidator Nothing script prot costModel network stake
 
 -- | Export to a file the validator information about a Marlowe contract.
 exportMarloweValidator
-  :: forall era lang m
-   . (MonadError CliError m, MonadReader (CliEnv era) m, IsPlutusScriptLanguage lang)
+  :: forall era m
+   . (MonadError CliError m, MonadReader (CliEnv era) m)
   => (MonadIO m)
   => ProtocolVersion
   -> [Integer]
@@ -468,8 +436,7 @@ exportMarloweValidator
   -> m ()
   -- ^ Action to export the validator information to a file.
 exportMarloweValidator prot costModel network stake out printHash printStats = do
-  PlutusScriptSerialised marloweValidatorBytes <- readMarloweValidator @_ @lang
-  exportValidatorImpl @lang marloweValidatorBytes prot costModel network stake out printHash printStats
+  exportValidatorImpl marloweValidator prot costModel network stake out printHash printStats
 
 -- | Build the datum information about a Marlowe transaction.
 buildDatumImpl
@@ -619,8 +586,8 @@ exportRedeemer inputFiles outputFile printStats =
 
 -- -- | Compute the role address of a Marlowe contract.
 buildRoleAddress
-  :: forall era lang m
-   . (MonadIO m, IsPlutusScriptLanguage lang)
+  :: forall era m
+   . (MonadIO m)
   => ScriptDataSupportedInEra era
   -> NetworkId
   -- ^ The network ID.
@@ -629,13 +596,12 @@ buildRoleAddress
   -> m (AddressInEra era)
   -- ^ The script address.
 buildRoleAddress script network stake = do
-  PlutusScriptSerialised rolePayoutValidatorBytes <- readRolePayoutValidator @_ @lang
-  pure $ buildAddress rolePayoutValidatorBytes script network stake
+  pure $ buildAddress payoutValidator script network stake
 
 -- | Print the role address of a Marlowe contract.
 exportRoleAddress
-  :: forall era lang m
-   . (MonadIO m, MonadReader (CliEnv era) m, IsPlutusScriptLanguage lang)
+  :: forall era m
+   . (MonadIO m, MonadReader (CliEnv era) m)
   => NetworkId
   -- ^ The network ID.
   -> StakeAddressReference
@@ -643,12 +609,11 @@ exportRoleAddress
   -> m ()
   -- ^ Action to print the script address.
 exportRoleAddress network stake = do
-  PlutusScriptSerialised rolePayoutValidatorBytes <- readRolePayoutValidator @_ @lang
-  exportAddress rolePayoutValidatorBytes network stake
+  exportAddress payoutValidator network stake
 
 -- | Current Marlowe validator information.
 payoutValidatorInfo
-  :: (MonadIO m, IsPlutusScriptLanguage lang)
+  :: (MonadIO m)
   => ScriptDataSupportedInEra era
   -- ^ The era to build he validator in.
   -> ProtocolVersion
@@ -658,15 +623,14 @@ payoutValidatorInfo
   -- ^ The network ID.
   -> StakeAddressReference
   -- ^ The stake address.
-  -> m (Either CliError (ValidatorInfo lang era))
+  -> m (Either CliError (ValidatorInfo CS.PlutusScriptV2 era))
   -- ^ The validator information, or an error message.
 payoutValidatorInfo script prot cost network stake = do
-  roleValidator <- readRolePayoutValidator
-  pure $ validatorInfo' roleValidator Nothing script prot cost network stake
+  pure $ validatorInfo' payoutValidator Nothing script prot cost network stake
 
 -- | Open role validator
 openRoleValidatorInfo
-  :: (MonadIO m, IsPlutusScriptLanguage lang)
+  :: (MonadIO m)
   => ScriptDataSupportedInEra era
   -- ^ The era to build he validator in.
   -> ProtocolVersion
@@ -676,16 +640,15 @@ openRoleValidatorInfo
   -- ^ The network ID.
   -> StakeAddressReference
   -- ^ The stake address.
-  -> m (Either CliError (ValidatorInfo lang era))
+  -> m (Either CliError (ValidatorInfo CS.PlutusScriptV2 era))
   -- ^ The validator information, or an error message.
 openRoleValidatorInfo script prot cost network stake = do
-  validator <- readOpenRoleValidator
-  pure $ validatorInfo' validator Nothing script prot cost network stake
+  pure $ validatorInfo' openRolesValidator Nothing script prot cost network stake
 
 -- | Export to a file the role validator information about a Marlowe contract.
 exportRoleValidator
-  :: forall era lang m
-   . (MonadError CliError m, MonadReader (CliEnv era) m, IsPlutusScriptLanguage lang)
+  :: forall era m
+   . (MonadError CliError m, MonadReader (CliEnv era) m)
   => (MonadIO m)
   => ProtocolVersion
   -- ^ The currency symbol for Marlowe contract roles.
@@ -704,8 +667,7 @@ exportRoleValidator
   -> m ()
   -- ^ Action to export the validator information to a file.
 exportRoleValidator prot cost network stake out printHash printStats = do
-  PlutusScriptSerialised roleValidator <- readRolePayoutValidator @_ @lang
-  exportValidatorImpl @lang roleValidator prot cost network stake out printHash printStats
+  exportValidatorImpl payoutValidator prot cost network stake out printHash printStats
 
 -- | Build the role datum information about a Marlowe transaction.
 buildRoleDatum

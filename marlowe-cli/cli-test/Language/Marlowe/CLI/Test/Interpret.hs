@@ -8,6 +8,7 @@
 module Language.Marlowe.CLI.Test.Interpret where
 
 import Cardano.Api (IsShelleyBasedEra)
+import Cardano.Api qualified as C
 import Contrib.Control.Concurrent (threadDelay)
 import Control.Monad.Except (MonadError (throwError), catchError)
 import Control.Monad.IO.Class (liftIO)
@@ -15,7 +16,6 @@ import Control.Monad.State.Class (get)
 import Data.Aeson qualified as A
 import Data.Aeson.OneLine qualified as A
 import Data.Text qualified as T
-import Language.Marlowe.CLI.Cardano.Api.PlutusScript (IsPlutusScriptLanguage)
 import Language.Marlowe.CLI.Test.CLI.Interpret qualified as CLI
 import Language.Marlowe.CLI.Test.InterpreterError (testExecutionFailed')
 import Language.Marlowe.CLI.Test.Log (Label (label), logLabeledMsg, logStoreLabeledMsg, throwLabeledError)
@@ -28,10 +28,9 @@ import Language.Marlowe.CLI.Test.Types (
 import Language.Marlowe.CLI.Test.Wallet.Interpret qualified as Wallet
 
 interpret
-  :: forall m lang era
+  :: forall m era
    . (IsShelleyBasedEra era)
-  => (IsPlutusScriptLanguage lang)
-  => (InterpretMonad m lang era)
+  => (InterpretMonad m C.PlutusScriptV2 era)
   => TestOperation
   -> m ()
 interpret (RuntimeOperation ro) = do

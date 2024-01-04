@@ -111,7 +111,6 @@ library
     , directory
     , errors
     , extra
-    , filepath
     , indexed-traversable
     , marlowe-cardano
     , megaparsec

@@ -1,9 +1,12 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 -- | Marlowe validators.
@@ -20,13 +23,25 @@ module Language.Marlowe.Scripts.Types (
 
   -- * Utilities
   marloweTxInputsFromInputs,
+
+  -- * TH utilities
+  readPlutusScript,
 ) where
 
+import Cardano.Api
+import Cardano.Api.Shelley (PlutusScript (..))
+import Data.ByteString.Char8 qualified as B8
+import Data.ByteString.Internal qualified as B
+import Data.ByteString.Short qualified as SBS
+import Data.ByteString.Unsafe qualified as BS
 import GHC.Generics (Generic)
+import Language.Haskell.TH
+import Language.Haskell.TH.Syntax (qAddDependentFile)
 import Language.Marlowe.Core.V1.Semantics.Types as Semantics
 import Language.Marlowe.Pretty (Pretty (..))
 import PlutusTx (makeIsDataIndexed, makeLift)
 import PlutusTx.Prelude as PlutusTxPrelude hiding (traceError, traceIfFalse)
+import System.IO.Unsafe (unsafePerformIO)
 import Prelude qualified as Haskell
 
 -- | Input to a Marlowe transaction.
@@ -51,3 +66,34 @@ marloweTxInputsFromInputs = fmap marloweTxInputFromInput
 -- Lifting data types to Plutus Core
 makeLift ''MarloweTxInput
 makeIsDataIndexed ''MarloweTxInput [('Input, 0), ('MerkleizedTxInput, 1)]
+
+readPlutusScript :: Haskell.FilePath -> Q Exp
+readPlutusScript fp = do
+  qAddDependentFile fp
+  runIO
+    $ either (Haskell.error . Haskell.show) id
+    Haskell.<$> readFileTextEnvelopeAnyOf
+      [ FromSomeType (AsPlutusScript AsPlutusScriptV1) plutusScriptToExpr
+      , FromSomeType (AsPlutusScript AsPlutusScriptV2) plutusScriptToExpr
+      , FromSomeType (AsPlutusScript AsPlutusScriptV3) plutusScriptToExpr
+      ]
+      (File fp)
+
+plutusScriptToExpr :: forall lang. (IsPlutusScriptLanguage lang) => PlutusScript lang -> Exp
+plutusScriptToExpr (PlutusScriptSerialised (SBS.fromShort -> script)) =
+  ConE 'PlutusScriptSerialised
+    `AppTypeE` ConT case plutusScriptVersion @lang of
+      PlutusScriptV1 -> ''PlutusScriptV1
+      PlutusScriptV2 -> ''PlutusScriptV2
+      PlutusScriptV3 -> Haskell.error "PlutusScriptV3 type constructor not exposed by cardano-api!"
+    `AppE` ( AppE (VarE 'SBS.toShort)
+              $ AppE (VarE 'unsafePerformIO)
+              $ VarE 'BS.unsafePackAddressLen
+              `AppE` LitE (IntegerL $ Haskell.fromIntegral $ B8.length script)
+              `AppE` LitE
+                ( bytesPrimL
+                    ( let B.PS ptr off sz = script
+                       in mkBytes ptr (Haskell.fromIntegral off) (Haskell.fromIntegral sz)
+                    )
+                )
+           )

@@ -70,7 +70,6 @@ import Language.Marlowe.CLI.Types (
  )
 
 import Cardano.Api qualified as Api (Value)
-import Cardano.Api qualified as C
 import Control.Monad.Reader.Class (MonadReader)
 import Data.Time.Units (Second)
 import Options.Applicative qualified as O
@@ -357,7 +356,7 @@ runTransactionCommand command =
           (fromMaybe 0 submitTimeout)
           >>= printTxId
       Publish{..} ->
-        buildPublishing @_ @C.PlutusScriptV2
+        buildPublishing @_
           connection
           signingKeyFile
           expires
@@ -367,7 +366,7 @@ runTransactionCommand command =
           submitTimeout
           (PrintStats True)
       FindPublished{..} ->
-        findPublished @_ @C.PlutusScriptV2
+        findPublished @_
           (QueryNode connection)
           strategy
 
