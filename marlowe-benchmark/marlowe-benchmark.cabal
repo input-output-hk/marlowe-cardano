@@ -62,6 +62,7 @@ executable marlowe-benchmark
   main-is:        Main.hs
   other-modules:
     Language.Marlowe.Runtime.Benchmark
+    Language.Marlowe.Runtime.Benchmark.BulkSync
     Language.Marlowe.Runtime.Benchmark.HeaderSync
     Language.Marlowe.Runtime.Benchmark.Query
     Language.Marlowe.Runtime.Benchmark.Sync

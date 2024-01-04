@@ -1,6 +1,8 @@
 {-# LANGUAGE RecordWildCards #-}
 
+-- | Benchmark for the `Query` protocol.
 module Language.Marlowe.Runtime.Benchmark.Query (
+  -- * Benchmarking
   Benchmark (..),
   measure,
 ) where
@@ -32,9 +34,9 @@ data Benchmark = Benchmark
   deriving (Eq, Generic, Ord, Show, ToJSON)
 
 data Statistics = Statistics
-  { queries :: Integer
-  , pages :: Integer
-  , contracts :: Integer
+  { queries :: Int
+  , pages :: Int
+  , contracts :: Int
   , duration :: NominalDiffTime
   }
   deriving (Eq, Generic, Ord, Show, ToJSON)
@@ -42,41 +44,59 @@ data Statistics = Statistics
 instance Default Statistics where
   def = Statistics def def def 0
 
+-- | Measure the performance of the protocol.
 measure
   :: Int
+  -- ^ Number of parallel clients for `Query` protocol.
   -> Int
+  -- ^ Number of queries to be executed by each `Query` client.
   -> Int
+  -- ^ Page size for each `Query` client.
   -> String
+  -- ^ Label for the contract filter.
   -> [ContractFilter]
+  -- ^ Contract filters to query.
   -> MarloweT IO [Benchmark]
+  -- ^ Action to run the benchmark.
 measure parallelism batchSize pageSize query filters =
   let batches = take parallelism $ chunksOf batchSize filters
    in forConcurrently batches $
         run "Query" pageSize query
 
+-- | Run a benchmark client.
 run
   :: String
+  -- ^ Label for the benchmark.
   -> Int
+  -- ^ Page size for each `Query` client.
   -> String
+  -- ^ Label for the contract filter.
   -> [ContractFilter]
+  -- ^ Contract filters to query.
   -> MarloweT IO Benchmark
+  -- ^ Action to run the benchmark.
 run metric pageSize query filters =
   do
     start <- liftIO getPOSIXTime
     Statistics{..} <- foldlM ((runMarloweQueryClient .) . benchmark start pageSize) def filters
     let seconds = realToFrac duration
-        queriesPerSecond = fromInteger queries / seconds
-        pagesPerSecond = fromInteger pages / seconds
-        contractsPerSecond = fromInteger contracts / seconds
+        queriesPerSecond = realToFrac queries / seconds
+        pagesPerSecond = realToFrac pages / seconds
+        contractsPerSecond = realToFrac contracts / seconds
     pure Benchmark{..}
 
+-- | Run the benchmark.
 benchmark
   :: (MonadIO m)
-  => NominalDiffTime
+  => NominalDiffTime -- When the benchmark started.
   -> Int
+  -- ^ Page size for each `Query` client.
   -> Statistics
+  -- ^ The statistics so far.
   -> ContractFilter
+  -- ^ The contract filter.
   -> MarloweQueryClient m Statistics
+  -- ^ Action to run the benchmark.
 benchmark start pageSize initial@Statistics{queries} cFilter =
   let accumulate = (. Query.getContractHeaders cFilter) . (=<<) . handleNextPage
       handleNextPage stats Nothing = pure stats
@@ -86,7 +106,7 @@ benchmark start pageSize initial@Statistics{queries} cFilter =
           let stats' =
                 stats
                   { pages = pages + 1
-                  , contracts = contracts + toInteger (length items)
+                  , contracts = contracts + length items
                   , duration = now - start
                   }
           case nextRange of

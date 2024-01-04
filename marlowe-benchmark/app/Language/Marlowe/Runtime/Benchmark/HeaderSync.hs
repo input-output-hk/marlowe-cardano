@@ -1,6 +1,8 @@
 {-# LANGUAGE RecordWildCards #-}
 
+-- | Benchmark for the `HeaderSync` protocol.
 module Language.Marlowe.Runtime.Benchmark.HeaderSync (
+  -- * Benchmarking
   Benchmark (..),
   measure,
 ) where
@@ -35,7 +37,7 @@ data Benchmark = Benchmark
   deriving (Eq, Generic, Ord, Show, ToJSON)
 
 data Statistics = Statistics
-  { blocks :: Integer
+  { blocks :: Int
   , contracts :: S.Set ContractId
   , duration :: NominalDiffTime
   }
@@ -44,31 +46,42 @@ data Statistics = Statistics
 instance Default Statistics where
   def = Statistics def mempty 0
 
+-- | Measure the performance of the protocol.
 measure
   :: Int
+  -- ^ Number of parallel clients for `HeaderSync` protocol.
   -> Int
+  -- ^ Maximum number of contracts to be read by each `HeaderSync` client.
   -> MarloweT IO ([Benchmark], S.Set ContractId)
 measure parallelism maxContracts =
   second head . unzip
     <$> replicateConcurrently parallelism (run "HeaderSync" maxContracts)
 
+-- | Run a benchmark client.
 run
   :: String
+  -- ^ Label for the benchmark.
   -> Int
+  -- ^ Maximum number of contracts to be read by each `HeaderSync` client.
   -> MarloweT IO (Benchmark, S.Set ContractId)
+  -- ^ Action for running the benchmark.
 run metric maxContracts =
   do
     Statistics{..} <- runMarloweHeaderSyncClient . benchmark maxContracts =<< liftIO getPOSIXTime
     let seconds = realToFrac duration
-        blocksPerSecond = fromInteger blocks / seconds
+        blocksPerSecond = realToFrac blocks / seconds
         contractsPerSecond = fromIntegral (S.size contracts) / seconds
     pure (Benchmark{..}, contracts)
 
+-- | Run the benchmark.
 benchmark
   :: (MonadIO m)
   => Int
+  -- ^ Maximum number of contracts to be read by each `HeaderSync` client.
   -> NominalDiffTime
+  -- ^ When the benchmark started.
   -> MarloweHeaderSyncClient m Statistics
+  -- ^ Action for running the benchmark.
 benchmark maxContracts start =
   let clientIdle = SendMsgRequestNext . clientNext
       clientWait = pure . SendMsgCancel . SendMsgDone

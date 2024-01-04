@@ -1,20 +1,29 @@
+{-# LANGUAGE LambdaCase #-}
+
+-- | Execute Benchmarks.
 module Main (
+  -- * Entry point
   main,
 ) where
 
-import Language.Marlowe.Runtime.Benchmark (BenchmarkConfig (..), measure)
+import Data.Aeson (eitherDecodeFileStrict')
+import Data.Default (def)
+import Language.Marlowe.Runtime.Benchmark (measure)
 import Language.Marlowe.Runtime.Client (connectToMarloweRuntime)
+import System.Environment (getArgs)
 
+-- | Execute the benchmarks.
 main :: IO ()
 main =
-  connectToMarloweRuntime "localhost" 13700
-    . measure
-    $ BenchmarkConfig
-      { headerSyncParallelism = 3
-      , maxContracts = 100
-      , syncParallelism = 3
-      , syncBatchSize = 20
-      , queryParallelism = 3
-      , queryBatchSize = 1
-      , queryPageSize = 50
-      }
+  do
+    (host, port, config) <-
+      getArgs >>= \case
+        [] -> pure ("localhost", 3700, def)
+        [h] -> pure (h, 3700, def)
+        [h, p] -> pure (h, read p, def)
+        [h, p, c] ->
+          eitherDecodeFileStrict' c >>= \case
+            Right c' -> pure (h, read p, c')
+            Left e -> error e
+        _ -> error "USAGE: marlowe-benchmark [host [port [configfile]]]"
+    connectToMarloweRuntime host port $ measure config
