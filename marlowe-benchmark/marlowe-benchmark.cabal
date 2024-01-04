@@ -63,6 +63,7 @@ executable marlowe-benchmark
   other-modules:
     Language.Marlowe.Runtime.Benchmark
     Language.Marlowe.Runtime.Benchmark.HeaderSync
+    Language.Marlowe.Runtime.Benchmark.Sync
 
   build-depends:
     , aeson
@@ -71,6 +72,7 @@ executable marlowe-benchmark
     , containers
     , data-default
     , marlowe-client
-    , marlowe-runtime:{marlowe-runtime, discovery-api}
+    , marlowe-runtime:{marlowe-runtime, discovery-api, history-api}
+    , split
     , time
     , unliftio
