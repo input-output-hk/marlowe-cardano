@@ -14,14 +14,11 @@ module Language.Marlowe.Runtime.Web.Common (
 ) where
 
 import Cardano.Api (
-  CardanoEra (..),
-  ShelleyBasedEra (ShelleyBasedEraBabbage),
+  BabbageEra,
   ShelleyWitnessSigningKey (..),
-  TextEnvelopeCddl (..),
-  deserialiseTxLedgerCddl,
+  Tx,
   getTxBody,
   getTxWitnesses,
-  serialiseWitnessLedgerCddl,
   signShelleyTransaction,
  )
 import Control.Concurrent (threadDelay)
@@ -49,7 +46,7 @@ import Language.Marlowe.Runtime.Web.Client (
   putTransaction,
   putWithdrawal,
  )
-import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO (toDTO))
+import Language.Marlowe.Runtime.Web.Server.DTO (FromDTO (..), ToDTO (toDTO))
 import qualified PlutusLedgerApi.V2 as PV2
 import Servant.Client.Streaming (ClientM)
 
@@ -209,23 +206,9 @@ applyInputs Wallet{..} contractId inputs = do
       }
 
 signShelleyTransaction' :: Web.UnwitnessedTx -> [ShelleyWitnessSigningKey] -> IO Web.TxWitness
-signShelleyTransaction' Web.UnwitnessedTx{..} wits = do
-  let te =
-        TextEnvelopeCddl
-          { teCddlType = utType
-          , teCddlDescription = utDescription
-          , teCddlRawCBOR = Web.unBase16 utCborHex
-          }
-  txBody <- case deserialiseTxLedgerCddl BabbageEra te of
-    Left err -> fail $ show err
-    Right a -> pure a
-  let witnessCddl =
-        serialiseWitnessLedgerCddl ShelleyBasedEraBabbage $
-          head $
-            getTxWitnesses $
-              signShelleyTransaction (getTxBody txBody) wits
-  pure case witnessCddl of
-    TextEnvelopeCddl ty _ bytes -> Web.TxWitness ty "" $ Web.Base16 bytes
+signShelleyTransaction' txEnvelope wits = do
+  tx :: Tx BabbageEra <- expectJust "Failed to deserialise tx" $ fromDTO txEnvelope
+  pure $ toDTO $ head $ getTxWitnesses $ signShelleyTransaction (getTxBody tx) wits
 
 waitUntilConfirmed :: (MonadIO m) => (a -> Web.TxStatus) -> m a -> m a
 waitUntilConfirmed getStatus getResource = do
