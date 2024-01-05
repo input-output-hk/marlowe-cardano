@@ -16,10 +16,8 @@ import Data.List.Split (chunksOf)
 import Data.Time.Clock (NominalDiffTime)
 import Data.Time.Clock.POSIX (getPOSIXTime)
 import GHC.Generics (Generic)
-import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient)
-import qualified Language.Marlowe.Protocol.Query.Client as Query
-import Language.Marlowe.Protocol.Query.Types (ContractFilter)
-import qualified Language.Marlowe.Protocol.Query.Types as Query
+import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient, getContractHeaders)
+import Language.Marlowe.Protocol.Query.Types (ContractFilter, Order (Ascending), Page (..), Range (..))
 import Language.Marlowe.Runtime.Client (runMarloweQueryClient)
 import UnliftIO (forConcurrently)
 
@@ -98,9 +96,9 @@ benchmark
   -> MarloweQueryClient m Statistics
   -- ^ Action to run the benchmark.
 benchmark start pageSize initial@Statistics{queries} cFilter =
-  let accumulate = (. Query.getContractHeaders cFilter) . (=<<) . handleNextPage
+  let accumulate = (. getContractHeaders cFilter) . (=<<) . handleNextPage
       handleNextPage stats Nothing = pure stats
-      handleNextPage stats@Statistics{pages, contracts} (Just Query.Page{..}) =
+      handleNextPage stats@Statistics{pages, contracts} (Just Page{..}) =
         do
           now <- liftIO getPOSIXTime
           let stats' =
@@ -112,4 +110,4 @@ benchmark start pageSize initial@Statistics{queries} cFilter =
           case nextRange of
             Nothing -> pure stats'
             Just range -> stats' `accumulate` range
-   in initial{queries = queries + 1} `accumulate` Query.Range Nothing 0 pageSize Query.Ascending
+   in initial{queries = queries + 1} `accumulate` Range Nothing 0 pageSize Ascending

@@ -21,11 +21,11 @@ import Data.Time.Clock.POSIX (getPOSIXTime)
 import Data.Type.Equality ((:~:) (Refl))
 import GHC.Generics (Generic)
 import Language.Marlowe.Protocol.Sync.Client (
-  ClientStFollow (ClientStFollow, recvMsgContractFound, recvMsgContractNotFound),
-  ClientStIdle (SendMsgDone, SendMsgRequestNext),
-  ClientStInit (SendMsgFollowContract),
+  ClientStFollow (..),
+  ClientStIdle (..),
+  ClientStInit (..),
   ClientStNext (..),
-  ClientStWait (SendMsgCancel),
+  ClientStWait (..),
   MarloweSyncClient (MarloweSyncClient),
  )
 import Language.Marlowe.Runtime.Client (runMarloweSyncClient)

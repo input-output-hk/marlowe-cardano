@@ -66,6 +66,7 @@ executable marlowe-benchmark
     Language.Marlowe.Runtime.Benchmark.HeaderSync
     Language.Marlowe.Runtime.Benchmark.Query
     Language.Marlowe.Runtime.Benchmark.Sync
+    Paths_marlowe_benchmark
 
   build-depends:
     , aeson
@@ -75,6 +76,7 @@ executable marlowe-benchmark
     , data-default
     , marlowe-client
     , marlowe-runtime:{marlowe-runtime, discovery-api, history-api, sync-api}
+    , optparse-applicative
     , split
     , time
     , unliftio
