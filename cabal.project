@@ -27,6 +27,7 @@ packages:
   marlowe
   marlowe-actus
   marlowe-apps
+  marlowe-benchmark
   marlowe-chain-sync
   marlowe-cli
   marlowe-client

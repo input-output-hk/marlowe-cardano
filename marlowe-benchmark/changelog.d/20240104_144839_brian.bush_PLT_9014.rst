@@ -1,0 +1,4 @@
+Added
+-----
+
+- Implemented basic benchmarking for Marlowe Runtime sync and query protocols.
