@@ -19,16 +19,18 @@ import Cardano.Api (
   KeyWitness,
   NetworkId (..),
   NetworkMagic (..),
+  TextEnvelope (..),
   TextEnvelopeCddl (..),
+  TextEnvelopeType (TextEnvelopeType),
   Tx,
   deserialiseAddress,
+  deserialiseFromTextEnvelope,
   deserialiseTxLedgerCddl,
-  deserialiseWitnessLedgerCddl,
   getTxId,
   makeSignedTransaction,
   metadataValueToJsonNoSchema,
+  serialiseToTextEnvelope,
   serialiseTxLedgerCddl,
-  serialiseWitnessLedgerCddl,
  )
 import Cardano.Api.Shelley (
   ReferenceTxInsScriptsInlineDatumsSupportedInEra (..),
@@ -81,7 +83,7 @@ import Data.List (groupBy)
 import qualified Data.Map.NonEmpty as NEMap
 import Data.Set (Set)
 import qualified Language.Marlowe.Protocol.Query.Types as Query
-import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
+import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType, fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api (AssetId (..))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (
@@ -106,6 +108,7 @@ import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx (..), TempTxStatus (
 import Network.HTTP.Media (MediaType, parseAccept)
 import Servant.Pagination (IsRangeType)
 import qualified Servant.Pagination as Pagination
+import Unsafe.Coerce (unsafeCoerce)
 
 -- | A class that states a type has a DTO representation.
 class HasDTO a where
@@ -681,10 +684,10 @@ instance HasDTO (KeyWitness era) where
   type DTO (KeyWitness era) = Web.TxWitness
 
 instance (IsShelleyBasedEra era) => ToDTO (KeyWitness era) where
-  toDTO = textEnvelopeToTxWitness . serialiseWitnessLedgerCddl (shelleyBasedEra @era)
+  toDTO = textEnvelopeToTxWitness . serialiseToTextEnvelope Nothing
 
 instance (IsShelleyBasedEra era) => FromDTO (KeyWitness era) where
-  fromDTO = hush . deserialiseWitnessLedgerCddl (shelleyBasedEra @era) . textEnvelopeFromTxWitness
+  fromDTO = hush . deserialiseFromTextEnvelope (AsKeyWitness $ cardanoEraToAsType $ cardanoEra @era) . textEnvelopeFromTxWitness
 
 textEnvelopeToUnwitnessedTx :: TextEnvelopeCddl -> Web.UnwitnessedTx
 textEnvelopeToUnwitnessedTx
@@ -712,30 +715,30 @@ textEnvelopeFromUnwitnessedTx
       , teCddlRawCBOR = Web.unBase16 utCborHex
       }
 
-textEnvelopeToTxWitness :: TextEnvelopeCddl -> Web.TxWitness
+textEnvelopeToTxWitness :: TextEnvelope -> Web.TxWitness
 textEnvelopeToTxWitness
-  TextEnvelopeCddl
-    { teCddlType
-    , teCddlDescription
-    , teCddlRawCBOR
+  TextEnvelope
+    { teType = TextEnvelopeType teType
+    , teDescription
+    , teRawCBOR
     } =
     Web.TxWitness
-      { twType = teCddlType
-      , twDescription = teCddlDescription
-      , twCborHex = Web.Base16 teCddlRawCBOR
+      { twType = T.pack teType
+      , twDescription = T.pack $ unsafeCoerce teDescription
+      , twCborHex = Web.Base16 teRawCBOR
       }
 
-textEnvelopeFromTxWitness :: Web.TxWitness -> TextEnvelopeCddl
+textEnvelopeFromTxWitness :: Web.TxWitness -> TextEnvelope
 textEnvelopeFromTxWitness
   Web.TxWitness
     { twType
     , twDescription
     , twCborHex
     } =
-    TextEnvelopeCddl
-      { teCddlType = twType
-      , teCddlDescription = twDescription
-      , teCddlRawCBOR = Web.unBase16 twCborHex
+    TextEnvelope
+      { teType = TextEnvelopeType $ T.unpack twType
+      , teDescription = fromString $ T.unpack twDescription
+      , teRawCBOR = Web.unBase16 twCborHex
       }
 
 instance HasDTO Tx.RoleTokensConfig where
