@@ -21,10 +21,15 @@ import Cardano.Api (
   getTxWitnesses,
   signShelleyTransaction,
  )
+import Cardano.Api.Shelley (KeyWitness (..))
+import Cardano.Ledger.Alonzo.TxWits (Redeemers (..))
+import Cardano.Ledger.Babbage.TxWits (AlonzoTxWits (AlonzoTxWits))
 import Control.Concurrent (threadDelay)
 import Control.Monad.IO.Class (MonadIO (liftIO))
+import Data.Aeson.Text (encodeToLazyText)
 import Data.Set (Set)
 import qualified Data.Set as Set
+import qualified Data.Text.Lazy as TL
 import qualified Language.Marlowe as V1
 import Language.Marlowe.Core.V1.Semantics.Types (
   ChoiceId (ChoiceId),
@@ -47,6 +52,7 @@ import Language.Marlowe.Runtime.Web.Client (
   putWithdrawal,
  )
 import Language.Marlowe.Runtime.Web.Server.DTO (FromDTO (..), ToDTO (toDTO))
+import Language.Marlowe.Runtime.Web.Server.Util (TxWitnessSet (TxWitnessSet))
 import qualified PlutusLedgerApi.V2 as PV2
 import Servant.Client.Streaming (ClientM)
 
@@ -112,6 +118,7 @@ submitContract
   -> ClientM Web.BlockHeader
 submitContract Wallet{..} Web.CreateTxEnvelope{contractId, tx} = do
   signedCreateTx <- liftIO $ signShelleyTransaction' tx signingKeys
+  liftIO $ putStrLn $ TL.unpack $ encodeToLazyText signedCreateTx
   putContract contractId signedCreateTx
   Web.ContractState{block} <- waitUntilConfirmed (\Web.ContractState{status} -> status) $ getContract contractId
   liftIO $ expectJust "Expected block header" block
@@ -208,7 +215,15 @@ applyInputs Wallet{..} contractId inputs = do
 signShelleyTransaction' :: Web.UnwitnessedTx -> [ShelleyWitnessSigningKey] -> IO Web.TxWitness
 signShelleyTransaction' txEnvelope wits = do
   tx :: Tx BabbageEra <- expectJust "Failed to deserialise tx" $ fromDTO txEnvelope
-  pure $ toDTO $ head $ getTxWitnesses $ signShelleyTransaction (getTxBody tx) wits
+  let keyWitness = head $ getTxWitnesses $ signShelleyTransaction (getTxBody tx) wits
+  let vKeys = case keyWitness of
+        ShelleyBootstrapWitness{} -> mempty
+        ShelleyKeyWitness _ key -> Set.singleton key
+  pure
+    . toDTO
+    . TxWitnessSet @BabbageEra
+    $ AlonzoTxWits vKeys mempty mempty mempty
+    $ Redeemers mempty
 
 waitUntilConfirmed :: (MonadIO m) => (a -> Web.TxStatus) -> m a -> m a
 waitUntilConfirmed getStatus getResource = do

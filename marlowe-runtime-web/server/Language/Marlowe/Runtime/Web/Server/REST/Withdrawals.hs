@@ -29,6 +29,7 @@ import Language.Marlowe.Runtime.Web.Server.REST.ApiError (
  )
 import qualified Language.Marlowe.Runtime.Web.Server.REST.ApiError as ApiError
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx (..), TempTxStatus (..))
+import Language.Marlowe.Runtime.Web.Server.Util (makeSignedTxWithWitnessKeys)
 import Servant
 import Servant.Pagination
 
@@ -111,8 +112,13 @@ put withdrawalId txWitness = do
   where
     handleLoaded :: Chain.TxId -> ReferenceTxInsScriptsInlineDatumsSupportedInEra era -> TxBody era -> ServerM NoContent
     handleLoaded withdrawalId' era txBody = withShelleyBasedEra (shelleyBasedEraOfFeature era) do
-      txWitness' <- fromDTOThrow (badRequest' "Invalid tx witness") txWitness
-      let tx = makeSignedTransaction [txWitness'] txBody
+      tx <- case era of
+        ReferenceTxInsScriptsInlineDatumsInBabbageEra -> do
+          txWitness' <- fromDTOThrow (badRequest' "Invalid tx witness") txWitness
+          pure $ makeSignedTxWithWitnessKeys txBody txWitness'
+        ReferenceTxInsScriptsInlineDatumsInConwayEra -> do
+          txWitness' <- fromDTOThrow (badRequest' "Invalid tx witness") txWitness
+          pure $ makeSignedTxWithWitnessKeys txBody txWitness'
       submitWithdrawal withdrawalId' era tx >>= \case
         Nothing -> pure NoContent
         Just err -> throwError $ ApiError.toServerError $ ApiError (show err) "SubmissionError" Null 403

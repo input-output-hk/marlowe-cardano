@@ -714,8 +714,8 @@ instance ToSchema TxWitness where
             & type_ ?~ OpenApiString
             & OpenApi.description ?~ "What type of data is encoded in the CBOR Hex."
             & enum_
-              ?~ [ "TxWitness BabbageEra"
-                 , "TxWitness ConwayEra"
+              ?~ [ "TxWitness Set BabbageEra"
+                 , "TxWitness Set ConwayEra"
                  ]
     pure $
       NamedSchema (Just "TxWitness") $

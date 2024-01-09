@@ -15,8 +15,7 @@ module Language.Marlowe.Runtime.Web.Server.DTO where
 import Cardano.Api (
   AsType (..),
   IsCardanoEra (..),
-  IsShelleyBasedEra (..),
-  KeyWitness,
+  IsShelleyBasedEra,
   NetworkId (..),
   NetworkMagic (..),
   TextEnvelope (..),
@@ -34,6 +33,7 @@ import Cardano.Api (
  )
 import Cardano.Api.Shelley (
   ReferenceTxInsScriptsInlineDatumsSupportedInEra (..),
+  ShelleyLedgerEra,
   StakeAddress (..),
   fromShelleyStakeCredential,
  )
@@ -74,6 +74,8 @@ import Language.Marlowe.Protocol.Query.Types (
   Withdrawal (..),
  )
 
+import Cardano.Ledger.Alonzo (AlonzoScript)
+import Cardano.Ledger.Alonzo.Core (EraTxWits, Script)
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Bitraversable (Bitraversable (..))
@@ -105,6 +107,7 @@ import qualified Language.Marlowe.Runtime.Discovery.Api as Discovery
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx (..), TempTxStatus (..))
+import Language.Marlowe.Runtime.Web.Server.Util (AsType (..), TxWitnessSet)
 import Network.HTTP.Media (MediaType, parseAccept)
 import Servant.Pagination (IsRangeType)
 import qualified Servant.Pagination as Pagination
@@ -680,14 +683,27 @@ instance (IsCardanoEra era) => ToDTO (Tx era) where
 instance (IsCardanoEra era) => FromDTO (Tx era) where
   fromDTO = hush . deserialiseTxLedgerCddl (cardanoEra @era) . textEnvelopeFromUnwitnessedTx
 
-instance HasDTO (KeyWitness era) where
-  type DTO (KeyWitness era) = Web.TxWitness
+instance HasDTO (TxWitnessSet era) where
+  type DTO (TxWitnessSet era) = Web.TxWitness
 
-instance (IsShelleyBasedEra era) => ToDTO (KeyWitness era) where
+instance
+  ( IsShelleyBasedEra era
+  , EraTxWits (ShelleyLedgerEra era)
+  , Script (ShelleyLedgerEra era) ~ AlonzoScript (ShelleyLedgerEra era)
+  )
+  => ToDTO (TxWitnessSet era)
+  where
   toDTO = textEnvelopeToTxWitness . serialiseToTextEnvelope Nothing
 
-instance (IsShelleyBasedEra era) => FromDTO (KeyWitness era) where
-  fromDTO = hush . deserialiseFromTextEnvelope (AsKeyWitness $ cardanoEraToAsType $ cardanoEra @era) . textEnvelopeFromTxWitness
+instance
+  ( IsShelleyBasedEra era
+  , EraTxWits (ShelleyLedgerEra era)
+  , Script (ShelleyLedgerEra era) ~ AlonzoScript (ShelleyLedgerEra era)
+  )
+  => FromDTO (TxWitnessSet era)
+  where
+  fromDTO =
+    hush . deserialiseFromTextEnvelope (AsTxWitnessSet $ cardanoEraToAsType $ cardanoEra @era) . textEnvelopeFromTxWitness
 
 textEnvelopeToUnwitnessedTx :: TextEnvelopeCddl -> Web.UnwitnessedTx
 textEnvelopeToUnwitnessedTx
