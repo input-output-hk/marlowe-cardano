@@ -64,6 +64,8 @@ executable marlowe-benchmark
     Language.Marlowe.Runtime.Benchmark
     Language.Marlowe.Runtime.Benchmark.BulkSync
     Language.Marlowe.Runtime.Benchmark.HeaderSync
+    Language.Marlowe.Runtime.Benchmark.Lifecycle
+    Language.Marlowe.Runtime.Benchmark.Lifecycle.Scenario
     Language.Marlowe.Runtime.Benchmark.Query
     Language.Marlowe.Runtime.Benchmark.Sync
     Paths_marlowe_benchmark
@@ -72,11 +74,19 @@ executable marlowe-benchmark
     , aeson
     , base >=4.9 && <5
     , bytestring
+    , cardano-api:{cardano-api, gen}
     , containers
     , data-default
+    , hedgehog-quickcheck
+    , marlowe-cardano
+    , marlowe-chain-sync
     , marlowe-client
-    , marlowe-runtime:{marlowe-runtime, discovery-api, history-api, sync-api}
+    , marlowe-runtime:{marlowe-runtime, discovery-api, history-api, sync-api, tx-api}
     , optparse-applicative
+    , plutus-ledger-api
+    , QuickCheck
+    , random
     , split
+    , text
     , time
     , unliftio
