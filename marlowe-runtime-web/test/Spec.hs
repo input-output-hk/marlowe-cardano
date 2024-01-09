@@ -613,7 +613,7 @@ instance (Arbitrary a) => Arbitrary (Web.ListObject a) where
   shrink = genericShrink
 
 instance Arbitrary Web.TxWitness where
-  arbitrary = Web.TxWitness "TxWitness BabbageEra" <$> arbitrary <*> arbitrary
+  arbitrary = Web.TxWitness "TxWitness Set BabbageEra" <$> arbitrary <*> arbitrary
   shrink = genericShrink
 
 instance Arbitrary Web.UnwitnessedTx where

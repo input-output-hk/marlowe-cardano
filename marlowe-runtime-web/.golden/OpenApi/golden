@@ -2834,8 +2834,8 @@
                     "type": {
                         "description": "What type of data is encoded in the CBOR Hex.",
                         "enum": [
-                            "TxWitness BabbageEra",
-                            "TxWitness ConwayEra"
+                            "TxWitness Set BabbageEra",
+                            "TxWitness Set ConwayEra"
                         ],
                         "type": "string"
                     }
