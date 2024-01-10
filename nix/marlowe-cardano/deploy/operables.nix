@@ -26,18 +26,17 @@ let
     marlowe-sync
     marlowe-pipe
     marlowe-oracle
-    marlowe-finder;
 
-  # Ensure this path only changes when sqitch.plan file is updated, or DDL
-  # files are updated.
-  chain-sync-sqitch-plan-dir = (builtins.path {
+    # Ensure this path only changes when sqitch.plan file is updated, or DDL
+    # files are updated.
+    chain-sync-sqitch-plan-dir= (builtins.path {
     path = self;
     name = "marlowe-chain-sync-sqitch-plan";
     filter = path: type:
       path == "${self}/marlowe-chain-sync"
-        || path == "${self}/marlowe-chain-sync/sqitch.plan"
-        || lib.hasPrefix "${self}/marlowe-chain-sync/deploy" path
-        || lib.hasPrefix "${self}/marlowe-chain-sync/revert" path;
+      || path == "${self}/marlowe-chain-sync/sqitch.plan"
+      || lib.hasPrefix "${self}/marlowe-chain-sync/deploy" path
+      || lib.hasPrefix "${self}/marlowe-chain-sync/revert" path;
   }) + "/marlowe-chain-sync";
 
   # Ensure this path only changes when sqitch.plan file is updated, or DDL
@@ -711,22 +710,4 @@ in
     '';
   };
 
-  marlowe-finder = mkOperable {
-    package = marlowe-finder;
-    runtimeScript = mkMarloweAppScript ''
-      #################
-      # OPTIONAL VARS #
-      #################
-      # POLLING_FREQUENCY: The polling frequency in seconds when waiting on Marlowe Runtime.
-      # REQUEUING_FREQUENCY: The requeuing frequency in seconds for reviewing the progress of contracts on Marlowe Runtime.
-
-      ${marlowe-finder}/bin/marlowe-finder \
-        --timeout-seconds "$TIMEOUT_SECONDS" \
-        --build-seconds "$BUILD_SECONDS" \
-        --confirm-seconds "$CONFIRM_SECONDS" \
-        --retry-seconds "$RETRY_SECONDS" \
-        --retry-limit "$RETRY_LIMIT" \
-        --polling "''${POLLING_FREQUENCY:-5}"
-    '';
-  };
 }

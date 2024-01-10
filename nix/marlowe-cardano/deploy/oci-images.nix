@@ -66,10 +66,6 @@ let
       name = "marlowe-oracle";
       description = "A general-purpose oracle for Marlowe contracts.";
     };
-    marlowe-finder = mkImage {
-      name = "marlowe-finder";
-      description = "Streams contract events in real-time from the chain.";
-    };
   };
 
   forAllImages = f: concatMapStrings (s: s + "\n") (mapAttrsToList f images);
