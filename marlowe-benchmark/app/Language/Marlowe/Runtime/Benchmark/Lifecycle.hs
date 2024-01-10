@@ -15,6 +15,7 @@ import Control.Monad.Trans.Marlowe.Class (MonadMarlowe, applyInputs, createContr
 import Data.Aeson (ToJSON)
 import Data.Bifunctor (second)
 import Data.Maybe (fromJust, mapMaybe)
+import Data.Time.Clock (UTCTime, getCurrentTime)
 import Data.Time.Clock.POSIX (getPOSIXTime)
 import GHC.Generics (Generic)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input (NormalInput), Party (Address, Role))
@@ -50,6 +51,8 @@ import qualified Test.Gen.Cardano.Api.Typed as C (genShelleyWitnessSigningKey)
 
 data Benchmark = Benchmark
   { metric :: String
+  , start :: UTCTime
+  , finish :: UTCTime
   , contractsPerSecond :: Double
   , creationsPerSecond :: Double
   , appliesPerSecond :: Double
@@ -58,14 +61,21 @@ data Benchmark = Benchmark
   }
   deriving (Eq, Generic, Ord, Show, ToJSON)
 
+-- | Measure the performance of the basic contract lifecycle.
 measure
   :: (C.IsShelleyBasedEra era)
   => C.SocketPath
+  -- ^ The path to the Cardano node socket.
   -> C.CardanoEra era
+  -- ^ The Cardano era.
   -> C.NetworkId
+  -- ^ The Cardano network.
   -> Int
+  -- ^ The number of clients to run in paralle.
   -> Address
+  -- ^ The faucet address.
   -> C.SigningKey C.PaymentExtendedKey
+  -- ^ The faucet signing key.
   -> Int
   -> MarloweT IO [Benchmark]
 measure node era network parallelism faucetAddress faucetKey count =
@@ -85,13 +95,21 @@ measure node era network parallelism faucetAddress faucetKey count =
 fundAddress
   :: (C.IsShelleyBasedEra era)
   => C.SocketPath
+  -- ^ The path to the Cardano node socket.
   -> C.CardanoEra era
+  -- ^ The Cardano era.
   -> C.NetworkId
+  -- ^ The Cardano network.
   -> Address
+  -- ^ The faucet address.
   -> C.SigningKey C.PaymentExtendedKey
+  -- ^ The faucet signing key.
   -> Address
+  -- ^ The change address.
   -> [(Address, C.Value)]
+  -- ^ The destination addresses and the value they receive.
   -> MarloweT IO ()
+  -- ^ Action for running the transactions.
 fundAddress node era network srcAddress srcKey changeAddress dstAddressAmount =
   do
     let local = C.LocalNodeConnectInfo (C.CardanoModeParams $ C.EpochSlots 432_000) network node
@@ -156,9 +174,12 @@ fundAddress node era network srcAddress srcKey changeAddress dstAddressAmount =
           Nothing
     void $ signSubmit (fromJust $ C.refInsScriptsAndInlineDatsSupportedInEra era) srcKey txBody
 
+-- | Generate a new address and its signing key.
 genKey
   :: Address
+  -- ^ Any address on  the network.
   -> IO (Address, C.SigningKey C.PaymentExtendedKey)
+  -- ^ Action to create the address and signing key.
 genKey faucetAddress =
   do
     let isPaymentExtendedKey (C.WitnessPaymentExtendedKey key) = Just key
@@ -177,32 +198,44 @@ genKey faucetAddress =
       $ "Generated address " <> show address <> " and signing key " <> show skey <> "."
     pure (address, skey)
 
+-- | Run multiple scenarios.
 run
   :: String
+  -- ^ The label for the metric.
   -> Int
+  -- ^ The number of contracts to run.
   -> Address
+  -- ^ The address.
   -> C.SigningKey C.PaymentExtendedKey
+  -- ^ The signing key.
   -> MarloweT IO Benchmark
+  -- ^ Action to run the benchmark.
 run metric count address key =
   do
     let address' = uncurry Address . fromJust . deserialiseAddress $ unAddress address
-    start <- liftIO getPOSIXTime
+    start <- liftIO getCurrentTime
+    start' <- liftIO getPOSIXTime
     scenarios <- liftIO . replicateM count $ randomScenario 1200 [address']
     mapM_ (runScenario $ M.singleton address' (address, key)) scenarios
-    finish <- liftIO getPOSIXTime
-    let seconds = realToFrac $ finish - start
+    finish <- liftIO getCurrentTime
+    finish' <- liftIO getPOSIXTime
+    let seconds = realToFrac $ finish' - start'
         contractsPerSecond = realToFrac (length scenarios) / seconds
         creationsPerSecond = realToFrac (length scenarios) / seconds
         appliesPerSecond = realToFrac (sum $ length . actions <$> scenarios) / seconds
         withdrawsPerSecond = 0
     pure Benchmark{..}
 
+-- | Run a single scenario.
 runScenario
   :: (MonadIO m)
   => (MonadMarlowe m)
   => M.Map Party (Address, C.SigningKey C.PaymentExtendedKey)
+  -- ^ The parties and their addresses and signing keys.
   -> Scenario
+  -- ^ The scenario.
   -> m ()
+  -- ^ Action to run the scenario.
 runScenario partyCredentials Scenario{..} =
   let act contractId party action =
         let (address, key) = partyCredentials M.! party
@@ -210,6 +243,7 @@ runScenario partyCredentials Scenario{..} =
    in forM_ actions . uncurry . act
         =<< create partyCredentials contract
 
+-- | Create a contract.
 create
   :: (MonadIO m)
   => (MonadMarlowe m)
@@ -240,6 +274,7 @@ create partyCredentials contract =
     void $ signSubmit support key txBody
     pure contractId
 
+-- | Apply input to a contract.
 apply
   :: (MonadIO m)
   => (MonadMarlowe m)
@@ -262,6 +297,7 @@ apply change key contractId input =
 
 -- TODO: Here we should determine any payouts and withdraw them.
 
+-- | Sign and submit a transaction.
 signSubmit
   :: (MonadIO m)
   => (MonadMarlowe m)
@@ -274,6 +310,7 @@ signSubmit support key txBody =
     C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> signSubmit' support key txBody
     C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> signSubmit' support key txBody
 
+-- | Sign and submit a transaction.
 signSubmit'
   :: (C.IsShelleyBasedEra era)
   => (MonadIO m)

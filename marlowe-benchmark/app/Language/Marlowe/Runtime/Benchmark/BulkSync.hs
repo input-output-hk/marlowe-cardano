@@ -11,7 +11,7 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Marlowe (MarloweT)
 import Data.Aeson (ToJSON)
 import Data.Default (Default (..))
-import Data.Time.Clock (NominalDiffTime)
+import Data.Time.Clock (NominalDiffTime, UTCTime, getCurrentTime)
 import Data.Time.Clock.POSIX (getPOSIXTime)
 import Data.Word (Word8)
 import GHC.Generics (Generic)
@@ -27,6 +27,8 @@ import UnliftIO (replicateConcurrently)
 
 data Benchmark = Benchmark
   { metric :: String
+  , start :: UTCTime
+  , finish :: UTCTime
   , blocksPerSecond :: Double
   , createsPerSecond :: Double
   , applyInputsPerSecond :: Double
@@ -73,12 +75,14 @@ run
   -- ^ Action for running the benchmark.
 run metric pageSize maxBlocks =
   do
+    start <- liftIO getCurrentTime
     Statistics{..} <- runMarloweBulkSyncClient . benchmark pageSize maxBlocks =<< liftIO getPOSIXTime
     let seconds = realToFrac duration
         blocksPerSecond = realToFrac blocks / seconds
         createsPerSecond = realToFrac creates / seconds
         applyInputsPerSecond = realToFrac applyInputs / seconds
         withdrawsPerSecond = realToFrac withdraws / seconds
+    finish <- liftIO getCurrentTime
     pure Benchmark{..}
 
 -- | Run a benchmark.
