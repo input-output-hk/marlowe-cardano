@@ -77,6 +77,7 @@ executable marlowe-benchmark
     , cardano-api:{cardano-api, gen}
     , containers
     , data-default
+    , directory
     , hedgehog-quickcheck
     , marlowe-cardano
     , marlowe-chain-sync
