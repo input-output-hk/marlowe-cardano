@@ -71,7 +71,6 @@ jobs:
             export TAG=$(echo "${{ github.ref_name }}" | sed -e "s/^marlowe-apps@v//")
             echo TAG=$TAG
             tagAndPush "marlowe-pipe"
-            tagAndPush "marlowe-scaling"
             tagAndPush "marlowe-oracle"
             tagAndPush "marlowe-finder"
           elif [[ "${{ github.ref }}" == "refs/tags/marlowe-runtime-web@v"* ]]
@@ -92,7 +91,6 @@ jobs:
             tagAndPush "marlowe-proxy"
             tagAndPush "marlowe-web-server"
             tagAndPush "marlowe-pipe"
-            tagAndPush "marlowe-scaling"
             tagAndPush "marlowe-oracle"
             tagAndPush "marlowe-finder"
           fi

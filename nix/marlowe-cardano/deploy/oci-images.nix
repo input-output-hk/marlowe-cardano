@@ -62,10 +62,6 @@ let
       name = "marlowe-pipe";
       description = "A streaming command processor for the Marlowe Runtime.";
     };
-    marlowe-scaling = mkImage {
-      name = "marlowe-scaling";
-      description = "A scale-testing client for the Marlowe Runtime.";
-    };
     marlowe-oracle = mkImage {
       name = "marlowe-oracle";
       description = "A general-purpose oracle for Marlowe contracts.";

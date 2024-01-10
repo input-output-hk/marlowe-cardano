@@ -82,34 +82,6 @@ executable marlowe-pipe
 
   default-language: Haskell2010
 
-executable marlowe-scaling
-  main-is:          Main.hs
-  hs-source-dirs:   scaling
-  build-depends:
-    , async
-    , base >=4.9 && <5
-    , cardano-api ^>=8.2
-    , eventuo11y >=0.9 && <0.11
-    , eventuo11y-dsl ^>=0.2
-    , eventuo11y-json ^>=0.3
-    , marlowe-apps
-    , marlowe-cardano
-    , marlowe-chain-sync
-    , marlowe-runtime
-    , mtl
-    , optparse-applicative
-    , plutus-ledger-api ^>=1.5
-    , random
-    , text
-    , time
-
-  ghc-options:
-    -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
-    -Wincomplete-record-updates -Wredundant-constraints -Widentities
-    -Wunused-packages
-
-  default-language: Haskell2010
-
 executable marlowe-oracle
   main-is:          Main.hs
   hs-source-dirs:   oracle

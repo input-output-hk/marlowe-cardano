@@ -25,7 +25,6 @@ let
     marlowe-web-server
     marlowe-sync
     marlowe-pipe
-    marlowe-scaling
     marlowe-oracle
     marlowe-finder;
 
@@ -678,34 +677,6 @@ in
         --confirm-seconds "$CONFIRM_SECONDS" \
         --retry-seconds "$RETRY_SECONDS" \
         --retry-limit "$RETRY_LIMIT"
-    '';
-  };
-
-  marlowe-scaling = mkOperable {
-    package = marlowe-scaling;
-    runtimeScript = mkMarloweAppScript ''
-      #################
-      # REQUIRED VARS #
-      #################
-      # CONTRACTS_PER_PARTY: The number of contracts to run sequentially for each party.
-
-      [ -z "''${CONTRACTS_PER_PARTY:-}" ] && echo "CONTRACTS_PER_PARTY env var must be set -- aborting" && exit 1
-
-      #################
-      # OPTIONAL VARS #
-      #################
-      # PARTIES: ADDRESS=KEYFILE per party separated by spaces
-
-      read -a -r args <<< "''${PARTIES:-}"
-
-      ${marlowe-scaling}/bin/marlowe-scaling \
-        --timeout-seconds "$TIMEOUT_SECONDS" \
-        --build-seconds "$BUILD_SECONDS" \
-        --confirm-seconds "$CONFIRM_SECONDS" \
-        --retry-seconds "$RETRY_SECONDS" \
-        --retry-limit "$RETRY_LIMIT" \
-        "$CONTRACTS_PER_PARTY" \
-        "''${args[@]}"
     '';
   };
 
