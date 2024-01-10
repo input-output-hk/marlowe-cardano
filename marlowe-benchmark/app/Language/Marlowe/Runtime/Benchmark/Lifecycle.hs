@@ -37,7 +37,7 @@ import PlutusLedgerApi.V2 (fromBuiltin, unTokenName)
 import System.IO (hPutStrLn, stderr)
 import Test.QuickCheck (generate, infiniteListOf)
 import Test.QuickCheck.Hedgehog (hedgehog)
-import UnliftIO (forConcurrently)
+import UnliftIO (catchIO, forConcurrently)
 
 import qualified Cardano.Api as C
 import qualified Cardano.Api.Shelley as C
@@ -71,7 +71,29 @@ measure
 measure node era network parallelism faucetAddress faucetKey count =
   do
     let lovelacePerClient = C.lovelaceToValue . fromIntegral $ 10_000_000 + 1_000_000 * count
+        fundAddress' = fundAddress node era network
     keys <- liftIO . replicateM parallelism $ genKey faucetAddress
+    fundAddress' faucetAddress faucetKey faucetAddress $
+      second (const lovelacePerClient) <$> keys
+    result <-
+      forConcurrently keys (uncurry $ run "Lifecycle" count)
+        `catchIO` (\e -> (liftIO . hPutStrLn stderr $ "Cleaning up after error: " <> show e) >> pure mempty)
+    forM_ keys $
+      \(address, key) -> fundAddress' address key faucetAddress mempty
+    pure result
+
+fundAddress
+  :: (C.IsShelleyBasedEra era)
+  => C.SocketPath
+  -> C.CardanoEra era
+  -> C.NetworkId
+  -> Address
+  -> C.SigningKey C.PaymentExtendedKey
+  -> Address
+  -> [(Address, C.Value)]
+  -> MarloweT IO ()
+fundAddress node era network srcAddress srcKey changeAddress dstAddressAmount =
+  do
     let local = C.LocalNodeConnectInfo (C.CardanoModeParams $ C.EpochSlots 432_000) network node
     Right systemStart <- liftIO $ C.queryNodeLocalState local Nothing C.QuerySystemStart
     Right ledgerEpochInfo <-
@@ -91,7 +113,7 @@ measure node era network parallelism faucetAddress faucetKey count =
             C.QueryInShelleyBasedEra C.shelleyBasedEra $
               C.QueryUTxO $
                 C.QueryUTxOByAddress . S.singleton . fromJust $
-                  toCardanoAddressAny faucetAddress
+                  toCardanoAddressAny srcAddress
     let txBodyContent =
           C.TxBodyContent
             { txIns = second (const . C.BuildTxWith $ C.KeyWitness C.KeyWitnessForSpending) <$> M.toList (C.unUTxO utxos)
@@ -100,10 +122,10 @@ measure node era network parallelism faucetAddress faucetKey count =
             , txOuts =
                 [ C.TxOut
                   (fromJust $ toCardanoAddressInEra era address)
-                  (C.TxOutValue (either (error "fromRight") id $ C.multiAssetSupportedInEra era) lovelacePerClient)
+                  (C.TxOutValue (either (error "fromRight") id $ C.multiAssetSupportedInEra era) amount)
                   C.TxOutDatumNone
                   C.ReferenceScriptNone
-                | (address, _) <- keys
+                | (address, amount) <- dstAddressAmount
                 ]
             , txTotalCollateral = C.TxTotalCollateralNone
             , txReturnCollateral = C.TxReturnCollateralNone
@@ -130,12 +152,9 @@ measure node era network parallelism faucetAddress faucetKey count =
           mempty
           utxos
           txBodyContent
-          (fromJust $ toCardanoAddressInEra era faucetAddress)
+          (fromJust $ toCardanoAddressInEra era changeAddress)
           Nothing
-    void $ signSubmit (fromJust $ C.refInsScriptsAndInlineDatsSupportedInEra era) faucetKey txBody
-    -- FIXME: Catch exceptions and finalize by returning funds to faucet.
-    forConcurrently keys $
-      uncurry (run "Lifecycle" count)
+    void $ signSubmit (fromJust $ C.refInsScriptsAndInlineDatsSupportedInEra era) srcKey txBody
 
 genKey
   :: Address
