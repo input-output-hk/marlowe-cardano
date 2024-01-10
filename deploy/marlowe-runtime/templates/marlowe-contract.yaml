@@ -55,6 +55,9 @@ spec:
           port: 3728
           protocol: TCP
         - expose: true
+          port: 3729
+          protocol: TCP
+        - expose: true
           port: 3787
           protocol: TCP
       traits:
