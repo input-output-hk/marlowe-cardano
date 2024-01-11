@@ -24,8 +24,8 @@ Each operable has a related OCI image containing exactly the operable and its de
 To push an oci-image to the registry you will need to get access credentials, by running `skopeo login` or `docker login` in a devshell with skopeo or docker (ask for login information).
 Then to push, for example, marlowe-chain-sync run:
 
-``` sh
-nix run .\#oci-images.x86_64-linux.marlowe-chain-sync.copyToRegistry
+```bash
+nix run .#oci-images.x86_64-linux.marlowe-chain-sync.copyToRegistry
 ```
 
 `

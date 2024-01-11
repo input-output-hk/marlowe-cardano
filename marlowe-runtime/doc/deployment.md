@@ -34,7 +34,6 @@ $ nix run .#marlowe-chain-sync -- --help
 $ nix run .#marlowe-indexer -- --help
 $ nix run .#marlowe-sync -- --help
 $ nix run .#marlowe-tx -- --help
-$ nix run .#marlowe -- --help
 ```
 
 For convenience, several Cardano tools and other utilities are built and available in the development shell.
