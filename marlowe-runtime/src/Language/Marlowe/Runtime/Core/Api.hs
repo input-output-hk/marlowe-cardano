@@ -111,6 +111,7 @@ class IsMarloweVersion (v :: MarloweVersionTag) where
   type Contract v :: Type
   type TransactionError v :: Type
   type Datum v :: Type
+  type State v :: Type
   type Inputs (v :: MarloweVersionTag) :: Type
   type PayoutDatum v :: Type
   marloweVersion :: MarloweVersion v
@@ -119,6 +120,7 @@ instance IsMarloweVersion 'V1 where
   type Contract 'V1 = V1.Contract
   type TransactionError 'V1 = V1.TransactionError
   type Datum 'V1 = V1.MarloweData
+  type State 'V1 = V1.State
   type Inputs 'V1 = [V1.Input]
   type PayoutDatum 'V1 = Chain.AssetId
   marloweVersion = MarloweV1

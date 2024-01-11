@@ -517,6 +517,7 @@ interpret ro@RuntimeCreateContract{..} = do
             roleTokensConfig
             marloweTransactionMetadata
             minLovelace
+            Nothing
             runtimeContract
       Nothing -> pure (Left Nothing)
   case result of

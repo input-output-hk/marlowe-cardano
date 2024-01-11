@@ -39,6 +39,7 @@ import Language.Marlowe.Runtime.Core.Api (
   Contract,
   ContractId,
   Inputs,
+  IsMarloweVersion (..),
   MarloweTransactionMetadata,
   MarloweVersion,
   MarloweVersionTag (..),
@@ -223,10 +224,12 @@ createContract
   -- ^ Optional metadata to attach to the transaction
   -> Maybe Lovelace
   -- ^ Optional min Lovelace deposit which should be stored in the contract's accounts.
+  -> Maybe (State v)
+  -- ^ Optional initial state for contract.
   -> Either (Contract v) DatumHash
   -- ^ The contract to run, or the hash of the contract to look up in the store.
   -> m (Either CreateError (ContractCreated v))
-createContract mStakeCredential version wallet threadName roleTokens metadata lovelace contract =
+createContract mStakeCredential version wallet threadName roleTokens metadata lovelace state contract =
   runMarloweTxClient $
     liftCommand $
       Create
@@ -237,6 +240,7 @@ createContract mStakeCredential version wallet threadName roleTokens metadata lo
         roleTokens
         metadata
         lovelace
+        state
         contract
 
 -- | Apply inputs to a contract, with custom validity interval bounds.

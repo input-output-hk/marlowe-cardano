@@ -776,6 +776,8 @@ data MarloweTxCommand status err result where
     -- ^ Optional metadata to attach to the transaction
     -> Maybe Lovelace
     -- ^ Optional min Lovelace deposit which should be used for the contract output.
+    -> Maybe (State v)
+    -- ^ Optional initial state. Can be used to pre-apply deposits and choices, or to pre-define variables.
     -> Either (Contract v) DatumHash
     -- ^ The contract to run, or the hash of the contract to load from the store.
     -> MarloweTxCommand Void CreateError (ContractCreated v)
@@ -849,7 +851,7 @@ instance Command MarloweTxCommand where
     JobIdSubmit :: TxId -> JobId MarloweTxCommand SubmitStatus SubmitError BlockHeader
 
   tagFromCommand = \case
-    Create _ version _ _ _ _ _ _ -> TagCreate version
+    Create _ version _ _ _ _ _ _ _ -> TagCreate version
     ApplyInputs version _ _ _ _ _ _ -> TagApplyInputs version
     Withdraw version _ _ -> TagWithdraw version
     Submit _ _ -> TagSubmit
@@ -898,13 +900,14 @@ instance Command MarloweTxCommand where
     TagSubmit -> JobIdSubmit <$> get
 
   putCommand = \case
-    Create mStakeCredential MarloweV1 walletAddresses threadName roles metadata minAda contract -> do
+    Create mStakeCredential MarloweV1 walletAddresses threadName roles metadata minAda state contract -> do
       put mStakeCredential
       put walletAddresses
       put threadName
       put roles
       put metadata
       put minAda
+      put state
       put contract
     ApplyInputs version walletAddresses contractId metadata invalidBefore invalidHereafter redeemer -> do
       put walletAddresses
@@ -925,14 +928,8 @@ instance Command MarloweTxCommand where
         put $ serialiseToCBOR tx
 
   getCommand = \case
-    TagCreate MarloweV1 -> do
-      mStakeCredential <- get
-      walletAddresses <- get
-      threadName <- get
-      roles <- get
-      metadata <- get
-      minAda <- get
-      Create mStakeCredential MarloweV1 walletAddresses threadName roles metadata minAda <$> get
+    TagCreate MarloweV1 ->
+      Create <$> get <*> pure MarloweV1 <*> get <*> get <*> get <*> get <*> get <*> get <*> get
     TagApplyInputs version -> do
       walletAddresses <- get
       contractId <- get
@@ -1146,14 +1143,15 @@ data SubmitStatus
 
 instance CommandEq MarloweTxCommand where
   commandEq = \case
-    Create stake MarloweV1 wallet threadName roleTokenConfig metadata minAda contract -> \case
-      Create stake' MarloweV1 wallet' threadName' roleTokenConfig' metadata' minAda' contract' ->
+    Create stake MarloweV1 wallet threadName roleTokenConfig metadata minAda state contract -> \case
+      Create stake' MarloweV1 wallet' threadName' roleTokenConfig' metadata' minAda' state' contract' ->
         stake == stake'
           && wallet == wallet'
           && threadName == threadName'
           && roleTokenConfig == roleTokenConfig'
           && metadata == metadata'
           && minAda == minAda'
+          && state == state'
           && contract == contract'
     ApplyInputs MarloweV1 wallet contractId metadata invalidBefore invalidHereafter inputs -> \case
       ApplyInputs MarloweV1 wallet' contractId' metadata' invalidBefore' invalidHereafter' inputs' ->
@@ -1223,7 +1221,7 @@ instance ShowCommand MarloweTxCommand where
 
   showsPrecCommand p =
     showParen (p >= 11) . \case
-      Create stake MarloweV1 wallet threadName roleTokenConfig metadata minAda contract ->
+      Create stake MarloweV1 wallet threadName roleTokenConfig metadata minAda state contract ->
         ( showString "Create"
             . showSpace
             . showsPrec 11 stake
@@ -1239,6 +1237,8 @@ instance ShowCommand MarloweTxCommand where
             . showsPrec 11 metadata
             . showSpace
             . showsPrec 11 minAda
+            . showSpace
+            . showsPrec 11 state
             . showSpace
             . showsPrec 11 contract
         )
