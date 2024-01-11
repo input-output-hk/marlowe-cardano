@@ -345,6 +345,7 @@ mkCreateCommand testData (CreateCase stakeCredential wallet (roleTokens, metadat
     (mkRoleTokensConfig testData roleTokens)
     (mkMarloweTxMetadata metadata)
     (mkMinLovelace minLovelace)
+    Nothing
     (Left $ mkContract roleTokens)
 
 mkStakeCredential :: TestData -> StakeCredentialCase -> Maybe StakeCredential

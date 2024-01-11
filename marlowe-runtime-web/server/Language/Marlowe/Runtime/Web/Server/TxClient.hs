@@ -43,6 +43,7 @@ import Language.Marlowe.Runtime.Core.Api (
   Contract,
   ContractId,
   Inputs,
+  IsMarloweVersion (..),
   MarloweTransactionMetadata,
   MarloweVersion,
   MarloweVersionTag,
@@ -80,6 +81,7 @@ type CreateContract m =
   -> RoleTokensConfig
   -> MarloweTransactionMetadata
   -> Maybe Lovelace
+  -> Maybe (State v)
   -> Either (Contract v) DatumHash
   -> m (Either CreateError (ContractCreated v))
 
@@ -215,12 +217,12 @@ txClient = component "web-tx-client" \TxClientDependencies{..} -> do
   pure
     ( runTxClient
     , TxClient
-        { createContract = \stakeCredential version addresses threadName roles metadata minUTxODeposit contract -> do
+        { createContract = \stakeCredential version addresses threadName roles metadata minUTxODeposit state contract -> do
             response <-
               runConnector connector $
                 RunTxClient $
                   liftCommand $
-                    Create stakeCredential version addresses threadName roles metadata minUTxODeposit contract
+                    Create stakeCredential version addresses threadName roles metadata minUTxODeposit state contract
             liftIO $ for_ response \(ContractCreated era creation@ContractCreatedInEra{contractId}) ->
               atomically $
                 modifyTVar tempContracts $

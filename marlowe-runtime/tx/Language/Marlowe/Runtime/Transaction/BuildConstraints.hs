@@ -157,15 +157,27 @@ buildCreateConstraints
   -- ^ Metadata to add to the transaction.
   -> Lovelace
   -- ^ The lower bound on the ada in the initial state.
+  -> Maybe (State v)
+  -- ^ Optional initial state
   -> (Assets -> Assets)
   -- ^ Adjust a value to account for the minimum UTxO ledger rule.
   -> Contract v
   -- ^ The contract being instantiated.
   -> m (Either CreateError ((Datum v, Assets, PolicyId), TxConstraints era v))
-buildCreateConstraints mkRoleTokenMintingPolicy era version walletCtx roles threadName metadata minAda adjustMinUtxo contract = case version of
+buildCreateConstraints mkRoleTokenMintingPolicy era version walletCtx roles threadName metadata minAda userState adjustMinUtxo contract = case version of
   MarloweV1 ->
     runTxConstraintsBuilder version $
-      buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx roles threadName metadata minAda adjustMinUtxo contract
+      buildCreateConstraintsV1
+        mkRoleTokenMintingPolicy
+        era
+        walletCtx
+        roles
+        threadName
+        metadata
+        minAda
+        userState
+        adjustMinUtxo
+        contract
 
 type MkRoleTokenMintingPolicy m = TxOutRef -> Map TokenName Integer -> m CS.PlutusScript
 
@@ -188,12 +200,14 @@ buildCreateConstraintsV1
   -- ^ Metadata to add to the transaction.
   -> Lovelace
   -- ^ The lower bound on the ada in the initial state.
+  -> Maybe V1.State
+  -- ^ Optional initial state
   -> (Assets -> Assets)
   -- ^ Adjust a value to account for the minimum UTxO ledger rule.
   -> Contract 'V1
   -- ^ The contract being instantiated.
   -> TxConstraintsBuilderM CreateError era 'V1 m (Datum 'V1, Assets, PolicyId)
-buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx threadTokenName roles metadata minAda adjustMinUtxo contract = do
+buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx threadTokenName roles metadata minAda userState adjustMinUtxo contract = do
   -- Output constraints.
 
   -- Role tokens minting and distribution.
@@ -223,7 +237,7 @@ buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx threadTokenName 
     sendMarloweOutput policyId threadToken = do
       (assets, marloweState) <-
         lift . except $
-          initialMarloweStateV1 adjustMinUtxo threadToken minAda walletCtx
+          initialMarloweStateV1 adjustMinUtxo userState threadToken minAda walletCtx
       datum <- mkMarloweDatum policyId marloweState
       tell $ mustSendMarloweOutput assets datum
       pure (datum, assets)
@@ -317,21 +331,23 @@ initialMarloweState
   :: forall v
    . (Assets -> Assets)
   -> MarloweVersion v
+  -> Maybe (State v)
   -> Maybe AssetId
   -> Lovelace
   -> WalletContext
   -> Either CreateError (Assets, V1.State)
-initialMarloweState adjustMinUtxo version threadToken minAda walletCtx = case version of
+initialMarloweState adjustMinUtxo version userState threadToken minAda walletCtx = case version of
   MarloweV1 ->
-    initialMarloweStateV1 adjustMinUtxo threadToken minAda walletCtx
+    initialMarloweStateV1 adjustMinUtxo userState threadToken minAda walletCtx
 
 initialMarloweStateV1
   :: (Assets -> Assets)
+  -> Maybe V1.State
   -> Maybe AssetId
   -> Lovelace
   -> WalletContext
   -> Either CreateError (Assets, V1.State)
-initialMarloweStateV1 adjustMinUtxo threadToken minAda walletCtx = do
+initialMarloweStateV1 adjustMinUtxo userState threadToken minAda walletCtx = do
   let minAda' = max safeLovelace minAda
       initialAssets =
         adjustMinUtxo
@@ -350,12 +366,20 @@ initialMarloweStateV1 adjustMinUtxo threadToken minAda walletCtx = do
       adaToken = V1.Token PV2.adaSymbol PV2.adaToken
       initialAccounts :: V1.Accounts
       initialAccounts =
-        AM.fromList $
-          ((accountId, adaToken), toInteger ada)
+        maybe id (AM.unionWith (+) . V1.accounts) userState
+          . AM.fromList
+          $ ((accountId, adaToken), toInteger ada)
             : [ ((accountId, V1.Token (toPlutusCurrencySymbol cs) (toPlutusTokenName tn)), toInteger i)
               | (AssetId cs tn, i) <- Map.toList $ unTokens tokens
               ]
-  pure (initialAssets, (V1.emptyState (PV2.POSIXTime 0)){V1.accounts = initialAccounts})
+  pure
+    ( initialAssets
+    , (V1.emptyState (maybe (PV2.POSIXTime 0) V1.minTime userState))
+        { V1.accounts = initialAccounts
+        , V1.choices = maybe AM.empty V1.choices userState
+        , V1.boundValues = maybe AM.empty V1.boundValues userState
+        }
+    )
 
 type ApplyResults v = (UTCTime, UTCTime, Maybe (Assets, Datum v), Inputs v)
 
