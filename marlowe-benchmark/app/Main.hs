@@ -28,14 +28,14 @@ import qualified Options.Applicative as O
 main :: IO ()
 main =
   do
-    (host, port, config, faucet, out) <- O.execParser commandParser
+    Command{..} <- O.execParser commandParser
     config' <-
       case config of
         Nothing -> pure def
         Just config'' -> either error id <$> eitherDecodeFileStrict' config''
     faucet' <-
       case faucet of
-        Just (node, magic, address, key) ->
+        Just Faucet{..} ->
           do
             address' <-
               maybe (error "Failed to parse faucet address.") (pure . fromCardanoAddressAny) $
@@ -48,15 +48,32 @@ main =
         Nothing -> pure Nothing
     connectToMarloweRuntime host (fromIntegral port) $ measure config' faucet' out
 
-commandParser :: O.ParserInfo (String, Int, Maybe FilePath, Maybe (FilePath, Word32, Text, FilePath), Maybe FilePath)
+data Command = Command
+  { host :: String
+  , port :: Int
+  , config :: Maybe FilePath
+  , faucet :: Maybe Faucet
+  , out :: Maybe FilePath
+  }
+  deriving (Show)
+
+data Faucet = Faucet
+  { node :: FilePath
+  , magic :: Word32
+  , address :: Text
+  , key :: FilePath
+  }
+  deriving (Show)
+
+commandParser :: O.ParserInfo Command
 commandParser =
   let commandOptions =
-        (,,,,)
+        Command
           <$> O.strOption (O.long "host" <> O.value "localhost" <> O.metavar "HOST" <> O.help "Host for Marlowe proxy service.")
           <*> O.option O.auto (O.long "port" <> O.value 3700 <> O.metavar "PORT" <> O.help "Port for Marlowe proxy service.")
           <*> (O.optional . O.strOption) (O.long "config" <> O.metavar "FILE" <> O.help "Path to the benchmark configuration file.")
           <*> ( O.optional $
-                  (,,,)
+                  Faucet
                     <$> O.strOption (O.long "node-socket-path" <> O.metavar "FILE" <> O.help "Path to the Cardano node socket.")
                     <*> O.option O.auto (O.long "network-magic" <> O.metavar "INTEGER" <> O.help "The Cardano network magic number.")
                     <*> O.strOption (O.long "address" <> O.metavar "ADDRESS" <> O.help "Faucet address.")
