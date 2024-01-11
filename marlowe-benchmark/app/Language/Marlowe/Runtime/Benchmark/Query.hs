@@ -13,7 +13,7 @@ import Data.Aeson (ToJSON)
 import Data.Default (Default (..))
 import Data.Foldable (foldlM)
 import Data.List.Split (chunksOf)
-import Data.Time.Clock (NominalDiffTime)
+import Data.Time.Clock (NominalDiffTime, UTCTime, getCurrentTime)
 import Data.Time.Clock.POSIX (getPOSIXTime)
 import GHC.Generics (Generic)
 import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient, getContractHeaders)
@@ -23,6 +23,8 @@ import UnliftIO (forConcurrently)
 
 data Benchmark = Benchmark
   { metric :: String
+  , start :: UTCTime
+  , finish :: UTCTime
   , query :: String
   , queriesPerSecond :: Double
   , pagesPerSecond :: Double
@@ -75,12 +77,14 @@ run
   -- ^ Action to run the benchmark.
 run metric pageSize query filters =
   do
-    start <- liftIO getPOSIXTime
-    Statistics{..} <- foldlM ((runMarloweQueryClient .) . benchmark start pageSize) def filters
+    start <- liftIO getCurrentTime
+    start' <- liftIO getPOSIXTime
+    Statistics{..} <- foldlM ((runMarloweQueryClient .) . benchmark start' pageSize) def filters
     let seconds = realToFrac duration
         queriesPerSecond = realToFrac queries / seconds
         pagesPerSecond = realToFrac pages / seconds
         contractsPerSecond = realToFrac contracts / seconds
+    finish <- liftIO getCurrentTime
     pure Benchmark{..}
 
 -- | Run the benchmark.

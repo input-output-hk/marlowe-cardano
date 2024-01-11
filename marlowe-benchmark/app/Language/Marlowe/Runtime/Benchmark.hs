@@ -7,18 +7,25 @@ module Language.Marlowe.Runtime.Benchmark (
   measure,
 ) where
 
-import Control.Monad (forM_, when)
+import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Marlowe (MarloweT)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Default (Default (..))
+import Data.Maybe (isJust)
+import Data.Time.Clock (getCurrentTime)
 import Data.Word (Word8)
 import GHC.Generics (Generic)
+import Language.Marlowe.Runtime.ChainSync.Api (Address)
+import System.Directory (removeFile)
+import System.IO (hPutStrLn, stderr)
 
+import qualified Cardano.Api as C
 import qualified Data.Aeson as A (encode)
-import qualified Data.ByteString.Lazy.Char8 as LBS8 (putStrLn)
+import qualified Data.ByteString.Lazy.Char8 as LBS8 (appendFile, putStrLn, unlines)
 import qualified Language.Marlowe.Runtime.Benchmark.BulkSync as Bulk (measure)
 import qualified Language.Marlowe.Runtime.Benchmark.HeaderSync as HeaderSync (measure)
+import qualified Language.Marlowe.Runtime.Benchmark.Lifecycle as Lifecycle (measure)
 import qualified Language.Marlowe.Runtime.Benchmark.Query as Query (measure)
 import qualified Language.Marlowe.Runtime.Benchmark.Sync as Sync (measure)
 
@@ -44,6 +51,10 @@ data BenchmarkConfig = BenchmarkConfig
   -- ^ Number of queries to be executed by each `Query` client.
   , queryPageSize :: Int
   -- ^ Page size for each `Query` client.
+  , lifecycleParallelism :: Int
+  -- ^ Number of parallel clients for basic transaction lifecycle.
+  , lifecycleContracts :: Int
+  -- ^ Number of contracts to be run by each basic transaction lifecycle client.
   }
   deriving (Eq, FromJSON, Generic, Ord, Show, ToJSON)
 
@@ -60,29 +71,50 @@ instance Default BenchmarkConfig where
       , queryParallelism = 4
       , queryBatchSize = 16
       , queryPageSize = 256
+      , lifecycleParallelism = 1
+      , lifecycleContracts = 1
       }
 
 -- | Run the benchmarks.
 measure
-  :: BenchmarkConfig
+  :: (C.IsShelleyBasedEra era)
+  => BenchmarkConfig
+  -> Maybe (C.SocketPath, C.CardanoEra era, C.NetworkId, Address, C.SigningKey C.PaymentExtendedKey)
+  -> Maybe FilePath
   -> MarloweT IO ()
-measure BenchmarkConfig{..} =
+measure BenchmarkConfig{..} faucet out =
   do
-    when (headerSyncParallelism == 0) $
-      error "At least one `HeaderSync` client must be run."
-    (headerSyncResults, contractIds) <- HeaderSync.measure headerSyncParallelism headerMaxContracts
-    liftIO . forM_ headerSyncResults $ LBS8.putStrLn . A.encode
-    when (bulkParallelism > 0) $
+    maybe (pure ()) (liftIO . removeFile) out
+    let report x =
+          liftIO $ case out of
+            Nothing -> mapM_ (LBS8.putStrLn . A.encode) x
+            Just out' -> LBS8.appendFile out' $ LBS8.unlines $ A.encode <$> x
+    when (headerSyncParallelism > 0) $
       do
-        bulkResults <- Bulk.measure bulkParallelism bulkPageSize bulkMaxBlocks
-        liftIO . forM_ bulkResults $ LBS8.putStrLn . A.encode
-    when (syncParallelism > 0) $
+        liftIO $ hPutStrLn stderr . ("HeaderSync: " <>) . show =<< getCurrentTime
+        (headerSyncResults, contractIds) <- HeaderSync.measure headerSyncParallelism headerMaxContracts
+        report headerSyncResults
+        when (bulkParallelism > 0) $
+          do
+            liftIO $ hPutStrLn stderr . ("BulkSync: " <>) . show =<< getCurrentTime
+            bulkResults <- Bulk.measure bulkParallelism bulkPageSize bulkMaxBlocks
+            report bulkResults
+        when (syncParallelism > 0) $
+          do
+            liftIO $ hPutStrLn stderr . ("Sync: " <>) . show =<< getCurrentTime
+            syncResults <- Sync.measure syncParallelism syncBatchSize contractIds
+            report syncResults
+        when (queryParallelism > 0) $
+          do
+            liftIO $ hPutStrLn stderr . ("Query: " <>) . show =<< getCurrentTime
+            queryResults <-
+              Query.measure queryParallelism queryBatchSize queryPageSize "No policy ID" $
+                replicate (queryParallelism * queryBatchSize) mempty
+            report queryResults
+    when (isJust faucet && lifecycleParallelism > 0) $
       do
-        syncResults <- Sync.measure syncParallelism syncBatchSize contractIds
-        liftIO . forM_ syncResults $ LBS8.putStrLn . A.encode
-    when (queryParallelism > 0) $
-      do
-        queryResults <-
-          Query.measure queryParallelism queryBatchSize queryPageSize "No policy ID" $
-            replicate (queryParallelism * queryBatchSize) mempty
-        liftIO . forM_ queryResults $ LBS8.putStrLn . A.encode
+        Just (node, era, network, faucetAddress, faucetKey) <- pure faucet
+        liftIO $ hPutStrLn stderr . ("Lifecycle: " <>) . show =<< getCurrentTime
+        lifecycleResults <- Lifecycle.measure node era network lifecycleParallelism faucetAddress faucetKey lifecycleContracts
+        report lifecycleResults
+    liftIO $ hPutStrLn stderr . ("Done: " <>) . show =<< getCurrentTime

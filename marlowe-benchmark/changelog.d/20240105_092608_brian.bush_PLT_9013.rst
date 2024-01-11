@@ -1,0 +1,4 @@
+Added
+-----
+
+- Added benchmark for the basic lifecycle of a Marlowe contract.

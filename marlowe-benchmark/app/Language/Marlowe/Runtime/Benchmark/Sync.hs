@@ -16,7 +16,7 @@ import Data.Aeson (ToJSON)
 import Data.Default (Default (..))
 import Data.Foldable (foldlM, toList)
 import Data.List.Split (chunksOf)
-import Data.Time.Clock (NominalDiffTime)
+import Data.Time.Clock (NominalDiffTime, UTCTime, getCurrentTime)
 import Data.Time.Clock.POSIX (getPOSIXTime)
 import Data.Type.Equality ((:~:) (Refl))
 import GHC.Generics (Generic)
@@ -42,6 +42,8 @@ import qualified Data.Set as S (Set)
 
 data Benchmark = Benchmark
   { metric :: String
+  , start :: UTCTime
+  , finish :: UTCTime
   , contractsPerSecond :: Double
   , stepsPerSecond :: Double
   , seconds :: Double
@@ -83,11 +85,13 @@ run
   -- ^ Action for running the benchmark.
 run metric contractIds =
   do
-    start <- liftIO getPOSIXTime
-    Statistics{..} <- foldlM ((runMarloweSyncClient .) . benchmark start) (def :: Statistics 'V1) contractIds
+    start' <- liftIO getPOSIXTime
+    start <- liftIO getCurrentTime
+    Statistics{..} <- foldlM ((runMarloweSyncClient .) . benchmark start') (def :: Statistics 'V1) contractIds
     let seconds = realToFrac duration
         contractsPerSecond = realToFrac contracts / seconds
         stepsPerSecond = realToFrac steps / seconds
+    finish <- liftIO getCurrentTime
     pure Benchmark{..}
 
 -- | Run the benchmark.
