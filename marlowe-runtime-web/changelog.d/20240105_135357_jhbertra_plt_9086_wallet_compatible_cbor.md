@@ -7,7 +7,7 @@
 
 - `Tx <era>` format in `POST` responses changed to `Unwitnessed Tx <era>`
 - Transactions in `POST` responses are CDDL compliant.
-- `ShelleyTxWitness <era>` format in `PUT` requests changed to `TxWitness <era>`
+- `ShelleyTxWitness <era>` format in `PUT` requests changed to `TxWitness Set <era>`
 - TxWitnesses in `PUT` requests must be CDDL compliant.
 
 ### Fixed
