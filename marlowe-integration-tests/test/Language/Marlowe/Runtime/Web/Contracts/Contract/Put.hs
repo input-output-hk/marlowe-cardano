@@ -52,6 +52,7 @@ spec = describe "POST /contracts/{contractId}/transactions" do
                   . Map.singleton "PartyA"
                   $ RoleTokenConfig (Map.singleton (ClosedRole partyAWebChangeAddress) 1) Nothing
             , contract = ContractOrSourceId $ Left contract
+            , state = Nothing
             , minUTxODeposit = Nothing
             , tags = mempty
             }

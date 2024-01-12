@@ -822,9 +822,10 @@ data PostContractsRequest = PostContractsRequest
   , roles :: Maybe RolesConfig
   , threadTokenName :: Maybe Text
   , contract :: ContractOrSourceId
+  , state :: Maybe Semantics.State
   , minUTxODeposit :: Maybe Word64
   }
-  deriving (Show, Eq, Ord, Generic)
+  deriving (Show, Eq, Generic)
 
 instance FromJSON PostContractsRequest
 instance ToJSON PostContractsRequest

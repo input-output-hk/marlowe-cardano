@@ -2145,6 +2145,9 @@
                     "roles": {
                         "$ref": "#/components/schemas/RolesConfig"
                     },
+                    "state": {
+                        "$ref": "#/components/schemas/MarloweState"
+                    },
                     "tags": {
                         "additionalProperties": {
                             "$ref": "#/components/schemas/Metadata"
