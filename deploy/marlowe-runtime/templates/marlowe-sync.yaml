@@ -29,22 +29,6 @@ spec:
         value: chain-sync-{{ $network }}-{{ $instanceName }}.{{ $.Values.namespace }}
       - name: MARLOWE_CHAIN_SYNC_QUERY_PORT
         value: "3716"
-      - name: DB_NAME
-        value: chainsync_{{ $instanceName }}_{{ $network }}
-      - name: DB_USER
-        valueFrom:
-          secretKeyRef:
-            key: username
-            name: chainsync-{{ $network }}-owner-user.{{ $.Values.databaseName }}.credentials.postgresql.acid.zalan.do
-            namespace: {{ $.Values.namespace }}
-      - name: DB_PASS
-        valueFrom:
-          secretKeyRef:
-            key: password
-            name: chainsync-{{ $network }}-owner-user.{{ $.Values.databaseName }}.credentials.postgresql.acid.zalan.do
-            namespace: {{ $.Values.namespace }}
-      - name: DB_HOST
-        value: {{ $instance.databaseHost }}:5432
       - name: HTTP_PORT
         value: "3784"
       - name: OTEL_EXPORTER_OTLP_ENDPOINT
@@ -71,6 +55,10 @@ spec:
       - expose: true
         port: 3784
         protocol: TCP
+    traits:
+    - type: postgres-instance
+      properties:
+        name: marlowe-runtime-{{ $instanceName }}-{{ $network }}-marlowe
   policies:
   - name: local-{{ $.Values.namespace }}
     properties:
