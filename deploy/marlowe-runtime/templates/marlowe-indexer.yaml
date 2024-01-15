@@ -43,7 +43,7 @@ spec:
         allocateDatabase:
           storage: 400
           instanceClass: db.t3.medium
-        name: marlowe-runtime-{{ $instanceName }}-{{ $network }}-marlowe
+        name: marlowe-runtime-{{ $instanceName }}-{{ . }}-marlowe
   policies:
   - name: local-{{ $.Values.namespace }}
     properties:
