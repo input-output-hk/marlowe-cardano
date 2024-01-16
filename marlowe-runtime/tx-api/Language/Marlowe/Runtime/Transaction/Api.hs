@@ -1060,6 +1060,7 @@ data CreateError
   | CreateBuildupFailed CreateBuildupError
   | CreateToCardanoError
   | CreateSafetyAnalysisError String -- FIXME: This is a placeholder, pending design of error handling for safety analysis.
+  | CreateSafetyAnalysisFailed [SafetyError]
   | CreateContractNotFound
   | ProtocolParamNoUTxOCostPerByte
   | InsufficientMinAdaDeposit Lovelace
@@ -1067,7 +1068,6 @@ data CreateError
 
 deriving instance Eq CreateError
 deriving instance Show CreateError
-deriving instance Ord CreateError
 instance Binary CreateError
 instance Variations CreateError
 instance ToJSON CreateError

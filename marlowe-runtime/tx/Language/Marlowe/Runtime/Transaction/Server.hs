@@ -429,6 +429,9 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
               contract'
               continuations
           )
+  let safetyErrors = contractSafetyErrors <> transactionSafetyErrors
+  unless (Map.null accounts || null safetyErrors) do
+    throwE $ CreateSafetyAnalysisFailed safetyErrors
   txBody <-
     except $
       first CreateConstraintError $
@@ -451,7 +454,7 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
         , version
         , datum
         , assets
-        , safetyErrors = contractSafetyErrors <> transactionSafetyErrors
+        , safetyErrors
         }
 
 referenceInputsSupportedInEra
