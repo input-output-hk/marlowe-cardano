@@ -29,7 +29,7 @@ In a shell terminal, clone the Marlowe Cardano git repository and launch a Jupyt
 ```bash
 git clone https://github.com/input-output-hk/marlowe-cardano.git
 cd marlowe-cardano/marlowe-runtime/doc/
-nix run ../../marlowe-cli
+nix run ../../.#marlowe-cli
 ```
 This should trigger a Jupyter web page to be displayed on one's browser. Double-click on the `tutorial.ipynb` file to open the notebook. To run this tutorial, simply execute each cell of this notebook in sequence.
 
