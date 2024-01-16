@@ -273,7 +273,7 @@ createSpec = describe "create" $
             Runtime.Transaction.Api.RoleTokensNone
             md
             Nothing
-            Nothing
+            mempty
             (Left contract)
 
     expectSameResultFromCLIAndJobClient "create-tx-body.json" extraCliArgs extractCreateTxBody creationCommand
@@ -309,7 +309,7 @@ depositSpec = describe "deposit" $
           )
           (standardMetadata tags)
           Nothing
-          Nothing
+          mempty
           (Left contract)
 
     _ <- Runtime.Integration.Common.submit partyAWallet era txBody
@@ -366,7 +366,7 @@ chooseSpec = describe "choose" $
           )
           (standardMetadata tags)
           Nothing
-          Nothing
+          mempty
           (Left contract)
 
     _ <- Runtime.Integration.Common.submit partyAWallet era txBody
@@ -420,7 +420,7 @@ notifySpec = describe "notify" $
           )
           (standardMetadata tags)
           Nothing
-          Nothing
+          mempty
           (Left contract)
 
     _ <- Runtime.Integration.Common.submit partyAWallet era txBody
@@ -497,7 +497,7 @@ applySpec = describe "apply" $
           )
           (standardMetadata tags)
           Nothing
-          Nothing
+          mempty
           (Left contract)
 
     _ <- Runtime.Integration.Common.submit partyAWallet era txBody
@@ -558,7 +558,7 @@ withdrawSpec = describe "withdraw" $
           )
           (standardMetadata tags)
           Nothing
-          Nothing
+          mempty
           (Left contract)
 
     _ <- Runtime.Integration.Common.submit partyAWallet era0 txBody

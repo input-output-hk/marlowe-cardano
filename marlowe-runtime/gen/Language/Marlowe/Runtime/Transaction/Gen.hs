@@ -330,6 +330,14 @@ instance (ArbitraryMarloweVersion v, IsCardanoEra era) => Arbitrary (WithdrawTxI
       <*> hedgehog (genTxBody cardanoEra)
   shrink WithdrawTxInEra{..} = [WithdrawTxInEra{..}{WithdrawTxInEra.inputs = inputs'} | inputs' <- shrink inputs]
 
+instance Arbitrary Account where
+  arbitrary =
+    oneof
+      [ RoleAccount <$> arbitrary
+      , AddressAccount <$> arbitrary
+      ]
+  shrink = genericShrink
+
 instance ArbitraryCommand MarloweTxCommand where
   arbitraryTag =
     elements

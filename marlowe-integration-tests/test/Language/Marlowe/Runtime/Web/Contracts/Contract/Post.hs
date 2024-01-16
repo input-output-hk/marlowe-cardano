@@ -83,7 +83,7 @@ specWithRolesConfig threadTokenName roles =
             , threadTokenName
             , roles = Just $ roles partyAWebChangeAddress
             , contract = ContractOrSourceId $ Left contract
-            , state = Nothing
+            , accounts = mempty
             , minUTxODeposit = Nothing
             , tags = mempty
             }
@@ -129,7 +129,7 @@ bugPLT8712 = do
                                   }
                           }
               , contract = ContractOrSourceId $ Left V1.Close
-              , state = Nothing
+              , accounts = mempty
               , minUTxODeposit = Nothing
               , tags = mempty
               }
@@ -197,7 +197,7 @@ bugPLT8713 = do
                           , metadata = Nothing
                           }
               , contract = ContractOrSourceId $ Left contract
-              , state = Nothing
+              , accounts = mempty
               , minUTxODeposit = Nothing
               , tags = mempty
               }

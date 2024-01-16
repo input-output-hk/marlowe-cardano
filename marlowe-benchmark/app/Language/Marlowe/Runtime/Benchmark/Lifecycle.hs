@@ -269,7 +269,7 @@ create partyCredentials contract =
         roles
         emptyMarloweTransactionMetadata
         Nothing
-        Nothing
+        mempty
         (Left contract)
         >>= either (error . show) pure
     void $ signSubmit support key txBody

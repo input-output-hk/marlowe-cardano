@@ -102,6 +102,7 @@ import Language.Marlowe.Runtime.Core.Api (
  )
 import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript (..), MarloweScripts (..))
 import Language.Marlowe.Runtime.Transaction.Api (
+  Account,
   ApplyInputsError (..),
   ContractCreated (..),
   ContractCreatedInEra (..),
@@ -229,7 +230,7 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                       (toLedgerEpochInfo eraHistory)
                       protocolParameters
               case command of
-                Create mStakeCredential version addresses threadRole roles metadata minAda state contract ->
+                Create mStakeCredential version addresses threadRole roles metadata minAda accounts contract ->
                   withEvent ExecCreate \_ ->
                     execCreate
                       mkRoleTokenMintingPolicy
@@ -248,7 +249,7 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                       roles
                       metadata
                       minAda
-                      state
+                      accounts
                       contract
                       analysisTimeout
                 ApplyInputs version addresses contractId metadata invalidBefore invalidHereafter inputs ->
@@ -318,11 +319,11 @@ execCreate
   -> RoleTokensConfig
   -> MarloweTransactionMetadata
   -> Maybe Chain.Lovelace
-  -> Maybe (State v)
+  -> Map Account Chain.Assets
   -> Either (Contract v) DatumHash
   -> NominalDiffTime
   -> m (ServerStCmd MarloweTxCommand Void CreateError (ContractCreated v) m ())
-execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts solveConstraints protocolParameters loadWalletContext loadHelpersContext networkId mStakeCredential version addresses threadRole roleTokens metadata optMinAda state contract analysisTimeout = execExceptT do
+execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts solveConstraints protocolParameters loadWalletContext loadHelpersContext networkId mStakeCredential version addresses threadRole roleTokens metadata optMinAda accounts contract analysisTimeout = execExceptT do
   referenceInputsSupported <- referenceInputsSupportedInEra (CreateEraUnsupported $ AnyCardanoEra era) era
   let adjustMinUtxo = mkAdjustMinimumUtxo referenceInputsSupported protocolParameters version
   let threadRole' = fromMaybe "" threadRole
@@ -332,7 +333,7 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
       initialMarloweState
         adjustMinUtxo
         version
-        state
+        accounts
         ( Chain.AssetId "00000000000000000000000000000000000000000000000000000000" threadRole' <$ guard case roleTokens of
             RoleTokensNone -> False
             RoleTokensMint (unMint -> mint) -> any (NEMap.member (ToScript OpenRoleScript) . roleTokenRecipients) mint
@@ -366,7 +367,7 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
         roleTokens
         metadata
         minAda
-        state
+        accounts
         adjustMinUtxo
         contract'
   let scripts@MarloweScripts{..} = getCurrentScripts version

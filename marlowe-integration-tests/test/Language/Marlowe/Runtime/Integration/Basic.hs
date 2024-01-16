@@ -236,7 +236,7 @@ spec = describe "Basic scenarios" do
           (RoleTokensUsePolicy "" mempty)
           emptyMarloweTransactionMetadata
           Nothing
-          Nothing
+          mempty
           (Left contract)
     _ <- submit wallet era0 created.txBody
     InputsApplied era1 applied <-

@@ -276,7 +276,7 @@ runBuildCreateConstraints CreateArgs{..} =
           roleTokensConfig
           metadata
           minAda
-          Nothing
+          mempty
           (\(Chain.Assets ada tokens) -> Chain.Assets ada tokens)
           contract
       )

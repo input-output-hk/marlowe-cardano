@@ -11,6 +11,7 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Marlowe.Runtime.Transaction.Api (
+  Account (..),
   ApplyInputsConstraintsBuildupError (..),
   ApplyInputsError (..),
   ConstraintError (..),
@@ -755,6 +756,12 @@ instance (IsCardanoEra era) => ToJSON (InputsAppliedInEra era 'V1) where
       , "tx-body" .= serialiseToTextEnvelope Nothing txBody
       ]
 
+data Account
+  = RoleAccount TokenName
+  | AddressAccount Address
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving anyclass (Binary, ToJSON, Variations)
+
 -- | The low-level runtime API for building and submitting transactions.
 data MarloweTxCommand status err result where
   -- | Construct a transaction that starts a new Marlowe contract. The
@@ -776,8 +783,8 @@ data MarloweTxCommand status err result where
     -- ^ Optional metadata to attach to the transaction
     -> Maybe Lovelace
     -- ^ Optional min Lovelace deposit which should be used for the contract output.
-    -> Maybe (State v)
-    -- ^ Optional initial state. Can be used to pre-apply deposits and choices, or to pre-define variables.
+    -> Map Account Assets
+    -- ^ Initial account balances. The min ADA deposit will be added to this.
     -> Either (Contract v) DatumHash
     -- ^ The contract to run, or the hash of the contract to load from the store.
     -> MarloweTxCommand Void CreateError (ContractCreated v)
@@ -900,14 +907,14 @@ instance Command MarloweTxCommand where
     TagSubmit -> JobIdSubmit <$> get
 
   putCommand = \case
-    Create mStakeCredential MarloweV1 walletAddresses threadName roles metadata minAda state contract -> do
+    Create mStakeCredential MarloweV1 walletAddresses threadName roles metadata minAda accounts contract -> do
       put mStakeCredential
       put walletAddresses
       put threadName
       put roles
       put metadata
       put minAda
-      put state
+      put accounts
       put contract
     ApplyInputs version walletAddresses contractId metadata invalidBefore invalidHereafter redeemer -> do
       put walletAddresses
@@ -1143,15 +1150,15 @@ data SubmitStatus
 
 instance CommandEq MarloweTxCommand where
   commandEq = \case
-    Create stake MarloweV1 wallet threadName roleTokenConfig metadata minAda state contract -> \case
-      Create stake' MarloweV1 wallet' threadName' roleTokenConfig' metadata' minAda' state' contract' ->
+    Create stake MarloweV1 wallet threadName roleTokenConfig metadata minAda accounts contract -> \case
+      Create stake' MarloweV1 wallet' threadName' roleTokenConfig' metadata' minAda' accounts' contract' ->
         stake == stake'
           && wallet == wallet'
           && threadName == threadName'
           && roleTokenConfig == roleTokenConfig'
           && metadata == metadata'
           && minAda == minAda'
-          && state == state'
+          && accounts == accounts'
           && contract == contract'
     ApplyInputs MarloweV1 wallet contractId metadata invalidBefore invalidHereafter inputs -> \case
       ApplyInputs MarloweV1 wallet' contractId' metadata' invalidBefore' invalidHereafter' inputs' ->
@@ -1221,7 +1228,7 @@ instance ShowCommand MarloweTxCommand where
 
   showsPrecCommand p =
     showParen (p >= 11) . \case
-      Create stake MarloweV1 wallet threadName roleTokenConfig metadata minAda state contract ->
+      Create stake MarloweV1 wallet threadName roleTokenConfig metadata minAda accounts contract ->
         ( showString "Create"
             . showSpace
             . showsPrec 11 stake
@@ -1238,7 +1245,7 @@ instance ShowCommand MarloweTxCommand where
             . showSpace
             . showsPrec 11 minAda
             . showSpace
-            . showsPrec 11 state
+            . showsPrec 11 accounts
             . showSpace
             . showsPrec 11 contract
         )

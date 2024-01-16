@@ -89,7 +89,7 @@ closedSpec = parallel $ describe "Closed contract" $ aroundAll setup do
             RoleTokensNone
             emptyMarloweTransactionMetadata
             Nothing
-            Nothing
+            mempty
             (Left Close)
       _ <- submit wallet era0 createBody
       applyInputs MarloweV1 (addresses wallet) contractId emptyMarloweTransactionMetadata []
@@ -140,7 +140,7 @@ closeSpec = parallel $ describe "Close contract" $ aroundAll setup do
         RoleTokensNone
         emptyMarloweTransactionMetadata
         Nothing
-        Nothing
+        mempty
         (Left Close)
         >>= expectRight "Failed to create contract"
         >>= \created@(ContractCreated era0 ContractCreatedInEra{txBody = createBody, contractId}) -> do
@@ -287,7 +287,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
             (mkRoleTokens [("Role", wallet2)])
             emptyMarloweTransactionMetadata
             (Just 2_000_000)
-            Nothing
+            mempty
             (Left $ mkPay (Account $ Role "Role") ada (Constant 2_000_000) Close)
       submitCreate wallet1 payRoleAccountCreated
       payAddressAccountCreated <-
@@ -300,7 +300,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
             RoleTokensNone
             emptyMarloweTransactionMetadata
             (Just 2_000_000)
-            Nothing
+            mempty
             (Left $ mkPay (Account $ walletParty wallet2) ada (Constant 2_000_000) Close)
       submitCreate wallet1 payAddressAccountCreated
       payRolePartyCreated <-
@@ -313,7 +313,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
             (mkRoleTokens [("Role", wallet2)])
             emptyMarloweTransactionMetadata
             (Just 2_000_000)
-            Nothing
+            mempty
             (Left $ mkPay (Party $ Role "Role") ada (Constant 2_000_000) Close)
       submitCreate wallet1 payRolePartyCreated
       payAddressPartyCreated <-
@@ -326,7 +326,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
             RoleTokensNone
             emptyMarloweTransactionMetadata
             (Just 2_000_000)
-            Nothing
+            mempty
             (Left $ mkPay (Party $ walletParty wallet2) ada (Constant 2_000_000) Close)
       submitCreate wallet1 payAddressPartyCreated
       payDepth1Created <-
@@ -339,7 +339,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
             (mkRoleTokens [("Role", wallet2)])
             emptyMarloweTransactionMetadata
             (Just 2_000_000)
-            Nothing
+            mempty
             ( Left $
                 mkPay (Account $ Role "Role") ada (Constant 2_000_000) $
                   When
@@ -359,7 +359,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
             (mkRoleTokens [("Role", wallet2)])
             emptyMarloweTransactionMetadata
             (Just 10_000_000)
-            Nothing
+            mempty
             ( Left $
                 mkPay (Account $ Role "Role") ada (Constant 2_000_000) $
                   When
@@ -384,7 +384,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
             (mkRoleTokens [("Role", wallet2)])
             emptyMarloweTransactionMetadata
             (Just 10_000_000)
-            Nothing
+            mempty
             ( Left $
                 mkPay (Party $ Role "Role") ada (Constant 2_000_000) $
                   When
@@ -531,7 +531,7 @@ whenTimeoutSpec = parallel $ describe "Timed out contracts" $ aroundAll setup do
             RoleTokensNone
             emptyMarloweTransactionMetadata
             Nothing
-            Nothing
+            mempty
             (Left $ When [Case (Notify TrueObs) Close] (utcTimeToPOSIXTime startTime) Close)
       submitCreate wallet depth1Created
       depth2InnerTimeoutCreated <-
@@ -544,7 +544,7 @@ whenTimeoutSpec = parallel $ describe "Timed out contracts" $ aroundAll setup do
             RoleTokensNone
             emptyMarloweTransactionMetadata
             Nothing
-            Nothing
+            mempty
             ( Left $
                 When [Case (Notify TrueObs) Close] (utcTimeToPOSIXTime startTime) $
                   When [] (utcTimeToPOSIXTime startTime) Close
@@ -560,7 +560,7 @@ whenTimeoutSpec = parallel $ describe "Timed out contracts" $ aroundAll setup do
             RoleTokensNone
             emptyMarloweTransactionMetadata
             Nothing
-            Nothing
+            mempty
             ( Left $
                 When [Case (Notify TrueObs) Close] (utcTimeToPOSIXTime startTime) $
                   When [] (utcTimeToPOSIXTime $ addUTCTime (secondsToNominalDiffTime 200) startTime) Close
@@ -658,7 +658,7 @@ whenEmptySpec = parallel $ describe "Empty When contracts" $ aroundAll setup do
             RoleTokensNone
             emptyMarloweTransactionMetadata
             Nothing
-            Nothing
+            mempty
             (Left $ When [] (utcTimeToPOSIXTime $ addUTCTime (secondsToNominalDiffTime 200) startTime) Close)
       submitCreate wallet $ ContractCreated era ContractCreatedInEra{..}
       runtime <- ask
@@ -935,7 +935,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
             )
             emptyMarloweTransactionMetadata
             Nothing
-            Nothing
+            mempty
             (Left $ When cases (utcTimeToPOSIXTime $ addUTCTime (secondsToNominalDiffTime 100) startTime) Close)
       submitCreate wallet1 contract
       runtime <- ask
@@ -993,7 +993,7 @@ merkleizedSpec = parallel $ describe "Merkleized contracts" $ aroundAll setup do
             RoleTokensNone
             emptyMarloweTransactionMetadata
             Nothing
-            Nothing
+            mempty
             ( Left $
                 When
                   [MerkleizedCase (Notify TrueObs) hash]
@@ -1060,7 +1060,7 @@ multiInputsSpec = parallel $ describe "Multi inputs" $ aroundAll setup do
             (mkRoleTokens [("role", wallet)])
             emptyMarloweTransactionMetadata
             Nothing
-            Nothing
+            mempty
             ( Left $
                 When
                   [Case action1 $ When [Case action2 Close] timeout Close, Case action2 $ When [Case action1 Close] timeout Close]

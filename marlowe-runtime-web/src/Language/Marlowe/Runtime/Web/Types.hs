@@ -263,7 +263,7 @@ instance ToHttpApiData AssetId where
 
 newtype Party = Party {unParty :: T.Text}
   deriving (Eq, Ord, Generic)
-  deriving newtype (Show, ToHttpApiData, FromHttpApiData, ToJSON, FromJSON)
+  deriving newtype (Show, ToHttpApiData, FromHttpApiData, ToJSON, FromJSON, FromJSONKey, ToJSONKey)
 
 instance ToSchema Party where
   declareNamedSchema proxy = pure $ NamedSchema (Just "Party") $ toParamSchema proxy
@@ -822,7 +822,7 @@ data PostContractsRequest = PostContractsRequest
   , roles :: Maybe RolesConfig
   , threadTokenName :: Maybe Text
   , contract :: ContractOrSourceId
-  , state :: Maybe Semantics.State
+  , accounts :: Map Party Assets
   , minUTxODeposit :: Maybe Word64
   }
   deriving (Show, Eq, Generic)
