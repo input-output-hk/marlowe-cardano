@@ -2120,6 +2120,12 @@
             },
             "PostContractsRequest": {
                 "properties": {
+                    "accounts": {
+                        "additionalProperties": {
+                            "$ref": "#/components/schemas/Assets"
+                        },
+                        "type": "object"
+                    },
                     "contract": {
                         "oneOf": [
                             {
@@ -2145,9 +2151,6 @@
                     "roles": {
                         "$ref": "#/components/schemas/RolesConfig"
                     },
-                    "state": {
-                        "$ref": "#/components/schemas/MarloweState"
-                    },
                     "tags": {
                         "additionalProperties": {
                             "$ref": "#/components/schemas/Metadata"
@@ -2165,7 +2168,8 @@
                     "tags",
                     "metadata",
                     "version",
-                    "contract"
+                    "contract",
+                    "accounts"
                 ],
                 "type": "object"
             },
