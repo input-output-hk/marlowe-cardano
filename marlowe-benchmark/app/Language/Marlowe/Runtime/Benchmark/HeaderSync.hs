@@ -13,7 +13,7 @@ import Control.Monad.Trans.Marlowe.Class (runMarloweHeaderSyncClient)
 import Data.Aeson (ToJSON)
 import Data.Bifunctor (second)
 import Data.Default (Default (..))
-import Data.Time.Clock (NominalDiffTime)
+import Data.Time.Clock (NominalDiffTime, UTCTime, getCurrentTime)
 import Data.Time.Clock.POSIX (getPOSIXTime)
 import GHC.Generics (Generic)
 import Language.Marlowe.Protocol.HeaderSync.Client (
@@ -30,6 +30,8 @@ import qualified Data.Set as S (Set, fromList, size)
 
 data Benchmark = Benchmark
   { metric :: String
+  , start :: UTCTime
+  , finish :: UTCTime
   , blocksPerSecond :: Double
   , contractsPerSecond :: Double
   , seconds :: Double
@@ -67,10 +69,12 @@ run
   -- ^ Action for running the benchmark.
 run metric maxContracts =
   do
+    start <- liftIO getCurrentTime
     Statistics{..} <- runMarloweHeaderSyncClient . benchmark maxContracts =<< liftIO getPOSIXTime
     let seconds = realToFrac duration
         blocksPerSecond = realToFrac blocks / seconds
         contractsPerSecond = fromIntegral (S.size contracts) / seconds
+    finish <- liftIO getCurrentTime
     pure (Benchmark{..}, contracts)
 
 -- | Run the benchmark.

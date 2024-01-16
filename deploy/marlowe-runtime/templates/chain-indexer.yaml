@@ -18,22 +18,6 @@ spec:
       env:
       - name: NODE_CONFIG
         value: /node-config/network/{{ $network }}/cardano-node/config.json
-      - name: DB_NAME
-        value: chainsync_{{ $instanceName }}_{{ $network }}
-      - name: DB_USER
-        valueFrom:
-          secretKeyRef:
-            key: username
-            name: chainsync-{{ $network }}-owner-user.{{ $.Values.databaseName }}.credentials.postgresql.acid.zalan.do
-            namespace: {{ $.Values.namespace }}
-      - name: DB_PASS
-        valueFrom:
-          secretKeyRef:
-            key: password
-            name: chainsync-{{ $network }}-owner-user.{{ $.Values.databaseName }}.credentials.postgresql.acid.zalan.do
-            namespace: {{ $.Values.namespace }}
-      - name: DB_HOST
-        value: {{ $instance.databaseHost }}:5432
       - name: CARDANO_NODE_SOCKET_PATH
         value: /ipc/node.socket
       - name: HTTP_PORT
@@ -50,6 +34,12 @@ spec:
         - name: ipc
           mountPath: /ipc
     traits:
+    - type: postgres-instance
+      properties:
+        allocateDatabase:
+          storage: 400
+          instanceClass: db.t3.medium
+        name: marlowe-runtime-{{ $instanceName }}-{{ $network }}-chain
     - type: init-container
       properties:
         name: node-config-cloner
@@ -78,7 +68,7 @@ spec:
     properties:
       clusters:
       - local
-      namespace: {{ $.Values.namespace }} 
+      namespace: {{ $.Values.namespace }}
     type: topology
   workflow:
     mode:

@@ -472,6 +472,7 @@ instance ToDTO SomeContractState where
       , status = Web.Confirmed
       , block = Just $ toDTO initialBlock
       , initialContract = Sem.marloweContract $ datum initialOutput
+      , initialState = Sem.marloweState $ datum initialOutput
       , currentContract = Sem.marloweContract . datum <$> latestOutput
       , state = Sem.marloweState . datum <$> latestOutput
       , assets = maybe emptyAssets (\Core.TransactionScriptOutput{..} -> toDTO assets) latestOutput
@@ -592,6 +593,8 @@ instance ToDTOWithTxStatus (Tx.ContractCreated v) where
       , block = Nothing
       , initialContract = case version of
           MarloweV1 -> Sem.marloweContract datum
+      , initialState = case version of
+          MarloweV1 -> Sem.marloweState datum
       , currentContract = case version of
           MarloweV1 -> Just $ Sem.marloweContract datum
       , state = case version of

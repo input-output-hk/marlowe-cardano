@@ -789,6 +789,9 @@
                     "initialContract": {
                         "$ref": "#/components/schemas/Contract"
                     },
+                    "initialState": {
+                        "$ref": "#/components/schemas/MarloweState"
+                    },
                     "metadata": {
                         "additionalProperties": {
                             "$ref": "#/components/schemas/Metadata"
@@ -834,6 +837,7 @@
                     "metadata",
                     "status",
                     "initialContract",
+                    "initialState",
                     "assets",
                     "unclaimedPayouts"
                 ],
