@@ -92,12 +92,12 @@ caseAsDataV1Scripts =
           [
             ( mainnetNetworkId
             , ReferenceScriptUtxo
-                { txOutRef = "825c0e18d0acd3cc4e388c864b774478de3749e37814b721188f6647a2e0ea83#1"
+                { txOutRef = "9e2f6031d9bd6ff1d08f38ff469657b8dac63ab78854a1fccca6b922292d0fce#1"
                 , txOut =
                     Chain.TransactionOutput
                       { address =
                           fromJust $
-                            fromBech32 "addr1z9l4w7djneh0kss4drg2php6ynflsvmal7x3w5nrc95uvhz7e4q926apsvcd6kn33cpx95k8jsmrj7v0k62rczvz8urqrl2z0l"
+                            fromBech32 "addr1q8cmu4u3quhxgansnxvfuzn5a9u6khvff4kggy35f5xl2qtsluv29uarg9hhghehhf7r7kmyrh6wsvtgg2caanrf94uscc58wh"
                       , assets = Assets 48_776_270 mempty
                       , datum = Nothing
                       , datumHash = Nothing
@@ -139,12 +139,12 @@ caseAsDataV1Scripts =
           [
             ( mainnetNetworkId
             , ReferenceScriptUtxo
-                { txOutRef = "825c0e18d0acd3cc4e388c864b774478de3749e37814b721188f6647a2e0ea83#2"
+                { txOutRef = "9e2f6031d9bd6ff1d08f38ff469657b8dac63ab78854a1fccca6b922292d0fce#2"
                 , txOut =
                     Chain.TransactionOutput
                       { address =
                           fromJust $
-                            fromBech32 "addr1z9l4w7djneh0kss4drg2php6ynflsvmal7x3w5nrc95uvhz7e4q926apsvcd6kn33cpx95k8jsmrj7v0k62rczvz8urqrl2z0l"
+                            fromBech32 "addr1qy0ph6lw0n2xdqgcy8qct5xpkhyy3cqkn8hjmctkq8zszumsluv29uarg9hhghehhf7r7kmyrh6wsvtgg2caanrf94usea72r0"
                       , assets = Assets 11_658_550 mempty
                       , datum = Nothing
                       , datumHash = Nothing
@@ -186,12 +186,12 @@ caseAsDataV1Scripts =
           [
             ( (OpenRoleScript, mainnetNetworkId)
             , ReferenceScriptUtxo
-                { txOutRef = "049ab6eed0c8fb79cb6dde873af45c7bf32e25a7d66bd7a384c57fd705170ee9#1"
+                { txOutRef = "71ac89e01f9b48ec9c388555f7b1d3ed8195d3013e47de6e0d64084311d9129e#1"
                 , txOut =
                     Chain.TransactionOutput
                       { address =
                           fromJust $
-                            fromBech32 "addr1z9l4w7djneh0kss4drg2php6ynflsvmal7x3w5nrc95uvhz7e4q926apsvcd6kn33cpx95k8jsmrj7v0k62rczvz8urqrl2z0l"
+                            fromBech32 "addr1q9heun9n9qjlgtkv7ldvl56wagju53ykr5ps49h80enx7grsluv29uarg9hhghehhf7r7kmyrh6wsvtgg2caanrf94usf2tt99"
                       , assets = Assets 17_765_820 mempty
                       , datum = Nothing
                       , datumHash = Nothing
