@@ -4,11 +4,14 @@
 
 module Language.Marlowe.Runtime.Transaction.Safety (
   Continuations,
+  ThreadTokenAssetId (..),
   checkContract,
   checkTransactions,
   makeSystemHistory,
+  mkLockedRolesContext,
+  mockLockedRolesContext,
   minAdaUpperBound,
-  mkAdjustMinimumUtxo,
+  mkAdjustMinUTxO,
   noContinuations,
 ) where
 
@@ -42,7 +45,12 @@ import Language.Marlowe.Runtime.Core.Api (
   TransactionScriptOutput (..),
  )
 import Language.Marlowe.Runtime.Transaction.Api (Mint (..), RoleTokensConfig (..))
-import Language.Marlowe.Runtime.Transaction.BuildConstraints (buildApplyInputsConstraints, safeLovelace)
+import Language.Marlowe.Runtime.Transaction.BuildConstraints (
+  AdjustMinUTxO (..),
+  ThreadTokenAssetId (..),
+  buildApplyInputsConstraints,
+  safeLovelace,
+ )
 import Language.Marlowe.Runtime.Transaction.Constraints (
   HelperScriptInfo (helperAddress),
   HelperScriptState (..),
@@ -65,22 +73,23 @@ import qualified Cardano.Api.Shelley as Shelley (
   SystemStart (..),
  )
 import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.Trans.State.Strict (evalState, get, put)
 import Data.Functor.Identity (runIdentity)
+import qualified Data.Map as Map
 import qualified Data.Map.NonEmpty as NEMap
 import qualified Data.Map.Strict as M (
   Map,
   elems,
   empty,
   fromList,
-  fromSet,
-  intersection,
   keysSet,
   map,
   mapKeys,
   singleton,
   size,
-  toList,
+  traverseWithKey,
  )
+import Data.Maybe (isJust)
 import qualified Data.SOP.Counting as Ouroboros
 import qualified Data.Set as S (Set, intersection, map, singleton)
 import qualified Data.Set as Set
@@ -146,6 +155,59 @@ import qualified PlutusTx.AssocMap as AM (toList)
 -- FIXME: Relocate this definition when full support for Merkleization is added to Runtime.
 type Continuations v = M.Map Chain.DatumHash (Contract v)
 
+-- Roles still locked in the script on the chain. All the `helperUTxO` are non empty.
+-- We could use parameter to enforce th in the original `HelpersContext` but it would overcomplicate the code all over the place.
+newtype LockedRolesContext = LockedRolesContext HelpersContext
+
+-- We check if script states have non empty helperUTxO.
+mkLockedRolesContext :: HelpersContext -> LockedRolesContext
+mkLockedRolesContext (HelpersContext helperScripts policyId helperScriptStates) = do
+  let helperScriptStates' = Map.filter (\HelperScriptState{helperUTxO} -> isJust helperUTxO) helperScriptStates
+  LockedRolesContext $ HelpersContext helperScripts policyId helperScriptStates'
+
+-- For every empty `helperUTxO` provide mock txOut info.
+mockLockedRolesContext
+  :: ThreadTokenAssetId
+  -> AdjustMinUTxO
+  -> HelpersContext
+  -> LockedRolesContext
+mockLockedRolesContext (ThreadTokenAssetId threadTokenAssetId) (AdjustMinUTxO adjustMinUtxo) hc@(HelpersContext _ _ helperScriptStates) = do
+  let Chain.AssetId threadTokenPolicyId threadTokenName = threadTokenAssetId
+      helperScriptStates' :: M.Map Chain.TokenName HelperScriptState
+      helperScriptStates' = flip evalState (1 :: Integer) $ flip M.traverseWithKey helperScriptStates \roleName v -> case v of
+        s@(HelperScriptState _ (Just _)) -> pure s
+        HelperScriptState helperScriptInfo _ -> do
+          let -- We assume that roles have the same policy id as the thread token which can change in the future.
+              roleTokenAssetId = Chain.AssetId threadTokenPolicyId roleName
+          ix <- get
+          put (ix + 1)
+          let txOutRef = fromString ("EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE#" <> show ix)
+              address = helperAddress helperScriptInfo
+              assets = adjustMinUtxo . Chain.Assets safeLovelace . Chain.Tokens $ M.fromList [(roleTokenAssetId, 1)]
+              datum = Just $ Chain.B $ Chain.unTokenName threadTokenName
+              datumHash =
+                Chain.fromCardanoDatumHash
+                  . C.hashScriptDataBytes
+                  . C.unsafeHashableScriptData
+                  . Chain.toCardanoScriptData
+                  <$> datum
+              helperTransactionOutput = Chain.TransactionOutput{..}
+          pure $ HelperScriptState helperScriptInfo $ Just (txOutRef, helperTransactionOutput)
+  LockedRolesContext $ hc{helperScriptStates = helperScriptStates'}
+
+newtype ActiveRoles = ActiveRoles (S.Set Chain.TokenName)
+
+activeLockedRolesContext :: ActiveRoles -> LockedRolesContext -> LockedRolesContext
+activeLockedRolesContext (ActiveRoles activeRoles) (LockedRolesContext (HelpersContext helperScripts policyId helperScriptStates)) = do
+  let helperScriptStates' = Map.filterWithKey (\k _ -> k `Set.member` activeRoles) helperScriptStates
+  LockedRolesContext $ HelpersContext helperScripts policyId helperScriptStates'
+
+data LockedRoles = LockedRoles Chain.PolicyId (S.Set Chain.TokenName)
+
+lockedRoles :: LockedRolesContext -> LockedRoles
+lockedRoles (LockedRolesContext (HelpersContext _ policyId helperScriptStates)) =
+  LockedRoles policyId $ M.keysSet helperScriptStates
+
 -- | No continuations for a contract.
 noContinuations
   :: MarloweVersion v
@@ -178,20 +240,20 @@ minAdaUpperBound era pps MarloweV1 state contract continuations =
 
 -- | Adjust the ada in a TxOut upwards, if needed to satisfy the minimum UTxO ledger rule. Assume that a datum hash is
 -- present in the TxOut and that the address contains a stake credential.
-mkAdjustMinimumUtxo
+mkAdjustMinUTxO
   :: forall era v
    . C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
   -> Shelley.ProtocolParameters
   -> MarloweVersion v
-  -> Chain.Assets
-  -> Chain.Assets
-mkAdjustMinimumUtxo era pps MarloweV1 assets@Chain.Assets{ada, tokens} =
-  let minLovelace =
-        maybe 30_000_000 toInteger $ -- Safe for all UTxOs.
-          minAdaBound era pps MarloweV1 assets
-   in if minLovelace > toInteger ada
-        then Chain.Assets (fromInteger minLovelace) tokens
-        else assets
+  -> AdjustMinUTxO
+mkAdjustMinUTxO era pps MarloweV1 =
+  AdjustMinUTxO \assets@Chain.Assets{ada, tokens} -> do
+    let minLovelace =
+          maybe 30_000_000 toInteger $ -- Safe for all UTxOs.
+            minAdaBound era pps MarloweV1 assets
+    if minLovelace > toInteger ada
+      then Chain.Assets (fromInteger minLovelace) tokens
+      else assets
 
 -- | Compute a worst-case bound on the minimum TxOut value for assets. Assume that a datum hash is present in the
 --   TxOut and that the address contains a stake credential.
@@ -242,37 +304,35 @@ minAdaBound era pps MarloweV1 assets =
 -- | Check a contract for design errors and ledger violations.
 checkContract
   :: Cardano.NetworkId
-  -> Maybe RoleTokensConfig
+  -> RoleTokensConfig
   -> MarloweVersion v
   -> Contract v
-  -> V1.State
+  -> Maybe V1.State
   -> Continuations v
   -> [SafetyError]
 checkContract network rolesTokenConfig MarloweV1 contract state continuations =
   let continuations' = remapContinuations continuations
-      mintCheck = flip foldMap rolesTokenConfig \cfg ->
-        checkMinting cfg MarloweV1 contract state continuations
+      mintCheck = checkMinting rolesTokenConfig MarloweV1 contract state continuations
       avoidDuplicateReport = True
-      nameCheck = checkRoleNames avoidDuplicateReport (Just state) contract continuations'
-      tokenCheck = checkTokens (Just state) contract continuations'
+      nameCheck = checkRoleNames avoidDuplicateReport state contract continuations'
+      tokenCheck = checkTokens state contract continuations'
       continuationCheck = checkContinuations contract continuations'
       networksCheck =
-        checkNetwork (network == Cardano.Mainnet) (Just state) contract continuations'
-          <> snd (checkNetworks (Just state) contract continuations')
-      addressCheck = checkAddresses (Just state) contract continuations'
+        checkNetwork (network == Cardano.Mainnet) state contract continuations'
+          <> snd (checkNetworks state contract continuations')
+      addressCheck = checkAddresses state contract continuations'
    in mintCheck <> nameCheck <> tokenCheck <> continuationCheck <> networksCheck <> addressCheck
 
--- | Let's extract a part which only validates minting from the above
 checkMinting
   :: RoleTokensConfig
   -> MarloweVersion v
   -> Contract v
-  -> V1.State
+  -> Maybe V1.State
   -> Continuations v
   -> [SafetyError]
 checkMinting config MarloweV1 contract state continuations = do
   let continuations' = remapContinuations continuations
-      roles = V1.extractRoleNames (Just state) contract continuations'
+      roles = V1.extractRoleNames state contract continuations'
   case (config, Set.null roles) of
     (RoleTokensNone, False) -> pure MissingRolesCurrency
     (RoleTokensNone, True) -> mempty
@@ -294,19 +354,17 @@ checkTransactions
   -> C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
   -> MarloweVersion v
   -> MarloweContext v
-  -> HelpersContext
-  -> Chain.TokenName
+  -> LockedRolesContext
   -> Chain.Address
-  -> (Chain.Assets -> Chain.Assets)
   -> Datum v
   -> Continuations v
   -> m (Either String [SafetyError])
-checkTransactions protocolParameters era version@MarloweV1 marloweContext helpersContext threadRole changeAddress adjustMinUtxo datum continuations =
+checkTransactions protocolParameters era version@MarloweV1 marloweContext lockedRolesContext changeAddress datum continuations =
   runExceptT $
     do
-      let helperRoles = M.keysSet $ helperScriptStates helpersContext
+      let LockedRoles _ helperLockedRoles = lockedRoles lockedRolesContext
           intersectHelperRoles transaction@Transaction{txAnnotation} =
-            transaction{txAnnotation = S.intersection txAnnotation $ S.map Chain.toPlutusTokenName helperRoles}
+            transaction{txAnnotation = S.intersection txAnnotation $ S.map Chain.toPlutusTokenName helperLockedRoles}
           V1.MarloweData{marloweState = state, marloweParams = params, marloweContract = contract} = datum
           V1.MarloweParams{rolesCurrency} = params
           rolesCurrency' = fromPlutusCurrencySymbol rolesCurrency
@@ -322,11 +380,9 @@ checkTransactions protocolParameters era version@MarloweV1 marloweContext helper
           era
           version
           marloweContext
-          helpersContext
+          lockedRolesContext
           rolesCurrency'
-          threadRole
           changeAddress
-          adjustMinUtxo
 
 -- | Check a transaction for safety issues.
 checkTransaction
@@ -334,14 +390,12 @@ checkTransaction
   -> C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
   -> MarloweVersion v
   -> MarloweContext v
-  -> HelpersContext
+  -> LockedRolesContext
   -> Chain.PolicyId
-  -> Chain.TokenName
   -> Chain.Address
-  -> (Chain.Assets -> Chain.Assets)
   -> Transaction (S.Set Plutus.TokenName)
   -> Either String [SafetyError]
-checkTransaction protocolParameters era version@MarloweV1 marloweContext@MarloweContext{..} helpersContext policyId@(Chain.PolicyId rolesCurrency) threadRole changeAddress adjustMinUtxo transaction@Transaction{..} =
+checkTransaction protocolParameters era version@MarloweV1 marloweContext@MarloweContext{..} lockedRolesContext (Chain.PolicyId rolesCurrency) changeAddress transaction@Transaction{..} =
   do
     let V1.TransactionInput{..} = txInput
         rolesCurrency' = V1.MarloweParams . Plutus.CurrencySymbol $ Plutus.toBuiltin rolesCurrency
@@ -391,44 +445,15 @@ checkTransaction protocolParameters era version@MarloweV1 marloweContext@Marlowe
               intervalEnd
               txInputs
     let walletContext = walletForConstraints version marloweContext changeAddress constraints
-        helpersContext' = helpersForRoles policyId threadRole txAnnotation adjustMinUtxo helpersContext
+
+        Transaction{txAnnotation = activeRoles} = transaction
+        activeRoles' = ActiveRoles $ S.map Chain.fromPlutusTokenName activeRoles
+        LockedRolesContext helperContext = activeLockedRolesContext activeRoles' lockedRolesContext
     pure
       . either
         (pure . TransactionValidationError (stripAnnotation transaction) . show)
         (const $ TransactionWarning (stripAnnotation transaction) <$> V1.txOutWarnings txOutput)
-      $ solveConstraints' era version (Left marloweContext') walletContext helpersContext' constraints
-
--- | Create a helpers context for the specified helper roles.
-helpersForRoles
-  :: Chain.PolicyId
-  -> Chain.TokenName
-  -> S.Set Plutus.TokenName
-  -> (Chain.Assets -> Chain.Assets)
-  -> HelpersContext
-  -> HelpersContext
-helpersForRoles policyId threadRole helperRoles adjustMinUtxo helpersContext =
-  let activeHelperScripts :: [(Chain.TokenName, HelperScriptState)]
-      activeHelperScripts =
-        M.toList
-          . M.intersection (helperScriptStates helpersContext)
-          . M.fromSet (const ())
-          $ S.map Chain.fromPlutusTokenName helperRoles
-      buildHelperState ix (role, helperScriptState) =
-        ( role
-        , let helperTxOutRef = helperTxOutRef' ix
-              address = helperAddress helperScriptInfo
-              assets = adjustMinUtxo . Chain.Assets safeLovelace . Chain.Tokens $ M.fromList [(Chain.AssetId policyId role, 1)]
-              datumHash =
-                Chain.fromCardanoDatumHash
-                  . C.hashScriptDataBytes
-                  . C.unsafeHashableScriptData
-                  . Chain.toCardanoScriptData
-                  <$> datum
-              datum = Just $ Chain.B $ Chain.unTokenName threadRole
-              helperTransactionOutput = Chain.TransactionOutput{..}
-           in HelperScriptState helperScriptInfo $ Just (helperTxOutRef, helperTransactionOutput)
-        )
-   in helpersContext{helperScriptStates = M.fromList $ uncurry buildHelperState <$> zip [0 ..] activeHelperScripts}
+      $ solveConstraints' era version (Left marloweContext') walletContext helperContext constraints
 
 -- | Create a wallet context that will satisfy the given constraints.
 walletForConstraints
@@ -577,7 +602,3 @@ scriptTxOutRef = "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
 -- | A dummy TxOut reference.
 fundingTxOutRef :: Int -> Chain.TxOutRef
 fundingTxOutRef = fromString . ("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF#" <>) . show . (2 +)
-
--- | A dummy TxOut reference.
-helperTxOutRef' :: Int -> Chain.TxOutRef
-helperTxOutRef' = fromString . ("EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE#" <>) . show

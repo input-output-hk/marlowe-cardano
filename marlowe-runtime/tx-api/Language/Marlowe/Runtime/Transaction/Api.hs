@@ -1071,7 +1071,7 @@ data CreateError
   | CreateLoadHelpersContextFailed LoadHelpersContextError
   | CreateBuildupFailed CreateBuildupError
   | CreateToCardanoError
-  | -- | This error is thrown when the safety analysis process itself fails itself
+  | -- | This error is thrown when the safety analysis process fails itself
     -- due to a timeout or other reasons, such as missing merkleization data.
     CreateSafetyAnalysisError String
   | CreateContractNotFound
@@ -1101,6 +1101,9 @@ data ApplyInputsError
   | ApplyInputsLoadMarloweContextFailed LoadMarloweContextError
   | ApplyInputsLoadHelpersContextFailed LoadHelpersContextError
   | ApplyInputsConstraintsBuildupFailed ApplyInputsConstraintsBuildupError
+  | -- | This error is thrown when the safety analysis process fails itself
+    -- due to a timeout or any other reasons, such as missing merkleization data.
+    ApplyInputsSafetyAnalysisError String
   | SlotConversionFailed String
   | TipAtGenesis
   | ValidityLowerBoundTooHigh SlotNo SlotNo

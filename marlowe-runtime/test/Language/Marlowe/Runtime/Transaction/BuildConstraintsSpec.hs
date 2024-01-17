@@ -54,6 +54,7 @@ import Language.Marlowe.Runtime.Transaction.Api (
  )
 import qualified Language.Marlowe.Runtime.Transaction.Api as Transaction.Api
 import Language.Marlowe.Runtime.Transaction.BuildConstraints (
+  AdjustMinUTxO (..),
   buildApplyInputsConstraints,
   buildCreateConstraints,
   safeLovelace,
@@ -262,7 +263,8 @@ extractMarloweAssets TxConstraints{..} = case marloweOutputConstraints of
   _ -> Nothing
 
 runBuildCreateConstraints :: CreateArgs v -> Either CreateError (TxConstraints BabbageEra v)
-runBuildCreateConstraints CreateArgs{..} =
+runBuildCreateConstraints CreateArgs{..} = do
+  let adjustMinUTxO = AdjustMinUTxO id
   snd
     <$> runIdentity
       ( buildCreateConstraints
@@ -275,7 +277,7 @@ runBuildCreateConstraints CreateArgs{..} =
           roleTokensConfig
           metadata
           minAda
-          (\(Chain.Assets ada tokens) -> Chain.Assets ada tokens)
+          adjustMinUTxO
           contract
       )
 

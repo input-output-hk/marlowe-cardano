@@ -102,7 +102,6 @@ import Language.Marlowe.Runtime.Core.Api (
   withMarloweVersion,
  )
 import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript (..), MarloweScripts (..))
-import qualified Language.Marlowe.Runtime.Plutus.V2.Api (fromPlutusCurrencySymbol)
 import Language.Marlowe.Runtime.Transaction.Api (
   ApplyInputsError (..),
   ContractCreated (..),
@@ -125,12 +124,19 @@ import Language.Marlowe.Runtime.Transaction.Api (
  )
 import Language.Marlowe.Runtime.Transaction.BuildConstraints (
   MkRoleTokenMintingPolicy,
+  RolesPolicyId (RolesPolicyId),
   buildApplyInputsConstraints,
   buildCreateConstraints,
   buildWithdrawConstraints,
   initialMarloweState,
+  mkMinAdaProvider,
  )
-import Language.Marlowe.Runtime.Transaction.Constraints (MarloweContext (..), SolveConstraints, TxConstraints)
+import Language.Marlowe.Runtime.Transaction.Constraints (
+  MarloweContext (..),
+  SolveConstraints,
+  TxConstraints,
+  WalletContext (WalletContext),
+ )
 import qualified Language.Marlowe.Runtime.Transaction.Constraints as Constraints
 import Language.Marlowe.Runtime.Transaction.Query (
   LoadMarloweContext,
@@ -142,10 +148,13 @@ import Language.Marlowe.Runtime.Transaction.Query (
 import Language.Marlowe.Runtime.Transaction.Query.Helper (LoadHelpersContext)
 import Language.Marlowe.Runtime.Transaction.Safety (
   Continuations,
+  ThreadTokenAssetId (..),
   checkContract,
   checkTransactions,
   minAdaUpperBound,
-  mkAdjustMinimumUtxo,
+  mkAdjustMinUTxO,
+  mkLockedRolesContext,
+  mockLockedRolesContext,
   noContinuations,
  )
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob (..), SubmitJobStatus (..))
@@ -328,21 +337,23 @@ execCreate
   -> m (ServerStCmd MarloweTxCommand Void CreateError (ContractCreated v) m ())
 execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts solveConstraints protocolParameters loadWalletContext loadHelpersContext networkId mStakeCredential version addresses threadRole roleTokens metadata optMinAda contract analysisTimeout = execExceptT do
   referenceInputsSupported <- referenceInputsSupportedInEra (CreateEraUnsupported $ AnyCardanoEra era) era
-  let adjustMinUtxo = mkAdjustMinimumUtxo referenceInputsSupported protocolParameters version
   let threadRole' = fromMaybe "" threadRole
+  let adjustMinUtxo = mkAdjustMinUTxO referenceInputsSupported protocolParameters version
   walletContext <- lift $ loadWalletContext addresses
-  (_, dummyState) <-
-    except $
+  dummyState <- do
+    let WalletContext{changeAddress} = walletContext
+    minAdaProvider <- except $ mkMinAdaProvider changeAddress
+    pure $
       initialMarloweState
         adjustMinUtxo
         version
-        ( Chain.AssetId "00000000000000000000000000000000000000000000000000000000" threadRole' <$ guard case roleTokens of
+        ( ThreadTokenAssetId (Chain.AssetId "00000000000000000000000000000000000000000000000000000000" threadRole') <$ guard case roleTokens of
             RoleTokensNone -> False
             RoleTokensMint (unMint -> mint) -> any (NEMap.member (ToScript OpenRoleScript) . roleTokenRecipients) mint
             RoleTokensUsePolicy _ distribution -> any (Map.member (ToScript OpenRoleScript)) distribution
         )
         (fromMaybe 0 optMinAda)
-        walletContext
+        minAdaProvider
   (contract', continuations) <- case contract of
     Right hash -> case version of
       MarloweV1 -> noteT CreateContractNotFound do
@@ -358,7 +369,7 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
           <$> minAdaUpperBound referenceInputsSupported protocolParameters version dummyState contract' continuations
   let minAda = fromMaybe computedMinAdaDeposit optMinAda
   unless (minAda >= computedMinAdaDeposit) $ throwE $ InsufficientMinAdaDeposit computedMinAdaDeposit
-  ((datum, assets, rolesCurrency), constraints) <-
+  ((datum, assets, RolesPolicyId rolesCurrency), constraints) <-
     ExceptT $
       buildCreateConstraints
         mkRoleTokenMintingPolicy
@@ -408,13 +419,15 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
   let -- Fast analysis of safety: examines bounds for transactions.
       V1.MarloweData{marloweState} = case version of
         MarloweV1 -> datum
-      contractSafetyErrors = checkContract networkId (Just roleTokens) version contract' marloweState continuations
+      contractSafetyErrors = checkContract networkId roleTokens version contract' (Just marloweState) continuations
       limitAnalysisTime =
         liftIO
           . fmap (either Right id)
           . race ([SafetyAnalysisTimeout] <$ threadDelay (floor $ nominalDiffTimeToSeconds analysisTimeout * 1_000_000))
   -- Slow analysis of safety: examines all possible transactions.
-  transactionSafetyErrors <-
+  transactionSafetyErrors <- do
+    let threadTokenAssetId = ThreadTokenAssetId (Chain.AssetId rolesCurrency threadRole')
+        lockedRolesContext = mockLockedRolesContext threadTokenAssetId adjustMinUtxo helpersContext
     ExceptT $
       first CreateSafetyAnalysisError
         <$> limitAnalysisTime
@@ -423,10 +436,8 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
               referenceInputsSupported
               version
               marloweContext
-              helpersContext
-              threadRole'
+              lockedRolesContext
               (changeAddress addresses)
-              adjustMinUtxo
               datum
               continuations
           )
@@ -522,7 +533,7 @@ execApplyInputs
   getTip
   systemStart
   eraHistory
-  protocolParamaters
+  protocolParameters
   solveConstraints
   loadWalletContext
   loadMarloweContext
@@ -587,8 +598,10 @@ execApplyInputs
         Just c -> pure c
 
     let -- Fast analysis of safety: examines bounds for transactions.
-        -- FIXME: This check will ignore any safety issue related to the minting policy and tokens.
-        contractSafetyErrors = checkContract networkId Nothing version contract state continuations
+        -- FIXME: We should verify minting policy here as well:
+        --  * we should check if trusted minting policy was used
+        --  * we should check the role where minted as NFTs or they were redundant (do we check this in creation?)
+        contractSafetyErrors = checkContract networkId RoleTokensNone version contract (Just state) continuations
         limitAnalysisTime =
           liftIO
             . fmap (either Right id)
@@ -596,24 +609,21 @@ execApplyInputs
     -- Slow analysis of safety: examines all possible transactions.
     transactionSafetyErrors <- case mAssetsAndDatum of
       Nothing -> pure []
-      Just (_, datum) ->
+      Just (_, datum) -> do
+        let lockedRolesContext = mkLockedRolesContext helpersContext
         ExceptT $
-          first CreateSafetyAnalysisError
+          first ApplyInputsSafetyAnalysisError
             <$> limitAnalysisTime
               ( checkTransactions
                   protocolParameters
                   referenceInputsSupported
                   version
                   marloweContext
-                  helpersContext
-                  threadRole'
+                  lockedRolesContext
                   (changeAddress addresses)
-                  adjustMinUtxo
                   datum
                   continuations
               )
-    let safetyErrors = []
-
     pure $
       InputsApplied referenceInputsSupported $
         InputsAppliedInEra
@@ -622,39 +632,9 @@ execApplyInputs
                 TxMetadataNone -> mempty
                 TxMetadataInEra _ m -> fromCardanoTxMetadata m
           , inputs = inputs'
+          , safetyErrors = contractSafetyErrors <> transactionSafetyErrors
           , ..
           }
-
---     let
---       contractSafetyErrors = checkContract networkId roleTokens version contract continuations
---     safetyErrors <- case mAssetsAndDatum of
---       Nothing -> pure []
---       Just (assets, datum) -> do
---         let -- Fast analysis of safety: examines bounds for transactions.
---             adjustMinUtxo = mkAdjustMinimumUtxo referenceInputsSupported protocolParameters version
---             limitAnalysisTime =
---               liftIO
---                 . fmap (either Right id)
---                 . race ([SafetyAnalysisTimeout] <$ threadDelay (floor $ nominalDiffTimeToSeconds analysisTimeout * 1_000_000))
---             rolesCurrency' = fromPlutusCurrencySymbol rolesCurrency
---         -- Slow analysis of safety: examines all possible transactions.
---         ExceptT $
---           first CreateSafetyAnalysisError
---             <$> limitAnalysisTime
---               ( checkTransactions
---                   protocolParameters
---                   referenceInputsSupported
---                   version
---                   marloweContext
---                   helpersContext
---                   rolesCurrency'
---                   threadRole'
---                   (changeAddress addresses)
---                   assets
---                   adjustMinUtxo
---                   contract'
---                   continuations
---               )
 
 -- | Build up continuations closure map for a contract.
 -- We don't want to just compute the root hash of the contract and ask the store for the closure because
