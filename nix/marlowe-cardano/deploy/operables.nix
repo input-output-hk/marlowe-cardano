@@ -174,6 +174,9 @@ in
       #################
       # OTEL_EXPORTER_OTLP_ENDPOINT: The url of the open telemetry collector
       # OTEL_SERVICE_NAME: The name of the open telemetry service
+      # BLOCK_COST: The number of cost units to associate with persisting a block
+      # TX_COST: The number of cost units to associate with persisting a transaction
+      # MAX_COST: The maximum cost of work to batch before committing
 
       [ -z "''${NODE_CONFIG:-}" ] && echo "NODE_CONFIG env var must be set -- aborting" && exit 1
       [ -z "''${CARDANO_NODE_SOCKET_PATH:-}" ] && echo "CARDANO_NODE_SOCKET_PATH env var must be set -- aborting" && exit 1
@@ -206,6 +209,9 @@ in
       ${wait-for-socket}/bin/wait-for-socket "$CARDANO_NODE_SOCKET_PATH"
 
       export OTEL_SERVICE_NAME="''${OTEL_SERVICE_NAME:-marlowe-chain-indexer}"
+      export BLOCK_COST="''${BLOCK_COST:-1}"
+      export TX_COST="''${TX_COST:-10}"
+      export MAX_COST="''${MAX_COST:-250000}"
 
       ${marlowe-chain-indexer}/bin/marlowe-chain-indexer \
         --socket-path "$CARDANO_NODE_SOCKET_PATH" \
@@ -213,6 +219,9 @@ in
         --shelley-genesis-config-file "$SHELLEY_GENESIS_CONFIG" \
         --genesis-config-file "$BYRON_GENESIS_CONFIG" \
         --genesis-config-file-hash "$BYRON_GENESIS_HASH" \
+        --block-cost "$BLOCK_COST" \
+        --tx-cost "$TX_COST" \
+        --max-cost "$MAX_COST" \
         --http-port "$HTTP_PORT"
     '';
   };
