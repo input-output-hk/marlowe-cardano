@@ -5,14 +5,14 @@ module Language.Marlowe.Runtime.Web.Contracts.Contract.Post where
 import Control.Monad.IO.Class (MonadIO (liftIO))
 
 import Cardano.Api (
-  AsType (..),
+  BabbageEra,
   TxBody (..),
   TxBodyContent (..),
   TxMetadata (TxMetadata),
   TxMetadataInEra (..),
   TxMetadataSupportedInEra (TxMetadataInBabbageEra),
   TxMetadataValue (..),
-  deserialiseFromTextEnvelope,
+  getTxBody,
  )
 import Data.Aeson (Value (String))
 import qualified Data.Aeson.Key as Key
@@ -134,10 +134,8 @@ bugPLT8712 = do
               , tags = mempty
               }
         liftIO do
-          textEnvelope <- expectJust "Failed to convert text envelope" $ fromDTO txEnvelope
-          TxBody TxBodyContent{..} <-
-            expectRight "Failed to deserialise tx body" $
-              deserialiseFromTextEnvelope (AsTxBody AsBabbageEra) textEnvelope
+          tx' <- expectJust "Failed to convert text envelope" $ fromDTO tx
+          let TxBody TxBodyContent{..} = getTxBody @BabbageEra tx'
           case txMetadata of
             TxMetadataNone -> fail "expected metadata"
             TxMetadataInEra TxMetadataInBabbageEra (TxMetadata m) -> do

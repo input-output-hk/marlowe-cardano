@@ -14,42 +14,34 @@ module Language.Marlowe.Runtime.Web.Server.DTO where
 
 import Cardano.Api (
   AsType (..),
-  HasTextEnvelope,
-  HasTypeProxy,
   IsCardanoEra (..),
-  IsShelleyBasedEra (..),
+  IsShelleyBasedEra,
   NetworkId (..),
   NetworkMagic (..),
-  SerialiseAsCBOR,
-  ShelleyBasedEra (..),
   TextEnvelope (..),
-  TextEnvelopeType (..),
+  TextEnvelopeCddl (..),
+  TextEnvelopeType (TextEnvelopeType),
   Tx,
-  TxBody,
   deserialiseAddress,
-  deserialiseFromCBOR,
   deserialiseFromTextEnvelope,
+  deserialiseTxLedgerCddl,
   getTxId,
+  makeSignedTransaction,
   metadataValueToJsonNoSchema,
-  proxyToAsType,
-  serialiseToCBOR,
   serialiseToTextEnvelope,
+  serialiseTxLedgerCddl,
  )
-import Cardano.Api.Byron (HasTextEnvelope (textEnvelopeType))
 import Cardano.Api.Shelley (
   ReferenceTxInsScriptsInlineDatumsSupportedInEra (..),
   ShelleyLedgerEra,
   StakeAddress (..),
   fromShelleyStakeCredential,
  )
-import qualified Cardano.Ledger.Alonzo.Scripts as Ledger.Alonzo.Scripts
-import qualified Cardano.Ledger.Core as Ledger.Core
 import Control.Arrow (Arrow (..))
 import Control.Error.Util (hush)
 import Control.Monad ((<=<))
 import Control.Monad.Except (MonadError, throwError)
 import Data.Aeson (Value (..))
-import qualified Data.ByteString.Lazy as BSL
 import Data.Coerce (coerce)
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map (Map)
@@ -82,9 +74,8 @@ import Language.Marlowe.Protocol.Query.Types (
   Withdrawal (..),
  )
 
-import Cardano.Ledger.Alonzo.Core (TxWits)
-import Cardano.Ledger.Binary (Annotator, DecCBOR (..), Decoder, decodeFullAnnotator, serialize')
-import Cardano.Ledger.Core (EraTxWits, eraProtVerLow)
+import Cardano.Ledger.Alonzo (AlonzoScript)
+import Cardano.Ledger.Alonzo.Core (EraTxWits, Script)
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Bitraversable (Bitraversable (..))
@@ -117,6 +108,7 @@ import Language.Marlowe.Runtime.Transaction.Api (Account (..))
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx (..), TempTxStatus (..))
+import Language.Marlowe.Runtime.Web.Server.Util (AsType (..), TxWitnessSet)
 import Network.HTTP.Media (MediaType, parseAccept)
 import Servant.Pagination (IsRangeType)
 import qualified Servant.Pagination as Pagination
@@ -604,8 +596,8 @@ instance ToDTOWithTxStatus (Tx.ContractCreated v) where
       , utxo = Nothing
       , txBody = case status of
           Unsigned -> Just case era of
-            ReferenceTxInsScriptsInlineDatumsInBabbageEra -> toDTO txBody
-            ReferenceTxInsScriptsInlineDatumsInConwayEra -> toDTO txBody
+            ReferenceTxInsScriptsInlineDatumsInBabbageEra -> toDTO $ makeSignedTransaction [] txBody
+            ReferenceTxInsScriptsInlineDatumsInConwayEra -> toDTO $ makeSignedTransaction [] txBody
           Submitted -> Nothing
       , unclaimedPayouts = []
       }
@@ -641,8 +633,8 @@ instance ToDTOWithTxStatus (Tx.InputsApplied v) where
               <$> M.toList (payouts output)
       , txBody = case status of
           Unsigned -> Just case era of
-            ReferenceTxInsScriptsInlineDatumsInBabbageEra -> toDTO txBody
-            ReferenceTxInsScriptsInlineDatumsInConwayEra -> toDTO txBody
+            ReferenceTxInsScriptsInlineDatumsInBabbageEra -> toDTO $ makeSignedTransaction [] txBody
+            ReferenceTxInsScriptsInlineDatumsInConwayEra -> toDTO $ makeSignedTransaction [] txBody
           Submitted -> Nothing
       }
 
@@ -686,119 +678,88 @@ instance FromDTO Chain.StakeCredential where
       . deserialiseAddress AsStakeAddress
       . Web.unStakeAddress
 
-instance HasDTO (TxBody era) where
-  type DTO (TxBody era) = Web.TextEnvelope
-
-instance (IsCardanoEra era) => ToDTO (TxBody era) where
-  toDTO = toDTO . serialiseToTextEnvelope Nothing
-
-instance (IsCardanoEra era) => FromDTO (TxBody era) where
-  fromDTO = hush . deserialiseFromTextEnvelope asType <=< fromDTO
-    where
-      asType = AsTxBody $ cardanoEraToAsType $ cardanoEra @era
-
 instance HasDTO (Tx era) where
-  type DTO (Tx era) = Web.TextEnvelope
+  type DTO (Tx era) = Web.UnwitnessedTx
 
 instance (IsCardanoEra era) => ToDTO (Tx era) where
-  toDTO = toDTO . serialiseToTextEnvelope Nothing
+  toDTO = textEnvelopeToUnwitnessedTx . serialiseTxLedgerCddl
 
 instance (IsCardanoEra era) => FromDTO (Tx era) where
-  fromDTO = hush . deserialiseFromTextEnvelope asType <=< fromDTO
-    where
-      asType = AsTx $ cardanoEraToAsType $ cardanoEra @era
+  fromDTO = hush . deserialiseTxLedgerCddl (cardanoEra @era) . textEnvelopeFromUnwitnessedTx
 
-newtype ShelleyTxWitness era = ShelleyTxWitness (TxWits (ShelleyLedgerEra era))
-
-instance (HasTypeProxy era) => HasTypeProxy (ShelleyTxWitness era) where
-  data AsType (ShelleyTxWitness era) = AsShelleyTxWitness (AsType era)
-  proxyToAsType _ = AsShelleyTxWitness (proxyToAsType (Proxy :: Proxy era))
-
-instance
-  ( HasTypeProxy era
-  , EraTxWits (ShelleyLedgerEra era)
-  , Ledger.Core.Script (ShelleyLedgerEra era) ~ Ledger.Alonzo.Scripts.AlonzoScript (ShelleyLedgerEra era)
-  )
-  => SerialiseAsCBOR (ShelleyTxWitness era)
-  where
-  serialiseToCBOR (ShelleyTxWitness wit) = serialize' (eraProtVerLow @(ShelleyLedgerEra era)) wit
-
-  deserialiseFromCBOR _ bs = do
-    let lbs = BSL.fromStrict bs
-
-        annotator :: forall s. Decoder s (Annotator (TxWits (ShelleyLedgerEra era)))
-        annotator = decCBOR
-
-    (w :: TxWits (ShelleyLedgerEra era)) <-
-      decodeFullAnnotator (eraProtVerLow @(ShelleyLedgerEra era)) "Shelley Tx Witness" annotator lbs
-    pure $ ShelleyTxWitness w
+instance HasDTO (TxWitnessSet era) where
+  type DTO (TxWitnessSet era) = Web.TxWitness
 
 instance
   ( IsShelleyBasedEra era
   , EraTxWits (ShelleyLedgerEra era)
-  , Ledger.Core.Script (ShelleyLedgerEra era) ~ Ledger.Alonzo.Scripts.AlonzoScript (ShelleyLedgerEra era)
+  , Script (ShelleyLedgerEra era) ~ AlonzoScript (ShelleyLedgerEra era)
   )
-  => HasTextEnvelope (ShelleyTxWitness era)
+  => ToDTO (TxWitnessSet era)
   where
-  textEnvelopeType _ = do
-    "ShelleyTxWitness " <> case shelleyBasedEra :: ShelleyBasedEra era of
-      ShelleyBasedEraAlonzo -> "AlonzoEra"
-      ShelleyBasedEraBabbage -> "BabbageEra"
-      ShelleyBasedEraConway -> "ConwayEra"
-
-instance HasDTO (ShelleyTxWitness era) where
-  type DTO (ShelleyTxWitness era) = Web.TextEnvelope
+  toDTO = textEnvelopeToTxWitness . serialiseToTextEnvelope Nothing
 
 instance
   ( IsShelleyBasedEra era
   , EraTxWits (ShelleyLedgerEra era)
-  , Ledger.Core.Script (ShelleyLedgerEra era) ~ Ledger.Alonzo.Scripts.AlonzoScript (ShelleyLedgerEra era)
+  , Script (ShelleyLedgerEra era) ~ AlonzoScript (ShelleyLedgerEra era)
   )
-  => ToDTO (ShelleyTxWitness era)
+  => FromDTO (TxWitnessSet era)
   where
-  toDTO = toDTO . serialiseToTextEnvelope Nothing
+  fromDTO =
+    hush . deserialiseFromTextEnvelope (AsTxWitnessSet $ cardanoEraToAsType $ cardanoEra @era) . textEnvelopeFromTxWitness
 
-instance
-  ( IsShelleyBasedEra era
-  , EraTxWits (ShelleyLedgerEra era)
-  , Ledger.Core.Script (ShelleyLedgerEra era) ~ Ledger.Alonzo.Scripts.AlonzoScript (ShelleyLedgerEra era)
-  )
-  => FromDTO (ShelleyTxWitness era)
-  where
-  fromDTO = hush . deserialiseFromTextEnvelope asType <=< fromDTO
-    where
-      eraAsType = cardanoEraToAsType $ cardanoEra @era
-      asType = AsShelleyTxWitness eraAsType
+textEnvelopeToUnwitnessedTx :: TextEnvelopeCddl -> Web.UnwitnessedTx
+textEnvelopeToUnwitnessedTx
+  TextEnvelopeCddl
+    { teCddlType
+    , teCddlDescription
+    , teCddlRawCBOR
+    } =
+    Web.UnwitnessedTx
+      { utType = teCddlType
+      , utDescription = teCddlDescription
+      , utCborHex = Web.Base16 teCddlRawCBOR
+      }
 
-instance HasDTO TextEnvelope where
-  type DTO TextEnvelope = Web.TextEnvelope
+textEnvelopeFromUnwitnessedTx :: Web.UnwitnessedTx -> TextEnvelopeCddl
+textEnvelopeFromUnwitnessedTx
+  Web.UnwitnessedTx
+    { utType
+    , utDescription
+    , utCborHex
+    } =
+    TextEnvelopeCddl
+      { teCddlType = utType
+      , teCddlDescription = utDescription
+      , teCddlRawCBOR = Web.unBase16 utCborHex
+      }
 
-instance ToDTO TextEnvelope where
-  toDTO
+textEnvelopeToTxWitness :: TextEnvelope -> Web.TxWitness
+textEnvelopeToTxWitness
+  TextEnvelope
+    { teType = TextEnvelopeType teType
+    , teDescription
+    , teRawCBOR
+    } =
+    Web.TxWitness
+      { twType = T.pack teType
+      , twDescription = T.pack $ unsafeCoerce teDescription
+      , twCborHex = Web.Base16 teRawCBOR
+      }
+
+textEnvelopeFromTxWitness :: Web.TxWitness -> TextEnvelope
+textEnvelopeFromTxWitness
+  Web.TxWitness
+    { twType
+    , twDescription
+    , twCborHex
+    } =
     TextEnvelope
-      { teType = TextEnvelopeType teType
-      , teDescription
-      , teRawCBOR
-      } =
-      Web.TextEnvelope
-        { teType = T.pack teType
-        , teDescription = T.pack $ unsafeCoerce teDescription
-        , teCborHex = Web.Base16 teRawCBOR
-        }
-
-instance FromDTO TextEnvelope where
-  fromDTO
-    Web.TextEnvelope
-      { teType
-      , teDescription
-      , teCborHex
-      } =
-      Just
-        TextEnvelope
-          { teType = TextEnvelopeType $ T.unpack teType
-          , teDescription = fromString $ T.unpack teDescription
-          , teRawCBOR = Web.unBase16 teCborHex
-          }
+      { teType = TextEnvelopeType $ T.unpack twType
+      , teDescription = fromString $ T.unpack twDescription
+      , teRawCBOR = Web.unBase16 twCborHex
+      }
 
 instance HasDTO Tx.RoleTokensConfig where
   type DTO Tx.RoleTokensConfig = Maybe Web.RolesConfig

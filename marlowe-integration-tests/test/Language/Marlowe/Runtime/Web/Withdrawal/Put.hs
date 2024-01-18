@@ -44,9 +44,9 @@ spec = describe "PUT /contracts/{contractId}/withdrawals/{withdrawalId}" do
       Page{..} <- getPayouts (Just $ Set.singleton contractId) Nothing (Just Available) Nothing
       let payouts = Set.fromList $ payoutId <$> items
 
-      Web.WithdrawTxEnvelope{withdrawalId, txEnvelope} <-
+      Web.WithdrawTxEnvelope{withdrawalId, tx} <-
         postWithdrawal webChangeAddress (Just webExtraAddresses) (Just webCollateralUtxos) Web.PostWithdrawalsRequest{..}
-      signedWithdrawalTx <- liftIO $ signShelleyTransaction' txEnvelope signingKeys
+      signedWithdrawalTx <- liftIO $ signShelleyTransaction' tx signingKeys
       putWithdrawal withdrawalId signedWithdrawalTx
 
     case result of

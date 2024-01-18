@@ -36,7 +36,7 @@ spec = describe "POST /contracts/{contractId}/transactions" do
 
       let (contract, _, _) = standardContract partyBAddress now $ secondsToNominalDiffTime 100
 
-      Web.CreateTxEnvelope{contractId, txEnvelope} <-
+      Web.CreateTxEnvelope{contractId, tx} <-
         postContract
           Nothing
           partyAWebChangeAddress
@@ -56,7 +56,7 @@ spec = describe "POST /contracts/{contractId}/transactions" do
             , minUTxODeposit = Nothing
             , tags = mempty
             }
-      signedCreateTx <- liftIO $ signShelleyTransaction' txEnvelope signingKeys
+      signedCreateTx <- liftIO $ signShelleyTransaction' tx signingKeys
       putContract contractId signedCreateTx
     case result of
       Left _ -> fail $ "Expected 200 response code - got " <> show result

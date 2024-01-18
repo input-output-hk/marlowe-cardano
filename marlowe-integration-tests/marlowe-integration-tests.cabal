@@ -95,6 +95,7 @@ executable marlowe-integration-tests
     , base16
     , bytestring
     , cardano-api ^>=8.2
+    , cardano-ledger-alonzo
     , cardano-ledger-babbage
     , co-log >=0.5.0.0 && <0.6.0.0
     , containers
