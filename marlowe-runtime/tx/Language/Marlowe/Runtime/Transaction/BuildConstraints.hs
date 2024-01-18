@@ -18,12 +18,12 @@ import qualified Cardano.Api.Shelley as C
 import qualified Cardano.Ledger.BaseTypes as CL (Network (..))
 import Control.Category ((>>>))
 import Control.Error (ExceptT, note)
-import Control.Monad (guard, unless, when, (>=>))
+import Control.Monad (guard, join, unless, when, (>=>))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (except, runExceptT, throwE, withExceptT)
 import Control.Monad.Trans.Writer (WriterT (runWriterT), tell)
 import Data.Bifunctor (first)
-import Data.Foldable (for_, traverse_)
+import Data.Foldable (Foldable (..), for_, traverse_)
 import Data.Function (on)
 import Data.List (find, sortBy)
 import Data.Map (Map)
@@ -87,6 +87,7 @@ import Language.Marlowe.Runtime.Plutus.V2.Api (
   toPlutusTokenName,
  )
 import Language.Marlowe.Runtime.Transaction.Api (
+  Account (..),
   ApplyInputsConstraintsBuildupError (..),
   ApplyInputsError (..),
   CreateBuildupError (AddressDecodingFailed, MintingScriptDecodingFailed, MintingUtxoSelectionFailed),
@@ -157,15 +158,27 @@ buildCreateConstraints
   -- ^ Metadata to add to the transaction.
   -> Lovelace
   -- ^ The lower bound on the ada in the initial state.
+  -> Map Account Assets
+  -- ^ User-defined initial account balances
   -> (Assets -> Assets)
   -- ^ Adjust a value to account for the minimum UTxO ledger rule.
   -> Contract v
   -- ^ The contract being instantiated.
   -> m (Either CreateError ((Datum v, Assets, PolicyId), TxConstraints era v))
-buildCreateConstraints mkRoleTokenMintingPolicy era version walletCtx roles threadName metadata minAda adjustMinUtxo contract = case version of
+buildCreateConstraints mkRoleTokenMintingPolicy era version walletCtx roles threadName metadata minAda accounts adjustMinUtxo contract = case version of
   MarloweV1 ->
     runTxConstraintsBuilder version $
-      buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx roles threadName metadata minAda adjustMinUtxo contract
+      buildCreateConstraintsV1
+        mkRoleTokenMintingPolicy
+        era
+        walletCtx
+        roles
+        threadName
+        metadata
+        minAda
+        accounts
+        adjustMinUtxo
+        contract
 
 type MkRoleTokenMintingPolicy m = TxOutRef -> Map TokenName Integer -> m CS.PlutusScript
 
@@ -188,12 +201,14 @@ buildCreateConstraintsV1
   -- ^ Metadata to add to the transaction.
   -> Lovelace
   -- ^ The lower bound on the ada in the initial state.
+  -> Map Account Assets
+  -- ^ User-defined initial account balances
   -> (Assets -> Assets)
   -- ^ Adjust a value to account for the minimum UTxO ledger rule.
   -> Contract 'V1
   -- ^ The contract being instantiated.
   -> TxConstraintsBuilderM CreateError era 'V1 m (Datum 'V1, Assets, PolicyId)
-buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx threadTokenName roles metadata minAda adjustMinUtxo contract = do
+buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx threadTokenName roles metadata minAda accounts adjustMinUtxo contract = do
   -- Output constraints.
 
   -- Role tokens minting and distribution.
@@ -223,7 +238,7 @@ buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx threadTokenName 
     sendMarloweOutput policyId threadToken = do
       (assets, marloweState) <-
         lift . except $
-          initialMarloweStateV1 adjustMinUtxo threadToken minAda walletCtx
+          initialMarloweStateV1 adjustMinUtxo accounts threadToken minAda walletCtx
       datum <- mkMarloweDatum policyId marloweState
       tell $ mustSendMarloweOutput assets datum
       pure (datum, assets)
@@ -317,45 +332,62 @@ initialMarloweState
   :: forall v
    . (Assets -> Assets)
   -> MarloweVersion v
+  -> Map Account Assets
   -> Maybe AssetId
   -> Lovelace
   -> WalletContext
   -> Either CreateError (Assets, V1.State)
-initialMarloweState adjustMinUtxo version threadToken minAda walletCtx = case version of
+initialMarloweState adjustMinUtxo version accounts threadToken minAda walletCtx = case version of
   MarloweV1 ->
-    initialMarloweStateV1 adjustMinUtxo threadToken minAda walletCtx
+    initialMarloweStateV1 adjustMinUtxo accounts threadToken minAda walletCtx
 
 initialMarloweStateV1
   :: (Assets -> Assets)
+  -> Map Account Assets
   -> Maybe AssetId
   -> Lovelace
   -> WalletContext
   -> Either CreateError (Assets, V1.State)
-initialMarloweStateV1 adjustMinUtxo threadToken minAda walletCtx = do
-  let minAda' = max safeLovelace minAda
-      initialAssets =
-        adjustMinUtxo
-          . Assets minAda'
-          . Tokens
-          . foldMap (flip Map.singleton 1)
-          $ threadToken
-      WalletContext{changeAddress = minAdaProvider} = walletCtx
-      liftMaybe err = maybe (Left $ CreateBuildupFailed err) Right
-  (net, addr) <- liftMaybe (AddressDecodingFailed minAdaProvider) do
-    address <- toPlutusAddress minAdaProvider
-    network <- toMarloweNetwork minAdaProvider
-    pure (network, address)
-  let accountId = V1.Address net addr
-      Assets{..} = initialAssets
-      adaToken = V1.Token PV2.adaSymbol PV2.adaToken
-      initialAccounts :: V1.Accounts
-      initialAccounts =
-        AM.fromList $
-          ((accountId, adaToken), toInteger ada)
-            : [ ((accountId, V1.Token (toPlutusCurrencySymbol cs) (toPlutusTokenName tn)), toInteger i)
-              | (AssetId cs tn, i) <- Map.toList $ unTokens tokens
-              ]
-  pure (initialAssets, (V1.emptyState (PV2.POSIXTime 0)){V1.accounts = initialAccounts})
+initialMarloweStateV1 adjustMinUtxo accounts threadToken minAda walletCtx = do
+  -- All assets from user-defined initial accounts
+  let accountAssets = fold accounts
+      -- The thread token as a tokens collection
+      threadTokenTokens = Tokens $ foldMap (flip Map.singleton 1) threadToken
+      -- The result of computing the min ada upper bound starting with the initial assets
+      minAda' =
+        ada
+          . adjustMinUtxo
+          . Assets (max safeLovelace minAda)
+          . (tokens accountAssets <>)
+          $ threadTokenTokens
+      WalletContext{changeAddress = creatorAddress} = walletCtx
+      -- The assets to be assigned to the contract creator include the min ADA deposit and the thread token.
+      creatorAssets = Assets minAda' threadTokenTokens
+      -- Merge these with the user-defined initial account balances.
+      initialAccounts = Map.unionWith (<>) (Map.singleton (AddressAccount creatorAddress) creatorAssets) accounts
+  -- Convert it to the format required by the Plutus script datum.
+  initialAccountsPlutus <-
+    AM.fromList . join <$> for (Map.toAscList initialAccounts) \(account, Assets{..}) -> do
+      accountId <- case account of
+        RoleAccount role -> pure $ V1.Role $ toPlutusTokenName role
+        AddressAccount address -> note (CreateBuildupFailed $ AddressDecodingFailed address) do
+          addressPlutus <- toPlutusAddress address
+          network <- toMarloweNetwork address
+          pure $ V1.Address network addressPlutus
+      let adaToken = V1.Token PV2.adaSymbol PV2.adaToken
+      pure
+        . Map.toAscList
+        . (if ada > 0 then Map.insert (accountId, adaToken) $ toInteger ada else id)
+        . Map.mapKeys (\(AssetId cs tn) -> (accountId, V1.Token (toPlutusCurrencySymbol cs) (toPlutusTokenName tn)))
+        . fmap toInteger
+        $ unTokens tokens
+
+  pure
+    ( fold initialAccounts
+    , (V1.emptyState (PV2.POSIXTime 0))
+        { V1.accounts = initialAccountsPlutus
+        }
+    )
 
 type ApplyResults v = (UTCTime, UTCTime, Maybe (Assets, Datum v), Inputs v)
 

@@ -72,6 +72,7 @@ createCloseContract Wallet{..} = do
         , roles = Nothing
         , threadTokenName = Nothing
         , contract = ContractOrSourceId $ Left V1.Close
+        , accounts = mempty
         , minUTxODeposit = Nothing
         , tags = mempty
         }

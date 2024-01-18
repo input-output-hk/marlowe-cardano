@@ -520,6 +520,11 @@ instance Arbitrary Web.PostContractsRequest where
       <*> arbitrary
       <*> arbitrary
       <*> arbitrary
+      <*> arbitrary
+  shrink = genericShrink
+
+instance Arbitrary Web.Party where
+  arbitrary = Web.Party <$> arbitrary
   shrink = genericShrink
 
 instance Arbitrary Web.ContractOrSourceId where

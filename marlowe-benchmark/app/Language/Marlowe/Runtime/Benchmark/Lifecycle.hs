@@ -71,7 +71,7 @@ measure
   -> C.NetworkId
   -- ^ The Cardano network.
   -> Int
-  -- ^ The number of clients to run in paralle.
+  -- ^ The number of clients to run in parallel.
   -> Address
   -- ^ The faucet address.
   -> C.SigningKey C.PaymentExtendedKey
@@ -269,6 +269,7 @@ create partyCredentials contract =
         roles
         emptyMarloweTransactionMetadata
         Nothing
+        mempty
         (Left contract)
         >>= either (error . show) pure
     void $ signSubmit support key txBody

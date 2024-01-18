@@ -289,7 +289,7 @@ runCreateCommand TxCommand{walletAddresses, signingMethod, tagsFile, metadataFil
       ContractCreated era ContractCreatedInEra{contractId, txBody, safetyErrors} <-
         ExceptT $
           first CreateFailed
-            <$> createContract stakeCredential version walletAddresses Nothing rolesDistribution metadata minUTxO contract
+            <$> createContract stakeCredential version walletAddresses Nothing rolesDistribution metadata minUTxO mempty contract
       case signingMethod of
         Manual outputFile -> do
           ExceptT @_ @_ @() $
