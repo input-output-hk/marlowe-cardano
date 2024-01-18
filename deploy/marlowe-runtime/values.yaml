@@ -5,8 +5,8 @@ networks:
 instances:
   qa:
     parentDomain: scdev.aws.iohkdev.io
-    webTag: bb203df0
-    tag: bb203df0
+    webTag: beb77f59
+    tag: beb77f59
     repo: ghcr.io
     org: input-output-hk
   demo:
