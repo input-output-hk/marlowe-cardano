@@ -42,25 +42,25 @@ import Language.Marlowe.Runtime.History.Api (
  )
 
 -- | Records a history of live contracts over a window of history.
-data LiveContracts = LiveContracts
+data LiveContracts a = LiveContracts
   { securityParameter :: Int
   -- ^ The number of blocks to retain in case of rollback.
-  , history :: History -- Map BlockNo (Map TxOutRef Contract)
+  , history :: History a -- Map BlockNo (Map TxOutRef Contract)
   }
   deriving (Show, Eq, Ord)
 
-data History
+data History a
   = EmptyHistory (WithGenesis BlockNo)
   | NonEmptyHistory
-      (Map TxOutRef Contract)
+      (Map TxOutRef a)
       -- ^ Initial snapshot of live contracts
       BlockNo
       -- ^ most recent recorded block
-      (Map TxOutRef Contract)
+      (Map TxOutRef a)
       -- ^ snapshot at most recent block
       BlockNo
       -- ^ most recent recorded tip
-      (Map BlockNo (Map TxOutRef Contract))
+      (Map BlockNo (Map TxOutRef a))
       -- ^ snapshots of less recently recorded points after security window
   deriving (Show, Eq, Ord)
 
@@ -68,7 +68,7 @@ data History
 create
   :: Int
   -- ^ The protocol security parameter (the number of blocks before a rollback is guaranteed not to happen).
-  -> LiveContracts
+  -> LiveContracts a
 create securityParameter =
   LiveContracts
     { securityParameter
@@ -76,31 +76,34 @@ create securityParameter =
     }
 
 -- | Get the live contracts as of the latest recorded block.
-currentLive :: LiveContracts -> Map TxOutRef Contract
+currentLive :: LiveContracts a -> Map TxOutRef a
 currentLive LiveContracts{..} = case history of
   EmptyHistory _ -> mempty
   NonEmptyHistory _ _ snapshot _ _ -> snapshot
 
-latestPoints :: LiveContracts -> Either (WithGenesis BlockNo) (BlockNo, BlockNo)
+latestPoints :: LiveContracts a -> Either (WithGenesis BlockNo) (BlockNo, BlockNo)
 latestPoints LiveContracts{..} = case history of
   EmptyHistory tip -> Left tip
   NonEmptyHistory _ point _ tip _ -> Right (point, tip)
 
 -- | Get all live contracts within the history window.
-allContracts :: LiveContracts -> Map TxOutRef Contract
+allContracts :: LiveContracts a -> Map TxOutRef a
 allContracts LiveContracts{..} = case history of
   EmptyHistory _ -> mempty
   NonEmptyHistory _ _ snapshot _ snapshots -> snapshot <> fold snapshots
 
 -- | Add a new marlowe block to a live contracts collection.
 rollForward
-  :: BlockNo
+  :: forall a
+   . BlockNo
   -- ^ The current block number of the chain tip.
+  -> (Contract -> a)
+  -- ^ Project the stored data from a contract
   -> MarloweBlock
   -- ^ The block to add.
-  -> LiveContracts
-  -> LiveContracts
-rollForward tipBlockNo MarloweBlock{..} LiveContracts{..}
+  -> LiveContracts a
+  -> LiveContracts a
+rollForward tipBlockNo f MarloweBlock{..} LiveContracts{..}
   | tipBlockNo < blockNo = error "rollForward: new block is after tip"
   | otherwise =
       LiveContracts
@@ -131,18 +134,18 @@ rollForward tipBlockNo MarloweBlock{..} LiveContracts{..}
 
     updateLiveContracts = consumeUpdatedContracts . addNewContracts
 
-    addNewContracts = Map.union $ getNewContracts createTransactions
+    addNewContracts = Map.union (getNewContracts createTransactions)
 
     consumeUpdatedContracts = flip (foldl' consumeUpdatedContract) applyInputsTransactions
 
-    getNewContracts :: [MarloweCreateTransaction] -> Map TxOutRef Contract
+    getNewContracts :: [MarloweCreateTransaction] -> Map TxOutRef a
     getNewContracts = foldMap \MarloweCreateTransaction{..} ->
       Map.mapKeysMonotonic (TxOutRef txId) $
         newContracts <&> \case
           SomeCreateStep MarloweV1 CreateStep{createOutput = TransactionScriptOutput{datum = MarloweData{..}}} ->
-            marloweContract
+            f marloweContract
 
-    consumeUpdatedContract :: Map TxOutRef Contract -> MarloweApplyInputsTransaction -> Map TxOutRef Contract
+    consumeUpdatedContract :: Map TxOutRef a -> MarloweApplyInputsTransaction -> Map TxOutRef a
     consumeUpdatedContract
       liveContracts
       (MarloweApplyInputsTransaction MarloweV1 UnspentContractOutput{..} Transaction{blockHeader = _, ..})
@@ -150,16 +153,16 @@ rollForward tipBlockNo MarloweBlock{..} LiveContracts{..}
             case scriptOutput output of
               Nothing -> Map.delete txOutRef liveContracts
               Just TransactionScriptOutput{..} ->
-                Map.insert utxo (marloweContract datum) $
+                Map.insert utxo (f $ marloweContract datum) $
                   Map.delete txOutRef liveContracts
         | otherwise = error $ "rollForward: block consumes non-existent output " <> show txOutRef
 
 trimHistory
   :: Int
   -> BlockNo
-  -> Map TxOutRef Contract
-  -> Map BlockNo (Map TxOutRef Contract)
-  -> (Map TxOutRef Contract, Map BlockNo (Map TxOutRef Contract))
+  -> Map TxOutRef a
+  -> Map BlockNo (Map TxOutRef a)
+  -> (Map TxOutRef a, Map BlockNo (Map TxOutRef a))
 trimHistory securityParameter tip = go
   where
     go initial =
@@ -178,8 +181,8 @@ rollBackward
   -- ^ The point to which to roll back.
   -> WithGenesis BlockNo
   -- ^ The new tip.
-  -> LiveContracts
-  -> LiveContracts
+  -> LiveContracts a
+  -> LiveContracts a
 -- Rolling back to genesis just clears all history.
 rollBackward Genesis tip liveContracts = liveContracts{history = EmptyHistory tip}
 rollBackward _ Genesis _ = error "rollBackward: new point must be genesis when new tip is genesis"
@@ -220,7 +223,7 @@ rollBackward (At blockNo) (At tip) LiveContracts{..}
         else rollbackHistory snapshots'
 
 -- | For testing
-validate :: LiveContracts -> IO ()
+validate :: LiveContracts a -> IO ()
 validate LiveContracts{..} = do
   assertIO (securityParameter >= 0) "securityParameter < 0"
   case history of
@@ -237,7 +240,7 @@ validate LiveContracts{..} = do
           "snapshot history contains blocks older than security window"
 
 -- | For testing
-shrinkLiveContracts :: (Map TxOutRef Contract -> [Map TxOutRef Contract]) -> LiveContracts -> [LiveContracts]
+shrinkLiveContracts :: (Map TxOutRef a -> [Map TxOutRef a]) -> LiveContracts a -> [LiveContracts a]
 shrinkLiveContracts shrinkContractMap LiveContracts{..} = maybe id (:) shrunkBySecurityParameter shrunkByHistory
   where
     shrunkBySecurityParameter = do
