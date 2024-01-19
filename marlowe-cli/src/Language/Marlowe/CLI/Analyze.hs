@@ -38,12 +38,13 @@ import Data.Maybe (catMaybes, isJust)
 import Data.String (IsString (..))
 import Language.Marlowe.Analysis.Safety.Ledger (worstValueSize)
 import Language.Marlowe.Analysis.Safety.Transaction (
+  CurrentState (AlreadyInitialized),
   LockedRoles (..),
   MarloweExBudget (..),
   UseReferenceInput (..),
   calcMarloweTxExBudget,
   executeTransaction,
-  findTransactions',
+  findTransactions,
   foldTransactionsM,
   inputsRequiredRoles,
   unitAnnotator,
@@ -251,7 +252,7 @@ analyzeImpl era protocol MarloweTransaction{..} preconditions roles tokens maxim
             mtSlotConfig
     transactions <-
       if checkAll || executionCost || transactionSize || best && (maximumValue || minimumUtxo)
-        then findTransactions' unitAnnotator True $ MerkleizedContract mtContract mtContinuations
+        then findTransactions unitAnnotator True (MerkleizedContract mtContract mtContinuations) (AlreadyInitialized mtState)
         else pure mempty
     let perhapsTransactions = if best then Right transactions else Left ci
         guardValue condition x =

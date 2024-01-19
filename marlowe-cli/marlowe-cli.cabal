@@ -281,7 +281,9 @@ test-suite marlowe-cli-test
 
   build-depends:
     , aeson
+    , aeson-pretty
     , base >=4.9 && <5
+    , bytestring
     , cardano-api
     , containers
     , marlowe-cardano
