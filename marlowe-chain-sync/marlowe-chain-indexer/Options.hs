@@ -8,7 +8,7 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Language.Marlowe.Runtime.ChainIndexer.NodeClient (CostModel (..))
 import qualified Options.Applicative as O
-import Prettyprinter
+import Options.Applicative.Help.Pretty
 import System.Environment (lookupEnv)
 import Text.Read (readMaybe)
 
@@ -214,7 +214,7 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri version = O.i
         , O.header "marlowe-chain-indexer: Chain indexer for the Marlowe Runtime."
         ]
 
-description :: Doc ann
+description :: Doc
 description =
   concatWith
     (\a b -> a <> line <> line <> b)
@@ -237,3 +237,8 @@ description =
         , "folder for marlowe-chain-indexer."
         ]
     ]
+
+concatWith :: (a -> a -> a) -> [a] -> a
+concatWith _ [] = error "concatWith: empty list"
+concatWith _ [a] = a
+concatWith f (a : b : as) = concatWith f $ f a b : as

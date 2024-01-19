@@ -55,8 +55,8 @@ import Options.Applicative (
   strOption,
   value,
  )
+import Options.Applicative.Help.Pretty
 import Paths_marlowe_runtime (version)
-import Prettyprinter
 import UnliftIO (liftIO, throwIO)
 
 main :: IO ()
@@ -271,7 +271,7 @@ getOptions = execParser $ info (helper <*> versionOption <*> parser) infoMod
         , header "marlowe-sync: Contract synchronization and query service for the Marlowe Runtime."
         ]
 
-description :: Doc ann
+description :: Doc
 description =
   concatWith
     (\a b -> a <> line <> line <> b)
@@ -314,3 +314,8 @@ description =
         , "cluster being populated by a single marlowe-indexer."
         ]
     ]
+
+concatWith :: (a -> a -> a) -> [a] -> a
+concatWith _ [] = error "concatWith: empty list"
+concatWith _ [a] = a
+concatWith f (a : b : as) = concatWith f $ f a b : as

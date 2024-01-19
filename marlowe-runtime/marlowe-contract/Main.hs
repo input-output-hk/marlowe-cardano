@@ -58,8 +58,8 @@ import Options.Applicative (
   strOption,
   value,
  )
+import Options.Applicative.Help.Pretty
 import Paths_marlowe_runtime
-import Prettyprinter
 
 main :: IO ()
 main = do
@@ -334,7 +334,7 @@ getOptions = do
         , header "marlowe-contract: Contract storage service for the Marlowe Runtime."
         ]
 
-description :: Doc ann
+description :: Doc
 description =
   concatWith
     (\a b -> a <> line <> line <> b)
@@ -369,3 +369,8 @@ description =
         , "Garbage collection. These must both be running in order for marlowe-contract to run."
         ]
     ]
+
+concatWith :: (a -> a -> a) -> [a] -> a
+concatWith _ [] = error "concatWith: empty list"
+concatWith _ [a] = a
+concatWith f (a : b : as) = concatWith f $ f a b : as
