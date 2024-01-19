@@ -14,6 +14,7 @@ module Language.Marlowe.Runtime.Transaction.Api (
   Account (..),
   ApplyInputsConstraintsBuildupError (..),
   ApplyInputsError (..),
+  CoinSelectionError (..),
   ConstraintError (..),
   ContractCreated (..),
   ContractCreatedInEra (..),
@@ -116,6 +117,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   SlotNo,
   StakeCredential,
   TokenName (..),
+  Tokens,
   TxId,
   TxOutRef,
   parseMetadataList,
@@ -1024,6 +1026,15 @@ data WalletAddresses = WalletAddresses
   }
   deriving (Eq, Show, Generic, Binary, ToJSON, Variations)
 
+data CoinSelectionError
+  = NoCollateralFound (Set TxOutRef)
+  | InsufficientLovelace
+      { required :: Integer
+      , available :: Integer
+      }
+  | InsufficientTokens Tokens
+  deriving (Eq, Ord, Show, Generic, Binary, ToJSON, Variations)
+
 -- | Errors that can occur when trying to solve the constraints.
 data ConstraintError
   = MintingUtxoNotFound TxOutRef
@@ -1035,7 +1046,7 @@ data ConstraintError
   | InvalidHelperDatum TxOutRef (Maybe Chain.Datum)
   | InvalidPayoutScriptAddress TxOutRef Address
   | CalculateMinUtxoFailed String
-  | CoinSelectionFailed String
+  | CoinSelectionFailed CoinSelectionError
   | BalancingError String
   | MarloweInputInWithdraw
   | MarloweOutputInWithdraw
@@ -1059,8 +1070,10 @@ data CreateError
   | CreateLoadHelpersContextFailed LoadHelpersContextError
   | CreateBuildupFailed CreateBuildupError
   | CreateToCardanoError
-  | CreateSafetyAnalysisError String -- FIXME: This is a placeholder, pending design of error handling for safety analysis.
   | CreateSafetyAnalysisFailed [SafetyError]
+  | -- | This error is thrown when the safety analysis process itself fails itself
+    -- due to a timeout or other reasons, such as missing merkleization data.
+    CreateSafetyAnalysisError String
   | CreateContractNotFound
   | ProtocolParamNoUTxOCostPerByte
   | InsufficientMinAdaDeposit Lovelace
@@ -1098,7 +1111,7 @@ instance Variations ApplyInputsError
 instance ToJSON ApplyInputsError
 
 data ApplyInputsConstraintsBuildupError
-  = MarloweComputeTransactionFailed String
+  = MarloweComputeTransactionFailed V1.TransactionError
   | UnableToDetermineTransactionTimeout
   deriving (Eq, Show, Generic)
   deriving anyclass (Binary, Variations, ToJSON)
