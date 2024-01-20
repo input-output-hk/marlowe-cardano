@@ -82,7 +82,10 @@ commandParser =
           <*> (O.optional . O.strOption)
             (O.long "out-file" <> O.metavar "FILE" <> O.help "Path to the output file for benchmark results.")
    in O.info
-        (O.helper <*> (O.infoOption (showVersion version) $ O.long "version" <> O.help "Show version") <*> commandOptions)
+        ( O.helper
+            <*> (O.infoOption ("marlowe-benchmark " <> showVersion version) $ O.long "version" <> O.help "Show version")
+            <*> commandOptions
+        )
         ( O.fullDesc
             <> O.progDesc "This command-line tool executes benchmarks for Marlowe Runtime."
             <> O.header "marlowe-benchmark : execute Marlowe Runtime benchmarks"

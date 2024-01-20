@@ -1,0 +1,15 @@
+export NETWORK=preprod
+export CARDANO_NODE_SOCKET_PATH=node.socket
+export CARDANO_TESTNET_MAGIC=1
+export MARLOWE_RT_HOST=$(hostname)
+export MARLOWE_RT_PORT=37001
+export DB_PORT=54321
+export PODNAME=benchmark-preprod
+export BENCHMARK_CONFIG=../benchmark-config.json
+export FAUCET_ADDRESS=$(cat faucet.address)
+export FAUCET_SKEY=faucet.skey
+export SYNC_PODSTAT_FILE=sync-podstat.json
+export SYNC_RESULT_FILE=sync-results.tsv
+export BENCHMARK_PODSTAT_FILE=benchmark-podstats.json
+export BENCHMARK_RESULT_FILE=benchmark-results.json
+export DISK_FILE=disk.tsv

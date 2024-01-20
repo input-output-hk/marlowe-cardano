@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- | Benchmark the basic contract lifecycle.
@@ -160,18 +161,21 @@ fundAddress node era network srcAddress srcKey changeAddress dstAddressAmount =
             , txMintValue = C.TxMintNone
             , txScriptValidity = C.TxScriptValidityNone
             }
-    Right (C.BalancedTxBody _ txBody _ _) <-
-      pure $
-        C.makeTransactionBodyAutoBalance
-          systemStart
-          ledgerEpochInfo
-          protocol
-          mempty
-          mempty
-          utxos
-          txBodyContent
-          (fromJust $ toCardanoAddressInEra era changeAddress)
-          Nothing
+        (&) = flip ($)
+        txBody =
+          C.makeTransactionBodyAutoBalance
+            systemStart
+            ledgerEpochInfo
+            protocol
+            mempty
+            mempty
+            utxos
+            txBodyContent
+            (fromJust $ toCardanoAddressInEra era changeAddress)
+            Nothing
+            & \case
+              Right (C.BalancedTxBody _ txBody' _ _) -> txBody'
+              Left e -> error $ show e
     void $ signSubmit (fromJust $ C.refInsScriptsAndInlineDatsSupportedInEra era) srcKey txBody
 
 -- | Generate a new address and its signing key.

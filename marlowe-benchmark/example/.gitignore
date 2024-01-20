@@ -1,0 +1,4 @@
+*.json
+*.tsv
+*.png
+.R.Rout
