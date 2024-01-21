@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE ExplicitForAll #-}
 -----------------------------------------------------------------------------
 --
@@ -9,6 +10,7 @@
 --
 -----------------------------------------------------------------------------
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -26,8 +28,9 @@ import Control.Arrow ((***))
 import Control.Monad.Except (runExceptT)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (runReaderT)
+import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.Ratio ((%))
-import Language.Marlowe.Analysis.Safety.Transaction (findTransactions', unitAnnotator)
+import Language.Marlowe.Analysis.Safety.Transaction (CurrentState (AlreadyInitialized), findTransactions, unitAnnotator)
 import Language.Marlowe.CLI.Analyze (
   ContractInstance (
     ContractInstance,
@@ -68,23 +71,28 @@ import Test.Tasty.HUnit (Assertion, assertBool, testCase)
 import Cardano.Api qualified as C
 import Cardano.Api.Shelley qualified as C
 import Data.Aeson qualified as A
+import Data.ByteString.Lazy qualified as LBS
+import Data.Functor ((<&>))
 import Data.Map.Strict qualified as M
+import Data.Text qualified as Text
+import Data.Text.Encoding qualified as Text
+import Language.Marlowe (POSIXTime (POSIXTime), State (accounts), adaSymbol, adaToken, emptyState)
+import PlutusLedgerApi.V1.Value (tokenName)
 import PlutusTx.AssocMap qualified as AM
 
 -- | Run tests.
 tests :: TestTree
-tests =
+tests = do
+  let scenarios = scenario1 <> [scenario2]
   testGroup
     "Safety analysis"
-    [ testGroup
-        "Transaction cost"
-        [ testCase "Normal" (checkTransactionCost False)
-        , testCase "Merkleized" (checkTransactionCost True)
-        ]
+    [ testGroup "Transaction cost" $
+        scenarios <&> \scenario@Scenario{..} ->
+          testCase scLabel (checkTransactionCost scenario)
     ]
 
-checkTransactionCost :: Bool -> Assertion
-checkTransactionCost merkleize =
+checkTransactionCost :: Scenario -> Assertion
+checkTransactionCost Scenario{scContract, scState, scMerkleize, scExpected} =
   fmap (either (error . show) id)
     . runExceptT
     $ do
@@ -98,10 +106,10 @@ checkTransactionCost merkleize =
             ((\(C.CostModel c) -> c) $ C.protocolParamCostModels protocolTestnet M.! C.AnyPlutusScriptVersion C.PlutusScriptV2)
             (C.Testnet $ C.NetworkMagic 1)
             C.NoStakeAddress
-            contract
-            state
+            scContract
+            scState
             Nothing
-            merkleize
+            scMerkleize
             False
       let ciState = mtState
           ciContract = mtContract
@@ -111,123 +119,219 @@ checkTransactionCost merkleize =
           ciOpenRoleValidator = mtOpenRoleValidator
           ciPayoutValidator = mtRoleValidator
           ciSlotConfig = mtSlotConfig
-      transactions <- findTransactions' unitAnnotator True $ MerkleizedContract ciContract ciContinuations
+          contract = MerkleizedContract ciContract ciContinuations
+      transactions <- findTransactions unitAnnotator True contract (AlreadyInitialized scState)
       actual <- checkExecutionCost protocolTestnet ContractInstance{..} transactions False
-      liftIO $ assertBool "" $ actual == expected merkleize
+      let lsbToText :: LBS.ByteString -> Text.Text
+          lsbToText = Text.decodeUtf8 . LBS.toStrict
 
-state :: State
-state = State (AM.singleton (Role "Alice", Token "" "") 2_000_000) AM.empty AM.empty 1
+          jsonToText :: A.Value -> Text.Text
+          jsonToText = lsbToText . encodePretty
 
-contract :: Contract
-contract =
-  When
-    [ Case
-        (Deposit (Role "Bob") (Role "Alice") (Token "" "") (Constant 5_000_000))
-        ( When
-            [ Case
-                (Deposit (Role "Charlie") (Role "Alice") (Token "" "") (Constant 5_000_000))
-                ( When
-                    [ Case
-                        (Deposit (Role "Dave") (Role "Alice") (Token "" "") (Constant 5_000_000))
-                        ( When
-                            [ Case
-                                (Deposit (Role "Eve") (Role "Alice") (Token "" "") (Constant 5_000_000))
-                                ( When
-                                    [ Case
-                                        (Notify TrueObs)
-                                        ( Pay
-                                            (Role "Bob")
-                                            (Party (Role "Bob"))
-                                            (Token "" "")
-                                            (Constant 2000000)
+          errorMessage =
+            Text.unpack . jsonToText $
+              A.object
+                [ "Expected costs" A..= scExpected
+                , "Actual costs" A..= actual
+                ]
+
+      liftIO $ assertBool errorMessage $ actual == scExpected
+
+data Scenario = Scenario
+  { scState :: State
+  , scContract :: Contract
+  , scMerkleize :: Bool
+  , scExpected :: A.Value
+  , scLabel :: String
+  }
+
+maxMemory :: Double
+maxMemory = 14_000_000
+
+maxSteps :: Double
+maxSteps = 10_000_000_000
+
+scenario1 :: [Scenario]
+scenario1 =
+  [ Scenario
+      { scState = state
+      , scContract = contract
+      , scMerkleize = False
+      , scExpected = expectedNonMerkleized
+      , scLabel = "Scenario 1 [Normal]"
+      }
+  , Scenario
+      { scState = state
+      , scContract = contract
+      , scMerkleize = True
+      , scExpected = expectedMerkeized
+      , scLabel = "Scenario 1 [Merkleized]"
+      }
+  ]
+  where
+    state :: State
+    state = State (AM.singleton (Role "Alice", Token "" "") 2_000_000) AM.empty AM.empty 1
+
+    contract :: Contract
+    contract =
+      When
+        [ Case
+            (Deposit (Role "Bob") (Role "Alice") (Token "" "") (Constant 5_000_000))
+            ( When
+                [ Case
+                    (Deposit (Role "Charlie") (Role "Alice") (Token "" "") (Constant 5_000_000))
+                    ( When
+                        [ Case
+                            (Deposit (Role "Dave") (Role "Alice") (Token "" "") (Constant 5_000_000))
+                            ( When
+                                [ Case
+                                    (Deposit (Role "Eve") (Role "Alice") (Token "" "") (Constant 5_000_000))
+                                    ( When
+                                        [ Case
+                                            (Notify TrueObs)
                                             ( Pay
-                                                (Role "Charlie")
-                                                (Party (Role "Charlie"))
+                                                (Role "Bob")
+                                                (Party (Role "Bob"))
                                                 (Token "" "")
                                                 (Constant 2000000)
                                                 ( Pay
-                                                    (Role "Dave")
-                                                    (Party (Role "Dave"))
+                                                    (Role "Charlie")
+                                                    (Party (Role "Charlie"))
                                                     (Token "" "")
                                                     (Constant 2000000)
                                                     ( Pay
-                                                        (Role "Eve")
-                                                        (Party (Role "Eve"))
+                                                        (Role "Dave")
+                                                        (Party (Role "Dave"))
                                                         (Token "" "")
                                                         (Constant 2000000)
-                                                        ( When
-                                                            [ Case
-                                                                (Notify TrueObs)
+                                                        ( Pay
+                                                            (Role "Eve")
+                                                            (Party (Role "Eve"))
+                                                            (Token "" "")
+                                                            (Constant 2000000)
+                                                            ( When
+                                                                [ Case
+                                                                    (Notify TrueObs)
+                                                                    Close
+                                                                ]
+                                                                60_000_000
                                                                 Close
-                                                            ]
-                                                            60_000_000
-                                                            Close
+                                                            )
                                                         )
                                                     )
                                                 )
                                             )
-                                        )
-                                    ]
-                                    50_000
-                                    Close
-                                )
-                            ]
-                            40_000
-                            Close
-                        )
-                    ]
-                    30_000
-                    Close
-                )
-            ]
-            20_000
-            Close
-        )
-    ]
-    10_000
-    Close
+                                        ]
+                                        50_000
+                                        Close
+                                    )
+                                ]
+                                40_000
+                                Close
+                            )
+                        ]
+                        30_000
+                        Close
+                    )
+                ]
+                20_000
+                Close
+            )
+        ]
+        10_000
+        Close
 
-expected :: Bool -> A.Value
-expected False =
-  A.object
-    [ "Execution cost"
-        A..= A.object
-          [ "Memory"
-              A..= A.object
-                [ "Actual" A..= (11408534 :: Integer)
-                , "Invalid" A..= False
-                , "Maximum" A..= (14000000 :: Integer)
-                , "Percentage" A..= (100 * 11408534 / 14000000 :: Double)
-                ]
-          , "Steps"
-              A..= A.object
-                [ "Actual" A..= (3029993662 :: Integer)
-                , "Invalid" A..= False
-                , "Maximum" A..= (10000000000 :: Integer)
-                , "Percentage" A..= (100 * 3029993662 / 10000000000 :: Double)
-                ]
-          ]
-    ]
-expected True =
-  A.object
-    [ "Execution cost"
-        A..= A.object
-          [ "Memory"
-              A..= A.object
-                [ "Actual" A..= (12252358 :: Integer)
-                , "Invalid" A..= False
-                , "Maximum" A..= (14000000 :: Integer)
-                , "Percentage" A..= (100 * 12252358 / 14000000 :: Double)
-                ]
-          , "Steps"
-              A..= A.object
-                [ "Actual" A..= (3309056741 :: Integer)
-                , "Invalid" A..= False
-                , "Maximum" A..= (10000000000 :: Integer)
-                , "Percentage" A..= (100 * 3309056741 / 10000000000 :: Double)
-                ]
-          ]
-    ]
+    expectedNonMerkleized :: A.Value
+    expectedNonMerkleized =
+      A.object
+        [ "Execution cost"
+            A..= A.object
+              [ "Memory"
+                  A..= A.object
+                    [ "Actual" A..= (11405174 :: Integer)
+                    , "Invalid" A..= False
+                    , "Maximum" A..= maxMemory
+                    , "Percentage" A..= (100 * 11405174 / maxMemory)
+                    ]
+              , "Steps"
+                  A..= A.object
+                    [ "Actual" A..= (3032642845 :: Integer)
+                    , "Invalid" A..= False
+                    , "Maximum" A..= maxSteps
+                    , "Percentage" A..= (100 * 3032642845 / maxSteps)
+                    ]
+              ]
+        ]
+    expectedMerkeized :: A.Value
+    expectedMerkeized =
+      A.object
+        [ "Execution cost"
+            A..= A.object
+              [ "Memory"
+                  A..= A.object
+                    [ "Actual" A..= (12248998 :: Integer)
+                    , "Invalid" A..= False
+                    , "Maximum" A..= maxMemory
+                    , "Percentage" A..= (100 * 12248998 / maxMemory)
+                    ]
+              , "Steps"
+                  A..= A.object
+                    [ "Actual" A..= (3311705924 :: Integer)
+                    , "Invalid" A..= False
+                    , "Maximum" A..= maxSteps
+                    , "Percentage" A..= (100 * 3311705924 / maxSteps)
+                    ]
+              ]
+        ]
+
+scenario2 :: Scenario
+scenario2 =
+  Scenario
+    { scState = state
+    , scContract = contract
+    , scMerkleize = False
+    , scExpected = expectedNonMerkleized
+    , scLabel = "Scenario 2 [Normal]"
+    }
+  where
+    ada = Token adaSymbol adaToken
+    accounts =
+      AM.fromList $
+        [ ((accountId, ada), 1)
+        | i <- [1 .. 10] :: [Int]
+        , let accountId = Role $ tokenName . Text.encodeUtf8 . Text.pack . show $ i
+        ]
+    state = (emptyState (POSIXTime 0)){accounts = accounts}
+    contract =
+      When
+        [ Case
+            (Notify TrueObs)
+            Close
+        ]
+        30_000
+        Close
+
+    expectedNonMerkleized :: A.Value
+    expectedNonMerkleized =
+      A.object
+        [ "Execution cost"
+            A..= A.object
+              [ "Memory"
+                  A..= A.object
+                    [ "Actual" A..= (15933293 :: Integer)
+                    , "Invalid" A..= True
+                    , "Maximum" A..= maxMemory
+                    , "Percentage" A..= (100 * 15933293 / maxMemory)
+                    ]
+              , "Steps"
+                  A..= A.object
+                    [ "Actual" A..= (4602444699 :: Integer)
+                    , "Invalid" A..= False
+                    , "Maximum" A..= maxSteps
+                    , "Percentage" A..= (100 * 4602444699 / maxSteps)
+                    ]
+              ]
+        ]
 
 protocolTestnet :: C.ProtocolParameters
 protocolTestnet =
