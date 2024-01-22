@@ -10,12 +10,12 @@ import Cardano.Api (
   deserialiseAddress,
   readFileTextEnvelope,
  )
+import Control.Applicative ((<|>))
 import Control.Monad ((<=<))
 import Data.Aeson (eitherDecodeFileStrict')
 import Data.Default (def)
 import Data.Text (Text)
 import Data.Version (showVersion)
-import Data.Word (Word32)
 import Language.Marlowe.Runtime.Benchmark (measure)
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoAddressAny)
 import Language.Marlowe.Runtime.Client (connectToMarloweRuntime)
@@ -44,7 +44,7 @@ main =
               either (error . show) pure
                 <=< readFileTextEnvelope (AsSigningKey AsPaymentExtendedKey)
                 $ File key
-            pure $ Just (C.File node, C.BabbageEra, C.Testnet $ C.NetworkMagic magic, address', key')
+            pure $ Just (C.File node, C.BabbageEra, magic, address', key')
         Nothing -> pure Nothing
     connectToMarloweRuntime host (fromIntegral port) $ measure config' faucet' out
 
@@ -59,7 +59,7 @@ data Command = Command
 
 data Faucet = Faucet
   { node :: FilePath
-  , magic :: Word32
+  , magic :: C.NetworkId
   , address :: Text
   , key :: FilePath
   }
@@ -75,7 +75,11 @@ commandParser =
           <*> ( O.optional $
                   Faucet
                     <$> O.strOption (O.long "node-socket-path" <> O.metavar "FILE" <> O.help "Path to the Cardano node socket.")
-                    <*> O.option O.auto (O.long "network-magic" <> O.metavar "INTEGER" <> O.help "The Cardano network magic number.")
+                    <*> ( O.flag' C.Mainnet (O.long "mainnet" <> O.help "Execute on the Cardano mainnet.")
+                            <|> ( C.Testnet . C.NetworkMagic . toEnum
+                                    <$> O.option O.auto (O.long "testnet-magic" <> O.metavar "INTEGER" <> O.help "Execute on a Cardano testnet.")
+                                )
+                        )
                     <*> O.strOption (O.long "address" <> O.metavar "ADDRESS" <> O.help "Faucet address.")
                     <*> O.strOption (O.long "signing-key-file" <> O.metavar "FILE" <> O.help "Path to faucet signing key file.")
               )

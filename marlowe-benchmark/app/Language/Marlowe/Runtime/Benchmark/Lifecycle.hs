@@ -15,6 +15,7 @@ import Control.Monad.Trans.Marlowe (MarloweT)
 import Control.Monad.Trans.Marlowe.Class (MonadMarlowe, applyInputs, createContract, submitAndWait)
 import Data.Aeson (ToJSON)
 import Data.Bifunctor (second)
+import Data.Bits ((.&.), (.|.))
 import Data.Maybe (fromJust, mapMaybe)
 import Data.Time.Clock (UTCTime, getCurrentTime)
 import Data.Time.Clock.POSIX (getPOSIXTime)
@@ -195,7 +196,7 @@ genKey faucetAddress =
         $ hedgehog C.genShelleyWitnessSigningKey
     let address =
           Chain.Address $
-            (BS.singleton . BS.head . unAddress) faucetAddress
+            (BS.singleton . (0x60 .|.) . (.&. 0x0f) . BS.head . unAddress) faucetAddress
               <> (C.serialiseToRawBytes . C.verificationKeyHash . C.getVerificationKey) skey
     liftIO
       . hPutStrLn stderr

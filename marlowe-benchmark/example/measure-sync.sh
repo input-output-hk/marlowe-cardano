@@ -22,13 +22,14 @@ cardano-cli --version |& head -n 1
 psql --version
 jq --version
 gawk --version |& head -n 1
+bc --version |& head -n 1
 echo
 
 echo -n "Starting container "
 podman start "$PODNAME-postgres"
 sleep 30s
 echo "Waiting for postgresql"
-while ! sql -h "$(hostname)" -p "$DB_PORT" -U postgres -c 'select 1' >& /dev/null
+while ! psql -h "$(hostname)" -p "$DB_PORT" -U postgres -c 'select 1' >& /dev/null
 do
   sleep 5s
 done
@@ -108,7 +109,6 @@ echo
 MARLOWE_FINISH=$(date -u +%s)
 
 START=$(stat -c %W "$SYNC_PODSTAT_FILE")
-
 for s in "postgres" "node" "chain-indexer" "chain-sync" "marlowe-indexer"
 do
   jq -r '.[] | select(.Name | contains("'"$s"'")) | ((.CPU | sub("%"; "")) + " " +  (.MemUsage | sub(" .*$";"")))' "$SYNC_PODSTAT_FILE" \

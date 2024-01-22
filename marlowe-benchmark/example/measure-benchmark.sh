@@ -24,6 +24,7 @@ podman --version
 cardano-cli --version | head -n 1
 marlowe-benchmark --version
 jq --version
+dasel --version
 gawk --version |& head -n 1
 echo
 
@@ -47,7 +48,7 @@ marlowe-benchmark \
   --port "$MARLOWE_RT_PORT" \
   --config "$BENCHMARK_CONFIG" \
   --node-socket-path "$CARDANO_NODE_SOCKET_PATH" \
-  --network-magic "$CARDANO_TESTNET_MAGIC" \
+  "${MAGIC[@]}" \
   --address "$FAUCET_ADDRESS" \
   --signing-key-file "$FAUCET_SKEY" \
   --out-file "$BENCHMARK_RESULT_FILE"

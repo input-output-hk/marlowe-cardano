@@ -1,5 +1,21 @@
 # Benchmark examples
 
+This example walks through executing and plotting a complete set of benchmarks for the `preprod` network.
+
+## Prerequisites
+
+The following tools must be on the `PATH`:
+
+- `podman`
+- `cardano-cli`
+- `marlowe-benchmark`
+- `psql`
+- `jq`
+- `dasel`
+- `gawk`
+- `sed`
+- `bc`
+
 
 ## 0. Select the network
 
@@ -8,7 +24,6 @@ In this example, we use the `preprod` network.
 ```bash
 cd preprod
 ```
-
 
 ## 1. Make the database folders
 
@@ -35,14 +50,14 @@ source environment
 ## 3. Create the pod and containers
 
 ```bash
-podman play kube --replace=true --start=false benchmark-preprod
+podman play kube --replace=true --start=false benchmark-preprod.yaml
 ```
 
 
 ## 4. Measure the performance of syncing from genesis
 
 ```bash
-../measure-disk.sh
+../measure-sync.sh
 ```
 
 ```console
