@@ -63,7 +63,7 @@ $ cardano-cli address info --address addr1z94f8ywk4fg672xasahtk4t9k6w3aql943uxz5
 116a9391d6aa51af28dd876ebb5565b69d1e83e5ac7861506bd29b56b0d3a6aa2ff333f6f155fbf87462c5205497ed8690172e947d829c2ee2
 ```
 
-Below are the version hashes as of January 20, 2025.
+Below are the version hashes as of January 20, 2024.
 
 | Version | Technical Notes                         | Hash for Semantics Validator                               | Hash for Role-Payout Validator                             | Hash for Open-Role Validator                               |
 |---------|-----------------------------------------|------------------------------------------------------------|------------------------------------------------------------|------------------------------------------------------------|
