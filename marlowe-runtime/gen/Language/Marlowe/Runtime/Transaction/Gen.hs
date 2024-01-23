@@ -166,6 +166,14 @@ instance Arbitrary LoadHelpersContextError where
   arbitrary = HelperScriptNotFoundInRegistry <$> arbitrary
   shrink = genericShrink
 
+instance Arbitrary CoinSelectionError where
+  arbitrary =
+    oneof
+      [ NoCollateralFound <$> arbitrary
+      , InsufficientLovelace <$> arbitrary <*> arbitrary
+      , InsufficientTokens <$> arbitrary
+      ]
+
 instance Arbitrary ConstraintError where
   arbitrary =
     oneof
@@ -330,6 +338,14 @@ instance (ArbitraryMarloweVersion v, IsCardanoEra era) => Arbitrary (WithdrawTxI
       <*> hedgehog (genTxBody cardanoEra)
   shrink WithdrawTxInEra{..} = [WithdrawTxInEra{..}{WithdrawTxInEra.inputs = inputs'} | inputs' <- shrink inputs]
 
+instance Arbitrary Account where
+  arbitrary =
+    oneof
+      [ RoleAccount <$> arbitrary
+      , AddressAccount <$> arbitrary
+      ]
+  shrink = genericShrink
+
 instance ArbitraryCommand MarloweTxCommand where
   arbitraryTag =
     elements
@@ -343,6 +359,7 @@ instance ArbitraryCommand MarloweTxCommand where
       Create
         <$> arbitrary
         <*> pure Core.MarloweV1
+        <*> arbitrary
         <*> arbitrary
         <*> arbitrary
         <*> arbitrary
@@ -387,7 +404,7 @@ instance ArbitraryCommand MarloweTxCommand where
     TagWithdraw Core.MarloweV1 -> arbitrary
     TagSubmit -> arbitrary
   shrinkCommand = \case
-    Create staking Core.MarloweV1 wallet thread roleConfig meta minAda contract ->
+    Create staking Core.MarloweV1 wallet thread roleConfig meta minAda state contract ->
       concat
         [ Create
             <$> shrink staking
@@ -397,6 +414,7 @@ instance ArbitraryCommand MarloweTxCommand where
             <*> pure roleConfig
             <*> pure meta
             <*> pure minAda
+            <*> pure state
             <*> pure contract
         , Create staking Core.MarloweV1
             <$> shrink wallet
@@ -404,26 +422,34 @@ instance ArbitraryCommand MarloweTxCommand where
             <*> pure roleConfig
             <*> pure meta
             <*> pure minAda
+            <*> pure state
             <*> pure contract
         , Create staking Core.MarloweV1 wallet
             <$> shrink thread
             <*> pure roleConfig
             <*> pure meta
             <*> pure minAda
+            <*> pure state
             <*> pure contract
         , Create staking Core.MarloweV1 wallet thread
             <$> shrink roleConfig
             <*> pure meta
             <*> pure minAda
+            <*> pure state
             <*> pure contract
         , Create staking Core.MarloweV1 wallet thread roleConfig
             <$> shrink meta
             <*> pure minAda
+            <*> pure state
             <*> pure contract
         , Create staking Core.MarloweV1 wallet thread roleConfig meta
             <$> shrink minAda
+            <*> pure state
             <*> pure contract
         , Create staking Core.MarloweV1 wallet thread roleConfig meta minAda
+            <$> shrink state
+            <*> pure contract
+        , Create staking Core.MarloweV1 wallet thread roleConfig meta minAda state
             <$> shrink contract
         ]
     ApplyInputs Core.MarloweV1 wallet contractId meta minValid maxValid inputs ->
@@ -490,6 +516,7 @@ instance CommandVariations MarloweTxCommand where
     TagCreate Core.MarloweV1 ->
       Create
         <$> variations
+          `varyAp` variations
           `varyAp` variations
           `varyAp` variations
           `varyAp` variations

@@ -1,9 +1,9 @@
 {-# LANGUAGE DataKinds #-}
+{-# HLINT ignore "Redundant if" #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
-{-# HLINT ignore "Redundant if" #-}
 
 module Data.Marlowe.LiveContractsSpec where
 
@@ -50,8 +50,8 @@ import Test.QuickCheck
 
 spec :: Spec
 spec = do
-  prop "arbitrary generates valid" validate
-  prop "shrink valid is valid" $ traverse_ validate . shrink
+  prop "arbitrary generates valid" $ validate @Contract
+  prop "shrink valid is valid" $ traverse_ (validate @Contract) . shrink
 
   describe "create" do
     prop "returns valid on valid" $ validate . create . abs
@@ -61,13 +61,13 @@ spec = do
       case getValidRollbackState liveContracts of
         Nothing -> discard
         Just validState -> forAll (genRollBackwardArgs validState) \(point, tip) ->
-          validate $ rollBackward point tip liveContracts
+          validate $ rollBackward @Contract point tip liveContracts
 
     prop "rollBackward currentPoint lastTip = id" \liveContracts ->
       let (currentPoint, tip) = case latestPoints liveContracts of
             Left t -> (Genesis, t)
             Right (point, t) -> (At point, At t)
-       in areValidRollbackArgs liveContracts currentPoint tip ==>
+       in areValidRollbackArgs @Contract liveContracts currentPoint tip ==>
             rollBackward currentPoint tip liveContracts
               === liveContracts
 
@@ -77,24 +77,24 @@ spec = do
             Right (point, t) -> (At point, At t)
        in canRollForward liveContracts ==>
             forAll (genRollForwardArgs liveContracts) \(tip, block) ->
-              let liveContracts' = rollForward tip block liveContracts
+              let liveContracts' = rollForward tip id block liveContracts
                in areValidRollbackArgs liveContracts' currentPoint (At tip) ==>
                     currentLive liveContracts
                       === currentLive (rollBackward currentPoint currentTip liveContracts')
 
     prop "rollBackward Genesis empties history" \liveContracts ->
-      rollBackward Genesis Genesis liveContracts === create (securityParameter liveContracts)
+      rollBackward @Contract Genesis Genesis liveContracts === create (securityParameter liveContracts)
 
   describe "rollForward" do
     prop "returns valid on valid" \liveContracts ->
       canRollForward liveContracts ==>
         forAll (genRollForwardArgs liveContracts) \(tip, block) ->
-          validate $ rollForward tip block liveContracts
+          validate $ rollForward tip id block liveContracts
 
     prop "rollForward contains all added contracts" \liveContracts ->
       canRollForward liveContracts ==>
         forAll (genRollForwardArgs liveContracts) \(tip, block) ->
-          let rolledForward = rollForward tip block liveContracts
+          let rolledForward = rollForward tip id block liveContracts
            in counterexample (show rolledForward) $
                 Set.difference (blockAddedContracts block) (membersSet $ currentLive rolledForward)
                   === mempty
@@ -102,7 +102,7 @@ spec = do
     prop "rollForward only removes consumed contracts" \liveContracts ->
       canRollForward liveContracts ==>
         forAll (genRollForwardArgs liveContracts) \(tip, block) -> do
-          let rolledForward = rollForward tip block liveContracts
+          let rolledForward = rollForward tip id block liveContracts
           let oldLiveKeys = Map.keysSet $ currentLive liveContracts
           let newLiveKeys = Map.keysSet $ currentLive rolledForward
           let consumedFromOld = Set.intersection oldLiveKeys $ blockConsumedContracts block
@@ -138,11 +138,11 @@ spec = do
                           }
                     }
           let block = MarloweBlock blockHeader [] applies []
-          let rolledForward = rollForward point block liveContracts
+          let rolledForward = rollForward point id block liveContracts
           counterexample (show rolledForward) $
             allContracts rolledForward === mempty
 
-genPointBeyondSecurityParam :: LiveContracts -> Gen BlockNo
+genPointBeyondSecurityParam :: LiveContracts a -> Gen BlockNo
 genPointBeyondSecurityParam lc = case latestPoints lc of
   Left _ -> chooseBoundedIntegral (fromIntegral (securityParameter lc), maxBound)
   Right (point, _) -> chooseBoundedIntegral (point + fromIntegral (securityParameter lc), maxBound)
@@ -179,11 +179,11 @@ blockNewCreateContracts = foldMap extractNewContracts . createTransactions
 membersSet :: Map.Map k v -> Set (k, v)
 membersSet = Set.fromDistinctAscList . Map.toAscList
 
-instance Arbitrary LiveContracts where
+instance Arbitrary (LiveContracts Contract) where
   arbitrary = genLiveContracts
   shrink = shrinkLiveContracts shrink
 
-genLiveContracts :: Gen LiveContracts
+genLiveContracts :: Gen (LiveContracts Contract)
 genLiveContracts = sized \size ->
   if size == 0
     then go size
@@ -203,7 +203,7 @@ genLiveContracts = sized \size ->
           [ Just $ pure liveContracts
           , guard (canRollForward liveContracts) $> do
               (tip, block) <- genRollForwardArgs liveContracts
-              pure $ rollForward tip block liveContracts
+              pure $ rollForward tip id block liveContracts
           , do
               validState <- getValidRollbackState liveContracts
               pure $ do
@@ -211,7 +211,7 @@ genLiveContracts = sized \size ->
                 pure $ rollBackward point tip liveContracts
           ]
 
-genRollForwardArgs :: LiveContracts -> Gen (BlockNo, MarloweBlock)
+genRollForwardArgs :: LiveContracts Contract -> Gen (BlockNo, MarloweBlock)
 genRollForwardArgs liveContracts = do
   let maxTipChange = max 1 $ fromIntegral (securityParameter liveContracts) * 2
   (nextBlockNo, nextTip) <- case latestPoints liveContracts of
@@ -338,10 +338,10 @@ genApplyInputsTransactions currentBlockHeader utxo = do
 createTxOutRefs :: MarloweCreateTransaction -> Set TxOutRef
 createTxOutRefs MarloweCreateTransaction{..} = Set.mapMonotonic (TxOutRef txId) $ Map.keysSet newContracts
 
-canRollForward :: LiveContracts -> Bool
+canRollForward :: LiveContracts a -> Bool
 canRollForward = canRollForwardBy 1
 
-canRollForwardBy :: BlockNo -> LiveContracts -> Bool
+canRollForwardBy :: BlockNo -> LiveContracts a -> Bool
 canRollForwardBy delta lc = case latestPoints lc of
   Left _ -> True
   Right (point, _) -> maxBound - point >= delta
@@ -356,7 +356,7 @@ data ValidRollbackState = ValidRollbackState
   , minTip :: BlockNo
   }
 
-getValidRollbackState :: LiveContracts -> Maybe ValidRollbackState
+getValidRollbackState :: LiveContracts a -> Maybe ValidRollbackState
 getValidRollbackState lc = case latestPoints lc of
   Left _ -> Nothing
   Right (point, tip) -> do
@@ -372,7 +372,7 @@ getValidRollbackState lc = case latestPoints lc of
     let minTip = tip
     pure ValidRollbackState{..}
 
-areValidRollbackArgs :: LiveContracts -> WithGenesis BlockNo -> WithGenesis BlockNo -> Bool
+areValidRollbackArgs :: LiveContracts a -> WithGenesis BlockNo -> WithGenesis BlockNo -> Bool
 areValidRollbackArgs _ _ Genesis = False
 areValidRollbackArgs _ Genesis _ = True
 areValidRollbackArgs lc (At point) (At tip) = case latestPoints lc of

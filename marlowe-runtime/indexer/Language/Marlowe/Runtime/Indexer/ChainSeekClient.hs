@@ -268,7 +268,9 @@ chainSeekClient = component "indexer-chain-seek-client" \ChainSeekClientDependen
                     pure (point, marloweBlock)
 
                 -- Emit the marlowe blocks in a roll forward event to a downstream consumer.
-                emit $ RollForward (catMaybes blocks') tip
+                case catMaybes blocks' of
+                  [] -> pure ()
+                  blocks'' -> emit $ RollForward blocks'' tip
 
                 -- Loop back into the main synchronization loop with an updated
                 -- rollback state.

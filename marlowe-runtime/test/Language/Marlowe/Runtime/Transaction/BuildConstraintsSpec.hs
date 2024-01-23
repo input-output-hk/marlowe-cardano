@@ -14,7 +14,6 @@ import Control.Monad.Trans.Except (runExcept, runExceptT)
 import Data.Function (on)
 import Data.Functor ((<&>))
 import Data.Functor.Identity (Identity (..))
-import Data.List (isPrefixOf)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Map.NonEmpty as NEMap
@@ -276,6 +275,7 @@ runBuildCreateConstraints CreateArgs{..} =
           roleTokensConfig
           metadata
           minAda
+          mempty
           (\(Chain.Assets ada tokens) -> Chain.Assets ada tokens)
           contract
       )
@@ -510,20 +510,15 @@ buildApplyInputsConstraintsSpec =
           Right _ ->
             counterexample "A valid transaction will occur if tip is not before the first timeout." $
               toSlot timeout <= tipSlot'
-          Left (ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed "TEUselessTransaction")) ->
+          Left (ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed Semantics.TEUselessTransaction)) ->
             counterexample "A useless transaction will occur if the tip is before the timeout." $
               tipTime < timeout
-          Left (ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed message)) ->
-            if "TEIntervalError (IntervalInPastError " `isPrefixOf` message
-              then
-                counterexample "The tip is in the past if the interval was in the past." $
-                  tipTime < minTime
-              else
-                if "TEIntervalError (InvalidInterval " `isPrefixOf` message
-                  then
-                    counterexample "Rounding off causes the timeout to fall at the tip if the interval was invalid (effectively empty)." $
-                      tipSlot' == toSlot timeout || marloweContract == whenWhenCloseContract timeout timeout' && tipSlot' == toSlot timeout'
-                  else counterexample "Unexpected transaction failure" False
+          Left (ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed (Semantics.TEIntervalError intervalError))) ->
+            case intervalError of
+              (Semantics.IntervalInPastError _ _) -> counterexample "The tip is in the past if the interval was in the past." $ tipTime < minTime
+              (Semantics.InvalidInterval _) ->
+                counterexample "Roundoff causes the timeout to fall at the tip if the interval was invalid (effectively empty)." $
+                  tipSlot' == toSlot timeout || marloweContract == whenWhenCloseContract timeout timeout' && tipSlot' == toSlot timeout'
           Left _ ->
             counterexample "Unexpected transaction failure" False
     Hspec.QuickCheck.prop "valid slot interval for non-timed-out contract" \assets utxo address marloweParams state -> do

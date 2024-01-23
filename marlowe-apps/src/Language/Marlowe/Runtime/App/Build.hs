@@ -59,7 +59,7 @@ buildCreation version' contract roles minUtxo metadata' =
             RoleTokensMint . mkMint . fmap (\(token, addr) -> (token, Nothing, ToAddress addr, 1)) . NE.fromList . M.toList $
               roles
    in build show (\(ContractCreated era ContractCreatedInEra{..}) -> (contractId, TxBodyInEraWithReferenceScripts era txBody)) $
-        \w -> Create Nothing version' w Nothing roles' metadata' minUtxo $ Left contract
+        \w -> Create Nothing version' w Nothing roles' metadata' minUtxo mempty $ Left contract
 
 buildApplication
   :: MarloweVersion v

@@ -11,8 +11,10 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Marlowe.Runtime.Transaction.Api (
+  Account (..),
   ApplyInputsConstraintsBuildupError (..),
   ApplyInputsError (..),
+  CoinSelectionError (..),
   ConstraintError (..),
   ContractCreated (..),
   ContractCreatedInEra (..),
@@ -115,6 +117,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   SlotNo,
   StakeCredential,
   TokenName (..),
+  Tokens,
   TxId,
   TxOutRef,
   parseMetadataList,
@@ -755,6 +758,12 @@ instance (IsCardanoEra era) => ToJSON (InputsAppliedInEra era 'V1) where
       , "tx-body" .= serialiseToTextEnvelope Nothing txBody
       ]
 
+data Account
+  = RoleAccount TokenName
+  | AddressAccount Address
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving anyclass (Binary, ToJSON, Variations)
+
 -- | The low-level runtime API for building and submitting transactions.
 data MarloweTxCommand status err result where
   -- | Construct a transaction that starts a new Marlowe contract. The
@@ -776,6 +785,8 @@ data MarloweTxCommand status err result where
     -- ^ Optional metadata to attach to the transaction
     -> Maybe Lovelace
     -- ^ Optional min Lovelace deposit which should be used for the contract output.
+    -> Map Account Assets
+    -- ^ Initial account balances. The min ADA deposit will be added to this.
     -> Either (Contract v) DatumHash
     -- ^ The contract to run, or the hash of the contract to load from the store.
     -> MarloweTxCommand Void CreateError (ContractCreated v)
@@ -849,7 +860,7 @@ instance Command MarloweTxCommand where
     JobIdSubmit :: TxId -> JobId MarloweTxCommand SubmitStatus SubmitError BlockHeader
 
   tagFromCommand = \case
-    Create _ version _ _ _ _ _ _ -> TagCreate version
+    Create _ version _ _ _ _ _ _ _ -> TagCreate version
     ApplyInputs version _ _ _ _ _ _ -> TagApplyInputs version
     Withdraw version _ _ -> TagWithdraw version
     Submit _ _ -> TagSubmit
@@ -898,13 +909,14 @@ instance Command MarloweTxCommand where
     TagSubmit -> JobIdSubmit <$> get
 
   putCommand = \case
-    Create mStakeCredential MarloweV1 walletAddresses threadName roles metadata minAda contract -> do
+    Create mStakeCredential MarloweV1 walletAddresses threadName roles metadata minAda accounts contract -> do
       put mStakeCredential
       put walletAddresses
       put threadName
       put roles
       put metadata
       put minAda
+      put accounts
       put contract
     ApplyInputs version walletAddresses contractId metadata invalidBefore invalidHereafter redeemer -> do
       put walletAddresses
@@ -925,14 +937,8 @@ instance Command MarloweTxCommand where
         put $ serialiseToCBOR tx
 
   getCommand = \case
-    TagCreate MarloweV1 -> do
-      mStakeCredential <- get
-      walletAddresses <- get
-      threadName <- get
-      roles <- get
-      metadata <- get
-      minAda <- get
-      Create mStakeCredential MarloweV1 walletAddresses threadName roles metadata minAda <$> get
+    TagCreate MarloweV1 ->
+      Create <$> get <*> pure MarloweV1 <*> get <*> get <*> get <*> get <*> get <*> get <*> get
     TagApplyInputs version -> do
       walletAddresses <- get
       contractId <- get
@@ -1020,6 +1026,15 @@ data WalletAddresses = WalletAddresses
   }
   deriving (Eq, Show, Generic, Binary, ToJSON, Variations)
 
+data CoinSelectionError
+  = NoCollateralFound (Set TxOutRef)
+  | InsufficientLovelace
+      { required :: Integer
+      , available :: Integer
+      }
+  | InsufficientTokens Tokens
+  deriving (Eq, Ord, Show, Generic, Binary, ToJSON, Variations)
+
 -- | Errors that can occur when trying to solve the constraints.
 data ConstraintError
   = MintingUtxoNotFound TxOutRef
@@ -1031,7 +1046,7 @@ data ConstraintError
   | InvalidHelperDatum TxOutRef (Maybe Chain.Datum)
   | InvalidPayoutScriptAddress TxOutRef Address
   | CalculateMinUtxoFailed String
-  | CoinSelectionFailed String
+  | CoinSelectionFailed CoinSelectionError
   | BalancingError String
   | MarloweInputInWithdraw
   | MarloweOutputInWithdraw
@@ -1055,7 +1070,10 @@ data CreateError
   | CreateLoadHelpersContextFailed LoadHelpersContextError
   | CreateBuildupFailed CreateBuildupError
   | CreateToCardanoError
-  | CreateSafetyAnalysisError String -- FIXME: This is a placeholder, pending design of error handling for safety analysis.
+  | CreateSafetyAnalysisFailed [SafetyError]
+  | -- | This error is thrown when the safety analysis process itself fails itself
+    -- due to a timeout or other reasons, such as missing merkleization data.
+    CreateSafetyAnalysisError String
   | CreateContractNotFound
   | ProtocolParamNoUTxOCostPerByte
   | InsufficientMinAdaDeposit Lovelace
@@ -1063,7 +1081,6 @@ data CreateError
 
 deriving instance Eq CreateError
 deriving instance Show CreateError
-deriving instance Ord CreateError
 instance Binary CreateError
 instance Variations CreateError
 instance ToJSON CreateError
@@ -1094,7 +1111,7 @@ instance Variations ApplyInputsError
 instance ToJSON ApplyInputsError
 
 data ApplyInputsConstraintsBuildupError
-  = MarloweComputeTransactionFailed String
+  = MarloweComputeTransactionFailed V1.TransactionError
   | UnableToDetermineTransactionTimeout
   deriving (Eq, Show, Generic)
   deriving anyclass (Binary, Variations, ToJSON)
@@ -1146,14 +1163,15 @@ data SubmitStatus
 
 instance CommandEq MarloweTxCommand where
   commandEq = \case
-    Create stake MarloweV1 wallet threadName roleTokenConfig metadata minAda contract -> \case
-      Create stake' MarloweV1 wallet' threadName' roleTokenConfig' metadata' minAda' contract' ->
+    Create stake MarloweV1 wallet threadName roleTokenConfig metadata minAda accounts contract -> \case
+      Create stake' MarloweV1 wallet' threadName' roleTokenConfig' metadata' minAda' accounts' contract' ->
         stake == stake'
           && wallet == wallet'
           && threadName == threadName'
           && roleTokenConfig == roleTokenConfig'
           && metadata == metadata'
           && minAda == minAda'
+          && accounts == accounts'
           && contract == contract'
     ApplyInputs MarloweV1 wallet contractId metadata invalidBefore invalidHereafter inputs -> \case
       ApplyInputs MarloweV1 wallet' contractId' metadata' invalidBefore' invalidHereafter' inputs' ->
@@ -1223,7 +1241,7 @@ instance ShowCommand MarloweTxCommand where
 
   showsPrecCommand p =
     showParen (p >= 11) . \case
-      Create stake MarloweV1 wallet threadName roleTokenConfig metadata minAda contract ->
+      Create stake MarloweV1 wallet threadName roleTokenConfig metadata minAda accounts contract ->
         ( showString "Create"
             . showSpace
             . showsPrec 11 stake
@@ -1239,6 +1257,8 @@ instance ShowCommand MarloweTxCommand where
             . showsPrec 11 metadata
             . showSpace
             . showsPrec 11 minAda
+            . showSpace
+            . showsPrec 11 accounts
             . showSpace
             . showsPrec 11 contract
         )

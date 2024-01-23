@@ -163,6 +163,7 @@ createStandardContractWithTagsAndRolesConfig threadName rolesConfig tags partyAW
               }
       )
       Nothing
+      mempty
       (Right contractHash)
   contractCreated@(ContractCreated era0 ContractCreatedInEra{contractId, txBody = createTxBody}) <-
     expectRight "failed to create standard contract" result

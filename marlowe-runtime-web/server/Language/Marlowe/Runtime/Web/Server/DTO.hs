@@ -95,7 +95,7 @@ import qualified Data.Map.NonEmpty as NEMap
 import Data.Set (Set)
 import qualified Language.Marlowe.Protocol.Query.Types as Query
 import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType, fromCardanoTxId)
-import Language.Marlowe.Runtime.ChainSync.Api (AssetId (..))
+import Language.Marlowe.Runtime.ChainSync.Api (AssetId (..), fromBech32, toBech32)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (
   ContractId (..),
@@ -113,6 +113,7 @@ import Language.Marlowe.Runtime.Core.Api (
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import qualified Language.Marlowe.Runtime.Core.Api as Core.Api (Payout (..))
 import qualified Language.Marlowe.Runtime.Discovery.Api as Discovery
+import Language.Marlowe.Runtime.Transaction.Api (Account (..))
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx (..), TempTxStatus (..))
@@ -685,6 +686,12 @@ instance FromDTO Chain.StakeCredential where
       . deserialiseAddress AsStakeAddress
       . Web.unStakeAddress
 
+instance HasDTO Chain.ScriptHash where
+  type DTO Chain.ScriptHash = Web.ScriptHash
+
+instance ToDTO Chain.ScriptHash where
+  toDTO = coerce
+
 instance HasDTO (TxBody era) where
   type DTO (TxBody era) = Web.TextEnvelope
 
@@ -937,3 +944,15 @@ instance FromDTO Sem.Party where
   fromDTO a = case deserialiseAddressBech32 (Web.unParty a) of
     Just (network, address) -> Just $ Sem.Address network address
     Nothing -> Just $ Sem.Role $ fromString . T.unpack . Web.unParty $ a
+
+instance HasDTO Account where
+  type DTO Account = Web.Party
+
+instance ToDTO Account where
+  toDTO (AddressAccount address) = Web.Party . fromMaybe (read . show $ address) $ toBech32 address
+  toDTO (RoleAccount tokenName) = Web.Party . T.pack . read . show . Chain.unTokenName $ tokenName
+
+instance FromDTO Account where
+  fromDTO a = Just case fromBech32 (Web.unParty a) of
+    Just address -> AddressAccount address
+    Nothing -> RoleAccount $ fromString . T.unpack . Web.unParty $ a

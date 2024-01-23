@@ -53,14 +53,14 @@ garbageCollector = component_ "garbage-collector" run
             }
 
         rollForward liveContracts blocks tip = do
-          idle $ foldl' (flip $ LiveContracts.rollForward $ blockNo tip) liveContracts blocks
+          idle $ foldl' (flip $ LiveContracts.rollForward (blockNo tip) getContractRoots) liveContracts blocks
 
         rollBackward liveContracts point tip =
           idle $ LiveContracts.rollBackward (blockNo <$> point) (blockNo <$> tip) liveContracts
 
         wait isPolling liveContracts = do
           unless isPolling do
-            let liveRoots = foldMap getContractRoots $ LiveContracts.allContracts liveContracts
+            let liveRoots = fold $ LiveContracts.allContracts liveContracts
             setGCRoots contractStore liveRoots
           poll liveContracts
 

@@ -261,9 +261,23 @@ instance FromHttpApiData AssetId where
 instance ToHttpApiData AssetId where
   toUrlPiece AssetId{..} = toUrlPiece policyId <> "." <> toUrlPiece assetName
 
+newtype ScriptHash = ScriptHash {unScriptHash :: ByteString}
+  deriving (Eq, Ord, Generic)
+  deriving (Show, ToHttpApiData, ToJSON, FromJSON) via Base16
+
+instance ToSchema ScriptHash where
+  declareNamedSchema proxy = pure $ NamedSchema (Just "ScriptHash") $ toParamSchema proxy
+
+instance ToParamSchema ScriptHash where
+  toParamSchema _ =
+    mempty
+      & type_ ?~ OpenApiString
+      & OpenApi.description ?~ "The hex-encoded hash of a Plutus script"
+      & pattern ?~ "^[a-fA-F0-9]*$"
+
 newtype Party = Party {unParty :: T.Text}
   deriving (Eq, Ord, Generic)
-  deriving newtype (Show, ToHttpApiData, FromHttpApiData, ToJSON, FromJSON)
+  deriving newtype (Show, ToHttpApiData, FromHttpApiData, ToJSON, FromJSON, FromJSONKey, ToJSONKey)
 
 instance ToSchema Party where
   declareNamedSchema proxy = pure $ NamedSchema (Just "Party") $ toParamSchema proxy
@@ -822,9 +836,10 @@ data PostContractsRequest = PostContractsRequest
   , roles :: Maybe RolesConfig
   , threadTokenName :: Maybe Text
   , contract :: ContractOrSourceId
+  , accounts :: Map Party Assets
   , minUTxODeposit :: Maybe Word64
   }
-  deriving (Show, Eq, Ord, Generic)
+  deriving (Show, Eq, Generic)
 
 instance FromJSON PostContractsRequest
 instance ToJSON PostContractsRequest

@@ -33,21 +33,24 @@ import Control.Monad.Event.Class
 import Control.Monad.IO.Unlift (MonadUnliftIO, liftIO, withRunInIO)
 import Data.Foldable (for_)
 import Data.Kind (Type)
+import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import Data.Time (UTCTime)
 import Language.Marlowe.Protocol.Client (MarloweRuntimeClient (..))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
-import Language.Marlowe.Runtime.ChainSync.Api (DatumHash, Lovelace, StakeCredential, TokenName, TxId, TxOutRef)
+import Language.Marlowe.Runtime.ChainSync.Api (Assets, DatumHash, Lovelace, StakeCredential, TokenName, TxId, TxOutRef)
 import Language.Marlowe.Runtime.Core.Api (
   Contract,
   ContractId,
   Inputs,
+  IsMarloweVersion (..),
   MarloweTransactionMetadata,
   MarloweVersion,
   MarloweVersionTag,
  )
 import Language.Marlowe.Runtime.Transaction.Api (
+  Account,
   ApplyInputsError,
   ContractCreated (..),
   ContractCreatedInEra (..),
@@ -80,6 +83,7 @@ type CreateContract m =
   -> RoleTokensConfig
   -> MarloweTransactionMetadata
   -> Maybe Lovelace
+  -> Map Account Assets
   -> Either (Contract v) DatumHash
   -> m (Either CreateError (ContractCreated v))
 
@@ -215,12 +219,12 @@ txClient = component "web-tx-client" \TxClientDependencies{..} -> do
   pure
     ( runTxClient
     , TxClient
-        { createContract = \stakeCredential version addresses threadName roles metadata minUTxODeposit contract -> do
+        { createContract = \stakeCredential version addresses threadName roles metadata minUTxODeposit accounts contract -> do
             response <-
               runConnector connector $
                 RunTxClient $
                   liftCommand $
-                    Create stakeCredential version addresses threadName roles metadata minUTxODeposit contract
+                    Create stakeCredential version addresses threadName roles metadata minUTxODeposit accounts contract
             liftIO $ for_ response \(ContractCreated era creation@ContractCreatedInEra{contractId}) ->
               atomically $
                 modifyTVar tempContracts $

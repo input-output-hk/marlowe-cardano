@@ -3,4 +3,4 @@ networks:
   - preprod
   # Reach out to dev empowerment to add secrets for new environments when needed
 images:
-  stagingTag: 42ece215
+  stagingTag: 71e2742a

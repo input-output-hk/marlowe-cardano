@@ -113,6 +113,7 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
               . Map.singleton "Party A"
               $ RoleTokenConfig (Map.singleton (ClosedRole partyAWebChangeAddress) 1) Nothing
         , contract = ContractOrSourceId $ Right contractSourceId
+        , accounts = mempty
         , minUTxODeposit = Nothing
         , tags = tags
         }

@@ -14,7 +14,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (Contract, Environment, State)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics
 
 import Data.List.NonEmpty (NonEmpty, nonEmpty)
-import Language.Marlowe.Runtime.Core.Api hiding (Contract)
+import Language.Marlowe.Runtime.Core.Api hiding (Contract, State)
 import Language.Marlowe.Runtime.Web (ContractState (ContractState, currentContract, state), NextAPI, Party, TxOutRef)
 import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO (toDTO), fromDTOThrow)
 
