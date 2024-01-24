@@ -80,7 +80,6 @@ import Control.Monad (guard)
 import Control.Monad.State (MonadState (get), evalState, evalStateT)
 import Control.Monad.State.Class (MonadState (put))
 import Control.Monad.Trans.Maybe (MaybeT (..))
-import qualified Data.ByteString.Short as SBS (ShortByteString)
 import Data.Functor ((<&>))
 import qualified Data.List as L
 import qualified Data.Map.Strict as M
@@ -88,7 +87,8 @@ import Data.Maybe (catMaybes)
 import qualified Data.Set as S
 import Data.Traversable (for)
 import Language.Marlowe (Input (..))
-import qualified PlutusLedgerApi.Common as P (PlutusLedgerLanguage (..), evaluateScriptCounting)
+import qualified PlutusLedgerApi.Common as P
+import qualified PlutusLedgerApi.Common.Versions as P
 import qualified PlutusLedgerApi.V2 as P hiding (evaluateScriptCounting)
 import qualified PlutusTx.AssocMap as AM
 import qualified PlutusTx.Builtins as P
@@ -101,7 +101,7 @@ executeTransaction
   => (MonadError e m)
   => P.EvaluationContext
   -- ^ The Plutus evaluation context.
-  -> SBS.ShortByteString
+  -> P.ScriptForEvaluation
   -- ^ The validator.
   -> P.Address
   -- ^ The semantics validator address.
@@ -249,9 +249,9 @@ calcMarloweTxExBudget
   => (MonadError e m)
   => P.EvaluationContext
   -- ^ The Plutus evaluation context.
-  -> (SBS.ShortByteString, P.Address, UseReferenceInput)
+  -> (P.ScriptForEvaluation, P.Address, UseReferenceInput)
   -- ^ The semantics validator and its address.
-  -> (SBS.ShortByteString, P.Address, UseReferenceInput, LockedRoles)
+  -> (P.ScriptForEvaluation, P.Address, UseReferenceInput, LockedRoles)
   -- ^ The open role validator and its address.
   -> P.Address
   -- ^ The payout validator address.
@@ -356,7 +356,7 @@ data TxInSpec = TxInSpec
   { tiAddress :: P.Address
   , tiValue :: P.Value
   , tiDatum :: Maybe P.Datum
-  , tiScriptEvaluationContext :: Maybe (ValidatorName, SBS.ShortByteString, P.Redeemer, UseReferenceInput)
+  , tiScriptEvaluationContext :: Maybe (ValidatorName, P.ScriptForEvaluation, P.Redeemer, UseReferenceInput)
   }
 
 data TxOutSpec = TxOutSpec
@@ -409,7 +409,7 @@ freshTxOutRef = do
   pure $ P.TxOutRef txId 0
 
 data ValidatorEvalContext = ValidatorEvalContext
-  { vecValidator :: SBS.ShortByteString
+  { vecValidator :: P.ScriptForEvaluation
   , vecInDatum :: P.Datum
   , vecRedeemer :: P.Redeemer
   , vecTxOutRef :: P.TxOutRef
@@ -719,7 +719,7 @@ firstRoleAuthorizationAnnotator =
 evaluateSemantics
   :: P.EvaluationContext
   -- ^ The evaluation context.
-  -> SBS.ShortByteString
+  -> P.ScriptForEvaluation
   -- ^ The validator script.
   -> P.Data
   -- ^ The datum.
@@ -732,7 +732,7 @@ evaluateSemantics
 evaluateSemantics evaluationContext validator datum redeemer context =
   P.evaluateScriptCounting
     P.PlutusV2
-    (P.ProtocolVersion 8 0)
+    P.valentinePV
     P.Verbose
     evaluationContext
     validator
