@@ -11,7 +11,7 @@ module Language.Marlowe.Runtime.ChainSync (
   renderNodeServiceSelectorOTel,
 ) where
 
-import Cardano.Api (CardanoEra, CardanoMode, Tx, TxValidationErrorInMode)
+import Cardano.Api (ShelleyBasedEra, Tx, TxValidationErrorInCardanoMode)
 import qualified Cardano.Api as Cardano
 import Cardano.Api.Shelley (AcquiringFailure)
 import Control.Arrow (returnA)
@@ -44,13 +44,13 @@ data ChainSyncDependencies m = ChainSyncDependencies
   , queryLocalNodeState
       :: Maybe Cardano.ChainPoint
       -> forall result
-       . Cardano.QueryInMode CardanoMode result
+       . Cardano.QueryInMode result
       -> m (Either AcquiringFailure result)
   , submitTxToNodeLocal
       :: forall era
-       . CardanoEra era
+       . ShelleyBasedEra era
       -> Tx era
-      -> m (SubmitResult (TxValidationErrorInMode CardanoMode))
+      -> m (SubmitResult TxValidationErrorInCardanoMode)
   , nodeTip :: STM ChainPoint
   , scanBatchSize :: Natural
   }

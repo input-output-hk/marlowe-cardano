@@ -48,7 +48,7 @@ maryTxRow encodeMetadata slotNo blockHash txId ValidityInterval{..} =
 
 maryTxOutRow :: Int64 -> Bytea -> Int16 -> ShelleyTxOut (MaryEra StandardCrypto) -> TxOutRowGroup
 maryTxOutRow slotNo txId txIx (ShelleyTxOut addr (MaryValue lovelace assets)) =
-  case allegraTxOutRow slotNo txId txIx (ShelleyTxOut addr $ Coin lovelace) of
+  case allegraTxOutRow slotNo txId txIx (ShelleyTxOut addr lovelace) of
     (txOut, _) ->
       ( txOut
       , multiAssetRows (AssetOutRow txId txIx slotNo) assets

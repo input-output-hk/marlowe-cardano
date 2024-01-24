@@ -3,15 +3,14 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Main where
 
 import Cardano.Api (
-  Block (..),
   BlockHeader (..),
   BlockInMode (..),
   BlockNo (..),
-  CardanoMode,
   ChainPoint (..),
   ChainSyncClient (ChainSyncClient),
   ChainTip (..),
@@ -28,6 +27,7 @@ import Cardano.Api (
   ),
   LocalNodeConnectInfo (LocalNodeConnectInfo, localConsensusModeParams, localNodeNetworkId, localNodeSocketPath),
   connectToLocalNode,
+  getBlockHeader,
  )
 import Cardano.Api.ChainSync.Client (ClientStIdle (..), ClientStNext (..))
 import Control.Monad (join, when)
@@ -127,7 +127,7 @@ main = do
     pure ()
 
 runBlockProcessor
-  :: TBQueueMaybe (BlockInMode CardanoMode)
+  :: TBQueueMaybe BlockInMode
   -> TBQueueMaybe BlockRow
   -> TBQueueMaybe TxRow
   -> TBQueueMaybe TxOutRow
@@ -162,7 +162,7 @@ runBlockProcessor blockQueue blockRowQueue txRowQueue txOutRowQueue txInRowQueue
 
 type TBQueueMaybe a = TBQueue (Maybe a)
 
-runChainSync :: TBQueueMaybe (BlockInMode CardanoMode) -> LocalNodeConnectInfo CardanoMode -> IO ()
+runChainSync :: TBQueueMaybe BlockInMode -> LocalNodeConnectInfo -> IO ()
 runChainSync blockQueue connect = do
   connectToLocalNode
     connect
@@ -173,15 +173,15 @@ runChainSync blockQueue connect = do
       , localTxMonitoringClient = Nothing
       }
   where
-    idle :: ClientStIdle (BlockInMode CardanoMode) ChainPoint ChainTip IO ()
+    idle :: ClientStIdle BlockInMode ChainPoint ChainTip IO ()
     idle = SendMsgRequestNext next end
 
-    next :: ClientStNext (BlockInMode CardanoMode) ChainPoint ChainTip IO ()
+    next :: ClientStNext BlockInMode ChainPoint ChainTip IO ()
     next =
       ClientStNext
         { recvMsgRollForward = \block tip -> ChainSyncClient do
             case block of
-              BlockInMode (Block (BlockHeader _ _ (BlockNo blockNo)) _) _ -> case tip of
+              BlockInMode _ (getBlockHeader -> BlockHeader _ _ (BlockNo blockNo)) -> case tip of
                 ChainTip _ _ (BlockNo blockNo') -> do
                   let onePercentOfTip = blockNo' `div` 100
                   when (blockNo `mod` onePercentOfTip == 0) do
@@ -202,7 +202,7 @@ runChainSync blockQueue connect = do
             _ -> SendMsgDone ()
         }
 
-    end :: IO (ClientStNext (BlockInMode CardanoMode) ChainPoint ChainTip IO ())
+    end :: IO (ClientStNext BlockInMode ChainPoint ChainTip IO ())
     end = do
       atomically $ writeTBQueue blockQueue Nothing
       pure

@@ -16,15 +16,13 @@
 module Language.Marlowe.Runtime.ChainSync.Api where
 
 import Cardano.Api (
+  AlonzoEraOnwards (..),
   AnyCardanoEra (..),
   AsType (..),
   CardanoEra (..),
-  CardanoMode,
-  ConsensusMode (..),
   EraHistory (..),
   NetworkId (..),
   NetworkMagic (..),
-  ScriptDataSupportedInEra (..),
   SerialiseAsRawBytes (..),
   Tx,
   deserialiseFromBech32,
@@ -74,8 +72,10 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust, fromMaybe, mapMaybe)
 import Data.Proxy (Proxy (..))
+import Data.SOP.BasicFunctors (K (..))
 import qualified Data.SOP.Counting as Counting
-import Data.SOP.Strict (K (..), NP (..))
+import Data.SOP.NonEmpty (NonEmpty (..))
+import Data.SOP.Strict (NP (..))
 import qualified Data.Scientific as Scientific
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -1071,7 +1071,7 @@ data ChainSyncQuery a where
   GetNetworkId :: ChainSyncQuery NetworkId
   GetProtocolParameters :: ChainSyncQuery ProtocolParameters
   GetSystemStart :: ChainSyncQuery SystemStart
-  GetEraHistory :: ChainSyncQuery (EraHistory CardanoMode)
+  GetEraHistory :: ChainSyncQuery EraHistory
   GetUTxOs :: GetUTxOsQuery -> ChainSyncQuery UTxOs
   GetNodeTip :: ChainSyncQuery ChainPoint
   GetTip :: ChainSyncQuery ChainPoint
@@ -1124,7 +1124,7 @@ renderChainSyncQueryOTel = \case
     RequestRenderedOTel
       { requestName = "get-era-history"
       , requestAttributes = []
-      , responseAttributes = \(EraHistory CardanoMode (unInterpreter -> Summary summary)) ->
+      , responseAttributes = \(EraHistory (unInterpreter -> Summary summary)) ->
           summaryAttributes summary $
             Counting.Exactly $
               K "byron"
@@ -1186,10 +1186,10 @@ renderChainSyncQueryOTel = \case
           ]
       }
 
-summaryAttributes :: Counting.NonEmpty xs EraSummary -> Counting.Exactly xs Text -> [(Text, Attribute)]
-summaryAttributes (Counting.NonEmptyOne summary) (Counting.Exactly (K era :* _)) =
+summaryAttributes :: NonEmpty xs EraSummary -> Counting.Exactly xs Text -> [(Text, Attribute)]
+summaryAttributes (NonEmptyOne summary) (Counting.Exactly (K era :* _)) =
   eraSummaryAttributes era summary
-summaryAttributes (Counting.NonEmptyCons summary summaries) (Counting.Exactly (K era :* eras)) =
+summaryAttributes (NonEmptyCons summary summaries) (Counting.Exactly (K era :* eras)) =
   eraSummaryAttributes era summary <> summaryAttributes summaries (Counting.Exactly eras)
 
 eraSummaryAttributes :: Text -> EraSummary -> [(Text, Attribute)]
@@ -1292,7 +1292,7 @@ instance Query.Request ChainSyncQuery where
     TagGetNetworkId :: Query.Tag ChainSyncQuery NetworkId
     TagGetProtocolParameters :: Query.Tag ChainSyncQuery ProtocolParameters
     TagGetSystemStart :: Query.Tag ChainSyncQuery SystemStart
-    TagGetEraHistory :: Query.Tag ChainSyncQuery (EraHistory CardanoMode)
+    TagGetEraHistory :: Query.Tag ChainSyncQuery EraHistory
     TagGetUTxOs :: Query.Tag ChainSyncQuery UTxOs
     TagGetNodeTip :: Query.Tag ChainSyncQuery ChainPoint
     TagGetTip :: Query.Tag ChainSyncQuery ChainPoint
@@ -1376,7 +1376,7 @@ instance Query.BinaryRequest ChainSyncQuery where
         Testnet (NetworkMagic magic) -> Just magic
     TagGetProtocolParameters -> put . Aeson.encode
     TagGetEraHistory -> \case
-      EraHistory _ interpreter -> put $ serialise interpreter
+      EraHistory interpreter -> put $ serialise interpreter
     TagGetSystemStart -> \case
       SystemStart start -> put start
     TagGetUTxOs -> put
@@ -1395,7 +1395,7 @@ instance Query.BinaryRequest ChainSyncQuery where
       bytes <- get
       case deserialiseOrFail bytes of
         Left err -> fail $ show err
-        Right interpreter -> pure $ EraHistory CardanoMode interpreter
+        Right interpreter -> pure $ EraHistory interpreter
     TagGetSystemStart -> SystemStart <$> get
     TagGetUTxOs -> get
     TagGetNodeTip -> get
@@ -1408,7 +1408,7 @@ instance Query.ShowRequest ChainSyncQuery where
     TagGetNetworkId -> showsPrec p
     TagGetProtocolParameters -> showsPrec p
     TagGetSystemStart -> showsPrec p
-    TagGetEraHistory -> \(EraHistory CardanoMode interpreter) ->
+    TagGetEraHistory -> \(EraHistory interpreter) ->
       showParen
         (p >= 11)
         ( showString "EraHistory"
@@ -1444,14 +1444,14 @@ unInterpreter :: Interpreter xs -> Summary xs
 unInterpreter = unsafeCoerce
 
 data ChainSyncCommand status err result where
-  SubmitTx :: ScriptDataSupportedInEra era -> Tx era -> ChainSyncCommand Void String ()
+  SubmitTx :: AlonzoEraOnwards era -> Tx era -> ChainSyncCommand Void String ()
 
 instance HasSignature ChainSyncCommand where
   signature _ = "ChainSyncCommand"
 
 instance Job.Command ChainSyncCommand where
   data Tag ChainSyncCommand status err result where
-    TagSubmitTx :: ScriptDataSupportedInEra era -> Job.Tag ChainSyncCommand Void String ()
+    TagSubmitTx :: AlonzoEraOnwards era -> Job.Tag ChainSyncCommand Void String ()
 
   data JobId ChainSyncCommand status err result
 
@@ -1465,37 +1465,37 @@ instance Job.Command ChainSyncCommand where
     TagSubmitTx era -> do
       putWord8 0x01
       case era of
-        ScriptDataInAlonzoEra -> putWord8 0x01
-        ScriptDataInBabbageEra -> putWord8 0x02
-        ScriptDataInConwayEra -> putWord8 0x03
+        AlonzoEraOnwardsAlonzo -> putWord8 0x01
+        AlonzoEraOnwardsBabbage -> putWord8 0x02
+        AlonzoEraOnwardsConway -> putWord8 0x03
   getTag =
     getWord8 >>= \case
       0x01 ->
         getWord8 >>= \case
-          0x01 -> pure $ Job.SomeTag $ TagSubmitTx ScriptDataInAlonzoEra
-          0x02 -> pure $ Job.SomeTag $ TagSubmitTx ScriptDataInBabbageEra
-          0x03 -> pure $ Job.SomeTag $ TagSubmitTx ScriptDataInConwayEra
+          0x01 -> pure $ Job.SomeTag $ TagSubmitTx AlonzoEraOnwardsAlonzo
+          0x02 -> pure $ Job.SomeTag $ TagSubmitTx AlonzoEraOnwardsBabbage
+          0x03 -> pure $ Job.SomeTag $ TagSubmitTx AlonzoEraOnwardsConway
           tag -> fail $ "invalid era tag " <> show tag
       tag -> fail $ "invalid command tag " <> show tag
   putJobId = \case {}
   getJobId = \case
     TagSubmitTx _ -> fail "SubmitTx does not support job IDs"
   putCommand = \case
-    SubmitTx ScriptDataInAlonzoEra tx -> put $ serialiseToCBOR tx
-    SubmitTx ScriptDataInBabbageEra tx -> put $ serialiseToCBOR tx
-    SubmitTx ScriptDataInConwayEra tx -> put $ serialiseToCBOR tx
+    SubmitTx AlonzoEraOnwardsAlonzo tx -> put $ serialiseToCBOR tx
+    SubmitTx AlonzoEraOnwardsBabbage tx -> put $ serialiseToCBOR tx
+    SubmitTx AlonzoEraOnwardsConway tx -> put $ serialiseToCBOR tx
   getCommand = \case
     TagSubmitTx era ->
       SubmitTx era <$> do
         bytes <- get @ByteString
         case era of
-          ScriptDataInAlonzoEra -> case deserialiseFromCBOR (AsTx AsAlonzo) bytes of
+          AlonzoEraOnwardsAlonzo -> case deserialiseFromCBOR (AsTx AsAlonzoEra) bytes of
             Left err -> fail $ show err
             Right tx -> pure tx
-          ScriptDataInBabbageEra -> case deserialiseFromCBOR (AsTx AsBabbage) bytes of
+          AlonzoEraOnwardsBabbage -> case deserialiseFromCBOR (AsTx AsBabbageEra) bytes of
             Left err -> fail $ show err
             Right tx -> pure tx
-          ScriptDataInConwayEra -> case deserialiseFromCBOR (AsTx AsConway) bytes of
+          AlonzoEraOnwardsConway -> case deserialiseFromCBOR (AsTx AsConwayEra) bytes of
             Left err -> fail $ show err
             Right tx -> pure tx
   putStatus = \case
@@ -1514,23 +1514,23 @@ instance Job.Command ChainSyncCommand where
 instance Job.ShowCommand ChainSyncCommand where
   showsPrecTag p =
     showParen (p >= 11) . showString . \case
-      TagSubmitTx ScriptDataInAlonzoEra -> "TagSubmitTx ScriptDataInAlonzoEra"
-      TagSubmitTx ScriptDataInBabbageEra -> "TagSubmitTx ScriptDataInBabbageEra"
-      TagSubmitTx ScriptDataInConwayEra -> "TagSubmitTx ScriptDataInConwayEra"
+      TagSubmitTx AlonzoEraOnwardsAlonzo -> "TagSubmitTx AlonzoEraOnwardsAlonzo"
+      TagSubmitTx AlonzoEraOnwardsBabbage -> "TagSubmitTx AlonzoEraOnwardsBabbage"
+      TagSubmitTx AlonzoEraOnwardsConway -> "TagSubmitTx AlonzoEraOnwardsConway"
   showsPrecCommand p =
     showParen (p >= 11) . \case
-      SubmitTx ScriptDataInAlonzoEra tx ->
-        ( showString "TagSubmitTx ScriptDataInAlonzoEra"
+      SubmitTx AlonzoEraOnwardsAlonzo tx ->
+        ( showString "TagSubmitTx AlonzoEraOnwardsAlonzo"
             . showSpace
             . showsPrec p tx
         )
-      SubmitTx ScriptDataInBabbageEra tx ->
-        ( showString "TagSubmitTx ScriptDataInBabbageEra"
+      SubmitTx AlonzoEraOnwardsBabbage tx ->
+        ( showString "TagSubmitTx AlonzoEraOnwardsBabbage"
             . showSpace
             . showsPrec p tx
         )
-      SubmitTx ScriptDataInConwayEra tx ->
-        ( showString "TagSubmitTx ScriptDataInConwayEra"
+      SubmitTx AlonzoEraOnwardsConway tx ->
+        ( showString "TagSubmitTx AlonzoEraOnwardsConway"
             . showSpace
             . showsPrec p tx
         )
@@ -1547,17 +1547,17 @@ instance Job.OTelCommand ChainSyncCommand where
   commandName = \case
     TagSubmitTx era ->
       "submit_tx/" <> case era of
-        ScriptDataInAlonzoEra -> "alonzo"
-        ScriptDataInBabbageEra -> "babbage"
-        ScriptDataInConwayEra -> "babbage"
+        AlonzoEraOnwardsAlonzo -> "alonzo"
+        AlonzoEraOnwardsBabbage -> "babbage"
+        AlonzoEraOnwardsConway -> "babbage"
 
-eraEq :: ScriptDataSupportedInEra era1 -> ScriptDataSupportedInEra era2 -> Maybe (era1 :~: era2)
-eraEq ScriptDataInAlonzoEra ScriptDataInAlonzoEra = Just Refl
-eraEq ScriptDataInAlonzoEra _ = Nothing
-eraEq ScriptDataInBabbageEra ScriptDataInBabbageEra = Just Refl
-eraEq ScriptDataInBabbageEra _ = Nothing
-eraEq ScriptDataInConwayEra ScriptDataInConwayEra = Just Refl
-eraEq ScriptDataInConwayEra _ = Nothing
+eraEq :: AlonzoEraOnwards era1 -> AlonzoEraOnwards era2 -> Maybe (era1 :~: era2)
+eraEq AlonzoEraOnwardsAlonzo AlonzoEraOnwardsAlonzo = Just Refl
+eraEq AlonzoEraOnwardsAlonzo _ = Nothing
+eraEq AlonzoEraOnwardsBabbage AlonzoEraOnwardsBabbage = Just Refl
+eraEq AlonzoEraOnwardsBabbage _ = Nothing
+eraEq AlonzoEraOnwardsConway AlonzoEraOnwardsConway = Just Refl
+eraEq AlonzoEraOnwardsConway _ = Nothing
 
 -- * Orphan instances
 
@@ -1590,20 +1590,20 @@ instance Variations C.ExecutionUnitPrices where
 instance Variations C.ExecutionUnits where
   variations = C.ExecutionUnits <$> variations `varyAp` variations
 
-instance Variations (C.EraHistory CardanoMode) where
-  variations = C.EraHistory C.CardanoMode <$> variations
+instance Variations C.EraHistory where
+  variations = C.EraHistory <$> variations
 
-instance (Variations (Counting.NonEmpty xs EraSummary)) => Variations (Interpreter xs) where
+instance (Variations (NonEmpty xs EraSummary)) => Variations (Interpreter xs) where
   variations = mkInterpreter <$> variations
 
-instance (Variations (Counting.NonEmpty xs EraSummary)) => Variations (Summary xs) where
+instance (Variations (NonEmpty xs EraSummary)) => Variations (Summary xs) where
   variations = Summary <$> variations
 
-instance {-# OVERLAPPING #-} (Variations a) => Variations (Counting.NonEmpty '[x] a) where
-  variations = Counting.NonEmptyOne <$> variations
+instance {-# OVERLAPPING #-} (Variations a) => Variations (NonEmpty '[x] a) where
+  variations = NonEmptyOne <$> variations
 
-instance {-# OVERLAPPING #-} (Variations a, Variations (Counting.NonEmpty xs a)) => Variations (Counting.NonEmpty (x ': xs) a) where
-  variations = Counting.NonEmptyCons <$> variations `varyAp` pure (NE.head variations)
+instance {-# OVERLAPPING #-} (Variations a, Variations (NonEmpty xs a)) => Variations (NonEmpty (x ': xs) a) where
+  variations = NonEmptyCons <$> variations `varyAp` pure (NE.head variations)
 
 instance Variations EraSummary
 

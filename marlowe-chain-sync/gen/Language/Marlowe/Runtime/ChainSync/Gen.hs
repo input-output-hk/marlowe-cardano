@@ -6,17 +6,16 @@ module Language.Marlowe.Runtime.ChainSync.Gen where
 
 import Cardano.Api (
   AddressAny (..),
+  AlonzoEraOnwards (..),
   AsType (..),
   CardanoEra (..),
-  CardanoMode,
-  ConsensusMode (..),
   EraHistory (..),
   Key (verificationKeyHash),
   NetworkId (..),
   NetworkMagic (..),
   PlutusScriptVersion (..),
-  ScriptDataSupportedInEra (..),
   SerialiseAsRawBytes (..),
+  ShelleyBasedEra (..),
   SystemStart (..),
   hashScriptDataBytes,
   unsafeHashableScriptData,
@@ -31,8 +30,9 @@ import Data.ByteString.Short (fromShort)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as Map
 import Data.Maybe (mapMaybe)
+import Data.SOP.BasicFunctors (K (..))
 import Data.SOP.Counting (Exactly (..))
-import Data.SOP.Strict (K (..), NP (..))
+import Data.SOP.Strict (NP (..))
 import qualified Data.Set.NonEmpty as NESet
 import qualified Data.Text as T
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
@@ -418,7 +418,9 @@ instance Query.ArbitraryRequest ChainSyncQuery where
   arbitraryResult = \case
     TagGetSecurityParameter -> arbitrary
     TagGetNetworkId -> arbitrary
-    TagGetProtocolParameters -> hedgehog genProtocolParameters
+    TagGetProtocolParameters -> do
+      AnyCardanoEra era <- arbitrary
+      hedgehog $ genProtocolParameters era
     TagGetSystemStart -> SystemStart . posixSecondsToUTCTime . fromIntegral <$> arbitrary @Word64
     TagGetEraHistory -> genEraHistory
     TagGetUTxOs -> arbitrary
@@ -450,9 +452,9 @@ instance Query.ArbitraryRequest ChainSyncQuery where
     TagGetTip -> shrink
     TagGetEra -> shrink
 
-genEraHistory :: Gen (EraHistory CardanoMode)
+genEraHistory :: Gen EraHistory
 genEraHistory =
-  EraHistory CardanoMode <$> do
+  EraHistory <$> do
     byronSummary <- genEraSummary
     shelleySummary <- genEraSummary
     allegraSummary <- genEraSummary
@@ -517,7 +519,7 @@ instance Query.RequestEq ChainSyncQuery where
     TagGetNetworkId -> (==)
     TagGetProtocolParameters -> (==)
     TagGetSystemStart -> (==)
-    TagGetEraHistory -> \(EraHistory CardanoMode interpreter1) (EraHistory CardanoMode interpreter2) ->
+    TagGetEraHistory -> \(EraHistory interpreter1) (EraHistory interpreter2) ->
       unInterpreter interpreter1 == unInterpreter interpreter2
     TagGetUTxOs -> (==)
     TagGetNodeTip -> (==)
@@ -527,14 +529,14 @@ instance Query.RequestEq ChainSyncQuery where
 instance Command.ArbitraryCommand ChainSyncCommand where
   arbitraryTag =
     elements
-      [ Command.SomeTag $ TagSubmitTx ScriptDataInAlonzoEra
-      , Command.SomeTag $ TagSubmitTx ScriptDataInBabbageEra
-      , Command.SomeTag $ TagSubmitTx ScriptDataInConwayEra
+      [ Command.SomeTag $ TagSubmitTx AlonzoEraOnwardsAlonzo
+      , Command.SomeTag $ TagSubmitTx AlonzoEraOnwardsBabbage
+      , Command.SomeTag $ TagSubmitTx AlonzoEraOnwardsConway
       ]
   arbitraryCmd = \case
-    TagSubmitTx ScriptDataInAlonzoEra -> hedgehog $ SubmitTx ScriptDataInAlonzoEra <$> genTx AlonzoEra
-    TagSubmitTx ScriptDataInBabbageEra -> hedgehog $ SubmitTx ScriptDataInBabbageEra <$> genTx BabbageEra
-    TagSubmitTx ScriptDataInConwayEra -> hedgehog $ SubmitTx ScriptDataInConwayEra <$> genTx ConwayEra
+    TagSubmitTx AlonzoEraOnwardsAlonzo -> hedgehog $ SubmitTx AlonzoEraOnwardsAlonzo <$> genTx ShelleyBasedEraAlonzo
+    TagSubmitTx AlonzoEraOnwardsBabbage -> hedgehog $ SubmitTx AlonzoEraOnwardsBabbage <$> genTx ShelleyBasedEraBabbage
+    TagSubmitTx AlonzoEraOnwardsConway -> hedgehog $ SubmitTx AlonzoEraOnwardsConway <$> genTx ShelleyBasedEraConway
   arbitraryJobId = const Nothing
   arbitraryStatus = const Nothing
   arbitraryErr = \case
@@ -553,14 +555,14 @@ instance Command.ArbitraryCommand ChainSyncCommand where
 
 instance Command.CommandEq ChainSyncCommand where
   commandEq = \case
-    SubmitTx ScriptDataInAlonzoEra tx -> \case
-      SubmitTx ScriptDataInAlonzoEra tx' -> tx == tx'
+    SubmitTx AlonzoEraOnwardsAlonzo tx -> \case
+      SubmitTx AlonzoEraOnwardsAlonzo tx' -> tx == tx'
       _ -> False
-    SubmitTx ScriptDataInBabbageEra tx -> \case
-      SubmitTx ScriptDataInBabbageEra tx' -> tx == tx'
+    SubmitTx AlonzoEraOnwardsBabbage tx -> \case
+      SubmitTx AlonzoEraOnwardsBabbage tx' -> tx == tx'
       _ -> False
-    SubmitTx ScriptDataInConwayEra tx -> \case
-      SubmitTx ScriptDataInConwayEra tx' -> tx == tx'
+    SubmitTx AlonzoEraOnwardsConway tx -> \case
+      SubmitTx AlonzoEraOnwardsConway tx' -> tx == tx'
       _ -> False
   jobIdEq = \case {}
   statusEq = \case

@@ -13,7 +13,7 @@ module Language.Marlowe.Runtime.ChainIndexer (
   renderDatabaseSelectorOTel,
 ) where
 
-import Cardano.Api (CardanoMode, LocalNodeClientProtocolsInMode)
+import Cardano.Api (LocalNodeClientProtocolsInMode)
 import Colog (Message, WithLog)
 import Control.Arrow (returnA)
 import Control.Concurrent.Component
@@ -52,7 +52,7 @@ data ChainIndexerSelector f where
   ChainStoreEvent :: ChainStoreSelector f -> ChainIndexerSelector f
 
 data ChainIndexerDependencies m = ChainIndexerDependencies
-  { connectToLocalNode :: !(LocalNodeClientProtocolsInMode CardanoMode -> m ())
+  { connectToLocalNode :: !(LocalNodeClientProtocolsInMode -> m ())
   , maxCost :: !Int
   , costModel :: !CostModel
   , databaseQueries :: !(DatabaseQueries m)

@@ -258,8 +258,3 @@ description =
         , "against a scalable postgres replica cluster being populated by a single chain indexer."
         ]
     ]
-
-concatWith :: (a -> a -> a) -> [a] -> a
-concatWith _ [] = error "concatWith: empty list"
-concatWith _ [a] = a
-concatWith f (a : b : as) = concatWith f $ f a b : as

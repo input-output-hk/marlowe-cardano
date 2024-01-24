@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Language.Marlowe.Runtime.ChainIndexer.NodeClient (
   Changes (..),
@@ -18,14 +19,15 @@ import Cardano.Api (
   BlockHeader (..),
   BlockInMode (..),
   BlockNo (..),
-  CardanoMode,
   ChainPoint (..),
   ChainSyncClientPipelined (..),
   ChainTip (..),
   LocalChainSyncClient (..),
   LocalNodeClientProtocols (..),
   LocalNodeClientProtocolsInMode,
+  ShelleyBasedEra (..),
   SlotNo (..),
+  getBlockHeader,
   serialiseToRawBytes,
  )
 import Cardano.Api.ChainSync.ClientPipelined (
@@ -40,6 +42,12 @@ import Cardano.Api.ChainSync.ClientPipelined (
   pipelineDecisionLowHighMark,
   runPipelineDecision,
  )
+import Cardano.Chain.Block (ABody (..))
+import qualified Cardano.Chain.Block as BL
+import Cardano.Chain.UTxO (txpTxs)
+import qualified Cardano.Ledger.Alonzo.TxSeq as A
+import qualified Cardano.Ledger.Block as C
+import Cardano.Ledger.Shelley.BlockChain (txSeqTxns)
 import Colog (Message, WithLog, logInfo)
 import Control.Arrow ((&&&))
 import Control.Concurrent.Component
@@ -53,22 +61,25 @@ import qualified Data.IntMap.Lazy as IntMap
 import Data.List (sortOn)
 import Data.Maybe (mapMaybe)
 import Data.Ord (Down (..))
+import qualified Data.Sequence.Strict as StrictSeq
 import Data.String (fromString)
 import Data.Time (UTCTime, diffUTCTime, getCurrentTime, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
-import Language.Marlowe.Runtime.ChainIndexer.Database (CardanoBlock, GetIntersectionPoints (..))
+import Language.Marlowe.Runtime.ChainIndexer.Database (GetIntersectionPoints (..))
+import qualified Ouroboros.Consensus.Byron.Ledger as C
+import qualified Ouroboros.Consensus.Shelley.Ledger as C
 import Ouroboros.Network.Point (WithOrigin (..))
 import Text.Printf (printf)
 import UnliftIO (MonadIO, MonadUnliftIO, atomicModifyIORef, atomically, newIORef, withRunInIO, writeIORef)
 
-type NumberedCardanoBlock = (BlockNo, CardanoBlock)
+type NumberedCardanoBlock = (BlockNo, BlockInMode)
 type NumberedChainTip = (WithOrigin BlockNo, ChainTip)
 
 -- | Describes a batch of chain data changes to write.
 data Changes = Changes
   { changesRollback :: !(Maybe ChainPoint)
   -- ^ Point to rollback to before writing any blocks.
-  , changesBlocks :: ![CardanoBlock]
+  , changesBlocks :: ![BlockInMode]
   -- ^ New blocks to write.
   , changesTip :: !ChainTip
   -- ^ Most recently observed tip of the local node.
@@ -113,7 +124,7 @@ cost CostModel{..} Changes{..} = changesBlockCount * blockCost + changesTxCount 
 
 -- | The set of dependencies needed by the NodeClient component.
 data NodeClientDependencies m = NodeClientDependencies
-  { connectToLocalNode :: !(LocalNodeClientProtocolsInMode CardanoMode -> m ())
+  { connectToLocalNode :: !(LocalNodeClientProtocolsInMode -> m ())
   -- ^ Connect to the local node.
   , getIntersectionPoints :: !(GetIntersectionPoints m)
   -- ^ How to load the set of initial intersection points for the chain sync client.
@@ -145,7 +156,7 @@ nodeClient = component "indexer-node-client" \NodeClientDependencies{..} -> do
         modifyTVar changesVar toEmptyChanges
         pure changes
 
-      pipelinedClient' :: ChainSyncClientPipelined CardanoBlock ChainPoint ChainTip m ()
+      pipelinedClient' :: ChainSyncClientPipelined BlockInMode ChainPoint ChainTip m ()
       pipelinedClient' =
         mapChainSyncClientPipelined id id (blockToBlockNo &&& id) (chainTipToBlockNo &&& id) $
           pipelinedClient costModel maxCost changesVar getIntersectionPoints
@@ -202,8 +213,8 @@ hoistClient f (ChainSyncClientPipelined m) = ChainSyncClientPipelined $ f $ hois
 blockHeaderToBlockNo :: BlockHeader -> BlockNo
 blockHeaderToBlockNo (BlockHeader _ _ blockNo) = blockNo
 
-blockToBlockNo :: CardanoBlock -> BlockNo
-blockToBlockNo (BlockInMode (Block header _) _) = blockHeaderToBlockNo header
+blockToBlockNo :: BlockInMode -> BlockNo
+blockToBlockNo (BlockInMode _ block) = blockHeaderToBlockNo $ getBlockHeader block
 
 chainTipToBlockNo :: ChainTip -> WithOrigin BlockNo
 chainTipToBlockNo = \case
@@ -323,7 +334,8 @@ mkClientStNext
   -> ClientStNext n NumberedCardanoBlock ChainPoint NumberedChainTip m ()
 mkClientStNext lastLog costModel maxCost changesVar slotNoToBlockNo pipelineDecision n =
   ClientStNext
-    { recvMsgRollForward = \(blockNo, block@(BlockInMode (Block (BlockHeader slotNo hash _) txs) _)) tip -> do
+    { recvMsgRollForward = \(blockNo, blockInMode@(BlockInMode _ block)) tip -> do
+        let BlockHeader slotNo hash _ = getBlockHeader block
         now <- liftIO getCurrentTime
         canLog <- atomicModifyIORef lastLog \lastLogValue ->
           if diffUTCTime now lastLogValue >= minLogPeriod
@@ -346,11 +358,11 @@ mkClientStNext lastLog costModel maxCost changesVar slotNoToBlockNo pipelineDeci
           changes <- readTVar changesVar
           let nextChanges =
                 changes
-                  { changesBlocks = block : changesBlocks changes
+                  { changesBlocks = blockInMode : changesBlocks changes
                   , changesTip = snd tip
                   , changesLocalTip = ChainTip slotNo hash blockNo
                   , changesBlockCount = changesBlockCount changes + 1
-                  , changesTxCount = changesTxCount changes + length txs
+                  , changesTxCount = changesTxCount changes + blockTxCount blockInMode
                   }
           -- Retry unless either the current change set is empty, or the next
           -- change set would not be too expensive.
@@ -390,7 +402,6 @@ mkClientStNext lastLog costModel maxCost changesVar slotNoToBlockNo pipelineDeci
           let changesBlocks' = case point of
                 ChainPointAtGenesis -> []
                 ChainPoint slot _ -> dropWhile ((> slot) . blockSlot) changesBlocks
-              blockTxCount (BlockInMode (Block _ txs) _) = length txs
               newChanges =
                 Changes
                   { changesBlocks = changesBlocks'
@@ -423,6 +434,17 @@ mkClientStNext lastLog costModel maxCost changesVar slotNoToBlockNo pipelineDeci
   where
     minLogPeriod = secondsToNominalDiffTime 1
 
+blockTxCount :: BlockInMode -> Int
+blockTxCount (BlockInMode _ block) = case block of
+  ByronBlock (C.ByronBlock (BL.ABOBBlock (BL.ABlock _ body _)) _ _) -> length . txpTxs $ bodyTxPayload body
+  ByronBlock C.ByronBlock{} -> 0
+  ShelleyBlock ShelleyBasedEraShelley (C.ShelleyBlock (C.Block _ txs) _) -> StrictSeq.length $ txSeqTxns txs
+  ShelleyBlock ShelleyBasedEraAllegra (C.ShelleyBlock (C.Block _ txs) _) -> StrictSeq.length $ txSeqTxns txs
+  ShelleyBlock ShelleyBasedEraMary (C.ShelleyBlock (C.Block _ txs) _) -> StrictSeq.length $ txSeqTxns txs
+  ShelleyBlock ShelleyBasedEraAlonzo (C.ShelleyBlock (C.Block _ txs) _) -> StrictSeq.length $ A.txSeqTxns txs
+  ShelleyBlock ShelleyBasedEraBabbage (C.ShelleyBlock (C.Block _ txs) _) -> StrictSeq.length $ A.txSeqTxns txs
+  ShelleyBlock ShelleyBasedEraConway (C.ShelleyBlock (C.Block _ txs) _) -> StrictSeq.length $ A.txSeqTxns txs
+
 minPoint :: ChainPoint -> ChainPoint -> ChainPoint
 minPoint ChainPointAtGenesis _ = ChainPointAtGenesis
 minPoint _ ChainPointAtGenesis = ChainPointAtGenesis
@@ -430,5 +452,5 @@ minPoint p1@(ChainPoint s1 _) p2@(ChainPoint s2 _)
   | s1 < s2 = p1
   | otherwise = p2
 
-blockSlot :: CardanoBlock -> SlotNo
-blockSlot (BlockInMode (Block (BlockHeader slot _ _) _) _) = slot
+blockSlot :: BlockInMode -> SlotNo
+blockSlot (BlockInMode _ (getBlockHeader -> (BlockHeader slot _ _))) = slot

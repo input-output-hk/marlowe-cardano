@@ -6,7 +6,6 @@
 module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Babbage where
 
 import Cardano.Binary (serialize')
-import Cardano.Ledger.Alonzo.Scripts.Data (binaryDataToData, hashBinaryData)
 import Cardano.Ledger.Alonzo.Tx (AlonzoTx (..), txdats')
 import Cardano.Ledger.Alonzo.TxAuxData (AlonzoTxAuxData (..))
 import Cardano.Ledger.Alonzo.TxWits (TxDats, unTxDats)
@@ -16,6 +15,7 @@ import Cardano.Ledger.Babbage.TxBody (BabbageTxBody (..), BabbageTxOut (..), Dat
 import Cardano.Ledger.Binary (Sized (..), shelleyProtVer)
 import qualified Cardano.Ledger.Binary as L
 import Cardano.Ledger.Crypto
+import Cardano.Ledger.Plutus.Data (binaryDataToData, hashBinaryData)
 import Cardano.Ledger.Shelley.API (ShelleyTxOut (..), StrictMaybe (..))
 import Data.ByteString (ByteString)
 import Data.Foldable (Foldable (..))
