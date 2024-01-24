@@ -32,3 +32,55 @@ jobs:
             echo "Unable to run nightly tests on $GITHUB_SHA, currently deployed commit is $CURRENT_DEPLOY"
             exit 1
           fi
+
+  marlowe-benchmark:
+    if: false
+    runs-on: ubuntu-latest
+    # Dependency disabled pending automatic deploys
+    # needs: [check-deploy]
+    env:
+      ENVIRONMENT: preview
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v21
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+          install_url: https://releases.nixos.org/nix/nix-2.10.3/install
+          extra_nix_config: |
+            allowed-uris = ${{ env.ALLOWED_URIS }}
+            trusted-public-keys = ${{ env.TRUSTED_PUBLIC_KEYS }}
+            substituters = ${{ env.SUBSTITUTERS }}
+            experimental-features = nix-command flakes
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v12
+        with:
+          name: ${{ env.CACHE_NAME }}
+          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
+
+      - name: Copy Signing Keys
+        env:
+          TEST_WALLET_SIGNING_KEYS: ${{ secrets.TEST_WALLET_SIGNING_KEYS }}
+        run: |
+          i=0
+          while IFS= read -r key
+          do
+            echo $key | jq . > test-wallets/test.$i.skey
+            i=$((i+1))
+          done < <(printf '%s\n' "$TEST_WALLET_SIGNING_KEYS")
+
+      - name: Run Marlowe Benchmark on Preview
+        run: |
+          mkfifo node.socket
+          nix run nixpkgs#socat -- UNIX-LISTEN:node.socket,fork,reuseaddr,unlink-early TCP:cardano-node-preview.scdev.aws.iohkdev.io:8090 &
+          nix run .#marlowe-benchmark -- \
+            --host marlowe-runtime-preview.scdev.aws.iohkdev.io \
+            --port 3700 \
+            --node-socket-path node.socket \
+            --testnet-magic 2 \
+            --address "$(cat test-wallets/test.0.addr)" \
+            --signing-key-file test-wallets/test.0.skey
+          kill %1

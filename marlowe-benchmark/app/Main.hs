@@ -69,8 +69,8 @@ commandParser :: O.ParserInfo Command
 commandParser =
   let commandOptions =
         Command
-          <$> O.strOption (O.long "host" <> O.value "localhost" <> O.metavar "HOST" <> O.help "Host for Marlowe proxy service.")
-          <*> O.option O.auto (O.long "port" <> O.value 3700 <> O.metavar "PORT" <> O.help "Port for Marlowe proxy service.")
+          <$> O.strOption (O.long "host" <> O.value "localhost" <> O.showDefault <> O.metavar "HOST" <> O.help "Host for Marlowe proxy service.")
+          <*> O.option O.auto (O.long "port" <> O.value 3700 <> O.showDefault <> O.metavar "PORT" <> O.help "Port for Marlowe proxy service.")
           <*> (O.optional . O.strOption) (O.long "config" <> O.metavar "FILE" <> O.help "Path to the benchmark configuration file.")
           <*> ( O.optional $
                   Faucet
