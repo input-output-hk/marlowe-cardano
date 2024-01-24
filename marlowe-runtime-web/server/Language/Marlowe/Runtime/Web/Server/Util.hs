@@ -50,7 +50,7 @@ makeSignedTxWithWitnessKeys
      )
   => TxBody era
   -> WitVKeys era
-  -> Maybe (Tx era)
+  -> Tx era
 makeSignedTxWithWitnessKeys txBody wtKeys = do
   let txScriptValidityToIsValid :: TxScriptValidity era -> Alonzo.IsValid
       txScriptValidityToIsValid TxScriptValidityNone = Alonzo.IsValid True
@@ -69,11 +69,9 @@ makeSignedTxWithWitnessKeys txBody wtKeys = do
               bkDats
               bkRdmrs
 
-      Just $
-        ShelleyTx era $
-          AlonzoTx
-            txBody'
-            wt'
-            (txScriptValidityToIsValid scriptValidity)
-            (maybeToStrictMaybe txmetadata)
-    _ -> Nothing
+      ShelleyTx era $
+        AlonzoTx
+          txBody'
+          wt'
+          (txScriptValidityToIsValid scriptValidity)
+          (maybeToStrictMaybe txmetadata)

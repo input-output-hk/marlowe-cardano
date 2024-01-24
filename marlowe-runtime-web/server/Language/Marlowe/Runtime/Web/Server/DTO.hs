@@ -14,6 +14,7 @@ module Language.Marlowe.Runtime.Web.Server.DTO where
 
 import Cardano.Api (
   AsType (..),
+  BabbageEraOnwards (..),
   HasTextEnvelope,
   HasTypeProxy,
   IsCardanoEra (..),
@@ -37,7 +38,6 @@ import Cardano.Api (
  )
 import Cardano.Api.Byron (HasTextEnvelope (textEnvelopeType))
 import Cardano.Api.Shelley (
-  ReferenceTxInsScriptsInlineDatumsSupportedInEra (..),
   ShelleyLedgerEra,
   StakeAddress (..),
   fromShelleyStakeCredential,
@@ -70,18 +70,6 @@ import Language.Marlowe.Runtime.Core.ScriptRegistry as Tx (HelperScript (..))
 
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Sem
 
-import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddressBech32, serialiseAddressBech32)
-import Language.Marlowe.Protocol.Query.Types (
-  ContractState (..),
-  PayoutHeader (..),
-  PayoutState (..),
-  RuntimeStatus (..),
-  SomeContractState (..),
-  SomePayoutState (..),
-  SomeTransaction (..),
-  Withdrawal (..),
- )
-
 import Cardano.Ledger.Alonzo.Core (TxWits)
 import Cardano.Ledger.Binary (Annotator, DecCBOR (..), Decoder, decodeFullAnnotator, serialize')
 import Cardano.Ledger.Core (EraTxWits, eraProtVerLow)
@@ -93,6 +81,17 @@ import Data.Kind (Type)
 import Data.List (groupBy)
 import qualified Data.Map.NonEmpty as NEMap
 import Data.Set (Set)
+import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddressBech32, serialiseAddressBech32)
+import Language.Marlowe.Protocol.Query.Types (
+  ContractState (..),
+  PayoutHeader (..),
+  PayoutState (..),
+  RuntimeStatus (..),
+  SomeContractState (..),
+  SomePayoutState (..),
+  SomeTransaction (..),
+  Withdrawal (..),
+ )
 import qualified Language.Marlowe.Protocol.Query.Types as Query
 import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType, fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api (AssetId (..), fromBech32, toBech32)
@@ -604,8 +603,8 @@ instance ToDTOWithTxStatus (Tx.ContractCreated v) where
       , utxo = Nothing
       , txBody = case status of
           Unsigned -> Just case era of
-            ReferenceTxInsScriptsInlineDatumsInBabbageEra -> toDTO txBody
-            ReferenceTxInsScriptsInlineDatumsInConwayEra -> toDTO txBody
+            BabbageEraOnwardsBabbage -> toDTO txBody
+            BabbageEraOnwardsConway -> toDTO txBody
           Submitted -> Nothing
       , unclaimedPayouts = []
       }
@@ -641,8 +640,8 @@ instance ToDTOWithTxStatus (Tx.InputsApplied v) where
               <$> M.toList (payouts output)
       , txBody = case status of
           Unsigned -> Just case era of
-            ReferenceTxInsScriptsInlineDatumsInBabbageEra -> toDTO txBody
-            ReferenceTxInsScriptsInlineDatumsInConwayEra -> toDTO txBody
+            BabbageEraOnwardsBabbage -> toDTO txBody
+            BabbageEraOnwardsConway -> toDTO txBody
           Submitted -> Nothing
       }
 
@@ -695,10 +694,10 @@ instance ToDTO Chain.ScriptHash where
 instance HasDTO (TxBody era) where
   type DTO (TxBody era) = Web.TextEnvelope
 
-instance (IsCardanoEra era) => ToDTO (TxBody era) where
+instance (IsShelleyBasedEra era) => ToDTO (TxBody era) where
   toDTO = toDTO . serialiseToTextEnvelope Nothing
 
-instance (IsCardanoEra era) => FromDTO (TxBody era) where
+instance (IsShelleyBasedEra era) => FromDTO (TxBody era) where
   fromDTO = hush . deserialiseFromTextEnvelope asType <=< fromDTO
     where
       asType = AsTxBody $ cardanoEraToAsType $ cardanoEra @era
@@ -706,10 +705,10 @@ instance (IsCardanoEra era) => FromDTO (TxBody era) where
 instance HasDTO (Tx era) where
   type DTO (Tx era) = Web.TextEnvelope
 
-instance (IsCardanoEra era) => ToDTO (Tx era) where
+instance (IsShelleyBasedEra era) => ToDTO (Tx era) where
   toDTO = toDTO . serialiseToTextEnvelope Nothing
 
-instance (IsCardanoEra era) => FromDTO (Tx era) where
+instance (IsShelleyBasedEra era) => FromDTO (Tx era) where
   fromDTO = hush . deserialiseFromTextEnvelope asType <=< fromDTO
     where
       asType = AsTx $ cardanoEraToAsType $ cardanoEra @era

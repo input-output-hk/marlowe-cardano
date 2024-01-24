@@ -4,9 +4,8 @@
 -- | This module defines a server for the /contracts REST API.
 module Language.Marlowe.Runtime.Web.Server.REST.Contracts where
 
-import Cardano.Api (BabbageEra, ConwayEra, TxBody, makeSignedTransaction)
+import Cardano.Api (BabbageEra, BabbageEraOnwards (..), ConwayEra, TxBody, makeSignedTransaction)
 import qualified Cardano.Api as Cardano
-import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import Cardano.Ledger.Alonzo.TxWits (AlonzoTxWits (..))
 import Data.Aeson (Value (Null))
 import qualified Data.Map as Map
@@ -96,9 +95,9 @@ postCreateTxBody PostContractsRequest{..} stakeAddressDTO changeAddressDTO mAddr
     >>= \case
       Left err -> throwDTOError err
       Right
-        (ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra ContractCreatedInEra{contractId, txBody, safetyErrors}) -> pure (contractId, TxBodyInAnyEra txBody, safetyErrors)
+        (ContractCreated BabbageEraOnwardsBabbage ContractCreatedInEra{contractId, txBody, safetyErrors}) -> pure (contractId, TxBodyInAnyEra txBody, safetyErrors)
       Right
-        (ContractCreated ReferenceTxInsScriptsInlineDatumsInConwayEra ContractCreatedInEra{contractId, txBody, safetyErrors}) -> pure (contractId, TxBodyInAnyEra txBody, safetyErrors)
+        (ContractCreated BabbageEraOnwardsConway ContractCreatedInEra{contractId, txBody, safetyErrors}) -> pure (contractId, TxBodyInAnyEra txBody, safetyErrors)
 
 postCreateTxBodyResponse
   :: Maybe StakeAddress
@@ -183,8 +182,8 @@ put contractId body = do
           ApiError "Contract already submitted" "ContractAlreadySubmitted" Null 409
   where
     handleLoaded
-      :: Core.ContractId -> ReferenceTxInsScriptsInlineDatumsSupportedInEra era -> TxBody era -> ServerM NoContent
-    handleLoaded contractId' ReferenceTxInsScriptsInlineDatumsInBabbageEra txBody = do
+      :: Core.ContractId -> BabbageEraOnwards era -> TxBody era -> ServerM NoContent
+    handleLoaded contractId' BabbageEraOnwardsBabbage txBody = do
       (req :: Maybe (Either (Cardano.Tx BabbageEra) (ShelleyTxWitness BabbageEra))) <- case teType body of
         "Tx BabbageEra" -> pure $ Left <$> fromDTO body
         "ShelleyTxWitness BabbageEra" -> pure $ Right <$> fromDTO body
@@ -197,14 +196,11 @@ put contractId body = do
         -- It seems that wallets provide nearly empty `TxWitness` back. Here is a quote from `CIP-30` docs:
         -- > Only the portion of the witness set that were signed as a result of this call are returned to
         -- > encourage dApps to verify the contents returned by this endpoint while building the final transaction.
-        Just (Right (ShelleyTxWitness (AlonzoTxWits wtKeys _ _ _ _))) -> do
-          case makeSignedTxWithWitnessKeys txBody wtKeys of
-            Just tx -> pure tx
-            Nothing -> throwError $ badRequest' "Invalid witness keys"
-      submitContract contractId' ReferenceTxInsScriptsInlineDatumsInBabbageEra tx >>= \case
+        Just (Right (ShelleyTxWitness (AlonzoTxWits wtKeys _ _ _ _))) -> do pure $ makeSignedTxWithWitnessKeys txBody wtKeys
+      submitContract contractId' BabbageEraOnwardsBabbage tx >>= \case
         Nothing -> pure NoContent
         Just err -> throwError $ ApiError.toServerError $ ApiError (show err) "SubmissionError" Null 403
-    handleLoaded contractId' ReferenceTxInsScriptsInlineDatumsInConwayEra txBody = do
+    handleLoaded contractId' BabbageEraOnwardsConway txBody = do
       (req :: Maybe (Either (Cardano.Tx ConwayEra) (ShelleyTxWitness ConwayEra))) <- case teType body of
         "Tx ConwayEra" -> pure $ Left <$> fromDTO body
         "ShelleyTxWitness ConwayEra" -> pure $ Right <$> fromDTO body
@@ -217,10 +213,7 @@ put contractId body = do
         -- It seems that wallets provide nearly empty `TxWitness` back. Here is a quote from `CIP-30` docs:
         -- > Only the portion of the witness set that were signed as a result of this call are returned to
         -- > encourage dApps to verify the contents returned by this endpoint while building the final transaction.
-        Just (Right (ShelleyTxWitness (AlonzoTxWits wtKeys _ _ _ _))) -> do
-          case makeSignedTxWithWitnessKeys txBody wtKeys of
-            Just tx -> pure tx
-            Nothing -> throwError $ badRequest' "Invalid witness keys"
-      submitContract contractId' ReferenceTxInsScriptsInlineDatumsInConwayEra tx >>= \case
+        Just (Right (ShelleyTxWitness (AlonzoTxWits wtKeys _ _ _ _))) -> pure $ makeSignedTxWithWitnessKeys txBody wtKeys
+      submitContract contractId' BabbageEraOnwardsConway tx >>= \case
         Nothing -> pure NoContent
         Just err -> throwError $ ApiError.toServerError $ ApiError (show err) "SubmissionError" Null 403

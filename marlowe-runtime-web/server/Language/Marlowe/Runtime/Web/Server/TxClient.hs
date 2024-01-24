@@ -6,8 +6,7 @@
 
 module Language.Marlowe.Runtime.Web.Server.TxClient where
 
-import Cardano.Api (Tx, getTxId)
-import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra)
+import Cardano.Api (BabbageEraOnwards, Tx, getTxId)
 import Colog (Message, WithLog)
 import Control.Concurrent.Async (concurrently_)
 import Control.Concurrent.Component
@@ -109,11 +108,11 @@ data TempTxStatus = Unsigned | Submitted
 
 type Submit r m = r -> Submit' m
 
-type Submit' m = forall era. ReferenceTxInsScriptsInlineDatumsSupportedInEra era -> Tx era -> m (Maybe SubmitError)
+type Submit' m = forall era. BabbageEraOnwards era -> Tx era -> m (Maybe SubmitError)
 
 data TempTx (tx :: Type -> MarloweVersionTag -> Type) where
   TempTx
-    :: ReferenceTxInsScriptsInlineDatumsSupportedInEra era -> MarloweVersion v -> TempTxStatus -> tx era v -> TempTx tx
+    :: BabbageEraOnwards era -> MarloweVersion v -> TempTxStatus -> tx era v -> TempTx tx
 
 -- | Public API of the TxClient
 data TxClient r m = TxClient
@@ -147,7 +146,7 @@ data SomeTVarWithMapUpdate = forall k tx a. (Ord k) => SomeTVarWithMapUpdate (TV
 
 data TxInEraWithReferenceScripts where
   TxInEraWithReferenceScripts
-    :: ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+    :: BabbageEraOnwards era
     -> Tx era
     -> TxInEraWithReferenceScripts
 
@@ -163,7 +162,7 @@ txClient = component "web-tx-client" \TxClientDependencies{..} -> do
 
   let runSubmitGeneric
         :: SomeTVarWithMapUpdate
-        -> ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+        -> BabbageEraOnwards era
         -> Tx era
         -> TMVar (Maybe SubmitError)
         -> m ()
@@ -195,7 +194,7 @@ txClient = component "web-tx-client" \TxClientDependencies{..} -> do
       genericSubmit
         :: SomeTVarWithMapUpdate
         -> r
-        -> ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+        -> BabbageEraOnwards era
         -> Tx era
         -> m (Maybe SubmitError)
       genericSubmit tVarWithUpdate currentParent era tx = do

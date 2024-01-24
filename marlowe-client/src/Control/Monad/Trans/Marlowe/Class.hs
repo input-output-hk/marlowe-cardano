@@ -4,8 +4,7 @@
 
 module Control.Monad.Trans.Marlowe.Class where
 
-import Cardano.Api (Tx)
-import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra)
+import Cardano.Api (BabbageEraOnwards, Tx)
 import Control.Concurrent (threadDelay)
 import Control.Monad (join)
 import Control.Monad.Identity (IdentityT (..))
@@ -312,7 +311,7 @@ withdraw version wallet payouts =
 -- with exponential back-off in the polling.
 submitAndWait
   :: (MonadMarlowe m, MonadIO m)
-  => ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  => BabbageEraOnwards era
   -- ^ Proof that the era of the transaction supports reference scripts.
   -> Tx era
   -- ^ The transaction to submit.
@@ -332,7 +331,7 @@ submitAndWait era tx = do
 -- which can be used to check progress later via @attachSubmit@.
 submitAndDetach
   :: (MonadMarlowe m)
-  => ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  => BabbageEraOnwards era
   -- ^ Proof that the era of the transaction supports reference scripts.
   -> Tx era
   -- ^ The transaction to submit.
@@ -353,7 +352,7 @@ submit
   -- transaction was seen to have been published on. Note: this block could be
   -- rolled back, in which case the block header would change and the
   -- transaction may not exist anymore.
-  -> ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  -> BabbageEraOnwards era
   -- ^ Proof that the era of the transaction supports reference scripts.
   -> Tx era
   -- ^ The transaction to submit.
