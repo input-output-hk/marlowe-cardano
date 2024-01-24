@@ -8,9 +8,6 @@
 module Language.Marlowe.Runtime where
 
 import Cardano.Api (
-  CardanoEra (..),
-  CardanoMode,
-  EraInMode (..),
   LocalNodeClientProtocolsInMode,
   NetworkId,
   TxInMode (..),
@@ -87,7 +84,7 @@ import UnliftIO (
 import UnliftIO.Concurrent (threadDelay)
 
 data MarloweRuntimeDependencies r n m = MarloweRuntimeDependencies
-  { connectToLocalNode :: LocalNodeClientProtocolsInMode CardanoMode -> m ()
+  { connectToLocalNode :: LocalNodeClientProtocolsInMode -> m ()
   , batchSize :: Nat ('S n)
   , chainIndexerDatabaseQueries :: ChainIndexer.DatabaseQueries m
   , chainSyncDatabaseQueries :: ChainSync.DatabaseQueries m
@@ -153,14 +150,7 @@ marloweRuntime = proc MarloweRuntimeDependencies{..} -> do
         ChainSyncDependencies
           { databaseQueries = chainSyncDatabaseQueries
           , queryLocalNodeState = queryNode
-          , submitTxToNodeLocal = \era tx -> submitTxToNode $ TxInMode tx case era of
-              ByronEra -> ByronEraInCardanoMode
-              ShelleyEra -> ShelleyEraInCardanoMode
-              AllegraEra -> AllegraEraInCardanoMode
-              MaryEra -> MaryEraInCardanoMode
-              AlonzoEra -> AlonzoEraInCardanoMode
-              BabbageEra -> BabbageEraInCardanoMode
-              ConwayEra -> ConwayEraInCardanoMode
+          , submitTxToNodeLocal = fmap submitTxToNode . TxInMode
           , scanBatchSize = 8192
           , ..
           }

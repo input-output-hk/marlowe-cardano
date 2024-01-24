@@ -83,7 +83,7 @@ executable marlowe-runtime-cli
     , marlowe-client
     , marlowe-object
     , marlowe-protocols
-    , marlowe-runtime:{marlowe-runtime, config, contract-api, history-api, proxy-api, tx-api}
+    , marlowe-runtime:{marlowe-runtime, config, contract-api, proxy-api, sync-api, tx-api}
     , monad-control
     , mtl
     , network

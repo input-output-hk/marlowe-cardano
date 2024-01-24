@@ -5,24 +5,26 @@ module Language.Marlowe.Runtime.Transaction.SafetySpec where
 import qualified Cardano.Api as Cardano (
   AddressInEra (..),
   AddressTypeInEra (..),
+  AlonzoEraOnwards (AlonzoEraOnwardsBabbage),
+  BabbageEraOnwards (..),
   CardanoEra (..),
   Lovelace (..),
-  MultiAssetSupportedInEra (..),
+  MaryEraOnwards (..),
   NetworkId (..),
   NetworkMagic (..),
-  ScriptDataSupportedInEra (..),
   ShelleyBasedEra (..),
   StakeAddressReference (..),
   TxOut (..),
   TxOutDatum (..),
-  TxOutValue (..),
   anyAddressInShelleyBasedEra,
   calculateMinimumUTxO,
   makeShelleyAddress,
  )
-import Cardano.Api.Shelley (CardanoEra (..), ReferenceTxInsScriptsInlineDatumsSupportedInEra (..), bundleProtocolParams)
-import qualified Cardano.Api.Shelley as Shelley (ReferenceScript (..), StakeAddressReference (..))
-import Data.Either (fromRight)
+import qualified Cardano.Api.Shelley as Shelley (
+  LedgerProtocolParameters (..),
+  ReferenceScript (..),
+  StakeAddressReference (..),
+ )
 import Data.Foldable (for_)
 import Data.List (isInfixOf, nub)
 import qualified Data.Map.NonEmpty as NEMap
@@ -58,6 +60,7 @@ import Language.Marlowe.Runtime.Transaction.Constraints (
   HelperScriptState (HelperScriptState),
   HelpersContext (..),
   MarloweContext (..),
+  mkTxOutValue,
  )
 import Language.Marlowe.Runtime.Transaction.ConstraintsSpec (protocolTestnet)
 import Language.Marlowe.Runtime.Transaction.Query.Helper (getHelperInfos)
@@ -88,7 +91,7 @@ spec =
   do
     let testnet = Cardano.Testnet $ Cardano.NetworkMagic 1
         version = MarloweV1
-        adjustMinUtxo = mkAdjustMinimumUtxo ReferenceTxInsScriptsInlineDatumsInBabbageEra protocolTestnet MarloweV1
+        adjustMinUtxo = mkAdjustMinimumUtxo Cardano.BabbageEraOnwardsBabbage protocolTestnet MarloweV1
         emptyHelpersContext = HelpersContext M.empty "" M.empty
         continuations = noContinuations version
         party = V1.Role "x"
@@ -109,22 +112,21 @@ spec =
                     (Plutus.TokenName $ Plutus.toBuiltin n)
                 tokens = fmap toToken . M.keys $ Chain.unTokens tokens'
                 expected =
-                  fromRight 0 $
-                    Cardano.calculateMinimumUTxO
-                      Cardano.ShelleyBasedEraBabbage
-                      ( Cardano.TxOut
-                          (Cardano.anyAddressInShelleyBasedEra . fromJust $ Chain.toCardanoAddressAny address)
-                          (Cardano.TxOutValue Cardano.MultiAssetInBabbageEra value)
-                          (Cardano.TxOutDatumHash Cardano.ScriptDataInBabbageEra . fromJust $ Chain.toCardanoDatumHash hash)
-                          Shelley.ReferenceScriptNone
-                      )
-                      <$> bundleProtocolParams BabbageEra protocolTestnet
+                  Cardano.calculateMinimumUTxO
+                    Cardano.ShelleyBasedEraBabbage
+                    ( Cardano.TxOut
+                        (Cardano.anyAddressInShelleyBasedEra Cardano.ShelleyBasedEraBabbage . fromJust $ Chain.toCardanoAddressAny address)
+                        (mkTxOutValue Cardano.MaryEraOnwardsBabbage value)
+                        (Cardano.TxOutDatumHash Cardano.AlonzoEraOnwardsBabbage . fromJust $ Chain.toCardanoDatumHash hash)
+                        Shelley.ReferenceScriptNone
+                    )
+                    $ Shelley.unLedgerProtocolParameters protocolTestnet
                     :: Cardano.Lovelace
                 contract = foldr payToken V1.Close tokens -- The tokens just need to appear somewhere in the contract.
                 actual =
                   fromJust $
                     minAdaUpperBound
-                      ReferenceTxInsScriptsInlineDatumsInBabbageEra
+                      Cardano.BabbageEraOnwardsBabbage
                       protocolTestnet
                       version
                       (V1.emptyState 0)
@@ -310,7 +312,7 @@ spec =
         let minAda =
               maybe 1_500_000 toInteger $
                 minAdaUpperBound
-                  ReferenceTxInsScriptsInlineDatumsInBabbageEra
+                  Cardano.BabbageEraOnwardsBabbage
                   protocolTestnet
                   version
                   (V1.emptyState 0)
@@ -319,7 +321,7 @@ spec =
         actual <-
           checkTransactions
             protocolTestnet
-            ReferenceTxInsScriptsInlineDatumsInBabbageEra
+            Cardano.BabbageEraOnwardsBabbage
             version
             marloweContext
             emptyHelpersContext
@@ -355,7 +357,7 @@ spec =
           actual <-
             checkTransactions
               protocolTestnet
-              ReferenceTxInsScriptsInlineDatumsInBabbageEra
+              Cardano.BabbageEraOnwardsBabbage
               version
               marloweContext
               emptyHelpersContext
@@ -410,7 +412,7 @@ spec =
           actual <-
             checkTransactions
               protocolTestnet
-              ReferenceTxInsScriptsInlineDatumsInBabbageEra
+              Cardano.BabbageEraOnwardsBabbage
               version
               marloweContext
               helpersContext

@@ -6,7 +6,7 @@
 
 module Language.Marlowe.Runtime.History.Api where
 
-import Cardano.Api (CardanoMode, EraHistory (EraHistory))
+import Cardano.Api (EraHistory (EraHistory))
 import Control.Error (listToMaybe, note, runMaybeT)
 import Control.Error.Util (hoistMaybe)
 import Control.Monad (guard, join, when)
@@ -279,7 +279,7 @@ getOutput (Chain.TxIx i) Chain.Transaction{..} = go i outputs
 extractMarloweTransaction
   :: MarloweVersion v
   -> SystemStart
-  -> EraHistory CardanoMode
+  -> EraHistory
   -> ContractId
   -> Chain.Address
   -> Chain.ScriptHash
@@ -340,7 +340,7 @@ extractMarloweTransaction version systemStart eraHistory contractId scriptAddres
       , output
       }
   where
-    EraHistory _ interpreter = eraHistory
+    EraHistory interpreter = eraHistory
     slotStartTime (Chain.SlotNo slotNo) = do
       (relativeTime, _) <-
         first (const SlotConversionFailed) $

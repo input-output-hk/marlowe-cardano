@@ -12,7 +12,7 @@ module Language.Marlowe.Runtime.Transaction.BuildConstraints (
   safeLovelace,
 ) where
 
-import Cardano.Api (CardanoMode, EraHistory (..))
+import Cardano.Api (EraHistory (..))
 import qualified Cardano.Api.Byron as C
 import qualified Cardano.Api.Shelley as C
 import qualified Cardano.Ledger.BaseTypes as CL (Network (..))
@@ -30,7 +30,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Map.NonEmpty as NEMap
 import Data.Maybe (fromMaybe, listToMaybe, maybeToList)
-import Data.SOP.Counting (NonEmpty (..))
+import Data.SOP.NonEmpty (NonEmpty (..))
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Time (UTCTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
@@ -144,7 +144,7 @@ buildCreateConstraints
    . (Monad m)
   => MkRoleTokenMintingPolicy m
   -- ^ A validator creator for the role token minting policy.
-  -> C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  -> C.BabbageEraOnwards era
   -- ^ The era in which the transaction is being built. Requires reference scripts.
   -> MarloweVersion v
   -- ^ The Marlowe version to build the transaction for.
@@ -189,7 +189,7 @@ buildCreateConstraintsV1
    . (Monad m)
   => MkRoleTokenMintingPolicy m
   -- ^ A validator creator for the role token minting policy.
-  -> C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  -> C.BabbageEraOnwards era
   -- ^ The era in which the transaction is being built. Requires reference scripts.
   -> WalletContext
   -- ^ The wallet used to mint tokens.
@@ -293,8 +293,8 @@ buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx threadTokenName 
           pure (script, scriptHash)
         let plutusScriptV2InEra :: C.ScriptLanguageInEra C.PlutusScriptV2 era
             plutusScriptV2InEra = case era of
-              C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.PlutusScriptV2InBabbage
-              C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.PlutusScriptV2InConway
+              C.BabbageEraOnwardsBabbage -> C.PlutusScriptV2InBabbage
+              C.BabbageEraOnwardsConway -> C.PlutusScriptV2InConway
             witness =
               C.PlutusScriptWitness
                 plutusScriptV2InEra
@@ -396,7 +396,7 @@ buildApplyInputsConstraints
   :: (Monad m)
   => (TransactionInput -> m (Maybe TransactionInput))
   -> SystemStart
-  -> EraHistory CardanoMode
+  -> EraHistory
   -- ^ The era history for converting times to slots.
   -> MarloweVersion v
   -- ^ The Marlowe version to build the transaction for.
@@ -436,7 +436,7 @@ buildApplyInputsConstraintsV1
    . (Monad m)
   => (TransactionInput -> m (Maybe TransactionInput))
   -> SystemStart
-  -> EraHistory CardanoMode
+  -> EraHistory
   -- ^ The era history for converting times to slots.
   -> TransactionScriptOutput 'V1
   -- ^ The previous script output for the contract with raw TxOut.
@@ -562,7 +562,7 @@ buildApplyInputsConstraintsV1 merkleizeInputs systemStart eraHistory marloweOutp
         V1.IChoice (V1.ChoiceId _ party) _ -> Just party
         V1.INotify -> Nothing
 
-    EraHistory _ interpreter = eraHistory
+    EraHistory interpreter = eraHistory
 
     -- Calculate slot number which contains a given timestamp
     utcTimeToSlotNo :: UTCTime -> ExceptT ApplyInputsError m C.SlotNo

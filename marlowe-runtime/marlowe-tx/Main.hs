@@ -340,7 +340,7 @@ description =
         [ "The transaction creation engine for the Marlowe Runtime. This component exposes"
         , "a job protocol with four commands: create, apply inputs, withdraw, and submit."
         ]
-    , bold "Create Command"
+    , annotate bold "Create Command"
     , vcat
         [ "The create command will create an unsigned transaction body that starts a new Marlowe"
         , "contract. The options that can be configured for this command are:"
@@ -364,7 +364,7 @@ description =
                 , "initial contract."
                 ]
               ]
-    , bold "Apply Inputs Command"
+    , annotate bold "Apply Inputs Command"
     , vcat
         [ "The apply inputs command will create an unsigned transaction body that advances a"
         , "Marlowe contract by applying transaction inputs to it. The options that can be"
@@ -384,7 +384,7 @@ description =
                 , "initial contract."
                 ]
               ]
-    , bold "Withdraw Command"
+    , annotate bold "Withdraw Command"
     , vcat
         [ "The withdraw command will create an unsigned transaction body that withdraws role payouts"
         , "from Marlowe contracts from the role payout validators that hold them. When a contract"
@@ -400,7 +400,7 @@ description =
               , ["Which address to send change to."]
               , ["Which payout outputs to withdraw."]
               ]
-    , bold "Submit Command"
+    , annotate bold "Submit Command"
     , vcat
         [ "The submit command will submit a signed transaction to a cardano node via a marlowe-chain-sync"
         , "instance. It waits until the transaction is confirmed and found in a block by marlowe-chain-sync"
@@ -411,7 +411,7 @@ description =
           <$> [ ["The era of the transaction (babbage or conway)"]
               , ["The transaction to submit."]
               ]
-    , bold "Dependencies"
+    , annotate bold "Dependencies"
     , vcat
         [ "marlowe-tx depends on a marlowe-chain-sync instance at various points. First, it runs a"
         , "chain seek client for the lifetime of the service to keep track of what the current tip"
@@ -427,15 +427,10 @@ description =
         , "Finally, it queries contract hashes found in merkleized cases to build merkleized inputs"
         , "automatically while executing an apply inputs command."
         ]
-    , bold "Scaling"
+    , annotate bold "Scaling"
     , vcat
         [ "marlowe-tx is designed to scale horizontally. That is to say, multiple instances can run"
         , "in parallel to scale with demand. A typical setup for this would involve running multiple"
         , "marlowe-tx instances in front of a load balancer."
         ]
     ]
-
-concatWith :: (a -> a -> a) -> [a] -> a
-concatWith _ [] = error "concatWith: empty list"
-concatWith _ [a] = a
-concatWith f (a : b : as) = concatWith f $ f a b : as

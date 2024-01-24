@@ -5,7 +5,7 @@
 
 module Language.Marlowe.Runtime.Transaction where
 
-import Cardano.Api (ScriptDataSupportedInEra, Tx)
+import Cardano.Api (AlonzoEraOnwards, Tx)
 import qualified Cardano.Api as C
 import Colog (Message, WithLog)
 import Control.Arrow (returnA)
@@ -65,7 +65,7 @@ import qualified UnliftIO.Process as P
 
 data TransactionDependencies m = TransactionDependencies
   { chainSyncConnector :: Connector RuntimeChainSeekClient m
-  , mkSubmitJob :: forall era. ScriptDataSupportedInEra era -> Tx era -> STM (SubmitJob m)
+  , mkSubmitJob :: forall era. AlonzoEraOnwards era -> Tx era -> STM (SubmitJob m)
   , loadWalletContext :: LoadWalletContext m
   , loadPayoutContext :: LoadPayoutContext m
   , loadMarloweContext :: LoadMarloweContext m
@@ -108,7 +108,7 @@ renderTransactionServerSelectorOTel = \case
       , eventKind = OTel.Server
       , renderField = \case
           SystemStart (C.SystemStart start) -> [("cardano.system_start", fromString $ show start)]
-          EraHistory (C.EraHistory C.CardanoMode interpreter) ->
+          EraHistory (C.EraHistory interpreter) ->
             [("cardano.era_history", fromString $ show $ unInterpreter interpreter)]
           ProtocolParameters pp -> [("cardano.protocol_parameters", fromString $ show pp)]
           NetworkId networkId -> [("cardano.network_id", fromString $ show networkId)]

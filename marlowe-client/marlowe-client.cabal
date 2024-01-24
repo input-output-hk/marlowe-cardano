@@ -64,7 +64,7 @@ library
     , marlowe-chain-sync ==0.0.6
     , marlowe-object ==0.2.0.1
     , marlowe-protocols ==0.3.0.0
-    , marlowe-runtime:{marlowe-runtime, contract-api, discovery-api, history-api, proxy-api, sync-api, tx-api} ==0.0.6
+    , marlowe-runtime:{marlowe-runtime, contract-api, proxy-api, sync-api, tx-api} ==0.0.6
     , monad-control ^>=1
     , mtl >=2.2 && <3
     , network >=3.1 && <4

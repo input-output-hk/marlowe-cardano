@@ -369,8 +369,3 @@ description =
         , "Garbage collection. These must both be running in order for marlowe-contract to run."
         ]
     ]
-
-concatWith :: (a -> a -> a) -> [a] -> a
-concatWith _ [] = error "concatWith: empty list"
-concatWith _ [a] = a
-concatWith f (a : b : as) = concatWith f $ f a b : as

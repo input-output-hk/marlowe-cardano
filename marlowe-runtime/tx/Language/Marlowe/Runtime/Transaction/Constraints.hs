@@ -9,15 +9,15 @@
 
 module Language.Marlowe.Runtime.Transaction.Constraints (
   ConstraintError (..),
-  MarloweContext (..),
-  PayoutContext (..),
-  HelpersContext (..),
-  HelperScriptState (..),
+  Distribution (..),
   HelperScriptInfo (..),
+  HelperScriptState (..),
+  HelpersContext (..),
+  MarloweContext (..),
   MarloweInputConstraints (..),
   MarloweOutputConstraints (..),
+  PayoutContext (..),
   RoleTokenConstraints (RoleTokenConstraintsNone, MintRoleTokens, DistributeRoleTokens, SpendRoleTokens),
-  Distribution (..),
   SolveConstraints,
   TxConstraints (..),
   WalletContext (..),
@@ -25,10 +25,11 @@ module Language.Marlowe.Runtime.Transaction.Constraints (
   balanceTx,
   ensureMinUtxo,
   findMinUtxo,
+  mkTxOutValue,
   mustConsumeMarloweOutput,
   mustConsumePayout,
-  mustMintRoleToken,
   mustDistributeRoleToken,
+  mustMintRoleToken,
   mustPayToAddress,
   mustPayToRole,
   mustSendMarloweOutput,
@@ -40,7 +41,7 @@ module Language.Marlowe.Runtime.Transaction.Constraints (
   solveInitialTxBodyContent,
 ) where
 
-import Cardano.Api (IsCardanoEra (..), IsShelleyBasedEra (..), MultiAssetSupportedInEra, unsafeHashableScriptData)
+import Cardano.Api (unsafeHashableScriptData)
 import qualified Cardano.Api as C
 import qualified Cardano.Api.Shelley as C
 import Control.Applicative ((<|>))
@@ -83,7 +84,6 @@ import Language.Marlowe.Runtime.Cardano.Api (
   tokensFromCardanoValue,
   tokensToCardanoValue,
  )
-import Language.Marlowe.Runtime.Cardano.Feature (withShelleyBasedEra)
 import Language.Marlowe.Runtime.ChainSync.Api (
   lookupUTxO,
   toCardanoMetadata,
@@ -485,7 +485,8 @@ deriving instance ToJSON HelperScriptInfo
 
 type SolveConstraints =
   forall era v
-   . C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+   . C.BabbageEraOnwards era
+  -> C.LedgerProtocolParameters era
   -> Core.MarloweVersion v
   -> Either (MarloweContext v) PayoutContext
   -> WalletContext
@@ -498,14 +499,12 @@ type SolveConstraints =
 solveConstraints
   :: SystemStart
   -> C.LedgerEpochInfo
-  -> C.ProtocolParameters
   -> SolveConstraints
-solveConstraints start history protocol era version scriptCtx walletCtx helpersCtx constraints =
-  withShelleyBasedEra era $
-    solveInitialTxBodyContent era protocol version scriptCtx walletCtx helpersCtx constraints
-      >>= adjustTxForMinUtxo era protocol (either (Just . marloweAddress) (const Nothing) scriptCtx)
-      >>= selectCoins era protocol version scriptCtx walletCtx helpersCtx
-      >>= balanceTx era start history protocol version scriptCtx walletCtx helpersCtx
+solveConstraints start history era protocol version scriptCtx walletCtx helpersCtx constraints =
+  solveInitialTxBodyContent era protocol version scriptCtx walletCtx helpersCtx constraints
+    >>= adjustTxForMinUtxo era protocol (either (Just . marloweAddress) (const Nothing) scriptCtx)
+    >>= selectCoins era protocol version scriptCtx walletCtx helpersCtx
+    >>= balanceTx era start history protocol version scriptCtx walletCtx helpersCtx
 
 -- | 2022-08 This function was written to compensate for a bug in Cardano's
 --   calculateMinimumUTxO. It's called by adjustOutputForMinUTxO below. We will
@@ -523,33 +522,29 @@ ensureAtLeastHalfAnAda origValue =
 --   to the minimum ADA requirement.
 adjustOutputForMinUtxo
   :: forall era
-   . (IsShelleyBasedEra era)
-  => MultiAssetSupportedInEra era
-  -> C.ProtocolParameters
+   . C.MaryEraOnwards era
+  -> C.LedgerProtocolParameters era
   -> C.TxOut C.CtxTx era
   -> Either ConstraintError (C.TxOut C.CtxTx era)
 adjustOutputForMinUtxo era protocol (C.TxOut address txOrigValue datum script) = do
   let origValue = C.txOutValueToValue txOrigValue
       adjustedForCalculateMin = ensureAtLeastHalfAnAda origValue
-      txOut' = C.TxOut address (C.TxOutValue era adjustedForCalculateMin) datum script
-  minLovelace <- case C.calculateMinimumUTxO (shelleyBasedEra @era) txOut' <$> C.bundleProtocolParams (cardanoEra @era) protocol of
-    Right minValue' -> pure minValue'
-    Left e -> Left (CalculateMinUtxoFailed $ show e)
+      txOut' = C.TxOut address (mkTxOutValue era adjustedForCalculateMin) datum script
+  let minLovelace = C.calculateMinimumUTxO (C.maryEraOnwardsToShelleyBasedEra era) txOut' $ C.unLedgerProtocolParameters protocol
   let deficit =
         if minLovelace > C.selectLovelace origValue
           then minLovelace <> (negate $ C.selectLovelace origValue)
           else mempty
       newValue = origValue <> C.lovelaceToValue deficit
-  pure $ C.TxOut address (C.TxOutValue era newValue) datum script
+  pure $ C.TxOut address (mkTxOutValue era newValue) datum script
 
 -- Adjusts all the TxOuts as necessary to comply with Minimum UTXO
 -- requirements. Additionally, ensures that the Value of the marlowe output
 -- does not change (fails with an error if it does).
 adjustTxForMinUtxo
   :: forall era
-   . (IsShelleyBasedEra era)
-  => C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
-  -> C.ProtocolParameters
+   . C.BabbageEraOnwards era
+  -> C.LedgerProtocolParameters era
   -> Maybe Chain.Address
   -> C.TxBodyContent C.BuildTx era
   -> Either ConstraintError (C.TxBodyContent C.BuildTx era)
@@ -562,7 +557,7 @@ adjustTxForMinUtxo era protocol mMarloweAddress txBodyContent = do
           . map
             ( First
                 . ( \(C.TxOut addressInEra txOutValue _ _) ->
-                      if fromCardanoAddressInEra (cardanoEra @era) addressInEra == marloweAddress
+                      if fromCardanoAddressInEra (C.babbageEraOnwardsToCardanoEra era) addressInEra == marloweAddress
                         then Just txOutValue
                         else Nothing
                   )
@@ -572,12 +567,10 @@ adjustTxForMinUtxo era protocol mMarloweAddress txBodyContent = do
       origTxOuts = C.txOuts txBodyContent
       origMarloweValue = getMarloweOutputValue origTxOuts
 
-      multiAssetSupported :: C.MultiAssetSupportedInEra era
-      multiAssetSupported = case era of
-        C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.MultiAssetInBabbageEra
-        C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.MultiAssetInConwayEra
+      maryEraOnwards :: C.MaryEraOnwards era
+      maryEraOnwards = C.babbageEraOnwardsToMaryEraOnwards era
 
-  adjustedTxOuts <- traverse (adjustOutputForMinUtxo multiAssetSupported protocol) origTxOuts
+  adjustedTxOuts <- traverse (adjustOutputForMinUtxo maryEraOnwards protocol) origTxOuts
 
   if origMarloweValue == getMarloweOutputValue adjustedTxOuts
     then Right $ txBodyContent{C.txOuts = adjustedTxOuts}
@@ -602,19 +595,19 @@ maximumFee C.ProtocolParameters{..} =
 --   in a subsequent call
 findMinUtxo
   :: forall era
-   . (IsShelleyBasedEra era)
-  => C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
-  -> C.ProtocolParameters
+   . C.BabbageEraOnwards era
+  -> C.LedgerProtocolParameters era
   -> (Chain.Address, Maybe Chain.Datum, C.Value)
   -> Either ConstraintError C.Value
 findMinUtxo era protocol (chAddress, mbDatum, origValue) =
   do
     let atLeastHalfAnAda :: C.Value
 
-        scriptDataSupported :: C.ScriptDataSupportedInEra era
-        scriptDataSupported = case era of
-          C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.ScriptDataInBabbageEra
-          C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.ScriptDataInConwayEra
+        maryEraOnwards :: C.MaryEraOnwards era
+        maryEraOnwards = C.babbageEraOnwardsToMaryEraOnwards era
+
+        alonzoEraOnwards :: C.AlonzoEraOnwards era
+        alonzoEraOnwards = C.babbageEraOnwardsToAlonzoEraOnwards era
 
         -- FIXME Found what looks like the same value being added and then subtracted from this computation
         -- atLeastHalfAnAda = origValue <> C.lovelaceToValue (maximum [500_000, C.selectLovelace origValue] - C.selectLovelace origValue)
@@ -623,25 +616,20 @@ findMinUtxo era protocol (chAddress, mbDatum, origValue) =
         datum =
           maybe
             C.TxOutDatumNone
-            (C.TxOutDatumInTx scriptDataSupported . C.unsafeHashableScriptData . toCardanoScriptData)
+            (C.TxOutDatumInTx alonzoEraOnwards . C.unsafeHashableScriptData . toCardanoScriptData)
             mbDatum
 
-        multiAssetSupported :: C.MultiAssetSupportedInEra era
-        multiAssetSupported = case era of
-          C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.MultiAssetInBabbageEra
-          C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.MultiAssetInConwayEra
-
-    dummyTxOut <- makeTxOut multiAssetSupported chAddress datum revisedValue C.ReferenceScriptNone
-    case C.calculateMinimumUTxO (shelleyBasedEra @era) dummyTxOut <$> C.bundleProtocolParams (cardanoEra @era) protocol of
-      Right minValue -> pure $ C.lovelaceToValue minValue
-      Left e -> Left . CalculateMinUtxoFailed $ show e
+    dummyTxOut <- makeTxOut maryEraOnwards chAddress datum revisedValue C.ReferenceScriptNone
+    pure
+      . C.lovelaceToValue
+      . C.calculateMinimumUTxO (C.babbageEraOnwardsToShelleyBasedEra era) dummyTxOut
+      $ C.unLedgerProtocolParameters protocol
 
 -- | Ensure that the minimum UTxO requirement is satisfied for outputs.
 ensureMinUtxo
   :: forall era
-   . (IsShelleyBasedEra era)
-  => C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
-  -> C.ProtocolParameters
+   . C.BabbageEraOnwards era
+  -> C.LedgerProtocolParameters era
   -> (Chain.Address, C.Value)
   -> Either ConstraintError (Chain.Address, C.Value)
 ensureMinUtxo era protocol (chAddress, origValue) =
@@ -656,8 +644,7 @@ ensureMinUtxo era protocol (chAddress, origValue) =
 
 -- | Compute transaction output for building a transaction.
 makeTxOut
-  :: (IsShelleyBasedEra era)
-  => MultiAssetSupportedInEra era
+  :: C.MaryEraOnwards era
   -> Chain.Address
   -> C.TxOutDatum C.CtxTx era
   -> C.Value
@@ -667,11 +654,11 @@ makeTxOut era address datum value referenceScript = do
   cardanoAddress <-
     note
       (CalculateMinUtxoFailed $ "Unable to convert address: " <> show address)
-      $ C.anyAddressInShelleyBasedEra <$> Chain.toCardanoAddressAny address
+      $ C.anyAddressInShelleyBasedEra (C.maryEraOnwardsToShelleyBasedEra era) <$> Chain.toCardanoAddressAny address
   Right $
     C.TxOut
       cardanoAddress
-      (C.TxOutValue era value)
+      (mkTxOutValue era value)
       datum
       referenceScript
 
@@ -683,9 +670,8 @@ onlyLovelace value = C.lovelaceToValue (C.selectLovelace value) == value
 -- transaction (total outputs - total inputs).
 selectCoins
   :: forall era v
-   . (IsShelleyBasedEra era)
-  => C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
-  -> C.ProtocolParameters
+   . C.BabbageEraOnwards era
+  -> C.LedgerProtocolParameters era
   -> Core.MarloweVersion v
   -> Either (MarloweContext v) PayoutContext
   -> WalletContext
@@ -708,17 +694,15 @@ selectCoins era protocol marloweVersion scriptCtx walletCtx@WalletContext{..} he
 
       -- FIXME: Use protocolParamCollateralPercent from ProtocolParameters instead of this hard-coded '2'. We will automatically pick up future chain values this way.
       fee :: C.Value
-      fee = C.lovelaceToValue $ 2 * maximumFee protocol
+      fee =
+        C.lovelaceToValue $
+          2 * maximumFee (C.fromLedgerPParams (C.babbageEraOnwardsToShelleyBasedEra era) $ C.unLedgerProtocolParameters protocol)
 
-      collateralSupported :: C.CollateralSupportedInEra era
-      collateralSupported = case era of
-        C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.CollateralInBabbageEra
-        C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.CollateralInConwayEra
+      maryEraOnwards :: C.MaryEraOnwards era
+      maryEraOnwards = C.babbageEraOnwardsToMaryEraOnwards era
 
-      multiAssetSupported :: C.MultiAssetSupportedInEra era
-      multiAssetSupported = case era of
-        C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.MultiAssetInBabbageEra
-        C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.MultiAssetInConwayEra
+      alonzoEraOnwards :: C.AlonzoEraOnwards era
+      alonzoEraOnwards = C.babbageEraOnwardsToAlonzoEraOnwards era
 
   collateral <-
     let candidateCollateral =
@@ -744,7 +728,7 @@ selectCoins era protocol marloweVersion scriptCtx walletCtx@WalletContext{..} he
             ( \candidate -> let value = txOutToValue $ snd candidate in onlyLovelace value && C.selectLovelace value >= C.selectLovelace fee
             )
             candidateCollateral of
-            (txIn, _) : _ -> pure $ C.TxInsCollateral collateralSupported [txIn]
+            (txIn, _) : _ -> pure $ C.TxInsCollateral alonzoEraOnwards [txIn]
             [] -> do
               Left . CoinSelectionFailed $ NoCollateralFound (Set.fromList $ map (fromCardanoTxIn . fst) utxos)
           else pure C.TxInsCollateralNone -- No collateral is needed unless a Plutus script is being executed.
@@ -876,7 +860,7 @@ selectCoins era protocol marloweVersion scriptCtx walletCtx@WalletContext{..} he
       then pure []
       else do
         (addr, val) <- ensureMinUtxo era protocol (changeAddress, change)
-        (: []) <$> makeTxOut multiAssetSupported addr C.TxOutDatumNone val C.ReferenceScriptNone
+        (: []) <$> makeTxOut maryEraOnwards addr C.TxOutDatumNone val C.ReferenceScriptNone
 
   let -- FIXME Generalize to include script witnesses
       addWitness
@@ -898,11 +882,10 @@ selectCoins era protocol marloweVersion scriptCtx walletCtx@WalletContext{..} he
 -- returned to the change address.
 balanceTx
   :: forall era v
-   . (IsShelleyBasedEra era)
-  => C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+   . C.BabbageEraOnwards era
   -> SystemStart
   -> C.LedgerEpochInfo
-  -> C.ProtocolParameters
+  -> C.LedgerProtocolParameters era
   -> Core.MarloweVersion v
   -> Either (MarloweContext v) PayoutContext
   -> WalletContext
@@ -914,20 +897,18 @@ balanceTx era systemStart eraHistory protocol marloweVersion scriptCtx walletCtx
     maybe
       (Left $ BalancingError "Failed to convert change address.")
       Right
-      $ toCardanoAddressInEra C.cardanoEra changeAddress
+      $ toCardanoAddressInEra (C.babbageEraOnwardsToCardanoEra era) changeAddress
 
   let -- Extract the value of a UTxO
       txOutToValue :: C.TxOut ctx era -> C.Value
       txOutToValue (C.TxOut _ value _ _) = C.txOutValueToValue value
 
-      multiAssetSupported :: C.MultiAssetSupportedInEra era
-      multiAssetSupported = case era of
-        C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.MultiAssetInBabbageEra
-        C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.MultiAssetInConwayEra
+      maryEraOnwards :: C.MaryEraOnwards era
+      maryEraOnwards = C.babbageEraOnwardsToMaryEraOnwards era
 
       -- Make the change output.
       mkChangeTxOut value = do
-        let txOutValue = C.TxOutValue multiAssetSupported value
+        let txOutValue = mkTxOutValue maryEraOnwards value
         C.TxOut changeAddress' txOutValue C.TxOutDatumNone C.ReferenceScriptNone
 
       -- Repeatedly try to balance the transaction.
@@ -938,14 +919,17 @@ balanceTx era systemStart eraHistory protocol marloweVersion scriptCtx walletCtx
       balancingLoop counter changeValue = do
         when (counter == 0) $
           Left . BalancingError $
-            "Unsuccessful transaction balancing: " <> show (C.TxBodyContent{..})
+            "Unsuccessful transaction balancing: "
+              <> C.shelleyBasedEraConstraints (C.babbageEraOnwardsToShelleyBasedEra era) (show C.TxBodyContent{..})
         let -- Recompute execution units with full set of UTxOs, including change.
             buildTxBodyContent = C.TxBodyContent{..}{C.txOuts = mkChangeTxOut changeValue : txOuts}
             dummyTxOut =
               C.makeTransactionBodyAutoBalance
+                (C.babbageEraOnwardsToShelleyBasedEra era)
                 systemStart
                 eraHistory
                 protocol
+                mempty
                 mempty
                 mempty
                 utxos
@@ -993,8 +977,7 @@ balanceTx era systemStart eraHistory protocol marloweVersion scriptCtx walletCtx
 -- The available UTxOs.
 allUtxos
   :: forall era v ctx
-   . (IsCardanoEra era)
-  => C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+   . C.BabbageEraOnwards era
   -> Core.MarloweVersion v
   -> Either (MarloweContext v) PayoutContext
   -> WalletContext
@@ -1003,13 +986,15 @@ allUtxos
   -> [(C.TxIn, C.TxOut ctx era)]
 allUtxos era marloweVersion scriptCtx WalletContext{..} HelpersContext{..} includeReferences =
   let -- Convert chain UTxOs to Cardano API ones.
-      multiAssetSupported :: C.MultiAssetSupportedInEra era
-      multiAssetSupported = case era of
-        C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.MultiAssetInBabbageEra
-        C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.MultiAssetInConwayEra
+      maryEraOnwards :: C.MaryEraOnwards era
+      maryEraOnwards = C.babbageEraOnwardsToMaryEraOnwards era
+
+      era' :: C.CardanoEra era
+      era' = C.babbageEraOnwardsToCardanoEra era
+
       convertUtxo :: (Chain.TxOutRef, Chain.TransactionOutput) -> Maybe (C.TxIn, C.TxOut ctx era)
       convertUtxo (txOutRef, transactionOutput) =
-        (,) <$> toCardanoTxIn txOutRef <*> toCardanoTxOut' multiAssetSupported transactionOutput Nothing
+        (,) <$> toCardanoTxIn txOutRef <*> toCardanoTxOut' maryEraOnwards transactionOutput Nothing
 
       -- Extra UTxO for the input from the script.
       mkMarloweUtxo :: Core.TransactionScriptOutput v -> Maybe (C.TxIn, C.TxOut ctx era)
@@ -1017,10 +1002,10 @@ allUtxos era marloweVersion scriptCtx WalletContext{..} HelpersContext{..} inclu
         (,)
           <$> toCardanoTxIn utxo
           <*> ( C.TxOut
-                  <$> toCardanoAddressInEra C.cardanoEra address
-                  <*> toCardanoTxOutValue multiAssetSupported assets
+                  <$> toCardanoAddressInEra era' address
+                  <*> toCardanoTxOutValue maryEraOnwards assets
                   <*> toCardanoTxOutDatum'
-                    C.cardanoEra
+                    era'
                     ( Just
                         . fromCardanoDatumHash
                         . C.hashScriptDataBytes
@@ -1036,14 +1021,14 @@ allUtxos era marloweVersion scriptCtx WalletContext{..} HelpersContext{..} inclu
       mkReferenceUtxo ReferenceScriptUtxo{..} =
         (,)
           <$> toCardanoTxIn txOutRef
-          <*> toCardanoTxOut' multiAssetSupported txOut (Just . C.toScriptInAnyLang $ C.PlutusScript C.PlutusScriptV2 script)
+          <*> toCardanoTxOut' maryEraOnwards txOut (Just . C.toScriptInAnyLang $ C.PlutusScript C.PlutusScriptV2 script)
 
       -- UTxOs for helper scripts.
       helperUTxO HelperScriptState{helperUTxO = Just (helperTxOutRef, helperTransactionOutput)} =
         maybe mempty pure $
           (,)
             <$> toCardanoTxIn helperTxOutRef
-            <*> toCardanoTxOut' multiAssetSupported helperTransactionOutput Nothing
+            <*> toCardanoTxOut' maryEraOnwards helperTransactionOutput Nothing
       helperUTxO _ = mempty
    in mapMaybe convertUtxo (SMap.toList . Chain.unUTxOs $ availableUtxos)
         <> either
@@ -1060,8 +1045,8 @@ allUtxos era marloweVersion scriptCtx WalletContext{..} HelpersContext{..} inclu
 
 solveInitialTxBodyContent
   :: forall era v
-   . C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
-  -> C.ProtocolParameters
+   . C.BabbageEraOnwards era
+  -> C.LedgerProtocolParameters era
   -> Core.MarloweVersion v
   -> Either (MarloweContext v) PayoutContext
   -> WalletContext
@@ -1072,7 +1057,7 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
   (txIns, requiredPayoutScriptHashes, helperTxInReferences, helperRoles) <- solveTxIns
   txInsReference <- solveTxInsReference requiredPayoutScriptHashes helperTxInReferences
   txOuts <- solveTxOuts helperRoles
-  txValidityRange <- solveTxValidityRange
+  (txValidityLowerBound, txValidityUpperBound) <- solveTxValidityRange
   txExtraKeyWits <- solveTxExtraKeyWits
   txMintValue <- solveTxMintValue
   pure
@@ -1083,12 +1068,15 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
       , txOuts
       , txTotalCollateral = C.TxTotalCollateralNone
       , txReturnCollateral = C.TxReturnCollateralNone
-      , txFee = C.TxFeeExplicit txFeesExplicit 0
-      , txValidityRange
+      , txFee = C.TxFeeExplicit shelleyEra 0
+      , txValidityLowerBound
+      , txValidityUpperBound
       , txMetadata
       , txAuxScripts = C.TxAuxScriptsNone
       , txExtraKeyWits
       , txProtocolParams = C.BuildTxWith $ Just protocol
+      , txProposalProcedures = Nothing
+      , txVotingProcedures = Nothing
       , txWithdrawals = C.TxWithdrawalsNone
       , txCertificates = C.TxCertificatesNone
       , txUpdateProposal = C.TxUpdateProposalNone
@@ -1096,40 +1084,19 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
       , txScriptValidity = C.TxScriptValidityNone
       }
   where
-    multiAssetSupported :: C.MultiAssetSupportedInEra era
-    multiAssetSupported = case era of
-      C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.MultiAssetInBabbageEra
-      C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.MultiAssetInConwayEra
+    shelleyEra :: C.ShelleyBasedEra era
+    shelleyEra = C.babbageEraOnwardsToShelleyBasedEra era
 
-    txFeesExplicit :: C.TxFeesExplicitInEra era
-    txFeesExplicit = case era of
-      C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.TxFeesExplicitInBabbageEra
-      C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.TxFeesExplicitInConwayEra
+    allegraEraOnwards :: C.AllegraEraOnwards era
+    allegraEraOnwards = case era of
+      C.BabbageEraOnwardsBabbage -> C.AllegraEraOnwardsBabbage
+      C.BabbageEraOnwardsConway -> C.AllegraEraOnwardsConway
 
-    validityUpperBoundSupported :: C.ValidityUpperBoundSupportedInEra era
-    validityUpperBoundSupported = case era of
-      C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.ValidityUpperBoundInBabbageEra
-      C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.ValidityUpperBoundInConwayEra
+    maryEraOnwards :: C.MaryEraOnwards era
+    maryEraOnwards = C.babbageEraOnwardsToMaryEraOnwards era
 
-    validityNoUpperBoundSupported :: C.ValidityNoUpperBoundSupportedInEra era
-    validityNoUpperBoundSupported = case era of
-      C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.ValidityNoUpperBoundInBabbageEra
-      C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.ValidityNoUpperBoundInConwayEra
-
-    validityLowerBoundSupported :: C.ValidityLowerBoundSupportedInEra era
-    validityLowerBoundSupported = case era of
-      C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.ValidityLowerBoundInBabbageEra
-      C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.ValidityLowerBoundInConwayEra
-
-    metadataSupported :: C.TxMetadataSupportedInEra era
-    metadataSupported = case era of
-      C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.TxMetadataInBabbageEra
-      C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.TxMetadataInConwayEra
-
-    extraKeyWitnessesSupported :: C.TxExtraKeyWitnessesSupportedInEra era
-    extraKeyWitnessesSupported = case era of
-      C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.ExtraKeyWitnessesInBabbageEra
-      C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.ExtraKeyWitnessesInConwayEra
+    alonzoEraOnwards :: C.AlonzoEraOnwards era
+    alonzoEraOnwards = C.babbageEraOnwardsToAlonzoEraOnwards era
 
     getWalletInputs
       :: Set Chain.AssetId -> Either ConstraintError [(C.TxIn, C.BuildTxWith C.BuildTx (C.Witness C.WitCtxTxIn era))]
@@ -1166,8 +1133,8 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
               <*> (Just <$> toCardanoScriptHash marloweScriptHash)
         let plutusScriptV2InEra :: C.ScriptLanguageInEra C.PlutusScriptV2 era
             plutusScriptV2InEra = case era of
-              C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.PlutusScriptV2InBabbage
-              C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.PlutusScriptV2InConway
+              C.BabbageEraOnwardsBabbage -> C.PlutusScriptV2InBabbage
+              C.BabbageEraOnwardsConway -> C.PlutusScriptV2InConway
 
             scriptWitness =
               C.PlutusScriptWitness
@@ -1207,8 +1174,8 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
             let plutusScriptOrRefInput = C.PReferenceScript referenceScriptTxIn $ Just cardanoScriptHash
                 plutusScriptV2InEra :: C.ScriptLanguageInEra C.PlutusScriptV2 era
                 plutusScriptV2InEra = case era of
-                  C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.PlutusScriptV2InBabbage
-                  C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.PlutusScriptV2InConway
+                  C.BabbageEraOnwardsBabbage -> C.PlutusScriptV2InBabbage
+                  C.BabbageEraOnwardsConway -> C.PlutusScriptV2InConway
                 scriptWitness =
                   C.PlutusScriptWitness
                     plutusScriptV2InEra
@@ -1313,8 +1280,8 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
             let plutusScriptOrRefInput = C.PReferenceScript referenceScriptTxIn $ Just cardanoScriptHash
                 plutusScriptV2InEra :: C.ScriptLanguageInEra C.PlutusScriptV2 era
                 plutusScriptV2InEra = case era of
-                  C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.PlutusScriptV2InBabbage
-                  C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.PlutusScriptV2InConway
+                  C.BabbageEraOnwardsBabbage -> C.PlutusScriptV2InBabbage
+                  C.BabbageEraOnwardsConway -> C.PlutusScriptV2InConway
                 scriptWitness =
                   C.PlutusScriptWitness
                     plutusScriptV2InEra
@@ -1396,7 +1363,7 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
     getAddressOutput address assets = Chain.TransactionOutput address assets Nothing Nothing
 
     solveTxOuts helperRoles =
-      note ToCardanoError . traverse (toCardanoTxOut multiAssetSupported) =<< do
+      note ToCardanoError . traverse (toCardanoTxOut maryEraOnwards) =<< do
         roleTokenOutputs <- getRoleTokenOutputs helperRoles
         marloweOutput <- getMarloweOutput
         payoutOutputs <- getPayoutOutputs
@@ -1413,12 +1380,12 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
       MarloweInputConstraintsNone ->
         pure
           ( C.TxValidityNoLowerBound
-          , C.TxValidityNoUpperBound validityNoUpperBoundSupported
+          , C.TxValidityUpperBound shelleyEra Nothing
           )
       MarloweInput minSlotNo maxSlotNo _ -> do
         pure
-          ( C.TxValidityLowerBound validityLowerBoundSupported minSlotNo
-          , C.TxValidityUpperBound validityUpperBoundSupported maxSlotNo
+          ( C.TxValidityLowerBound allegraEraOnwards minSlotNo
+          , C.TxValidityUpperBound shelleyEra $ Just maxSlotNo
           )
 
     Chain.TransactionMetadata encodedMetadata = encodeMarloweTransactionMetadata metadataConstraints
@@ -1426,14 +1393,14 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
     txMetadata :: C.TxMetadataInEra era
     txMetadata
       | Map.null encodedMetadata = C.TxMetadataNone
-      | otherwise = C.TxMetadataInEra metadataSupported $ C.TxMetadata $ toCardanoMetadata <$> encodedMetadata
+      | otherwise = C.TxMetadataInEra shelleyEra $ C.TxMetadata $ toCardanoMetadata <$> encodedMetadata
 
     solveTxExtraKeyWits :: Either ConstraintError (C.TxExtraKeyWitnesses era)
     solveTxExtraKeyWits
       | Set.null signatureConstraints = pure C.TxExtraKeyWitnessesNone
       | otherwise =
           note ToCardanoError $
-            C.TxExtraKeyWitnesses extraKeyWitnessesSupported
+            C.TxExtraKeyWitnesses alonzoEraOnwards
               <$> traverse toCardanoPaymentKeyHash (Set.toList signatureConstraints)
 
     solveTxMintValue :: Either ConstraintError (C.TxMintValue C.BuildTx era)
@@ -1453,7 +1420,7 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
                 <$> traverse (toCardanoPolicyId . Chain.policyId) (Set.toAscList assetIds)
           value <- note ToCardanoError $ tokensToCardanoValue $ Chain.Tokens tokens
           pure $
-            C.TxMintValue multiAssetSupported value $
+            C.TxMintValue maryEraOnwards value $
               C.BuildTxWith $
                 Map.fromSet (const witness) policyIds
 
@@ -1466,3 +1433,9 @@ demoteDestination dist =
 isAda :: Chain.AssetId -> Bool
 isAda (Chain.AssetId "" "") = True
 isAda _ = False
+
+mkTxOutValue :: C.MaryEraOnwards era -> C.Value -> C.TxOutValue era
+mkTxOutValue C.MaryEraOnwardsMary = C.TxOutValueShelleyBased C.ShelleyBasedEraMary . C.toLedgerValue C.MaryEraOnwardsMary
+mkTxOutValue C.MaryEraOnwardsAlonzo = C.TxOutValueShelleyBased C.ShelleyBasedEraAlonzo . C.toLedgerValue C.MaryEraOnwardsAlonzo
+mkTxOutValue C.MaryEraOnwardsBabbage = C.TxOutValueShelleyBased C.ShelleyBasedEraBabbage . C.toLedgerValue C.MaryEraOnwardsBabbage
+mkTxOutValue C.MaryEraOnwardsConway = C.TxOutValueShelleyBased C.ShelleyBasedEraConway . C.toLedgerValue C.MaryEraOnwardsConway

@@ -40,7 +40,7 @@ library
     , marlowe-chain-sync
     , marlowe-client
     , marlowe-protocols
-    , marlowe-runtime:{marlowe-runtime, config, discovery-api, history-api, proxy-api, sync-api, tx-api}
+    , marlowe-runtime:{marlowe-runtime, config, proxy-api, sync-api, tx-api}
     , monad-control
     , mtl
     , network

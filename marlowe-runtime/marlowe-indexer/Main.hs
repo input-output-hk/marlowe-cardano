@@ -240,8 +240,3 @@ description =
         , "folder for marlowe-indexer."
         ]
     ]
-
-concatWith :: (a -> a -> a) -> [a] -> a
-concatWith _ [] = error "concatWith: empty list"
-concatWith _ [a] = a
-concatWith f (a : b : as) = concatWith f $ f a b : as

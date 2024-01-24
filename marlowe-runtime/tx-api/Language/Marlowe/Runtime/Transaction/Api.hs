@@ -50,8 +50,8 @@ import Cardano.Api (
   AnyCardanoEra (..),
   AsType (..),
   BabbageEra,
+  BabbageEraOnwards (..),
   ConwayEra,
-  IsCardanoEra,
   IsShelleyBasedEra,
   Tx,
   TxBody,
@@ -63,7 +63,6 @@ import Cardano.Api (
   serialiseToTextEnvelope,
  )
 import qualified Cardano.Api as C
-import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import qualified Cardano.Api.Shelley as CS
 import Control.Applicative ((<|>))
 import Data.Aeson (
@@ -436,61 +435,61 @@ pattern RoleTokensMint mint <- UnsafeRoleTokensMint mint
 
 data ContractCreated v where
   ContractCreated
-    :: ReferenceTxInsScriptsInlineDatumsSupportedInEra era -> ContractCreatedInEra era v -> ContractCreated v
+    :: BabbageEraOnwards era -> ContractCreatedInEra era v -> ContractCreated v
 
 instance Variations (ContractCreated 'V1) where
   variations =
     sconcat
-      [ ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> variations
-      , ContractCreated ReferenceTxInsScriptsInlineDatumsInConwayEra <$> variations
+      [ ContractCreated BabbageEraOnwardsBabbage <$> variations
+      , ContractCreated BabbageEraOnwardsConway <$> variations
       ]
 
 instance Show (ContractCreated 'V1) where
-  showsPrec p (ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra created) =
+  showsPrec p (ContractCreated BabbageEraOnwardsBabbage created) =
     showParen (p > 10) $
       showString "ContractCreated"
         . showSpace
-        . showString "ReferenceTxInsScriptsInlineDatumsInBabbageEra"
+        . showString "BabbageEraOnwardsBabbage"
         . showsPrec 11 created
-  showsPrec p (ContractCreated ReferenceTxInsScriptsInlineDatumsInConwayEra created) =
+  showsPrec p (ContractCreated BabbageEraOnwardsConway created) =
     showParen (p > 10) $
       showString "ContractCreated"
         . showSpace
-        . showString "ReferenceTxInsScriptsInlineDatumsInConwayEra"
+        . showString "BabbageEraOnwardsConway"
         . showsPrec 11 created
 
 instance Eq (ContractCreated 'V1) where
-  ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra a == ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra b =
+  ContractCreated BabbageEraOnwardsBabbage a == ContractCreated BabbageEraOnwardsBabbage b =
     a == b
-  ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra _ == _ = False
-  ContractCreated ReferenceTxInsScriptsInlineDatumsInConwayEra a == ContractCreated ReferenceTxInsScriptsInlineDatumsInConwayEra b =
+  ContractCreated BabbageEraOnwardsBabbage _ == _ = False
+  ContractCreated BabbageEraOnwardsConway a == ContractCreated BabbageEraOnwardsConway b =
     a == b
-  ContractCreated ReferenceTxInsScriptsInlineDatumsInConwayEra _ == _ = False
+  ContractCreated BabbageEraOnwardsConway _ == _ = False
 
 instance ToJSON (ContractCreated 'V1) where
-  toJSON (ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra created) =
+  toJSON (ContractCreated BabbageEraOnwardsBabbage created) =
     object
       [ "era" .= String "babbage"
       , "contractCreated" .= created
       ]
-  toJSON (ContractCreated ReferenceTxInsScriptsInlineDatumsInConwayEra created) =
+  toJSON (ContractCreated BabbageEraOnwardsConway created) =
     object
       [ "era" .= String "conway"
       , "contractCreated" .= created
       ]
 
 instance Binary (ContractCreated 'V1) where
-  put (ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra created) = do
+  put (ContractCreated BabbageEraOnwardsBabbage created) = do
     putWord8 0
     put created
-  put (ContractCreated ReferenceTxInsScriptsInlineDatumsInConwayEra created) = do
+  put (ContractCreated BabbageEraOnwardsConway created) = do
     putWord8 1
     put created
   get = do
     eraTag <- getWord8
     case eraTag of
-      0 -> ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> get
-      1 -> ContractCreated ReferenceTxInsScriptsInlineDatumsInConwayEra <$> get
+      0 -> ContractCreated BabbageEraOnwardsBabbage <$> get
+      1 -> ContractCreated BabbageEraOnwardsConway <$> get
       _ -> fail $ "Invalid era tag value: " <> show eraTag
 
 data ContractCreatedInEra era v = ContractCreatedInEra
@@ -529,7 +528,7 @@ instance (IsShelleyBasedEra era) => Variations (ContractCreatedInEra era 'V1) wh
         `varyAp` variations
         `varyAp` variations
 
-instance (IsCardanoEra era) => ToJSON (ContractCreatedInEra era 'V1) where
+instance (IsShelleyBasedEra era) => ToJSON (ContractCreatedInEra era 'V1) where
   toJSON ContractCreatedInEra{..} =
     object
       [ "contract-id" .= contractId
@@ -545,7 +544,7 @@ instance (IsCardanoEra era) => ToJSON (ContractCreatedInEra era 'V1) where
       , "safety-errors" .= safetyErrors
       ]
 
-instance (IsCardanoEra era) => Binary (ContractCreatedInEra era 'V1) where
+instance (IsShelleyBasedEra era) => Binary (ContractCreatedInEra era 'V1) where
   put ContractCreatedInEra{..} = do
     put contractId
     put rolesCurrency
@@ -575,57 +574,57 @@ instance (IsCardanoEra era) => Binary (ContractCreatedInEra era 'V1) where
 
 data InputsApplied v where
   InputsApplied
-    :: ReferenceTxInsScriptsInlineDatumsSupportedInEra era -> InputsAppliedInEra era v -> InputsApplied v
+    :: BabbageEraOnwards era -> InputsAppliedInEra era v -> InputsApplied v
 
 instance Variations (InputsApplied 'V1) where
-  variations = InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> variations
+  variations = InputsApplied BabbageEraOnwardsBabbage <$> variations
 
 instance Show (InputsApplied 'V1) where
-  showsPrec p (InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra created) =
+  showsPrec p (InputsApplied BabbageEraOnwardsBabbage created) =
     showParen (p > 10) $
       showString "InputsApplied"
         . showSpace
-        . showString "ReferenceTxInsScriptsInlineDatumsInBabbageEra"
+        . showString "BabbageEraOnwardsBabbage"
         . showsPrec 11 created
-  showsPrec p (InputsApplied ReferenceTxInsScriptsInlineDatumsInConwayEra created) =
+  showsPrec p (InputsApplied BabbageEraOnwardsConway created) =
     showParen (p > 10) $
       showString "InputsApplied"
         . showSpace
-        . showString "ReferenceTxInsScriptsInlineDatumsInConwayEra"
+        . showString "BabbageEraOnwardsConway"
         . showsPrec 11 created
 
 instance Eq (InputsApplied 'V1) where
-  InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra a == InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra b =
+  InputsApplied BabbageEraOnwardsBabbage a == InputsApplied BabbageEraOnwardsBabbage b =
     a == b
-  InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra _ == _ = False
-  InputsApplied ReferenceTxInsScriptsInlineDatumsInConwayEra a == InputsApplied ReferenceTxInsScriptsInlineDatumsInConwayEra b =
+  InputsApplied BabbageEraOnwardsBabbage _ == _ = False
+  InputsApplied BabbageEraOnwardsConway a == InputsApplied BabbageEraOnwardsConway b =
     a == b
-  InputsApplied ReferenceTxInsScriptsInlineDatumsInConwayEra _ == _ = False
+  InputsApplied BabbageEraOnwardsConway _ == _ = False
 
 instance ToJSON (InputsApplied 'V1) where
-  toJSON (InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra created) =
+  toJSON (InputsApplied BabbageEraOnwardsBabbage created) =
     object
       [ "era" .= String "babbage"
       , "contractCreated" .= created
       ]
-  toJSON (InputsApplied ReferenceTxInsScriptsInlineDatumsInConwayEra created) =
+  toJSON (InputsApplied BabbageEraOnwardsConway created) =
     object
       [ "era" .= String "conway"
       , "contractCreated" .= created
       ]
 
 instance Binary (InputsApplied 'V1) where
-  put (InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra created) = do
+  put (InputsApplied BabbageEraOnwardsBabbage created) = do
     putWord8 0
     put created
-  put (InputsApplied ReferenceTxInsScriptsInlineDatumsInConwayEra created) = do
+  put (InputsApplied BabbageEraOnwardsConway created) = do
     putWord8 1
     put created
   get = do
     eraTag <- getWord8
     case eraTag of
-      0 -> InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> get
-      1 -> InputsApplied ReferenceTxInsScriptsInlineDatumsInConwayEra <$> get
+      0 -> InputsApplied BabbageEraOnwardsBabbage <$> get
+      1 -> InputsApplied BabbageEraOnwardsConway <$> get
       _ -> fail $ "Invalid era tag value: " <> show eraTag
 
 data InputsAppliedInEra era v = InputsAppliedInEra
@@ -657,7 +656,7 @@ instance (IsShelleyBasedEra era) => Variations (InputsAppliedInEra era 'V1) wher
         `varyAp` variations
         `varyAp` variations
 
-instance (IsCardanoEra era) => Binary (InputsAppliedInEra era 'V1) where
+instance (IsShelleyBasedEra era) => Binary (InputsAppliedInEra era 'V1) where
   put InputsAppliedInEra{..} = do
     put contractId
     put metadata
@@ -681,45 +680,45 @@ instance (IsCardanoEra era) => Binary (InputsAppliedInEra era 'V1) where
 
 data WithdrawTx v where
   WithdrawTx
-    :: ReferenceTxInsScriptsInlineDatumsSupportedInEra era -> WithdrawTxInEra era v -> WithdrawTx v
+    :: BabbageEraOnwards era -> WithdrawTxInEra era v -> WithdrawTx v
 
 instance Variations (WithdrawTx 'V1) where
-  variations = WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> variations
+  variations = WithdrawTx BabbageEraOnwardsBabbage <$> variations
 
 instance Show (WithdrawTx 'V1) where
-  showsPrec p (WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra created) =
+  showsPrec p (WithdrawTx BabbageEraOnwardsBabbage created) =
     showParen (p > 10) $
       showString "WithdrawTx"
         . showSpace
-        . showString "ReferenceTxInsScriptsInlineDatumsInBabbageEra"
+        . showString "BabbageEraOnwardsBabbage"
         . showsPrec 11 created
-  showsPrec p (WithdrawTx ReferenceTxInsScriptsInlineDatumsInConwayEra created) =
+  showsPrec p (WithdrawTx BabbageEraOnwardsConway created) =
     showParen (p > 10) $
       showString "WithdrawTx"
         . showSpace
-        . showString "ReferenceTxInsScriptsInlineDatumsInConwayEra"
+        . showString "BabbageEraOnwardsConway"
         . showsPrec 11 created
 
 instance Eq (WithdrawTx 'V1) where
-  WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra a == WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra b =
+  WithdrawTx BabbageEraOnwardsBabbage a == WithdrawTx BabbageEraOnwardsBabbage b =
     a == b
-  WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra _ == _ = False
-  WithdrawTx ReferenceTxInsScriptsInlineDatumsInConwayEra a == WithdrawTx ReferenceTxInsScriptsInlineDatumsInConwayEra b =
+  WithdrawTx BabbageEraOnwardsBabbage _ == _ = False
+  WithdrawTx BabbageEraOnwardsConway a == WithdrawTx BabbageEraOnwardsConway b =
     a == b
-  WithdrawTx ReferenceTxInsScriptsInlineDatumsInConwayEra _ == _ = False
+  WithdrawTx BabbageEraOnwardsConway _ == _ = False
 
 instance Binary (WithdrawTx 'V1) where
-  put (WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra created) = do
+  put (WithdrawTx BabbageEraOnwardsBabbage created) = do
     putWord8 0
     put created
-  put (WithdrawTx ReferenceTxInsScriptsInlineDatumsInConwayEra created) = do
+  put (WithdrawTx BabbageEraOnwardsConway created) = do
     putWord8 1
     put created
   get = do
     eraTag <- getWord8
     case eraTag of
-      0 -> WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> get
-      1 -> WithdrawTx ReferenceTxInsScriptsInlineDatumsInConwayEra <$> get
+      0 -> WithdrawTx BabbageEraOnwardsBabbage <$> get
+      1 -> WithdrawTx BabbageEraOnwardsConway <$> get
       _ -> fail $ "Invalid era tag value: " <> show eraTag
 
 data WithdrawTxInEra era v = WithdrawTxInEra
@@ -736,7 +735,7 @@ deriving instance Eq (WithdrawTxInEra ConwayEra 'V1)
 instance (IsShelleyBasedEra era) => Variations (WithdrawTxInEra era 'V1) where
   variations = WithdrawTxInEra MarloweV1 <$> variations `varyAp` variations
 
-instance (IsCardanoEra era) => Binary (WithdrawTxInEra era 'V1) where
+instance (IsShelleyBasedEra era) => Binary (WithdrawTxInEra era 'V1) where
   put WithdrawTxInEra{..} = do
     put inputs
     putTxBody txBody
@@ -746,7 +745,7 @@ instance (IsCardanoEra era) => Binary (WithdrawTxInEra era 'V1) where
     txBody <- getTxBody
     pure WithdrawTxInEra{..}
 
-instance (IsCardanoEra era) => ToJSON (InputsAppliedInEra era 'V1) where
+instance (IsShelleyBasedEra era) => ToJSON (InputsAppliedInEra era 'V1) where
   toJSON InputsAppliedInEra{..} =
     object
       [ "contract-id" .= contractId
@@ -830,7 +829,7 @@ data MarloweTxCommand status err result where
         )
   -- | Submits a signed transaction to the attached Cardano node.
   Submit
-    :: ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+    :: BabbageEraOnwards era
     -> Tx era
     -- ^ A signed transaction to submit
     -> MarloweTxCommand
@@ -929,10 +928,10 @@ instance Command MarloweTxCommand where
       put walletAddresses
       put payoutIds
     Submit era tx -> case era of
-      ReferenceTxInsScriptsInlineDatumsInBabbageEra -> do
+      BabbageEraOnwardsBabbage -> do
         putWord8 0
         put $ serialiseToCBOR tx
-      ReferenceTxInsScriptsInlineDatumsInConwayEra -> do
+      BabbageEraOnwardsConway -> do
         putWord8 1
         put $ serialiseToCBOR tx
 
@@ -963,12 +962,12 @@ instance Command MarloweTxCommand where
       case eraTag of
         0 -> do
           bytes <- get @ByteString
-          Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> case deserialiseFromCBOR (AsTx AsBabbage) bytes of
+          Submit BabbageEraOnwardsBabbage <$> case deserialiseFromCBOR (AsTx AsBabbageEra) bytes of
             Left err -> fail $ show err
             Right tx -> pure tx
         1 -> do
           bytes <- get @ByteString
-          Submit ReferenceTxInsScriptsInlineDatumsInConwayEra <$> case deserialiseFromCBOR (AsTx AsConway) bytes of
+          Submit BabbageEraOnwardsConway <$> case deserialiseFromCBOR (AsTx AsConwayEra) bytes of
             Left err -> fail $ show err
             Right tx -> pure tx
         _ -> fail $ "Invalid era tag: " <> show eraTag
@@ -1009,10 +1008,10 @@ instance Command MarloweTxCommand where
     TagWithdraw MarloweV1 -> get
     TagSubmit -> get
 
-putTxBody :: (IsCardanoEra era) => TxBody era -> Put
+putTxBody :: (IsShelleyBasedEra era) => TxBody era -> Put
 putTxBody = put . serialiseToCBOR
 
-getTxBody :: forall era. (IsCardanoEra era) => Get (TxBody era)
+getTxBody :: forall era. (IsShelleyBasedEra era) => Get (TxBody era)
 getTxBody = do
   bytes <- get @ByteString
   case deserialiseFromCBOR (AsTxBody $ cardanoEraToAsType $ cardanoEra @era) bytes of
@@ -1185,11 +1184,11 @@ instance CommandEq MarloweTxCommand where
       Withdraw MarloweV1 wallet' payoutIds' ->
         wallet == wallet'
           && payoutIds == payoutIds'
-    Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra tx -> \case
-      Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra tx' -> tx == tx'
+    Submit BabbageEraOnwardsBabbage tx -> \case
+      Submit BabbageEraOnwardsBabbage tx' -> tx == tx'
       _ -> False
-    Submit ReferenceTxInsScriptsInlineDatumsInConwayEra tx -> \case
-      Submit ReferenceTxInsScriptsInlineDatumsInConwayEra tx' -> tx == tx'
+    Submit BabbageEraOnwardsConway tx -> \case
+      Submit BabbageEraOnwardsConway tx' -> tx == tx'
       _ -> False
 
   jobIdEq = \case
@@ -1288,17 +1287,17 @@ instance ShowCommand MarloweTxCommand where
             . showSpace
             . showsPrec 11 payoutIds
         )
-      Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra tx ->
+      Submit BabbageEraOnwardsBabbage tx ->
         ( showString "Submit"
             . showSpace
-            . showString "ReferenceTxInsScriptsInlineDatumsInBabbageEra"
+            . showString "BabbageEraOnwardsBabbage"
             . showSpace
             . showsPrec 11 tx
         )
-      Submit ReferenceTxInsScriptsInlineDatumsInConwayEra tx ->
+      Submit BabbageEraOnwardsConway tx ->
         ( showString "Submit"
             . showSpace
-            . showString "ReferenceTxInsScriptsInlineDatumsInConwayEra"
+            . showString "BabbageEraOnwardsConway"
             . showSpace
             . showsPrec 11 tx
         )
@@ -1347,7 +1346,8 @@ instance (IsShelleyBasedEra era) => Variations (TxBody era) where
   variations =
     either (error . show) pure $
       createAndValidateTransactionBody
-        TxBodyContent
+        (C.shelleyBasedEra @era)
+        (C.defaultTxBodyContent era)
           { txIns =
               [
                 ( C.TxIn
@@ -1356,33 +1356,7 @@ instance (IsShelleyBasedEra era) => Variations (TxBody era) where
                 , C.BuildTxWith $ C.KeyWitness C.KeyWitnessForSpending
                 )
               ]
-          , txInsCollateral = C.TxInsCollateralNone
-          , txTotalCollateral = C.TxTotalCollateralNone
-          , txReturnCollateral = C.TxReturnCollateralNone
-          , txInsReference = C.TxInsReferenceNone
           , txOuts = [C.TxOut addr value C.TxOutDatumNone CS.ReferenceScriptNone]
-          , txFee = case C.txFeesExplicitInEra (cardanoEra @era) of
-              Left implicit -> C.TxFeeImplicit implicit
-              Right explicit -> C.TxFeeExplicit explicit 1
-          , txValidityRange =
-              ( C.TxValidityNoLowerBound
-              , case era of
-                  C.ShelleyBasedEraShelley -> C.TxValidityUpperBound C.ValidityUpperBoundInShelleyEra $ C.SlotNo 0
-                  C.ShelleyBasedEraAllegra -> C.TxValidityNoUpperBound C.ValidityNoUpperBoundInAllegraEra
-                  C.ShelleyBasedEraMary -> C.TxValidityNoUpperBound C.ValidityNoUpperBoundInMaryEra
-                  C.ShelleyBasedEraAlonzo -> C.TxValidityNoUpperBound C.ValidityNoUpperBoundInAlonzoEra
-                  C.ShelleyBasedEraBabbage -> C.TxValidityNoUpperBound C.ValidityNoUpperBoundInBabbageEra
-                  C.ShelleyBasedEraConway -> C.TxValidityNoUpperBound C.ValidityNoUpperBoundInConwayEra
-              )
-          , txMetadata = C.TxMetadataNone
-          , txAuxScripts = C.TxAuxScriptsNone
-          , txExtraKeyWits = C.TxExtraKeyWitnessesNone
-          , txProtocolParams = C.BuildTxWith Nothing
-          , txWithdrawals = C.TxWithdrawalsNone
-          , txCertificates = C.TxCertificatesNone
-          , txUpdateProposal = C.TxUpdateProposalNone
-          , txMintValue = C.TxMintNone
-          , txScriptValidity = C.TxScriptValidityNone
           }
     where
       era = C.shelleyBasedEra @era
@@ -1394,12 +1368,12 @@ instance (IsShelleyBasedEra era) => Variations (TxBody era) where
 
       value :: C.TxOutValue era
       value = case era of
-        C.ShelleyBasedEraShelley -> C.TxOutAdaOnly C.AdaOnlyInShelleyEra 1
-        C.ShelleyBasedEraAllegra -> C.TxOutAdaOnly C.AdaOnlyInAllegraEra 1
-        C.ShelleyBasedEraMary -> C.TxOutValue C.MultiAssetInMaryEra $ C.lovelaceToValue 1
-        C.ShelleyBasedEraAlonzo -> C.TxOutValue C.MultiAssetInAlonzoEra $ C.lovelaceToValue 1
-        C.ShelleyBasedEraBabbage -> C.TxOutValue C.MultiAssetInBabbageEra $ C.lovelaceToValue 1
-        C.ShelleyBasedEraConway -> C.TxOutValue C.MultiAssetInConwayEra $ C.lovelaceToValue 1
+        C.ShelleyBasedEraShelley -> C.TxOutValueByron 1
+        C.ShelleyBasedEraAllegra -> C.TxOutValueByron 1
+        C.ShelleyBasedEraMary -> C.TxOutValueShelleyBased era $ C.toLedgerValue C.MaryEraOnwardsMary $ C.lovelaceToValue 1
+        C.ShelleyBasedEraAlonzo -> C.TxOutValueShelleyBased era $ C.toLedgerValue C.MaryEraOnwardsMary $ C.lovelaceToValue 1
+        C.ShelleyBasedEraBabbage -> C.TxOutValueShelleyBased era $ C.toLedgerValue C.MaryEraOnwardsMary $ C.lovelaceToValue 1
+        C.ShelleyBasedEraConway -> C.TxOutValueShelleyBased era $ C.toLedgerValue C.MaryEraOnwardsMary $ C.lovelaceToValue 1
 
 instance (IsShelleyBasedEra era) => Variations (Tx era) where
-  variations = C.signShelleyTransaction <$> variations <*> pure []
+  variations = C.signShelleyTransaction (C.shelleyBasedEra @era) <$> variations <*> pure []

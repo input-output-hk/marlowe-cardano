@@ -8,7 +8,7 @@ module Logging (
   renderRootSelectorOTel,
 ) where
 
-import Cardano.Api (CardanoMode, ConsensusModeParams (..), EpochSlots (..), File (..), LocalNodeConnectInfo (..))
+import Cardano.Api (ConsensusModeParams (..), EpochSlots (..), File (..), LocalNodeConnectInfo (..))
 import Control.Monad.Event.Class (Inject (..))
 import Data.ByteString (ByteString)
 import Data.String (fromString)
@@ -51,7 +51,7 @@ data RootSelector f where
   SyncDatabase :: Sync.DatabaseSelector f -> RootSelector f
   ChainIndexerDatabase :: ChainIndexer.QuerySelector f -> RootSelector f
   ChainIndexer :: ChainIndexerSelector f -> RootSelector f
-  ConnectToNode :: RootSelector (LocalNodeConnectInfo CardanoMode)
+  ConnectToNode :: RootSelector LocalNodeConnectInfo
   ChainSyncDatabase :: ChainSync.QuerySelector f -> RootSelector f
   ChainSyncNodeService :: ChainSync.NodeClientSelector f -> RootSelector f
   MarloweIndexerDatabase :: MarloweIndexer.QuerySelector f -> RootSelector f

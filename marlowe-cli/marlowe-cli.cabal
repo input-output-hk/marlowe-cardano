@@ -199,7 +199,7 @@ library cli-test
     , marlowe-client
     , marlowe-contracts
     , marlowe-protocols
-    , marlowe-runtime:{marlowe-runtime, history-api, proxy-api, sync-api, tx-api}
+    , marlowe-runtime:{marlowe-runtime, proxy-api, sync-api, tx-api}
     , monad-loops
     , mtl
     , network

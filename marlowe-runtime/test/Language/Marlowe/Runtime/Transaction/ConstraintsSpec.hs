@@ -9,11 +9,12 @@ module Language.Marlowe.Runtime.Transaction.ConstraintsSpec where
 
 import Cardano.Api
 import Cardano.Api.Shelley (
+  LedgerProtocolParameters (..),
   PlutusScriptOrReferenceInput (..),
   ProtocolParameters (..),
-  ReferenceScript (ReferenceScriptNone),
-  ReferenceTxInsScriptsInlineDatumsSupportedInEra (ReferenceTxInsScriptsInlineDatumsInBabbageEra),
-  SimpleScriptOrReferenceInput (SReferenceScript),
+  ReferenceScript (..),
+  SimpleScriptOrReferenceInput (..),
+  convertToLedgerProtocolParameters,
  )
 import Control.Applicative (Alternative)
 import Control.Arrow (Arrow ((&&&), (***)))
@@ -22,7 +23,7 @@ import Control.Monad (guard)
 import Data.Bifunctor (Bifunctor (..))
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
-import Data.Either (fromLeft, isRight)
+import Data.Either (fromLeft, fromRight, isRight)
 import Data.Foldable (fold)
 import Data.Function (on)
 import Data.Functor (($>), (<&>))
@@ -33,8 +34,9 @@ import qualified Data.Map.Strict as SMap (filterWithKey, toList)
 import Data.Maybe (fromJust, isJust, mapMaybe)
 import Data.Monoid (First (..), getFirst)
 import Data.Ratio ((%))
+import Data.SOP.BasicFunctors (K (..))
 import Data.SOP.Counting (Exactly (..))
-import Data.SOP.Strict (K (..), NP (Nil, (:*)))
+import Data.SOP.Strict (NP (Nil, (:*)))
 import qualified Data.Set as Set
 import qualified Data.Text as T
 import Data.Time (UTCTime)
@@ -100,7 +102,9 @@ spec :: Spec
 spec = do
   describe "solveInitialTxBodyContent" do
     prop "satisfies the constraints" \(SomeTxConstraints marloweVersion constraints) -> do
-      protocol <- hedgehog genProtocolParameters
+      protocol <-
+        fromRight undefined . convertToLedgerProtocolParameters ShelleyBasedEraBabbage
+          <$> hedgehog (genProtocolParameters BabbageEra)
       scriptCtx <- genScriptContext marloweVersion constraints
       walletContext <- genWalletContext marloweVersion constraints
       helpersContext <- genHelperContext constraints
@@ -124,7 +128,7 @@ spec = do
           utxos = utxosFromMarloweContext <> availableUtxos walletContext
           result =
             solveInitialTxBodyContent
-              ReferenceTxInsScriptsInlineDatumsInBabbageEra
+              BabbageEraOnwardsBabbage
               protocol
               marloweVersion
               scriptCtx
@@ -160,14 +164,14 @@ spec = do
                 )
 
       txBodyContent <- do
-        txBC <- hedgehog $ genTxBodyContent BabbageEra
+        txBC <- hedgehog $ genTxBodyContent ShelleyBasedEraBabbage
         lovelaceAmount <- (2_000_000 +) <$> suchThat arbitrary (> 0)
         pure $
           txBC
             { txOuts =
                 [ TxOut
                     marloweAddressCardano
-                    (lovelaceToTxOutValue $ Lovelace lovelaceAmount)
+                    (lovelaceToTxOutValue ShelleyBasedEraBabbage $ Lovelace lovelaceAmount)
                     TxOutDatumNone
                     ReferenceScriptNone
                 ]
@@ -176,7 +180,7 @@ spec = do
       let actual =
             getValueAtAddress marloweAddressChain . txOuts
               <$> adjustTxForMinUtxo
-                ReferenceTxInsScriptsInlineDatumsInBabbageEra
+                BabbageEraOnwardsBabbage
                 protocolTestnet
                 (Just marloweAddressChain)
                 txBodyContent
@@ -196,8 +200,8 @@ spec = do
 
           valueMeetsMinimumReq :: TxOut CtxTx BabbageEra -> Maybe String
           valueMeetsMinimumReq txOut@(TxOut _ txOrigValue _ _) =
-            case calculateMinimumUTxO ShelleyBasedEraBabbage txOut <$> bundleProtocolParams BabbageEra protocolTestnet of
-              Right minValueFromApi ->
+            case calculateMinimumUTxO ShelleyBasedEraBabbage txOut $ unLedgerProtocolParameters protocolTestnet of
+              minValueFromApi ->
                 if origAda >= minValueFromApi
                   then Nothing
                   else
@@ -206,13 +210,12 @@ spec = do
                         "Value %s is lower than minimum value %s"
                         (show origAda)
                         (show minValueFromApi)
-              Left exception -> Just $ show exception
             where
               origAda = selectLovelace . txOutValueToValue $ txOrigValue
 
-      txBodyContent <- hedgehog $ genTxBodyContent BabbageEra
+      txBodyContent <- hedgehog $ genTxBodyContent ShelleyBasedEraBabbage
 
-      pure $ case adjustTxForMinUtxo ReferenceTxInsScriptsInlineDatumsInBabbageEra protocolTestnet (Just marloweAddress) txBodyContent of
+      pure $ case adjustTxForMinUtxo BabbageEraOnwardsBabbage protocolTestnet (Just marloweAddress) txBodyContent of
         Right newTxBodyContent -> do
           let errors = mapMaybe valueMeetsMinimumReq $ txOuts newTxBodyContent
           if null errors
@@ -237,9 +240,9 @@ spec = do
             where
               origAda = selectLovelace . txOutValueToValue $ txOrigValue
 
-      txBodyContent <- hedgehog $ genTxBodyContent BabbageEra
+      txBodyContent <- hedgehog $ genTxBodyContent ShelleyBasedEraBabbage
 
-      pure $ case adjustTxForMinUtxo ReferenceTxInsScriptsInlineDatumsInBabbageEra protocolTestnet (Just marloweAddress) txBodyContent of
+      pure $ case adjustTxForMinUtxo BabbageEraOnwardsBabbage protocolTestnet (Just marloweAddress) txBodyContent of
         Right newTxBodyContent -> do
           let errors = mapMaybe valueIsAtLeastHalfAnAda $ txOuts newTxBodyContent
           if null errors
@@ -294,7 +297,7 @@ spec = do
                   ( False
                   , emptyTxBodyContent
                       { txMintValue =
-                          TxMintValue MultiAssetInBabbageEra mempty $
+                          TxMintValue MaryEraOnwardsBabbage mempty $
                             BuildTxWith $
                               Map.singleton policy $
                                 SimpleScriptWitness SimpleScriptInBabbage script
@@ -312,7 +315,7 @@ spec = do
                   ( True
                   , emptyTxBodyContent
                       { txMintValue =
-                          TxMintValue MultiAssetInBabbageEra mempty $
+                          TxMintValue MaryEraOnwardsBabbage mempty $
                             BuildTxWith $
                               Map.singleton policy $
                                 PlutusScriptWitness
@@ -391,7 +394,7 @@ spec = do
           -- Convert chain UTxOs to Cardano API ones.
           convertUtxo :: (Chain.TxOutRef, Chain.TransactionOutput) -> Maybe (TxOut ctx BabbageEra)
           convertUtxo (_, transactionOutput) =
-            toCardanoTxOut' MultiAssetInBabbageEra transactionOutput Nothing
+            toCardanoTxOut' MaryEraOnwardsBabbage transactionOutput Nothing
 
           -- All utxos that are spendable from the wallet context
           eligible :: [(Chain.TxOutRef, Chain.TransactionOutput)]
@@ -461,7 +464,7 @@ spec = do
           -- Function to convert the Left side of the Either from (ConstraintError v) to String
           selection =
             selectCoins
-              ReferenceTxInsScriptsInlineDatumsInBabbageEra
+              BabbageEraOnwardsBabbage
               protocolTestnet
               marloweVersion
               marloweContext
@@ -519,7 +522,7 @@ spec = do
               (\ce -> case marloweVersion of MarloweV1 -> Left . show $ ce)
               Right
               $ selectCoins
-                ReferenceTxInsScriptsInlineDatumsInBabbageEra
+                BabbageEraOnwardsBabbage
                 protocolTestnet
                 marloweVersion
                 scriptCtx
@@ -614,7 +617,7 @@ spec = do
               (\ce -> case marloweVersion of MarloweV1 -> Left . show $ ce)
               Right
               $ selectCoins
-                ReferenceTxInsScriptsInlineDatumsInBabbageEra
+                BabbageEraOnwardsBabbage
                 protocolTestnet
                 marloweVersion
                 scriptCtx
@@ -647,37 +650,39 @@ spec = do
     prop "pure lovelace" do
       inAddress <- arbitrary
       inDatum <- oneof [pure Nothing, Just . fromCardanoScriptData . getScriptData <$> hedgehog genHashableScriptData]
-      inValue <- hedgehog genValueForTxOut
-      case findMinUtxo ReferenceTxInsScriptsInlineDatumsInBabbageEra protocolTestnet (inAddress, inDatum, inValue) of
+      inValue <- fromLedgerValue ShelleyBasedEraBabbage <$> hedgehog (genValueForTxOut ShelleyBasedEraBabbage)
+      case findMinUtxo BabbageEraOnwardsBabbage protocolTestnet (inAddress, inDatum, inValue) of
         Right outValue -> pure $ valueToLovelace outValue `shouldSatisfy` isJust
         Left message -> pure . expectationFailure $ show (message :: ConstraintError)
     prop "minUTxO matches Cardano API" do
       inAddress <- arbitrary
       inDatum <- oneof [pure Nothing, Just <$> hedgehog genHashableScriptData]
       -- Tiny lovelace values violate ledger rules and occupy too few bytes for a meaningful test.
-      inValue <- (lovelaceToValue 100_000 <>) <$> hedgehog genValueForTxOut
+      inValue <-
+        (lovelaceToValue 100_000 <>) . fromLedgerValue ShelleyBasedEraBabbage
+          <$> hedgehog (genValueForTxOut ShelleyBasedEraBabbage)
       either
         (pure . expectationFailure)
         pure
         do
           inAddress' <-
-            maybe (Left "Failed to convert address.") (Right . anyAddressInShelleyBasedEra) $
+            maybe (Left "Failed to convert address.") (Right . anyAddressInShelleyBasedEra ShelleyBasedEraBabbage) $
               Chain.toCardanoAddressAny inAddress
-          expected <-
-            bimap show lovelaceToValue $
-              calculateMinimumUTxO
-                ShelleyBasedEraBabbage
-                ( TxOut
-                    inAddress'
-                    (TxOutValue MultiAssetInBabbageEra inValue)
-                    (maybe TxOutDatumNone (TxOutDatumInTx ScriptDataInBabbageEra) inDatum)
-                    ReferenceScriptNone
-                )
-                <$> bundleProtocolParams BabbageEra protocolTestnet
+          let expected =
+                lovelaceToValue
+                  $ calculateMinimumUTxO
+                    ShelleyBasedEraBabbage
+                    ( TxOut
+                        inAddress'
+                        (mkTxOutValue MaryEraOnwardsBabbage inValue)
+                        (maybe TxOutDatumNone (TxOutDatumInTx AlonzoEraOnwardsBabbage) inDatum)
+                        ReferenceScriptNone
+                    )
+                  $ unLedgerProtocolParameters protocolTestnet
           outValue <-
             first (\message -> show (message :: ConstraintError)) $
               findMinUtxo
-                ReferenceTxInsScriptsInlineDatumsInBabbageEra
+                BabbageEraOnwardsBabbage
                 protocolTestnet
                 (inAddress, fromCardanoScriptData . getScriptData <$> inDatum, inValue)
           pure $ (inDatum, outValue) `shouldBe` (inDatum, expected)
@@ -686,36 +691,37 @@ spec = do
     prop "non-lovelace value is unchanged" do
       let noLovelace = valueFromList . filter ((/= AdaAssetId) . fst) . valueToList
       inAddress <- arbitrary
-      inValue <- hedgehog genValueForTxOut
-      case ensureMinUtxo ReferenceTxInsScriptsInlineDatumsInBabbageEra protocolTestnet (inAddress, inValue) of
+      inValue <- fromLedgerValue ShelleyBasedEraBabbage <$> hedgehog (genValueForTxOut ShelleyBasedEraBabbage)
+      case ensureMinUtxo BabbageEraOnwardsBabbage protocolTestnet (inAddress, inValue) of
         Right (_, outValue) -> pure $ noLovelace outValue `shouldBe` noLovelace inValue
         Left message -> pure . expectationFailure $ show (message :: ConstraintError)
     prop "address is unchanged" do
       inAddress <- arbitrary
-      inValue <- hedgehog genValueForTxOut
-      case ensureMinUtxo ReferenceTxInsScriptsInlineDatumsInBabbageEra protocolTestnet (inAddress, inValue) of
+      inValue <- fromLedgerValue ShelleyBasedEraBabbage <$> hedgehog (genValueForTxOut ShelleyBasedEraBabbage)
+      case ensureMinUtxo BabbageEraOnwardsBabbage protocolTestnet (inAddress, inValue) of
         Right (outAddress, _) -> pure $ outAddress `shouldBe` inAddress
         Left message -> pure . expectationFailure $ show (message :: ConstraintError)
     prop "adjusted lovelace is greater of minUTxO and original lovelace" do
       inAddress <- arbitrary
       -- Tiny lovelace values violate ledger rules and occupy too few bytes for a meaningful test.
-      inValue <- (lovelaceToValue 100_000 <>) <$> hedgehog genValueForTxOut
+      inValue <-
+        (lovelaceToValue 100_000 <>) . fromLedgerValue ShelleyBasedEraBabbage
+          <$> hedgehog (genValueForTxOut ShelleyBasedEraBabbage)
       either
         (pure . expectationFailure)
         pure
         do
           inAddress' <-
-            maybe (Left "Failed to convert address.") (Right . anyAddressInShelleyBasedEra) $
+            maybe (Left "Failed to convert address.") (Right . anyAddressInShelleyBasedEra ShelleyBasedEraBabbage) $
               Chain.toCardanoAddressAny inAddress
-          expected <-
-            first show $
-              calculateMinimumUTxO
-                ShelleyBasedEraBabbage
-                (TxOut inAddress' (TxOutValue MultiAssetInBabbageEra inValue) TxOutDatumNone ReferenceScriptNone)
-                <$> bundleProtocolParams BabbageEra protocolTestnet
+          let expected =
+                calculateMinimumUTxO
+                  ShelleyBasedEraBabbage
+                  (TxOut inAddress' (mkTxOutValue MaryEraOnwardsBabbage inValue) TxOutDatumNone ReferenceScriptNone)
+                  $ unLedgerProtocolParameters protocolTestnet
           (_, outValue) <-
             first (\message -> show (message :: ConstraintError)) $
-              ensureMinUtxo ReferenceTxInsScriptsInlineDatumsInBabbageEra protocolTestnet (inAddress, inValue)
+              ensureMinUtxo BabbageEraOnwardsBabbage protocolTestnet (inAddress, inValue)
           pure $ selectLovelace outValue `shouldBe` max (selectLovelace inValue) expected
 
   describe "balanceTx" do
@@ -736,9 +742,9 @@ spec = do
                   -- which would normally come from the chain at runtime
 
                   helpersContext = HelpersContext mempty "" mempty
-                  eraHistory :: EraHistory CardanoMode
+                  eraHistory :: EraHistory
                   eraHistory =
-                    EraHistory CardanoMode $
+                    EraHistory $
                       mkInterpreter $
                         summaryWithExactly $
                           Exactly $
@@ -803,7 +809,7 @@ spec = do
                             . availableUtxos
                             $ walletContext
                       , txInsCollateral =
-                          TxInsCollateral CollateralInBabbageEra $
+                          TxInsCollateral AlonzoEraOnwardsBabbage $
                             mapMaybe toCardanoTxIn . Set.toList . collateralUtxos $
                               walletContext
                       }
@@ -832,7 +838,7 @@ spec = do
                   -}
 
                   case balanceTx
-                    ReferenceTxInsScriptsInlineDatumsInBabbageEra
+                    BabbageEraOnwardsBabbage
                     (SystemStart start)
                     (toLedgerEpochInfo eraHistory)
                     protocolTestnet
@@ -900,14 +906,14 @@ genBodyContentWith500AdaOutput = do
       { txOuts =
           [ TxOut
               addr
-              (lovelaceToTxOutValue $ Lovelace 500_000_000)
+              (lovelaceToTxOutValue ShelleyBasedEraBabbage $ Lovelace 500_000_000)
               TxOutDatumNone
               ReferenceScriptNone
           ]
       }
 
-maxFee :: ProtocolParameters -> Lovelace
-maxFee ProtocolParameters{..} = 2 * (txFee + round executionFee)
+maxFee :: LedgerProtocolParameters BabbageEra -> Lovelace
+maxFee (fromLedgerPParams ShelleyBasedEraBabbage . unLedgerProtocolParameters -> ProtocolParameters{..}) = 2 * (txFee + round executionFee)
   where
     txFee :: Lovelace
     txFee = protocolParamTxFeeFixed + protocolParamTxFeePerByte * fromIntegral protocolParamMaxTxSize
@@ -921,10 +927,10 @@ maxFee ProtocolParameters{..} = 2 * (txFee + round executionFee)
         _ -> 0
 
 changeAddressFromWallet :: WalletContext -> AddressInEra BabbageEra
-changeAddressFromWallet = anyAddressInShelleyBasedEra . fromJust . Chain.toCardanoAddressAny . changeAddress
+changeAddressFromWallet = anyAddressInShelleyBasedEra ShelleyBasedEraBabbage . fromJust . Chain.toCardanoAddressAny . changeAddress
 
 -- FIXME: It's risky to copy-and-paste code being tested into the test suite so that it can be used for other tests.
-findMinUtxo' :: ProtocolParameters -> AddressInEra BabbageEra -> Value -> Lovelace
+findMinUtxo' :: LedgerProtocolParameters BabbageEra -> AddressInEra BabbageEra -> Value -> Lovelace
 findMinUtxo' protocol chAddress origValue = do
   let atLeastHalfAnAda :: Value
       atLeastHalfAnAda = lovelaceToValue (max 500_000 (selectLovelace origValue))
@@ -932,13 +938,11 @@ findMinUtxo' protocol chAddress origValue = do
       dummyTxOut =
         TxOut
           chAddress
-          (TxOutValue MultiAssetInBabbageEra revisedValue)
+          (mkTxOutValue MaryEraOnwardsBabbage revisedValue)
           TxOutDatumNone
           ReferenceScriptNone
 
-  case calculateMinimumUTxO ShelleyBasedEraBabbage dummyTxOut <$> bundleProtocolParams BabbageEra protocol of
-    Right minValue -> minValue
-    Left _ -> undefined
+  calculateMinimumUTxO ShelleyBasedEraBabbage dummyTxOut $ unLedgerProtocolParameters protocol
 
 data WalletValueDesc = EmptyWallet | WalletHasOnlyAda | WalletHasOnlyNonAda | WalletHasBoth
   deriving (Show)
@@ -1074,29 +1078,7 @@ genWalletWithAsset marloweVersion constraints minLovelace = do
 
 -- A simple TxBodyContent that's completely empty
 emptyTxBodyContent :: TxBodyContent BuildTx BabbageEra
-emptyTxBodyContent =
-  TxBodyContent
-    { txIns = []
-    , txInsCollateral = TxInsCollateralNone
-    , txInsReference = TxInsReferenceNone
-    , txOuts = []
-    , txTotalCollateral = TxTotalCollateralNone
-    , txReturnCollateral = TxReturnCollateralNone
-    , txFee = TxFeeExplicit TxFeesExplicitInBabbageEra 0
-    , txValidityRange =
-        ( TxValidityNoLowerBound
-        , TxValidityNoUpperBound ValidityNoUpperBoundInBabbageEra
-        )
-    , txMetadata = TxMetadataNone
-    , txAuxScripts = TxAuxScriptsNone
-    , txExtraKeyWits = TxExtraKeyWitnessesNone
-    , txProtocolParams = BuildTxWith $ Just protocolTestnet
-    , txWithdrawals = TxWithdrawalsNone
-    , txCertificates = TxCertificatesNone
-    , txUpdateProposal = TxUpdateProposalNone
-    , txMintValue = TxMintNone
-    , txScriptValidity = TxScriptValidityNone
-    }
+emptyTxBodyContent = (defaultTxBodyContent ShelleyBasedEraBabbage){txProtocolParams = BuildTxWith $ Just protocolTestnet}
 
 violations
   :: MarloweVersion v
@@ -1160,7 +1142,7 @@ mustMintRoleTokenViolations MarloweV1 HelpersContext{..} TxConstraints{..} TxBod
     checkDistribution expected = do
       (assetId, roleDistribution) <- Map.toList expected
       let tally = \case
-            TxOut address (TxOutValue MultiAssetInBabbageEra value) datum _ ->
+            TxOut address (TxOutValueShelleyBased _ (fromLedgerValue ShelleyBasedEraBabbage -> value)) datum _ ->
               case fromCardanoQuantity $ selectAsset value (toCardanoAssetId assetId) of
                 0 -> id
                 q -> Map.insert (fromCardanoAddressInEra BabbageEra address) (q, snd $ fromCardanoTxOutDatum datum)
@@ -1203,7 +1185,7 @@ mustMintRoleTokenViolations MarloweV1 HelpersContext{..} TxConstraints{..} TxBod
           TxMintNone
             | Map.null mintedQuantities -> []
             | otherwise -> ["No tokens minted"]
-          TxMintValue MultiAssetInBabbageEra value _ -> do
+          TxMintValue MaryEraOnwardsBabbage value _ -> do
             (assetId, quantity) <- Map.toList mintedQuantities
             (("roleToken: " <> show assetId <> ": ") <>) <$> do
               let cardanoAssetId = toCardanoAssetId assetId
@@ -1330,9 +1312,9 @@ mustConsumeMarloweOutputViolations MarloweV1 MarloweContext{..} TxConstraints{..
                     "Input redeemer does not match"
                 ]
         , check
-            ( txValidityRange
-                == ( TxValidityLowerBound ValidityLowerBoundInBabbageEra invalidBefore
-                   , TxValidityUpperBound ValidityUpperBoundInBabbageEra invalidHereafter
+            ( (txValidityLowerBound, txValidityUpperBound)
+                == ( TxValidityLowerBound AllegraEraOnwardsBabbage invalidBefore
+                   , TxValidityUpperBound ShelleyBasedEraBabbage $ Just invalidHereafter
                    )
             )
             "Tx validity range does not match constraints"
@@ -1752,215 +1734,218 @@ extractDatum (TxOut _ _ txOutDatum _) = snd $ fromCardanoTxOutDatum txOutDatum
 byteStringGen :: Gen ByteString
 byteStringGen = BS.pack <$> arbitrary
 
-protocolTestnet :: ProtocolParameters
+protocolTestnet :: LedgerProtocolParameters BabbageEra
 protocolTestnet =
-  ProtocolParameters
-    { protocolParamProtocolVersion = (8, 0)
-    , protocolParamDecentralization = Nothing
-    , protocolParamExtraPraosEntropy = Nothing
-    , protocolParamMaxBlockHeaderSize = 1100
-    , protocolParamMaxBlockBodySize = 90112
-    , protocolParamMaxTxSize = 16384
-    , protocolParamTxFeeFixed = 155381
-    , protocolParamTxFeePerByte = 44
-    , protocolParamMinUTxOValue = Nothing
-    , protocolParamStakeAddressDeposit = Lovelace 2000000
-    , protocolParamStakePoolDeposit = Lovelace 500000000
-    , protocolParamMinPoolCost = Lovelace 340000000
-    , protocolParamPoolRetireMaxEpoch = EpochNo 18
-    , protocolParamStakePoolTargetNum = 500
-    , protocolParamPoolPledgeInfluence = 3 % 10
-    , protocolParamMonetaryExpansion = 3 % 1000
-    , protocolParamTreasuryCut = 1 % 5
-    , protocolParamUTxOCostPerWord = Nothing
-    , protocolParamCostModels =
-        Map.singleton
-          (AnyPlutusScriptVersion PlutusScriptV2)
-          . CostModel
-          . Map.elems
-          $ Map.fromList @String
-            [ ("addInteger-cpu-arguments-intercept", 205665)
-            , ("addInteger-cpu-arguments-slope", 812)
-            , ("addInteger-memory-arguments-intercept", 1)
-            , ("addInteger-memory-arguments-slope", 1)
-            , ("appendByteString-cpu-arguments-intercept", 1000)
-            , ("appendByteString-cpu-arguments-slope", 571)
-            , ("appendByteString-memory-arguments-intercept", 0)
-            , ("appendByteString-memory-arguments-slope", 1)
-            , ("appendString-cpu-arguments-intercept", 1000)
-            , ("appendString-cpu-arguments-slope", 24177)
-            , ("appendString-memory-arguments-intercept", 4)
-            , ("appendString-memory-arguments-slope", 1)
-            , ("bData-cpu-arguments", 1000)
-            , ("bData-memory-arguments", 32)
-            , ("blake2b_256-cpu-arguments-intercept", 117366)
-            , ("blake2b_256-cpu-arguments-slope", 10475)
-            , ("blake2b_256-memory-arguments", 4)
-            , ("cekApplyCost-exBudgetCPU", 23000)
-            , ("cekApplyCost-exBudgetMemory", 100)
-            , ("cekBuiltinCost-exBudgetCPU", 23000)
-            , ("cekBuiltinCost-exBudgetMemory", 100)
-            , ("cekConstCost-exBudgetCPU", 23000)
-            , ("cekConstCost-exBudgetMemory", 100)
-            , ("cekDelayCost-exBudgetCPU", 23000)
-            , ("cekDelayCost-exBudgetMemory", 100)
-            , ("cekForceCost-exBudgetCPU", 23000)
-            , ("cekForceCost-exBudgetMemory", 100)
-            , ("cekLamCost-exBudgetCPU", 23000)
-            , ("cekLamCost-exBudgetMemory", 100)
-            , ("cekStartupCost-exBudgetCPU", 100)
-            , ("cekStartupCost-exBudgetMemory", 100)
-            , ("cekVarCost-exBudgetCPU", 23000)
-            , ("cekVarCost-exBudgetMemory", 100)
-            , ("chooseData-cpu-arguments", 19537)
-            , ("chooseData-memory-arguments", 32)
-            , ("chooseList-cpu-arguments", 175354)
-            , ("chooseList-memory-arguments", 32)
-            , ("chooseUnit-cpu-arguments", 46417)
-            , ("chooseUnit-memory-arguments", 4)
-            , ("consByteString-cpu-arguments-intercept", 221973)
-            , ("consByteString-cpu-arguments-slope", 511)
-            , ("consByteString-memory-arguments-intercept", 0)
-            , ("consByteString-memory-arguments-slope", 1)
-            , ("constrData-cpu-arguments", 89141)
-            , ("constrData-memory-arguments", 32)
-            , ("decodeUtf8-cpu-arguments-intercept", 497525)
-            , ("decodeUtf8-cpu-arguments-slope", 14068)
-            , ("decodeUtf8-memory-arguments-intercept", 4)
-            , ("decodeUtf8-memory-arguments-slope", 2)
-            , ("divideInteger-cpu-arguments-constant", 196500)
-            , ("divideInteger-cpu-arguments-model-arguments-intercept", 453240)
-            , ("divideInteger-cpu-arguments-model-arguments-slope", 220)
-            , ("divideInteger-memory-arguments-intercept", 0)
-            , ("divideInteger-memory-arguments-minimum", 1)
-            , ("divideInteger-memory-arguments-slope", 1)
-            , ("encodeUtf8-cpu-arguments-intercept", 1000)
-            , ("encodeUtf8-cpu-arguments-slope", 28662)
-            , ("encodeUtf8-memory-arguments-intercept", 4)
-            , ("encodeUtf8-memory-arguments-slope", 2)
-            , ("equalsByteString-cpu-arguments-constant", 245000)
-            , ("equalsByteString-cpu-arguments-intercept", 216773)
-            , ("equalsByteString-cpu-arguments-slope", 62)
-            , ("equalsByteString-memory-arguments", 1)
-            , ("equalsData-cpu-arguments-intercept", 1060367)
-            , ("equalsData-cpu-arguments-slope", 12586)
-            , ("equalsData-memory-arguments", 1)
-            , ("equalsInteger-cpu-arguments-intercept", 208512)
-            , ("equalsInteger-cpu-arguments-slope", 421)
-            , ("equalsInteger-memory-arguments", 1)
-            , ("equalsString-cpu-arguments-constant", 187000)
-            , ("equalsString-cpu-arguments-intercept", 1000)
-            , ("equalsString-cpu-arguments-slope", 52998)
-            , ("equalsString-memory-arguments", 1)
-            , ("fstPair-cpu-arguments", 80436)
-            , ("fstPair-memory-arguments", 32)
-            , ("headList-cpu-arguments", 43249)
-            , ("headList-memory-arguments", 32)
-            , ("iData-cpu-arguments", 1000)
-            , ("iData-memory-arguments", 32)
-            , ("ifThenElse-cpu-arguments", 80556)
-            , ("ifThenElse-memory-arguments", 1)
-            , ("indexByteString-cpu-arguments", 57667)
-            , ("indexByteString-memory-arguments", 4)
-            , ("lengthOfByteString-cpu-arguments", 1000)
-            , ("lengthOfByteString-memory-arguments", 10)
-            , ("lessThanByteString-cpu-arguments-intercept", 197145)
-            , ("lessThanByteString-cpu-arguments-slope", 156)
-            , ("lessThanByteString-memory-arguments", 1)
-            , ("lessThanEqualsByteString-cpu-arguments-intercept", 197145)
-            , ("lessThanEqualsByteString-cpu-arguments-slope", 156)
-            , ("lessThanEqualsByteString-memory-arguments", 1)
-            , ("lessThanEqualsInteger-cpu-arguments-intercept", 204924)
-            , ("lessThanEqualsInteger-cpu-arguments-slope", 473)
-            , ("lessThanEqualsInteger-memory-arguments", 1)
-            , ("lessThanInteger-cpu-arguments-intercept", 208896)
-            , ("lessThanInteger-cpu-arguments-slope", 511)
-            , ("lessThanInteger-memory-arguments", 1)
-            , ("listData-cpu-arguments", 52467)
-            , ("listData-memory-arguments", 32)
-            , ("mapData-cpu-arguments", 64832)
-            , ("mapData-memory-arguments", 32)
-            , ("mkCons-cpu-arguments", 65493)
-            , ("mkCons-memory-arguments", 32)
-            , ("mkNilData-cpu-arguments", 22558)
-            , ("mkNilData-memory-arguments", 32)
-            , ("mkNilPairData-cpu-arguments", 16563)
-            , ("mkNilPairData-memory-arguments", 32)
-            , ("mkPairData-cpu-arguments", 76511)
-            , ("mkPairData-memory-arguments", 32)
-            , ("modInteger-cpu-arguments-constant", 196500)
-            , ("modInteger-cpu-arguments-model-arguments-intercept", 453240)
-            , ("modInteger-cpu-arguments-model-arguments-slope", 220)
-            , ("modInteger-memory-arguments-intercept", 0)
-            , ("modInteger-memory-arguments-minimum", 1)
-            , ("modInteger-memory-arguments-slope", 1)
-            , ("multiplyInteger-cpu-arguments-intercept", 69522)
-            , ("multiplyInteger-cpu-arguments-slope", 11687)
-            , ("multiplyInteger-memory-arguments-intercept", 0)
-            , ("multiplyInteger-memory-arguments-slope", 1)
-            , ("nullList-cpu-arguments", 60091)
-            , ("nullList-memory-arguments", 32)
-            , ("quotientInteger-cpu-arguments-constant", 196500)
-            , ("quotientInteger-cpu-arguments-model-arguments-intercept", 453240)
-            , ("quotientInteger-cpu-arguments-model-arguments-slope", 220)
-            , ("quotientInteger-memory-arguments-intercept", 0)
-            , ("quotientInteger-memory-arguments-minimum", 1)
-            , ("quotientInteger-memory-arguments-slope", 1)
-            , ("remainderInteger-cpu-arguments-constant", 196500)
-            , ("remainderInteger-cpu-arguments-model-arguments-intercept", 453240)
-            , ("remainderInteger-cpu-arguments-model-arguments-slope", 220)
-            , ("remainderInteger-memory-arguments-intercept", 0)
-            , ("remainderInteger-memory-arguments-minimum", 1)
-            , ("remainderInteger-memory-arguments-slope", 1)
-            , ("serialiseData-cpu-arguments-intercept", 1159724)
-            , ("serialiseData-cpu-arguments-slope", 392670)
-            , ("serialiseData-memory-arguments-intercept", 0)
-            , ("serialiseData-memory-arguments-slope", 2)
-            , ("sha2_256-cpu-arguments-intercept", 806990)
-            , ("sha2_256-cpu-arguments-slope", 30482)
-            , ("sha2_256-memory-arguments", 4)
-            , ("sha3_256-cpu-arguments-intercept", 1927926)
-            , ("sha3_256-cpu-arguments-slope", 82523)
-            , ("sha3_256-memory-arguments", 4)
-            , ("sliceByteString-cpu-arguments-intercept", 265318)
-            , ("sliceByteString-cpu-arguments-slope", 0)
-            , ("sliceByteString-memory-arguments-intercept", 4)
-            , ("sliceByteString-memory-arguments-slope", 0)
-            , ("sndPair-cpu-arguments", 85931)
-            , ("sndPair-memory-arguments", 32)
-            , ("subtractInteger-cpu-arguments-intercept", 205665)
-            , ("subtractInteger-cpu-arguments-slope", 812)
-            , ("subtractInteger-memory-arguments-intercept", 1)
-            , ("subtractInteger-memory-arguments-slope", 1)
-            , ("tailList-cpu-arguments", 41182)
-            , ("tailList-memory-arguments", 32)
-            , ("trace-cpu-arguments", 212342)
-            , ("trace-memory-arguments", 32)
-            , ("unBData-cpu-arguments", 31220)
-            , ("unBData-memory-arguments", 32)
-            , ("unConstrData-cpu-arguments", 32696)
-            , ("unConstrData-memory-arguments", 32)
-            , ("unIData-cpu-arguments", 43357)
-            , ("unIData-memory-arguments", 32)
-            , ("unListData-cpu-arguments", 32247)
-            , ("unListData-memory-arguments", 32)
-            , ("unMapData-cpu-arguments", 38314)
-            , ("unMapData-memory-arguments", 32)
-            , ("verifyEcdsaSecp256k1Signature-cpu-arguments", 35892428)
-            , ("verifyEcdsaSecp256k1Signature-memory-arguments", 10)
-            , ("verifyEd25519Signature-cpu-arguments-intercept", 57996947)
-            , ("verifyEd25519Signature-cpu-arguments-slope", 18975)
-            , ("verifyEd25519Signature-memory-arguments", 10)
-            , ("verifySchnorrSecp256k1Signature-cpu-arguments-intercept", 38887044)
-            , ("verifySchnorrSecp256k1Signature-cpu-arguments-slope", 32947)
-            , ("verifySchnorrSecp256k1Signature-memory-arguments", 10)
-            ]
-    , protocolParamPrices =
-        Just (ExecutionUnitPrices{priceExecutionSteps = 721 % 10000000, priceExecutionMemory = 577 % 10000})
-    , protocolParamMaxTxExUnits = Just (ExecutionUnits{executionSteps = 10000000000, executionMemory = 14000000})
-    , protocolParamMaxBlockExUnits = Just (ExecutionUnits{executionSteps = 40000000000, executionMemory = 62000000})
-    , protocolParamMaxValueSize = Just 5000
-    , protocolParamCollateralPercent = Just 150
-    , protocolParamMaxCollateralInputs = Just 3
-    , protocolParamUTxOCostPerByte = Just (Lovelace 4310)
-    }
+  fromRight undefined $
+    convertToLedgerProtocolParameters
+      ShelleyBasedEraBabbage
+      ProtocolParameters
+        { protocolParamProtocolVersion = (8, 0)
+        , protocolParamDecentralization = Nothing
+        , protocolParamExtraPraosEntropy = Nothing
+        , protocolParamMaxBlockHeaderSize = 1100
+        , protocolParamMaxBlockBodySize = 90112
+        , protocolParamMaxTxSize = 16384
+        , protocolParamTxFeeFixed = 155381
+        , protocolParamTxFeePerByte = 44
+        , protocolParamMinUTxOValue = Nothing
+        , protocolParamStakeAddressDeposit = Lovelace 2000000
+        , protocolParamStakePoolDeposit = Lovelace 500000000
+        , protocolParamMinPoolCost = Lovelace 340000000
+        , protocolParamPoolRetireMaxEpoch = EpochNo 18
+        , protocolParamStakePoolTargetNum = 500
+        , protocolParamPoolPledgeInfluence = 3 % 10
+        , protocolParamMonetaryExpansion = 3 % 1000
+        , protocolParamTreasuryCut = 1 % 5
+        , -- , protocolParamUTxOCostPerWord = Nothing
+          protocolParamCostModels =
+            Map.singleton
+              (AnyPlutusScriptVersion PlutusScriptV2)
+              . CostModel
+              . Map.elems
+              $ Map.fromList @String
+                [ ("addInteger-cpu-arguments-intercept", 205665)
+                , ("addInteger-cpu-arguments-slope", 812)
+                , ("addInteger-memory-arguments-intercept", 1)
+                , ("addInteger-memory-arguments-slope", 1)
+                , ("appendByteString-cpu-arguments-intercept", 1000)
+                , ("appendByteString-cpu-arguments-slope", 571)
+                , ("appendByteString-memory-arguments-intercept", 0)
+                , ("appendByteString-memory-arguments-slope", 1)
+                , ("appendString-cpu-arguments-intercept", 1000)
+                , ("appendString-cpu-arguments-slope", 24177)
+                , ("appendString-memory-arguments-intercept", 4)
+                , ("appendString-memory-arguments-slope", 1)
+                , ("bData-cpu-arguments", 1000)
+                , ("bData-memory-arguments", 32)
+                , ("blake2b_256-cpu-arguments-intercept", 117366)
+                , ("blake2b_256-cpu-arguments-slope", 10475)
+                , ("blake2b_256-memory-arguments", 4)
+                , ("cekApplyCost-exBudgetCPU", 23000)
+                , ("cekApplyCost-exBudgetMemory", 100)
+                , ("cekBuiltinCost-exBudgetCPU", 23000)
+                , ("cekBuiltinCost-exBudgetMemory", 100)
+                , ("cekConstCost-exBudgetCPU", 23000)
+                , ("cekConstCost-exBudgetMemory", 100)
+                , ("cekDelayCost-exBudgetCPU", 23000)
+                , ("cekDelayCost-exBudgetMemory", 100)
+                , ("cekForceCost-exBudgetCPU", 23000)
+                , ("cekForceCost-exBudgetMemory", 100)
+                , ("cekLamCost-exBudgetCPU", 23000)
+                , ("cekLamCost-exBudgetMemory", 100)
+                , ("cekStartupCost-exBudgetCPU", 100)
+                , ("cekStartupCost-exBudgetMemory", 100)
+                , ("cekVarCost-exBudgetCPU", 23000)
+                , ("cekVarCost-exBudgetMemory", 100)
+                , ("chooseData-cpu-arguments", 19537)
+                , ("chooseData-memory-arguments", 32)
+                , ("chooseList-cpu-arguments", 175354)
+                , ("chooseList-memory-arguments", 32)
+                , ("chooseUnit-cpu-arguments", 46417)
+                , ("chooseUnit-memory-arguments", 4)
+                , ("consByteString-cpu-arguments-intercept", 221973)
+                , ("consByteString-cpu-arguments-slope", 511)
+                , ("consByteString-memory-arguments-intercept", 0)
+                , ("consByteString-memory-arguments-slope", 1)
+                , ("constrData-cpu-arguments", 89141)
+                , ("constrData-memory-arguments", 32)
+                , ("decodeUtf8-cpu-arguments-intercept", 497525)
+                , ("decodeUtf8-cpu-arguments-slope", 14068)
+                , ("decodeUtf8-memory-arguments-intercept", 4)
+                , ("decodeUtf8-memory-arguments-slope", 2)
+                , ("divideInteger-cpu-arguments-constant", 196500)
+                , ("divideInteger-cpu-arguments-model-arguments-intercept", 453240)
+                , ("divideInteger-cpu-arguments-model-arguments-slope", 220)
+                , ("divideInteger-memory-arguments-intercept", 0)
+                , ("divideInteger-memory-arguments-minimum", 1)
+                , ("divideInteger-memory-arguments-slope", 1)
+                , ("encodeUtf8-cpu-arguments-intercept", 1000)
+                , ("encodeUtf8-cpu-arguments-slope", 28662)
+                , ("encodeUtf8-memory-arguments-intercept", 4)
+                , ("encodeUtf8-memory-arguments-slope", 2)
+                , ("equalsByteString-cpu-arguments-constant", 245000)
+                , ("equalsByteString-cpu-arguments-intercept", 216773)
+                , ("equalsByteString-cpu-arguments-slope", 62)
+                , ("equalsByteString-memory-arguments", 1)
+                , ("equalsData-cpu-arguments-intercept", 1060367)
+                , ("equalsData-cpu-arguments-slope", 12586)
+                , ("equalsData-memory-arguments", 1)
+                , ("equalsInteger-cpu-arguments-intercept", 208512)
+                , ("equalsInteger-cpu-arguments-slope", 421)
+                , ("equalsInteger-memory-arguments", 1)
+                , ("equalsString-cpu-arguments-constant", 187000)
+                , ("equalsString-cpu-arguments-intercept", 1000)
+                , ("equalsString-cpu-arguments-slope", 52998)
+                , ("equalsString-memory-arguments", 1)
+                , ("fstPair-cpu-arguments", 80436)
+                , ("fstPair-memory-arguments", 32)
+                , ("headList-cpu-arguments", 43249)
+                , ("headList-memory-arguments", 32)
+                , ("iData-cpu-arguments", 1000)
+                , ("iData-memory-arguments", 32)
+                , ("ifThenElse-cpu-arguments", 80556)
+                , ("ifThenElse-memory-arguments", 1)
+                , ("indexByteString-cpu-arguments", 57667)
+                , ("indexByteString-memory-arguments", 4)
+                , ("lengthOfByteString-cpu-arguments", 1000)
+                , ("lengthOfByteString-memory-arguments", 10)
+                , ("lessThanByteString-cpu-arguments-intercept", 197145)
+                , ("lessThanByteString-cpu-arguments-slope", 156)
+                , ("lessThanByteString-memory-arguments", 1)
+                , ("lessThanEqualsByteString-cpu-arguments-intercept", 197145)
+                , ("lessThanEqualsByteString-cpu-arguments-slope", 156)
+                , ("lessThanEqualsByteString-memory-arguments", 1)
+                , ("lessThanEqualsInteger-cpu-arguments-intercept", 204924)
+                , ("lessThanEqualsInteger-cpu-arguments-slope", 473)
+                , ("lessThanEqualsInteger-memory-arguments", 1)
+                , ("lessThanInteger-cpu-arguments-intercept", 208896)
+                , ("lessThanInteger-cpu-arguments-slope", 511)
+                , ("lessThanInteger-memory-arguments", 1)
+                , ("listData-cpu-arguments", 52467)
+                , ("listData-memory-arguments", 32)
+                , ("mapData-cpu-arguments", 64832)
+                , ("mapData-memory-arguments", 32)
+                , ("mkCons-cpu-arguments", 65493)
+                , ("mkCons-memory-arguments", 32)
+                , ("mkNilData-cpu-arguments", 22558)
+                , ("mkNilData-memory-arguments", 32)
+                , ("mkNilPairData-cpu-arguments", 16563)
+                , ("mkNilPairData-memory-arguments", 32)
+                , ("mkPairData-cpu-arguments", 76511)
+                , ("mkPairData-memory-arguments", 32)
+                , ("modInteger-cpu-arguments-constant", 196500)
+                , ("modInteger-cpu-arguments-model-arguments-intercept", 453240)
+                , ("modInteger-cpu-arguments-model-arguments-slope", 220)
+                , ("modInteger-memory-arguments-intercept", 0)
+                , ("modInteger-memory-arguments-minimum", 1)
+                , ("modInteger-memory-arguments-slope", 1)
+                , ("multiplyInteger-cpu-arguments-intercept", 69522)
+                , ("multiplyInteger-cpu-arguments-slope", 11687)
+                , ("multiplyInteger-memory-arguments-intercept", 0)
+                , ("multiplyInteger-memory-arguments-slope", 1)
+                , ("nullList-cpu-arguments", 60091)
+                , ("nullList-memory-arguments", 32)
+                , ("quotientInteger-cpu-arguments-constant", 196500)
+                , ("quotientInteger-cpu-arguments-model-arguments-intercept", 453240)
+                , ("quotientInteger-cpu-arguments-model-arguments-slope", 220)
+                , ("quotientInteger-memory-arguments-intercept", 0)
+                , ("quotientInteger-memory-arguments-minimum", 1)
+                , ("quotientInteger-memory-arguments-slope", 1)
+                , ("remainderInteger-cpu-arguments-constant", 196500)
+                , ("remainderInteger-cpu-arguments-model-arguments-intercept", 453240)
+                , ("remainderInteger-cpu-arguments-model-arguments-slope", 220)
+                , ("remainderInteger-memory-arguments-intercept", 0)
+                , ("remainderInteger-memory-arguments-minimum", 1)
+                , ("remainderInteger-memory-arguments-slope", 1)
+                , ("serialiseData-cpu-arguments-intercept", 1159724)
+                , ("serialiseData-cpu-arguments-slope", 392670)
+                , ("serialiseData-memory-arguments-intercept", 0)
+                , ("serialiseData-memory-arguments-slope", 2)
+                , ("sha2_256-cpu-arguments-intercept", 806990)
+                , ("sha2_256-cpu-arguments-slope", 30482)
+                , ("sha2_256-memory-arguments", 4)
+                , ("sha3_256-cpu-arguments-intercept", 1927926)
+                , ("sha3_256-cpu-arguments-slope", 82523)
+                , ("sha3_256-memory-arguments", 4)
+                , ("sliceByteString-cpu-arguments-intercept", 265318)
+                , ("sliceByteString-cpu-arguments-slope", 0)
+                , ("sliceByteString-memory-arguments-intercept", 4)
+                , ("sliceByteString-memory-arguments-slope", 0)
+                , ("sndPair-cpu-arguments", 85931)
+                , ("sndPair-memory-arguments", 32)
+                , ("subtractInteger-cpu-arguments-intercept", 205665)
+                , ("subtractInteger-cpu-arguments-slope", 812)
+                , ("subtractInteger-memory-arguments-intercept", 1)
+                , ("subtractInteger-memory-arguments-slope", 1)
+                , ("tailList-cpu-arguments", 41182)
+                , ("tailList-memory-arguments", 32)
+                , ("trace-cpu-arguments", 212342)
+                , ("trace-memory-arguments", 32)
+                , ("unBData-cpu-arguments", 31220)
+                , ("unBData-memory-arguments", 32)
+                , ("unConstrData-cpu-arguments", 32696)
+                , ("unConstrData-memory-arguments", 32)
+                , ("unIData-cpu-arguments", 43357)
+                , ("unIData-memory-arguments", 32)
+                , ("unListData-cpu-arguments", 32247)
+                , ("unListData-memory-arguments", 32)
+                , ("unMapData-cpu-arguments", 38314)
+                , ("unMapData-memory-arguments", 32)
+                , ("verifyEcdsaSecp256k1Signature-cpu-arguments", 35892428)
+                , ("verifyEcdsaSecp256k1Signature-memory-arguments", 10)
+                , ("verifyEd25519Signature-cpu-arguments-intercept", 57996947)
+                , ("verifyEd25519Signature-cpu-arguments-slope", 18975)
+                , ("verifyEd25519Signature-memory-arguments", 10)
+                , ("verifySchnorrSecp256k1Signature-cpu-arguments-intercept", 38887044)
+                , ("verifySchnorrSecp256k1Signature-cpu-arguments-slope", 32947)
+                , ("verifySchnorrSecp256k1Signature-memory-arguments", 10)
+                ]
+        , protocolParamPrices =
+            Just (ExecutionUnitPrices{priceExecutionSteps = 721 % 10000000, priceExecutionMemory = 577 % 10000})
+        , protocolParamMaxTxExUnits = Just (ExecutionUnits{executionSteps = 10000000000, executionMemory = 14000000})
+        , protocolParamMaxBlockExUnits = Just (ExecutionUnits{executionSteps = 40000000000, executionMemory = 62000000})
+        , protocolParamMaxValueSize = Just 5000
+        , protocolParamCollateralPercent = Just 150
+        , protocolParamMaxCollateralInputs = Just 3
+        , protocolParamUTxOCostPerByte = Just (Lovelace 4310)
+        }

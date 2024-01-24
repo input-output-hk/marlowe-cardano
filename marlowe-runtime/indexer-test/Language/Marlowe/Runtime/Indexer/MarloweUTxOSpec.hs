@@ -7,8 +7,6 @@ module Language.Marlowe.Runtime.Indexer.MarloweUTxOSpec (
 ) where
 
 import Cardano.Api (
-  CardanoMode,
-  ConsensusMode (CardanoMode),
   EraHistory (EraHistory),
   SystemStart (SystemStart),
  )
@@ -23,8 +21,9 @@ import Data.Functor (($>), (<&>))
 import Data.List (nub)
 import qualified Data.Map as Map
 import Data.Maybe (isJust, mapMaybe, maybeToList)
+import Data.SOP.BasicFunctors (K (..))
 import Data.SOP.Counting (Exactly (..))
-import Data.SOP.Strict (K (..), NP (..))
+import Data.SOP.Strict (NP (..))
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Time (secondsToNominalDiffTime)
@@ -232,9 +231,9 @@ addInput MarloweApplyInputsTransaction{..} utxo =
     { unspentContractOutputs = Map.insert (Core.contractId marloweTransaction) marloweInput $ unspentContractOutputs utxo
     }
 
-eraHistory :: EraHistory CardanoMode
+eraHistory :: EraHistory
 eraHistory =
-  EraHistory CardanoMode $
+  EraHistory $
     mkInterpreter $
       summaryWithExactly $
         Exactly $

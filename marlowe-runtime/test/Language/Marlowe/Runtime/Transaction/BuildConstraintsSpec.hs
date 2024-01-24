@@ -7,9 +7,8 @@ module Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec (
   spec,
 ) where
 
-import Cardano.Api (BabbageEra, ConsensusMode (..), EraHistory (EraHistory), SlotNo (SlotNo))
+import Cardano.Api (BabbageEra, BabbageEraOnwards (..), EraHistory (EraHistory), SlotNo (SlotNo))
 import qualified Cardano.Api as C
-import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import Control.Monad.Trans.Except (runExcept, runExceptT)
 import Data.Function (on)
 import Data.Functor ((<&>))
@@ -18,8 +17,9 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Map.NonEmpty as NEMap
 import Data.Maybe (fromJust, maybeToList)
+import Data.SOP.BasicFunctors (K (..))
 import Data.SOP.Counting (Exactly (..))
-import Data.SOP.Strict (K (..), NP (..))
+import Data.SOP.Strict (NP (..))
 import qualified Data.Set as Set
 import Data.Time (UTCTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
@@ -268,7 +268,7 @@ runBuildCreateConstraints CreateArgs{..} =
       ( buildCreateConstraints
           -- Since we don't actually run the script, we can just return empty bytes
           (\_ _ -> pure testMintingValidator)
-          ReferenceTxInsScriptsInlineDatumsInBabbageEra
+          BabbageEraOnwardsBabbage
           version
           walletContext
           threadName
@@ -418,7 +418,7 @@ buildApplyInputsConstraintsSpec =
             , eraParams
             }
         eraHistory =
-          EraHistory CardanoMode
+          EraHistory
             . mkInterpreter
             . summaryWithExactly
             $ Exactly
