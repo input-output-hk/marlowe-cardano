@@ -15,7 +15,6 @@ in
 
 
   packages = [
-    cabalProject.hsPkgs.cardano-addresses-cli.components.exes.cardano-address
     cabalProject.hsPkgs.hspec-golden.components.exes.hgold
 
     repoRoot.nix.marlowe-cardano.cardano-tools.cardano-node

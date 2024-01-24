@@ -41,7 +41,6 @@ For convenience, several Cardano tools and other utilities are built and availab
 $ which cardano-node cardano-cli cardano-address sqitch
 /nix/store/...-cardano-node-exe-cardano-node-.../bin/cardano-node
 /nix/store/...-cardano-cli-exe-cardano-cli-.../bin/cardano-cli
-/nix/store/...-cardano-addresses-cli-exe-cardano-address-.../bin/cardano-address
 /nix/store/...-sqitch-pg-.../bin/sqitch
 ```
 

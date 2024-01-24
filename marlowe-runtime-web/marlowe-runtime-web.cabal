@@ -64,7 +64,7 @@ library
     Language.Marlowe.Runtime.Web.Orphans
 
   build-depends:
-    , aeson >=2 && <3
+    , aeson ^>=2.2
     , base >=4.9 && <5
     , base16 ^>=0.3.2
     , bytestring >=0.10.12 && <0.12
@@ -78,15 +78,15 @@ library
     , openapi3 >=3.2 && <4
     , parsec ^>=3.1.14
     , pipes ^>=4.3.16
-    , plutus-ledger-api ^>=1.5
-    , servant ^>=0.19
-    , servant-client ^>=0.19
-    , servant-client-core ^>=0.19
+    , plutus-ledger-api ^>=1.15
+    , servant ^>=0.20
+    , servant-client ^>=0.20
+    , servant-client-core ^>=0.20
     , servant-openapi3 ^>=2.0
     , servant-pagination >=2.5 && <3
-    , servant-pipes ^>=0.15.3
-    , servant-server ^>=0.19
-    , text ^>=1.2
+    , servant-pipes ^>=0.16
+    , servant-server ^>=0.20
+    , text ^>=2.0
     , time >=1.9 && <2
     , wai >=3.2 && <4
 
@@ -116,17 +116,17 @@ library server
     Paths_marlowe_runtime_web
 
   build-depends:
-    , aeson >=2 && <3
+    , aeson ^>=2.2
     , async >=2.2 && <3
     , async-components ==0.1.1.0
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
-    , cardano-api ^>=8.2
-    , cardano-ledger-alonzo ^>=1.2
-    , cardano-ledger-binary ^>=1.1
-    , cardano-ledger-core ^>=1.2
-    , cardano-ledger-shelley ^>=1.2
-    , co-log >=0.5.0.0 && <0.6.0.0
+    , cardano-api ^>=8.37
+    , cardano-ledger-alonzo ^>=1.5
+    , cardano-ledger-binary ^>=1.2
+    , cardano-ledger-core ^>=1.9
+    , cardano-ledger-shelley ^>=1.8
+    , co-log ^>=0.6
     , containers ^>=0.6.5
     , errors >=2.3 && <3
     , eventuo11y >=0.9 && <0.11
@@ -149,16 +149,16 @@ library server
     , nonempty-containers ^>=0.3.4
     , openapi3 >=3.2 && <4
     , pipes ^>=4.3.16
-    , plutus-ledger-api ^>=1.5
-    , servant ^>=0.19
+    , plutus-ledger-api ^>=1.15
+    , servant ^>=0.20
     , servant-openapi3 ^>=2.0
     , servant-pagination >=2.5 && <3
-    , servant-pipes ^>=0.15.3
-    , servant-server ^>=0.19
+    , servant-pipes ^>=0.16
+    , servant-server ^>=0.20
     , stm ^>=2.5
     , stm-delay ^>=0.1.1
     , string-conversions ^>=0.4
-    , text ^>=1.2
+    , text ^>=2.0
     , time >=1.9 && <2
     , transformers-base ^>=0.4
     , unliftio-core ^>=0.2
@@ -176,10 +176,10 @@ executable marlowe-web-server
   build-depends:
     , async-components ==0.1.1.0
     , base >=4.9 && <5
-    , co-log >=0.5.0.0 && <0.6.0.0
+    , co-log ^>=0.6
     , eventuo11y >=0.9 && <0.11
     , eventuo11y-otel ^>=0.1
-    , hs-opentelemetry-sdk ==0.0.3.4
+    , hs-opentelemetry-sdk ^>=0.0.3
     , http-types
     , marlowe-client
     , marlowe-protocols
@@ -188,7 +188,7 @@ executable marlowe-web-server
     , mtl >=2.2 && <3
     , network
     , optparse-applicative
-    , text ^>=1.2
+    , text ^>=2.0
     , unliftio ^>=0.2.1
     , wai >=3.2 && <4
     , warp
@@ -201,7 +201,7 @@ test-suite marlowe-runtime-web-test
   type:           exitcode-stdio-1.0
   main-is:        Spec.hs
   build-depends:
-    , aeson >=2 && <3
+    , aeson ^>=2.2
     , aeson-pretty
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
@@ -221,6 +221,6 @@ test-suite marlowe-runtime-web-test
     , regex-posix
     , servant
     , servant-openapi3
-    , text ^>=1.2
+    , text ^>=2.0
 
   ghc-options:    -threaded

@@ -94,9 +94,9 @@ executable marlowe-integration-tests
     , base >=4.9 && <5
     , base16
     , bytestring
-    , cardano-api ^>=8.2
+    , cardano-api ^>=8.37
     , cardano-ledger-babbage
-    , co-log >=0.5.0.0 && <0.6.0.0
+    , co-log ^>=0.6
     , containers
     , deepseq
     , eventuo11y-extras

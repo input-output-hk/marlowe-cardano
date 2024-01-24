@@ -14,10 +14,10 @@ repository cardano-haskell-packages
 -- We duplicate the hackage index-state first for haskell.nix, even though cabal ignores it.
 -- This must always match the hackage index-state on the next line.
 -- See https://github.com/input-output-hk/haskell.nix/issues/1869#issuecomment-1449272480
-index-state: 2024-01-01T00:00:00Z
+index-state: 2024-02-01T00:00:00Z
 index-state:
-  , hackage.haskell.org      2024-01-01T00:00:00Z
-  , cardano-haskell-packages 2024-01-01T00:00:00Z
+  , hackage.haskell.org      2024-02-01T00:00:00Z
+  , cardano-haskell-packages 2024-02-01T00:00:00Z
 
 packages:
   async-components
@@ -25,7 +25,7 @@ packages:
   eventuo11y-extras
   hasql-dynamic-syntax
   marlowe
-  marlowe-actus
+  -- marlowe-actus
   marlowe-apps
   marlowe-benchmark
   marlowe-chain-sync
@@ -196,8 +196,7 @@ source-repository-package
   location: https://github.com/input-output-hk/cardano-addresses
   tag: 0b66b8ad3703ab349414de58f3503843dfb22a1e
   --sha256: sha256-69iE7LrigHTSKJrgq6uGU+U4j+NtBwR4ae18vsLyVvI=
-  subdir: command-line
-          core
+  subdir: core
 
 -- These constraints needed for plutus-apps
 constraints:
@@ -205,11 +204,32 @@ constraints:
   -- failures when other packages depend on cryptonite.
   -- Can be removed when this is resolved: https://github.com/snoyberg/http-client/issues/508
   http-client-tls < 0.3.6.2,
-  text ^>=1.2
+  ouroboros-network-framework ==0.10.1.0
+
+allow-newer:
+  primitive,
+  optparse-applicative
+
+
+-- source-repository-package
+--   type: git
+--   location: https://github.com/input-output-hk/actus-core
+--   tag: 3bddfeb838c695adf2c6689b3beda3ef1019de7
+--   --sha256: 12pahjijkym93sm1qh9l9jw6wlv3vf46l73hpdwrm25rz195hi47
 
 
 source-repository-package
-  type: git
-  location: https://github.com/input-output-hk/actus-core
-  tag: 3bddfeb838c695adf2c6689b3beda3ef1019de7
-  --sha256: 12pahjijkym93sm1qh9l9jw6wlv3vf46l73hpdwrm25rz195hi47
+   type: git
+   location: https://github.com/input-output-hk/marlowe
+   tag: 0ce78a4a94b093130393c836faeb4f825dd3ee93
+   subdir: marlowe-spec-test
+           isabelle
+   --sha256: 0ax86ascypf8z26zgwx6bdgv0w21y2mkw55i77da9jpw9g94sxg5
+
+
+source-repository-package
+   type: git
+   location: https://github.com/intersectMBO/cardano-api
+   tag: 8a539a8e63d8c410a329e3bc028d8339f32e4c8f
+   subdir: cardano-api
+   --sha256: 0r2zi4is8ayjryq80b144zcfl95ylx60gjp9n1qdcr1hcyrm76aj
