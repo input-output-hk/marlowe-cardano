@@ -15,6 +15,7 @@ The following tools must be on the `PATH`:
 - `gawk`
 - `sed`
 - `bc`
+- `curl`
 
 
 ## 0. Select the network
@@ -23,6 +24,12 @@ In this example, we use the `preprod` network.
 
 ```bash
 cd preprod
+mkdir -p config
+for f in {config,topology,byron-genesis,shelley-genesis,alonzo-genesis}.json
+do
+  curl https://raw.githubusercontent.com/IntersectMBO/cardano-world/master/docs/environments/preprod/$f -o config/$f
+done
+mv config/{config,node}.json
 ```
 
 ## 1. Make the database folders
