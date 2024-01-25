@@ -10,6 +10,7 @@
 --
 -----------------------------------------------------------------------------
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -23,7 +24,7 @@ module Language.Marlowe.CLI.IO (
   decodeFileStrict,
   getEraHistory,
   getProtocolParams,
-  getProtocolVersion,
+  getMajorProtocolVersion,
   getPV2CostModelParams,
   getSystemStart,
   maybeWriteJson,
@@ -54,20 +55,23 @@ module Language.Marlowe.CLI.IO (
 
 import Cardano.Api (
   AsType (..),
-  CardanoMode,
-  ConsensusModeIsMultiEra (..),
+  BabbageEraOnwards (..),
   File (..),
   FromSomeType (..),
   HasTextEnvelope,
   LocalNodeConnectInfo,
+  MaryEraOnwards (..),
   NetworkId (..),
   NetworkMagic (..),
-  QueryInEra (QueryInShelleyBasedEra),
+  QueryInEra (..),
   QueryInMode (..),
   QueryInShelleyBasedEra (..),
   ScriptDataJsonSchema (..),
+  ShelleyBasedEra (..),
   TxMetadataInEra (..),
   TxMetadataJsonSchema (..),
+  babbageEraOnwardsToShelleyBasedEra,
+  fromLedgerPParams,
   getScriptData,
   getTxId,
   metadataFromJson,
@@ -75,8 +79,10 @@ import Cardano.Api (
   readFileTextEnvelopeAnyOf,
   scriptDataFromJson,
   serialiseToTextEnvelope,
+  shelleyBasedEraConstraints,
   signShelleyTransaction,
   submitTxToNodeLocal,
+  toLedgerValue,
   writeFileTextEnvelope,
  )
 import Cardano.Api.Shelley (ProtocolParameters (protocolParamProtocolVersion), toPlutusData)
@@ -103,7 +109,7 @@ import Data.Set qualified as Set
 import Data.Time.Units (Second, TimeUnit, toMicroseconds)
 import Data.Yaml as Yaml (decodeFileEither, encode, encodeFile)
 import GHC.Natural (naturalFromInteger)
-import Language.Marlowe.CLI.Cardano.Api (toPlutusProtocolVersion, withShelleyBasedEra)
+import Language.Marlowe.CLI.Cardano.Api (toPlutusMajorProtocolVersion)
 import Language.Marlowe.CLI.Types (
   CliEnv,
   CliError (..),
@@ -121,15 +127,10 @@ import Language.Marlowe.CLI.Types (
   asksEra,
   somePaymentSigningKeyToTxWitness,
   toAddressAny',
-  toEraInMode,
-  toMultiAssetSupportedInEra,
-  toShelleyBasedEra,
-  toTxMetadataSupportedInEra,
-  withCardanoEra,
  )
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult (..))
 import PlutusCore.Evaluation.Machine.ExBudgetingDefaults (defaultCostModelParams)
-import PlutusLedgerApi.Common (ProtocolVersion)
+import PlutusLedgerApi.Common (MajorProtocolVersion)
 import PlutusLedgerApi.V1 (BuiltinData)
 import PlutusLedgerApi.V2 (CostModelParams)
 import PlutusTx (dataToBuiltinData)
@@ -280,7 +281,7 @@ readMaybeMetadata
 readMaybeMetadata file =
   do
     metadata <- mapM decodeFileStrict file
-    era <- asksEra toTxMetadataSupportedInEra
+    era <- asksEra babbageEraOnwardsToShelleyBasedEra
     maybe
       (pure TxMetadataNone)
       (fmap (TxMetadataInEra era) . liftCli . metadataFromJson TxMetadataJsonNoSchema)
@@ -313,7 +314,7 @@ queryInEra
   :: (MonadError CliError m)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
-  => LocalNodeConnectInfo CardanoMode
+  => LocalNodeConnectInfo
   -- ^ The connection info for the local node.
   -> QueryInShelleyBasedEra era a
   -- ^ The query.
@@ -324,8 +325,8 @@ queryInEra connection q = do
   res <-
     liftCliIO $
       queryNodeLocalState connection Nothing $
-        QueryInEra (toEraInMode era) $
-          QueryInShelleyBasedEra (toShelleyBasedEra era) q
+        QueryInEra $
+          QueryInShelleyBasedEra (babbageEraOnwardsToShelleyBasedEra era) q
   liftCli res
 
 queryUTxOs
@@ -370,10 +371,12 @@ getProtocolParams
   => (MonadReader (CliEnv era) m)
   => QueryExecutionContext era
   -> m C.ProtocolParameters
-getProtocolParams (QueryNode connection) = queryInEra connection QueryProtocolParameters
+getProtocolParams (QueryNode connection) = do
+  era <- asksEra babbageEraOnwardsToShelleyBasedEra
+  fromLedgerPParams era <$> queryInEra connection QueryProtocolParameters
 getProtocolParams (PureQueryContext _ NodeStateInfo{nsiProtocolParameters}) = pure nsiProtocolParameters
 
-queryAny :: (MonadError CliError m, MonadIO m) => LocalNodeConnectInfo mode -> QueryInMode mode a -> m a
+queryAny :: (MonadError CliError m, MonadIO m) => LocalNodeConnectInfo -> QueryInMode a -> m a
 queryAny connection = liftCliIO . queryNodeLocalState connection Nothing
 
 getSystemStart
@@ -388,19 +391,19 @@ getEraHistory
   :: (MonadError CliError m)
   => (MonadIO m)
   => QueryExecutionContext era
-  -> m (C.EraHistory C.CardanoMode)
-getEraHistory (QueryNode connection) = queryAny connection $ QueryEraHistory CardanoModeIsMultiEra
+  -> m C.EraHistory
+getEraHistory (QueryNode connection) = queryAny connection QueryEraHistory
 getEraHistory (PureQueryContext _ NodeStateInfo{nsiEraHistory}) = pure nsiEraHistory
 
-getProtocolVersion
+getMajorProtocolVersion
   :: (MonadError CliError m)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
   => QueryExecutionContext era
-  -> m ProtocolVersion
-getProtocolVersion queryCtx = do
+  -> m MajorProtocolVersion
+getMajorProtocolVersion queryCtx = do
   protocol <- getProtocolParams queryCtx
-  pure $ toPlutusProtocolVersion $ protocolParamProtocolVersion protocol
+  pure $ toPlutusMajorProtocolVersion $ protocolParamProtocolVersion protocol
 
 getPV2CostModelParams
   :: (MonadError CliError m)
@@ -422,7 +425,7 @@ waitForUtxos
   => (MonadError CliError m)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
-  => LocalNodeConnectInfo CardanoMode
+  => LocalNodeConnectInfo
   -- ^ The connection info for the local node.
   -> a
   -- ^ The time interval to wait for the transaction to be confirmed.
@@ -450,12 +453,17 @@ waitForUtxos connection timeout txIns = do
   go . ceiling $ (fromIntegral timeoutMicroseconds / fromIntegral pauseMicroseconds :: Double)
 
 txResourceUsage
-  :: C.ScriptDataSupportedInEra era
+  :: C.BabbageEraOnwards era
   -> C.ProtocolParameters
   -> C.TxBody era
   -> TxResourceUsage
 txResourceUsage era pp txBody =
-  let size = naturalFromInteger $ toInteger $ BS.length $ withCardanoEra era $ C.serialiseToCBOR txBody
+  let size =
+        naturalFromInteger $
+          toInteger $
+            BS.length $
+              shelleyBasedEraConstraints (babbageEraOnwardsToShelleyBasedEra era) $
+                C.serialiseToCBOR txBody
       maxSize = C.protocolParamMaxTxSize pp
       fractionSize = 100 * size `div` maxSize
 
@@ -471,7 +479,7 @@ txResourceUsage era pp txBody =
         }
 
 checkTxLimits
-  :: C.ScriptDataSupportedInEra era
+  :: C.BabbageEraOnwards era
   -- ^ The era to serialise the transaction in.
   -> C.ProtocolParameters
   -- ^ The protocol params to check against.
@@ -508,19 +516,15 @@ submitTxBody
 submitTxBody txBuildupContext txBody signings =
   do
     era <- askEra
-    let tx =
-          withShelleyBasedEra era $
-            signShelleyTransaction txBody $
-              somePaymentSigningKeyToTxWitness <$> signings
+    let shelleyEra = babbageEraOnwardsToShelleyBasedEra era
+        tx =
+          signShelleyTransaction shelleyEra txBody $
+            somePaymentSigningKeyToTxWitness <$> signings
         txId = getTxId txBody
     case txBuildupContext of
       (NodeTxBuildup _ DontSubmit) -> pure txId
       (NodeTxBuildup connection (DoSubmit timeout)) -> do
-        result <-
-          liftIO
-            . submitTxToNodeLocal connection
-            . C.TxInMode tx
-            $ toEraInMode era
+        result <- liftIO . submitTxToNodeLocal connection $ C.TxInMode shelleyEra tx
         case result of
           SubmitSuccess -> do
             when (toMicroseconds timeout > 0) $
@@ -597,7 +601,17 @@ submitTxBody' txBuildupCtx body bodyContent changeAddress signingKeys = do
         step (C.TxOut addr value datum refScript) (False, outs)
           | addr == changeAddress && (fromMaybe 0 . C.valueToLovelace $ C.txOutValueToValue value) > feeBalancingMargin = do
               let value' = C.txOutValueToValue value <> C.negateValue (C.lovelaceToValue feeBalancingMargin)
-                  out' = C.TxOut addr (C.TxOutValue (toMultiAssetSupportedInEra era) value') datum refScript
+                  out' =
+                    C.TxOut
+                      addr
+                      ( case era of
+                          BabbageEraOnwardsBabbage ->
+                            C.TxOutValueShelleyBased ShelleyBasedEraBabbage $ toLedgerValue MaryEraOnwardsBabbage value'
+                          BabbageEraOnwardsConway ->
+                            C.TxOutValueShelleyBased ShelleyBasedEraConway $ toLedgerValue MaryEraOnwardsConway value'
+                      )
+                      datum
+                      refScript
               (True, out' : outs)
         step out (flag, outs) = (flag, out : outs)
 
@@ -607,7 +621,9 @@ submitTxBody' txBuildupCtx body bodyContent changeAddress signingKeys = do
       (True, C.TxFeeExplicit feesInEra value) -> pure $ C.TxFeeExplicit feesInEra (value + feeBalancingMargin)
       _ -> throwError . CliError $ "Unable to adjust the change during resubmission attempt."
 
-    withCardanoEra era $ case C.createAndValidateTransactionBody (C.TxBodyContent{..}{C.txOuts = txOuts', C.txFee = txFee'}) of
+    case C.createAndValidateTransactionBody
+      (babbageEraOnwardsToShelleyBasedEra era)
+      (C.TxBodyContent{..}{C.txOuts = txOuts', C.txFee = txFee'}) of
       Left err' -> throwError . CliError $ "Failure during reconstruction of the failing tx body: " <> show err'
       Right body' -> do
         txId <- submitTxBody txBuildupCtx body' signingKeys

@@ -83,8 +83,6 @@ library
     Language.Marlowe.CLI.Merkle
     Language.Marlowe.CLI.Orphans
     Language.Marlowe.CLI.Run
-    Language.Marlowe.CLI.Sync
-    Language.Marlowe.CLI.Sync.Types
     Language.Marlowe.CLI.Transaction
     Language.Marlowe.CLI.Types
     Paths_marlowe_cli
@@ -105,16 +103,13 @@ library
     , cardano-ledger-shelley
     , cardano-slotting
     , cborg
-    , cborg-json
     , containers
-    , data-default
     , directory
     , errors
     , extra
     , indexed-traversable
     , marlowe-cardano
     , megaparsec
-    , memory
     , mtl
     , ouroboros-consensus
     , ouroboros-network-protocols
