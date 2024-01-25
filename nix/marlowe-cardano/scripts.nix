@@ -29,7 +29,5 @@ in
     chmod u+w marlowe/scripts/*
   '';
 
-  marlowe-runtime-cli = mkCabalExeScript "marlowe-runtime-cli";
-
   marlowe-cli = mkCabalExeScript "marlowe-cli";
 }

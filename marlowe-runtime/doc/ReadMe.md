@@ -19,7 +19,7 @@ See [eventuo11y-extras](../eventuo11y-extras).
 
 ## Architecture
 
-The backend for Marlowe runtime consists of a chain-indexing and query service (`marlowe-chain-indexer` / `marlowe-chain-sync`), a contract-indexing and query service for Marlowe contracts (`marlowe-indexer` / `marlowe-sync`), and a transaction-creation service for Marlowe contracts (`marlowe-tx`). These backend services operate in concert and rely upon [cardano-node](https://github.com/input-output-hk/cardano-node/blob/master/README.rst) for blockchain connectivity and upon [PostgreSQL](https://www.postgresql.org/) for persistent storage. Access to the backend services is provided via a command-line client (`marlowe-runtime-cli`), an AWS Lambda function (`marlowe-lambda`), or a REST/WebSocket server (`web-server`) that uses JSON payloads. Web applications can integrate with a [CIP-30 light wallet](https://cips.cardano.org/cips/cip30/) for transaction signing, whereas enterprise applications can integrate with [cardano-wallet](https://github.com/input-output-hk/cardano-wallet/blob/master/README.md), [cardano-cli](https://github.com/input-output-hk/cardano-node/blob/master/cardano-cli/README.md), or [cardano-hw-cli](https://github.com/vacuumlabs/cardano-hw-cli/blob/develop/README.md) for signing transactions.
+The backend for Marlowe runtime consists of a chain-indexing and query service (`marlowe-chain-indexer` / `marlowe-chain-sync`), a contract-indexing and query service for Marlowe contracts (`marlowe-indexer` / `marlowe-sync`), and a transaction-creation service for Marlowe contracts (`marlowe-tx`). These backend services operate in concert and rely upon [cardano-node](https://github.com/input-output-hk/cardano-node/blob/master/README.rst) for blockchain connectivity and upon [PostgreSQL](https://www.postgresql.org/) for persistent storage. Access to the backend services is provided via a REST/WebSocket server (`web-server`) that uses JSON payloads. Web applications can integrate with a [CIP-30 light wallet](https://cips.cardano.org/cips/cip30/) for transaction signing, whereas enterprise applications can integrate with [cardano-wallet](https://github.com/input-output-hk/cardano-wallet/blob/master/README.md), [cardano-cli](https://github.com/input-output-hk/cardano-node/blob/master/cardano-cli/README.md), or [cardano-hw-cli](https://github.com/vacuumlabs/cardano-hw-cli/blob/develop/README.md) for signing transactions.
 
 ![Marlowe Runtime ecosystem](diagrams/ecosystem.png)
 
@@ -71,29 +71,6 @@ The *command* API, accessible over a TCP socket, provides the following capabili
 - Submit a transaction to the Cardano node.
 
 See `marlowe-tx`'s [help page](marlowe-tx.md) for more information.
-
-
-## Command-Line Interface
-
-The `marlowe-runtime-cli` executable provides a command-line interface to interacting with Marlowe Runtime services. All communication is via TCP sockets with a Haskell-centric serialization format. It can be used to discover, query, create, apply inputs, withdraw, or submit Marlowe transactions. Note that it does not support private-key management and it defers signing to external tools such as [cardano-wallet](https://github.com/input-output-hk/cardano-wallet/blob/master/README.md), [cardano-cli](https://github.com/input-output-hk/cardano-node/blob/master/cardano-cli/README.md), or [cardano-hw-cli](https://github.com/vacuumlabs/cardano-hw-cli/blob/develop/README.md).
-
-See `marlowe-tx`'s various [help pages](marlowe-tx.md) for more information, or the tutorial for Marlowe runtime [as a Jupyter notebook](tutorial.ipynb) or in [markdown format](tutorial.md). There are more examples [here](https://github.com/input-output-hk/real-world-marlowe/tree/main/archives/marlowe-runtime/examples/).
-- Building transactions
-	- [Create a contract](marlowe/create.md)
-	- [Advance a contract through a timeout](marlowe/advance.md)
-	- [Apply a choice to a contract](marlowe/choose.md)
-	- [Deposit funds into a contract](marlowe/deposit.md)
-	- [Notify a contract](marlowe/notify.md)
-	- [Apply multiple inputs to a contract](marlowe/apply.md)
-	- [Withdraw funds paid by a contract](marlowe/withdraw.md)
-- Submitting transactions
-	- [Submit a signed transaction to the node](marlowe/submit.md)
-- Querying history
-	- [List the contracts being tracked](marlowe/ls.md)
-	- [Add a contract to the set of tracked contracts](marlowe/add.md)
-	- [Remove a contract from the set of tracked contracts](marlowe/rm.md)
-	- [Output the History of a contract](marlowe/log.md)
-
 
 ## Web Services
 

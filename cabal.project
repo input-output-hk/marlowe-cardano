@@ -37,7 +37,6 @@ packages:
   marlowe-object
   marlowe-protocols
   marlowe-runtime
-  marlowe-runtime-cli
   marlowe-runtime-web
   marlowe-test
 
@@ -130,9 +129,6 @@ package marlowe-protocols
   ghc-options: -Werror
 
 package marlowe-runtime
-  ghc-options: -Werror
-
-package marlowe-runtime-cli
   ghc-options: -Werror
 
 package marlowe-runtime-web

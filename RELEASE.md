@@ -12,7 +12,7 @@ release (i.e. the most recent tag on `main`) is: a prerelease or a normal releas
 
 For the `runtime` component, increment the version numbers in
 `marlowe-chain-sync.cabal`, `marlowe-runtime.cabal`, `marlowe-runtime-web.cabal`,
-`marlowe-client.cabal`, and `marlowe-runtime-cli.cabal` as prescribed by semantic
+and `marlowe-client.cabal` as prescribed by semantic
 versioning. Given a version number scheme `major.minor.patch`:
 
 - For API-preserving changes that do not add functionality, increment the `patch` number by one.
@@ -103,8 +103,7 @@ Create a new release on GitHub that points to the release tag. Include a
 high-level summary description and a detailed change log (from the main
 changelog).
 
-Attach the binary files for the CLI tools (`marlowe-cli` and `marlowe-runtime-cli`) to the
-release for Mac and Linux.
+Attach the binary files for the CLI tools to the release for Mac and Linux.
 
 ## Step 8: Update documentation
 
