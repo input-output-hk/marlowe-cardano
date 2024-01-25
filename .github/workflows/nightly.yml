@@ -74,7 +74,6 @@ jobs:
 
       - name: Run Marlowe Benchmark on Preview
         run: |
-          mkfifo node.socket
           nix run nixpkgs#socat -- UNIX-LISTEN:node.socket,fork,reuseaddr,unlink-early TCP:cardano-node-preview.scdev.aws.iohkdev.io:8090 &
           nix run .#marlowe-benchmark -- \
             --host marlowe-runtime-preview.scdev.aws.iohkdev.io \
