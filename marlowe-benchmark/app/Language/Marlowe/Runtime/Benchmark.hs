@@ -17,7 +17,7 @@ import Data.Time.Clock (getCurrentTime)
 import Data.Word (Word8)
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.ChainSync.Api (Address)
-import System.Directory (removeFile)
+import System.Directory (doesFileExist, removeFile)
 import System.IO (hPutStrLn, stderr)
 
 import qualified Cardano.Api as C
@@ -84,7 +84,11 @@ measure
   -> MarloweT IO ()
 measure BenchmarkConfig{..} faucet out =
   do
-    maybe (pure ()) (liftIO . removeFile) out
+    liftIO $
+      maybe
+        (pure ())
+        (\out' -> do exists <- doesFileExist out'; when exists $ removeFile out')
+        out
     let report x =
           liftIO $ case out of
             Nothing -> mapM_ (LBS8.putStrLn . A.encode) x

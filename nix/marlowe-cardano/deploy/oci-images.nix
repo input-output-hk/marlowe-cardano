@@ -58,21 +58,17 @@ let
       name = "marlowe-web-server";
       description = "An HTTP server for the Marlowe Runtime, exposing a REST API.";
     };
+    marlowe-benchmark = mkImage {
+      name = "marlowe-benchmark";
+      description = "A benchmarking tool for Marlowe Runtime.";
+    };
     marlowe-pipe = mkImage {
       name = "marlowe-pipe";
       description = "A streaming command processor for the Marlowe Runtime.";
     };
-    marlowe-scaling = mkImage {
-      name = "marlowe-scaling";
-      description = "A scale-testing client for the Marlowe Runtime.";
-    };
     marlowe-oracle = mkImage {
       name = "marlowe-oracle";
       description = "A general-purpose oracle for Marlowe contracts.";
-    };
-    marlowe-finder = mkImage {
-      name = "marlowe-finder";
-      description = "Streams contract events in real-time from the chain.";
     };
   };
 

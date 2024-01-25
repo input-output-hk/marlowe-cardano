@@ -1,0 +1,14 @@
+{
+  "headerSyncParallelism" : 4
+, "headerMaxContracts" : 100000
+, "bulkParallelism" : 4
+, "bulkPageSize" : 64
+, "bulkMaxBlocks" : 100000
+, "syncParallelism" : 4
+, "syncBatchSize" : 512
+, "queryParallelism" : 4
+, "queryBatchSize" : 16
+, "queryPageSize" : 64
+, "lifecycleParallelism" : 4
+, "lifecycleContracts" : 3
+}

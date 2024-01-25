@@ -25,9 +25,9 @@ let
     marlowe-web-server
     marlowe-sync
     marlowe-pipe
-    marlowe-scaling
+    marlowe-benchmark
     marlowe-oracle
-    marlowe-finder;
+    ;
 
   # Ensure this path only changes when sqitch.plan file is updated, or DDL
   # files are updated.
@@ -681,31 +681,67 @@ in
     '';
   };
 
-  marlowe-scaling = mkOperable {
-    package = marlowe-scaling;
+  marlowe-benchmark = mkOperable {
+    package = marlowe-benchmark;
     runtimeScript = mkMarloweAppScript ''
       #################
       # REQUIRED VARS #
       #################
-      # CONTRACTS_PER_PARTY: The number of contracts to run sequentially for each party.
 
-      [ -z "''${CONTRACTS_PER_PARTY:-}" ] && echo "CONTRACTS_PER_PARTY env var must be set -- aborting" && exit 1
+      # MARLOWE_BENCHMARK_CONFIG: Configuration JSON file for benchmarks.
+      [ -z "''${MARLOWE_BENCHMARK_CONFIG:-}" ] && echo "MARLOWE_BENCHMARK_CONFIG env var must be set -- aborting" && exit 1
+      export MARLOWE_BENCHMARK_CONFIG
+
+      # MARLOWE_BENCHMARK_OUTPUT: Output file path for benchmark results.
+      [ -z "''${MARLOWE_BENCHMARK_OUTPUT:-}" ] && echo "MARLOWE_BENCHMARK_OUTPUT env var must be set -- aborting" && exit 1
+      export MARLOWE_BENCHMARK_OUTPUT
+
+      ##########################################################
+      # OPTIONAL VARS, BUT REQUIRED FOR EXECUTING TRANSACTIONS #
+      ##########################################################
+
+      # CARDANO_NODE_SOCKET_PATH: path to the node socket.
+      export CARDANO_NODE_SOCKET_PATH
+
+      # CARDANO_TESTNET_MAGIC: magic number for network.
+      export CARDANO_TESTNET_MAGIC
+
+      # FAUCET_ADDRESS: File path to the Bech32 address of the faucet for funds to execute transactions.
+      export FAUCET_ADDRESS
+
+      # FAUCET_SKEY: Payment extended signing key for the faucet of funds to execute transactions.
+      export FAUCET_SKEY
 
       #################
       # OPTIONAL VARS #
       #################
-      # PARTIES: ADDRESS=KEYFILE per party separated by spaces
 
-      read -a -r args <<< "''${PARTIES:-}"
+      # MARLOWE_RT_HOST: Host name of the marlowe runtime server.
+      export MARLOWE_RT_HOST="''${MARLOWE_RT_HOST:-127.0.0.1}"
 
-      ${marlowe-scaling}/bin/marlowe-scaling \
-        --timeout-seconds "$TIMEOUT_SECONDS" \
-        --build-seconds "$BUILD_SECONDS" \
-        --confirm-seconds "$CONFIRM_SECONDS" \
-        --retry-seconds "$RETRY_SECONDS" \
-        --retry-limit "$RETRY_LIMIT" \
-        "$CONTRACTS_PER_PARTY" \
-        "''${args[@]}"
+      # MARLOWE_RT_PORT: Host name of the marlowe runtime server.
+      export MARLOWE_RT_PORT="''${MARLOWE_RT_PORT:-3700}"
+
+      export PATH="${lib.makeBinPath [ coreutils ]}"
+
+      if [ -z "$FAUCET_SKEY" ]
+      then
+        ${marlowe-benchmark}/bin/marlowe-benchmark \
+          --host "$MARLOWE_RT_HOST" \
+          --port "$MARLOWE_RT_PORT" \
+          --config "$MARLOWE_BENCHMARK_CONFIG" \
+          --out-file "$MARLOWE_BENCHMARK_OUTPUT"
+      else
+        ${marlowe-benchmark}/bin/marlowe-benchmark \
+          --host "$MARLOWE_RT_HOST" \
+          --port "$MARLOWE_RT_PORT" \
+          --config "$MARLOWE_BENCHMARK_CONFIG" \
+          --node-socket-path "$CARDANO_NODE_SOCKET_PATH" \
+          --network-magic "$CARDANO_TESTNET_MAGIC" \
+          --address "$(cat "$FAUCET_ADDRESS")" \
+          --signing-key-file "$FAUCET_SKEY" \
+          --out-file "$MARLOWE_BENCHMARK_OUTPUT"
+      fi
     '';
   };
 
@@ -740,22 +776,4 @@ in
     '';
   };
 
-  marlowe-finder = mkOperable {
-    package = marlowe-finder;
-    runtimeScript = mkMarloweAppScript ''
-      #################
-      # OPTIONAL VARS #
-      #################
-      # POLLING_FREQUENCY: The polling frequency in seconds when waiting on Marlowe Runtime.
-      # REQUEUING_FREQUENCY: The requeuing frequency in seconds for reviewing the progress of contracts on Marlowe Runtime.
-
-      ${marlowe-finder}/bin/marlowe-finder \
-        --timeout-seconds "$TIMEOUT_SECONDS" \
-        --build-seconds "$BUILD_SECONDS" \
-        --confirm-seconds "$CONFIRM_SECONDS" \
-        --retry-seconds "$RETRY_SECONDS" \
-        --retry-limit "$RETRY_LIMIT" \
-        --polling "''${POLLING_FREQUENCY:-5}"
-    '';
-  };
 }

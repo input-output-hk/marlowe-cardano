@@ -82,34 +82,6 @@ executable marlowe-pipe
 
   default-language: Haskell2010
 
-executable marlowe-scaling
-  main-is:          Main.hs
-  hs-source-dirs:   scaling
-  build-depends:
-    , async
-    , base >=4.9 && <5
-    , cardano-api ^>=8.2
-    , eventuo11y >=0.9 && <0.11
-    , eventuo11y-dsl ^>=0.2
-    , eventuo11y-json ^>=0.3
-    , marlowe-apps
-    , marlowe-cardano
-    , marlowe-chain-sync
-    , marlowe-runtime
-    , mtl
-    , optparse-applicative
-    , plutus-ledger-api ^>=1.5
-    , random
-    , text
-    , time
-
-  ghc-options:
-    -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
-    -Wincomplete-record-updates -Wredundant-constraints -Widentities
-    -Wunused-packages
-
-  default-language: Haskell2010
-
 executable marlowe-oracle
   main-is:          Main.hs
   hs-source-dirs:   oracle
@@ -145,80 +117,6 @@ executable marlowe-oracle
     , servant-client
     , text
     , time-units
-
-  ghc-options:
-    -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
-    -Wincomplete-record-updates -Wredundant-constraints -Widentities
-    -Wunused-packages
-
-  default-language: Haskell2010
-
-executable marlowe-finder
-  main-is:          Main.hs
-  hs-source-dirs:   finder
-  build-depends:
-    , aeson
-    , base >=4.9 && <5
-    , containers
-    , eventuo11y >=0.9 && <0.11
-    , eventuo11y-json ^>=0.3
-    , marlowe-apps
-    , marlowe-chain-sync
-    , marlowe-client
-    , marlowe-runtime:{marlowe-runtime, history-api, sync-api}
-    , optparse-applicative
-    , time-units
-
-  ghc-options:
-    -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
-    -Wincomplete-record-updates -Wredundant-constraints -Widentities
-    -Wunused-packages
-
-  default-language: Haskell2010
-
-executable signing-service
-  main-is:          Main.hs
-  hs-source-dirs:   signing
-  build-depends:
-    , aeson
-    , base >=4.9 && <5
-    , cardano-api ^>=8.2
-    , marlowe-apps
-    , marlowe-chain-sync
-    , servant-server
-    , wai
-    , warp
-
-  ghc-options:
-    -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
-    -Wincomplete-record-updates -Wredundant-constraints -Widentities
-    -Wunused-packages
-
-  default-language: Haskell2010
-
-executable marlowe-streamer
-  main-is:          Main.hs
-  hs-source-dirs:   streamer
-  build-depends:
-    , aeson
-    , base >=4.9 && <5
-    , blaze-builder
-    , bytestring
-    , containers
-    , eventuo11y >=0.9 && <0.11
-    , eventuo11y-json ^>=0.3
-    , marlowe-apps
-    , marlowe-cardano
-    , marlowe-chain-sync
-    , marlowe-runtime:{marlowe-runtime, history-api}
-    , optparse-applicative
-    , plutus-ledger-api ^>=1.5
-    , plutus-tx
-    , text
-    , time-units
-    , vector
-    , wai-extra
-    , warp
 
   ghc-options:
     -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
