@@ -315,10 +315,10 @@ createShelleyGenesisStaked workspace startTime testnetMagic LocalTestnetOptions{
       (shelleyGenesisDir </> "genesis.alonzo.spec.json")
 
   _ <-
-    writeWorkspaceFileJSON
+    copyToWorkspace
       workspace
+      "./configuration/conway-babbage-test-genesis.json"
       (shelleyGenesisDir </> "genesis.conway.spec.json")
-      $ object ["genDelegs" .= object []]
 
   configFile <-
     copyToWorkspace
