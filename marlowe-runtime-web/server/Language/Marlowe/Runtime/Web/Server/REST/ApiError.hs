@@ -325,20 +325,26 @@ createBuildupErrorToApiError err = ApiError (show err) errorCode details statusC
   where
     details = case err of
       MintingUtxoSelectionFailed -> tagged "MintingUtxoSelectionFailed" []
-      AddressDecodingFailed address ->
+      AddressesDecodingFailed address ->
         tagged
-          "AddressDecodingFailed"
-          ["address" .= toJSON (toDTO address)]
+          "AddressesDecodingFailed"
+          ["addresses" .= toJSON (toDTO address)]
+      NonPositiveBalancesError accounts ->
+        tagged
+          "NonPositiveBalancesError"
+          ["accounts" .= toJSON (toDTO accounts)]
       MintingScriptDecodingFailed _ -> tagged "MintingScriptDecodingFailed" []
 
     statusCode = case err of
       MintingUtxoSelectionFailed -> 400
-      AddressDecodingFailed _ -> 500
+      AddressesDecodingFailed _ -> 500
+      NonPositiveBalancesError _ -> 500
       MintingScriptDecodingFailed _ -> 500
 
     errorCode = case err of
       MintingUtxoSelectionFailed -> "MintingUtxoSelectionFailed"
-      AddressDecodingFailed _ -> "AddressDecodingFailed"
+      AddressesDecodingFailed _ -> "AddressesDecodingFailed"
+      NonPositiveBalancesError _ -> "NonPositiveBalancesError"
       MintingScriptDecodingFailed _ -> "MintingScriptDecodingFailed"
 
 instance HasDTO CreateError where
@@ -395,6 +401,12 @@ instance ToDTO ApplyInputsError where
     ApplyInputsConstraintError err -> constraintErrorToApiError err
     ApplyInputsLoadMarloweContextFailed err -> loadMarloweContextErrorToApiError err
     ApplyInputsConstraintsBuildupFailed err -> applyInputsConstraintsBuildupErrorToApiError err
+    ApplyInputsContractContinuationNotFound -> ApiError "Contract continuation not found" "ContractContinuationNotFound" Null 404
+    ApplyInputsSafetyAnalysisError safetyAnalysisError -> do
+      let details =
+            object
+              ["safetyAnalysisProcessFailed" .= safetyAnalysisError]
+      ApiError "Safety analysis failed" "SafetyAnalysisFailed" details 400
     ScriptOutputNotFound -> ApiError "Script output not found" "ScriptOutputNotFound" Null 400
     SlotConversionFailed _ -> ApiError "Slot conversion failed" "SlotConversionFailed" Null 400
     TipAtGenesis -> ApiError "Internal error" "TipAtGenesis" Null 500

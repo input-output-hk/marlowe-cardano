@@ -112,7 +112,7 @@ import Language.Marlowe.Runtime.Core.Api (
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import qualified Language.Marlowe.Runtime.Core.Api as Core.Api (Payout (..))
 import qualified Language.Marlowe.Runtime.Discovery.Api as Discovery
-import Language.Marlowe.Runtime.Transaction.Api (Account (..))
+import Language.Marlowe.Runtime.Transaction.Api (Account (..), Accounts, mkAccounts, unAccounts)
 import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx (..), TempTxStatus (..))
@@ -955,3 +955,12 @@ instance FromDTO Account where
   fromDTO a = Just case fromBech32 (Web.unParty a) of
     Just address -> AddressAccount address
     Nothing -> RoleAccount $ fromString . T.unpack . Web.unParty $ a
+
+instance HasDTO Accounts where
+  type DTO Accounts = Map Web.Party Web.Assets
+
+instance ToDTO Accounts where
+  toDTO = toDTO . unAccounts
+
+instance FromDTO Accounts where
+  fromDTO = hush . mkAccounts <=< fromDTO

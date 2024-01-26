@@ -12,6 +12,7 @@
 
 module Language.Marlowe.Runtime.Transaction.Api (
   Account (..),
+  Accounts,
   ApplyInputsConstraintsBuildupError (..),
   ApplyInputsError (..),
   CoinSelectionError (..),
@@ -43,7 +44,9 @@ module Language.Marlowe.Runtime.Transaction.Api (
   encodeRoleTokenMetadata,
   getTokenQuantities,
   hasRecipient,
+  mkAccounts,
   mkMint,
+  unAccounts,
 ) where
 
 import Cardano.Api (
@@ -105,7 +108,7 @@ import Language.Marlowe.Runtime.Cardano.Feature (hush)
 import Language.Marlowe.Runtime.ChainSync.Api (
   Address,
   AssetId,
-  Assets,
+  Assets (..),
   BlockHeader,
   DatumHash,
   Lovelace,
@@ -122,6 +125,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   parseMetadataList,
   parseMetadataMap,
   parseMetadataText,
+  unTokens,
  )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api
@@ -637,6 +641,7 @@ data InputsAppliedInEra era v = InputsAppliedInEra
   , invalidHereafter :: UTCTime
   , inputs :: Inputs v
   , txBody :: TxBody era
+  , safetyErrors :: [SafetyError]
   }
 
 deriving instance Show (InputsAppliedInEra BabbageEra 'V1)
@@ -655,6 +660,7 @@ instance (IsShelleyBasedEra era) => Variations (InputsAppliedInEra era 'V1) wher
         `varyAp` variations
         `varyAp` variations
         `varyAp` variations
+        `varyAp` variations
 
 instance (IsShelleyBasedEra era) => Binary (InputsAppliedInEra era 'V1) where
   put InputsAppliedInEra{..} = do
@@ -666,6 +672,7 @@ instance (IsShelleyBasedEra era) => Binary (InputsAppliedInEra era 'V1) where
     put invalidHereafter
     putInputs MarloweV1 inputs
     putTxBody txBody
+    put safetyErrors
   get = do
     let version = MarloweV1
     contractId <- get
@@ -676,6 +683,7 @@ instance (IsShelleyBasedEra era) => Binary (InputsAppliedInEra era 'V1) where
     invalidHereafter <- get
     inputs <- getInputs MarloweV1
     txBody <- getTxBody
+    safetyErrors <- get
     pure InputsAppliedInEra{..}
 
 data WithdrawTx v where
@@ -755,6 +763,7 @@ instance (IsShelleyBasedEra era) => ToJSON (InputsAppliedInEra era 'V1) where
       , "invalid-hereafter" .= invalidHereafter
       , "inputs" .= inputs
       , "tx-body" .= serialiseToTextEnvelope Nothing txBody
+      , "safety-errors" .= safetyErrors
       ]
 
 data Account
@@ -762,6 +771,33 @@ data Account
   | AddressAccount Address
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary, ToJSON, Variations)
+
+-- | User-defined initial account balances which should hold only positive values.
+newtype Accounts = Accounts (Map Account Assets)
+
+deriving newtype instance Eq Accounts
+deriving instance Show Accounts
+instance Semigroup Accounts where
+  Accounts a <> Accounts b = Accounts $ Map.unionWith (<>) a b
+deriving newtype instance Monoid Accounts
+instance Variations Accounts where
+  variations = Accounts <$> variations
+
+unAccounts :: Accounts -> Map Account Assets
+unAccounts (Accounts accounts) = accounts
+
+newtype NonPositiveBalances = NonPositiveBalances [Account]
+deriving instance Show NonPositiveBalances
+deriving newtype instance Semigroup NonPositiveBalances
+deriving newtype instance Monoid NonPositiveBalances
+
+mkAccounts :: Map Account Assets -> Either NonPositiveBalances Accounts
+mkAccounts accounts = Accounts <$> Map.traverseWithKey checkPositive accounts
+  where
+    checkPositive account assets@(Assets lovelace tokens) =
+      if lovelace >= 0 && all (> 0) (unTokens tokens)
+        then pure assets
+        else Left $ NonPositiveBalances [account]
 
 -- | The low-level runtime API for building and submitting transactions.
 data MarloweTxCommand status err result where
@@ -784,7 +820,7 @@ data MarloweTxCommand status err result where
     -- ^ Optional metadata to attach to the transaction
     -> Maybe Lovelace
     -- ^ Optional min Lovelace deposit which should be used for the contract output.
-    -> Map Account Assets
+    -> Accounts
     -- ^ Initial account balances. The min ADA deposit will be added to this.
     -> Either (Contract v) DatumHash
     -- ^ The contract to run, or the hash of the contract to load from the store.
@@ -908,7 +944,7 @@ instance Command MarloweTxCommand where
     TagSubmit -> JobIdSubmit <$> get
 
   putCommand = \case
-    Create mStakeCredential MarloweV1 walletAddresses threadName roles metadata minAda accounts contract -> do
+    Create mStakeCredential MarloweV1 walletAddresses threadName roles metadata minAda (Accounts accounts) contract -> do
       put mStakeCredential
       put walletAddresses
       put threadName
@@ -936,8 +972,13 @@ instance Command MarloweTxCommand where
         put $ serialiseToCBOR tx
 
   getCommand = \case
-    TagCreate MarloweV1 ->
-      Create <$> get <*> pure MarloweV1 <*> get <*> get <*> get <*> get <*> get <*> get <*> get
+    TagCreate MarloweV1 -> do
+      let getAccounts = do
+            accounts <- get
+            case mkAccounts accounts of
+              Left err -> fail $ "Invalid accounts: " <> show err
+              Right accounts' -> pure accounts'
+      Create <$> get <*> pure MarloweV1 <*> get <*> get <*> get <*> get <*> get <*> getAccounts <*> get
     TagApplyInputs version -> do
       walletAddresses <- get
       contractId <- get
@@ -1070,7 +1111,7 @@ data CreateError
   | CreateBuildupFailed CreateBuildupError
   | CreateToCardanoError
   | CreateSafetyAnalysisFailed [SafetyError]
-  | -- | This error is thrown when the safety analysis process itself fails itself
+  | -- | This error is thrown when the safety analysis process fails itself
     -- due to a timeout or other reasons, such as missing merkleization data.
     CreateSafetyAnalysisError String
   | CreateContractNotFound
@@ -1086,7 +1127,8 @@ instance ToJSON CreateError
 
 data CreateBuildupError
   = MintingUtxoSelectionFailed
-  | AddressDecodingFailed Address
+  | AddressesDecodingFailed [Address]
+  | NonPositiveBalancesError [Account]
   | MintingScriptDecodingFailed PlutusScript
   deriving (Eq, Ord, Show, Generic)
   deriving anyclass (Binary, ToJSON, Variations)
@@ -1094,10 +1136,14 @@ data CreateBuildupError
 data ApplyInputsError
   = ApplyInputsEraUnsupported AnyCardanoEra
   | ApplyInputsConstraintError ConstraintError
+  | ApplyInputsContractContinuationNotFound
   | ScriptOutputNotFound
   | ApplyInputsLoadMarloweContextFailed LoadMarloweContextError
   | ApplyInputsLoadHelpersContextFailed LoadHelpersContextError
   | ApplyInputsConstraintsBuildupFailed ApplyInputsConstraintsBuildupError
+  | -- | This error is thrown when the safety analysis process fails itself
+    -- due to a timeout or any other reasons, such as missing merkleization data.
+    ApplyInputsSafetyAnalysisError String
   | SlotConversionFailed String
   | TipAtGenesis
   | ValidityLowerBoundTooHigh SlotNo SlotNo

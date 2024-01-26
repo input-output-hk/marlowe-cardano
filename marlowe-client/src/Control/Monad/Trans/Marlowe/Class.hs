@@ -13,7 +13,6 @@ import Control.Monad.Trans.Reader (ReaderT (..))
 import Control.Monad.Trans.Resource.Internal (ResourceT (..))
 import Data.Coerce (coerce)
 import Data.Foldable (asum)
-import Data.Map (Map)
 import Data.Set (Set)
 import Data.Time (UTCTime)
 import Language.Marlowe.Protocol.BulkSync.Client (MarloweBulkSyncClient)
@@ -26,7 +25,6 @@ import Language.Marlowe.Protocol.Transfer.Client (
   MarloweTransferClient,
  )
 import Language.Marlowe.Runtime.ChainSync.Api (
-  Assets,
   BlockHeader,
   DatumHash,
   Lovelace,
@@ -46,7 +44,7 @@ import Language.Marlowe.Runtime.Core.Api (
   MarloweVersionTag (..),
  )
 import Language.Marlowe.Runtime.Transaction.Api (
-  Account,
+  Accounts,
   ApplyInputsError,
   ContractCreated,
   CreateError,
@@ -226,12 +224,12 @@ createContract
   -- ^ Optional metadata to attach to the transaction
   -> Maybe Lovelace
   -- ^ Optional min Lovelace deposit which should be stored in the contract's accounts.
-  -> Map Account Assets
+  -> Accounts
   -- ^ Optional initial state for contract.
   -> Either (Contract v) DatumHash
   -- ^ The contract to run, or the hash of the contract to look up in the store.
   -> m (Either CreateError (ContractCreated v))
-createContract mStakeCredential version wallet threadName roleTokens metadata lovelace account contract =
+createContract mStakeCredential version wallet threadName roleTokens metadata lovelace accounts contract =
   runMarloweTxClient $
     liftCommand $
       Create
@@ -242,7 +240,7 @@ createContract mStakeCredential version wallet threadName roleTokens metadata lo
         roleTokens
         metadata
         lovelace
-        account
+        accounts
         contract
 
 -- | Apply inputs to a contract, with custom validity interval bounds.

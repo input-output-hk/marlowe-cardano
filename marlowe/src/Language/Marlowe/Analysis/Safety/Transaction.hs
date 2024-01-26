@@ -27,6 +27,7 @@ module Language.Marlowe.Analysis.Safety.Transaction (
   findTransactions',
   foldTransactionsM,
   inputsRequiredRoles,
+  roleAuthorizations,
   CurrentState (..),
   LockedRoles (..),
   MarloweExBudget (..),
@@ -707,13 +708,17 @@ firstRoleAuthorizationAnnotator =
     \input ->
       do
         usedRoles <- get
-        let roleAuthorization (IDeposit _ (Role role) _ _) = S.singleton role
-            roleAuthorization (IChoice (ChoiceId _ (Role role)) _) = S.singleton role
-            roleAuthorization _ = mempty
-            roleAuthorizations = foldMap (roleAuthorization . getInputContent) $ txInputs input
-            newUses = roleAuthorizations S.\\ usedRoles
-        put $ roleAuthorizations `S.union` usedRoles
+        let newUses = roleAuthorizations input S.\\ usedRoles
+        put $ roleAuthorizations input `S.union` usedRoles
         pure (input, newUses)
+
+roleAuthorizations :: TransactionInput -> S.Set P.TokenName
+roleAuthorizations = foldMap (roleAuthorization . getInputContent) . txInputs
+  where
+    roleAuthorization :: InputContent -> S.Set P.TokenName
+    roleAuthorization (IDeposit _ (Role role) _ _) = S.singleton role
+    roleAuthorization (IChoice (ChoiceId _ (Role role)) _) = S.singleton role
+    roleAuthorization _ = mempty
 
 -- | Run the Plutus evaluator on the Marlowe semantics validator.
 evaluateSemantics

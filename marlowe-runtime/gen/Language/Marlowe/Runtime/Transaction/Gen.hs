@@ -12,11 +12,13 @@ import Cardano.Api (
   shelleyBasedEra,
  )
 import Control.Applicative (liftA2)
+import Control.Error.Util (hush)
 import qualified Data.ByteString.Char8 as BS
 import Data.Foldable (fold)
 import qualified Data.List.NonEmpty as NE
 import Data.Map.NonEmpty (NEMap)
 import qualified Data.Map.NonEmpty as NEMap
+import Data.Maybe (maybeToList)
 import Data.Semigroup (Semigroup (..))
 import Language.Marlowe.Runtime.ChainSync.Gen ()
 import qualified Language.Marlowe.Runtime.Core.Api as Core
@@ -202,7 +204,7 @@ instance Arbitrary CreateBuildupError where
   arbitrary =
     oneof
       [ pure MintingUtxoSelectionFailed
-      , AddressDecodingFailed <$> arbitrary
+      , AddressesDecodingFailed <$> arbitrary
       , MintingScriptDecodingFailed <$> arbitrary
       ]
   shrink = genericShrink
@@ -316,6 +318,7 @@ instance (ArbitraryMarloweVersion v, IsShelleyBasedEra era) => Arbitrary (Inputs
       <*> arbitrary
       <*> arbitrary
       <*> hedgehog (genTxBody shelleyBasedEra)
+      <*> arbitrary
   shrink InputsAppliedInEra{..} =
     fold
       [ [InputsAppliedInEra{..}{InputsAppliedInEra.metadata = metadata'} | metadata' <- shrink metadata]
@@ -350,6 +353,14 @@ instance Arbitrary Account where
       ]
   shrink = genericShrink
 
+instance Arbitrary Accounts where
+  arbitrary = do
+    m <- arbitrary
+    maybe arbitrary pure $ hush $ mkAccounts m
+  shrink accounts = do
+    accounts' <- shrink (unAccounts accounts)
+    maybeToList $ hush $ mkAccounts accounts'
+
 instance ArbitraryCommand MarloweTxCommand where
   arbitraryTag =
     elements
@@ -359,7 +370,10 @@ instance ArbitraryCommand MarloweTxCommand where
       , SomeTag TagSubmit
       ]
   arbitraryCmd = \case
-    TagCreate Core.MarloweV1 ->
+    TagCreate Core.MarloweV1 -> do
+      let arbitraryAccounts = do
+            m <- arbitrary
+            maybe arbitraryAccounts pure $ hush $ mkAccounts m
       Create
         <$> arbitrary
         <*> pure Core.MarloweV1
@@ -368,7 +382,7 @@ instance ArbitraryCommand MarloweTxCommand where
         <*> arbitrary
         <*> arbitrary
         <*> arbitrary
-        <*> arbitrary
+        <*> arbitraryAccounts
         <*> arbitrary
     TagApplyInputs Core.MarloweV1 ->
       ApplyInputs Core.MarloweV1
@@ -408,7 +422,7 @@ instance ArbitraryCommand MarloweTxCommand where
     TagWithdraw Core.MarloweV1 -> arbitrary
     TagSubmit -> arbitrary
   shrinkCommand = \case
-    Create staking Core.MarloweV1 wallet thread roleConfig meta minAda state contract ->
+    Create staking Core.MarloweV1 wallet thread roleConfig meta minAda accounts contract ->
       concat
         [ Create
             <$> shrink staking
@@ -418,7 +432,7 @@ instance ArbitraryCommand MarloweTxCommand where
             <*> pure roleConfig
             <*> pure meta
             <*> pure minAda
-            <*> pure state
+            <*> pure accounts
             <*> pure contract
         , Create staking Core.MarloweV1
             <$> shrink wallet
@@ -426,34 +440,34 @@ instance ArbitraryCommand MarloweTxCommand where
             <*> pure roleConfig
             <*> pure meta
             <*> pure minAda
-            <*> pure state
+            <*> pure accounts
             <*> pure contract
         , Create staking Core.MarloweV1 wallet
             <$> shrink thread
             <*> pure roleConfig
             <*> pure meta
             <*> pure minAda
-            <*> pure state
+            <*> pure accounts
             <*> pure contract
         , Create staking Core.MarloweV1 wallet thread
             <$> shrink roleConfig
             <*> pure meta
             <*> pure minAda
-            <*> pure state
+            <*> pure accounts
             <*> pure contract
         , Create staking Core.MarloweV1 wallet thread roleConfig
             <$> shrink meta
             <*> pure minAda
-            <*> pure state
+            <*> pure accounts
             <*> pure contract
         , Create staking Core.MarloweV1 wallet thread roleConfig meta
             <$> shrink minAda
-            <*> pure state
+            <*> pure accounts
             <*> pure contract
         , Create staking Core.MarloweV1 wallet thread roleConfig meta minAda
-            <$> shrink state
+            <$> shrink accounts
             <*> pure contract
-        , Create staking Core.MarloweV1 wallet thread roleConfig meta minAda state
+        , Create staking Core.MarloweV1 wallet thread roleConfig meta minAda accounts
             <$> shrink contract
         ]
     ApplyInputs Core.MarloweV1 wallet contractId meta minValid maxValid inputs ->
