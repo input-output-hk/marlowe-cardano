@@ -14,12 +14,12 @@ import Language.Marlowe.Runtime.ChainSync.Api (
 import Language.Marlowe.Runtime.Client (runMarloweTxClient)
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand (Submit))
 
+import Cardano.Api (BabbageEraOnwards)
 import qualified Cardano.Api as C (
   Tx,
   getTxBody,
   getTxId,
  )
-import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra)
 import qualified Network.Protocol.Job.Client as J (
   ClientStAwait (..),
   ClientStCmd (..),
@@ -29,7 +29,7 @@ import qualified Network.Protocol.Job.Client as J (
 
 submit
   :: Int
-  -> ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  -> BabbageEraOnwards era
   -> C.Tx era
   -> Client (Either String TxId)
 submit pollingFrequency era tx =

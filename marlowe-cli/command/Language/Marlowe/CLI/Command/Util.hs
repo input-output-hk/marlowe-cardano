@@ -23,10 +23,10 @@ module Language.Marlowe.CLI.Command.Util (
 
 import Cardano.Api (
   AddressInEra,
+  BabbageEraOnwards,
   ConsensusModeParams (CardanoModeParams),
   EpochSlots (..),
   File (..),
-  IsCardanoEra,
   IsShelleyBasedEra,
   LocalNodeConnectInfo (..),
   Lovelace (..),
@@ -59,7 +59,6 @@ import Language.Marlowe.CLI.Command.Parse (
   walletOpt,
  )
 import Language.Marlowe.CLI.Merkle (demerkleize, merkleize)
-import Language.Marlowe.CLI.Sync (watchMarlowe)
 import Language.Marlowe.CLI.Transaction (buildClean, buildFaucet, buildMinting, querySlotting, selectUtxos)
 import Language.Marlowe.CLI.Types (
   CliEnv,
@@ -183,23 +182,6 @@ data UtilCommand era
       , slottingFile :: Maybe FilePath
       -- ^ The output file for the slot configuration.
       }
-  | -- | Watch Marlowe transactions.
-    Watch
-      { network :: NetworkId
-      -- ^ The network ID, if any.
-      , socketPath :: FilePath
-      -- ^ The path to the node socket.
-      , includeAll :: Bool
-      -- ^ Whether to include non-Marlowe transactions.
-      , cbor :: Bool
-      -- ^ Whether to output CBOR instead of JSON.
-      , continue :: Bool
-      -- ^ Whether to continue watching when the tip of the chain is reached.
-      , restartFile :: Maybe FilePath
-      -- ^ File for restoring and saving current point on the chain.
-      , outputFile :: Maybe FilePath
-      -- ^ File for recording Marlowe transactions.
-      }
   | -- | Merkleize a contract.
     Merkleize
       { marloweFile :: FilePath
@@ -219,7 +201,7 @@ data UtilCommand era
 runUtilCommand
   :: (MonadError CliError m)
   => (MonadReader (CliEnv era) m)
-  => (IsCardanoEra era)
+  => (IsShelleyBasedEra era)
   => (MonadIO m)
   => UtilCommand era
   -- ^ The command.
@@ -298,14 +280,6 @@ runUtilCommand command =
         querySlotting
           connection
           slottingFile
-      Watch{..} ->
-        watchMarlowe
-          connection
-          includeAll
-          cbor
-          continue
-          restartFile
-          outputFile
       Merkleize{..} ->
         merkleize
           marloweFile
@@ -319,37 +293,36 @@ runUtilCommand command =
 
 -- | Parser for miscellaneous commands.
 parseUtilCommand
-  :: (IsShelleyBasedEra era) => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
-parseUtilCommand network socket =
+  :: BabbageEraOnwards era -> O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
+parseUtilCommand era network socket =
   O.hsubparser $
     O.commandGroup "Miscellaneous low-level commands:"
-      <> cleanCommand network socket
+      <> cleanCommand era network socket
       <> decodeBechCommand
       <> demerkleizeCommand
       <> encodeBechCommand
-      <> fundAddressCommand network socket
+      <> fundAddressCommand era network socket
       <> merkleizeCommand
-      <> mintCommand network socket
-      <> burnCommand network socket
-      <> selectCommand network socket
+      <> mintCommand era network socket
+      <> burnCommand era network socket
+      <> selectCommand era network socket
       <> slottingCommand network socket
-      <> watchCommand network socket
 
 -- | Parser for the "clean" command.
 cleanCommand
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Mod O.CommandFields (UtilCommand era)
-cleanCommand network socket =
+cleanCommand era network socket =
   O.command "clean" $
-    O.info (cleanOptions network socket) $
+    O.info (cleanOptions era network socket) $
       O.progDesc "Reorganize the UTxOs at an address, separating tokens."
 
 -- | Parser for the "clean" options.
 cleanOptions
-  :: (IsShelleyBasedEra era) => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
-cleanOptions network socket =
+  :: BabbageEraOnwards era -> O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
+cleanOptions era network socket =
   Clean
     <$> parseNetworkId network
     <*> O.strOption
@@ -367,7 +340,7 @@ cleanOptions network socket =
           <> O.help "The lovelace to send with each bundle of tokens."
       )
     <*> O.option
-      parseAddress
+      (parseAddress era)
       ( O.long "change-address"
           <> O.metavar "ADDRESS"
           <> O.help "Address to receive ADA in excess of fee."
@@ -381,19 +354,23 @@ cleanOptions network socket =
 
 -- | Parser for the "mint" command.
 mintCommand
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Mod O.CommandFields (UtilCommand era)
-mintCommand network socket =
+mintCommand era network socket =
   O.command "mint" $
-    O.info (mintOptions network socket) $
+    O.info (mintOptions era network socket) $
       O.progDesc "Mint native tokens."
 
 -- | Parser for the "mint" options.
 mintOptions
-  :: (IsShelleyBasedEra era) => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
-mintOptions network socket =
+  :: forall era
+   . BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
+  -> O.Mod O.OptionFields FilePath
+  -> O.Parser (UtilCommand era)
+mintOptions era network socket =
   Mint
     <$> parseNetworkId network
     <*> O.strOption
@@ -404,6 +381,7 @@ mintOptions network socket =
             "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value."
       )
     <*> walletOpt
+      era
       (O.long "issuer" <> O.metavar "ADDRESS:SIGNING_FILE" <> O.help "Issuer wallet info")
     <*> tokenProviderOpt
     <*> (O.optional . O.strOption)
@@ -434,33 +412,33 @@ mintOptions network socket =
   where
     tokenProviderOpt =
       fmap (fromMaybe []) $
-        (O.optional . O.some . walletOpt)
+        (O.optional . O.some . walletOpt era)
           (O.long "token-provider" <> O.metavar "ADDRESS:SIGNING_FILE" <> O.help "Additional tokens owners info.")
-    parseTokenDistribution :: (IsShelleyBasedEra era) => O.ReadM (TokenName, AddressInEra era)
+    parseTokenDistribution :: O.ReadM (TokenName, AddressInEra era)
     parseTokenDistribution =
       O.eitherReader $
         splitOn ":" >>> \case
           [tokenName, address] -> do
-            address' <- readAddressEither address
+            address' <- readAddressEither era address
             let tokenName' = readTokenName tokenName
             pure (tokenName', address')
           _ -> Left "Expecting token name and recipient address in the following format: TOKENNAME:ADDRESS"
 
 -- | Parser for the "mint" command.
 burnCommand
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Mod O.CommandFields (UtilCommand era)
-burnCommand network socket =
+burnCommand era network socket =
   O.command "burn" $
-    O.info (burnOptions network socket) $
+    O.info (burnOptions era network socket) $
       O.progDesc "Burn native tokens."
 
 -- | Parser for the "mint" options.
 burnOptions
-  :: (IsShelleyBasedEra era) => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
-burnOptions network socket =
+  :: BabbageEraOnwards era -> O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
+burnOptions era network socket =
   Burn
     <$> parseNetworkId network
     <*> O.strOption
@@ -471,6 +449,7 @@ burnOptions network socket =
             "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value."
       )
     <*> walletOpt
+      era
       (O.long "issuer" <> O.metavar "ADDRESS:SIGNING_FILE" <> O.help "Issuer wallet info")
     <*> tokenProviderOpt
     <*> (O.optional . O.strOption)
@@ -492,25 +471,25 @@ burnOptions network socket =
   where
     tokenProviderOpt =
       fmap (fromMaybe []) $
-        (O.optional . O.some . walletOpt)
+        (O.optional . O.some . walletOpt era)
           (O.long "token-provider" <> O.metavar "ADDRESS:SIGNING_FILE" <> O.help "Additional tokens owners info.")
 
 -- | Parser for the "fund-address" command.
 fundAddressCommand
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Mod O.CommandFields (UtilCommand era)
-fundAddressCommand network socket =
+fundAddressCommand era network socket =
   O.command "fund-address" $
-    O.info (fundAddressOptions network socket) $
+    O.info (fundAddressOptions era network socket) $
       O.progDesc
         "Fund an address from a source wallet. If the source wallet is a faucet, note that the faucet is only funded on the private developer testnet for Marlowe, and that this command will not supply funds on public networks."
 
 -- | Parser for the "fund-address" options.
 fundAddressOptions
-  :: (IsShelleyBasedEra era) => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
-fundAddressOptions network socket =
+  :: BabbageEraOnwards era -> O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
+fundAddressOptions era network socket =
   Fund
     <$> parseNetworkId network
     <*> O.strOption
@@ -528,12 +507,13 @@ fundAddressOptions network socket =
           <> O.help "Also submit the transaction, and wait for confirmation."
       )
     <*> walletOpt
+      era
       ( O.long "source-wallet-credentials"
           <> O.metavar "ADDRESS:SIGNING_FILE"
           <> O.help "Credentials for the source wallet that will send the funds"
       )
     <*> O.some
-      ( O.argument parseAddress $
+      ( O.argument (parseAddress era) $
           O.metavar "ADDRESS" <> O.help "The addresses to receive the funds."
       )
   where
@@ -549,19 +529,19 @@ fundAddressOptions network socket =
 
 -- | Parser for the "select" command.
 selectCommand
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Mod O.CommandFields (UtilCommand era)
-selectCommand network socket =
+selectCommand era network socket =
   O.command "select" $
-    O.info (selectOptions network socket) $
+    O.info (selectOptions era network socket) $
       O.progDesc "Select UTxO by asset."
 
 -- | Parser for the "select" options.
 selectOptions
-  :: (IsShelleyBasedEra era) => O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
-selectOptions network socket =
+  :: BabbageEraOnwards era -> O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
+selectOptions era network socket =
   Output
     <$> parseNetworkId network
     <*> O.strOption
@@ -573,7 +553,7 @@ selectOptions network socket =
       )
     <*> parseOutputQuery
     <*> O.argument
-      parseAddress
+      (parseAddress era)
       ( O.metavar "ADDRESS" <> O.help "The address."
       )
 
@@ -582,7 +562,7 @@ decodeBechCommand :: O.Mod O.CommandFields (UtilCommand era)
 decodeBechCommand =
   O.command "decode-bech32" $
     O.info decodeBechOptions $
-      O.progDesc "DecodBech32 data."
+      O.progDesc "DecodeBech32 data."
 
 -- | Parser for the "decode-bech32" options.
 decodeBechOptions :: O.Parser (UtilCommand era)
@@ -595,7 +575,7 @@ encodeBechCommand :: O.Mod O.CommandFields (UtilCommand era)
 encodeBechCommand =
   O.command "encode-bech32" $
     O.info encodeBechOptions $
-      O.progDesc "EncodBech32 data."
+      O.progDesc "EncodeBech32 data."
 
 -- | Parser for the "encode-bech32" options.
 encodeBechOptions :: O.Parser (UtilCommand era)
@@ -626,48 +606,6 @@ slottingOptions network socket =
       )
     <*> (O.optional . O.strOption)
       ( O.long "out-file" <> O.metavar "FILE" <> O.help "Output file for slot configuration."
-      )
-
--- | Parser for the "watch" command.
-watchCommand
-  :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Mod O.CommandFields (UtilCommand era)
-watchCommand network socket =
-  O.command "watch" $
-    O.info (watchOptions network socket) $
-      O.progDesc "Watch Marlowe transactions on a Cardano node."
-
--- | Parser for the "watch" options.
-watchOptions :: O.Mod O.OptionFields NetworkId -> O.Mod O.OptionFields FilePath -> O.Parser (UtilCommand era)
-watchOptions network socket =
-  Watch
-    <$> parseNetworkId network
-    <*> O.strOption
-      ( O.long "socket-path"
-          <> O.metavar "SOCKET_FILE"
-          <> socket
-          <> O.help
-            "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value."
-      )
-    <*> O.switch
-      ( O.long "all"
-          <> O.help "Whether to also output non-Marlowe transactions."
-      )
-    <*> O.switch
-      ( O.long "cbor" <> O.help "Whether to output CBOR instead of JSON."
-      )
-    <*> O.switch
-      ( O.long "continue"
-          <> O.help "Whether to continue when the current tip of the chain is reached."
-      )
-    <*> (O.optional . O.strOption)
-      ( O.long "restart"
-          <> O.metavar "POINT_FILE"
-          <> O.help "File for restoring and saving current point on the chain."
-      )
-    <*> (O.optional . O.strOption)
-      ( O.long "out-file"
-          <> O.metavar "OUTPUT_FILE"
-          <> O.help "File in which to store records of Marlowe transactions."
       )
 
 -- | Parser for the "merkleize" command.

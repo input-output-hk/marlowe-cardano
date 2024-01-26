@@ -83,6 +83,8 @@ library
     Language.Marlowe.CLI.Merkle
     Language.Marlowe.CLI.Orphans
     Language.Marlowe.CLI.Run
+    Language.Marlowe.CLI.Sync
+    Language.Marlowe.CLI.Sync.Types
     Language.Marlowe.CLI.Transaction
     Language.Marlowe.CLI.Types
     Paths_marlowe_cli
@@ -110,6 +112,7 @@ library
     , indexed-traversable
     , marlowe-cardano
     , megaparsec
+    , memory
     , mtl
     , ouroboros-consensus
     , ouroboros-network-protocols
@@ -235,6 +238,7 @@ library command
     , cardano-api
     , containers
     , filepath
+    , marlowe-actus
     , marlowe-cardano
     , marlowe-cli:{marlowe-cli, cli-test}
     , marlowe-contracts
@@ -250,7 +254,6 @@ library command
     , text
     , time-units
 
--- , marlowe-actus
 executable marlowe-cli
   import:          lang
   hs-source-dirs:  app

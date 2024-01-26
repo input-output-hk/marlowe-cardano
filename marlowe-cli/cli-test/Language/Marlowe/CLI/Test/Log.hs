@@ -36,9 +36,10 @@ import Control.Monad.Error.Class (MonadError (throwError))
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Reader.Class (MonadReader)
 import Control.Monad.State.Class (MonadState)
-import Data.Aeson.OneLine qualified as A
+import Data.Aeson.Text qualified as A
 import Data.Aeson.Types qualified as A
 import Data.Text qualified as T
+import Data.Text.Lazy qualified as TL
 import GHC.IO.Handle.FD (stderr)
 import Language.Marlowe.CLI.IO (getProtocolParams, txResourceUsage)
 import Language.Marlowe.CLI.Test.CLI.Monad (runCli)
@@ -76,7 +77,7 @@ type Logs = [LogEntry]
 class HasInterpretEnv env era | env -> era where
   reportDirL :: Getter env FilePath
   queryCtxL :: Getter env (QueryExecutionContext era)
-  eraL :: Lens' env (C.ScriptDataSupportedInEra era)
+  eraL :: Lens' env (C.BabbageEraOnwards era)
 
 class HasInterpretState st where
   logStoreL :: Lens' st Logs
@@ -112,7 +113,7 @@ logStoreMsgWith l msg pairs = do
     [] -> liftIO . hPutStrLn stderr $ printLabeledMsg l msg
     _ -> do
       let payloadStr = do
-            let jsonStr = T.unpack $ A.renderValue $ A.object pairs
+            let jsonStr = TL.unpack $ A.encodeToLazyText $ A.object pairs
             if length jsonStr > 80
               then take 80 jsonStr <> "..."
               else jsonStr
@@ -128,7 +129,7 @@ logStoreLabeledMsg l msg = logStoreMsgWith l msg []
 
 logTxBody
   :: (InterpretMonad env st m era)
-  => (C.IsCardanoEra era)
+  => (C.IsShelleyBasedEra era)
   => (Label l)
   => l
   -> String
@@ -138,8 +139,8 @@ logTxBody
 logTxBody l msg txBody jsonRewrite = do
   let txId = T.unpack $ C.serialiseToRawBytesHexText $ C.getTxId txBody
       txJson =
-        T.unpack $
-          A.renderValue $
+        TL.unpack $
+          A.encodeToLazyText $
             jsonRewrite $
               A.object $
                 C.Debug.friendlyTxBody C.cardanoEra txBody

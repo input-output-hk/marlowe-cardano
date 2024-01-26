@@ -18,10 +18,9 @@
 module Language.Marlowe.CLI.Test.CLI.Types where
 
 import Cardano.Api (
-  CardanoMode,
+  BabbageEraOnwards,
   LocalNodeConnectInfo,
   Lovelace,
-  ScriptDataSupportedInEra,
  )
 import Cardano.Api qualified as C
 import Control.Lens (Lens', makeLenses)
@@ -84,7 +83,7 @@ import Language.Marlowe.Runtime.Cardano.Api qualified as Runtime.Api
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Language.Marlowe.Runtime.Core.Api qualified as Runtime.Api
 import Plutus.V1.Ledger.SlotConfig (SlotConfig)
-import PlutusLedgerApi.V1 (ProtocolVersion, TokenName)
+import PlutusLedgerApi.V1 (MajorProtocolVersion, TokenName)
 
 type CLITxInfo lang era = (MarloweTransaction lang era, C.TxBody era)
 
@@ -315,12 +314,12 @@ class HasInterpretState st lang era | st -> lang era where
   publishedScriptsL :: Lens' st (Maybe (MarloweScriptsRefs lang era))
 
 class HasInterpretEnv env lang era | env -> lang era where
-  connectionL :: Lens' env (LocalNodeConnectInfo CardanoMode)
-  eraL :: Lens' env (ScriptDataSupportedInEra era)
+  connectionL :: Lens' env LocalNodeConnectInfo
+  eraL :: Lens' env (BabbageEraOnwards era)
   printStatsL :: Lens' env PrintStats
   slotConfigL :: Lens' env SlotConfig
   costModelParamsL :: Lens' env [Integer]
-  protocolVersionL :: Lens' env ProtocolVersion
+  protocolVersionL :: Lens' env MajorProtocolVersion
   txBuildupContextL :: Lens' env (TxBuildupContext era)
 
 type InterpretMonad env st m lang era =

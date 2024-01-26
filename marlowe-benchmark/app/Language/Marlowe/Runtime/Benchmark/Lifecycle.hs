@@ -42,6 +42,7 @@ import Test.QuickCheck (generate, infiniteListOf)
 import Test.QuickCheck.Hedgehog (hedgehog)
 import UnliftIO (catchIO, forConcurrently)
 
+import Cardano.Api (TxBodyContent (..))
 import qualified Cardano.Api as C
 import qualified Cardano.Api.Shelley as C
 import qualified Data.ByteString as BS
@@ -68,7 +69,7 @@ measure
   :: (C.IsShelleyBasedEra era)
   => C.SocketPath
   -- ^ The path to the Cardano node socket.
-  -> C.CardanoEra era
+  -> C.BabbageEraOnwards era
   -- ^ The Cardano era.
   -> C.NetworkId
   -- ^ The Cardano network.
@@ -98,7 +99,7 @@ fundAddress
   :: (C.IsShelleyBasedEra era)
   => C.SocketPath
   -- ^ The path to the Cardano node socket.
-  -> C.CardanoEra era
+  -> C.BabbageEraOnwards era
   -- ^ The Cardano era.
   -> C.NetworkId
   -- ^ The Cardano network.
@@ -119,65 +120,59 @@ fundAddress node era network srcAddress srcKey changeAddress dstAddressAmount =
     Right ledgerEpochInfo <-
       liftIO $
         fmap (fmap C.toLedgerEpochInfo) $
-          C.queryNodeLocalState local Nothing $
-            C.QueryEraHistory C.CardanoModeIsMultiEra
+          C.queryNodeLocalState
+            local
+            Nothing
+            C.QueryEraHistory
     Right protocol <-
       liftIO $
-        C.executeQueryCardanoMode node era network $
-          C.QueryInEra (fromJust $ C.toEraInMode era C.CardanoMode) $
+        C.executeQueryCardanoMode node network $
+          C.QueryInEra $
             C.QueryInShelleyBasedEra C.shelleyBasedEra C.QueryProtocolParameters
     Right utxos <-
       liftIO $
-        C.executeQueryCardanoMode node era network $
-          C.QueryInEra (fromJust $ C.toEraInMode era C.CardanoMode) $
+        C.executeQueryCardanoMode node network $
+          C.QueryInEra $
             C.QueryInShelleyBasedEra C.shelleyBasedEra $
               C.QueryUTxO $
                 C.QueryUTxOByAddress . S.singleton . fromJust $
                   toCardanoAddressAny srcAddress
     let txBodyContent =
-          C.TxBodyContent
+          (C.defaultTxBodyContent C.shelleyBasedEra)
             { txIns = second (const . C.BuildTxWith $ C.KeyWitness C.KeyWitnessForSpending) <$> M.toList (C.unUTxO utxos)
-            , txInsCollateral = C.TxInsCollateralNone
-            , txInsReference = C.TxInsReferenceNone
             , txOuts =
                 [ C.TxOut
-                  (fromJust $ toCardanoAddressInEra era address)
-                  (C.TxOutValue (either (error "fromRight") id $ C.multiAssetSupportedInEra era) amount)
+                  (fromJust $ toCardanoAddressInEra C.cardanoEra address)
+                  ( case era of
+                      C.BabbageEraOnwardsBabbage ->
+                        C.TxOutValueShelleyBased C.ShelleyBasedEraBabbage $ C.toLedgerValue C.MaryEraOnwardsBabbage amount
+                      C.BabbageEraOnwardsConway ->
+                        C.TxOutValueShelleyBased C.ShelleyBasedEraConway $ C.toLedgerValue C.MaryEraOnwardsConway amount
+                  )
                   C.TxOutDatumNone
                   C.ReferenceScriptNone
                 | (address, amount) <- dstAddressAmount
                 ]
-            , txTotalCollateral = C.TxTotalCollateralNone
-            , txReturnCollateral = C.TxReturnCollateralNone
-            , txFee = C.TxFeeExplicit (either (error "fromRight") id $ C.txFeesExplicitInEra era) 0
-            , txValidityRange =
-                (C.TxValidityNoLowerBound, C.TxValidityNoUpperBound . fromJust $ C.validityNoUpperBoundSupportedInEra era)
-            , txMetadata = C.TxMetadataNone
-            , txAuxScripts = C.TxAuxScriptsNone
-            , txExtraKeyWits = C.TxExtraKeyWitnessesNone
-            , txProtocolParams = C.BuildTxWith Nothing
-            , txWithdrawals = C.TxWithdrawalsNone
-            , txCertificates = C.TxCertificatesNone
-            , txUpdateProposal = C.TxUpdateProposalNone
-            , txMintValue = C.TxMintNone
-            , txScriptValidity = C.TxScriptValidityNone
+            , txFee = C.TxFeeExplicit C.shelleyBasedEra 0
             }
         (&) = flip ($)
         txBody =
           C.makeTransactionBodyAutoBalance
+            C.shelleyBasedEra
             systemStart
             ledgerEpochInfo
-            protocol
+            (C.LedgerProtocolParameters protocol)
+            mempty
             mempty
             mempty
             utxos
             txBodyContent
-            (fromJust $ toCardanoAddressInEra era changeAddress)
+            (fromJust $ toCardanoAddressInEra C.cardanoEra changeAddress)
             Nothing
             & \case
               Right (C.BalancedTxBody _ txBody' _ _) -> txBody'
               Left e -> error $ show e
-    void $ signSubmit (fromJust $ C.refInsScriptsAndInlineDatsSupportedInEra era) srcKey txBody
+    void $ signSubmit era srcKey txBody
 
 -- | Generate a new address and its signing key.
 genKey
@@ -307,27 +302,27 @@ apply change key contractId input =
 signSubmit
   :: (MonadIO m)
   => (MonadMarlowe m)
-  => C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  => C.BabbageEraOnwards era
   -> C.SigningKey C.PaymentExtendedKey
   -> C.TxBody era
   -> m TxId
 signSubmit support key txBody =
   case support of
-    C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> signSubmit' support key txBody
-    C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> signSubmit' support key txBody
+    C.BabbageEraOnwardsBabbage -> signSubmit' support key txBody
+    C.BabbageEraOnwardsConway -> signSubmit' support key txBody
 
 -- | Sign and submit a transaction.
 signSubmit'
   :: (C.IsShelleyBasedEra era)
   => (MonadIO m)
   => (MonadMarlowe m)
-  => C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  => C.BabbageEraOnwards era
   -> C.SigningKey C.PaymentExtendedKey
   -> C.TxBody era
   -> m TxId
 signSubmit' support key txBody =
   do
-    let tx = C.signShelleyTransaction txBody [C.WitnessPaymentExtendedKey key]
+    let tx = C.signShelleyTransaction C.shelleyBasedEra txBody [C.WitnessPaymentExtendedKey key]
     submitAndWait support tx
       >>= \case
         Right _ -> pure . fromCardanoTxId $ C.getTxId txBody

@@ -24,7 +24,6 @@ import Cardano.Api (
   ConsensusModeParams (CardanoModeParams),
   EpochSlots (..),
   File (..),
-  IsShelleyBasedEra,
   LocalNodeConnectInfo (..),
   NetworkId (..),
   StakeAddressReference (..),
@@ -75,7 +74,7 @@ import Cardano.Api qualified as Api (Value)
 import Cardano.Api qualified as C
 import Control.Monad.Reader (MonadReader)
 import Data.Time.Units (Second)
-import Language.Marlowe.CLI.IO (getPV2CostModelParams, getProtocolVersion)
+import Language.Marlowe.CLI.IO (getMajorProtocolVersion, getPV2CostModelParams)
 import Options.Applicative qualified as O
 
 -- | Marlowe CLI commands and options for running contracts.
@@ -259,7 +258,7 @@ data RunCommand era
 runRunCommand
   :: (MonadError CliError m, MonadReader (CliEnv era) m)
   => (MonadIO m)
-  => (C.IsCardanoEra era)
+  => (C.IsShelleyBasedEra era)
   => RunCommand era
   -- ^ The command.
   -> m ()
@@ -282,7 +281,7 @@ runRunCommand command =
                 }
         costModel <- getPV2CostModelParams (QueryNode connection)
         slotConfig <- querySlotConfig connection
-        protocolVersion <- getProtocolVersion (QueryNode connection)
+        protocolVersion <- getMajorProtocolVersion (QueryNode connection)
         initializeTransaction
           connection
           marloweParams'
@@ -408,43 +407,43 @@ runRunCommand command =
 
 -- | Parser for contract commands.
 parseRunCommand
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: C.BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Parser (RunCommand era)
-parseRunCommand network socket =
+parseRunCommand era network socket =
   asum
     [ O.hsubparser $
         O.commandGroup "Commands for running contracts:"
-          <> runCommand network socket
-          <> initializeCommand network socket
+          <> runCommand era network socket
+          <> initializeCommand era network socket
           <> prepareCommand
-          <> withdrawCommand network socket
+          <> withdrawCommand era network socket
           <> analyzeCommand network socket
     , O.hsubparser $
         O.commandGroup "Experimental commands for running contracts, with automatic balancing."
-          <> autoRunCommand network socket
-          <> autoWithdrawCommand network socket
+          <> autoRunCommand era network socket
+          <> autoWithdrawCommand era network socket
     ]
 
 -- | Parser for the "initialize" command.
 initializeCommand
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: C.BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Mod O.CommandFields (RunCommand era)
-initializeCommand network socket =
+initializeCommand era network socket =
   O.command "initialize"
-    . O.info (initializeOptions network socket)
+    . O.info (initializeOptions era network socket)
     $ O.progDesc "Initialize the first transaction of a Marlowe contract and write output to a JSON file."
 
 -- | Parser for the "initialize" options.
 initializeOptions
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: C.BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Parser (RunCommand era)
-initializeOptions network socket =
+initializeOptions era network socket =
   Initialize
     <$> parseNetworkId network
     <*> O.strOption
@@ -466,7 +465,7 @@ initializeOptions network socket =
     <*> O.strOption
       ( O.long "state-file" <> O.metavar "STATE_FILE" <> O.help "JSON input file for the contract state."
       )
-    <*> O.optional publishingStrategyOpt
+    <*> O.optional (publishingStrategyOpt era)
     <*> (O.optional . O.strOption)
       ( O.long "out-file" <> O.metavar "OUTPUT_FILE" <> O.help "JSON output file for initialize."
       )
@@ -509,22 +508,22 @@ prepareOptions =
 
 -- | Parser for the "execute" command.
 runCommand
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: C.BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Mod O.CommandFields (RunCommand era)
-runCommand network socket =
+runCommand era network socket =
   O.command "execute" $
-    O.info (runOptions network socket) $
+    O.info (runOptions era network socket) $
       O.progDesc "Run a Marlowe transaction."
 
 -- | Parser for the "execute" options.
 runOptions
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: C.BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Parser (RunCommand era)
-runOptions network socket =
+runOptions era network socket =
   Run
     <$> parseNetworkId network
     <*> O.strOption
@@ -543,11 +542,11 @@ runOptions network socket =
     <*> (O.many . O.option parseTxIn)
       ( O.long "tx-in" <> O.metavar "TXID#TXIX" <> O.help "Transaction input in TxId#TxIx format."
       )
-    <*> (O.many . O.option parseTxOut)
+    <*> (O.many . O.option (parseTxOut era))
       ( O.long "tx-out" <> O.metavar "ADDRESS+VALUE" <> O.help "Transaction output in ADDRESS+VALUE format."
       )
     <*> O.option
-      parseAddress
+      (parseAddress era)
       ( O.long "change-address" <> O.metavar "ADDRESS" <> O.help "Address to receive ADA in excess of fee."
       )
     <*> requiredSignersOpt
@@ -586,22 +585,22 @@ runOptions network socket =
 
 -- | Parser for the "withdraw" command.
 withdrawCommand
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: C.BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Mod O.CommandFields (RunCommand era)
-withdrawCommand network socket =
+withdrawCommand era network socket =
   O.command "withdraw" $
-    O.info (withdrawOptions network socket) $
+    O.info (withdrawOptions era network socket) $
       O.progDesc "Withdraw funds from the Marlowe role address."
 
 -- | Parser for the "withdraw" options.
 withdrawOptions
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: C.BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Parser (RunCommand era)
-withdrawOptions network socket =
+withdrawOptions era network socket =
   Withdraw
     <$> parseNetworkId network
     <*> O.strOption
@@ -627,13 +626,13 @@ withdrawOptions network socket =
     <*> (O.many . O.option parseTxIn)
       ( O.long "tx-in" <> O.metavar "TXID#TXIX" <> O.help "Transaction input in TxId#TxIx format."
       )
-    <*> (O.many . O.option parseTxOut)
+    <*> (O.many . O.option (parseTxOut era))
       ( O.long "tx-out"
           <> O.metavar "ADDRESS+VALUE"
           <> O.help "Transaction output in ADDRESS+VALUE format."
       )
     <*> O.option
-      parseAddress
+      (parseAddress era)
       ( O.long "change-address" <> O.metavar "ADDRESS" <> O.help "Address to receive ADA in excess of fee."
       )
     <*> requiredSignersOpt
@@ -655,22 +654,22 @@ withdrawOptions network socket =
 
 -- | Parser for the "auto-execute" command.
 autoRunCommand
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: C.BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Mod O.CommandFields (RunCommand era)
-autoRunCommand network socket =
+autoRunCommand era network socket =
   O.command "auto-execute" $
-    O.info (autoRunOptions network socket) $
+    O.info (autoRunOptions era network socket) $
       O.progDesc "[EXPERIMENTAL] Run a Marlowe transaction, selecting transaction inputs and outputs automatically."
 
 -- | Parser for the "auto-execute" options.
 autoRunOptions
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: C.BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Parser (RunCommand era)
-autoRunOptions network socket =
+autoRunOptions era network socket =
   AutoRun
     <$> parseNetworkId network
     <*> O.strOption
@@ -687,7 +686,7 @@ autoRunOptions network socket =
           <> O.help "JSON file with the Marlowe inputs, final state, and final contract."
       )
     <*> O.option
-      parseAddress
+      (parseAddress era)
       ( O.long "change-address" <> O.metavar "ADDRESS" <> O.help "Address to receive ADA in excess of fee."
       )
     <*> requiredSignersOpt
@@ -722,23 +721,23 @@ autoRunOptions network socket =
 
 -- | Parser for the "auto-withdraw" command.
 autoWithdrawCommand
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: C.BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Mod O.CommandFields (RunCommand era)
-autoWithdrawCommand network socket =
+autoWithdrawCommand era network socket =
   O.command "auto-withdraw" $
-    O.info (autoWithdrawOptions network socket) $
+    O.info (autoWithdrawOptions era network socket) $
       O.progDesc
         "[EXPERIMENTAL] Withdraw funds from the Marlowe role address, selecting transaction inputs and outputs automatically."
 
 -- | Parser for the "auto-withdraw" options.
 autoWithdrawOptions
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: C.BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Parser (RunCommand era)
-autoWithdrawOptions network socket =
+autoWithdrawOptions era network socket =
   AutoWithdraw
     <$> parseNetworkId network
     <*> O.strOption
@@ -758,7 +757,7 @@ autoWithdrawOptions network socket =
       ( O.long "role-name" <> O.metavar "TOKEN_NAME" <> O.help "The role name for the withdrawal."
       )
     <*> O.option
-      parseAddress
+      (parseAddress era)
       ( O.long "change-address" <> O.metavar "ADDRESS" <> O.help "Address to receive ADA in excess of fee."
       )
     <*> requiredSignersOpt

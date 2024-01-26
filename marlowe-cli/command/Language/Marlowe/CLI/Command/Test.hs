@@ -20,7 +20,7 @@ module Language.Marlowe.CLI.Command.Test (
   runTestCommand,
 ) where
 
-import Cardano.Api (IsShelleyBasedEra, NetworkId)
+import Cardano.Api (BabbageEraOnwards, IsShelleyBasedEra, NetworkId)
 import Control.Monad.Except (MonadError, MonadIO)
 import Data.Maybe (fromMaybe)
 import Language.Marlowe.CLI.Command.Parse (parseAddress, parseNetworkId)
@@ -71,11 +71,11 @@ simulationModeOpt =
 
 -- | Parser for the "testSuite" options.
 mkParseTestCommand
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> IO (O.Parser (TestCommand era))
-mkParseTestCommand network socket = do
+mkParseTestCommand era network socket = do
   runtimePortParser <- optParserWithEnvDefault Runtime.CLI.Option.runtimePort
   runtimeHostParser <- optParserWithEnvDefault Runtime.CLI.Option.runtimeHost
 
@@ -90,7 +90,7 @@ mkParseTestCommand network socket = do
                 ( O.flag'
                     ()
                     ( O.long "stream-json"
-                        <> O.help "Stream result json objects to the stdout as they are produced. All the other debug logs are outputed to stderr."
+                        <> O.help "Stream result json objects to the stdout as they are produced. All the other debug logs are output to stderr."
                     )
                 )
             writeToJsonFile =
@@ -120,7 +120,7 @@ mkParseTestCommand network socket = do
             <> O.help "The file containing the signing key for the faucet."
         )
       <*> O.option
-        parseAddress
+        (parseAddress era)
         ( O.long "faucet-address" <> O.metavar "FAUCET_ADDRESS" <> O.help "The address of the faucet."
         )
       <*> txBuildupContextParser

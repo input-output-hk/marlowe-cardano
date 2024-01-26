@@ -20,9 +20,9 @@ module Language.Marlowe.CLI.Test.Wallet.Types where
 
 import Cardano.Api (
   AddressInEra,
+  BabbageEraOnwards,
   Lovelace,
   PolicyId,
-  ScriptDataSupportedInEra,
   TxBody,
   UTxO (UTxO),
  )
@@ -43,7 +43,6 @@ import Data.Aeson (
 import Data.Aeson qualified as A
 import Data.Aeson qualified as Aeson
 import Data.Aeson.KeyMap qualified as KeyMap
-import Data.Aeson.OneLine qualified as A
 import Data.Aeson.Types (toJSONKeyText)
 import Data.Aeson.Types qualified as A
 import Data.Fixed qualified as F
@@ -81,10 +80,12 @@ import Text.Read (readMaybe)
 import Control.Lens.Getter (Getter)
 import Data.Aeson.Key qualified as K
 import Data.Aeson.KeyMap qualified as KM
+import Data.Aeson.Text qualified as A
 import Data.ByteString.Base16.Aeson (EncodeBase16)
 import Data.List qualified as List
 import Data.Maybe (fromMaybe, isJust)
 import Data.Text (Text)
+import Data.Text.Lazy qualified as TL
 import Language.Marlowe.CLI.Test.ExecutionMode qualified as EM
 import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddressBech32)
 
@@ -94,10 +95,10 @@ import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddressBech3
 data SomeTxBody
   = forall era.
     SomeTxBody
-      (ScriptDataSupportedInEra era)
+      (BabbageEraOnwards era)
       (TxBody era)
 
-overSomeTxBody :: forall a. (forall era. ScriptDataSupportedInEra era -> TxBody era -> a) -> SomeTxBody -> a
+overSomeTxBody :: forall a. (forall era. BabbageEraOnwards era -> TxBody era -> a) -> SomeTxBody -> a
 overSomeTxBody f (SomeTxBody era txBody) = f era txBody
 
 overSomeTxBody' :: forall a. (forall era. TxBody era -> a) -> SomeTxBody -> a
@@ -276,7 +277,7 @@ instance (FromJSON value) => FromJSON (Balance value) where
             let str' = T.replace "_" "" str
             parseJSON (A.String str')
           n@(A.Number _) -> parseJSON n
-          _ -> fail $ "Expecting a number or a string but got:" <> T.unpack (A.renderValue json)
+          _ -> fail $ "Expecting a number or a string but got:" <> TL.unpack (A.encodeToLazyText json)
     case json of
       A.String (T.toLower -> "*") -> pure AnyBalance
       A.Array (V.toList -> [minJson, maxJson]) -> ValueRange <$> parseValue minJson <*> parseValue maxJson
@@ -375,7 +376,7 @@ instance FromJSON TokenRecipientScript where
       (T.toLower -> "openrole") -> do
         possibleThreadTokenName <- obj .:? "threadTokenName"
         pure $ OpenRoleScript $ fromMaybe (ThreadTokenName "") possibleThreadTokenName
-      _ -> fail $ "Expecting a token recipient script: " <> T.unpack (A.renderValue json)
+      _ -> fail $ "Expecting a token recipient script: " <> TL.unpack (A.encodeToLazyText json)
   parseJSON _ = fail "Expecting a token recipient script"
 
 -- Either a wallet or a script
@@ -397,7 +398,7 @@ instance FromJSON TokenRecipient where
     json@(A.Object props) | (isJust $ List.find ((==) "script" . fst) (KeyMap.toList props)) -> ScriptRecipient <$> parseJSON json
     A.Object (KeyMap.toList -> [("wallet", walletNicknameJSON)]) -> WalletRecipient <$> parseJSON walletNicknameJSON
     A.Object (KeyMap.toList -> [("address", addressJSON)]) -> AddressRecipient <$> parseJSON addressJSON
-    json -> fail $ "Expecting a `TokenRecipient` string or object: " <> T.unpack (A.renderValue json)
+    json -> fail $ "Expecting a `TokenRecipient` string or object: " <> TL.unpack (A.encodeToLazyText json)
 
 instance ToJSON TokenRecipient where
   toJSON = \case
@@ -623,7 +624,7 @@ class HasInterpretState st era | st -> era where
   currenciesL :: Lens' st Currencies
 
 class HasInterpretEnv env era | env -> era where
-  eraL :: Lens' env (ScriptDataSupportedInEra era)
+  eraL :: Lens' env (BabbageEraOnwards era)
   printStatsL :: Lens' env PrintStats
   txBuildupContextL :: Getter env (TxBuildupContext era)
 
@@ -645,7 +646,6 @@ txBodyFee :: forall era. TxBody era -> C.Lovelace
 txBodyFee (C.TxBody txBodyContent) =
   case C.txFee txBodyContent of
     C.TxFeeExplicit _ lovelace -> lovelace
-    C.TxFeeImplicit _ -> C.Lovelace 0
 
 walletTxFees :: Wallet era' -> C.Lovelace
 walletTxFees Wallet{..} = do

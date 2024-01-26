@@ -28,9 +28,15 @@ import Control.Monad.Except (runExceptT)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (runReaderT)
 import Data.Aeson qualified as A
+import Data.Aeson.Encode.Pretty (encodePretty)
+import Data.ByteString.Lazy qualified as LBS
+import Data.Functor ((<&>))
 import Data.Map.Strict qualified as M
 import Data.Ratio ((%))
-import Language.Marlowe.Analysis.Safety.Transaction (findTransactions', unitAnnotator)
+import Data.Text qualified as Text
+import Data.Text.Encoding qualified as Text
+import Language.Marlowe (emptyState)
+import Language.Marlowe.Analysis.Safety.Transaction (CurrentState (..), findTransactions, unitAnnotator)
 import Language.Marlowe.CLI.Analyze (
   ContractInstance (
     ContractInstance,
@@ -59,12 +65,14 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   Observation (TrueObs),
   Party (Role),
   Payee (Party),
-  State (State),
+  State (..),
   Token (Token),
   Value (Constant),
  )
+import Language.Marlowe.Extended.V1 (adaSymbol, adaToken)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (SlotConfig))
-import PlutusLedgerApi.V2 (MajorProtocolVersion (..))
+import PlutusLedgerApi.V1.Value (tokenName)
+import PlutusLedgerApi.V2 (MajorProtocolVersion (..), POSIXTime (..))
 import PlutusTx.AssocMap qualified as AM
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (Assertion, assertBool, testCase)

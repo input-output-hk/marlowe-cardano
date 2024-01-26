@@ -1266,11 +1266,11 @@
     "hackage": {
       "flake": false,
       "locked": {
-        "lastModified": 1705883077,
-        "narHash": "sha256-KfQfG7ZKH5mvjdLulDKvvY75V0ZdtR04GPKcg2pEL9s=",
+        "lastModified": 1706228559,
+        "narHash": "sha256-wI4Fba5wByZWdRY1fw7ckHfz0TdTkUj0Q6iODCXNuZc=",
         "owner": "input-output-hk",
         "repo": "hackage.nix",
-        "rev": "bd2d081c571174c2e81c7e2bba1346ae4757de75",
+        "rev": "c315acf27dac63a684ac71e684f2256671a201cd",
         "type": "github"
       },
       "original": {

@@ -14,7 +14,7 @@
 
 module Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON where
 
-import Cardano.Api (AddressInEra, CardanoMode, LocalNodeConnectInfo)
+import Cardano.Api (AddressInEra, LocalNodeConnectInfo)
 import Contrib.Data.Aeson.Traversals qualified as A
 import Contrib.Data.Time.Clock (nominalDiffTimeToMilliseconds)
 import Contrib.Data.Time.Units qualified as Time.Units
@@ -26,7 +26,7 @@ import Control.Monad.State.Class (MonadState, gets)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Aeson qualified as A
 import Data.Aeson.KeyMap qualified as KeyMap
-import Data.Aeson.OneLine qualified as A
+import Data.Aeson.Text qualified as A
 import Data.Bifunctor (Bifunctor (first))
 import Data.Function ((&))
 import Data.Functor ((<&>))
@@ -35,13 +35,14 @@ import Data.Map.Strict qualified as M
 import Data.Map.Strict qualified as Map
 import Data.Proxy (Proxy)
 import Data.Text qualified as Text
+import Data.Text.Lazy qualified as TL
 import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
 import Data.Time.Units (Microsecond, TimeUnit (..))
 import Data.Vector qualified as Vector
 import Debug.Trace (traceM)
 import GHC.Generics (Generic)
 import Language.Marlowe qualified as Marlowe
-import Language.Marlowe.CLI.Sync (toPlutusAddress)
+import Language.Marlowe.CLI.Run (toPlutusAddress)
 import Language.Marlowe.CLI.Test.Wallet.Types (
   Currencies (Currencies),
   Currency (Currency, ccCurrencySymbol),
@@ -232,7 +233,7 @@ decodeParametrizedContractJSON
 decodeParametrizedContractJSON network wallets currencies n json = do
   rewriteParametrizedMarloweJSON network wallets currencies n json >>= \(ParametrizedMarloweJSON contractJSON) ->
     case A.fromJSON contractJSON of
-      A.Error err -> Left $ InvalidMarloweJSON err (Text.unpack $ A.renderValue contractJSON)
+      A.Error err -> Left $ InvalidMarloweJSON err (TL.unpack $ A.encodeToLazyText contractJSON)
       A.Success contract -> pure contract
 
 decodeParametrizedInputJSON
@@ -245,7 +246,7 @@ decodeParametrizedInputJSON
 decodeParametrizedInputJSON network wallets currencies n json = do
   rewriteParametrizedMarloweJSON network wallets currencies n json >>= \(ParametrizedMarloweJSON contractJSON) ->
     case A.fromJSON contractJSON of
-      A.Error err -> Left $ InvalidMarloweJSON err (Text.unpack $ A.renderValue contractJSON)
+      A.Error err -> Left $ InvalidMarloweJSON err (TL.unpack $ A.encodeToLazyText contractJSON)
       A.Success input -> pure input
 
 doRewriteParametrizedMarloweJSON
@@ -253,7 +254,7 @@ doRewriteParametrizedMarloweJSON
    . (MonadIO m)
   => (MonadError CliError m)
   => (MonadReader env m)
-  => (Has (LocalNodeConnectInfo CardanoMode) env)
+  => (Has LocalNodeConnectInfo env)
   => (MonadState st m)
   => (Has (Wallets era) st)
   => (Has Currencies st)
@@ -261,7 +262,7 @@ doRewriteParametrizedMarloweJSON
   -> ParametrizedMarloweJSON
   -> m ParametrizedMarloweJSON
 doRewriteParametrizedMarloweJSON _ json = do
-  network <- (asks getter :: m (LocalNodeConnectInfo CardanoMode)) <&> marloweNetworkFromLocalNodeConnectInfo
+  network <- (asks getter :: m LocalNodeConnectInfo) <&> marloweNetworkFromLocalNodeConnectInfo
   (wallets :: Wallets era) <- gets getter
   (currencies :: Currencies) <- gets getter
   n <- now

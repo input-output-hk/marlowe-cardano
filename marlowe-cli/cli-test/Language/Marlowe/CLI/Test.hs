@@ -21,12 +21,12 @@ module Language.Marlowe.CLI.Test (
 ) where
 
 import Cardano.Api (
+  BabbageEraOnwards,
   ConsensusModeParams (CardanoModeParams),
   EpochSlots (..),
   File (..),
   IsShelleyBasedEra,
   LocalNodeConnectInfo (..),
-  ScriptDataSupportedInEra,
  )
 import Cardano.Api qualified as C
 import Cardano.Api.Shelley qualified as CS
@@ -47,9 +47,6 @@ import Data.List (intercalate)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
 import GHC.IO.Handle.FD (stderr)
-import Language.Marlowe.CLI.Cardano.Api (
-  toMultiAssetSupportedInEra,
- )
 import Language.Marlowe.CLI.IO (
   decodeFileStrict,
   getEraHistory,
@@ -76,6 +73,7 @@ import Language.Marlowe.CLI.Test.Types (
   TestSuite (..),
  )
 import Language.Marlowe.CLI.Transaction (
+  mkTxOutValue,
   querySlotConfig,
  )
 import Language.Marlowe.CLI.Types (
@@ -100,7 +98,7 @@ runTestSuite
   => (MonadError CliError m)
   => (MonadReader (CliEnv era) m)
   => (MonadIO m)
-  => ScriptDataSupportedInEra era
+  => BabbageEraOnwards era
   -> TestSuite era FilePath
   -- ^ The tests.
   -> m ()
@@ -133,8 +131,7 @@ runTestSuite era TestSuite{..} = do
               BS8.pack "b1c9a36fff21ab3941e63e3ff15351a2f4459d8e055521a4b581044789e3a0db"
         let txIx = C.TxIx 0
             txIn = C.TxIn txId txIx
-            era' = toMultiAssetSupportedInEra era
-            txOutValue = C.TxOutValue era' $ C.lovelaceToValue $ C.Lovelace 1000_000 * 1000_000
+            txOutValue = mkTxOutValue era $ C.lovelaceToValue $ C.Lovelace 1000_000 * 1000_000
             txOut = C.TxOut tsFaucetAddress txOutValue C.TxOutDatumNone CS.ReferenceScriptNone
             utxo = C.UTxO $ Map.singleton txIn txOut
             queryCtx = QueryNode connection
@@ -154,7 +151,8 @@ runTestSuite era TestSuite{..} = do
       UseOnChainMode timeout ->
         pure $ NodeTxBuildup connection (T.DoSubmit timeout)
 
-  protocolParameters <- queryInEra connection C.QueryProtocolParameters
+  protocolParameters <-
+    C.fromLedgerPParams (C.babbageEraOnwardsToShelleyBasedEra era) <$> queryInEra connection C.QueryProtocolParameters
   slotConfig <- querySlotConfig connection
   costModel <- getPV2CostModelParams (QueryNode connection)
   -- FIXME: This should be configurable.

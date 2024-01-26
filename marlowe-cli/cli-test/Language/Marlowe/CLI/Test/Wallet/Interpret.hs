@@ -17,10 +17,10 @@ module Language.Marlowe.CLI.Test.Wallet.Interpret where
 import Cardano.Api (
   AddressInEra,
   AsType (AsPaymentKey),
+  BabbageEraOnwards,
   File (..),
   Key (verificationKeyHash),
   PaymentCredential (PaymentCredentialByKey),
-  ScriptDataSupportedInEra,
   StakeAddressReference (NoStakeAddress),
   generateSigningKey,
   makeShelleyAddressInEra,
@@ -57,12 +57,11 @@ import Data.Set qualified as Set
 import Data.Text qualified as Text
 import Data.Traversable (for)
 import Data.Tuple.Extra (uncurry3)
-import Language.Marlowe.CLI.Cardano.Api (toReferenceTxInsScriptsInlineDatumsSupportedInEra, toTxOutDatumInline)
+import Language.Marlowe.CLI.Cardano.Api (toTxOutDatumInline)
 import Language.Marlowe.CLI.Cardano.Api.Value (lovelaceToPlutusValue, toCurrencySymbol, toPlutusValue)
 import Language.Marlowe.CLI.Cardano.Api.Value qualified as CV
 import Language.Marlowe.CLI.IO (readSigningKey, submitTxBody')
-import Language.Marlowe.CLI.Run (toCardanoPolicyId)
-import Language.Marlowe.CLI.Sync (toPlutusAddress)
+import Language.Marlowe.CLI.Run (toCardanoPolicyId, toPlutusAddress)
 import Language.Marlowe.CLI.Test.CLI.Monad (runLabeledCli)
 import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (
   ParametrizedMarloweJSON,
@@ -72,7 +71,7 @@ import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (
  )
 import Language.Marlowe.CLI.Test.ExecutionMode (queryByAddress, queryUTxOs)
 import Language.Marlowe.CLI.Test.ExecutionMode qualified as EM
-import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError (..), assertionFailed', testExecutionFailed')
+import Language.Marlowe.CLI.Test.InterpreterError (assertionFailed', testExecutionFailed')
 import Language.Marlowe.CLI.Test.Log (Label, logStoreLabeledMsg, logStoreMsgWith, logTxBody, throwLabeledError)
 import Language.Marlowe.CLI.Test.Report qualified as Report
 import Language.Marlowe.CLI.Test.Wallet.Types (
@@ -129,7 +128,7 @@ import Language.Marlowe.CLI.Types (
   validatorAddress,
  )
 import Language.Marlowe.CLI.Types qualified as CT
-import Language.Marlowe.Cardano (marloweNetworkFromCaradnoNetworkId)
+import Language.Marlowe.Cardano (marloweNetworkFromCardanoNetworkId)
 import Language.Marlowe.Core.V1.Semantics.Types qualified as M
 import Language.Marlowe.Scripts (openRolesValidator)
 import PlutusLedgerApi.V1 (CurrencySymbol, TokenName)
@@ -180,7 +179,7 @@ updateWallets f = do
 addWalletTransaction
   :: (InterpretMonad env st m era)
   => (Label l)
-  => (C.IsCardanoEra era)
+  => (C.IsShelleyBasedEra era)
   => WalletNickname
   -> l
   -> String
@@ -468,7 +467,7 @@ decodeInputJSON
 decodeInputJSON json = do
   currencies <- use currenciesL
   wallets <- use walletsL
-  network <- getNetworkId <&> marloweNetworkFromCaradnoNetworkId
+  network <- getNetworkId <&> marloweNetworkFromCardanoNetworkId
   n <- now
   case decodeParametrizedInputJSON network wallets currencies n json of
     Left err -> throwError $ testExecutionFailed' $ "Failed to decode input: " <> show err
@@ -481,7 +480,7 @@ decodeContractJSON
 decodeContractJSON json = do
   currencies <- use currenciesL
   wallets <- use walletsL
-  network <- getNetworkId <&> marloweNetworkFromCaradnoNetworkId
+  network <- getNetworkId <&> marloweNetworkFromCardanoNetworkId
   n <- now
   case decodeParametrizedContractJSON network wallets currencies n json of
     Left err -> throwError $ testExecutionFailed' $ "Failed to decode contract: " <> show err
@@ -559,7 +558,12 @@ interpret so@ExternalWallet{..} = do
   skey <- runLabeledCli era so $ readSigningKey (SigningKeyFile woSigningKeyFile)
   networkId <- getNetworkId
   let vkey = toPaymentVerificationKey $ getVerificationKey skey
-      (address :: AddressInEra era) = makeShelleyAddressInEra networkId (PaymentCredentialByKey (verificationKeyHash vkey)) NoStakeAddress
+      (address :: AddressInEra era) =
+        makeShelleyAddressInEra
+          (C.babbageEraOnwardsToShelleyBasedEra era)
+          networkId
+          (PaymentCredentialByKey (verificationKeyHash vkey))
+          NoStakeAddress
 
   utxo <- EM.queryByAddress address
   let wallet = T.fromUTxO address skey utxo (IsExternalWallet True)
@@ -620,12 +624,6 @@ interpret wo@Fund{..} =
 interpret wo@Mint{..} = do
   era <- view eraL
 
-  scriptReferenceEra <-
-    liftEither $
-      note
-        (TestExecutionFailed "Unable to convert era to script reference era" [])
-        (toReferenceTxInsScriptsInlineDatumsSupportedInEra era)
-
   let issuerNickname = fromMaybe faucetNickname woIssuer
 
   (Currencies currencies) <- use currenciesL
@@ -650,12 +648,12 @@ interpret wo@Mint{..} = do
       AddressRecipient bech32 -> do
         case C.deserialiseFromBech32 C.AsShelleyAddress bech32 of
           Left err -> throwError $ testExecutionFailed' $ "Failed to parse address: " <> show err
-          Right addr -> pure $ RegularAddressRecipient $ C.shelleyAddressInEra addr
+          Right addr -> pure $ RegularAddressRecipient $ C.shelleyAddressInEra (C.babbageEraOnwardsToShelleyBasedEra era) addr
       WalletRecipient walletNickname -> do
         Wallet addr _ _ _ _ _ <- getWallet walletNickname
         pure $ RegularAddressRecipient addr
       ScriptRecipient (OpenRoleScript (ThreadTokenName bs)) -> do
-        let datum = toTxOutDatumInline scriptReferenceEra $ P.Datum . P.toBuiltinData . stringToBuiltinByteString $ bs
+        let datum = toTxOutDatumInline era $ P.Datum . P.toBuiltinData . stringToBuiltinByteString $ bs
         addr <- openRoleValidatorAddress
         pure $ ScriptAddressRecipient addr datum
     pure (destAddress, Just woMinLovelace, tokens)
@@ -695,7 +693,7 @@ interpret SplitWallet{..} = do
   let values = [C.lovelaceToValue v | v <- woUTxOs]
   void $ buildFaucet ("[createCollaterals] " :: String) [address] values address skey
 interpret wo@ReturnFunds{} = do
-  (era :: ScriptDataSupportedInEra era) <- view eraL
+  (era :: BabbageEraOnwards era) <- view eraL
   (allWalletsUtxos :: Map.Map WalletNickname [AnUTxO era]) <- fetchWalletsUTxOs
   (utxos, signingKeys) <- ifoldMapMFlipped allWalletsUtxos \n (utxos :: [CT.AnUTxO era]) -> do
     if n /= faucetNickname
@@ -789,26 +787,25 @@ saveWalletFiles walletNickname wallet dir = do
     SomePaymentSigningKeyGenesisUTxO k -> writeEnvelope (File skeyFile) k
   pure (addrFile, CT.SigningKeyFile skeyFile)
 
--- TODO: We should use `CardanoEra era` as an `era` carrier here.
 createWallet
   :: forall env era st m
    . (InterpretMonad env st m era)
-  => (C.IsShelleyBasedEra era)
-  => ScriptDataSupportedInEra era
+  => BabbageEraOnwards era
   -> m (Wallet era)
-createWallet _ = do
+createWallet era = do
   skey <- liftIO $ generateSigningKey AsPaymentKey
   networkId <- getNetworkId
   let vkey = C.getVerificationKey skey
       (address :: AddressInEra era) =
         makeShelleyAddressInEra
+          (C.babbageEraOnwardsToShelleyBasedEra era)
           networkId
           (PaymentCredentialByKey (verificationKeyHash vkey))
           NoStakeAddress
   pure $ emptyWallet address (SomePaymentSigningKeyPayment skey)
 
 fundWallets
-  :: (InterpretMonad env st m era, CAS.IsCardanoEra era)
+  :: (InterpretMonad env st m era, CAS.IsShelleyBasedEra era)
   => (Label l)
   => l
   -> [WalletNickname]
@@ -827,7 +824,7 @@ fundWallets label walletNicknames utxos = do
     faucet{_waSubmittedTransactions = SomeTxBody era txBody : faucetTransactions}
 
 buildFaucet
-  :: (InterpretMonad env st m era, CAS.IsCardanoEra era)
+  :: (InterpretMonad env st m era, CAS.IsShelleyBasedEra era)
   => (Label l)
   => l
   -> [AddressInEra era]

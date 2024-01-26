@@ -35,7 +35,7 @@ import Language.Marlowe.CLI.Types (TxBuildupContext, toQueryContext)
 import Language.Marlowe.CLI.Types qualified as CT
 
 class HasInterpretEnv env era | env -> era where
-  eraL :: Lens' env (C.ScriptDataSupportedInEra era)
+  eraL :: Lens' env (C.BabbageEraOnwards era)
   txBuildupContextL :: Getter env (TxBuildupContext era)
 
 type InterpretMonad env m era =

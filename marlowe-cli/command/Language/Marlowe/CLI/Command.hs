@@ -23,7 +23,15 @@ module Language.Marlowe.CLI.Command (
   runCommand,
 ) where
 
-import Cardano.Api (AlonzoEra, BabbageEra, ConwayEra, IsShelleyBasedEra, NetworkId, ScriptDataSupportedInEra (..))
+import Cardano.Api (
+  BabbageEra,
+  BabbageEraOnwards (..),
+  ConwayEra,
+  IsShelleyBasedEra,
+  NetworkId,
+  babbageEraOnwardsToShelleyBasedEra,
+  shelleyBasedEraConstraints,
+ )
 import Control.Monad.Except (MonadError, MonadIO, liftIO, runExceptT)
 import Data.Foldable (Foldable (fold), asum)
 import Language.Marlowe.CLI.Command.Contract (ContractCommand, parseContractCommand, runContractCommand)
@@ -42,7 +50,7 @@ import Language.Marlowe.CLI.Command.Test (TestCommand, mkParseTestCommand, runTe
 import Language.Marlowe.CLI.Command.Transaction (TransactionCommand, parseTransactionCommand, runTransactionCommand)
 import Language.Marlowe.CLI.Command.Util (UtilCommand, parseUtilCommand, runUtilCommand)
 import Language.Marlowe.CLI.IO (getNetworkMagic, getNodeSocketPath)
-import Language.Marlowe.CLI.Types (CliEnv (..), CliError (..), withShelleyBasedEra)
+import Language.Marlowe.CLI.Types (CliEnv (..), CliError (..))
 import System.Exit (exitFailure)
 import System.IO (BufferMode (LineBuffering), hPutStrLn, hSetBuffering, stderr, stdout)
 
@@ -71,9 +79,9 @@ data Command era
   | -- | Format-related commands.
     FormatCommand FormatCommand
 
-data SomeCommand = forall era. SomeCommand (ScriptDataSupportedInEra era) (Command era)
+data SomeCommand = forall era. SomeCommand (BabbageEraOnwards era) (Command era)
 
-data SomeEra = forall era. SomeEra (ScriptDataSupportedInEra era)
+data SomeEra = forall era. SomeEra (BabbageEraOnwards era)
 
 -- | Main entry point for Marlowe CLI tool.
 runCLI
@@ -90,7 +98,7 @@ runCLI version =
     hSetBuffering stderr LineBuffering
     SomeCommand era command <-
       O.customExecParser O.defaultPrefs{O.prefShowHelpOnEmpty = True} commandParser
-    result <- runExceptT $ withShelleyBasedEra era $ runCommand era command
+    result <- runExceptT $ shelleyBasedEraConstraints (babbageEraOnwardsToShelleyBasedEra era) $ runCommand era command
     case result of
       Right () -> return ()
       Left message -> do
@@ -102,7 +110,7 @@ runCommand
   :: (IsShelleyBasedEra era)
   => (MonadError CliError m)
   => (MonadIO m)
-  => ScriptDataSupportedInEra era
+  => BabbageEraOnwards era
   -> Command era
   -- ^ The command.
   -> m ()
@@ -114,7 +122,7 @@ runCommand era cmd = flip runReaderT CliEnv{..} case cmd of
   InputCommand command -> runInputCommand command
   RoleCommand command -> runRoleCommand command
   TemplateCommand command outputFiles -> runTemplateCommand command outputFiles
-  TransactionCommand command -> runTransactionCommand command
+  TransactionCommand command -> runTransactionCommand era command
   UtilCommand command -> runUtilCommand command
   FormatCommand command -> runFormatCommand command
 
@@ -145,45 +153,43 @@ mkCommandParser networkId socketPath version = do
     eraOption =
       asum
         [ O.flag'
-            (SomeEra ScriptDataInAlonzoEra)
-            ( O.long "alonzo-era"
-                <> O.help "Specify the Alonzo era"
-            )
-        , O.flag'
-            (SomeEra ScriptDataInBabbageEra)
+            (SomeEra BabbageEraOnwardsBabbage)
             ( O.long "babbage-era"
                 <> O.help "Specify the Babbage era (default)"
             )
-        , pure (SomeEra ScriptDataInBabbageEra)
+        , O.flag'
+            (SomeEra BabbageEraOnwardsConway)
+            ( O.long "conway-era"
+                <> O.help "Specify the Conway era"
+            )
+        , pure (SomeEra BabbageEraOnwardsBabbage)
         ]
     mkSomeCommandParser :: IO (O.Parser SomeCommand)
     mkSomeCommandParser = do
-      let parseTestCommand :: forall era. (IsShelleyBasedEra era) => IO (O.Parser (TestCommand era))
-          parseTestCommand = mkParseTestCommand networkId socketPath
+      let parseTestCommand :: BabbageEraOnwards era -> IO (O.Parser (TestCommand era))
+          parseTestCommand era = mkParseTestCommand era networkId socketPath
       -- FIXME: Is is possible to avoid this duplication?
       -- It seems to be hard to mix `BindP` and `IO`.
-      testCommandParsers <- (,,) <$> parseTestCommand <*> parseTestCommand <*> parseTestCommand
+      testCommandParsers <- (,) <$> parseTestCommand BabbageEraOnwardsBabbage <*> parseTestCommand BabbageEraOnwardsConway
       pure $ O.BindP eraOption (mkSomeCommandParser' testCommandParsers)
 
     mkSomeCommandParser'
-      :: (O.Parser (TestCommand AlonzoEra), O.Parser (TestCommand BabbageEra), O.Parser (TestCommand ConwayEra))
+      :: (O.Parser (TestCommand BabbageEra), O.Parser (TestCommand ConwayEra))
       -> SomeEra
       -> O.Parser SomeCommand
-    mkSomeCommandParser' (testCommandParser, _, _) (SomeEra ScriptDataInAlonzoEra) = do
-      SomeCommand ScriptDataInAlonzoEra <$> commandParser testCommandParser
-    mkSomeCommandParser' (_, testCommandParser, _) (SomeEra ScriptDataInBabbageEra) = do
-      SomeCommand ScriptDataInBabbageEra <$> commandParser testCommandParser
-    mkSomeCommandParser' (_, _, testCommandParser) (SomeEra ScriptDataInConwayEra) = do
-      SomeCommand ScriptDataInConwayEra <$> commandParser testCommandParser
+    mkSomeCommandParser' (testCommandParser, _) (SomeEra BabbageEraOnwardsBabbage) = do
+      SomeCommand BabbageEraOnwardsBabbage <$> commandParser BabbageEraOnwardsBabbage testCommandParser
+    mkSomeCommandParser' (_, testCommandParser) (SomeEra BabbageEraOnwardsConway) = do
+      SomeCommand BabbageEraOnwardsConway <$> commandParser BabbageEraOnwardsConway testCommandParser
 
-    commandParser :: (IsShelleyBasedEra era) => O.Parser (TestCommand era) -> O.Parser (Command era)
-    commandParser testCommandParser =
+    commandParser :: BabbageEraOnwards era -> O.Parser (TestCommand era) -> O.Parser (Command era)
+    commandParser era testCommandParser =
       asum
         [ O.hsubparser $
             fold
               [ O.commandGroup "High-level commands:"
               , O.command "run" $
-                  O.info (RunCommand <$> parseRunCommand networkId socketPath) $
+                  O.info (RunCommand <$> parseRunCommand era networkId socketPath) $
                     O.progDesc "Run a contract."
               , O.command "template" $
                   O.info (TemplateCommand <$> parseTemplateCommand <*> parseTemplateCommandOutputFiles) $
@@ -208,10 +214,10 @@ mkCommandParser networkId socketPath version = do
                   O.info (RoleCommand <$> parseRoleCommand networkId) $
                     O.progDesc "Export role address, validator, datum, or redeemer."
               , O.command "transaction" $
-                  O.info (TransactionCommand <$> parseTransactionCommand networkId socketPath) $
+                  O.info (TransactionCommand <$> parseTransactionCommand era networkId socketPath) $
                     O.progDesc "Create and submit transactions."
               , O.command "util" $
-                  O.info (UtilCommand <$> parseUtilCommand networkId socketPath) $
+                  O.info (UtilCommand <$> parseUtilCommand era networkId socketPath) $
                     O.progDesc "Miscellaneous utilities."
               ]
         ]

@@ -10,6 +10,7 @@ import Cardano.Api (
   AddressAny (AddressShelley),
   AnyCardanoEra (..),
   AsType (..),
+  BabbageEraOnwards,
   File (..),
   Key (verificationKeyHash),
   NetworkId (Testnet),
@@ -28,7 +29,6 @@ import Cardano.Api (
  )
 import qualified Cardano.Api as C
 import Cardano.Api.Byron (deserialiseFromTextEnvelope)
-import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import qualified Cardano.Api.Shelley as C
 import Control.Concurrent (threadDelay)
 import Control.DeepSeq (NFData)
@@ -170,49 +170,14 @@ submitBuilder wallet builder = withCurrentEra go
       -- Note - the txId is not evaluated yet - we're referring to it lazily.
       (a, txOuts) <- runStateT (runReaderT builder txId) []
       utxo <- getUTxO era wallet
-      multiAsset <-
-        expectRight ("multi asset not supported in " <> show era) $
-          C.multiAssetSupportedInEra $
-            C.shelleyBasedToCardanoEra era
-      txFeesExplicit <-
-        expectRight ("multi asset not supported in " <> show era) $
-          C.txFeesExplicitInEra $
-            C.shelleyBasedToCardanoEra era
-      validityNoUpperBound <-
-        expectJust ("multi asset not supported in " <> show era) $
-          C.validityNoUpperBoundSupportedInEra $
-            C.shelleyBasedToCardanoEra era
-      referenceScripts <-
-        expectJust @_ @(C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era)
-          ("reference scripts not supported in " <> show era)
-          case era of
-            C.ShelleyBasedEraShelley -> Nothing
-            C.ShelleyBasedEraAllegra -> Nothing
-            C.ShelleyBasedEraMary -> Nothing
-            C.ShelleyBasedEraAlonzo -> Nothing
-            C.ShelleyBasedEraBabbage -> Just C.ReferenceTxInsScriptsInlineDatumsInBabbageEra
-            C.ShelleyBasedEraConway -> Just C.ReferenceTxInsScriptsInlineDatumsInConwayEra
+      multiAsset <- C.inEonForShelleyBasedEra (fail $ "Era not Mary or later" <> show era) pure era
+      referenceScripts <- C.inEonForShelleyBasedEra (fail $ "Era not Babbage or later" <> show era) pure era
       let txBodyContent =
-            TxBodyContent
+            (C.defaultTxBodyContent era)
               { txIns =
                   (,C.BuildTxWith $ C.KeyWitness C.KeyWitnessForSpending) . fst
                     <$> Map.toList (C.unUTxO utxo)
-              , txInsCollateral = C.TxInsCollateralNone
-              , txInsReference = C.TxInsReferenceNone
               , txOuts = fromJust . toCardanoTxOut multiAsset <$> reverse txOuts
-              , txTotalCollateral = C.TxTotalCollateralNone
-              , txReturnCollateral = C.TxReturnCollateralNone
-              , txFee = C.TxFeeExplicit txFeesExplicit 0
-              , txValidityRange = (C.TxValidityNoLowerBound, C.TxValidityNoUpperBound validityNoUpperBound)
-              , txMetadata = C.TxMetadataNone
-              , txAuxScripts = C.TxAuxScriptsNone
-              , txExtraKeyWits = C.TxExtraKeyWitnessesNone
-              , txProtocolParams = C.BuildTxWith Nothing
-              , txWithdrawals = C.TxWithdrawalsNone
-              , txCertificates = C.TxCertificatesNone
-              , txUpdateProposal = C.TxUpdateProposalNone
-              , txMintValue = C.TxMintNone
-              , txScriptValidity = C.TxScriptValidityNone
               }
       txBody <- balanceTx era wallet utxo txBodyContent
       let txId = fromCardanoTxId $ getTxId txBody
@@ -220,30 +185,25 @@ submitBuilder wallet builder = withCurrentEra go
 
 withCurrentEra :: (forall era. C.ShelleyBasedEra era -> Integration a) -> Integration a
 withCurrentEra f = do
-  AnyCardanoEra era <- queryNode 0 $ C.QueryCurrentEra C.CardanoModeIsMultiEra
-  case era of
-    C.ByronEra -> fail "Still in byron"
-    C.ShelleyEra -> f C.ShelleyBasedEraShelley
-    C.AllegraEra -> f C.ShelleyBasedEraAllegra
-    C.MaryEra -> f C.ShelleyBasedEraMary
-    C.AlonzoEra -> f C.ShelleyBasedEraAlonzo
-    C.BabbageEra -> f C.ShelleyBasedEraBabbage
-    C.ConwayEra -> f C.ShelleyBasedEraConway
+  AnyCardanoEra era <- queryNode 0 C.QueryCurrentEra
+  C.inEonForEra (fail "Still in byron") f era
 
 balanceTx :: C.ShelleyBasedEra era -> Wallet -> C.UTxO era -> TxBodyContent C.BuildTx era -> Integration (TxBody era)
 balanceTx era (Wallet WalletAddresses{..} _) utxo txBodyContent = do
   start <- queryNode 0 C.QuerySystemStart
-  history <- queryNode 0 $ C.QueryEraHistory C.CardanoModeIsMultiEra
-  protocol <- queryShelley era 0 $ C.QueryInShelleyBasedEra era C.QueryProtocolParameters
+  history <- queryNode 0 C.QueryEraHistory
+  protocol <- queryShelley 0 $ C.QueryInShelleyBasedEra era C.QueryProtocolParameters
   changeAddr <-
     expectJust "Could not convert to Cardano address" $ toCardanoAddressInEra (C.shelleyBasedToCardanoEra era) changeAddress
   C.BalancedTxBody _ txBody _ _ <-
     withShelleyBasedEra era $
       expectRight "Failed to balance Tx" $
         C.makeTransactionBodyAutoBalance
+          era
           start
           (toLedgerEpochInfo history)
-          protocol
+          (C.LedgerProtocolParameters protocol)
+          mempty
           mempty
           mempty
           utxo
@@ -254,30 +214,22 @@ balanceTx era (Wallet WalletAddresses{..} _) utxo txBodyContent = do
 
 getUTxO :: C.ShelleyBasedEra era -> Wallet -> Integration (C.UTxO era)
 getUTxO era (Wallet WalletAddresses{..} _) =
-  queryShelley era 0 $
+  queryShelley 0 $
     C.QueryInShelleyBasedEra era $
       C.QueryUTxO $
         C.QueryUTxOByAddress $
           Set.insert (fromJust $ toCardanoAddressAny changeAddress) $
             Set.map (fromJust . toCardanoAddressAny) extraAddresses
 
-queryShelley :: C.ShelleyBasedEra era -> Int -> C.QueryInEra era a -> Integration a
-queryShelley era nodeNum =
-  either (fail . show) pure
-    <=< queryNode nodeNum . C.QueryInEra case era of
-      C.ShelleyBasedEraShelley -> C.ShelleyEraInCardanoMode
-      C.ShelleyBasedEraAllegra -> C.AllegraEraInCardanoMode
-      C.ShelleyBasedEraMary -> C.MaryEraInCardanoMode
-      C.ShelleyBasedEraAlonzo -> C.AlonzoEraInCardanoMode
-      C.ShelleyBasedEraBabbage -> C.BabbageEraInCardanoMode
-      C.ShelleyBasedEraConway -> C.ConwayEraInCardanoMode
+queryShelley :: Int -> C.QueryInEra era a -> Integration a
+queryShelley nodeNum = either (fail . show) pure <=< queryNode nodeNum . C.QueryInEra
 
-queryNode :: Int -> C.QueryInMode C.CardanoMode a -> Integration a
+queryNode :: Int -> C.QueryInMode a -> Integration a
 queryNode nodeNum query = do
   connectInfo <- nodeConnectInfo nodeNum
   liftIO $ either (fail . show) pure =<< C.queryNodeLocalState connectInfo Nothing query
 
-nodeConnectInfo :: Int -> Integration (C.LocalNodeConnectInfo C.CardanoMode)
+nodeConnectInfo :: Int -> Integration C.LocalNodeConnectInfo
 nodeConnectInfo nodeNum = do
   LocalTestnet{..} <- testnet
   let SpoNode{..} = spoNodes !! nodeNum
@@ -398,18 +350,18 @@ getTip = do
 
 submit
   :: Wallet
-  -> ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  -> BabbageEraOnwards era
   -> TxBody era
   -> Integration BlockHeader
 submit era wallet = expectRight "failed to submit tx" <=< submit' era wallet
 
 submit'
   :: Wallet
-  -> ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  -> BabbageEraOnwards era
   -> TxBody era
   -> Integration (Either SubmitError BlockHeader)
 submit' Wallet{..} era txBody = do
-  let tx = withShelleyBasedEra era $ signShelleyTransaction txBody signingKeys
+  let tx = signShelleyTransaction (C.babbageEraOnwardsToShelleyBasedEra era) txBody signingKeys
   runMarloweTxClient $ liftCommandWait $ Submit era tx
 
 deposit

@@ -1,3 +1,7 @@
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
+
 module Language.Marlowe.Runtime.App.Sign (
   sign,
 ) where
@@ -5,6 +9,7 @@ module Language.Marlowe.Runtime.App.Sign (
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api (TxId)
 
+import Cardano.Api (IsShelleyBasedEra (..))
 import qualified Cardano.Api as C (
   IsShelleyBasedEra,
   PaymentExtendedKey,
@@ -18,14 +23,15 @@ import qualified Cardano.Api as C (
  )
 
 sign
-  :: (C.IsShelleyBasedEra era)
+  :: forall era
+   . (C.IsShelleyBasedEra era)
   => C.TxBody era
   -> [C.SigningKey C.PaymentKey]
   -> [C.SigningKey C.PaymentExtendedKey]
   -> (TxId, C.Tx era)
 sign body paymentKeys paymentExtendedKeys =
   let tx =
-        C.signShelleyTransaction body $
+        C.signShelleyTransaction (shelleyBasedEra @era) body $
           fmap C.WitnessPaymentKey paymentKeys
             <> fmap C.WitnessPaymentExtendedKey paymentExtendedKeys
    in (fromCardanoTxId $ C.getTxId body, tx)

@@ -3,8 +3,6 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
@@ -17,7 +15,7 @@ module Language.Marlowe.Runtime.App.Types (
   TxBodyInEraWithReferenceScripts (..),
   TxInEraWithReferenceScripts (..),
   App,
-  Client (..),
+  Client,
   Config (..),
   FinishOnClose (..),
   FinishOnWait (..),
@@ -28,16 +26,8 @@ module Language.Marlowe.Runtime.App.Types (
   mkBody,
 ) where
 
-import Control.Applicative (Alternative)
-import Control.Monad.Base (MonadBase)
 import Control.Monad.Except (ExceptT)
-import Control.Monad.Fix (MonadFix)
-import Control.Monad.IO.Class (MonadIO (..))
-import Control.Monad.Trans.Control (MonadBaseControl)
-import Control.Monad.With (MonadWith (..))
 import Data.Default (Default (..))
-import Data.Functor ((<&>))
-import Data.GeneralAllocate (GeneralAllocate (..), GeneralAllocated (..))
 import Data.String (fromString)
 import Language.Marlowe (POSIXTime (..))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
@@ -80,13 +70,9 @@ import Language.Marlowe.Runtime.History.Api (
  )
 import Network.Socket (HostName, PortNumber)
 
-import Cardano.Api (AnyCardanoEra (..))
-import Cardano.Api.Shelley (
-  ReferenceTxInsScriptsInlineDatumsSupportedInEra (..),
- )
+import Cardano.Api (AnyCardanoEra (..), BabbageEraOnwards (..))
 import qualified Cardano.Api.Shelley as C
 import Control.Monad.Trans.Marlowe (MarloweT)
-import Control.Monad.Trans.Marlowe.Class (MonadMarlowe (..))
 import qualified Data.Aeson.Types as A (
   FromJSON (parseJSON),
   Parser,
@@ -105,17 +91,16 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Text as T (Text)
 import Data.Time.Units (Second)
-import Language.Marlowe.Protocol.Client (hoistMarloweRuntimeClient)
 import Language.Marlowe.Protocol.Query.Types (ContractFilter)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as CS (Transaction)
 
 data TxBodyInEraWithReferenceScripts where
   TxBodyInEraWithReferenceScripts
-    :: ReferenceTxInsScriptsInlineDatumsSupportedInEra era -> C.TxBody era -> TxBodyInEraWithReferenceScripts
+    :: BabbageEraOnwards era -> C.TxBody era -> TxBodyInEraWithReferenceScripts
 
 data TxInEraWithReferenceScripts where
   TxInEraWithReferenceScripts
-    :: ReferenceTxInsScriptsInlineDatumsSupportedInEra era -> C.Tx era -> TxInEraWithReferenceScripts
+    :: BabbageEraOnwards era -> C.Tx era -> TxInEraWithReferenceScripts
 
 type App = ExceptT String IO
 
@@ -143,32 +128,7 @@ instance Default Config where
       }
 
 -- | A monad type for Marlowe Runtime.Client programs.
-newtype Client a = Client {runClient :: MarloweT IO a}
-  deriving newtype
-    (Alternative, Applicative, Functor, Monad, MonadBase IO, MonadBaseControl IO, MonadFail, MonadFix, MonadIO)
-
-instance MonadWith Client where
-  type WithException Client = WithException (MarloweT IO)
-  stateThreadingGeneralWith
-    :: forall a b releaseReturn
-     . GeneralAllocate Client (WithException Client) releaseReturn b a
-    -> (a -> Client b)
-    -> Client (b, releaseReturn)
-  stateThreadingGeneralWith (GeneralAllocate allocA) go = Client $ do
-    stateThreadingGeneralWith (GeneralAllocate allocA') $ runClient . go
-    where
-      allocA'
-        :: (forall x. MarloweT IO x -> MarloweT IO x)
-        -> MarloweT IO (GeneralAllocated (MarloweT IO) (WithException (MarloweT IO)) releaseReturn b a)
-      allocA' restore =
-        runClient (allocA restore') <&> \case
-          GeneralAllocated a releaseA -> GeneralAllocated a $ runClient . releaseA
-        where
-          restore' :: forall x. Client x -> Client x
-          restore' = Client . restore . runClient
-
-instance MonadMarlowe Client where
-  runMarloweRuntimeClient client = Client $ runMarloweRuntimeClient $ hoistMarloweRuntimeClient runClient client
+type Client = MarloweT IO
 
 -- | A function signature for running a client for some protocol in some monad m.
 type RunClient m client = forall a. client m a -> m a
@@ -211,14 +171,14 @@ data MarloweRequest v
       }
   | forall era.
     Sign
-      { reqTxEra :: C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+      { reqTxEra :: C.BabbageEraOnwards era
       , reqTxBody :: C.TxBody era
       , reqPaymentKeys :: [C.SigningKey C.PaymentKey]
       , reqPaymentExtendedKeys :: [C.SigningKey C.PaymentExtendedKey]
       }
   | forall era.
     Submit
-      { reqTxEra :: C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+      { reqTxEra :: C.BabbageEraOnwards era
       , reqTx :: C.Tx era
       , reqPollingSeconds :: Int
       }
@@ -271,14 +231,14 @@ instance A.FromJSON (MarloweRequest 'V1) where
               AnyCardanoEra reqTxEra' <- o A..: "era"
               case reqTxEra' of
                 C.BabbageEra -> do
-                  let reqTxEra = ReferenceTxInsScriptsInlineDatumsInBabbageEra
+                  let reqTxEra = BabbageEraOnwardsBabbage
                   reqTxBody <- textEnvelopeFromJSON (C.AsTxBody C.AsBabbageEra) =<< o A..: "body"
                   reqPaymentKeys <- mapM (textEnvelopeFromJSON $ C.AsSigningKey C.AsPaymentKey) =<< o A..: "paymentKeys"
                   reqPaymentExtendedKeys <-
                     mapM (textEnvelopeFromJSON $ C.AsSigningKey C.AsPaymentExtendedKey) =<< o A..: "paymentExtendedKeys"
                   pure Sign{..}
                 C.ConwayEra -> do
-                  let reqTxEra = ReferenceTxInsScriptsInlineDatumsInConwayEra
+                  let reqTxEra = BabbageEraOnwardsConway
                   reqTxBody <- textEnvelopeFromJSON (C.AsTxBody C.AsConwayEra) =<< o A..: "body"
                   reqPaymentKeys <- mapM (textEnvelopeFromJSON $ C.AsSigningKey C.AsPaymentKey) =<< o A..: "paymentKeys"
                   reqPaymentExtendedKeys <-
@@ -289,12 +249,12 @@ instance A.FromJSON (MarloweRequest 'V1) where
               AnyCardanoEra reqTxEra' <- o A..: "era"
               case reqTxEra' of
                 C.BabbageEra -> do
-                  let reqTxEra = ReferenceTxInsScriptsInlineDatumsInBabbageEra
+                  let reqTxEra = BabbageEraOnwardsBabbage
                   reqTx <- textEnvelopeFromJSON (C.AsTx C.AsBabbageEra) =<< o A..: "tx"
                   reqPollingSeconds <- o A..: "pollingSeconds"
                   pure Submit{..}
                 C.ConwayEra -> do
-                  let reqTxEra = ReferenceTxInsScriptsInlineDatumsInConwayEra
+                  let reqTxEra = BabbageEraOnwardsConway
                   reqTx <- textEnvelopeFromJSON (C.AsTx C.AsConwayEra) =<< o A..: "tx"
                   reqPollingSeconds <- o A..: "pollingSeconds"
                   pure Submit{..}
@@ -357,11 +317,11 @@ instance A.ToJSON (MarloweRequest 'V1) where
     A.object
       [ "request" A..= ("sign" :: String)
       , case reqTxEra of
-          ReferenceTxInsScriptsInlineDatumsInBabbageEra -> "era" A..= C.BabbageEra
-          ReferenceTxInsScriptsInlineDatumsInConwayEra -> "era" A..= C.ConwayEra
+          BabbageEraOnwardsBabbage -> "era" A..= C.BabbageEra
+          BabbageEraOnwardsConway -> "era" A..= C.ConwayEra
       , case reqTxEra of
-          ReferenceTxInsScriptsInlineDatumsInBabbageEra -> "body" A..= textEnvelopeToJSON reqTxBody
-          ReferenceTxInsScriptsInlineDatumsInConwayEra -> "body" A..= textEnvelopeToJSON reqTxBody
+          BabbageEraOnwardsBabbage -> "body" A..= textEnvelopeToJSON reqTxBody
+          BabbageEraOnwardsConway -> "body" A..= textEnvelopeToJSON reqTxBody
       , "paymentKeys" A..= fmap textEnvelopeToJSON reqPaymentKeys
       , "paymentExtendedKeys" A..= fmap textEnvelopeToJSON reqPaymentExtendedKeys
       ]
@@ -369,11 +329,11 @@ instance A.ToJSON (MarloweRequest 'V1) where
     A.object
       [ "request" A..= ("submit" :: String)
       , case reqTxEra of
-          ReferenceTxInsScriptsInlineDatumsInBabbageEra -> "era" A..= C.BabbageEra
-          ReferenceTxInsScriptsInlineDatumsInConwayEra -> "era" A..= C.ConwayEra
+          BabbageEraOnwardsBabbage -> "era" A..= C.BabbageEra
+          BabbageEraOnwardsConway -> "era" A..= C.ConwayEra
       , case reqTxEra of
-          ReferenceTxInsScriptsInlineDatumsInBabbageEra -> "tx" A..= textEnvelopeToJSON reqTx
-          ReferenceTxInsScriptsInlineDatumsInConwayEra -> "tx" A..= textEnvelopeToJSON reqTx
+          BabbageEraOnwardsBabbage -> "tx" A..= textEnvelopeToJSON reqTx
+          BabbageEraOnwardsConway -> "tx" A..= textEnvelopeToJSON reqTx
       ]
 
 {-
@@ -401,14 +361,14 @@ data MarloweResponse v
       }
   | forall era.
     Body
-      { resTxEra :: C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+      { resTxEra :: C.BabbageEraOnwards era
       , resContractId :: Maybe ContractId
       , resTxId :: TxId
       , resTxBody :: C.TxBody era
       }
   | forall era.
     Tx
-      { resTxEra :: C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+      { resTxEra :: C.BabbageEraOnwards era
       , resTxId :: TxId
       , resTx :: C.Tx era
       }
@@ -446,11 +406,11 @@ instance A.ToJSON (MarloweResponse 'V1) where
       [ "response" A..= ("body" :: String)
       , "txId" A..= C.getTxId resTxBody
       , case resTxEra of
-          C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> "era" A..= C.BabbageEra
-          C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> "era" A..= C.ConwayEra
+          C.BabbageEraOnwardsBabbage -> "era" A..= C.BabbageEra
+          C.BabbageEraOnwardsConway -> "era" A..= C.ConwayEra
       , case resTxEra of
-          C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> "body" A..= textEnvelopeToJSON resTxBody
-          C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> "body" A..= textEnvelopeToJSON resTxBody
+          C.BabbageEraOnwardsBabbage -> "body" A..= textEnvelopeToJSON resTxBody
+          C.BabbageEraOnwardsConway -> "body" A..= textEnvelopeToJSON resTxBody
       ]
         <> case resContractId of
           Nothing -> []
@@ -460,11 +420,11 @@ instance A.ToJSON (MarloweResponse 'V1) where
       [ "response" A..= ("tx" :: String)
       , "txId" A..= resTxId
       , case resTxEra of
-          C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> "era" A..= C.BabbageEra
-          C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> "era" A..= C.ConwayEra
+          C.BabbageEraOnwardsBabbage -> "era" A..= C.BabbageEra
+          C.BabbageEraOnwardsConway -> "era" A..= C.ConwayEra
       , case resTxEra of
-          C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> "tx" A..= textEnvelopeToJSON resTx
-          C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> "tx" A..= textEnvelopeToJSON resTx
+          C.BabbageEraOnwardsBabbage -> "tx" A..= textEnvelopeToJSON resTx
+          C.BabbageEraOnwardsConway -> "tx" A..= textEnvelopeToJSON resTx
       ]
   toJSON TxId{..} =
     A.object

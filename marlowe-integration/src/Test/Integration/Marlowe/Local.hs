@@ -22,15 +22,15 @@ module Test.Integration.Marlowe.Local (
 import Cardano.Api (
   AsType (..),
   BabbageEra,
+  BabbageEraOnwards (..),
   CardanoEra (..),
-  CardanoMode,
   ConsensusModeParams (..),
   EpochSlots (..),
   File (..),
   LocalNodeConnectInfo (..),
   NetworkId (..),
   NetworkMagic (..),
-  ScriptDataSupportedInEra (ScriptDataInBabbageEra),
+  ShelleyBasedEra (..),
   StakeAddressReference (..),
   deserialiseFromBech32,
   deserialiseFromTextEnvelope,
@@ -405,7 +405,7 @@ randomPort lo hi = do
       bind socket $ addrAddress addr
       pure socket
 
-publishCurrentScripts :: LocalTestnet -> LocalNodeConnectInfo CardanoMode -> IO MarloweScripts
+publishCurrentScripts :: LocalTestnet -> LocalNodeConnectInfo -> IO MarloweScripts
 publishCurrentScripts LocalTestnet{..} localNodeConnectInfo = do
   let PaymentKeyPair{..} = head wallets
   signingKey <-
@@ -415,7 +415,7 @@ publishCurrentScripts LocalTestnet{..} localNodeConnectInfo = do
       . either error id
       <$> eitherDecodeFileStrict paymentSKey
   changeAddress <-
-    either (error . show) shelleyAddressInEra
+    either (error . show) (shelleyAddressInEra ShelleyBasedEraBabbage)
       . deserialiseFromBech32 (AsAddress AsShelleyAddr)
       . T.pack
       <$> execCli
@@ -429,7 +429,7 @@ publishCurrentScripts LocalTestnet{..} localNodeConnectInfo = do
   let publishingStrategy = PublishPermanently NoStakeAddress
   let coinSelectionStrategy = defaultCoinSelectionStrategy
   either throwIO pure =<< runExceptT do
-    flip runReaderT (CliEnv ScriptDataInBabbageEra) do
+    flip runReaderT (CliEnv BabbageEraOnwardsBabbage) do
       let submitCtx = NodeTxBuildup localNodeConnectInfo (DoSubmit (30 :: Second))
       (txBodies, publishedScripts) <-
         buildPublishingImpl
@@ -517,7 +517,7 @@ data TestContainerDependencies r m = TestContainerDependencies
   , marloweSyncDatabaseQueries :: Sync.DatabaseQueries m
   , submitConfirmationBlocks :: BlockNo
   , networkId :: NetworkId
-  , localNodeConnectInfo :: LocalNodeConnectInfo CardanoMode
+  , localNodeConnectInfo :: LocalNodeConnectInfo
   , securityParameter :: Int
   , marloweScripts :: MarloweScripts
   , webPort :: Int

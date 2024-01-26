@@ -54,7 +54,7 @@ import Control.Monad.Error.Class (MonadError (throwError), liftEither)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Loops (untilJust)
 import Data.Aeson qualified as A
-import Data.Aeson.OneLine qualified as A
+import Data.Aeson.Text qualified as A
 import Data.Bifunctor qualified as Bifunctor
 import Data.Coerce (coerce)
 import Data.Foldable (fold, for_)
@@ -65,6 +65,7 @@ import Data.List.NonEmpty qualified as List.NonEmpty
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe, isJust, mapMaybe, maybeToList)
 import Data.Text qualified as Text
+import Data.Text.Lazy qualified as TL
 import Data.Traversable (for)
 import Language.Marlowe.CLI.Run (
   autoRunTransactionImpl,
@@ -167,7 +168,7 @@ findCLIContractInfo Nothing = do
     _ -> throwLabeledError fnName (testExecutionFailed' "Multiple contracts found. Please specify a contract nickname.")
 
 toOneLineJSON :: forall a. (A.ToJSON a) => a -> String
-toOneLineJSON = Text.unpack . A.renderValue . A.toJSON
+toOneLineJSON = TL.unpack . A.encodeToLazyText . A.toJSON
 
 autoRunTransaction
   :: forall era env m st

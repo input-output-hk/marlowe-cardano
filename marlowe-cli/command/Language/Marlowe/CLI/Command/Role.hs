@@ -37,7 +37,7 @@ import Language.Marlowe.CLI.IO (getDefaultCostModel)
 import Language.Marlowe.CLI.Types (CliEnv, CliError)
 import Language.Marlowe.Core.V1.Semantics.Types (Token (Token))
 import Options.Applicative qualified as O
-import PlutusLedgerApi.Common (ProtocolVersion)
+import PlutusLedgerApi.Common (MajorProtocolVersion)
 import PlutusLedgerApi.V1 (CurrencySymbol, TokenName)
 
 -- | Marlowe CLI commands and options for exporting role information.
@@ -55,7 +55,7 @@ data RoleCommand
       -- ^ The network ID, if any.
       , stake :: Maybe StakeAddressReference
       -- ^ The stake address, if any.
-      , protocolVersion :: ProtocolVersion
+      , protocolVersion :: MajorProtocolVersion
       -- ^ Protocol version
       , outputFile :: Maybe FilePath
       -- ^ The output JSON file for the validator information.

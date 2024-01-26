@@ -61,7 +61,6 @@ executable marlowe-integration-tests
   hs-source-dirs:     test
   main-is:            Spec.hs
   other-modules:
-    Language.Marlowe.Runtime.CliSpec
     Language.Marlowe.Runtime.Integration.ApplyInputs
     Language.Marlowe.Runtime.Integration.Basic
     Language.Marlowe.Runtime.Integration.Common
@@ -95,7 +94,6 @@ executable marlowe-integration-tests
     , base16
     , bytestring
     , cardano-api ^>=8.37
-    , cardano-ledger-babbage
     , co-log ^>=0.6
     , containers
     , deepseq

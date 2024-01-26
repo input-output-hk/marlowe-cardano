@@ -24,12 +24,12 @@ import Control.Monad (forever, join, void)
 import Control.Monad.Except (MonadError (throwError))
 import Control.Monad.Loops (untilJust)
 import Data.Aeson (toJSON)
-import Data.Aeson.OneLine qualified as A
+import Data.Aeson.Text qualified as A
 import Data.Foldable.Extra (for_)
 import Data.Functor ((<&>))
 import Data.Map.Strict qualified as M
 import Data.Map.Strict qualified as Map
-import Data.Text qualified as T
+import Data.Text.Lazy qualified as TL
 import Data.Time.Units (Second)
 import Data.Traversable (for)
 import Language.Marlowe.CLI.Test.Contract (ContractNickname)
@@ -66,9 +66,9 @@ import Observe.Event.Backend (unitEventBackend)
 
 mkRuntimeMonitor :: Config -> IO (RuntimeMonitorInput, RuntimeMonitorState, RuntimeMonitor)
 mkRuntimeMonitor config = do
-  -- Runtime intput channel and detection input channel differ:
+  -- Runtime input channel and detection input channel differ:
   --  * test runner gonna put contract id only once into the runtime input channel
-  --  * runtime gonna refeed the contract id to the detection thread as long as it is not found on the chain
+  --  * runtime gonna re-feed the contract id to the detection thread as long as it is not found on the chain
   --  * runtime thread gonna expose finally the contract stream through the state
   runtimeContractInputChannel <- newTChanIO
   detectionInputChannel <- newTChanIO
@@ -207,7 +207,7 @@ processMarloweStreamEvent knownContracts contractsInfo = do
             Nothing -> do
               let threadJson = overAnyMarloweThread marloweThreadToJSON th
                   inputsJson = toJSON inputs
-                  jsonStr = T.unpack . A.renderValue
+                  jsonStr = TL.unpack . A.encodeToLazyText
                   threadStr = jsonStr threadJson
                   inputsStr = jsonStr inputsJson
 

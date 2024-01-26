@@ -8,7 +8,7 @@
 
 module Language.Marlowe.CLI.Test.CLI.Monad where
 
-import Cardano.Api (ScriptDataSupportedInEra)
+import Cardano.Api (BabbageEraOnwards)
 import Control.Monad.Except (ExceptT, MonadError (catchError, throwError), runExceptT)
 import Control.Monad.Reader (ReaderT (runReaderT))
 import Data.Aeson qualified as A
@@ -25,10 +25,10 @@ withCliErrorMsg :: (MonadError CliError m) => (String -> String) -> m a -> m a
 withCliErrorMsg f = withError (\(CliError msg) -> CliError (f msg))
 
 -- `modifyError` was added to the newer version of mtl
--- So we have to do some gimnastics here.
+-- So we have to do some gymnastics here.
 runCli
   :: (MonadError InterpreterError m)
-  => ScriptDataSupportedInEra era
+  => BabbageEraOnwards era
   -> String
   -> ReaderT (CliEnv era) (ExceptT CliError m) a
   -> m a
@@ -43,7 +43,7 @@ runCli era msg action = do
 runLabeledCli
   :: (MonadError InterpreterError m)
   => (Label l)
-  => ScriptDataSupportedInEra era
+  => BabbageEraOnwards era
   -> l
   -> ReaderT (CliEnv era) (ExceptT CliError m) a
   -> m a

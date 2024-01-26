@@ -14,11 +14,11 @@ import Cardano.Api (
   TxMintValue (..),
   TxOut (..),
   TxOutValue (..),
+  fromLedgerValue,
   scriptPolicyId,
   valueToList,
  )
 import qualified Cardano.Api as C
-import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import Control.Applicative (liftA2)
 import Control.Monad (guard)
 import Control.Monad.IO.Class (liftIO)
@@ -40,7 +40,6 @@ import Language.Marlowe.Runtime.Cardano.Api (
   fromCardanoTxIn,
   fromCardanoTxOutValue,
  )
-import Language.Marlowe.Runtime.Cardano.Feature (CardanoFeature (..))
 import Language.Marlowe.Runtime.ChainSync.Api (
   AssetId (..),
   Assets (..),
@@ -228,14 +227,12 @@ roleTokenSpec = \case
       let mintValue = case txBody of
             TxBody TxBodyContent{..} -> txMintValue
       mintValue `shouldBe` TxMintNone
-    it "Should not output any non-ada tokens" \(_, ContractCreated era ContractCreatedInEra{..}) -> do
+    it "Should not output any non-ada tokens" \(_, ContractCreated _ ContractCreatedInEra{..}) -> do
       let tokensOutput = case txBody of
             TxBody TxBodyContent{..} ->
               txOuts & foldMap \(TxOut _ value _ _) -> case value of
-                TxOutAdaOnly era' _ -> case era of
-                  ReferenceTxInsScriptsInlineDatumsInBabbageEra -> case era' of {}
-                  ReferenceTxInsScriptsInlineDatumsInConwayEra -> case era' of {}
-                TxOutValue _ value' -> Set.fromList $ fst <$> valueToList value'
+                TxOutValueByron _ -> Set.singleton C.AdaAssetId
+                TxOutValueShelleyBased sbe value' -> Set.fromList $ fst <$> valueToList (fromLedgerValue sbe value')
       tokensOutput `shouldBe` Set.singleton C.AdaAssetId
   ExistingPolicyRoleTokens -> Just do
     it "Should use the given policyId as the role token currency" \(TestData{..}, ContractCreated _ ContractCreatedInEra{..}) -> do
@@ -244,14 +241,12 @@ roleTokenSpec = \case
       let mintValue = case txBody of
             TxBody TxBodyContent{..} -> txMintValue
       mintValue `shouldBe` TxMintNone
-    it "Should not output any non-ada tokens" \(_, ContractCreated era ContractCreatedInEra{..}) -> do
+    it "Should not output any non-ada tokens" \(_, ContractCreated _ ContractCreatedInEra{..}) -> do
       let tokensOutput = case txBody of
             TxBody TxBodyContent{..} ->
               txOuts & foldMap \(TxOut _ value _ _) -> case value of
-                TxOutAdaOnly era' _ -> case era of
-                  ReferenceTxInsScriptsInlineDatumsInBabbageEra -> case era' of {}
-                  ReferenceTxInsScriptsInlineDatumsInConwayEra -> case era' of {}
-                TxOutValue _ value' -> Set.fromList $ fst <$> valueToList value'
+                TxOutValueByron _ -> Set.singleton C.AdaAssetId
+                TxOutValueShelleyBased sbe value' -> Set.fromList $ fst <$> valueToList (fromLedgerValue sbe value')
       tokensOutput `shouldBe` Set.singleton C.AdaAssetId
   -- Metadata checks done with other metadata checks.
   testCase -> Just do
@@ -272,7 +267,7 @@ roleTokenSpec = \case
                   Map.fromList
                     $ fmap
                       ( \(assetId, quantity) ->
-                          ((fromCardanoAddressInEra (cardanoEraOfFeature era) address, assetId), quantity)
+                          ((fromCardanoAddressInEra (C.babbageEraOnwardsToCardanoEra era) address, assetId), quantity)
                       )
                     $ Map.toList
                     $ unTokens

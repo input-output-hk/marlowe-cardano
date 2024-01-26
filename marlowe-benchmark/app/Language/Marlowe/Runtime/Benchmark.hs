@@ -79,7 +79,7 @@ instance Default BenchmarkConfig where
 measure
   :: (C.IsShelleyBasedEra era)
   => BenchmarkConfig
-  -> Maybe (C.SocketPath, C.CardanoEra era, C.NetworkId, Address, C.SigningKey C.PaymentExtendedKey)
+  -> Maybe (C.SocketPath, C.BabbageEraOnwards era, C.NetworkId, Address, C.SigningKey C.PaymentExtendedKey)
   -> Maybe FilePath
   -> MarloweT IO ()
 measure BenchmarkConfig{..} faucet out =

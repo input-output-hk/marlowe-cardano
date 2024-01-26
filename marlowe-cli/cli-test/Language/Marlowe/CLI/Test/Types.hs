@@ -20,7 +20,7 @@
 
 module Language.Marlowe.CLI.Test.Types where
 
-import Cardano.Api (AddressInEra, CardanoMode, IsCardanoEra, LocalNodeConnectInfo, NetworkId, ScriptDataSupportedInEra)
+import Cardano.Api (AddressInEra, BabbageEraOnwards, IsCardanoEra, LocalNodeConnectInfo, NetworkId)
 import Cardano.Api qualified as C
 import Contrib.Data.Foldable (foldMapM)
 import Contrib.Data.Time.Units.Aeson qualified as A
@@ -78,7 +78,7 @@ import Language.Marlowe.Protocol.Client qualified as Marlowe.Protocol
 import Network.Protocol.Connection qualified as Network.Protocol
 import Network.Socket (PortNumber)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig)
-import PlutusLedgerApi.Common (ProtocolVersion)
+import PlutusLedgerApi.Common (MajorProtocolVersion)
 import PlutusLedgerApi.V1.Value qualified as P.Value
 import PlutusLedgerApi.V2 qualified as P
 import PlutusTx.AssocMap qualified as P.AssocMap
@@ -249,7 +249,7 @@ plutusValueToJSON (P.Value value) = do
       (A.Key.fromString . show $ cs, inner')
 
 data InterpretState lang era = InterpretState
-  { -- We should flatten these two contracInfo representations.
+  { -- We should flatten these two contractInfo representations.
     _isCLIContracts :: CLIContracts lang era
   , _isKnownContracts :: Map ContractNickname Runtime.ContractInfo
   , _isPublishedScripts :: Maybe (MarloweScriptsRefs lang era)
@@ -272,12 +272,12 @@ mkInterpretState wallets =
 data InterpretEnv lang era = InterpretEnv
   { _ieRuntimeMonitor :: Maybe (RuntimeMonitorInput, RuntimeMonitorState)
   , _ieRuntimeClientConnector :: Maybe (Network.Protocol.Connector Marlowe.Protocol.MarloweRuntimeClient IO)
-  , _ieConnection :: LocalNodeConnectInfo CardanoMode
-  , _ieEra :: ScriptDataSupportedInEra era
+  , _ieConnection :: LocalNodeConnectInfo
+  , _ieEra :: BabbageEraOnwards era
   , _iePrintStats :: PrintStats
   , _ieSlotConfig :: SlotConfig
   , _ieCostModelParams :: [Integer]
-  , _ieProtocolVersion :: ProtocolVersion
+  , _ieProtocolVersion :: MajorProtocolVersion
   , _ieTxBuildupContext :: TxBuildupContext era
   , _ieReportDir :: FilePath
   }
@@ -394,7 +394,7 @@ interpretStateToJSONPairs
   :: forall a era lang m
    . (MonadIO m)
   => (IsCardanoEra era)
-  => (Aeson.KeyValue a)
+  => (Aeson.KeyValue Aeson.Value a)
   => InterpretState lang era
   -> m [a]
 interpretStateToJSONPairs InterpretState{..} = do

@@ -53,6 +53,7 @@ module Language.Marlowe.CLI.Run (
   toCardanoAssetName,
   toCardanoValue,
   toCardanoPolicyId,
+  toPlutusAddress,
 ) where
 
 import Cardano.Api (
