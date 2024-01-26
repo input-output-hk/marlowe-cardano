@@ -34,7 +34,6 @@ jobs:
           fi
 
   marlowe-benchmark:
-    if: false
     runs-on: ubuntu-latest
     # Dependency disabled pending automatic deploys
     # needs: [check-deploy]
@@ -74,7 +73,9 @@ jobs:
 
       - name: Run Marlowe Benchmark on Preview
         run: |
-          nix run nixpkgs#socat -- UNIX-LISTEN:node.socket,fork,reuseaddr,unlink-early TCP:cardano-node-preview.scdev.aws.iohkdev.io:8090 &
+          nix run nixpkgs#socat -- \
+            UNIX-LISTEN:node.socket,fork,reuseaddr,unlink-early \
+            TCP:cardano-node-preview.scdev.aws.iohkdev.io:8090 &
           nix run .#marlowe-benchmark -- \
             --host marlowe-runtime-preview.scdev.aws.iohkdev.io \
             --port 3700 \
