@@ -3,12 +3,20 @@
 {-# LANGUAGE ViewPatterns #-}
 
 module Language.Marlowe.Runtime.Transaction.BuildConstraints (
+  Accounts,
+  AdjustMinUTxO (..),
   ApplyResults,
+  InvalidAddresses (..),
   MkRoleTokenMintingPolicy,
+  MinAdaProvider (..),
+  RolesPolicyId (..),
+  ThreadTokenAssetId (..),
   buildApplyInputsConstraints,
   buildCreateConstraints,
   buildWithdrawConstraints,
   initialMarloweState,
+  initialMarloweDatum,
+  invalidAddressesError,
   safeLovelace,
 ) where
 
@@ -25,6 +33,10 @@ import Control.Monad.Trans.Writer (WriterT (runWriterT), tell)
 import Data.Bifunctor (first)
 import Data.Foldable (Foldable (..), for_, traverse_)
 import Data.Function (on)
+
+-- nonPositiveBalancesError,
+
+import Data.Functor ((<&>))
 import Data.List (find, sortBy)
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -88,9 +100,10 @@ import Language.Marlowe.Runtime.Plutus.V2.Api (
  )
 import Language.Marlowe.Runtime.Transaction.Api (
   Account (..),
+  Accounts,
   ApplyInputsConstraintsBuildupError (..),
   ApplyInputsError (..),
-  CreateBuildupError (AddressDecodingFailed, MintingScriptDecodingFailed, MintingUtxoSelectionFailed),
+  CreateBuildupError (AddressesDecodingFailed, MintingScriptDecodingFailed, MintingUtxoSelectionFailed),
   CreateError (..),
   Destination (..),
   Mint (unMint),
@@ -99,6 +112,8 @@ import Language.Marlowe.Runtime.Transaction.Api (
   WithdrawError (..),
   encodeRoleTokenMetadata,
   getTokenQuantities,
+  mkAccounts,
+  unAccounts,
  )
 import Language.Marlowe.Runtime.Transaction.Constraints (
   TxConstraints (..),
@@ -131,6 +146,8 @@ import qualified PlutusTx.AssocMap as AM
 
 type TxConstraintsBuilderM err era v m a = WriterT (TxConstraints era v) (ExceptT err m) a
 
+newtype AdjustMinUTxO = AdjustMinUTxO {runAdjustMinUTxO :: Assets -> Assets}
+
 runTxConstraintsBuilder
   :: MarloweVersion v
   -> TxConstraintsBuilderM err era v m a
@@ -158,13 +175,13 @@ buildCreateConstraints
   -- ^ Metadata to add to the transaction.
   -> Lovelace
   -- ^ The lower bound on the ada in the initial state.
-  -> Map Account Assets
+  -> Accounts
   -- ^ User-defined initial account balances
-  -> (Assets -> Assets)
+  -> AdjustMinUTxO
   -- ^ Adjust a value to account for the minimum UTxO ledger rule.
   -> Contract v
   -- ^ The contract being instantiated.
-  -> m (Either CreateError ((Datum v, Assets, PolicyId), TxConstraints era v))
+  -> m (Either CreateError ((Datum v, Assets, RolesPolicyId), TxConstraints era v))
 buildCreateConstraints mkRoleTokenMintingPolicy era version walletCtx roles threadName metadata minAda accounts adjustMinUtxo contract = case version of
   MarloweV1 ->
     runTxConstraintsBuilder version $
@@ -181,6 +198,8 @@ buildCreateConstraints mkRoleTokenMintingPolicy era version walletCtx roles thre
         contract
 
 type MkRoleTokenMintingPolicy m = TxOutRef -> Map TokenName Integer -> m CS.PlutusScript
+
+newtype ThreadTokenAssetId = ThreadTokenAssetId {unThreadTokenAssetId :: AssetId}
 
 -- | Creates a set of Tx constraints that are used to build a transaction that
 -- instantiates a contract.
@@ -201,27 +220,27 @@ buildCreateConstraintsV1
   -- ^ Metadata to add to the transaction.
   -> Lovelace
   -- ^ The lower bound on the ada in the initial state.
-  -> Map Account Assets
+  -> Accounts
   -- ^ User-defined initial account balances
-  -> (Assets -> Assets)
+  -> AdjustMinUTxO
   -- ^ Adjust a value to account for the minimum UTxO ledger rule.
   -> Contract 'V1
   -- ^ The contract being instantiated.
-  -> TxConstraintsBuilderM CreateError era 'V1 m (Datum 'V1, Assets, PolicyId)
+  -> TxConstraintsBuilderM CreateError era 'V1 m (Datum 'V1, Assets, RolesPolicyId)
 buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx threadTokenName roles metadata minAda accounts adjustMinUtxo contract = do
   -- Output constraints.
 
   -- Role tokens minting and distribution.
-  (policyId, threadToken) <- buildRoleTokenConstraints
+  (roleCurrency, threadToken) <- buildRoleTokenConstraints
 
-  tell . requiresMetadata $ metadata{transactionMetadata = nftsMetadata policyId <> transactionMetadata metadata}
+  tell . requiresMetadata $ metadata{transactionMetadata = nftsMetadata roleCurrency <> transactionMetadata metadata}
 
   -- Marlowe script output.
-  (datum, assets) <- sendMarloweOutput policyId threadToken
+  (datum, assets) <- sendMarloweOutput roleCurrency threadToken
 
-  pure (datum, assets, policyId)
+  pure (datum, assets, roleCurrency)
   where
-    nftsMetadata (PolicyId policyId) = case roles of
+    nftsMetadata (RolesPolicyId (PolicyId policyId)) = case roles of
       RoleTokensMint (unMint -> minting) -> do
         let tokensMetadata = flip NEMap.foldMapWithKey minting \tokenName MintRole{..} ->
               flip foldMap roleMetadata \roleTokenMetadata -> do
@@ -236,23 +255,22 @@ buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx threadTokenName 
     liftMaybe err = lift . except . note (CreateBuildupFailed err)
 
     sendMarloweOutput policyId threadToken = do
-      (assets, marloweState) <-
-        lift . except $
-          initialMarloweStateV1 adjustMinUtxo accounts threadToken minAda walletCtx
-      datum <- mkMarloweDatum policyId marloweState
+      datum@(V1.MarloweData _ marloweState _) <- do
+        let WalletContext{changeAddress} = walletCtx
+            minAdaProvider = MinAdaProvider changeAddress
+        lift $
+          except $
+            first invalidAddressesError $
+              initialMarloweDatumV1 contract policyId adjustMinUtxo accounts threadToken minAda minAdaProvider
+      let assets = totalStateBalance marloweState
       tell $ mustSendMarloweOutput assets datum
       pure (datum, assets)
-
-    mkMarloweDatum :: PolicyId -> V1.State -> TxConstraintsBuilderM CreateError era 'V1 m (Datum 'V1)
-    mkMarloweDatum policyId marloweState = do
-      let marloweParams = V1.MarloweParams . toPlutusCurrencySymbol $ policyId
-      pure $ V1.MarloweData marloweParams marloweState contract
 
     adaAsset :: Assets -> Assets
     adaAsset (Assets amount _) = Assets amount mempty
 
     -- Role token distribution constraints
-    buildRoleTokenConstraints :: TxConstraintsBuilderM CreateError era 'V1 m (PolicyId, Maybe AssetId)
+    buildRoleTokenConstraints :: TxConstraintsBuilderM CreateError era 'V1 m (RolesPolicyId, Maybe ThreadTokenAssetId)
     buildRoleTokenConstraints = case roles of
       RoleTokensUsePolicy policyId distribution -> do
         for_ (Map.toList distribution) \(tokenName, dist') ->
@@ -262,8 +280,8 @@ buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx threadTokenName 
                   ToAddress addr -> Left addr
             tell $ mustDistributeRoleToken (AssetId policyId tokenName) destination' quantity
         pure
-          ( policyId
-          , AssetId policyId threadTokenName <$ guard (any (Map.member (ToScript OpenRoleScript)) distribution)
+          ( RolesPolicyId policyId
+          , ThreadTokenAssetId (AssetId policyId threadTokenName) <$ guard (any (Map.member (ToScript OpenRoleScript)) distribution)
           )
       RoleTokensMint mint -> do
         let WalletContext{availableUtxos} = walletCtx
@@ -273,7 +291,7 @@ buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx threadTokenName 
             tokenQuantities = maybe id (flip Map.insert 1) threadTokenName' $ NEMap.toMap $ getTokenQuantities mint
             txLovelaceRequirementEstimate =
               adaAsset
-                . adjustMinUtxo
+                . runAdjustMinUTxO adjustMinUtxo
                 . Assets safeLovelace
                 . Tokens
                 . Map.mapKeysMonotonic (AssetId "")
@@ -311,12 +329,12 @@ buildCreateConstraintsV1 mkRoleTokenMintingPolicy era walletCtx threadTokenName 
                   ToScript script' -> Right (AssetId policyId threadTokenName, script')
                   ToAddress addr -> Left addr
             tell $ mustMintRoleToken txOutRef witness (AssetId policyId tokenName) destination' quantity
-        pure (policyId, AssetId policyId <$> threadTokenName')
+        pure (RolesPolicyId policyId, ThreadTokenAssetId . AssetId policyId <$> threadTokenName')
       RoleTokensNone -> do
         let -- We use ADA currency symbol as a placeholder which
             -- carries really no semantics in this context.
             uselessRolePolicyId = PolicyId . PV2.fromBuiltin . PV2.unCurrencySymbol $ PV2.adaSymbol
-        pure (uselessRolePolicyId, Nothing)
+        pure (RolesPolicyId uselessRolePolicyId, Nothing)
 
 toMarloweNetwork :: Address -> Maybe V1.Network
 toMarloweNetwork =
@@ -328,31 +346,91 @@ toMarloweNetwork =
 safeLovelace :: Lovelace
 safeLovelace = 750_000 -- Enough lovelace to avoid the Cardano.Api minimum-UTxO bug.
 
+newtype InvalidAddresses = InvalidAddresses [Address]
+deriving newtype instance Semigroup InvalidAddresses
+deriving newtype instance Monoid InvalidAddresses
+
+invalidAddressesError :: InvalidAddresses -> CreateError
+invalidAddressesError (InvalidAddresses addresses) =
+  CreateBuildupFailed $ AddressesDecodingFailed addresses
+
+newtype MinAdaProvider = MinAdaProvider Address
+
+newtype RolesPolicyId = RolesPolicyId PolicyId
+
+toMarloweParty :: Account -> Either InvalidAddresses V1.Party
+toMarloweParty (AddressAccount address) = note (InvalidAddresses [address]) do
+  address' <- toPlutusAddress address
+  network <- toMarloweNetwork address
+  pure $ V1.Address network address'
+toMarloweParty (RoleAccount role) =
+  pure $ V1.Role $ toPlutusTokenName role
+
+type MarloweAccounts = AM.Map (V1.Party, V1.Token) Integer
+
+toMarloweAccounts :: Accounts -> Either InvalidAddresses MarloweAccounts
+toMarloweAccounts accounts = do
+  let adaToken = V1.Token PV2.adaSymbol PV2.adaToken
+      accounts' = unAccounts accounts
+  AM.fromList . join <$> for (Map.toAscList accounts') \(account, Assets{..}) ->
+    toMarloweParty account <&> \accountId ->
+      Map.toAscList
+        . (if ada > 0 then Map.insert (accountId, adaToken) $ toInteger ada else id)
+        . Map.mapKeys (\(AssetId cs tn) -> (accountId, V1.Token (toPlutusCurrencySymbol cs) (toPlutusTokenName tn)))
+        . fmap toInteger
+        $ unTokens tokens
+
+initialMarloweDatum
+  :: Contract v
+  -> RolesPolicyId
+  -> AdjustMinUTxO
+  -> Accounts
+  -> MarloweVersion v
+  -> Maybe ThreadTokenAssetId
+  -> Lovelace
+  -> MinAdaProvider
+  -> Either InvalidAddresses (Datum v)
+initialMarloweDatum contract policyId adjustMinUtxo accounts version threadToken minAda minAdaProvider = case version of
+  MarloweV1 -> initialMarloweDatumV1 contract policyId adjustMinUtxo accounts threadToken minAda minAdaProvider
+
+initialMarloweDatumV1
+  :: V1.Contract
+  -> RolesPolicyId
+  -> AdjustMinUTxO
+  -> Accounts
+  -> Maybe ThreadTokenAssetId
+  -> Lovelace
+  -> MinAdaProvider
+  -> Either InvalidAddresses (Datum 'V1)
+initialMarloweDatumV1 contract (RolesPolicyId policyId) adjustMinUtxo accounts threadToken minAda minAdaProvider = do
+  state <- initialMarloweStateV1 adjustMinUtxo accounts threadToken minAda minAdaProvider
+  let marloweParams = V1.MarloweParams . toPlutusCurrencySymbol $ policyId
+  pure $ V1.MarloweData marloweParams state contract
+
 initialMarloweState
   :: forall v
-   . (Assets -> Assets)
+   . AdjustMinUTxO
   -> MarloweVersion v
-  -> Map Account Assets
-  -> Maybe AssetId
+  -> Accounts
+  -> Maybe ThreadTokenAssetId
   -> Lovelace
-  -> WalletContext
-  -> Either CreateError (Assets, V1.State)
-initialMarloweState adjustMinUtxo version accounts threadToken minAda walletCtx = case version of
-  MarloweV1 ->
-    initialMarloweStateV1 adjustMinUtxo accounts threadToken minAda walletCtx
+  -> MinAdaProvider
+  -> Either InvalidAddresses V1.State
+initialMarloweState adjustMinUtxo version accounts threadToken minAda minAdaProvider = case version of
+  MarloweV1 -> do
+    initialMarloweStateV1 adjustMinUtxo accounts threadToken minAda minAdaProvider
 
 initialMarloweStateV1
-  :: (Assets -> Assets)
-  -> Map Account Assets
-  -> Maybe AssetId
+  :: AdjustMinUTxO
+  -> Accounts
+  -> Maybe ThreadTokenAssetId
   -> Lovelace
-  -> WalletContext
-  -> Either CreateError (Assets, V1.State)
-initialMarloweStateV1 adjustMinUtxo accounts threadToken minAda walletCtx = do
-  -- All assets from user-defined initial accounts
-  let accountAssets = fold accounts
+  -> MinAdaProvider
+  -> Either InvalidAddresses V1.State
+initialMarloweStateV1 (AdjustMinUTxO adjustMinUtxo) accounts threadToken minAda (MinAdaProvider creatorAddress) = do
+  let accountAssets = fold $ unAccounts accounts
       -- The thread token as a tokens collection
-      threadTokenTokens = Tokens $ foldMap (flip Map.singleton 1) threadToken
+      threadTokenTokens = Tokens $ foldMap (flip Map.singleton 1 . unThreadTokenAssetId) threadToken
       -- The result of computing the min ada upper bound starting with the initial assets
       minAda' =
         ada
@@ -360,34 +438,22 @@ initialMarloweStateV1 adjustMinUtxo accounts threadToken minAda walletCtx = do
           . Assets (max safeLovelace minAda)
           . (tokens accountAssets <>)
           $ threadTokenTokens
-      WalletContext{changeAddress = creatorAddress} = walletCtx
+
       -- The assets to be assigned to the contract creator include the min ADA deposit and the thread token.
       creatorAssets = Assets minAda' threadTokenTokens
-      -- Merge these with the user-defined initial account balances.
-      initialAccounts = Map.unionWith (<>) (Map.singleton (AddressAccount creatorAddress) creatorAssets) accounts
-  -- Convert it to the format required by the Plutus script datum.
-  initialAccountsPlutus <-
-    AM.fromList . join <$> for (Map.toAscList initialAccounts) \(account, Assets{..}) -> do
-      accountId <- case account of
-        RoleAccount role -> pure $ V1.Role $ toPlutusTokenName role
-        AddressAccount address -> note (CreateBuildupFailed $ AddressDecodingFailed address) do
-          addressPlutus <- toPlutusAddress address
-          network <- toMarloweNetwork address
-          pure $ V1.Address network addressPlutus
-      let adaToken = V1.Token PV2.adaSymbol PV2.adaToken
-      pure
-        . Map.toAscList
-        . (if ada > 0 then Map.insert (accountId, adaToken) $ toInteger ada else id)
-        . Map.mapKeys (\(AssetId cs tn) -> (accountId, V1.Token (toPlutusCurrencySymbol cs) (toPlutusTokenName tn)))
-        . fmap toInteger
-        $ unTokens tokens
 
-  pure
-    ( fold initialAccounts
-    , (V1.emptyState (PV2.POSIXTime 0))
-        { V1.accounts = initialAccountsPlutus
-        }
-    )
+      -- FIXME: we should rise here an exception probably
+      creatorAccounts = fold $ mkAccounts (Map.singleton (AddressAccount creatorAddress) creatorAssets)
+
+      -- Merge these with the user-defined initial account balances.
+      initialAccounts = creatorAccounts <> accounts
+  -- Convert it to the format required by the Plutus script datum.
+  initialMarloweAccounts <- toMarloweAccounts initialAccounts
+  pure $ (V1.emptyState (PV2.POSIXTime 0)){V1.accounts = initialMarloweAccounts}
+
+totalStateBalance :: V1.State -> Assets
+totalStateBalance V1.State{accounts} =
+  fromPlutusValue $ V1.totalBalance accounts
 
 type ApplyResults v = (UTCTime, UTCTime, Maybe (Assets, Datum v), Inputs v)
 

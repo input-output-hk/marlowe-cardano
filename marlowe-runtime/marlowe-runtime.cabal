@@ -233,6 +233,7 @@ library gen
     , bytestring >=0.10.12 && <0.12
     , cardano-api ^>=8.39.2.0
     , cardano-api-gen ^>=8.1
+    , errors
     , hedgehog-quickcheck ^>=0.1
     , http-media ^>=0.8
     , marlowe-cardano ==0.2.1.0
