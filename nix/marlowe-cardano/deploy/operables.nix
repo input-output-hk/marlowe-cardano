@@ -737,7 +737,7 @@ in
           --port "$MARLOWE_RT_PORT" \
           --config "$MARLOWE_BENCHMARK_CONFIG" \
           --node-socket-path "$CARDANO_NODE_SOCKET_PATH" \
-          --network-magic "$CARDANO_TESTNET_MAGIC" \
+          --testnet-magic "$CARDANO_TESTNET_MAGIC" \
           --address "$(cat "$FAUCET_ADDRESS")" \
           --signing-key-file "$FAUCET_SKEY" \
           --out-file "$MARLOWE_BENCHMARK_OUTPUT"
