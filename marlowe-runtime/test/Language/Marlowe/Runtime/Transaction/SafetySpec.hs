@@ -2,29 +2,8 @@
 
 module Language.Marlowe.Runtime.Transaction.SafetySpec where
 
-import qualified Cardano.Api as Cardano (
-  AddressInEra (..),
-  AddressTypeInEra (..),
-  AlonzoEraOnwards (AlonzoEraOnwardsBabbage),
-  BabbageEraOnwards (..),
-  CardanoEra (..),
-  Lovelace (..),
-  MaryEraOnwards (..),
-  NetworkId (..),
-  NetworkMagic (..),
-  ShelleyBasedEra (..),
-  StakeAddressReference (..),
-  TxOut (..),
-  TxOutDatum (..),
-  anyAddressInShelleyBasedEra,
-  calculateMinimumUTxO,
-  makeShelleyAddress,
- )
-import qualified Cardano.Api.Shelley as Shelley (
-  LedgerProtocolParameters (..),
-  ReferenceScript (..),
-  StakeAddressReference (..),
- )
+import qualified Cardano.Api as Cardano
+import qualified Cardano.Api.Shelley as Shelley
 import Data.Foldable (for_)
 import Data.List (isInfixOf, nub)
 import qualified Data.Map.NonEmpty as NEMap
@@ -86,12 +65,29 @@ import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (counterexample, discard, elements, generate, sublistOf, suchThat, (===), (==>))
 import Test.QuickCheck.Arbitrary (arbitrary)
 
+type TestEra = Cardano.BabbageEra
+
+testEra :: Cardano.CardanoEra TestEra
+testEra = Cardano.BabbageEra
+
+shelleyBasedEraTest :: Cardano.ShelleyBasedEra TestEra
+shelleyBasedEraTest = Cardano.ShelleyBasedEraBabbage
+
+babbageEraOnwardsTest :: Cardano.BabbageEraOnwards TestEra
+babbageEraOnwardsTest = Cardano.BabbageEraOnwardsBabbage
+
+alonzoEraOnwardsTest :: Cardano.AlonzoEraOnwards TestEra
+alonzoEraOnwardsTest = Cardano.AlonzoEraOnwardsBabbage
+
+maryEraOnwardsTest :: Cardano.MaryEraOnwards TestEra
+maryEraOnwardsTest = Cardano.MaryEraOnwardsBabbage
+
 spec :: Spec
 spec =
   do
     let testnet = Cardano.Testnet $ Cardano.NetworkMagic 1
         version = MarloweV1
-        adjustMinUtxo = mkAdjustMinimumUtxo Cardano.BabbageEraOnwardsBabbage protocolTestnet MarloweV1
+        adjustMinUtxo = mkAdjustMinimumUtxo babbageEraOnwardsTest protocolTestnet MarloweV1
         emptyHelpersContext = HelpersContext M.empty "" M.empty
         continuations = noContinuations version
         party = V1.Role "x"
@@ -113,11 +109,11 @@ spec =
                 tokens = fmap toToken . M.keys $ Chain.unTokens tokens'
                 expected =
                   Cardano.calculateMinimumUTxO
-                    Cardano.ShelleyBasedEraBabbage
+                    shelleyBasedEraTest
                     ( Cardano.TxOut
-                        (Cardano.anyAddressInShelleyBasedEra Cardano.ShelleyBasedEraBabbage . fromJust $ Chain.toCardanoAddressAny address)
-                        (mkTxOutValue Cardano.MaryEraOnwardsBabbage value)
-                        (Cardano.TxOutDatumHash Cardano.AlonzoEraOnwardsBabbage . fromJust $ Chain.toCardanoDatumHash hash)
+                        (Cardano.anyAddressInShelleyBasedEra shelleyBasedEraTest . fromJust $ Chain.toCardanoAddressAny address)
+                        (mkTxOutValue maryEraOnwardsTest value)
+                        (Cardano.TxOutDatumHash alonzoEraOnwardsTest . fromJust $ Chain.toCardanoDatumHash hash)
                         Shelley.ReferenceScriptNone
                     )
                     $ Shelley.unLedgerProtocolParameters protocolTestnet
@@ -126,7 +122,7 @@ spec =
                 actual =
                   fromJust $
                     minAdaUpperBound
-                      Cardano.BabbageEraOnwardsBabbage
+                      babbageEraOnwardsTest
                       protocolTestnet
                       version
                       (V1.emptyState 0)
@@ -284,15 +280,15 @@ spec =
             MarloweContext
               { scriptOutput = Nothing
               , marloweAddress =
-                  Chain.fromCardanoAddressInEra Cardano.BabbageEra
-                    . Cardano.AddressInEra (Cardano.ShelleyAddressInEra Cardano.ShelleyBasedEraBabbage)
+                  Chain.fromCardanoAddressInEra testEra
+                    . Cardano.AddressInEra (Cardano.ShelleyAddressInEra shelleyBasedEraTest)
                     $ Cardano.makeShelleyAddress
                       networkId
                       (fromJust . Chain.toCardanoPaymentCredential $ Chain.ScriptCredential marloweScript)
                       stakeReference
               , payoutAddress =
-                  Chain.fromCardanoAddressInEra Cardano.BabbageEra
-                    . Cardano.AddressInEra (Cardano.ShelleyAddressInEra Cardano.ShelleyBasedEraBabbage)
+                  Chain.fromCardanoAddressInEra testEra
+                    . Cardano.AddressInEra (Cardano.ShelleyAddressInEra shelleyBasedEraTest)
                     $ Cardano.makeShelleyAddress
                       networkId
                       (fromJust . Chain.toCardanoPaymentCredential $ Chain.ScriptCredential payoutScript)
@@ -312,7 +308,7 @@ spec =
         let minAda =
               maybe 1_500_000 toInteger $
                 minAdaUpperBound
-                  Cardano.BabbageEraOnwardsBabbage
+                  babbageEraOnwardsTest
                   protocolTestnet
                   version
                   (V1.emptyState 0)
@@ -321,7 +317,7 @@ spec =
         actual <-
           checkTransactions
             protocolTestnet
-            Cardano.BabbageEraOnwardsBabbage
+            babbageEraOnwardsTest
             version
             marloweContext
             emptyHelpersContext
@@ -357,7 +353,7 @@ spec =
           actual <-
             checkTransactions
               protocolTestnet
-              Cardano.BabbageEraOnwardsBabbage
+              babbageEraOnwardsTest
               version
               marloweContext
               emptyHelpersContext
@@ -412,7 +408,7 @@ spec =
           actual <-
             checkTransactions
               protocolTestnet
-              Cardano.BabbageEraOnwardsBabbage
+              babbageEraOnwardsTest
               version
               marloweContext
               helpersContext
