@@ -71,8 +71,8 @@ instance Default BenchmarkConfig where
       , queryParallelism = 4
       , queryBatchSize = 16
       , queryPageSize = 256
-      , lifecycleParallelism = 1
-      , lifecycleContracts = 1
+      , lifecycleParallelism = 4
+      , lifecycleContracts = 3
       }
 
 -- | Run the benchmarks.

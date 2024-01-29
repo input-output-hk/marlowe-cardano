@@ -2,8 +2,8 @@ name: "Deploy"
 env:
   CACHE_NAME: marlowe-temp
   ALLOWED_URIS: "https://github.com https://api.github.com"
-  TRUSTED_PUBLIC_KEYS: "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= marlowe-temp.cachix.org-1:1gPjVFpu4QjaAT3tRurCioX+BC23V7mjvFwpP5bV0Ec= loony-tools:pr9m4BkM/5/eSTZlkQyRt57Jz7OMBxNSUiMC4FkcNfk="
-  SUBSTITUTERS: "https://cache.nixos.org/ https://cache.iog.io https://marlowe-temp.cachix.org https://cache.zw3rk.com/"
+  TRUSTED_PUBLIC_KEYS: "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= marlowe-temp.cachix.org-1:1gPjVFpu4QjaAT3tRurCioX+BC23V7mjvFwpP5bV0Ec="
+  SUBSTITUTERS: "https://cache.nixos.org/ https://cache.iog.io https://marlowe-temp.cachix.org"
   VAULT_ADDR: "https://vault.dapps.aws.iohkdev.io"
   NOMAD_ADDR: "https://nomad.dapps.aws.iohkdev.io"
   NOMAD_NAMESPACE: "marlowe"
