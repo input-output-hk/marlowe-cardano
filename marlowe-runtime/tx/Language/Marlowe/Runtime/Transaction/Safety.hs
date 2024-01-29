@@ -17,7 +17,7 @@ import Control.Monad (forM)
 import Control.Monad.Trans.Except (runExceptT, throwE)
 import Data.Bifunctor (bimap, first)
 import Data.Maybe (fromJust)
-import Data.SOP.Strict (K (..), NP (..))
+import Data.SOP.Strict (NP (..))
 import Data.String (fromString)
 import Data.Time (UTCTime, addUTCTime, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
@@ -53,16 +53,14 @@ import Language.Marlowe.Runtime.Transaction.Constraints (
   RoleTokenConstraints (..),
   TxConstraints (..),
   WalletContext (..),
+  mkTxOutValue,
   solveConstraints,
  )
 
 import qualified Cardano.Api as Cardano
 import qualified Cardano.Api.Shelley as C
 import qualified Cardano.Api.Shelley as Shelley (
-  CardanoMode,
-  ConsensusMode (..),
   EraHistory (..),
-  ProtocolParameters (..),
   SystemStart (..),
  )
 import Control.Monad.IO.Class (MonadIO)
@@ -82,6 +80,7 @@ import qualified Data.Map.Strict as M (
   size,
   toList,
  )
+import Data.SOP.BasicFunctors (K (..))
 import qualified Data.SOP.Counting as Ouroboros
 import qualified Data.Set as S (Set, intersection, map, singleton)
 import qualified Data.Set as Set
@@ -165,8 +164,8 @@ remapContinuations = M.mapKeys $ Plutus.DatumHash . Plutus.toBuiltin . Chain.unD
 --   present in the TxOut and that the address contains a stake credential.
 minAdaUpperBound
   :: forall era v
-   . C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
-  -> Shelley.ProtocolParameters
+   . C.BabbageEraOnwards era
+  -> C.LedgerProtocolParameters era
   -> MarloweVersion v
   -> V1.State
   -> Contract v
@@ -182,8 +181,8 @@ minAdaUpperBound era pps MarloweV1 state contract continuations =
 -- present in the TxOut and that the address contains a stake credential.
 mkAdjustMinimumUtxo
   :: forall era v
-   . C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
-  -> Shelley.ProtocolParameters
+   . C.BabbageEraOnwards era
+  -> C.LedgerProtocolParameters era
   -> MarloweVersion v
   -> Chain.Assets
   -> Chain.Assets
@@ -199,35 +198,26 @@ mkAdjustMinimumUtxo era pps MarloweV1 assets@Chain.Assets{ada, tokens} =
 --   TxOut and that the address contains a stake credential.
 minAdaBound
   :: forall era v
-   . C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
-  -> Shelley.ProtocolParameters
+   . C.BabbageEraOnwards era
+  -> C.LedgerProtocolParameters era
   -> MarloweVersion v
   -> Chain.Assets
   -> Maybe Cardano.Lovelace
 minAdaBound era pps MarloweV1 assets =
   do
     let -- Ugh, the era handling can be done much better, but this is how it's done elsewhere in the codebase.
-        multiAssetSupported :: C.MultiAssetSupportedInEra era
-        multiAssetSupported = case era of
-          C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.MultiAssetInBabbageEra
-          C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.MultiAssetInConwayEra
-        scriptDataSupported :: C.ScriptDataSupportedInEra era
-        scriptDataSupported = case era of
-          C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.ScriptDataInBabbageEra
-          C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.ScriptDataInConwayEra
-        shelleyBasedEra = case era of
-          C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.ShelleyBasedEraBabbage
-          C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.ShelleyBasedEraConway
-        cardanoEra = case era of
-          C.ReferenceTxInsScriptsInlineDatumsInBabbageEra -> C.BabbageEra
-          C.ReferenceTxInsScriptsInlineDatumsInConwayEra -> C.ConwayEra
+        maryEraOnwards :: C.MaryEraOnwards era
+        maryEraOnwards = C.babbageEraOnwardsToMaryEraOnwards era
+        alonzoEraOnwards :: C.AlonzoEraOnwards era
+        alonzoEraOnwards = C.babbageEraOnwardsToAlonzoEraOnwards era
+        shelleyBasedEra = C.babbageEraOnwardsToShelleyBasedEra era
     address <-
       case era of
-        C.ReferenceTxInsScriptsInlineDatumsInBabbageEra ->
+        C.BabbageEraOnwardsBabbage ->
           C.deserialiseAddress
             (C.AsAddressInEra C.AsBabbageEra)
             "addr1x8ur42seq20ytdzm33fhjf3c2pxskxf3gzxq706qk7p5muhc824pjq57gk69hrzn0ynrs5zdpvvnzsyvpul5pdurfheq28w2dx"
-        C.ReferenceTxInsScriptsInlineDatumsInConwayEra ->
+        C.BabbageEraOnwardsConway ->
           C.deserialiseAddress
             (C.AsAddressInEra C.AsConwayEra)
             "addr1x8ur42seq20ytdzm33fhjf3c2pxskxf3gzxq706qk7p5muhc824pjq57gk69hrzn0ynrs5zdpvvnzsyvpul5pdurfheq28w2dx"
@@ -235,11 +225,10 @@ minAdaBound era pps MarloweV1 assets =
     let txOut =
           Cardano.TxOut
             address
-            (Cardano.TxOutValue multiAssetSupported value)
-            (Cardano.TxOutDatumHash scriptDataSupported "45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0")
+            (mkTxOutValue maryEraOnwards value)
+            (Cardano.TxOutDatumHash alonzoEraOnwards "45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0")
             C.ReferenceScriptNone
-    params <- either (const Nothing) Just $ C.bundleProtocolParams cardanoEra pps
-    pure $ Cardano.calculateMinimumUTxO shelleyBasedEra txOut params
+    pure $ Cardano.calculateMinimumUTxO shelleyBasedEra txOut $ C.unLedgerProtocolParameters pps
 
 -- | Check a contract for design errors and ledger violations.
 checkContract
@@ -279,8 +268,8 @@ checkContract network config MarloweV1 contract continuations =
 -- | Mock-execute all possible transactions for a contract.
 checkTransactions
   :: (MonadIO m)
-  => Shelley.ProtocolParameters
-  -> C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  => C.LedgerProtocolParameters era
+  -> C.BabbageEraOnwards era
   -> MarloweVersion v
   -> MarloweContext v
   -> HelpersContext
@@ -324,8 +313,8 @@ checkTransactions protocolParameters era version@MarloweV1 marloweContext helper
 
 -- | Check a transaction for safety issues.
 checkTransaction
-  :: Shelley.ProtocolParameters
-  -> C.ReferenceTxInsScriptsInlineDatumsSupportedInEra era
+  :: C.LedgerProtocolParameters era
+  -> C.BabbageEraOnwards era
   -> MarloweVersion v
   -> MarloweContext v
   -> HelpersContext
@@ -366,7 +355,7 @@ checkTransaction protocolParameters era version@MarloweV1 marloweContext@Marlowe
         metadata = MarloweTransactionMetadata Nothing $ Chain.TransactionMetadata mempty
         (start, history) =
           makeSystemHistory . posixTimeToUTCTime $ Plutus.POSIXTime 0
-        solveConstraints' = solveConstraints start (C.toLedgerEpochInfo history) protocolParameters
+        solveConstraints' = solveConstraints start (C.toLedgerEpochInfo history)
     tipSlot <-
       utcTimeToSlotNo start history now
     constraints <-
@@ -390,7 +379,7 @@ checkTransaction protocolParameters era version@MarloweV1 marloweContext@Marlowe
       . either
         (pure . TransactionValidationError (stripAnnotation transaction) . show)
         (const $ TransactionWarning (stripAnnotation transaction) <$> V1.txOutWarnings txOutput)
-      $ solveConstraints' era version (Left marloweContext') walletContext helpersContext' constraints
+      $ solveConstraints' era protocolParameters version (Left marloweContext') walletContext helpersContext' constraints
 
 -- | Create a helpers context for the specified helper roles.
 helpersForRoles
@@ -496,10 +485,10 @@ makeValue (V1.Token (Plutus.CurrencySymbol p) (Plutus.TokenName n)) quantity =
 -- | Convert UTC time to a slot number.
 utcTimeToSlotNo
   :: Shelley.SystemStart
-  -> Shelley.EraHistory Shelley.CardanoMode
+  -> Shelley.EraHistory
   -> UTCTime
   -> Either String Chain.SlotNo
-utcTimeToSlotNo systemStart (Shelley.EraHistory _ interpreter) time =
+utcTimeToSlotNo systemStart (Shelley.EraHistory interpreter) time =
   do
     (slotNo, _, _) <-
       first show
@@ -517,7 +506,7 @@ posixTimeToUTCTime (Plutus.POSIXTime t) = posixSecondsToUTCTime . secondsToNomin
 -- | Make a system start and error history for the given start time.
 makeSystemHistory
   :: UTCTime
-  -> (Shelley.SystemStart, Shelley.EraHistory Shelley.CardanoMode)
+  -> (Shelley.SystemStart, Shelley.EraHistory)
 makeSystemHistory time =
   let systemStart = Shelley.SystemStart $ addUTCTime (-1000) time
       eraParams =
@@ -545,7 +534,7 @@ makeSystemHistory time =
           , eraParams
           }
       eraHistory =
-        C.EraHistory Shelley.CardanoMode
+        C.EraHistory
           . Ouroboros.mkInterpreter
           . Ouroboros.summaryWithExactly
           . Ouroboros.Exactly

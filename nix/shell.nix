@@ -15,7 +15,6 @@ in
 
 
   packages = [
-    cabalProject.hsPkgs.cardano-addresses-cli.components.exes.cardano-address
     cabalProject.hsPkgs.hspec-golden.components.exes.hgold
 
     repoRoot.nix.marlowe-cardano.cardano-tools.cardano-node
@@ -48,12 +47,6 @@ in
       description = "Genereate compose.yaml in the repository root";
       exec = scripts.refresh-compose;
       enable = isLinux;
-      group = "marlowe";
-    };
-
-    marlowe-runtime-cli = {
-      exec = scripts.marlowe-runtime-cli;
-      description = "Marlowe Runtime CLI";
       group = "marlowe";
     };
 

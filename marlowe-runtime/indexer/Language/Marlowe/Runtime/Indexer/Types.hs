@@ -5,7 +5,7 @@
 
 module Language.Marlowe.Runtime.Indexer.Types where
 
-import Cardano.Api (CardanoMode, EraHistory, SystemStart)
+import Cardano.Api (EraHistory, SystemStart)
 import Control.Applicative (empty)
 import Control.Monad (guard, mfilter, unless, when)
 import Control.Monad.Except (MonadError (throwError), runExceptT, withExceptT)
@@ -81,7 +81,7 @@ instance ToJSON MarloweUTxO
 -- MarloweUTxO.
 extractMarloweBlock
   :: SystemStart
-  -> EraHistory CardanoMode
+  -> EraHistory
   -> Set ScriptHash
   -- ^ All known Marlowe script hashes.
   -> BlockHeader
@@ -180,7 +180,7 @@ extractContractId marloweScriptHashes txOutRef TransactionOutput{..} = do
 -- output.
 extractApplyInputsTx
   :: SystemStart
-  -> EraHistory CardanoMode
+  -> EraHistory
   -> BlockHeader
   -> Transaction
   -- ^ The transaction to extract an apply inputs tx from.

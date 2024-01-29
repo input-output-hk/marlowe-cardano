@@ -12,9 +12,8 @@
 
 module Language.Marlowe.CLI.Test.Runtime.Interpret where
 
-import Cardano.Api (CardanoMode, ScriptDataSupportedInEra (..))
+import Cardano.Api (BabbageEraOnwards (..))
 import Cardano.Api qualified as C
-import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import Contrib.Control.Concurrent.Async (timeoutIO)
 import Contrib.Control.Monad.Except (note)
 import Contrib.Data.List.Random (combinationWithRepetitions)
@@ -32,17 +31,16 @@ import Control.Monad.Trans.Marlowe.Class qualified as Marlowe.Class
 import Control.Monad.Writer.Lazy (runWriter)
 import Data.Aeson (toJSON)
 import Data.Aeson qualified as A
-import Data.Aeson.OneLine qualified as A
+import Data.Aeson.Text qualified as A
 import Data.Bifunctor qualified as Bifunctor
 import Data.Coerce (coerce)
 import Data.Foldable (for_)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe, isJust, isNothing)
 import Data.Set qualified as Set
-import Data.Text qualified as Text
+import Data.Text.Lazy qualified as TL
 import Data.Time.Units (Microsecond, Second, TimeUnit (fromMicroseconds, toMicroseconds))
 import Data.Traversable (for)
-import Language.Marlowe.CLI.Cardano.Api (withShelleyBasedEra)
 import Language.Marlowe.CLI.Test.Contract (ContractNickname (ContractNickname), Source (InlineContract, UseTemplate))
 import Language.Marlowe.CLI.Test.Contract.Source (useTemplate)
 import Language.Marlowe.CLI.Test.InterpreterError (runtimeOperationFailed', testExecutionFailed', timeoutReached')
@@ -129,7 +127,7 @@ import System.IO (hPutStrLn, stderr)
 getConnection
   :: forall env era st m
    . (InterpretMonad env st m era)
-  => m (C.LocalNodeConnectInfo CardanoMode)
+  => m C.LocalNodeConnectInfo
 getConnection = do
   preview connectionT >>= \case
     Just conn -> pure conn
@@ -296,8 +294,8 @@ runtimeAwaitTxsConfirmed ro possibleContractNickname timeout = do
     liftIO $ hPutStrLn stderr $ "Timeout reached while waiting for txs confirmation: " <> show contractNickname
     let getRuntimeContractInfo = awaitRuntimeContractInfo rms contractNickname (const True)
     thread <- liftIO $ atomically getRuntimeContractInfo
-    let monitorContractInfo = maybe "<empty>" (Text.unpack . A.renderValue . anyMarloweThreadToJSON . view rcMarloweThread) thread
-        interpreterContractInfo = Text.unpack . A.renderValue . anyMarloweThreadToJSON $ interpreterMarloweThread
+    let monitorContractInfo = maybe "<empty>" (TL.unpack . A.encodeToLazyText . anyMarloweThreadToJSON . view rcMarloweThread) thread
+        interpreterContractInfo = TL.unpack . A.encodeToLazyText . anyMarloweThreadToJSON $ interpreterMarloweThread
     throwLabeledError ro $
       timeoutReached' $
         "Timeout reached while waiting for txs confirmation: "
@@ -340,31 +338,31 @@ withdraw ro contractId tokenName walletNickname Wallet{_waAddress, _waSigningKey
     let payouts = Set.fromList $ payoutId <$> filter matchesRole items
     Marlowe.Class.withdraw MarloweV1 walletAddresses payouts
   case result of
-    Right (WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra WithdrawTxInEra{..}) -> do
+    Right (WithdrawTx BabbageEraOnwardsBabbage WithdrawTxInEra{..}) -> do
       let witness = somePaymentSigningKeyToTxWitness _waSigningKey
-          tx = C.signShelleyTransaction txBody [witness]
+          tx = C.signShelleyTransaction C.ShelleyBasedEraBabbage txBody [witness]
       res <- liftIO $ flip runMarloweT connector do
-        Marlowe.Class.submitAndWait ReferenceTxInsScriptsInlineDatumsInBabbageEra tx
+        Marlowe.Class.submitAndWait BabbageEraOnwardsBabbage tx
       case res of
         Right bl -> do
           logStoreLabeledMsg ro $ "Withdrawal submitted and confirmed: " <> show bl
 
           updateWallet walletNickname \wallet'@Wallet{_waSubmittedTransactions} -> do
-            wallet'{_waSubmittedTransactions = SomeTxBody ScriptDataInBabbageEra txBody : _waSubmittedTransactions}
+            wallet'{_waSubmittedTransactions = SomeTxBody BabbageEraOnwardsBabbage txBody : _waSubmittedTransactions}
           pure $ C.getTxId txBody
         Left err ->
           throwLabeledError ro $ runtimeOperationFailed' $ "Failed to submit withdrawal: " <> show err
-    Right (WithdrawTx ReferenceTxInsScriptsInlineDatumsInConwayEra WithdrawTxInEra{..}) -> do
+    Right (WithdrawTx BabbageEraOnwardsConway WithdrawTxInEra{..}) -> do
       let witness = somePaymentSigningKeyToTxWitness _waSigningKey
-          tx = C.signShelleyTransaction txBody [witness]
+          tx = C.signShelleyTransaction C.ShelleyBasedEraConway txBody [witness]
       res <- liftIO $ flip runMarloweT connector do
-        Marlowe.Class.submitAndWait ReferenceTxInsScriptsInlineDatumsInConwayEra tx
+        Marlowe.Class.submitAndWait BabbageEraOnwardsConway tx
       case res of
         Right bl -> do
           logStoreLabeledMsg ro $ "Withdrawal submitted and confirmed: " <> show bl
 
           updateWallet walletNickname \wallet'@Wallet{_waSubmittedTransactions} -> do
-            wallet'{_waSubmittedTransactions = SomeTxBody ScriptDataInConwayEra txBody : _waSubmittedTransactions}
+            wallet'{_waSubmittedTransactions = SomeTxBody BabbageEraOnwardsConway txBody : _waSubmittedTransactions}
           pure $ C.getTxId txBody
         Left err ->
           throwLabeledError ro $ runtimeOperationFailed' $ "Failed to submit withdrawal: " <> show err
@@ -423,7 +421,7 @@ interpret ro@RuntimeAwaitClosed{..} = do
   when (isNothing res) do
     let getRuntimeContractInfo = awaitRuntimeContractInfo rms contractNickname (const True)
     thread <- liftIO $ atomically getRuntimeContractInfo
-    let contractState = maybe "<empty>" (Text.unpack . A.renderValue . anyMarloweThreadToJSON . view rcMarloweThread) thread
+    let contractState = maybe "<empty>" (TL.unpack . A.encodeToLazyText . anyMarloweThreadToJSON . view rcMarloweThread) thread
     throwLabeledError ro $
       timeoutReached' $
         "Timeout reached while waiting for contract instance to be closed: "
@@ -523,16 +521,16 @@ interpret ro@RuntimeCreateContract{..} = do
   case result of
     Right
       ( Transaction.ContractCreated
-          ReferenceTxInsScriptsInlineDatumsInBabbageEra
+          BabbageEraOnwardsBabbage
           Transaction.ContractCreatedInEra{datum, txBody, contractId}
         ) -> do
         logStoreLabeledMsg ro $ "Creating contract: " <> show contractId
         let witness = somePaymentSigningKeyToTxWitness _waSigningKey
-            tx = C.signShelleyTransaction txBody [witness]
+            tx = C.signShelleyTransaction C.ShelleyBasedEraBabbage txBody [witness]
             submitterNickname = fromMaybe faucetNickname roSubmitter
         logStoreLabeledMsg ro $ "Submitting contract: " <> show contractId
         res <- liftIO $ flip runMarloweT connector do
-          Marlowe.Class.submitAndWait ReferenceTxInsScriptsInlineDatumsInBabbageEra tx
+          Marlowe.Class.submitAndWait BabbageEraOnwardsBabbage tx
         logStoreLabeledMsg ro $ "Submitted" <> show contractId
         case res of
           Right _ -> do
@@ -556,7 +554,7 @@ interpret ro@RuntimeCreateContract{..} = do
                         }
                 modifying knownContractsL $ Map.insert contractNickname contractInfo
                 updateWallet submitterNickname \submitter@Wallet{_waSubmittedTransactions} -> do
-                  submitter{_waSubmittedTransactions = SomeTxBody ScriptDataInBabbageEra txBody : _waSubmittedTransactions}
+                  submitter{_waSubmittedTransactions = SomeTxBody BabbageEraOnwardsBabbage txBody : _waSubmittedTransactions}
                 case roAwaitConfirmed of
                   Nothing -> pure ()
                   Just timeout -> do
@@ -566,16 +564,16 @@ interpret ro@RuntimeCreateContract{..} = do
             throwLabeledError ro $ runtimeOperationFailed' $ "Failed to submit contract: " <> show err
     Right
       ( Transaction.ContractCreated
-          ReferenceTxInsScriptsInlineDatumsInConwayEra
+          BabbageEraOnwardsConway
           Transaction.ContractCreatedInEra{datum, txBody, contractId}
         ) -> do
         logStoreLabeledMsg ro $ "Creating contract: " <> show contractId
         let witness = somePaymentSigningKeyToTxWitness _waSigningKey
-            tx = C.signShelleyTransaction txBody [witness]
+            tx = C.signShelleyTransaction C.ShelleyBasedEraConway txBody [witness]
             submitterNickname = fromMaybe faucetNickname roSubmitter
         logStoreLabeledMsg ro $ "Submitting contract: " <> show contractId
         res <- liftIO $ flip runMarloweT connector do
-          Marlowe.Class.submitAndWait ReferenceTxInsScriptsInlineDatumsInConwayEra tx
+          Marlowe.Class.submitAndWait BabbageEraOnwardsConway tx
         logStoreLabeledMsg ro $ "Submitted" <> show contractId
         case res of
           Right _ -> do
@@ -599,7 +597,7 @@ interpret ro@RuntimeCreateContract{..} = do
                         }
                 modifying knownContractsL $ Map.insert contractNickname contractInfo
                 updateWallet submitterNickname \submitter@Wallet{_waSubmittedTransactions} -> do
-                  submitter{_waSubmittedTransactions = SomeTxBody ScriptDataInConwayEra txBody : _waSubmittedTransactions}
+                  submitter{_waSubmittedTransactions = SomeTxBody BabbageEraOnwardsConway txBody : _waSubmittedTransactions}
                 case roAwaitConfirmed of
                   Nothing -> pure ()
                   Just timeout -> do
@@ -632,7 +630,7 @@ interpret ro@RuntimeApplyInputs{..} = do
   contractId <- getContractId contractNickname
   let possibleChangeAddress = toChainSyncAddress _waAddress
   changeAddress <- note (testExecutionFailed' "Failed to create change address") possibleChangeAddress
-  logStoreLabeledMsg ro $ "Applying inputs:" <> Text.unpack (A.renderValue $ toJSON inputs')
+  logStoreLabeledMsg ro $ "Applying inputs:" <> TL.unpack (A.encodeToLazyText $ toJSON inputs')
   result <- liftIO $ flip runMarloweT connector do
     let walletAddresses =
           WalletAddresses
@@ -651,17 +649,17 @@ interpret ro@RuntimeApplyInputs{..} = do
   case result of
     Right
       ( Transaction.InputsApplied
-          ReferenceTxInsScriptsInlineDatumsInBabbageEra
+          BabbageEraOnwardsBabbage
           Transaction.InputsAppliedInEra{output = R.TransactionOutput{scriptOutput = possibleMarloweOutput}, txBody}
         ) -> do
         logStoreLabeledMsg ro "Successful application."
         let witness = somePaymentSigningKeyToTxWitness _waSigningKey
-            tx = withShelleyBasedEra ScriptDataInBabbageEra . C.signShelleyTransaction txBody $ [witness]
+            tx = C.signShelleyTransaction C.ShelleyBasedEraBabbage txBody [witness]
             submitterNickname = fromMaybe faucetNickname roSubmitter
 
         logStoreLabeledMsg ro "Submitting..."
         res <- liftIO $ flip runMarloweT connector do
-          Marlowe.Class.submitAndWait ReferenceTxInsScriptsInlineDatumsInBabbageEra tx
+          Marlowe.Class.submitAndWait BabbageEraOnwardsBabbage tx
         logStoreLabeledMsg ro "Submitted and confirmed."
 
         case res of
@@ -679,7 +677,7 @@ interpret ro@RuntimeApplyInputs{..} = do
                 throwLabeledError ro $
                   testExecutionFailed' $
                     "Failed to extend the marlowe thread with the applied inputs: "
-                      <> (Text.unpack . A.renderValue . anyMarloweThreadToJSON $ th)
+                      <> (TL.unpack . A.encodeToLazyText . anyMarloweThreadToJSON $ th)
               Just th' -> do
                 modifying knownContractsL \contracts -> do
                   let contractInfo' = do
@@ -687,7 +685,7 @@ interpret ro@RuntimeApplyInputs{..} = do
                         c{_ciMarloweThread = th'}
                   Map.insert contractNickname contractInfo' contracts
             updateWallet submitterNickname \submitter@Wallet{_waSubmittedTransactions} -> do
-              submitter{_waSubmittedTransactions = SomeTxBody ScriptDataInBabbageEra txBody : _waSubmittedTransactions}
+              submitter{_waSubmittedTransactions = SomeTxBody BabbageEraOnwardsBabbage txBody : _waSubmittedTransactions}
 
             case roAwaitConfirmed of
               Nothing -> pure ()
@@ -697,17 +695,17 @@ interpret ro@RuntimeApplyInputs{..} = do
             throwLabeledError ro $ runtimeOperationFailed' $ "Failed to submit contract: " <> show err
     Right
       ( Transaction.InputsApplied
-          ReferenceTxInsScriptsInlineDatumsInConwayEra
+          BabbageEraOnwardsConway
           Transaction.InputsAppliedInEra{output = R.TransactionOutput{scriptOutput = possibleMarloweOutput}, txBody}
         ) -> do
         logStoreLabeledMsg ro "Successful application."
         let witness = somePaymentSigningKeyToTxWitness _waSigningKey
-            tx = withShelleyBasedEra ScriptDataInConwayEra . C.signShelleyTransaction txBody $ [witness]
+            tx = C.signShelleyTransaction C.ShelleyBasedEraConway txBody [witness]
             submitterNickname = fromMaybe faucetNickname roSubmitter
 
         logStoreLabeledMsg ro "Submitting..."
         res <- liftIO $ flip runMarloweT connector do
-          Marlowe.Class.submitAndWait ReferenceTxInsScriptsInlineDatumsInConwayEra tx
+          Marlowe.Class.submitAndWait BabbageEraOnwardsConway tx
         logStoreLabeledMsg ro "Submitted and confirmed."
 
         case res of
@@ -725,7 +723,7 @@ interpret ro@RuntimeApplyInputs{..} = do
                 throwLabeledError ro $
                   testExecutionFailed' $
                     "Failed to extend the marlowe thread with the applied inputs: "
-                      <> (Text.unpack . A.renderValue . anyMarloweThreadToJSON $ th)
+                      <> (TL.unpack . A.encodeToLazyText . anyMarloweThreadToJSON $ th)
               Just th' -> do
                 modifying knownContractsL \contracts -> do
                   let contractInfo' = do
@@ -733,7 +731,7 @@ interpret ro@RuntimeApplyInputs{..} = do
                         c{_ciMarloweThread = th'}
                   Map.insert contractNickname contractInfo' contracts
             updateWallet submitterNickname \submitter@Wallet{_waSubmittedTransactions} -> do
-              submitter{_waSubmittedTransactions = SomeTxBody ScriptDataInConwayEra txBody : _waSubmittedTransactions}
+              submitter{_waSubmittedTransactions = SomeTxBody BabbageEraOnwardsConway txBody : _waSubmittedTransactions}
 
             case roAwaitConfirmed of
               Nothing -> pure ()

@@ -14,8 +14,8 @@ import Control.Monad.Except (MonadError (throwError), catchError)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.State.Class (get)
 import Data.Aeson qualified as A
-import Data.Aeson.OneLine qualified as A
-import Data.Text qualified as T
+import Data.Aeson.Text qualified as A
+import Data.Text.Lazy qualified as TL
 import Language.Marlowe.CLI.Test.CLI.Interpret qualified as CLI
 import Language.Marlowe.CLI.Test.InterpreterError (testExecutionFailed')
 import Language.Marlowe.CLI.Test.Log (Label (label), logLabeledMsg, logStoreLabeledMsg, throwLabeledError)
@@ -56,16 +56,16 @@ interpret o@(ShouldFail operation) =
     result <- (Right <$> interpret operation) `catchError` (pure . Left)
     case result of
       Right _ ->
-        throwLabeledError o $ testExecutionFailed' $ "Operation unexpectedly suceeded: " <> show operation
+        throwLabeledError o $ testExecutionFailed' $ "Operation unexpectedly succeeded: " <> show operation
       Left e -> do
         state' <- get
         prevStateJson <- A.object <$> interpretStateToJSONPairs state
         newStateJson <- A.object <$> interpretStateToJSONPairs state'
-        -- FIXME: We don't have Eq instance in place and this check coveres only the part of the state.
+        -- FIXME: We don't have Eq instance in place and this check covers only the part of the state.
         if prevStateJson /= newStateJson
           then do
-            prevStateStr <- T.unpack . A.renderValue . A.object <$> interpretStateToJSONPairs state
-            newStateStr <- T.unpack . A.renderValue . A.object <$> interpretStateToJSONPairs state'
+            prevStateStr <- TL.unpack . A.encodeToLazyText . A.object <$> interpretStateToJSONPairs state
+            newStateStr <- TL.unpack . A.encodeToLazyText . A.object <$> interpretStateToJSONPairs state'
             throwLabeledError o $
               testExecutionFailed' $
                 "Operation failed as expected: "
@@ -76,7 +76,7 @@ interpret o@(ShouldFail operation) =
                   <> " State before: "
                   <> prevStateStr
                   <> "."
-                  <> " Ctate after: "
+                  <> " State after: "
                   <> newStateStr
                   <> "."
           else logLabeledMsg o $ "Operation failed as expected: " <> show e <> " occurred for " <> show operation <> "."

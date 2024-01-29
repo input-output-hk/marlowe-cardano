@@ -7,7 +7,7 @@ import Cardano.Api (NetworkId (..), NetworkMagic (..))
 import Data.Maybe (fromMaybe)
 import Network.Socket (HostName, PortNumber)
 import qualified Options.Applicative as O
-import Prettyprinter
+import Options.Applicative.Help.Pretty
 import System.Environment (lookupEnv)
 import Text.Read (readMaybe)
 
@@ -224,7 +224,7 @@ parseOptions defaultNetworkId defaultSocketPath defaultDatabaseUri defaultHost d
         , O.header "marlowe-chain-sync: Chain query and sync server for the Marlowe Runtime."
         ]
 
-description :: Doc ann
+description :: Doc
 description =
   concatWith
     (\a b -> a <> line <> line <> b)

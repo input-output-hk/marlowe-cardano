@@ -15,6 +15,7 @@ module Language.Marlowe.Runtime.Web.Common (
 
 import Cardano.Api (
   AsType (..),
+  ShelleyBasedEra (ShelleyBasedEraBabbage),
   ShelleyWitnessSigningKey (..),
   TextEnvelope (..),
   TextEnvelopeType (..),
@@ -217,10 +218,10 @@ signShelleyTransaction' Web.TextEnvelope{..} wits = do
           , teDescription = fromString (T.unpack teDescription)
           , teRawCBOR = Web.unBase16 teCborHex
           }
-  txBody <- case deserialiseFromTextEnvelope (AsTxBody AsBabbage) te of
+  txBody <- case deserialiseFromTextEnvelope (AsTxBody AsBabbageEra) te of
     Left err -> fail $ show err
     Right a -> pure a
-  pure case serialiseToTextEnvelope Nothing $ signShelleyTransaction txBody wits of
+  pure case serialiseToTextEnvelope Nothing $ signShelleyTransaction ShelleyBasedEraBabbage txBody wits of
     TextEnvelope (TextEnvelopeType ty) _ bytes -> Web.TextEnvelope (T.pack ty) "" $ Web.Base16 bytes
 
 waitUntilConfirmed :: (MonadIO m) => (a -> Web.TxStatus) -> m a -> m a

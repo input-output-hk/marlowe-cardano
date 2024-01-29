@@ -7,15 +7,14 @@ module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Byron where
 import Cardano.Chain.Common (Address, unsafeGetLovelace)
 import Cardano.Chain.UTxO
 import Cardano.Crypto (AbstractHash, hashToBytes)
-import Cardano.Ledger.Binary (Annotated (..), byronProtVer, serialize')
-import Data.ByteString (ByteString)
+import Cardano.Ledger.Binary (byronProtVer, serialize')
 import qualified Data.ByteString as BS
 import Data.Int
 import qualified Data.List.NonEmpty as NE
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types
 
-byronTxRow :: Int64 -> Bytea -> Bytea -> ATxAux ByteString -> TxRowGroup
-byronTxRow slotNo blockHash txId (unAnnotated . aTaTx -> UnsafeTx{..}) =
+byronTxRow :: Int64 -> Bytea -> Bytea -> Tx -> TxRowGroup
+byronTxRow slotNo blockHash txId UnsafeTx{..} =
   ( TxRow
       { blockHash
       , txId

@@ -42,8 +42,8 @@ import Options.Applicative (
   strOption,
   value,
  )
+import Options.Applicative.Help.Pretty
 import Paths_marlowe_runtime
-import Prettyprinter
 
 main :: IO ()
 main = do
@@ -200,7 +200,7 @@ getOptions = do
         , header "marlowe-proxy: The API gateway server for the Marlowe Runtime."
         ]
 
-description :: Doc ann
+description :: Doc
 description =
   concatWith
     (\a b -> a <> line <> line <> b)

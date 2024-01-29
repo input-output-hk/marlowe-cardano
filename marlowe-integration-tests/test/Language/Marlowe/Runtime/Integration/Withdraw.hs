@@ -3,10 +3,7 @@
 
 module Language.Marlowe.Runtime.Integration.Withdraw where
 
-import Cardano.Api (getTxId)
-import Cardano.Api.Shelley (
-  ReferenceTxInsScriptsInlineDatumsSupportedInEra (ReferenceTxInsScriptsInlineDatumsInBabbageEra),
- )
+import Cardano.Api (BabbageEraOnwards (..), getTxId)
 import Control.Arrow ((&&&))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (ask)
@@ -108,7 +105,7 @@ missingRoleTokenTest TestData{..} = flip runIntegrationTest runtime do
 
 singlePayoutTest :: ActionWith TestData
 singlePayoutTest TestData{..} = flip runIntegrationTest runtime do
-  WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra WithdrawTxInEra{..} <-
+  WithdrawTx BabbageEraOnwardsBabbage WithdrawTxInEra{..} <-
     expectRight "expected withdraw to succeed"
       =<< withdraw MarloweV1 (addresses wallet1) (Set.singleton $ payoutId wallet1AvailablePayout1)
   let expectedInputs = Map.singleton (payoutId wallet1AvailablePayout1) (payout wallet1AvailablePayout1)
@@ -116,7 +113,7 @@ singlePayoutTest TestData{..} = flip runIntegrationTest runtime do
 
 multiPayoutTest :: ActionWith TestData
 multiPayoutTest TestData{..} = flip runIntegrationTest runtime do
-  WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra WithdrawTxInEra{..} <-
+  WithdrawTx BabbageEraOnwardsBabbage WithdrawTxInEra{..} <-
     expectRight "expected withdraw to succeed"
       =<< withdraw
         MarloweV1
@@ -129,7 +126,7 @@ multiPayoutMultiWalletTest :: ActionWith TestData
 multiPayoutMultiWalletTest TestData{..} = flip runIntegrationTest runtime do
   let wallet1Addresses = addresses wallet1
   let wallet2Addresses = addresses wallet2
-  WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra WithdrawTxInEra{..} <-
+  WithdrawTx BabbageEraOnwardsBabbage WithdrawTxInEra{..} <-
     expectRight "expected withdraw to succeed"
       =<< withdraw
         MarloweV1

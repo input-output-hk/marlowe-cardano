@@ -6,11 +6,11 @@ import Control.Monad.IO.Class (MonadIO (liftIO))
 
 import Cardano.Api (
   AsType (..),
+  ShelleyBasedEra (ShelleyBasedEraBabbage),
   TxBody (..),
   TxBodyContent (..),
   TxMetadata (TxMetadata),
   TxMetadataInEra (..),
-  TxMetadataSupportedInEra (TxMetadataInBabbageEra),
   TxMetadataValue (..),
   deserialiseFromTextEnvelope,
  )
@@ -140,7 +140,7 @@ bugPLT8712 = do
               deserialiseFromTextEnvelope (AsTxBody AsBabbageEra) textEnvelope
           case txMetadata of
             TxMetadataNone -> fail "expected metadata"
-            TxMetadataInEra TxMetadataInBabbageEra (TxMetadata m) -> do
+            TxMetadataInEra ShelleyBasedEraBabbage (TxMetadata m) -> do
               TxMetaMap [(TxMetaBytes _, tokenMetadata)] <- expectJust "Failed to lookup metadata" $ Map.lookup 721 m
               let expected =
                     TxMetaMap

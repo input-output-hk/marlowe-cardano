@@ -61,13 +61,16 @@ module Language.Marlowe.CLI.Export (
 
 import Cardano.Api (
   AddressInEra,
+  BabbageEraOnwards,
   NetworkId,
   PaymentCredential (..),
   Script (PlutusScript),
   ScriptDataJsonSchema (..),
-  ScriptDataSupportedInEra (..),
   SerialiseAsRawBytes (..),
   StakeAddressReference (..),
+  babbageEraOnwardsToCardanoEra,
+  babbageEraOnwardsToShelleyBasedEra,
+  cardanoEraConstraints,
   hashScript,
   hashScriptDataBytes,
   makeShelleyAddressInEra,
@@ -100,8 +103,6 @@ import Language.Marlowe.CLI.Types (
   doWithShelleyBasedEra,
   queryContextNetworkId,
   validatorInfo',
-  withCardanoEra,
-  withShelleyBasedEra,
  )
 import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract (..), Input, State (..), Token (Token))
@@ -122,15 +123,15 @@ import Language.Marlowe.CLI.Cardano.Api qualified as C
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (withPlutusScriptVersion)
 import Language.Marlowe.Scripts (marloweValidator, openRolesValidator, payoutValidator)
 import Language.Marlowe.Scripts.Types (marloweTxInputsFromInputs)
-import PlutusLedgerApi.Common (ProtocolVersion)
+import PlutusLedgerApi.Common (MajorProtocolVersion)
 import PlutusLedgerApi.V1 (DatumHash (..), toBuiltin, toData)
 
 -- | Build comprehensive information about a Marlowe contract and transaction.
 buildMarlowe
   :: (MonadIO m)
   => MarloweParams
-  -> ScriptDataSupportedInEra era
-  -> ProtocolVersion
+  -> BabbageEraOnwards era
+  -> MajorProtocolVersion
   -> [Integer]
   -- ^ The cost model parameters.
   -> NetworkId
@@ -160,7 +161,7 @@ exportMarlowe
    . (MonadError CliError m, MonadIO m, MonadReader (CliEnv era) m)
   => MarloweParams
   -- ^ The Marlowe contract parameters.
-  -> ProtocolVersion
+  -> MajorProtocolVersion
   -> [Integer]
   -- ^ The cost model parameters.
   -> NetworkId
@@ -211,8 +212,8 @@ printMarlowe
    . (MonadError CliError m, MonadIO m, CS.IsPlutusScriptLanguage lang)
   => MarloweParams
   -- ^ The Marlowe contract parameters.
-  -> ScriptDataSupportedInEra era
-  -> ProtocolVersion
+  -> BabbageEraOnwards era
+  -> MajorProtocolVersion
   -> [Integer]
   -- ^ The cost model parameters.
   -> NetworkId
@@ -248,7 +249,9 @@ printMarlowe marloweParams era protocolVersion costModel network stake contract 
             <> LBS8.unpack
               (withPlutusScriptVersion (CS.plutusScriptVersion @lang) $ encode $ C.serialiseToTextEnvelope Nothing viScript)
         putStrLn ""
-        putStrLn $ "Validator address: " <> T.unpack (withCardanoEra era $ serialiseAddress viAddress)
+        putStrLn $
+          "Validator address: "
+            <> T.unpack (cardanoEraConstraints (babbageEraOnwardsToCardanoEra era) $ serialiseAddress viAddress)
         putStrLn ""
         putStrLn $ "Validator hash: " <> show viHash
         putStrLn ""
@@ -279,7 +282,7 @@ buildAddress
    . (CS.IsPlutusScriptLanguage lang)
   => CS.PlutusScript lang
   -- ^ The validator.
-  -> ScriptDataSupportedInEra era
+  -> BabbageEraOnwards era
   -> NetworkId
   -- ^ The network ID.
   -> StakeAddressReference
@@ -288,17 +291,17 @@ buildAddress
   -- ^ The script address.
 buildAddress script era network stake =
   let viScript = PlutusScript CS.plutusScriptVersion script
-   in withShelleyBasedEra era $
-        makeShelleyAddressInEra
-          network
-          (PaymentCredentialByScript $ hashScript viScript)
-          stake
+   in makeShelleyAddressInEra
+        (babbageEraOnwardsToShelleyBasedEra era)
+        network
+        (PaymentCredentialByScript $ hashScript viScript)
+        stake
 
 -- | Compute the address of a Marlowe contract.
 buildMarloweAddress
   :: forall m era
    . (MonadIO m)
-  => ScriptDataSupportedInEra era
+  => BabbageEraOnwards era
   -> NetworkId
   -- ^ The network ID.
   -> StakeAddressReference
@@ -350,7 +353,7 @@ buildValidatorInfo queryCtx plutusScript txIn stake = do
   protocolParams <- getProtocolParams queryCtx
   costModel <- getPV2CostModelParams queryCtx
   let networkId = queryContextNetworkId queryCtx
-      protocolVersion = C.toPlutusProtocolVersion $ CS.protocolParamProtocolVersion protocolParams
+      protocolVersion = C.toPlutusMajorProtocolVersion $ CS.protocolParamProtocolVersion protocolParams
   validatorInfo' plutusScript txIn era protocolVersion costModel networkId stake
 
 -- | Export to a file the validator information.
@@ -359,7 +362,7 @@ exportValidatorImpl
    . (MonadError CliError m, MonadReader (CliEnv era) m, CS.IsPlutusScriptLanguage lang)
   => (MonadIO m)
   => CS.PlutusScript lang
-  -> ProtocolVersion
+  -> MajorProtocolVersion
   -> [Integer]
   -- ^ The cost model parameters.
   -> NetworkId
@@ -401,9 +404,9 @@ exportValidatorImpl plutusScript protocolVersion costModel network stake outputF
 -- | Current Marlowe validator information.
 marloweValidatorInfo
   :: (MonadIO m)
-  => ScriptDataSupportedInEra era
+  => BabbageEraOnwards era
   -- ^ The era to build he validator in.
-  -> ProtocolVersion
+  -> MajorProtocolVersion
   -> [Integer]
   -- ^ The cost model parameters.
   -> NetworkId
@@ -420,7 +423,7 @@ exportMarloweValidator
   :: forall era m
    . (MonadError CliError m, MonadReader (CliEnv era) m)
   => (MonadIO m)
-  => ProtocolVersion
+  => MajorProtocolVersion
   -> [Integer]
   -- ^ The cost model parameters.
   -> NetworkId
@@ -588,7 +591,7 @@ exportRedeemer inputFiles outputFile printStats =
 buildRoleAddress
   :: forall era m
    . (MonadIO m)
-  => ScriptDataSupportedInEra era
+  => BabbageEraOnwards era
   -> NetworkId
   -- ^ The network ID.
   -> StakeAddressReference
@@ -614,9 +617,9 @@ exportRoleAddress network stake = do
 -- | Current Marlowe validator information.
 payoutValidatorInfo
   :: (MonadIO m)
-  => ScriptDataSupportedInEra era
+  => BabbageEraOnwards era
   -- ^ The era to build he validator in.
-  -> ProtocolVersion
+  -> MajorProtocolVersion
   -> [Integer]
   -- ^ The cost model parameters.
   -> NetworkId
@@ -631,9 +634,9 @@ payoutValidatorInfo script prot cost network stake = do
 -- | Open role validator
 openRoleValidatorInfo
   :: (MonadIO m)
-  => ScriptDataSupportedInEra era
+  => BabbageEraOnwards era
   -- ^ The era to build he validator in.
-  -> ProtocolVersion
+  -> MajorProtocolVersion
   -> [Integer]
   -- ^ The cost model parameters.
   -> NetworkId
@@ -650,7 +653,7 @@ exportRoleValidator
   :: forall era m
    . (MonadError CliError m, MonadReader (CliEnv era) m)
   => (MonadIO m)
-  => ProtocolVersion
+  => MajorProtocolVersion
   -- ^ The currency symbol for Marlowe contract roles.
   -> [Integer]
   -- ^ The cost model parameters.

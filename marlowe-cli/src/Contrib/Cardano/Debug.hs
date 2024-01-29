@@ -1,12 +1,13 @@
 {-# LANGUAGE DisambiguateRecordFields #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 
 -- | A local copy of the cardano-cli `Contrib.Cardano.CLI.Run.Friendly`
 -- | because I'm not able to use `cardano-cli` lib in our current setup.
@@ -14,38 +15,39 @@ module Contrib.Cardano.Debug (friendlyTxOut, friendlyTxBS, friendlyTxBody, frien
 
 import Prelude
 
+import Cardano.Api as Api
+import Cardano.Api.Byron (KeyWitness (ByronKeyWitness))
+import Cardano.Api.Ledger (EraCrypto, ShelleyTxCert (..))
+import Cardano.Api.Shelley (
+  Address (ShelleyAddress),
+  KeyWitness (ShelleyBootstrapWitness, ShelleyKeyWitness),
+  ShelleyLedgerEra,
+  StakeAddress (..),
+  StakePoolParameters (..),
+  fromShelleyPaymentCredential,
+  fromShelleyPoolParams,
+  fromShelleyStakeReference,
+  toShelleyStakeCredential,
+ )
+import Cardano.Ledger.Coin qualified as Coin
+import Cardano.Ledger.Crypto qualified as Crypto
+import Cardano.Ledger.Shelley.API qualified as Shelley
 import Data.Aeson (Value (..), object, toJSON, (.=))
+import Data.Aeson qualified as A
 import Data.Aeson qualified as Aeson
 import Data.Aeson.Key qualified as Aeson
 import Data.Aeson.Types qualified as Aeson
 import Data.ByteString.Char8 qualified as BSC
+import Data.Char (isAlphaNum, isAscii)
+import Data.Function ((&))
+import Data.Functor ((<&>))
 import Data.Map.Strict qualified as Map
+import Data.Maybe (catMaybes, isJust)
+import Data.Ratio (denominator)
 import Data.Text qualified as Text
 import Data.Yaml (array)
 import Data.Yaml.Pretty (setConfCompare)
 import Data.Yaml.Pretty qualified as Yaml
-
-import Cardano.Api as Api
-import Cardano.Api.Byron (KeyWitness (ByronKeyWitness))
-import Cardano.Api.Shelley (
-  Address (ShelleyAddress),
-  KeyWitness (ShelleyBootstrapWitness, ShelleyKeyWitness),
-  StakeAddress (..),
-  StakeCredential (..),
-  StakePoolParameters (..),
-  fromShelleyPaymentCredential,
-  fromShelleyStakeCredential,
-  fromShelleyStakeReference,
- )
-
--- import           Cardano.CLI.Helpers (textShow)
-import Cardano.Ledger.Shelley.API qualified as Shelley
-import Data.Aeson qualified as A
-import Data.Char (isAlphaNum, isAscii)
-import Data.Function ((&))
-import Data.Functor ((<&>))
-import Data.Maybe (catMaybes, isJust)
-import Data.Ratio (denominator)
 import GHC.Real (numerator)
 
 yamlConfig :: Yaml.Config
@@ -72,8 +74,7 @@ friendlyTxBodyBS :: CardanoEra era -> TxBody era -> BSC.ByteString
 friendlyTxBodyBS era =
   Yaml.encodePretty yamlConfig . object . friendlyTxBody era
 
-friendlyTxBody
-  :: CardanoEra era -> TxBody era -> [Aeson.Pair]
+friendlyTxBody :: CardanoEra era -> TxBody era -> [Aeson.Pair]
 friendlyTxBody
   era
   ( TxBody
@@ -88,7 +89,8 @@ friendlyTxBody
         , txMintValue
         , txOuts
         , txUpdateProposal
-        , txValidityRange
+        , txValidityLowerBound
+        , txValidityUpperBound
         , txWithdrawals
         }
     ) =
@@ -104,7 +106,7 @@ friendlyTxBody
     , "required signers (payment key hashes needed for scripts)"
         .= friendlyExtraKeyWits txExtraKeyWits
     , "update proposal" .= friendlyUpdateProposal txUpdateProposal
-    , "validity range" .= friendlyValidityRange era txValidityRange
+    , "validity range" .= friendlyValidityRange (txValidityLowerBound, txValidityUpperBound)
     , "withdrawals" .= friendlyWithdrawals txWithdrawals
     ]
 
@@ -124,37 +126,17 @@ friendlyExtraKeyWits = \case
   TxExtraKeyWitnesses _supported paymentKeyHashes ->
     toJSON $ map serialiseToRawBytesHexText paymentKeyHashes
 
--- | Special case of validity range:
--- in Shelley, upper bound is TTL, and no lower bound
-pattern ShelleyTtl
-  :: SlotNo -> (TxValidityLowerBound era, TxValidityUpperBound era)
-pattern ShelleyTtl ttl <-
-  ( TxValidityNoLowerBound
-    , TxValidityUpperBound ValidityUpperBoundInShelleyEra ttl
-    )
-
 friendlyValidityRange
-  :: CardanoEra era
-  -> (TxValidityLowerBound era, TxValidityUpperBound era)
+  :: (TxValidityLowerBound era, TxValidityUpperBound era)
   -> Aeson.Value
-friendlyValidityRange era = \case
-  ShelleyTtl ttl -> object ["time to live" .= ttl]
-  (lowerBound, upperBound)
-    | isLowerBoundSupported || isUpperBoundSupported ->
-        object
-          [ "lower bound"
-              .= case lowerBound of
-                TxValidityNoLowerBound -> Null
-                TxValidityLowerBound _ s -> toJSON s
-          , "upper bound"
-              .= case upperBound of
-                TxValidityNoUpperBound _ -> Null
-                TxValidityUpperBound _ s -> toJSON s
-          ]
-    | otherwise -> Null
-  where
-    isLowerBoundSupported = isJust $ validityLowerBoundSupportedInEra era
-    isUpperBoundSupported = isJust $ validityUpperBoundSupportedInEra era
+friendlyValidityRange = \case
+  (TxValidityNoLowerBound, TxValidityUpperBound _ (Just ttl)) -> object ["time to live" .= ttl]
+  (TxValidityNoLowerBound, TxValidityUpperBound _ Nothing) -> Null
+  (TxValidityLowerBound _ lowerBound, TxValidityUpperBound _ upperBound) ->
+    object
+      [ "lower bound" .= lowerBound
+      , "upper bound" .= maybe Null toJSON upperBound
+      ]
 
 friendlyWithdrawals :: TxWithdrawals ViewTx era -> Aeson.Value
 friendlyWithdrawals TxWithdrawalsNone = Null
@@ -170,7 +152,7 @@ friendlyWithdrawals (TxWithdrawals _ withdrawals) =
 friendlyStakeAddress :: StakeAddress -> [Aeson.Pair]
 friendlyStakeAddress (StakeAddress net cred) =
   [ "network" .= net
-  , friendlyStakeCredential $ fromShelleyStakeCredential cred
+  , friendlyStakeCredential cred
   ]
 
 friendlyTxOut :: forall era. (IsCardanoEra era) => TxOut CtxTx era -> Aeson.Value
@@ -194,7 +176,7 @@ friendlyTxOut (TxOut addr amount mdatum script) =
                   ]
             datum =
               [ "datum" .= renderDatum mdatum
-              | isJust $ scriptDataSupportedInEra $ shelleyBasedToCardanoEra sbe
+              | isJust $ inEonForEraMaybe @AlonzoEraOnwards id $ shelleyBasedToCardanoEra sbe
               ]
             sinceAlonzo = ["reference script" .= script]
          in preAlonzo ++ datum ++ sinceAlonzo
@@ -213,7 +195,7 @@ friendlyStakeReference :: StakeAddressReference -> Aeson.Value
 friendlyStakeReference = \case
   NoStakeAddress -> Null
   StakeAddressByPointer ptr -> String (textShow ptr)
-  StakeAddressByValue cred -> object [friendlyStakeCredential cred]
+  StakeAddressByValue cred -> object [friendlyStakeCredential $ toShelleyStakeCredential cred]
 
 friendlyUpdateProposal :: TxUpdateProposal era -> Aeson.Value
 friendlyUpdateProposal = \case
@@ -250,7 +232,6 @@ friendlyProtocolParametersUpdate
     , protocolUpdatePoolPledgeInfluence
     , protocolUpdateMonetaryExpansion
     , protocolUpdateTreasuryCut
-    , protocolUpdateUTxOCostPerWord
     , protocolUpdateCollateralPercent
     , protocolUpdateMaxBlockExUnits
     , protocolUpdateMaxCollateralInputs
@@ -284,8 +265,6 @@ friendlyProtocolParametersUpdate
       , protocolUpdateMonetaryExpansion
           <&> ("monetary expansion" .=) . friendlyRational
       , protocolUpdateTreasuryCut <&> ("treasury expansion" .=) . friendlyRational
-      , protocolUpdateUTxOCostPerWord
-          <&> ("UTxO storage cost per word" .=) . friendlyLovelace
       , protocolUpdateCollateralPercent
           <&> ("collateral inputs share" .=) . (<> "%") . textShow
       , protocolUpdateMaxBlockExUnits <&> ("max block execution units" .=)
@@ -307,63 +286,59 @@ friendlyPrices ExecutionUnitPrices{priceExecutionMemory, priceExecutionSteps} =
 friendlyCertificates :: TxCertificates ViewTx era -> Aeson.Value
 friendlyCertificates = \case
   TxCertificatesNone -> Null
-  TxCertificates _ cs _ -> array $ map friendlyCertificate cs
+  TxCertificates ShelleyBasedEraShelley cs _ -> array $ map friendlyCertificate cs
+  TxCertificates ShelleyBasedEraAllegra cs _ -> array $ map friendlyCertificate cs
+  TxCertificates ShelleyBasedEraMary cs _ -> array $ map friendlyCertificate cs
+  TxCertificates ShelleyBasedEraAlonzo cs _ -> array $ map friendlyCertificate cs
+  TxCertificates ShelleyBasedEraBabbage cs _ -> array $ map friendlyCertificate cs
+  TxCertificates ShelleyBasedEraConway cs _ -> array $ map friendlyCertificate cs
 
-friendlyCertificate :: Certificate -> Aeson.Value
+friendlyCertificate
+  :: (EraCrypto (ShelleyLedgerEra era) ~ Crypto.StandardCrypto)
+  => Certificate era
+  -> Aeson.Value
 friendlyCertificate =
-  object
-    . (: [])
-    . \case
-      -- Stake address certificates
-      StakeAddressRegistrationCertificate credential ->
-        "stake address registration"
-          .= object [friendlyStakeCredential credential]
-      StakeAddressDeregistrationCertificate credential ->
-        "stake address deregistration"
-          .= object [friendlyStakeCredential credential]
-      StakeAddressPoolDelegationCertificate credential poolId ->
-        "stake address delegation"
-          .= object [friendlyStakeCredential credential, "pool" .= poolId]
-      -- Stake pool certificates
-      StakePoolRegistrationCertificate parameters ->
-        "stake pool registration" .= friendlyStakePoolParameters parameters
-      StakePoolRetirementCertificate poolId epochNo ->
+  object . (: []) . \case
+    ShelleyRelatedCertificate _ cert -> case cert of
+      ShelleyTxCertDelegCert (Shelley.ShelleyRegCert credential) ->
+        "stake address registration" .= object [friendlyStakeCredential credential]
+      ShelleyTxCertDelegCert (Shelley.ShelleyUnRegCert credential) ->
+        "stake address deregistration" .= object [friendlyStakeCredential credential]
+      ShelleyTxCertDelegCert (Shelley.ShelleyDelegCert credential poolId) ->
+        "stake address delegation" .= object [friendlyStakeCredential credential, "pool" .= poolId]
+      ShelleyTxCertPool (Shelley.RegPool parameters) ->
+        "stake pool registration" .= friendlyStakePoolParameters (fromShelleyPoolParams parameters)
+      ShelleyTxCertPool (Shelley.RetirePool poolId epochNo) ->
         "stake pool retirement" .= object ["pool" .= poolId, "epoch" .= epochNo]
-      -- Special certificates
-      GenesisKeyDelegationCertificate
-        genesisKeyHash
-        delegateKeyHash
-        vrfKeyHash ->
-          "genesis key delegation"
-            .= object
-              [ "genesis key hash"
-                  .= serialiseToRawBytesHexText genesisKeyHash
-              , "delegate key hash"
-                  .= serialiseToRawBytesHexText delegateKeyHash
-              , "VRF key hash" .= serialiseToRawBytesHexText vrfKeyHash
-              ]
-      MIRCertificate pot target ->
+      ShelleyTxCertGenesisDeleg (Shelley.GenesisDelegCert genesisKeyHash delegateKeyHash vrfKeyHash) ->
+        "genesis key delegation"
+          .= object
+            [ "genesis key hash" .= genesisKeyHash
+            , "delegate key hash" .= delegateKeyHash
+            , "VRF key hash" .= vrfKeyHash
+            ]
+      ShelleyTxCertMir (Shelley.MIRCert pot target) ->
         "MIR" .= object ["pot" .= friendlyMirPot pot, friendlyMirTarget target]
+    ConwayCertificate ConwayEraOnwardsConway _ -> error "FIXME handle conway certs"
 
-friendlyMirTarget :: MIRTarget -> Aeson.Pair
+friendlyMirTarget :: (Crypto.Crypto era) => MIRTarget era -> Aeson.Pair
 friendlyMirTarget = \case
   StakeAddressesMIR addresses ->
     "target stake addresses"
       .= [ object
           [ friendlyStakeCredential credential
-          , "amount" .= friendlyLovelace lovelace
+          , "amount" .= friendlyCoin (Coin.addDeltaCoin (Coin.Coin 0) lovelace)
           ]
-         | (credential, lovelace) <- addresses
+         | (credential, lovelace) <- Map.toList addresses
          ]
-  SendToReservesMIR amount -> "send to reserves" .= friendlyLovelace amount
-  SendToTreasuryMIR amount -> "send to treasury" .= friendlyLovelace amount
+  SendToOppositePotMIR amount -> "send to reserves" .= friendlyCoin amount
 
-friendlyStakeCredential :: StakeCredential -> Aeson.Pair
+friendlyStakeCredential :: (Crypto.Crypto era) => Shelley.Credential 'Shelley.Staking era -> Aeson.Pair
 friendlyStakeCredential = \case
-  StakeCredentialByKey keyHash ->
-    "stake credential key hash" .= serialiseToRawBytesHexText keyHash
-  StakeCredentialByScript scriptHash ->
-    "stake credential script hash" .= serialiseToRawBytesHexText scriptHash
+  Shelley.KeyHashObj keyHash ->
+    "stake credential key hash" .= keyHash
+  Shelley.ScriptHashObj scriptHash ->
+    "stake credential script hash" .= scriptHash
 
 friendlyPaymentCredential :: PaymentCredential -> Aeson.Pair
 friendlyPaymentCredential = \case
@@ -415,8 +390,10 @@ friendlyRational r =
 
 friendlyFee :: TxFee era -> Aeson.Value
 friendlyFee = \case
-  TxFeeImplicit _ -> "implicit"
   TxFeeExplicit _ fee -> friendlyLovelace fee
+
+friendlyCoin :: Coin.Coin -> Aeson.Value
+friendlyCoin (Coin.Coin value) = String $ textShow value <> " Lovelace"
 
 friendlyLovelace :: Lovelace -> Aeson.Value
 friendlyLovelace (Lovelace value) = String $ textShow value <> " Lovelace"
@@ -428,8 +405,8 @@ friendlyMintValue = \case
 
 friendlyTxOutValue :: TxOutValue era -> Aeson.Value
 friendlyTxOutValue = \case
-  TxOutAdaOnly _ lovelace -> friendlyLovelace lovelace
-  TxOutValue _ v -> friendlyValue v
+  TxOutValueByron lovelace -> friendlyLovelace lovelace
+  TxOutValueShelleyBased era v -> friendlyValue $ fromLedgerValue era v
 
 friendlyValue :: Api.Value -> Aeson.Value
 friendlyValue v =

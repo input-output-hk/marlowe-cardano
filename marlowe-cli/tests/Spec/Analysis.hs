@@ -1,14 +1,5 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE ExplicitForAll #-}
------------------------------------------------------------------------------
---
--- Module      :  $Headers
--- License     :  Apache 2.0
---
--- Stability   :  Experimental
--- Portability :  Portable
---
------------------------------------------------------------------------------
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
@@ -18,19 +9,34 @@
 {-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
--- | Golden test for transaction cost measurement.
+-----------------------------------------------------------------------------
+
+-- |
+-- Module      :  $Headers
+-- License     :  Apache 2.0
+--
+-- Stability   :  Experimental
+-- Portability :  Portable
 module Spec.Analysis (
   -- * Testing
   tests,
 ) where
 
-import Control.Arrow ((***))
+import Cardano.Api qualified as C
+import Cardano.Api.Shelley qualified as C
 import Control.Monad.Except (runExceptT)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (runReaderT)
+import Data.Aeson qualified as A
 import Data.Aeson.Encode.Pretty (encodePretty)
+import Data.ByteString.Lazy qualified as LBS
+import Data.Functor ((<&>))
+import Data.Map.Strict qualified as M
 import Data.Ratio ((%))
-import Language.Marlowe.Analysis.Safety.Transaction (CurrentState (AlreadyInitialized), findTransactions, unitAnnotator)
+import Data.Text qualified as Text
+import Data.Text.Encoding qualified as Text
+import Language.Marlowe (emptyState)
+import Language.Marlowe.Analysis.Safety.Transaction (CurrentState (..), findTransactions, unitAnnotator)
 import Language.Marlowe.CLI.Analyze (
   ContractInstance (
     ContractInstance,
@@ -59,26 +65,17 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   Observation (TrueObs),
   Party (Role),
   Payee (Party),
-  State (State),
+  State (..),
   Token (Token),
   Value (Constant),
  )
+import Language.Marlowe.Extended.V1 (adaSymbol, adaToken)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (SlotConfig))
-import PlutusLedgerApi.V2 (ProtocolVersion (..))
+import PlutusLedgerApi.V1.Value (tokenName)
+import PlutusLedgerApi.V2 (MajorProtocolVersion (..), POSIXTime (..))
+import PlutusTx.AssocMap qualified as AM
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (Assertion, assertBool, testCase)
-
-import Cardano.Api qualified as C
-import Cardano.Api.Shelley qualified as C
-import Data.Aeson qualified as A
-import Data.ByteString.Lazy qualified as LBS
-import Data.Functor ((<&>))
-import Data.Map.Strict qualified as M
-import Data.Text qualified as Text
-import Data.Text.Encoding qualified as Text
-import Language.Marlowe (POSIXTime (POSIXTime), State (accounts), adaSymbol, adaToken, emptyState)
-import PlutusLedgerApi.V1.Value (tokenName)
-import PlutusTx.AssocMap qualified as AM
 
 -- | Run tests.
 tests :: TestTree
@@ -97,12 +94,12 @@ checkTransactionCost Scenario{scContract, scState, scMerkleize, scExpected} =
     . runExceptT
     $ do
       MarloweTransaction{..} <-
-        flip runReaderT (CliEnv C.ScriptDataInBabbageEra) $
+        flip runReaderT (CliEnv C.BabbageEraOnwardsBabbage) $
           initializeTransactionImpl
             @C.PlutusScriptV2
             (marloweParams "8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d")
             (SlotConfig 0 1000)
-            (uncurry ProtocolVersion $ fromEnum *** fromEnum $ C.protocolParamProtocolVersion protocolTestnet)
+            (MajorProtocolVersion $ fromEnum $ fst $ C.protocolParamProtocolVersion protocolTestnet)
             ((\(C.CostModel c) -> c) $ C.protocolParamCostModels protocolTestnet M.! C.AnyPlutusScriptVersion C.PlutusScriptV2)
             (C.Testnet $ C.NetworkMagic 1)
             C.NoStakeAddress
@@ -353,7 +350,6 @@ protocolTestnet =
     , protocolParamPoolPledgeInfluence = 3 % 10
     , protocolParamMonetaryExpansion = 3 % 1000
     , protocolParamTreasuryCut = 1 % 5
-    , protocolParamUTxOCostPerWord = Nothing
     , protocolParamCostModels =
         M.singleton
           (C.AnyPlutusScriptVersion C.PlutusScriptV2)

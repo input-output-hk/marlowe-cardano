@@ -42,7 +42,7 @@ import Language.Marlowe.CLI.IO (getDefaultCostModel)
 import Language.Marlowe.CLI.Types (CliEnv, CliError)
 import Language.Marlowe.Client (defaultMarloweParams, marloweParams)
 import Options.Applicative qualified as O
-import PlutusLedgerApi.V1 (CurrencySymbol, ProtocolVersion)
+import PlutusLedgerApi.V1 (CurrencySymbol, MajorProtocolVersion)
 
 -- | Marlowe CLI commands and options for exporting data.
 data ContractCommand
@@ -54,7 +54,7 @@ data ContractCommand
       -- ^ The stake address, if any.
       , rolesCurrency :: Maybe CurrencySymbol
       -- ^ The role currency symbols, if any.
-      , protocolVersion :: ProtocolVersion
+      , protocolVersion :: MajorProtocolVersion
       -- ^ The protocol version.
       , contractFile :: FilePath
       -- ^ The JSON file containing the contract.
@@ -80,7 +80,7 @@ data ContractCommand
       -- ^ The network ID, if any.
       , stake :: Maybe StakeAddressReference
       -- ^ The stake address, if any.
-      , protocolVersion :: ProtocolVersion
+      , protocolVersion :: MajorProtocolVersion
       -- ^ The protocol version.
       , outputFile :: Maybe FilePath
       -- ^ The output JSON file for the validator information.

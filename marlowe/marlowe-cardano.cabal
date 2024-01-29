@@ -60,26 +60,26 @@ library
   import:          lang
   hs-source-dirs:  src
   build-depends:
-    , aeson >=2 && <3
+    , aeson ^>=2.2
     , base >=4.9 && <5
     , base16-aeson ==0.1.0.0
     , bech32 >=1.1 && <2
     , bytestring >=0.10.12 && <0.12
-    , cardano-api ^>=8.2
+    , cardano-api ^>=8.37
     , containers ^>=0.6.5
-    , deriving-aeson ^>=0.2.9
+    , deriving-aeson ^>=0.2.2
     , ilist ==0.4.0.1
     , mtl >=2.2 && <3
     , multiplate ==0.0.3
     , newtype-generics ^>=0.6.2
     , ordered-containers ^>=0.2
-    , plutus-ledger-api ^>=1.5
-    , plutus-tx ^>=1.5
+    , plutus-ledger-api ^>=1.15
+    , plutus-tx ^>=1.15
     , range ==0.3.0.2
     , sbv ^>=9.2
     , scientific ^>=0.3.7
     , template-haskell
-    , text ^>=1.2
+    , text ^>=2.0
     , time >=1.9.3 && <2
     , transformers ^>=0.5.6
     , wl-pprint >=1.2 && <2

@@ -6,9 +6,16 @@
 -- | This module defines a server for the /withdrawals REST API.
 module Language.Marlowe.Runtime.Web.Server.REST.Withdrawals where
 
-import Cardano.Api (BabbageEra, ConwayEra, IsCardanoEra, TxBody, getTxId, makeSignedTransaction)
+import Cardano.Api (
+  BabbageEra,
+  BabbageEraOnwards (..),
+  ConwayEra,
+  IsShelleyBasedEra,
+  TxBody,
+  getTxId,
+  makeSignedTransaction,
+ )
 import qualified Cardano.Api as Cardano
-import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import Cardano.Ledger.Alonzo.TxWits (AlonzoTxWits (..))
 import Data.Aeson (Value (..))
 import Data.Maybe (fromMaybe)
@@ -41,7 +48,7 @@ server =
     :<|> withdrawalServer
 
 data TxBodyInAnyEra where
-  TxBodyInAnyEra :: (IsCardanoEra era) => TxBody era -> TxBodyInAnyEra
+  TxBodyInAnyEra :: (IsShelleyBasedEra era) => TxBody era -> TxBodyInAnyEra
 
 postCreateTxBody
   :: PostWithdrawalsRequest
@@ -59,8 +66,8 @@ postCreateTxBody PostWithdrawalsRequest{..} changeAddressDTO mAddresses mCollate
   payouts' <- fromDTOThrow (badRequest' "Invalid payouts") payouts
   withdraw MarloweV1 WalletAddresses{..} payouts' >>= \case
     Left err -> throwDTOError err
-    Right (WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra WithdrawTxInEra{txBody}) -> pure $ TxBodyInAnyEra txBody
-    Right (WithdrawTx ReferenceTxInsScriptsInlineDatumsInConwayEra WithdrawTxInEra{txBody}) -> pure $ TxBodyInAnyEra txBody
+    Right (WithdrawTx BabbageEraOnwardsBabbage WithdrawTxInEra{txBody}) -> pure $ TxBodyInAnyEra txBody
+    Right (WithdrawTx BabbageEraOnwardsConway WithdrawTxInEra{txBody}) -> pure $ TxBodyInAnyEra txBody
 
 postCreateTxBodyResponse
   :: PostWithdrawalsRequest
@@ -131,8 +138,8 @@ put withdrawalId body = do
         ApiError.toServerError $
           ApiError "Withdrawal already submitted" "WithdrawalAlreadySubmitted" Null 409
   where
-    handleLoaded :: Chain.TxId -> ReferenceTxInsScriptsInlineDatumsSupportedInEra era -> TxBody era -> ServerM NoContent
-    handleLoaded withdrawalId' ReferenceTxInsScriptsInlineDatumsInBabbageEra txBody = do
+    handleLoaded :: Chain.TxId -> BabbageEraOnwards era -> TxBody era -> ServerM NoContent
+    handleLoaded withdrawalId' BabbageEraOnwardsBabbage txBody = do
       (req :: Maybe (Either (Cardano.Tx BabbageEra) (ShelleyTxWitness BabbageEra))) <- case teType body of
         "Tx BabbageEra" -> pure $ Left <$> fromDTO body
         "ShelleyTxWitness BabbageEra" -> pure $ Right <$> fromDTO body
@@ -142,14 +149,11 @@ put withdrawalId body = do
       tx <- case req of
         Nothing -> throwError $ badRequest' "Invalid text envelope cbor value"
         Just (Left tx) -> pure tx
-        Just (Right (ShelleyTxWitness (AlonzoTxWits wtKeys _ _ _ _))) ->
-          case makeSignedTxWithWitnessKeys txBody wtKeys of
-            Just tx -> pure tx
-            Nothing -> throwError $ badRequest' "Invalid witness keys"
-      submitWithdrawal withdrawalId' ReferenceTxInsScriptsInlineDatumsInBabbageEra tx >>= \case
+        Just (Right (ShelleyTxWitness (AlonzoTxWits wtKeys _ _ _ _))) -> pure $ makeSignedTxWithWitnessKeys txBody wtKeys
+      submitWithdrawal withdrawalId' BabbageEraOnwardsBabbage tx >>= \case
         Nothing -> pure NoContent
         Just err -> throwError $ ApiError.toServerError $ ApiError (show err) "SubmissionError" Null 403
-    handleLoaded withdrawalId' ReferenceTxInsScriptsInlineDatumsInConwayEra txBody = do
+    handleLoaded withdrawalId' BabbageEraOnwardsConway txBody = do
       (req :: Maybe (Either (Cardano.Tx ConwayEra) (ShelleyTxWitness ConwayEra))) <- case teType body of
         "Tx ConwayEra" -> pure $ Left <$> fromDTO body
         "ShelleyTxWitness ConwayEra" -> pure $ Right <$> fromDTO body
@@ -159,10 +163,7 @@ put withdrawalId body = do
       tx <- case req of
         Nothing -> throwError $ badRequest' "Invalid text envelope cbor value"
         Just (Left tx) -> pure tx
-        Just (Right (ShelleyTxWitness (AlonzoTxWits wtKeys _ _ _ _))) ->
-          case makeSignedTxWithWitnessKeys txBody wtKeys of
-            Just tx -> pure tx
-            Nothing -> throwError $ badRequest' "Invalid witness keys"
-      submitWithdrawal withdrawalId' ReferenceTxInsScriptsInlineDatumsInConwayEra tx >>= \case
+        Just (Right (ShelleyTxWitness (AlonzoTxWits wtKeys _ _ _ _))) -> pure $ makeSignedTxWithWitnessKeys txBody wtKeys
+      submitWithdrawal withdrawalId' BabbageEraOnwardsConway tx >>= \case
         Nothing -> pure NoContent
         Just err -> throwError $ ApiError.toServerError $ ApiError (show err) "SubmissionError" Null 403

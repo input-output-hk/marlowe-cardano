@@ -18,10 +18,10 @@ module Language.Marlowe.CLI.Test.Runner where
 
 import Cardano.Api (
   AddressInEra,
+  BabbageEraOnwards,
   IsShelleyBasedEra,
   LocalNodeConnectInfo (..),
   Lovelace (Lovelace),
-  ScriptDataSupportedInEra,
  )
 import Cardano.Api qualified as C
 import Cardano.Api.Shelley (protocolParamProtocolVersion)
@@ -36,7 +36,7 @@ import Contrib.Monad.Loops (
   retryTillJust,
   retryTillRight,
  )
-import Contrib.UnliftIO.Async.Pool qualified as UnlifIO
+import Contrib.UnliftIO.Async.Pool qualified as UnliftIO
 import Contrib.UnliftIO.Control.Concurrent (threadDelayBy)
 import Control.Concurrent.STM (
   TVar,
@@ -59,7 +59,7 @@ import Control.Monad.Reader (MonadReader, ReaderT (runReaderT), asks, withReader
 import Control.Monad.Trans.Class (lift)
 import Data.Aeson (FromJSON, ToJSON, (.=))
 import Data.Aeson qualified as A
-import Data.Aeson.OneLine qualified as A
+import Data.Aeson.Text qualified as A
 import Data.Bifunctor (first)
 import Data.Coerce (coerce)
 import Data.Foldable (for_)
@@ -70,14 +70,14 @@ import Data.List.Extra qualified as List
 import Data.Map.Strict qualified as Map
 import Data.Maybe (isJust)
 import Data.Set qualified as S (singleton)
-import Data.Text qualified as Text
+import Data.Text.Lazy qualified as TL
 import Data.Time.Units (Second)
 import Data.Traversable (for)
 import GHC.Generics (Generic)
 import GHC.IO (catch)
 import GHC.IO.Handle.FD (stderr)
 import Language.Marlowe.CLI.Cardano.Api (
-  toPlutusProtocolVersion,
+  toPlutusMajorProtocolVersion,
   txOutValueValue,
  )
 import Language.Marlowe.CLI.Cardano.Api.Value (
@@ -159,15 +159,15 @@ fromCLIError :: CliError -> TestRunnerError
 fromCLIError (CliError e) = TestRunnerCliError e
 
 -- A helper structure which keeps track of the funded transactions
--- accross test runs.
+-- across test runs.
 data TestRunnerFaucet era = TestRunnerFaucet
   { _trAddress :: AddressInEra era
   , _trSigningKey :: SomePaymentSigningKey
   , _trInitialBalance :: P.Value
   , _trSubmittedTransactions :: ![SomeTxBody]
-  -- ^ Transactions submitted directly by the test runner (like subfaucets funding).
+  -- ^ Transactions submitted directly by the test runner (like sub-faucets funding).
   , _trFundedTransactions :: ![SomeTxBody]
-  -- ^ Transactions submitted non directly (subfaucets and test wallets)
+  -- ^ Transactions submitted non directly (sub-faucets and test wallets)
   }
 
 makeLenses 'TestRunnerFaucet
@@ -195,8 +195,8 @@ type TestsResults lang era = Map.Map (FilePath, TestName) (TestResult lang era)
 -- master faucet at the end.
 -- Single test runner allocates a wallet from the pool and updates it at the end.
 data Env lang era resource = Env
-  { _envEra :: ScriptDataSupportedInEra era
-  , _envConnection :: LocalNodeConnectInfo C.CardanoMode
+  { _envEra :: BabbageEraOnwards era
+  , _envConnection :: LocalNodeConnectInfo
   , _envResource :: resource
   , _envRuntimeConfig :: Maybe RuntimeConfig
   , _envPrintStats :: PrintStats
@@ -265,11 +265,11 @@ toTestWallet faucet@TestRunnerFaucet{..} conversion = do
   when (actualBalance /= expectedBalance) $ do
     liftIO $
       hPutStrLn stderr $
-        "Faucet: " <> Text.unpack (A.renderValue (testRunnerFaucetToJSON faucet))
+        "Faucet: " <> TL.unpack (A.encodeToLazyText (testRunnerFaucetToJSON faucet))
     liftIO $ hPutStrLn stderr "has unexpected balance: "
     liftIO $
       hPutStrLn stderr $
-        Text.unpack (A.renderValue (A.toJSON actualBalance))
+        TL.unpack (A.encodeToLazyText (A.toJSON actualBalance))
   pure $
     case conversion of
       ExcludeAllTransactions ->
@@ -444,7 +444,7 @@ setupTestInterpretEnv = do
   slotConfig <- view envSlotConfig
   costModelParams <- view envCostModelParams
   let protocolVersion =
-        toPlutusProtocolVersion $ protocolParamProtocolVersion protocolParams
+        toPlutusMajorProtocolVersion $ protocolParamProtocolVersion protocolParams
       env =
         InterpretEnv
           { _ieTxBuildupContext = txBuildupContext
@@ -477,7 +477,7 @@ type TestInterpreterM lang era a =
 -- The resulting `Either a a` is the way to express
 -- retries with short circuiting (by using `retryTillRight` somewhere below).
 -- Result semantics is as follows:
---  * `Right` - close the loop imidiatelly. It is a definite result.
+--  * `Right` - close the loop immediately. It is a definite result.
 --  * `Left` - possibly try again. the result is not definite and retry could change it.
 interpretTest
   :: forall era
@@ -516,8 +516,8 @@ interpretTest testOperations (PrevResult possiblePrevResult) = do
           Nothing -> []
       testFailed failure = TestFailed failure prevFailures
   state <- liftIO $ readIORef stateRef
-  -- We perform retries only when meaningful rollback occures
-  -- throughout the excution (indicated by the runtime monitor) or
+  -- We perform retries only when meaningful rollback occurs
+  -- throughout the execution (indicated by the runtime monitor) or
   -- upon `CliOperationFailed` or operation timeout.
   pure $
     case res of
@@ -580,9 +580,9 @@ releaseFaucet faucet = do
   atomically $ modifyTVar faucetsRef (++ [faucet])
 
 -- Resource which we acquire during the test execution is a faucet. We also
--- track all the wallets and transactions which were submitted throught the
+-- track all the wallets and transactions which were submitted throughout the
 -- test execution.
--- The actuall interpreting function has an access to the interpreter state
+-- The actually interpreting function has an access to the interpreter state
 -- only. The acquired faucet is used later on during the cleanup phase.
 type TestInterpretContext lang era =
   (IORef (InterpretState lang era), TestRunnerFaucet era)
@@ -653,7 +653,7 @@ runTest (testFile, testCase@TestCase{testName, operations = testOperations}) = d
       then
         pure
           if simulationMode
-            then TestSkipped $ "In simulation mode. Skipping runntime test " <> coerce testName
+            then TestSkipped $ "In simulation mode. Skipping runtime test " <> coerce testName
             else TestSkipped $ "Runtime is not configured for the test " <> coerce testName
       else
         either id id
@@ -679,7 +679,7 @@ runTest (testFile, testCase@TestCase{testName, operations = testOperations}) = d
     (view envStreamJSON)
     do
       resultJson <- testResultToJSON testFile testName result
-      liftIO $ putStrLn $ Text.unpack $ A.renderValue resultJson
+      liftIO $ putStrLn $ TL.unpack $ A.encodeToLazyText resultJson
   let printResultMsg msg =
         liftIO $
           hPutStrLn stderr $
@@ -749,8 +749,8 @@ acquireFaucets (TestFaucetBudget testFaucetBudget) (FaucetsNumber faucetNumber) 
             , _trSubmittedTransactions = mempty
             , _trFundedTransactions = mempty
             }
-  subfaucets <- Foldable.toList <$> for subFaucetsWallets fromFreshWallet
-  liftIO $ newTVarIO subfaucets
+  subFaucets <- Foldable.toList <$> for subFaucetsWallets fromFreshWallet
+  liftIO $ newTVarIO subFaucets
 
 releaseFaucets
   :: forall era m
@@ -759,24 +759,24 @@ releaseFaucets
   => (MonadReader (TestSuiteRunnerInternalEnv C.PlutusScriptV2 era) m)
   => TVar [TestRunnerFaucet era]
   -> m ()
-releaseFaucets subfaucetsRef = do
+releaseFaucets subFaucetsRef = do
   masterFaucetRef <- view envResource
   MasterFaucet masterFaucet <- liftIO $ readTVarIO masterFaucetRef
   masterFaucetWallet <- toTestWallet masterFaucet ExcludeAllTransactions
-  subfaucets <- liftIO $ readTVarIO subfaucetsRef
-  subfaucetsWallets <-
+  subFaucets <- liftIO $ readTVarIO subFaucetsRef
+  subFaucetsWallets <-
     fmap Map.fromList $
       for
-        (zip [(1 :: Integer) ..] subfaucets)
-        \(i, subfaucet) ->
+        (zip [(1 :: Integer) ..] subFaucets)
+        \(i, subFaucet) ->
           -- We include all the transactions because we want to update the master wallet using the state.
           do
-            subfaucetWallet <- toTestWallet subfaucet IncludeAllTransactions
-            pure (WalletNickname ("Faucet-" <> show i), subfaucetWallet)
-  let wallets = Wallets subfaucetsWallets masterFaucetWallet
+            subFaucetWallet <- toTestWallet subFaucet IncludeAllTransactions
+            pure (WalletNickname ("Faucet-" <> show i), subFaucetWallet)
+  let wallets = Wallets subFaucetsWallets masterFaucetWallet
       interpretState = mkInterpretState wallets
       operations = [Wallet.ReturnFunds]
-  -- FIXME: This loop should be part of the `RetrunFund` interpreter
+  -- FIXME: This loop should be part of the `ReturnFund` interpreter
   interpretState' <-
     fmap (either id id) $
       retryTillRight
@@ -790,7 +790,7 @@ releaseFaucets subfaucetsRef = do
                 liftIO $
                   hPutStrLn stderr "Failed to return funds to the master wallet"
                 liftIO $ hPrint stderr err
-                -- Sould we throw here or only add to the test report this failure?
+                -- Should we throw here or only add to the test report this failure?
                 -- liftIO $ throwIO $ TestRunnerError $ "Failed to return funds to the master wallet: " <> show err
                 threadDelayBy (10 :: Second)
                 pure $ Left interpretState''
@@ -842,8 +842,8 @@ data MasterFaucetInfo = MasterFaucetInfo
   , _mfiFundedTransactions :: [SomeTxBody]
   }
 
-masterFauceInfoToJSON :: MasterFaucetInfo -> A.Value
-masterFauceInfoToJSON MasterFaucetInfo{..} =
+masterFaucetInfo :: MasterFaucetInfo -> A.Value
+masterFaucetInfo MasterFaucetInfo{..} =
   A.object
     [ "initialBalance" .= plutusValueToJSON _mfiInitialBalance
     , "currentBalance" .= plutusValueToJSON _mfiCurrentBalance
@@ -873,10 +873,10 @@ testSuiteResultToJSON TestSuiteResult{..} = do
   pure $
     A.object
       [ "results" .= resultsJSON
-      , "masterFaucetInfo" A..= masterFauceInfoToJSON _tsMasterFaucetInfo
+      , "masterFaucetInfo" A..= masterFaucetInfo _tsMasterFaucetInfo
       ]
 
--- It is a bit surprising but the standard bracketing failes (hangs)
+-- It is a bit surprising but the standard bracketing fails (hangs)
 -- when we have to perform node queries during the release action.
 unmaskedReleaseBracket :: IO a -> (a -> IO b) -> (a -> IO c) -> IO c
 unmaskedReleaseBracket before after thing = do
@@ -907,13 +907,13 @@ runTests tests (MaxConcurrentRunners maxConcurrentRunners) = do
         TxCostsUpperBounds
           (2 * maximumFee protocolParams)
           (Lovelace 100_000_000)
-      subfaucetBudget = testsFaucetBudgetUpperBound txCosts (map snd tests)
+      subFaucetBudget = testsFaucetBudgetUpperBound txCosts (map snd tests)
       requiredFunds =
-        lovelaceFromInt (lovelaceToInt subfaucetBudget * concurrentRunners)
+        lovelaceFromInt (lovelaceToInt subFaucetBudget * concurrentRunners)
       totalTxCost = sum (testTxsFeesUpperBound txCosts <$> map snd tests)
       acquireFaucets' =
         acquireFaucets
-          (TestFaucetBudget subfaucetBudget)
+          (TestFaucetBudget subFaucetBudget)
           (FaucetsNumber concurrentRunners)
       showAdaAmount lovelaceAmount =
         show (toInteger lovelaceAmount `div` 1_000_000) <> " ADA"
@@ -923,8 +923,8 @@ runTests tests (MaxConcurrentRunners maxConcurrentRunners) = do
         "Estimated required funds: "
           <> showAdaAmount requiredFunds
       hPutStrLn stderr $
-        "Estimated subfaucet budget: "
-          <> showAdaAmount subfaucetBudget
+        "Estimated subFaucet budget: "
+          <> showAdaAmount subFaucetBudget
       hPutStrLn stderr $
         "Estimated test total tx fees: "
           <> showAdaAmount totalTxCost
@@ -947,21 +947,21 @@ runTests tests (MaxConcurrentRunners maxConcurrentRunners) = do
       unmaskedReleaseBracket'
         acquireFaucets'
         releaseFaucets
-        \subfaucetsRef -> do
+        \subFaucetsRef -> do
           runCounterRef <- liftIO $ newTVarIO (TestRunId 1)
           let testRunnerEnvResource =
                 TestRunnerEnvResource
-                  { _trcFaucets = subfaucetsRef
+                  { _trcFaucets = subFaucetsRef
                   , _trcRunId = runCounterRef
                   , _trcResults = resultsRef
                   }
           withReaderEnvResource testRunnerEnvResource $
-            UnlifIO.withTaskGroup
+            UnliftIO.withTaskGroup
               concurrentRunners
-              \taskGroup -> do UnlifIO.mapTasksE taskGroup $ fmap runTest tests
+              \taskGroup -> do UnliftIO.mapTasksE taskGroup $ fmap runTest tests
   masterFaucet' <- liftIO $ readTVarIO masterFaucetRef
   currentBalance <- fetchBalance (masterFaucet' ^. (mfFaucet . trAddress))
-  let masterFaucetInfo =
+  let masterFaucetInfo' =
         MasterFaucetInfo
           { _mfiInitialBalance = masterFaucet' ^. (mfFaucet . trInitialBalance)
           , _mfiCurrentBalance = currentBalance
@@ -971,4 +971,4 @@ runTests tests (MaxConcurrentRunners maxConcurrentRunners) = do
               masterFaucet' ^. (mfFaucet . trFundedTransactions)
           }
   result <- liftIO $ readTVarIO resultsRef
-  pure $ TestSuiteResult result masterFaucetInfo
+  pure $ TestSuiteResult result masterFaucetInfo'

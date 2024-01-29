@@ -5,8 +5,12 @@
 
 module Language.Marlowe.Runtime.Transaction.Gen where
 
-import Cardano.Api (CardanoEra (..), IsCardanoEra, cardanoEra)
-import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
+import Cardano.Api (
+  BabbageEraOnwards (..),
+  IsShelleyBasedEra,
+  ShelleyBasedEra (ShelleyBasedEraBabbage, ShelleyBasedEraConway),
+  shelleyBasedEra,
+ )
 import Control.Applicative (liftA2)
 import qualified Data.ByteString.Char8 as BS
 import Data.Foldable (fold)
@@ -259,15 +263,15 @@ instance Arbitrary SubmitError where
 instance (ArbitraryMarloweVersion v) => Arbitrary (ContractCreated v) where
   arbitrary =
     oneof
-      [ ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> arbitrary
-      , ContractCreated ReferenceTxInsScriptsInlineDatumsInConwayEra <$> arbitrary
+      [ ContractCreated BabbageEraOnwardsBabbage <$> arbitrary
+      , ContractCreated BabbageEraOnwardsConway <$> arbitrary
       ]
-  shrink (ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra created) =
-    ContractCreated ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> shrink created
-  shrink (ContractCreated ReferenceTxInsScriptsInlineDatumsInConwayEra created) =
-    ContractCreated ReferenceTxInsScriptsInlineDatumsInConwayEra <$> shrink created
+  shrink (ContractCreated BabbageEraOnwardsBabbage created) =
+    ContractCreated BabbageEraOnwardsBabbage <$> shrink created
+  shrink (ContractCreated BabbageEraOnwardsConway created) =
+    ContractCreated BabbageEraOnwardsConway <$> shrink created
 
-instance (ArbitraryMarloweVersion v, IsCardanoEra era) => Arbitrary (ContractCreatedInEra era v) where
+instance (ArbitraryMarloweVersion v, IsShelleyBasedEra era) => Arbitrary (ContractCreatedInEra era v) where
   arbitrary =
     ContractCreatedInEra
       <$> arbitrary
@@ -280,7 +284,7 @@ instance (ArbitraryMarloweVersion v, IsCardanoEra era) => Arbitrary (ContractCre
       <*> pure Core.marloweVersion
       <*> arbitrary
       <*> arbitrary
-      <*> hedgehog (genTxBody cardanoEra)
+      <*> hedgehog (genTxBody shelleyBasedEra)
       <*> arbitrary
   shrink ContractCreatedInEra{..} =
     fold
@@ -293,15 +297,15 @@ instance (ArbitraryMarloweVersion v, IsCardanoEra era) => Arbitrary (ContractCre
 instance (ArbitraryMarloweVersion v) => Arbitrary (InputsApplied v) where
   arbitrary =
     oneof
-      [ InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> arbitrary
-      , InputsApplied ReferenceTxInsScriptsInlineDatumsInConwayEra <$> arbitrary
+      [ InputsApplied BabbageEraOnwardsBabbage <$> arbitrary
+      , InputsApplied BabbageEraOnwardsConway <$> arbitrary
       ]
-  shrink (InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra created) =
-    InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> shrink created
-  shrink (InputsApplied ReferenceTxInsScriptsInlineDatumsInConwayEra created) =
-    InputsApplied ReferenceTxInsScriptsInlineDatumsInConwayEra <$> shrink created
+  shrink (InputsApplied BabbageEraOnwardsBabbage created) =
+    InputsApplied BabbageEraOnwardsBabbage <$> shrink created
+  shrink (InputsApplied BabbageEraOnwardsConway created) =
+    InputsApplied BabbageEraOnwardsConway <$> shrink created
 
-instance (ArbitraryMarloweVersion v, IsCardanoEra era) => Arbitrary (InputsAppliedInEra era v) where
+instance (ArbitraryMarloweVersion v, IsShelleyBasedEra era) => Arbitrary (InputsAppliedInEra era v) where
   arbitrary =
     InputsAppliedInEra Core.marloweVersion
       <$> arbitrary
@@ -311,7 +315,7 @@ instance (ArbitraryMarloweVersion v, IsCardanoEra era) => Arbitrary (InputsAppli
       <*> arbitrary
       <*> arbitrary
       <*> arbitrary
-      <*> hedgehog (genTxBody cardanoEra)
+      <*> hedgehog (genTxBody shelleyBasedEra)
   shrink InputsAppliedInEra{..} =
     fold
       [ [InputsAppliedInEra{..}{InputsAppliedInEra.metadata = metadata'} | metadata' <- shrink metadata]
@@ -323,19 +327,19 @@ instance (ArbitraryMarloweVersion v, IsCardanoEra era) => Arbitrary (InputsAppli
 instance (ArbitraryMarloweVersion v) => Arbitrary (WithdrawTx v) where
   arbitrary =
     oneof
-      [ WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> arbitrary
-      , WithdrawTx ReferenceTxInsScriptsInlineDatumsInConwayEra <$> arbitrary
+      [ WithdrawTx BabbageEraOnwardsBabbage <$> arbitrary
+      , WithdrawTx BabbageEraOnwardsConway <$> arbitrary
       ]
-  shrink (WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra created) =
-    WithdrawTx ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> shrink created
-  shrink (WithdrawTx ReferenceTxInsScriptsInlineDatumsInConwayEra created) =
-    WithdrawTx ReferenceTxInsScriptsInlineDatumsInConwayEra <$> shrink created
+  shrink (WithdrawTx BabbageEraOnwardsBabbage created) =
+    WithdrawTx BabbageEraOnwardsBabbage <$> shrink created
+  shrink (WithdrawTx BabbageEraOnwardsConway created) =
+    WithdrawTx BabbageEraOnwardsConway <$> shrink created
 
-instance (ArbitraryMarloweVersion v, IsCardanoEra era) => Arbitrary (WithdrawTxInEra era v) where
+instance (ArbitraryMarloweVersion v, IsShelleyBasedEra era) => Arbitrary (WithdrawTxInEra era v) where
   arbitrary =
     WithdrawTxInEra Core.marloweVersion
       <$> arbitrary
-      <*> hedgehog (genTxBody cardanoEra)
+      <*> hedgehog (genTxBody shelleyBasedEra)
   shrink WithdrawTxInEra{..} = [WithdrawTxInEra{..}{WithdrawTxInEra.inputs = inputs'} | inputs' <- shrink inputs]
 
 instance Arbitrary Account where
@@ -380,8 +384,8 @@ instance ArbitraryCommand MarloweTxCommand where
         <*> arbitrary
     TagSubmit ->
       oneof
-        [ Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> hedgehog (genTx BabbageEra)
-        , Submit ReferenceTxInsScriptsInlineDatumsInConwayEra <$> hedgehog (genTx ConwayEra)
+        [ Submit BabbageEraOnwardsBabbage <$> hedgehog (genTx ShelleyBasedEraBabbage)
+        , Submit BabbageEraOnwardsConway <$> hedgehog (genTx ShelleyBasedEraConway)
         ]
   arbitraryJobId = \case
     TagCreate Core.MarloweV1 -> Nothing
@@ -537,8 +541,8 @@ instance CommandVariations MarloweTxCommand where
     TagSubmit ->
       sconcat $
         NE.fromList
-          [ Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra <$> variations
-          , Submit ReferenceTxInsScriptsInlineDatumsInConwayEra <$> variations
+          [ Submit BabbageEraOnwardsBabbage <$> variations
+          , Submit BabbageEraOnwardsConway <$> variations
           ]
   jobIdVariations = \case
     TagCreate Core.MarloweV1 -> []

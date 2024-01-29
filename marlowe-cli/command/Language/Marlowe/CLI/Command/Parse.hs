@@ -63,12 +63,10 @@ import Cardano.Api (
   AsType (..),
   AssetId (..),
   AssetName (..),
-  IsShelleyBasedEra,
   Lovelace (..),
   NetworkId (..),
   NetworkMagic (..),
   Quantity (..),
-  ShelleyBasedEra (..),
   SlotNo (..),
   StakeAddressReference (..),
   TxId (..),
@@ -79,7 +77,6 @@ import Cardano.Api (
   deserialiseFromRawBytesHex,
   lovelaceToValue,
   quantityToLovelace,
-  shelleyBasedEra,
   valueFromList,
  )
 import Cardano.Api.Shelley (StakeAddress (..), fromShelleyStakeCredential)
@@ -111,7 +108,7 @@ import Data.Text qualified as T (pack)
 import Data.Time.Units (Second)
 import Language.Marlowe qualified as M
 import Options.Applicative qualified as O
-import PlutusLedgerApi.Common (ProtocolVersion)
+import PlutusLedgerApi.Common (MajorProtocolVersion)
 import PlutusLedgerApi.Common.Versions (alonzoPV, vasilPV)
 
 -- | Parser for network ID.
@@ -206,13 +203,13 @@ parseTxIx :: O.ReadM TxIx
 parseTxIx = TxIx <$> O.auto
 
 -- | Parser for `TxOut` information.
-parseTxOut :: (IsShelleyBasedEra era) => O.ReadM (AddressInEra era, Value)
-parseTxOut =
+parseTxOut :: C.BabbageEraOnwards era -> O.ReadM (AddressInEra era, Value)
+parseTxOut era =
   O.eitherReader $
     \s ->
       case splitOn "+" s of
         address : lovelace' : tokens -> do
-          address' <- readAddressEither address
+          address' <- readAddressEither era address
           lovelace'' <- readLovelaceEither lovelace'
           tokens' <- mapM readAssetValueEither tokens
           pure (address', lovelace'' <> mconcat tokens')
@@ -280,28 +277,24 @@ readAssetIdEither s =
     _ -> Left "Invalid token."
 
 -- | Parser for `AddressInEra era`.
-parseAddress :: (IsShelleyBasedEra era) => O.ReadM (AddressInEra era)
-parseAddress = O.eitherReader readAddressEither
+parseAddress :: C.BabbageEraOnwards era -> O.ReadM (AddressInEra era)
+parseAddress = O.eitherReader . readAddressEither
 
 -- | Parser for `AddressInEra era`.
 readAddressEither
   :: forall era
-   . (IsShelleyBasedEra era)
-  => String
+   . C.BabbageEraOnwards era
+  -> String
   -- ^ The string to be read.
   -> Either String (AddressInEra era)
   -- ^ Either the address or an error message.
-readAddressEither s = do
-  era <- eraAsType
-  case deserialiseAddress (AsAddressInEra era) $ T.pack s of
+readAddressEither era s = do
+  let result = case era of
+        C.BabbageEraOnwardsBabbage -> deserialiseAddress (AsAddressInEra AsBabbageEra) $ T.pack s
+        C.BabbageEraOnwardsConway -> deserialiseAddress (AsAddressInEra AsConwayEra) $ T.pack s
+  case result of
     Nothing -> Left "Invalid address."
     Just address -> Right address
-  where
-    eraAsType :: Either String (AsType era)
-    eraAsType = case shelleyBasedEra :: ShelleyBasedEra era of
-      ShelleyBasedEraAlonzo -> Right AsAlonzo
-      ShelleyBasedEraBabbage -> Right AsBabbage
-      era -> Left $ "unsupported era: " <> show era
 
 readPartyEither :: String -> Either String Party
 readPartyEither str = readPartyAddressEither str <|> readPartyRoleEither str
@@ -429,13 +422,13 @@ parseUrl =
       . parseBaseUrl
 
 -- | Parse a role.
-parseRole :: (IsShelleyBasedEra era) => O.ReadM (TokenName, AddressInEra era)
-parseRole =
+parseRole :: C.BabbageEraOnwards era -> O.ReadM (TokenName, AddressInEra era)
+parseRole era =
   O.eitherReader $
     \s ->
       case splitOn "=" s of
         [name, address] -> do
-          address' <- readAddressEither address
+          address' <- readAddressEither era address
           pure (readTokenName name, address')
         _ -> Left "Invalid role assignment."
 
@@ -464,13 +457,13 @@ parseOutputQuery =
               <> O.help "The current symbol and token name for the sole native asset in the value."
           )
 
-parseProtocolVersion :: O.ReadM ProtocolVersion
+parseProtocolVersion :: O.ReadM MajorProtocolVersion
 parseProtocolVersion = O.eitherReader \case
   "alonzo" -> pure alonzoPV
   "vasil" -> pure vasilPV
   s -> Left $ "Invalid protocol version: " <> s <> ". Expecting [alonzo|vasil]."
 
-protocolVersionOpt :: O.Parser ProtocolVersion
+protocolVersionOpt :: O.Parser MajorProtocolVersion
 protocolVersionOpt =
   fromMaybe vasilPV
     <$> ( O.optional $
@@ -490,30 +483,30 @@ requiredSignersOpt =
     <$> (O.some . O.strOption)
       (O.long "required-signer" <> O.metavar "SIGNING_FILE" <> O.help "File containing a required signing key.")
 
-parseWallet :: (IsShelleyBasedEra era) => O.ReadM (AddressInEra era, SigningKeyFile)
-parseWallet =
+parseWallet :: C.BabbageEraOnwards era -> O.ReadM (AddressInEra era, SigningKeyFile)
+parseWallet era =
   O.eitherReader $
     splitOn ":" >>> \case
       [address, signingKeyFile] -> do
-        address' <- readAddressEither address
+        address' <- readAddressEither era address
         pure (address', SigningKeyFile signingKeyFile)
       _ -> Left "Expecting address and signing key file path: ADDRESS:SIGNING_FILE"
 
 walletOpt
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields (AddressInEra era, SigningKeyFile)
+  :: C.BabbageEraOnwards era
+  -> O.Mod O.OptionFields (AddressInEra era, SigningKeyFile)
   -> O.Parser (AddressInEra era, SigningKeyFile)
-walletOpt = O.option parseWallet
+walletOpt = O.option . parseWallet
 
 txBodyFileOpt :: O.Parser TxBodyFile
 txBodyFileOpt =
   TxBodyFile <$> O.strOption (O.long "out-file" <> O.metavar "FILE" <> O.help "Output file for transaction body.")
 
-publishingStrategyOpt :: forall era. (C.IsShelleyBasedEra era) => O.Parser (PublishingStrategy era)
-publishingStrategyOpt =
+publishingStrategyOpt :: forall era. C.BabbageEraOnwards era -> O.Parser (PublishingStrategy era)
+publishingStrategyOpt era =
   PublishAtAddress
     <$> O.option
-      parseAddress
+      (parseAddress era)
       ( O.long "at-address"
           <> O.metavar "ADDRESS"
           <> O.help "Publish script at a given address. This is a default strategy which uses change address as a destination."

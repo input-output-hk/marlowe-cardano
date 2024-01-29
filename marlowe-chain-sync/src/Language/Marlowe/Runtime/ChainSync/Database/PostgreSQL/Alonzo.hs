@@ -7,7 +7,6 @@ module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Alonzo where
 
 import Cardano.Binary (serialize')
 import Cardano.Ledger.Alonzo
-import Cardano.Ledger.Alonzo.Scripts.Data (dataToBinaryData)
 import Cardano.Ledger.Alonzo.Tx (AlonzoTx (..), IsValid (..), ScriptPurpose (Spending), indexedRdmrs, txdats')
 import Cardano.Ledger.Alonzo.TxAuxData (AlonzoTxAuxData (..))
 import Cardano.Ledger.Alonzo.TxBody (AlonzoTxBody (..), AlonzoTxOut (..))
@@ -18,6 +17,7 @@ import qualified Cardano.Ledger.Binary as L
 import Cardano.Ledger.Core (Era (..), EraTx, Tx, TxAuxData)
 import Cardano.Ledger.Crypto
 import Cardano.Ledger.Mary.TxBody (MaryEraTxBody, ValidityInterval)
+import Cardano.Ledger.Plutus.Data (dataToBinaryData)
 import Cardano.Ledger.Shelley.API
 import Data.ByteString (ByteString)
 import Data.Foldable (Foldable (..))

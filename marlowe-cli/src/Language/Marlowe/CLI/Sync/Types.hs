@@ -18,7 +18,6 @@
 module Language.Marlowe.CLI.Sync.Types (
   -- * Types
   MarloweAddress (..),
-  MarloweAddresses,
   MarloweEvent (..),
   MarloweIn (..),
   MarloweOut (..),
@@ -34,7 +33,6 @@ import Language.Marlowe.Core.V1.Semantics.Types (Input, TimeInterval)
 import PlutusLedgerApi.V1 (Address, TokenName)
 
 import Data.Aeson qualified as A (Value)
-import Data.Map.Strict qualified as M (Map)
 
 -- | A point on the chain.
 data SavedPoint a = SavedPoint
@@ -46,9 +44,6 @@ data SavedPoint a = SavedPoint
   -- ^ The additional information to be recorded.
   }
   deriving (Eq, FromJSON, Generic, Ord, Show, ToJSON)
-
--- | Map from Marlowe addresses to parameters.
-type MarloweAddresses = M.Map MarloweAddress MarloweParams
 
 -- | A Marlowe address.
 data MarloweAddress

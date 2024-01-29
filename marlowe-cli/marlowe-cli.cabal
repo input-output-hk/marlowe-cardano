@@ -97,7 +97,7 @@ library
     , base16-bytestring
     , bech32
     , bytestring
-    , cardano-api ^>=8.2
+    , cardano-api ^>=8.37
     , cardano-crypto-class
     , cardano-ledger-alonzo
     , cardano-ledger-byron ^>=1.0
@@ -105,9 +105,7 @@ library
     , cardano-ledger-shelley
     , cardano-slotting
     , cborg
-    , cborg-json
     , containers
-    , data-default
     , directory
     , errors
     , extra
@@ -116,13 +114,12 @@ library
     , megaparsec
     , memory
     , mtl
-    , one-line-aeson-text
     , ouroboros-consensus
     , ouroboros-network-protocols
     , parser-combinators
     , plutus-core
     , plutus-ledger-ada
-    , plutus-ledger-api ^>=1.5
+    , plutus-ledger-api ^>=1.15
     , plutus-ledger-slot
     , plutus-tx
     , prettyprinter
@@ -185,7 +182,7 @@ library cli-test
     , base >=4.9 && <5
     , base16-aeson ==0.1.0.0
     , bytestring
-    , cardano-api ^>=8.2
+    , cardano-api ^>=8.37
     , containers
     , data-has
     , errors
@@ -200,12 +197,11 @@ library cli-test
     , marlowe-client
     , marlowe-contracts
     , marlowe-protocols
-    , marlowe-runtime:{marlowe-runtime, history-api, proxy-api, sync-api, tx-api}
+    , marlowe-runtime:{marlowe-runtime, proxy-api, sync-api, tx-api}
     , monad-loops
     , mtl
     , network
-    , one-line-aeson-text
-    , plutus-ledger-api ^>=1.5
+    , plutus-ledger-api ^>=1.15
     , plutus-ledger-slot
     , plutus-tx
     , random
@@ -250,7 +246,7 @@ library command
     , mtl
     , optparse-applicative
     , plutus-ledger-ada
-    , plutus-ledger-api ^>=1.5
+    , plutus-ledger-api ^>=1.15
     , plutus-ledger-slot
     , regex-posix
     , servant-client
@@ -291,7 +287,7 @@ test-suite marlowe-cli-test
     , marlowe-test
     , megaparsec
     , mtl
-    , plutus-ledger-api ^>=1.5
+    , plutus-ledger-api ^>=1.15
     , plutus-ledger-slot
     , plutus-tx
     , tasty

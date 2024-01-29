@@ -61,7 +61,6 @@ executable marlowe-integration-tests
   hs-source-dirs:     test
   main-is:            Spec.hs
   other-modules:
-    Language.Marlowe.Runtime.CliSpec
     Language.Marlowe.Runtime.Integration.ApplyInputs
     Language.Marlowe.Runtime.Integration.Basic
     Language.Marlowe.Runtime.Integration.Common
@@ -94,9 +93,8 @@ executable marlowe-integration-tests
     , base >=4.9 && <5
     , base16
     , bytestring
-    , cardano-api ^>=8.2
-    , cardano-ledger-babbage
-    , co-log >=0.5.0.0 && <0.6.0.0
+    , cardano-api ^>=8.37
+    , co-log ^>=0.6
     , containers
     , deepseq
     , eventuo11y-extras
@@ -109,7 +107,7 @@ executable marlowe-integration-tests
     , marlowe-object:{marlowe-object, gen}
     , marlowe-protocols
     , marlowe-runtime-web:{marlowe-runtime-web, server}
-    , marlowe-runtime:{marlowe-runtime, contract, contract-api, discovery-api, history-api, sync-api, tx-api}
+    , marlowe-runtime:{marlowe-runtime, contract, contract-api, sync-api, tx-api}
     , marlowe-test
     , mtl
     , network-uri

@@ -15,7 +15,6 @@ module Language.Marlowe.Runtime.ChainSync.NodeClient (
 import Cardano.Api (
   BlockInMode,
   BlockNo (..),
-  CardanoMode,
   ChainPoint,
   ChainTip (..),
   LocalChainSyncClient (LocalChainSyncClient),
@@ -24,7 +23,7 @@ import Cardano.Api (
   QueryInMode,
   SlotNo (..),
   TxInMode,
-  TxValidationErrorInMode,
+  TxValidationErrorInCardanoMode,
   chainTipToChainPoint,
   serialiseToRawBytes,
  )
@@ -46,13 +45,13 @@ import qualified Ouroboros.Network.Protocol.LocalTxSubmission.Client as S
 import UnliftIO (MonadIO, MonadUnliftIO, STM, atomically, newEmptyTMVarIO, newTVar, readTVar, writeTVar)
 
 type SubmitToNode m =
-  TxInMode CardanoMode
-  -> m (S.SubmitResult (TxValidationErrorInMode CardanoMode))
+  TxInMode
+  -> m (S.SubmitResult TxValidationErrorInCardanoMode)
 
 type QueryNode m =
   Maybe ChainPoint
   -> forall result
-   . QueryInMode CardanoMode result
+   . QueryInMode result
   -> m (Either AcquiringFailure result)
 
 data NodeClient m = NodeClient
@@ -62,12 +61,12 @@ data NodeClient m = NodeClient
   }
 
 newtype NodeClientDependencies m = NodeClientDependencies
-  { connectToLocalNode :: LocalNodeClientProtocolsInMode CardanoMode -> m ()
+  { connectToLocalNode :: LocalNodeClientProtocolsInMode -> m ()
   }
 
 data NodeClientSelector f where
-  Submit :: NodeClientSelector (TxInMode CardanoMode)
-  Query :: NodeClientSelector (Q.Some (QueryInMode CardanoMode))
+  Submit :: NodeClientSelector TxInMode
+  Query :: NodeClientSelector (Q.Some QueryInMode)
 
 nodeClient
   :: (MonadInjectEvent r NodeClientSelector s m, MonadUnliftIO m, WithLog env Message m)
@@ -101,15 +100,15 @@ nodeClient =
 type SubmitChannel = TChan SubmitJob
 
 data SubmitJob = SubmitJob
-  { tx :: TxInMode CardanoMode
-  , submitResultTMVar :: TMVar (S.SubmitResult (TxValidationErrorInMode CardanoMode))
+  { tx :: TxInMode
+  , submitResultTMVar :: TMVar (S.SubmitResult TxValidationErrorInCardanoMode)
   }
 
 submitTxToNodeChannel
   :: (MonadIO m, MonadInjectEvent r NodeClientSelector s m)
   => SubmitChannel
-  -> TxInMode CardanoMode
-  -> m (S.SubmitResult (TxValidationErrorInMode CardanoMode))
+  -> TxInMode
+  -> m (S.SubmitResult TxValidationErrorInCardanoMode)
 submitTxToNodeChannel channel tx =
   withEvent Submit \event ->
     do
@@ -120,7 +119,7 @@ submitTxToNodeChannel channel tx =
 
 submitClient
   :: SubmitChannel
-  -> S.LocalTxSubmissionClient (TxInMode CardanoMode) (TxValidationErrorInMode CardanoMode) IO ()
+  -> S.LocalTxSubmissionClient TxInMode TxValidationErrorInCardanoMode IO ()
 submitClient channel =
   let next =
         do
@@ -137,7 +136,7 @@ type QueryChannel = TChan QueryJob
 data QueryJob = forall result.
   QueryJob
   { point :: Maybe ChainPoint
-  , query :: QueryInMode CardanoMode result
+  , query :: QueryInMode result
   , queryResultTMVar :: TMVar (Either Q.AcquireFailure result)
   }
 
@@ -145,7 +144,7 @@ queryNodeChannel
   :: (MonadIO m, MonadInjectEvent r NodeClientSelector s m)
   => QueryChannel
   -> Maybe ChainPoint
-  -> QueryInMode CardanoMode result
+  -> QueryInMode result
   -> m (Either AcquiringFailure result)
 queryNodeChannel channel point query =
   withEvent Query \event ->
@@ -159,7 +158,7 @@ queryNodeChannel channel point query =
 
 queryClient
   :: QueryChannel
-  -> Q.LocalStateQueryClient (BlockInMode CardanoMode) ChainPoint (QueryInMode CardanoMode) IO ()
+  -> Q.LocalStateQueryClient BlockInMode ChainPoint QueryInMode IO ()
 queryClient channel =
   let next =
         do
@@ -185,11 +184,11 @@ chainSyncClient
   :: forall m
    . (MonadIO m)
   => TVar ChainSync.ChainPoint
-  -> ChainSyncClient (BlockInMode CardanoMode) ChainPoint ChainTip m ()
+  -> ChainSyncClient BlockInMode ChainPoint ChainTip m ()
 chainSyncClient nodeTipVar =
-  let stStart :: ClientStIdle (BlockInMode CardanoMode) ChainPoint ChainTip m ()
+  let stStart :: ClientStIdle BlockInMode ChainPoint ChainTip m ()
       stStart = SendMsgRequestNext stFirst $ pure stNext
-      stFirst :: ClientStNext (BlockInMode CardanoMode) ChainPoint ChainTip m ()
+      stFirst :: ClientStNext BlockInMode ChainPoint ChainTip m ()
       stFirst =
         ClientStNext
           { recvMsgRollForward = \_ tip -> ChainSyncClient do
@@ -199,16 +198,16 @@ chainSyncClient nodeTipVar =
               atomically $ writeTVar nodeTipVar $ fromCardanoChainTip tip
               pure $ stTip tip -- Identified the tip, now intersect with it.
           }
-      stTip :: ChainTip -> ClientStIdle (BlockInMode CardanoMode) ChainPoint ChainTip m ()
+      stTip :: ChainTip -> ClientStIdle BlockInMode ChainPoint ChainTip m ()
       stTip tip =
         SendMsgFindIntersect [chainTipToChainPoint tip] $
           ClientStIntersect
             { recvMsgIntersectFound = \_ _ -> ChainSyncClient $ pure stIdle -- The tip was found, so follow it.
             , recvMsgIntersectNotFound = \tip' -> ChainSyncClient . pure $ stTip tip' -- The tip was not found, so try again.
             }
-      stIdle :: ClientStIdle (BlockInMode CardanoMode) ChainPoint ChainTip m ()
+      stIdle :: ClientStIdle BlockInMode ChainPoint ChainTip m ()
       stIdle = SendMsgRequestNext stNext $ pure stNext
-      stNext :: ClientStNext (BlockInMode CardanoMode) ChainPoint ChainTip m ()
+      stNext :: ClientStNext BlockInMode ChainPoint ChainTip m ()
       stNext =
         ClientStNext
           { recvMsgRollForward = \_ tip -> ChainSyncClient do

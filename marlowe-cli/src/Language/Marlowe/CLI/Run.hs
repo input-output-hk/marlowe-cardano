@@ -53,11 +53,11 @@ module Language.Marlowe.CLI.Run (
   toCardanoAssetName,
   toCardanoValue,
   toCardanoPolicyId,
+  toPlutusAddress,
 ) where
 
 import Cardano.Api (
   AddressInEra (..),
-  CardanoMode,
   File (..),
   LocalNodeConnectInfo (..),
   NetworkId (..),
@@ -65,7 +65,6 @@ import Cardano.Api (
   PlutusScriptVersion (..),
   QueryInShelleyBasedEra (..),
   QueryUTxOFilter (..),
-  ScriptDataSupportedInEra (..),
   SerialiseAsRawBytes (..),
   SlotNo (..),
   StakeAddressReference (..),
@@ -84,8 +83,10 @@ import Cardano.Api (
  )
 import Cardano.Api qualified as Api (Value)
 import Cardano.Api qualified as C
+import Cardano.Api.Byron qualified as CB
 import Cardano.Api.Shelley (ReferenceScript (ReferenceScriptNone))
 import Cardano.Api.Shelley qualified as CS
+import Cardano.Chain.Common (addrToBase58)
 import Cardano.Ledger.BaseTypes qualified as LC (Network (..))
 import Control.Monad (forM_, guard, unless, void, when)
 import Control.Monad.Except (MonadError, MonadIO, catchError, liftIO, throwError)
@@ -127,7 +128,6 @@ import Language.Marlowe.CLI.IO (
  )
 import Language.Marlowe.CLI.Merkle (merkleizeMarlowe)
 import Language.Marlowe.CLI.Orphans ()
-import Language.Marlowe.CLI.Sync (toPlutusAddress)
 import Language.Marlowe.CLI.Transaction (
   buildBody,
   buildPayFromScript,
@@ -160,7 +160,7 @@ import Language.Marlowe.CLI.Types (
   ValidatorInfo (..),
   askEra,
   defaultCoinSelectionStrategy,
-  doWithCardanoEra,
+  doWithShelleyBasedEra,
   mkNodeTxBuildup,
   mrOpenRoleValidator,
   toAddressAny',
@@ -168,7 +168,6 @@ import Language.Marlowe.CLI.Types (
   toShelleyAddress,
   txIn,
   validatorInfoScriptOrReference,
-  withShelleyBasedEra,
  )
 import Language.Marlowe.Client qualified as MC
 import Language.Marlowe.Core.V1.Merkle (MerkleizedContract (..), merkleizeInputs)
@@ -199,9 +198,10 @@ import Language.Marlowe.Core.V1.Semantics.Types (
 import Language.Marlowe.Core.V1.Semantics.Types.Address (Network, mainnet, testnet)
 import Plutus.V1.Ledger.Ada (fromValue)
 import Plutus.V1.Ledger.SlotConfig (SlotConfig, posixTimeToEnclosingSlot, slotToBeginPOSIXTime, slotToEndPOSIXTime)
-import PlutusLedgerApi.Common (ProtocolVersion)
+import PlutusLedgerApi.Common (MajorProtocolVersion)
 import PlutusLedgerApi.V1 (Credential (..), DatumHash (..), fromBuiltin)
 import PlutusLedgerApi.V1 qualified as P
+import PlutusLedgerApi.V1 qualified as PV1
 import PlutusLedgerApi.V1.Value (
   AssetClass (..),
   Value (..),
@@ -273,15 +273,15 @@ makeNotification outputFile =
 
 -- | Create an initial Marlowe transaction.
 initializeTransaction
-  :: (MonadError CliError m)
+  :: (MonadError CliError m, C.IsShelleyBasedEra era)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
-  => LocalNodeConnectInfo CardanoMode
+  => LocalNodeConnectInfo
   -> MarloweParams
   -- ^ The Marlowe contract parameters.
   -> SlotConfig
   -- ^ The POSIXTime-to-slot configuration.
-  -> ProtocolVersion
+  -> MajorProtocolVersion
   -> [Integer]
   -- ^ The cost model parameters.
   -> NetworkId
@@ -306,25 +306,22 @@ initializeTransaction connection marloweParams slotConfig protocolVersion costMo
     era <- askEra
     refs <- case publishingStrategy of
       Nothing -> pure Nothing
-      Just publishingStrategy' ->
-        withShelleyBasedEra era $
-          findMarloweScriptsRefs (QueryNode connection) publishingStrategy' (PrintStats printStats)
+      Just publishingStrategy' -> findMarloweScriptsRefs (QueryNode connection) publishingStrategy' (PrintStats printStats)
     contract <- decodeFileStrict contractFile
     state <- decodeFileStrict stateFile
     marloweTransaction <-
-      withShelleyBasedEra era $
-        initializeTransactionImpl
-          marloweParams
-          slotConfig
-          protocolVersion
-          costModelParams
-          network
-          stake
-          contract
-          state
-          refs
-          merkleize
-          printStats
+      initializeTransactionImpl
+        marloweParams
+        slotConfig
+        protocolVersion
+        costModelParams
+        network
+        stake
+        contract
+        state
+        refs
+        merkleize
+        printStats
     maybeWriteJson outputFile $
       SomeMarloweTransaction
         (C.plutusScriptVersion :: PlutusScriptVersion MarlowePlutusVersion)
@@ -336,14 +333,13 @@ initializeTransactionImpl
   :: forall lang m era
    . (MonadError CliError m)
   => (MonadIO m)
-  => (C.IsShelleyBasedEra era)
   => (MonadReader (CliEnv era) m)
   => (C.IsPlutusScriptLanguage lang)
   => MarloweParams
   -- ^ The Marlowe contract parameters.
   -> SlotConfig
   -- ^ The POSIXTime-to-slot configuration.
-  -> ProtocolVersion
+  -> MajorProtocolVersion
   -> [Integer]
   -- ^ The cost model parameters.
   -> NetworkId
@@ -383,7 +379,7 @@ initializeTransactionImpl marloweParams mtSlotConfig protocolVersion costModelPa
                 pure $
                   vi
                     { viAddress =
-                        C.shelleyAddressInEra $
+                        C.shelleyAddressInEra (C.babbageEraOnwardsToShelleyBasedEra era) $
                           CS.ShelleyAddress n p $
                             toShelleyStakeReference stake
                     }
@@ -434,7 +430,7 @@ initializeTransactionUsingScriptRefsImpl marloweParams mtSlotConfig scriptRefs s
             Nothing -> throwError "Expecting shelley address in reference validator info"
             Just (CS.ShelleyAddress n p _) -> do
               let viAddress' =
-                    C.shelleyAddressInEra $
+                    C.shelleyAddressInEra (C.shelleyBasedEra @era) $
                       CS.ShelleyAddress
                         n
                         p
@@ -585,28 +581,37 @@ readMarloweTransactionFile
   :: forall era lang m
    . (MonadError CliError m)
   => (MonadIO m)
-  => (C.IsCardanoEra era)
-  => PlutusScriptVersion lang
+  => C.BabbageEraOnwards era
+  -> PlutusScriptVersion lang
   -> FilePath
   -> m (MarloweTransaction lang era)
-readMarloweTransactionFile lang marloweInFile = do
+readMarloweTransactionFile era lang marloweInFile = do
   SomeMarloweTransaction lang' era' marloweIn <- decodeFileStrict marloweInFile
-  case (C.cardanoEra :: C.CardanoEra era, era', lang, lang') of
-    (C.AlonzoEra, ScriptDataInAlonzoEra, PlutusScriptV1, PlutusScriptV1) -> pure marloweIn
-    (C.BabbageEra, C.ScriptDataInBabbageEra, PlutusScriptV2, PlutusScriptV2) -> pure marloweIn
-    (C.AlonzoEra, C.ScriptDataInBabbageEra, _, _) -> throwError "Running in Alonzo era, read file in Babbage era"
-    (C.BabbageEra, C.ScriptDataInAlonzoEra, _, _) -> throwError "Running in Babbage era, read file in Alonzo era"
-    (_, _, _, _) ->
-      throwError . CliError $
-        "Expecting a different version of plutus in the Marlowe file. Expected: " <> show lang <> " but got: " <> show lang'
+  case era of
+    C.BabbageEraOnwardsBabbage -> case (era', lang, lang') of
+      (C.BabbageEraOnwardsBabbage, PlutusScriptV1, PlutusScriptV1) -> pure marloweIn
+      (C.BabbageEraOnwardsBabbage, PlutusScriptV2, PlutusScriptV2) -> pure marloweIn
+      (C.BabbageEraOnwardsBabbage, PlutusScriptV3, PlutusScriptV3) -> pure marloweIn
+      (C.BabbageEraOnwardsConway, _, _) -> throwError "Running in Babbage era, read file in Conway era"
+      _ ->
+        throwError . CliError $
+          "Expecting a different version of plutus in the Marlowe file. Expected: " <> show lang <> " but got: " <> show lang'
+    C.BabbageEraOnwardsConway -> case (era', lang, lang') of
+      (C.BabbageEraOnwardsConway, PlutusScriptV1, PlutusScriptV1) -> pure marloweIn
+      (C.BabbageEraOnwardsConway, PlutusScriptV2, PlutusScriptV2) -> pure marloweIn
+      (C.BabbageEraOnwardsConway, PlutusScriptV3, PlutusScriptV3) -> pure marloweIn
+      (C.BabbageEraOnwardsBabbage, _, _) -> throwError "Running in Conway era, read file in Babbage era"
+      _ ->
+        throwError . CliError $
+          "Expecting a different version of plutus in the Marlowe file. Expected: " <> show lang <> " but got: " <> show lang'
 
 -- | Run a Marlowe transaction using FS.
 runTransaction
   :: forall era m
-   . (MonadError CliError m, CS.IsCardanoEra era)
+   . (MonadError CliError m)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
-  => LocalNodeConnectInfo CardanoMode
+  => LocalNodeConnectInfo
   -- ^ The connection info for the local node.
   -> Maybe (FilePath, TxIn, TxIn)
   -- ^ The JSON file with the Marlowe initial state and initial contract, along with the script eUTxO being spent and the collateral, unless the transaction opens the contract.
@@ -643,7 +648,7 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
           marloweInBundle' <- case marloweInBundle of
             Nothing -> pure Nothing
             Just (marloweInFile, marloweTxIn, collateralTxIn) -> do
-              marloweIn <- readMarloweTransactionFile (C.plutusScriptVersion :: PlutusScriptVersion lang) marloweInFile
+              marloweIn <- readMarloweTransactionFile era (C.plutusScriptVersion :: PlutusScriptVersion lang) marloweInFile
               pure $ Just (marloweIn, marloweTxIn, collateralTxIn)
 
           (body :: TxBody era) <-
@@ -658,29 +663,26 @@ runTransaction connection marloweInBundle marloweOutFile inputs outputs changeAd
               metadata
               printStats
               invalid
-          doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope (File bodyFile) Nothing body
+          doWithShelleyBasedEra $ liftCliIO $ writeFileTextEnvelope (File bodyFile) Nothing body
           pure $ getTxId body
 
     case testSameEra era era' of
       Just Refl -> go marloweOut'
       Nothing -> throwError $ fromString $ "Running in " <> show era <> ", read file in " <> show era'
 
-testSameEra :: ScriptDataSupportedInEra era -> ScriptDataSupportedInEra era' -> Maybe (era :~: era')
+testSameEra :: C.BabbageEraOnwards era -> C.BabbageEraOnwards era' -> Maybe (era :~: era')
 testSameEra = \case
-  ScriptDataInAlonzoEra -> \case
-    ScriptDataInAlonzoEra -> Just Refl
+  C.BabbageEraOnwardsBabbage -> \case
+    C.BabbageEraOnwardsBabbage -> Just Refl
     _ -> Nothing
-  C.ScriptDataInBabbageEra -> \case
-    C.ScriptDataInBabbageEra -> Just Refl
-    _ -> Nothing
-  C.ScriptDataInConwayEra -> \case
-    C.ScriptDataInConwayEra -> Just Refl
+  C.BabbageEraOnwardsConway -> \case
+    C.BabbageEraOnwardsConway -> Just Refl
     _ -> Nothing
 
 -- | Run a Marlowe transaction.
 runTransactionImpl
   :: forall era lang m
-   . (MonadError CliError m, CS.IsCardanoEra era)
+   . (MonadError CliError m)
   => (C.IsPlutusScriptLanguage lang)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
@@ -709,8 +711,9 @@ runTransactionImpl
 runTransactionImpl txBuildupCtx marloweInBundle marloweOut' inputs outputs changeAddress signingKeys metadata printStats invalid =
   do
     let queryCtx = toQueryContext txBuildupCtx
-    protocol <- getProtocolParams queryCtx
     era <- askEra @era
+    protocol <- getProtocolParams queryCtx
+    protocol' <- liftCli $ CS.convertToLedgerProtocolParameters (C.babbageEraOnwardsToShelleyBasedEra era) protocol
     let marloweParams = MC.marloweParams $ mtRolesCurrency marloweOut'
         go :: MarloweTransaction lang era -> m (TxBody era)
         go marloweOut = do
@@ -764,18 +767,18 @@ runTransactionImpl txBuildupCtx marloweInBundle marloweOut' inputs outputs chang
               <$> sequence
                 [ case payee of
                   Party (Address network address) -> do
-                    address' <- withShelleyBasedEra era $ marloweAddressToCardanoAddress network address
+                    address' <- doWithShelleyBasedEra $ marloweAddressToCardanoAddress network address
                     money' <-
                       liftCli $
                         toCardanoValue money
-                    (_, money'') <- liftCli $ adjustMinimumUTxO era protocol address' C.TxOutDatumNone money' ReferenceScriptNone
+                    let (_, money'') = adjustMinimumUTxO era protocol' address' C.TxOutDatumNone money' ReferenceScriptNone
                     pure $ Just (address', C.TxOutDatumNone, money'')
                   Party (Role role) -> do
                     money' <-
                       liftCli $
                         toCardanoValue money
                     let datum = toTxOutDatumInTx era $ diDatum $ buildRoleDatum (Token (rolesCurrency marloweParams) role)
-                    (_, money'') <- liftCli $ adjustMinimumUTxO era protocol roleAddress datum money' ReferenceScriptNone
+                    let (_, money'') = adjustMinimumUTxO era protocol' roleAddress datum money' ReferenceScriptNone
                     pure $ Just (roleAddress, datum, money'')
                   Account _ -> pure Nothing
                 | (payee, money) <-
@@ -788,21 +791,22 @@ runTransactionImpl txBuildupCtx marloweInBundle marloweOut' inputs outputs chang
                 ]
           outputs' <- for (payments <> outputs <> datumOutputs) (uncurry3 makeTxOut')
           body <-
-            buildBody
-              queryCtx
-              spend
-              continue
-              []
-              inputs
-              outputs'
-              collateral
-              changeAddress
-              (mtRange marloweOut)
-              (hashSigningKey <$> signingKeys)
-              TxMintNone
-              metadata
-              printStats
-              invalid
+            doWithShelleyBasedEra $
+              buildBody
+                queryCtx
+                spend
+                continue
+                []
+                inputs
+                outputs'
+                collateral
+                changeAddress
+                (mtRange marloweOut)
+                (hashSigningKey <$> signingKeys)
+                TxMintNone
+                metadata
+                printStats
+                invalid
           void $ submitBody txBuildupCtx body signingKeys invalid
           pure body
     go marloweOut'
@@ -811,7 +815,7 @@ runTransactionImpl txBuildupCtx marloweInBundle marloweOut' inputs outputs chang
 withdrawFunds
   :: (MonadError CliError m, MonadReader (CliEnv era) m)
   => (MonadIO m)
-  => LocalNodeConnectInfo CardanoMode
+  => LocalNodeConnectInfo
   -- ^ The connection info for the local node.
   -> FilePath
   -- ^ The JSON file with the Marlowe state and contract.
@@ -869,32 +873,33 @@ withdrawFunds connection marloweOutFile roleName collateral inputs outputs chang
         withdrawal = (changeAddress, C.TxOutDatumNone, mconcat [txOutValueToValue value | (_, TxOut _ value _ _) <- utxos])
     outputs' <- mapM (uncurry3 makeTxOut') $ withdrawal : outputs
     body <-
-      buildBody
-        (QueryNode connection)
-        spend
-        Nothing
-        []
-        inputs
-        outputs'
-        (Just collateral)
-        changeAddress
-        Nothing
-        (hashSigningKey <$> signingKeys)
-        TxMintNone
-        metadata
-        printStats
-        invalid
-    doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope (File bodyFile) Nothing body
+      doWithShelleyBasedEra $
+        buildBody
+          (QueryNode connection)
+          spend
+          Nothing
+          []
+          inputs
+          outputs'
+          (Just collateral)
+          changeAddress
+          Nothing
+          (hashSigningKey <$> signingKeys)
+          TxMintNone
+          metadata
+          printStats
+          invalid
+    doWithShelleyBasedEra $ liftCliIO $ writeFileTextEnvelope (File bodyFile) Nothing body
     let txBuildupCtx = mkNodeTxBuildup connection timeout
     submitBody txBuildupCtx body signingKeys invalid
 
 -- | Run a Marlowe transaction using FS, without selecting inputs or outputs.
 autoRunTransaction
   :: forall era m
-   . (MonadError CliError m, CS.IsCardanoEra era)
+   . (MonadError CliError m)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
-  => LocalNodeConnectInfo CardanoMode
+  => LocalNodeConnectInfo
   -- ^ The connection info for the local node.
   -> Maybe (FilePath, TxIn)
   -- ^ The JSON file with the Marlowe initial state and initial contract, along with the script eUTxO being spent and the collateral, unless the transaction opens the contract.
@@ -927,7 +932,7 @@ autoRunTransaction connection marloweInBundle marloweOutFile changeAddress signi
           marloweInBundle' <- case marloweInBundle of
             Nothing -> pure Nothing
             Just (marloweInFile, marloweTxIn) -> do
-              marloweIn <- readMarloweTransactionFile (C.plutusScriptVersion :: PlutusScriptVersion lang) marloweInFile
+              marloweIn <- readMarloweTransactionFile era (C.plutusScriptVersion :: PlutusScriptVersion lang) marloweInFile
               pure $ Just (marloweIn, marloweTxIn)
 
           (body :: TxBody era) <-
@@ -942,7 +947,7 @@ autoRunTransaction connection marloweInBundle marloweOutFile changeAddress signi
               printStats
               invalid
           -- Write the transaction file.
-          doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope (File bodyFile) Nothing body
+          doWithShelleyBasedEra $ liftCliIO $ writeFileTextEnvelope (File bodyFile) Nothing body
           pure $ getTxId body
 
     case testSameEra era era' of
@@ -952,7 +957,7 @@ autoRunTransaction connection marloweInBundle marloweOutFile changeAddress signi
 -- | Run a Marlowe transaction, without selecting inputs or outputs.
 autoRunTransactionImpl
   :: forall era lang m
-   . (MonadError CliError m, CS.IsCardanoEra era)
+   . (MonadError CliError m)
   => (C.IsPlutusScriptLanguage lang)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
@@ -977,10 +982,11 @@ autoRunTransactionImpl
 autoRunTransactionImpl txBuildupCtx marloweInBundle marloweOut' extraSpend changeAddress signingKeys metadata printStats invalid =
   do
     let queryCtx = toQueryContext txBuildupCtx
+    era <- askEra @era
     protocol <- getProtocolParams queryCtx
+    protocol' <- liftCli $ CS.convertToLedgerProtocolParameters (C.babbageEraOnwardsToShelleyBasedEra era) protocol
     -- Read the Marlowe transaction information for the output.
     -- Fetch the era.
-    era <- askEra @era
     let go :: MarloweTransaction lang era -> m (TxBody era)
         go marloweOut = do
           let rolesCurrency = mtRolesCurrency marloweOut
@@ -1046,13 +1052,13 @@ autoRunTransactionImpl txBuildupCtx marloweInBundle marloweOut' extraSpend chang
               <$> sequence
                 [ case payee of
                   Party (Address network address) -> do
-                    address' <- withShelleyBasedEra era $ marloweAddressToCardanoAddress network address
+                    address' <- doWithShelleyBasedEra $ marloweAddressToCardanoAddress network address
                     money' <- liftCli $ toCardanoValue money
-                    Just <$> ensureMinUtxo protocol (address', C.TxOutDatumNone, money')
+                    Just <$> ensureMinUtxo protocol' (address', C.TxOutDatumNone, money')
                   Party (Role role) -> do
                     money' <- liftCli $ toCardanoValue money
                     let datum = toTxOutDatumInTx era . diDatum $ buildRoleDatum (Token rolesCurrency role)
-                    Just <$> ensureMinUtxo protocol (roleAddress, datum, money')
+                    Just <$> ensureMinUtxo protocol' (roleAddress, datum, money')
                   Account _ -> pure Nothing
                 | (payee, money) <-
                     bimap head mconcat . unzip
@@ -1086,7 +1092,7 @@ autoRunTransactionImpl txBuildupCtx marloweInBundle marloweOut' extraSpend chang
             sequence
               [ do
                 value <- liftCli . toCardanoValue $ singleton (mtRolesCurrency marloweOut) role 1
-                ensureMinUtxo protocol (changeAddress, C.TxOutDatumNone, value)
+                ensureMinUtxo protocol' (changeAddress, C.TxOutDatumNone, value)
               | role <- roles $ mtInputs marloweOut
               ]
           txOuts <-
@@ -1106,21 +1112,22 @@ autoRunTransactionImpl txBuildupCtx marloweInBundle marloweOut' extraSpend chang
               Nothing
           -- Build the transaction body.
           body <-
-            buildBody
-              queryCtx
-              spend
-              continue
-              []
-              extraInputs
-              revisedOutputs
-              (Just collateral)
-              changeAddress
-              (mtRange marloweOut)
-              (hashSigningKey <$> signingKeys)
-              TxMintNone
-              metadata
-              printStats
-              invalid
+            doWithShelleyBasedEra $
+              buildBody
+                queryCtx
+                spend
+                continue
+                []
+                extraInputs
+                revisedOutputs
+                (Just collateral)
+                changeAddress
+                (mtRange marloweOut)
+                (hashSigningKey <$> signingKeys)
+                TxMintNone
+                metadata
+                printStats
+                invalid
           void $ submitBody txBuildupCtx body signingKeys invalid
           -- Return the transaction body.
           pure body
@@ -1161,14 +1168,52 @@ marloweAddressFromCardanoAddress address =
         _ -> throwError "Byron addresses are not supported."
     pure (network', toPlutusAddress address)
 
+toPlutusAddress :: AddressInEra era -> PV1.Address
+toPlutusAddress address = PV1.Address (cardanoAddressCredential address) (cardanoStakingCredential address)
+
+cardanoAddressCredential :: AddressInEra era -> PV1.Credential
+cardanoAddressCredential (AddressInEra C.ByronAddressInAnyEra (CB.ByronAddress address)) =
+  PV1.PubKeyCredential $
+    PV1.PubKeyHash $
+      PV1.toBuiltin $
+        addrToBase58 address
+cardanoAddressCredential (AddressInEra _ (CS.ShelleyAddress _ paymentCredential _)) =
+  case CS.fromShelleyPaymentCredential paymentCredential of
+    C.PaymentCredentialByKey paymentKeyHash ->
+      PV1.PubKeyCredential $
+        PV1.PubKeyHash $
+          PV1.toBuiltin $
+            serialiseToRawBytes paymentKeyHash
+    C.PaymentCredentialByScript scriptHash ->
+      PV1.ScriptCredential $ toPlutusScriptHash scriptHash
+
+cardanoStakingCredential :: AddressInEra era -> Maybe PV1.StakingCredential
+cardanoStakingCredential (AddressInEra C.ByronAddressInAnyEra _) = Nothing
+cardanoStakingCredential (AddressInEra _ (CS.ShelleyAddress _ _ stakeAddressReference)) =
+  case CS.fromShelleyStakeReference stakeAddressReference of
+    NoStakeAddress -> Nothing
+    (StakeAddressByValue stakeCredential) ->
+      Just (PV1.StakingHash $ fromCardanoStakeCredential stakeCredential)
+    StakeAddressByPointer{} -> Nothing -- Not supported
+  where
+    fromCardanoStakeCredential :: C.StakeCredential -> PV1.Credential
+    fromCardanoStakeCredential (CS.StakeCredentialByKey stakeKeyHash) =
+      PV1.PubKeyCredential $
+        PV1.PubKeyHash $
+          PV1.toBuiltin $
+            serialiseToRawBytes stakeKeyHash
+    fromCardanoStakeCredential (CS.StakeCredentialByScript scriptHash) = PV1.ScriptCredential (toPlutusScriptHash scriptHash)
+
+toPlutusScriptHash :: C.ScriptHash -> PV1.ScriptHash
+toPlutusScriptHash = PV1.ScriptHash . PV1.toBuiltin . serialiseToRawBytes
+
 -- | Withdraw funds for a specific role from the role address, without selecting inputs or outputs.
 autoWithdrawFunds
   :: forall era m
    . (MonadError CliError m)
   => (MonadReader (CliEnv era) m)
   => (MonadIO m)
-  => (C.IsCardanoEra era)
-  => LocalNodeConnectInfo CardanoMode
+  => LocalNodeConnectInfo
   -- ^ The connection info for the local node.
   -> FilePath
   -- ^ The JSON file with the Marlowe state and contract.
@@ -1219,7 +1264,7 @@ autoWithdrawFunds connection marloweOutFile roleName changeAddress signingKeyFil
               printStats
               invalid
 
-          doWithCardanoEra $ liftCliIO $ writeFileTextEnvelope (File $ unTxBodyFile bodyFile) Nothing txBody
+          doWithShelleyBasedEra $ liftCliIO $ writeFileTextEnvelope (File $ unTxBodyFile bodyFile) Nothing txBody
           pure $ getTxId txBody
 
     case testSameEra era era' of
@@ -1231,7 +1276,7 @@ type FilterPayouts era = [AnUTxO era] -> [AnUTxO era]
 -- | Withdraw funds for a specific role from the role address, without selecting inputs or outputs.
 autoWithdrawFundsImpl
   :: forall era lang m
-   . (MonadError CliError m, CS.IsCardanoEra era)
+   . (MonadError CliError m)
   => (MonadReader (CliEnv era) m)
   => (MonadIO m)
   => (C.IsPlutusScriptLanguage lang)
@@ -1261,7 +1306,9 @@ autoWithdrawFundsImpl txBuildupCtx token validatorInfo range changeAddress signi
   do
     let queryCtx = toQueryContext txBuildupCtx
     -- Fetch the protocol parameters.
+    era <- askEra
     protocol <- getProtocolParams queryCtx
+    protocol' <- liftCli $ CS.convertToLedgerProtocolParameters (C.babbageEraOnwardsToShelleyBasedEra era) protocol
     let Token rolesCurrency roleName = token
         filterPayoutUtxos = fromMaybe id possibleFilter
         -- Build the datum corresponding to the role name.
@@ -1294,7 +1341,7 @@ autoWithdrawFundsImpl txBuildupCtx token validatorInfo range changeAddress signi
         -- The output value should include the spending from the script and the role token.
         withdrawn = mconcat [txOutValueToValue value | AnUTxO (_, TxOut _ value _ _) <- utxos]
     -- Ensure that the output meets the min-Ada requirement.
-    output <- ensureMinUtxo protocol (changeAddress, C.TxOutDatumNone, withdrawn <> role) >>= uncurry3 makeTxOut'
+    output <- ensureMinUtxo protocol' (changeAddress, C.TxOutDatumNone, withdrawn <> role) >>= uncurry3 makeTxOut'
 
     -- Select the coins.
     (collateral, extraInputs, revisedOutputs) <-
@@ -1308,21 +1355,22 @@ autoWithdrawFundsImpl txBuildupCtx token validatorInfo range changeAddress signi
         Nothing
     -- Build the transaction body.
     body <-
-      buildBody
-        queryCtx
-        spend
-        Nothing
-        []
-        extraInputs
-        revisedOutputs
-        (Just collateral)
-        changeAddress
-        range
-        (hashSigningKey <$> signingKeys)
-        TxMintNone
-        metadata
-        printStats
-        invalid
+      doWithShelleyBasedEra $
+        buildBody
+          queryCtx
+          spend
+          Nothing
+          []
+          extraInputs
+          revisedOutputs
+          (Just collateral)
+          changeAddress
+          range
+          (hashSigningKey <$> signingKeys)
+          TxMintNone
+          metadata
+          printStats
+          invalid
     void $ submitBody txBuildupCtx body signingKeys invalid
     -- Return the transaction body.
     pure body

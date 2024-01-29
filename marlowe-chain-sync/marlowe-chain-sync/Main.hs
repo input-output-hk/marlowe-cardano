@@ -9,11 +9,8 @@
 module Main where
 
 import Cardano.Api (
-  CardanoEra (..),
-  CardanoMode,
   ConsensusModeParams (..),
   EpochSlots (..),
-  EraInMode (..),
   File (..),
   LocalNodeConnectInfo (..),
   TxInMode (..),
@@ -89,14 +86,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
             ChainSyncDependencies
               { databaseQueries = PostgreSQL.databaseQueries pool networkId
               , queryLocalNodeState = queryNode
-              , submitTxToNodeLocal = \era tx -> submitTxToNode $ TxInMode tx case era of
-                  ByronEra -> ByronEraInCardanoMode
-                  ShelleyEra -> ShelleyEraInCardanoMode
-                  AllegraEra -> AllegraEraInCardanoMode
-                  MaryEra -> MaryEraInCardanoMode
-                  AlonzoEra -> AlonzoEraInCardanoMode
-                  BabbageEra -> BabbageEraInCardanoMode
-                  ConwayEra -> ConwayEraInCardanoMode
+              , submitTxToNodeLocal = fmap submitTxToNode . TxInMode
               , nodeTip
               , scanBatchSize = 8192 -- TODO make this a command line option
               }
@@ -134,7 +124,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
 
       probeServer -< ProbeServerDependencies{port = fromIntegral httpPort, ..}
 
-    localNodeConnectInfo :: LocalNodeConnectInfo CardanoMode
+    localNodeConnectInfo :: LocalNodeConnectInfo
     localNodeConnectInfo =
       LocalNodeConnectInfo
         { -- The epoch slots ignored after Byron.

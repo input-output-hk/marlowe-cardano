@@ -87,22 +87,7 @@ module Language.Marlowe.CLI.Types (
   somePaymentSigningKeyToTxWitness,
   toAddressAny',
   toAsType,
-  toCardanoEra,
-  toCollateralSupportedInEra,
-  toEraInMode,
-  toExtraKeyWitnessesSupportedInEra,
-  toMultiAssetSupportedInEra,
   toShelleyAddress,
-  toShelleyBasedEra,
-  toSimpleScriptLanguageInEra,
-  toTxFeesExplicitInEra,
-  toTxMetadataSupportedInEra,
-  toTxScriptValiditySupportedInEra,
-  toValidityLowerBoundSupportedInEra,
-  toValidityNoUpperBoundSupportedInEra,
-  toValidityUpperBoundSupportedInEra,
-  withCardanoEra,
-  withShelleyBasedEra,
 
   -- * accessors and converters
   anUTxOValue,
@@ -132,10 +117,7 @@ import Cardano.Api (
   AddressInEra (..),
   AsType (..),
   AssetId,
-  CardanoEra (..),
-  CardanoMode,
-  CollateralSupportedInEra (..),
-  EraInMode (..),
+  BabbageEraOnwards (..),
   GenesisUTxOKey,
   HasTypeProxy (..),
   IsCardanoEra,
@@ -147,47 +129,27 @@ import Cardano.Api (
   PlutusScript,
   PlutusScriptVersion,
   Script (..),
-  ScriptDataSupportedInEra (..),
-  ScriptLanguageInEra (..),
-  ShelleyBasedEra (..),
   SigningKey,
-  SimpleScript',
   SlotNo,
-  TxExtraKeyWitnessesSupportedInEra (..),
-  TxFeesExplicitInEra (..),
   TxIn,
-  TxMetadataSupportedInEra (..),
-  TxScriptValiditySupportedInEra (..),
-  ValidityLowerBoundSupportedInEra (..),
-  ValidityNoUpperBoundSupportedInEra (..),
-  ValidityUpperBoundSupportedInEra (..),
   VerificationKey,
+  babbageEraOnwardsToCardanoEra,
+  babbageEraOnwardsToShelleyBasedEra,
+  cardanoEraConstraints,
   castVerificationKey,
   deserialiseAddress,
   deserialiseFromTextEnvelope,
   serialiseAddress,
   serialiseToTextEnvelope,
+  shelleyBasedEraConstraints,
   toAddressAny,
  )
-import Cardano.Api.Shelley (PlutusScript (..))
-import Codec.Serialise (deserialise)
-import Data.Aeson (FromJSON (..), ToJSON (..), Value, object, withObject, (.:), (.:?), (.=))
-import Data.ByteString.Short (ShortByteString)
-import Data.Maybe (fromMaybe)
-import Data.String (IsString)
-import GHC.Generics (Generic)
-import Language.Marlowe.CLI.Orphans ()
-import Language.Marlowe.Core.V1.Merkle (Continuations)
-import Language.Marlowe.Core.V1.Semantics (Payment)
-import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input, State)
-import Plutus.V1.Ledger.SlotConfig (SlotConfig, posixTimeToEnclosingSlot, slotToBeginPOSIXTime)
-import PlutusLedgerApi.V1 (CurrencySymbol, Datum, DatumHash, ExBudget, Redeemer)
-import PlutusLedgerApi.V1 qualified as P
-
 import Cardano.Api qualified as C
 import Cardano.Api.Byron qualified as CB
+import Cardano.Api.Shelley (PlutusScript (..))
 import Cardano.Api.Shelley qualified as C
 import Cardano.Api.Shelley qualified as CS
+import Codec.Serialise (deserialise)
 import Contrib.Data.Time.Units as Time.Units
 import Contrib.Data.Time.Units.Aeson (Duration (..))
 import Control.Concurrent.STM (TVar)
@@ -196,24 +158,36 @@ import Control.Monad.Except (MonadError, liftEither)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Reader.Class (MonadReader (..), asks)
 import Control.Monad.Writer (WriterT (..))
+import Data.Aeson (FromJSON (..), ToJSON (..), Value, object, withObject, (.:), (.:?), (.=))
 import Data.Aeson qualified as Aeson
 import Data.Aeson.KeyMap qualified as KeyMap
-import Data.Aeson.OneLine qualified as A
+import Data.Aeson.Text qualified as A
 import Data.Bifunctor qualified as Bifunctor
 import Data.ByteString.Lazy qualified as LBS (fromStrict)
+import Data.ByteString.Short (ShortByteString)
 import Data.ByteString.Short qualified as SBS (fromShort, length)
 import Data.List.NonEmpty qualified as L
 import Data.Map.Strict qualified as Map
+import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy (Proxy))
+import Data.String (IsString)
 import Data.Text qualified as Text
+import Data.Text.Lazy qualified as TL
 import Data.Time (NominalDiffTime, UTCTime, addUTCTime, getCurrentTime, nominalDiffTimeToSeconds)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Data.Time.Units (Second)
 import GHC.Exts (IsString (fromString))
+import GHC.Generics (Generic)
 import GHC.Natural (Natural)
-import Language.Marlowe.CLI.Cardano.Api (toMultiAssetSupportedInEra, withShelleyBasedEra)
+import Language.Marlowe.CLI.Orphans ()
+import Language.Marlowe.Core.V1.Merkle (Continuations)
+import Language.Marlowe.Core.V1.Semantics (Payment)
+import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input, State)
 import Language.Marlowe.Core.V1.Semantics.Types qualified as M
 import Language.Marlowe.Extended.V1 qualified as E
+import Plutus.V1.Ledger.SlotConfig (SlotConfig, posixTimeToEnclosingSlot, slotToBeginPOSIXTime)
+import PlutusLedgerApi.V1 (CurrencySymbol, Datum, DatumHash, ExBudget, Redeemer)
+import PlutusLedgerApi.V1 qualified as P
 
 -- | Exception for Marlowe CLI.
 newtype CliError = CliError {unCliError :: String}
@@ -266,7 +240,7 @@ data SomeMarloweTransaction
     (C.IsPlutusScriptLanguage lang) =>
     SomeMarloweTransaction
       (PlutusScriptVersion lang)
-      (ScriptDataSupportedInEra era)
+      (BabbageEraOnwards era)
       (MarloweTransaction lang era)
 
 -- | Plutus version which we use in the current Marlowe script.
@@ -276,95 +250,15 @@ marlowePlutusVersion :: PlutusScriptVersion MarlowePlutusVersion
 marlowePlutusVersion = C.plutusScriptVersion
 
 doWithCardanoEra :: forall era m a. (MonadReader (CliEnv era) m) => ((IsCardanoEra era) => m a) -> m a
-doWithCardanoEra m = askEra >>= \era -> withCardanoEra era m
+doWithCardanoEra m = askEra >>= \era -> cardanoEraConstraints (babbageEraOnwardsToCardanoEra era) m
 
 doWithShelleyBasedEra :: forall era m a. (MonadReader (CliEnv era) m) => ((IsShelleyBasedEra era) => m a) -> m a
-doWithShelleyBasedEra m = askEra >>= \era -> withShelleyBasedEra era m
+doWithShelleyBasedEra m = askEra >>= \era -> shelleyBasedEraConstraints (babbageEraOnwardsToShelleyBasedEra era) m
 
--- TODO: Move this set of functions to `Marlowe.CLI.Cardano.Api`
-withCardanoEra :: forall era a. ScriptDataSupportedInEra era -> ((IsCardanoEra era) => a) -> a
-withCardanoEra = \case
-  ScriptDataInAlonzoEra -> id
-  ScriptDataInBabbageEra -> id
-  ScriptDataInConwayEra -> id
-
-toAsType :: ScriptDataSupportedInEra era -> AsType era
+toAsType :: BabbageEraOnwards era -> AsType era
 toAsType = \case
-  ScriptDataInAlonzoEra -> AsAlonzoEra
-  ScriptDataInBabbageEra -> AsBabbageEra
-  ScriptDataInConwayEra -> AsConwayEra
-
-toCardanoEra :: ScriptDataSupportedInEra era -> CardanoEra era
-toCardanoEra = \case
-  ScriptDataInAlonzoEra -> AlonzoEra
-  ScriptDataInBabbageEra -> BabbageEra
-  ScriptDataInConwayEra -> ConwayEra
-
-toEraInMode :: ScriptDataSupportedInEra era -> EraInMode era CardanoMode
-toEraInMode = \case
-  ScriptDataInAlonzoEra -> AlonzoEraInCardanoMode
-  ScriptDataInBabbageEra -> BabbageEraInCardanoMode
-  ScriptDataInConwayEra -> ConwayEraInCardanoMode
-
-toShelleyBasedEra :: ScriptDataSupportedInEra era -> ShelleyBasedEra era
-toShelleyBasedEra = \case
-  ScriptDataInAlonzoEra -> ShelleyBasedEraAlonzo
-  ScriptDataInBabbageEra -> ShelleyBasedEraBabbage
-  ScriptDataInConwayEra -> ShelleyBasedEraConway
-
-toSimpleScriptLanguageInEra :: ScriptDataSupportedInEra era -> ScriptLanguageInEra SimpleScript' era
-toSimpleScriptLanguageInEra = \case
-  ScriptDataInAlonzoEra -> SimpleScriptInAlonzo
-  ScriptDataInBabbageEra -> SimpleScriptInBabbage
-  ScriptDataInConwayEra -> SimpleScriptInConway
-
-toTxMetadataSupportedInEra :: ScriptDataSupportedInEra era -> TxMetadataSupportedInEra era
-toTxMetadataSupportedInEra = \case
-  ScriptDataInAlonzoEra -> TxMetadataInAlonzoEra
-  ScriptDataInBabbageEra -> TxMetadataInBabbageEra
-  ScriptDataInConwayEra -> TxMetadataInConwayEra
-
-toTxScriptValiditySupportedInEra :: ScriptDataSupportedInEra era -> TxScriptValiditySupportedInEra era
-toTxScriptValiditySupportedInEra = \case
-  ScriptDataInAlonzoEra -> TxScriptValiditySupportedInAlonzoEra
-  ScriptDataInBabbageEra -> TxScriptValiditySupportedInBabbageEra
-  ScriptDataInConwayEra -> TxScriptValiditySupportedInConwayEra
-
-toCollateralSupportedInEra :: ScriptDataSupportedInEra era -> CollateralSupportedInEra era
-toCollateralSupportedInEra = \case
-  ScriptDataInAlonzoEra -> CollateralInAlonzoEra
-  ScriptDataInBabbageEra -> CollateralInBabbageEra
-  ScriptDataInConwayEra -> CollateralInConwayEra
-
-toTxFeesExplicitInEra :: ScriptDataSupportedInEra era -> TxFeesExplicitInEra era
-toTxFeesExplicitInEra = \case
-  ScriptDataInAlonzoEra -> TxFeesExplicitInAlonzoEra
-  ScriptDataInBabbageEra -> TxFeesExplicitInBabbageEra
-  ScriptDataInConwayEra -> TxFeesExplicitInConwayEra
-
-toValidityLowerBoundSupportedInEra :: ScriptDataSupportedInEra era -> ValidityLowerBoundSupportedInEra era
-toValidityLowerBoundSupportedInEra = \case
-  ScriptDataInAlonzoEra -> ValidityLowerBoundInAlonzoEra
-  ScriptDataInBabbageEra -> ValidityLowerBoundInBabbageEra
-  ScriptDataInConwayEra -> ValidityLowerBoundInConwayEra
-
-toValidityUpperBoundSupportedInEra :: ScriptDataSupportedInEra era -> ValidityUpperBoundSupportedInEra era
-toValidityUpperBoundSupportedInEra = \case
-  ScriptDataInAlonzoEra -> ValidityUpperBoundInAlonzoEra
-  ScriptDataInBabbageEra -> ValidityUpperBoundInBabbageEra
-  ScriptDataInConwayEra -> ValidityUpperBoundInConwayEra
-
-toValidityNoUpperBoundSupportedInEra :: ScriptDataSupportedInEra era -> ValidityNoUpperBoundSupportedInEra era
-toValidityNoUpperBoundSupportedInEra = \case
-  ScriptDataInAlonzoEra -> ValidityNoUpperBoundInAlonzoEra
-  ScriptDataInBabbageEra -> ValidityNoUpperBoundInBabbageEra
-  ScriptDataInConwayEra -> ValidityNoUpperBoundInConwayEra
-
-toExtraKeyWitnessesSupportedInEra :: ScriptDataSupportedInEra era -> TxExtraKeyWitnessesSupportedInEra era
-toExtraKeyWitnessesSupportedInEra = \case
-  ScriptDataInAlonzoEra -> ExtraKeyWitnessesInAlonzoEra
-  ScriptDataInBabbageEra -> ExtraKeyWitnessesInBabbageEra
-  ScriptDataInConwayEra -> ExtraKeyWitnessesInConwayEra
+  BabbageEraOnwardsBabbage -> AsBabbageEra
+  BabbageEraOnwardsConway -> AsConwayEra
 
 toAddressAny' :: AddressInEra era -> AddressAny
 toAddressAny' (AddressInEra _ addr) = toAddressAny addr
@@ -374,23 +268,22 @@ toShelleyAddress (AddressInEra _ addr) = case addr of
   CB.ByronAddress _ -> Nothing
   s@CS.ShelleyAddress{} -> Just s
 
-newtype CliEnv era = CliEnv {era :: ScriptDataSupportedInEra era}
+newtype CliEnv era = CliEnv {era :: BabbageEraOnwards era}
 
-askEra :: (MonadReader (CliEnv era) m) => m (ScriptDataSupportedInEra era)
+askEra :: (MonadReader (CliEnv era) m) => m (BabbageEraOnwards era)
 askEra = asks era
 
-asksEra :: (MonadReader (CliEnv era) m) => (ScriptDataSupportedInEra era -> a) -> m a
+asksEra :: (MonadReader (CliEnv era) m) => (BabbageEraOnwards era -> a) -> m a
 asksEra f = f <$> askEra
 
 instance ToJSON SomeMarloweTransaction where
   toJSON (SomeMarloweTransaction plutusVersion era tx) =
-    withShelleyBasedEra era $
+    shelleyBasedEraConstraints (babbageEraOnwardsToShelleyBasedEra era) $
       object
         let eraStr :: String
             eraStr = case era of
-              ScriptDataInAlonzoEra -> "alonzo"
-              ScriptDataInBabbageEra -> "babbage"
-              ScriptDataInConwayEra -> "conway"
+              BabbageEraOnwardsBabbage -> "babbage"
+              BabbageEraOnwardsConway -> "conway"
             plutusVersionStr :: String
             plutusVersionStr = case plutusVersion of
               C.PlutusScriptV1 -> "PlutusScriptV1"
@@ -413,12 +306,10 @@ instance FromJSON SomeMarloweTransaction where
     eraStr :: String <- obj .: "era"
     plutusVersionStr :: String <- obj .: "plutusVersion"
     case (eraStr, plutusVersionStr) of
-      ("alonzo", "PlutusScriptV1") -> SomeMarloweTransaction C.PlutusScriptV1 ScriptDataInAlonzoEra <$> obj .: "tx"
-      ("alonzo", "PlutusScriptV2") -> SomeMarloweTransaction C.PlutusScriptV2 ScriptDataInAlonzoEra <$> obj .: "tx"
-      ("babbage", "PlutusScriptV1") -> SomeMarloweTransaction C.PlutusScriptV1 ScriptDataInBabbageEra <$> obj .: "tx"
-      ("babbage", "PlutusScriptV2") -> SomeMarloweTransaction C.PlutusScriptV2 ScriptDataInBabbageEra <$> obj .: "tx"
-      ("conway", "PlutusScriptV1") -> SomeMarloweTransaction C.PlutusScriptV1 ScriptDataInConwayEra <$> obj .: "tx"
-      ("conway", "PlutusScriptV2") -> SomeMarloweTransaction C.PlutusScriptV2 ScriptDataInConwayEra <$> obj .: "tx"
+      ("babbage", "PlutusScriptV1") -> SomeMarloweTransaction C.PlutusScriptV1 BabbageEraOnwardsBabbage <$> obj .: "tx"
+      ("babbage", "PlutusScriptV2") -> SomeMarloweTransaction C.PlutusScriptV2 BabbageEraOnwardsBabbage <$> obj .: "tx"
+      ("conway", "PlutusScriptV1") -> SomeMarloweTransaction C.PlutusScriptV1 BabbageEraOnwardsConway <$> obj .: "tx"
+      ("conway", "PlutusScriptV2") -> SomeMarloweTransaction C.PlutusScriptV2 BabbageEraOnwardsConway <$> obj .: "tx"
       _ -> fail $ "Unsupported era " <> show eraStr
 
 -- | Complete description of a Marlowe transaction.
@@ -537,14 +428,14 @@ data ValidatorInfo lang era = ValidatorInfo
 validatorAddress
   :: (C.IsPlutusScriptLanguage lang)
   => PlutusScript lang
-  -> ScriptDataSupportedInEra era
+  -> BabbageEraOnwards era
   -> CS.NetworkId
   -> CS.StakeAddressReference
   -> AddressInEra era
 validatorAddress viScript era network stake = do
   let viHash = C.hashScript (C.PlutusScript C.plutusScriptVersion viScript)
       paymentCredential = C.PaymentCredentialByScript viHash
-  withShelleyBasedEra era $ C.makeShelleyAddressInEra network paymentCredential stake
+  C.makeShelleyAddressInEra (babbageEraOnwardsToShelleyBasedEra era) network paymentCredential stake
 
 -- | Build validator info.
 validatorInfo
@@ -552,9 +443,9 @@ validatorInfo
   => C.PlutusScript lang
   -- ^ The validator.
   -> Maybe TxIn
-  -> C.ScriptDataSupportedInEra era
+  -> C.BabbageEraOnwards era
   -- ^ The era to build the validator in.
-  -> P.ProtocolVersion
+  -> P.MajorProtocolVersion
   -> [Integer]
   -- ^ The cost model parameters.
   -> C.NetworkId
@@ -569,8 +460,9 @@ validatorInfo viScript viTxIn era protocolVersion costModel network stake = do
       viAddress = validatorAddress viScript era network stake
       viSize = SBS.length viBytes
 
+  script <- Bifunctor.first show $ P.deserialiseScript protocolVersion viBytes
   (evaluationContext, _) <- Bifunctor.first show $ runWriterT $ P.mkEvaluationContext costModel
-  case P.evaluateScriptCounting protocolVersion P.Verbose evaluationContext viBytes [] of
+  case P.evaluateScriptCounting protocolVersion P.Verbose evaluationContext script [] of
     (_, Right viCost) -> pure $ ValidatorInfo{..}
     (_, Left err) -> Left $ show err
 
@@ -579,8 +471,8 @@ validatorInfo'
   => (C.IsPlutusScriptLanguage lang)
   => C.PlutusScript lang
   -> Maybe C.TxIn
-  -> ScriptDataSupportedInEra era
-  -> P.ProtocolVersion
+  -> BabbageEraOnwards era
+  -> P.MajorProtocolVersion
   -> [Integer]
   -> C.NetworkId
   -> C.StakeAddressReference
@@ -617,7 +509,7 @@ instance (IsScriptLanguage lang, IsShelleyBasedEra era) => FromJSON (ValidatorIn
           viCost <- o .: "cost"
           viAddress <- case deserialiseAddress (proxyToAsType (Proxy :: Proxy (AddressInEra era))) address of
             Just address' -> pure address'
-            Nothing -> fail "Failed deserialising address."
+            Nothing -> fail "Failed deserializing address."
 
           anyScript <- case deserialiseFromTextEnvelope (proxyToAsType (Proxy :: Proxy (Script lang))) script of
             Right script' -> pure script'
@@ -752,7 +644,7 @@ instance FromJSON SomeTimeout where
         errorMsg =
           "Expecting either relative timeout like +10s, -1h, +1d or just a timestamp"
             <> "or an object with a single field of either `absolute` or `relative` but got:"
-            <> Text.unpack (A.renderValue json)
+            <> TL.unpack (A.encodeToLazyText json)
     case json of
       Aeson.Object (KeyMap.toList -> [("absolute", absoluteTimeout)]) -> do
         parsedTimeout <- parseJSON absoluteTimeout
@@ -841,7 +733,7 @@ defaultCoinSelectionStrategy = CoinSelectionStrategy True True []
 
 data CurrencyIssuer era = CurrencyIssuer
   { ciIssuer :: AddressInEra era
-  , ciSigingKey :: SomePaymentSigningKey
+  , ciSigningKey :: SomePaymentSigningKey
   }
 
 data TokensRecipient era
@@ -853,7 +745,7 @@ data TokensRecipient era
       -- ^ The datum.
 
 data MintingAction era
-  = -- | The token names, amount and a possible receipient addresses.
+  = -- | The token names, amount and a possible recipient addresses.
     Mint
       { maIssuer :: CurrencyIssuer era
       , -- , maTokenDistribution
@@ -877,16 +769,14 @@ data NodeStateInfo = NodeStateInfo
   { nsiNetworkId :: C.NetworkId
   , nsiProtocolParameters :: C.ProtocolParameters
   , nsiSystemStart :: C.SystemStart
-  , nsiEraHistory :: C.EraHistory C.CardanoMode
+  , nsiEraHistory :: C.EraHistory
   }
 
--- We slowely migrate all the internal functions to use these types.
+-- We slowly migrate all the internal functions to use these types.
 -- They allow us to perform fully dry run over contract execution.
 data QueryExecutionContext era
-  = QueryNode (C.LocalNodeConnectInfo C.CardanoMode)
-  | PureQueryContext
-      (TVar (C.UTxO era))
-      NodeStateInfo
+  = QueryNode C.LocalNodeConnectInfo
+  | PureQueryContext (TVar (C.UTxO era)) NodeStateInfo
 
 queryContextNetworkId :: QueryExecutionContext era -> C.NetworkId
 queryContextNetworkId (QueryNode connection) = C.localNodeNetworkId connection
@@ -894,12 +784,12 @@ queryContextNetworkId (PureQueryContext _ NodeStateInfo{nsiNetworkId}) = nsiNetw
 
 -- Same as above but with timeout information.
 data TxBuildupContext era
-  = NodeTxBuildup (C.LocalNodeConnectInfo C.CardanoMode) SubmitMode
+  = NodeTxBuildup C.LocalNodeConnectInfo SubmitMode
   | PureTxBuildup
       (TVar (C.UTxO era))
       NodeStateInfo
 
-mkNodeTxBuildup :: forall era. C.LocalNodeConnectInfo C.CardanoMode -> Maybe Second -> TxBuildupContext era
+mkNodeTxBuildup :: forall era. C.LocalNodeConnectInfo -> Maybe Second -> TxBuildupContext era
 mkNodeTxBuildup connection timeout = NodeTxBuildup connection (submitModeFromTimeout timeout)
 
 toQueryContext :: TxBuildupContext era -> QueryExecutionContext era

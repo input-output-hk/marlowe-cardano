@@ -82,7 +82,7 @@ executable marlowe-benchmark
     , marlowe-cardano
     , marlowe-chain-sync
     , marlowe-client
-    , marlowe-runtime:{marlowe-runtime, discovery-api, history-api, sync-api, tx-api}
+    , marlowe-runtime:{marlowe-runtime, sync-api, tx-api}
     , optparse-applicative
     , plutus-ledger-api
     , QuickCheck

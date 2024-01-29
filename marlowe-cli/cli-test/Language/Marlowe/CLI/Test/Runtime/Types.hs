@@ -62,7 +62,7 @@ module Language.Marlowe.CLI.Test.Runtime.Types (
 )
 where
 
-import Cardano.Api (CardanoMode, LocalNodeConnectInfo, ScriptDataSupportedInEra)
+import Cardano.Api (BabbageEraOnwards, LocalNodeConnectInfo)
 import Cardano.Api qualified as C
 import Contrib.Data.Time.Units.Aeson qualified as A
 import Control.Concurrent.STM (TChan, TVar)
@@ -139,7 +139,7 @@ anyRuntimeMonitorMarloweThreadInputsApplied txId possibleTxIx = do
 -- | confirmations.
 data RuntimeTxInfo = RuntimeTxInfo
   { _rtiTxId :: !C.TxId
-  , _rtiMaroweParams :: !(Maybe M.MarloweData)
+  , _rtiMarloweParams :: !(Maybe M.MarloweData)
   }
   deriving stock (Eq, Generic, Show)
 
@@ -330,8 +330,8 @@ class HasInterpretEnv env era | env -> era where
   runtimeMonitorInputT :: Traversal' env RuntimeMonitorInput
   runtimeClientConnectorT :: Traversal' env (Network.Protocol.Connector Marlowe.Protocol.MarloweRuntimeClient IO)
 
-  connectionT :: Traversal' env (LocalNodeConnectInfo CardanoMode)
-  eraL :: Lens' env (ScriptDataSupportedInEra era)
+  connectionT :: Traversal' env LocalNodeConnectInfo
+  eraL :: Lens' env (BabbageEraOnwards era)
   slotConfigL :: Lens' env SlotConfig
 
   txBuildupContextL :: Lens' env (TxBuildupContext era)

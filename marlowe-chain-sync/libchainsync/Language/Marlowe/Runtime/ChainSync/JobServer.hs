@@ -5,7 +5,12 @@
 
 module Language.Marlowe.Runtime.ChainSync.JobServer where
 
-import Cardano.Api (CardanoEra (..), CardanoMode, ScriptDataSupportedInEra (..), Tx, TxValidationErrorInMode)
+import Cardano.Api (
+  ShelleyBasedEra,
+  Tx,
+  TxValidationErrorInCardanoMode,
+  alonzoEraOnwardsToShelleyBasedEra,
+ )
 import Language.Marlowe.Runtime.ChainSync.Api (ChainSyncCommand (..))
 import Network.Protocol.Connection (ServerSource (..))
 import Network.Protocol.Job.Server
@@ -15,9 +20,9 @@ import UnliftIO (MonadUnliftIO)
 newtype ChainSyncJobServerDependencies m = ChainSyncJobServerDependencies
   { submitTxToNodeLocal
       :: forall era
-       . CardanoEra era
+       . ShelleyBasedEra era
       -> Tx era
-      -> m (SubmitResult (TxValidationErrorInMode CardanoMode))
+      -> m (SubmitResult TxValidationErrorInCardanoMode)
   }
 
 chainSyncJobServer
@@ -31,13 +36,7 @@ chainSyncJobServer ChainSyncJobServerDependencies{..} = ServerSource $ pure serv
     server = liftCommandHandler $ flip either (\case {}) \case
       SubmitTx era tx ->
         ((),) <$> do
-          result <-
-            submitTxToNodeLocal
-              case era of
-                ScriptDataInAlonzoEra -> AlonzoEra
-                ScriptDataInBabbageEra -> BabbageEra
-                ScriptDataInConwayEra -> ConwayEra
-              tx
+          result <- submitTxToNodeLocal (alonzoEraOnwardsToShelleyBasedEra era) tx
           pure case result of
             SubmitFail err -> Left $ show err
             SubmitSuccess -> Right ()

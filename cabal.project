@@ -14,10 +14,10 @@ repository cardano-haskell-packages
 -- We duplicate the hackage index-state first for haskell.nix, even though cabal ignores it.
 -- This must always match the hackage index-state on the next line.
 -- See https://github.com/input-output-hk/haskell.nix/issues/1869#issuecomment-1449272480
-index-state: 2023-05-26T00:00:00Z
+index-state: 2024-02-01T00:00:00Z
 index-state:
-  , hackage.haskell.org      2023-05-26T00:00:00Z
-  , cardano-haskell-packages 2023-05-26T00:00:00Z
+  , hackage.haskell.org      2024-02-01T00:00:00Z
+  , cardano-haskell-packages 2024-02-01T00:00:00Z
 
 packages:
   async-components
@@ -37,7 +37,6 @@ packages:
   marlowe-object
   marlowe-protocols
   marlowe-runtime
-  marlowe-runtime-cli
   marlowe-runtime-web
   marlowe-test
 
@@ -132,9 +131,6 @@ package marlowe-protocols
 package marlowe-runtime
   ghc-options: -Werror
 
-package marlowe-runtime-cli
-  ghc-options: -Werror
-
 package marlowe-runtime-web
   ghc-options: -Werror
 
@@ -196,8 +192,7 @@ source-repository-package
   location: https://github.com/input-output-hk/cardano-addresses
   tag: 0b66b8ad3703ab349414de58f3503843dfb22a1e
   --sha256: sha256-69iE7LrigHTSKJrgq6uGU+U4j+NtBwR4ae18vsLyVvI=
-  subdir: command-line
-          core
+  subdir: core
 
 -- These constraints needed for plutus-apps
 constraints:
@@ -205,17 +200,32 @@ constraints:
   -- failures when other packages depend on cryptonite.
   -- Can be removed when this is resolved: https://github.com/snoyberg/http-client/issues/508
   http-client-tls < 0.3.6.2,
-  ouroboros-consensus-cardano ^>=0.6,
-  ouroboros-network ^>=0.7,
-  ouroboros-network-framework ^>=0.6,
-  plutus-tx ^>=1.5,
-  plutus-ledger-api ^>=1.5,
-  plutus-core ^>=1.5,
-  text ^>=1.2
+  ouroboros-network-framework ==0.10.1.0
+
+allow-newer:
+  primitive,
+  optparse-applicative
 
 
 source-repository-package
-  type: git
-  location: https://github.com/input-output-hk/actus-core
-  tag: 3bddfeb838c695adf2c6689b3beda3ef1019de7
-  --sha256: 12pahjijkym93sm1qh9l9jw6wlv3vf46l73hpdwrm25rz195hi47
+   type: git
+   location: https://github.com/input-output-hk/actus-core
+   tag: 3bddfeb838c695adf2c6689b3beda3ef1019de7
+   --sha256: 12pahjijkym93sm1qh9l9jw6wlv3vf46l73hpdwrm25rz195hi47
+
+
+source-repository-package
+   type: git
+   location: https://github.com/input-output-hk/marlowe
+   tag: d9042cc6e0e0c2003c9eff47c98896aaf080aa72
+   subdir: marlowe-spec-test
+           isabelle
+   --sha256: 1yfbv9bwr71jd2sqfsb5jjq6j5bjfbjpp946fbkhxwwc2npwj0pd
+
+
+source-repository-package
+   type: git
+   location: https://github.com/intersectMBO/cardano-api
+   tag: 8a539a8e63d8c410a329e3bc028d8339f32e4c8f
+   subdir: cardano-api
+   --sha256: 0r2zi4is8ayjryq80b144zcfl95ylx60gjp9n1qdcr1hcyrm76aj

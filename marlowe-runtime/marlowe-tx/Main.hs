@@ -69,9 +69,8 @@ import Options.Applicative (
   strOption,
   value,
  )
+import Options.Applicative.Help.Pretty
 import Paths_marlowe_runtime (version)
-import Prettyprinter
-import Prettyprinter.Render.Terminal (AnsiStyle, bold)
 
 main :: IO ()
 main = do
@@ -330,10 +329,10 @@ getOptions = execParser $ info (helper <*> versionOption <*> parser) infoMod
         , header "marlowe-tx: Transaction creation server for the Marlowe Runtime."
         ]
 
-bullets :: [Doc ann] -> Doc ann
+bullets :: [Doc] -> Doc
 bullets = indent 2 . vcat . fmap (("•" <+>) . align)
 
-description :: Doc AnsiStyle
+description :: Doc
 description =
   concatWith
     (\a b -> a <> line <> line <> b)

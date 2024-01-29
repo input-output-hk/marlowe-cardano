@@ -2,27 +2,8 @@
 
 module Language.Marlowe.Runtime.Transaction.SafetySpec where
 
-import qualified Cardano.Api as Cardano (
-  AddressInEra (..),
-  AddressTypeInEra (..),
-  CardanoEra (..),
-  Lovelace (..),
-  MultiAssetSupportedInEra (..),
-  NetworkId (..),
-  NetworkMagic (..),
-  ScriptDataSupportedInEra (..),
-  ShelleyBasedEra (..),
-  StakeAddressReference (..),
-  TxOut (..),
-  TxOutDatum (..),
-  TxOutValue (..),
-  anyAddressInShelleyBasedEra,
-  calculateMinimumUTxO,
-  makeShelleyAddress,
- )
-import Cardano.Api.Shelley (CardanoEra (..), ReferenceTxInsScriptsInlineDatumsSupportedInEra (..), bundleProtocolParams)
-import qualified Cardano.Api.Shelley as Shelley (ReferenceScript (..), StakeAddressReference (..))
-import Data.Either (fromRight)
+import qualified Cardano.Api as Cardano
+import qualified Cardano.Api.Shelley as Shelley
 import Data.Foldable (for_)
 import Data.List (isInfixOf, nub)
 import qualified Data.Map.NonEmpty as NEMap
@@ -58,6 +39,7 @@ import Language.Marlowe.Runtime.Transaction.Constraints (
   HelperScriptState (HelperScriptState),
   HelpersContext (..),
   MarloweContext (..),
+  mkTxOutValue,
  )
 import Language.Marlowe.Runtime.Transaction.ConstraintsSpec (protocolTestnet)
 import Language.Marlowe.Runtime.Transaction.Query.Helper (getHelperInfos)
@@ -83,12 +65,29 @@ import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (counterexample, discard, elements, generate, sublistOf, suchThat, (===), (==>))
 import Test.QuickCheck.Arbitrary (arbitrary)
 
+type TestEra = Cardano.BabbageEra
+
+testEra :: Cardano.CardanoEra TestEra
+testEra = Cardano.BabbageEra
+
+shelleyBasedEraTest :: Cardano.ShelleyBasedEra TestEra
+shelleyBasedEraTest = Cardano.ShelleyBasedEraBabbage
+
+babbageEraOnwardsTest :: Cardano.BabbageEraOnwards TestEra
+babbageEraOnwardsTest = Cardano.BabbageEraOnwardsBabbage
+
+alonzoEraOnwardsTest :: Cardano.AlonzoEraOnwards TestEra
+alonzoEraOnwardsTest = Cardano.AlonzoEraOnwardsBabbage
+
+maryEraOnwardsTest :: Cardano.MaryEraOnwards TestEra
+maryEraOnwardsTest = Cardano.MaryEraOnwardsBabbage
+
 spec :: Spec
 spec =
   do
     let testnet = Cardano.Testnet $ Cardano.NetworkMagic 1
         version = MarloweV1
-        adjustMinUtxo = mkAdjustMinimumUtxo ReferenceTxInsScriptsInlineDatumsInBabbageEra protocolTestnet MarloweV1
+        adjustMinUtxo = mkAdjustMinimumUtxo babbageEraOnwardsTest protocolTestnet MarloweV1
         emptyHelpersContext = HelpersContext M.empty "" M.empty
         continuations = noContinuations version
         party = V1.Role "x"
@@ -109,22 +108,21 @@ spec =
                     (Plutus.TokenName $ Plutus.toBuiltin n)
                 tokens = fmap toToken . M.keys $ Chain.unTokens tokens'
                 expected =
-                  fromRight 0 $
-                    Cardano.calculateMinimumUTxO
-                      Cardano.ShelleyBasedEraBabbage
-                      ( Cardano.TxOut
-                          (Cardano.anyAddressInShelleyBasedEra . fromJust $ Chain.toCardanoAddressAny address)
-                          (Cardano.TxOutValue Cardano.MultiAssetInBabbageEra value)
-                          (Cardano.TxOutDatumHash Cardano.ScriptDataInBabbageEra . fromJust $ Chain.toCardanoDatumHash hash)
-                          Shelley.ReferenceScriptNone
-                      )
-                      <$> bundleProtocolParams BabbageEra protocolTestnet
+                  Cardano.calculateMinimumUTxO
+                    shelleyBasedEraTest
+                    ( Cardano.TxOut
+                        (Cardano.anyAddressInShelleyBasedEra shelleyBasedEraTest . fromJust $ Chain.toCardanoAddressAny address)
+                        (mkTxOutValue maryEraOnwardsTest value)
+                        (Cardano.TxOutDatumHash alonzoEraOnwardsTest . fromJust $ Chain.toCardanoDatumHash hash)
+                        Shelley.ReferenceScriptNone
+                    )
+                    $ Shelley.unLedgerProtocolParameters protocolTestnet
                     :: Cardano.Lovelace
                 contract = foldr payToken V1.Close tokens -- The tokens just need to appear somewhere in the contract.
                 actual =
                   fromJust $
                     minAdaUpperBound
-                      ReferenceTxInsScriptsInlineDatumsInBabbageEra
+                      babbageEraOnwardsTest
                       protocolTestnet
                       version
                       (V1.emptyState 0)
@@ -282,15 +280,15 @@ spec =
             MarloweContext
               { scriptOutput = Nothing
               , marloweAddress =
-                  Chain.fromCardanoAddressInEra Cardano.BabbageEra
-                    . Cardano.AddressInEra (Cardano.ShelleyAddressInEra Cardano.ShelleyBasedEraBabbage)
+                  Chain.fromCardanoAddressInEra testEra
+                    . Cardano.AddressInEra (Cardano.ShelleyAddressInEra shelleyBasedEraTest)
                     $ Cardano.makeShelleyAddress
                       networkId
                       (fromJust . Chain.toCardanoPaymentCredential $ Chain.ScriptCredential marloweScript)
                       stakeReference
               , payoutAddress =
-                  Chain.fromCardanoAddressInEra Cardano.BabbageEra
-                    . Cardano.AddressInEra (Cardano.ShelleyAddressInEra Cardano.ShelleyBasedEraBabbage)
+                  Chain.fromCardanoAddressInEra testEra
+                    . Cardano.AddressInEra (Cardano.ShelleyAddressInEra shelleyBasedEraTest)
                     $ Cardano.makeShelleyAddress
                       networkId
                       (fromJust . Chain.toCardanoPaymentCredential $ Chain.ScriptCredential payoutScript)
@@ -310,7 +308,7 @@ spec =
         let minAda =
               maybe 1_500_000 toInteger $
                 minAdaUpperBound
-                  ReferenceTxInsScriptsInlineDatumsInBabbageEra
+                  babbageEraOnwardsTest
                   protocolTestnet
                   version
                   (V1.emptyState 0)
@@ -319,7 +317,7 @@ spec =
         actual <-
           checkTransactions
             protocolTestnet
-            ReferenceTxInsScriptsInlineDatumsInBabbageEra
+            babbageEraOnwardsTest
             version
             marloweContext
             emptyHelpersContext
@@ -355,7 +353,7 @@ spec =
           actual <-
             checkTransactions
               protocolTestnet
-              ReferenceTxInsScriptsInlineDatumsInBabbageEra
+              babbageEraOnwardsTest
               version
               marloweContext
               emptyHelpersContext
@@ -410,7 +408,7 @@ spec =
           actual <-
             checkTransactions
               protocolTestnet
-              ReferenceTxInsScriptsInlineDatumsInBabbageEra
+              babbageEraOnwardsTest
               version
               marloweContext
               helpersContext

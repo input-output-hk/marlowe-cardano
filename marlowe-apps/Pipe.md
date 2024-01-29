@@ -258,7 +258,7 @@ This response details the history of a Marlowe contract.
 }
 ```
 
-See `CreateStep` and `ContractStep` in [`Language.Marlowe.Runtime.History.Api`](../marlowe-runtime/history-api/Language/Marlowe/Runtime/History/Api.hs) for details on the contents of the `creation` and `steps` fields.
+See `CreateStep` and `ContractStep` in [`Language.Marlowe.Runtime.History.Api`](../marlowe-runtime/sync-api/Language/Marlowe/Runtime/History/Api.hs) for details on the contents of the `creation` and `steps` fields.
 
 
 #### Body

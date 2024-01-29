@@ -13,14 +13,14 @@ module Language.Marlowe.Runtime.Transaction.Server where
 import Cardano.Api (
   AddressInEra (..),
   AddressTypeInEra (..),
+  AlonzoEraOnwards (..),
   AnyCardanoEra (..),
+  BabbageEraOnwards (..),
   CardanoEra (..),
-  CardanoMode,
   CtxTx,
   EraHistory,
   IsCardanoEra,
   NetworkId (..),
-  ScriptDataSupportedInEra (..),
   ShelleyBasedEra (..),
   StakeAddressReference (..),
   Tx,
@@ -29,14 +29,18 @@ import Cardano.Api (
   TxMetadataInEra (..),
   TxOut (..),
   cardanoEra,
+  cardanoEraConstraints,
   getTxBody,
   getTxId,
+  inEonForEra,
+  inEonForEraMaybe,
   makeShelleyAddress,
   toLedgerEpochInfo,
  )
 import Cardano.Api.Shelley (
+  LedgerProtocolParameters,
   ProtocolParameters,
-  ReferenceTxInsScriptsInlineDatumsSupportedInEra (..),
+  convertToLedgerProtocolParameters,
  )
 import Colog (Message, WithLog)
 import Control.Applicative ((<|>))
@@ -171,7 +175,7 @@ data TransactionServerSelector f where
 
 data ExecField
   = SystemStart SystemStart
-  | EraHistory (EraHistory CardanoMode)
+  | EraHistory EraHistory
   | ProtocolParameters ProtocolParameters
   | NetworkId NetworkId
   | Era AnyCardanoEra
@@ -181,7 +185,7 @@ data BuildTxField where
   ResultingTxBody :: (IsCardanoEra era) => TxBody era -> BuildTxField
 
 data TransactionServerDependencies m = TransactionServerDependencies
-  { mkSubmitJob :: forall era. ScriptDataSupportedInEra era -> Tx era -> STM (SubmitJob m)
+  { mkSubmitJob :: forall era. AlonzoEraOnwards era -> Tx era -> STM (SubmitJob m)
   , loadWalletContext :: LoadWalletContext m
   , loadMarloweContext :: LoadMarloweContext m
   , loadPayoutContext :: LoadPayoutContext m
@@ -218,6 +222,9 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                     <*> request GetProtocolParameters
                     <*> request GetNetworkId
                     <*> request GetEra
+              shelleyEra <- case inEonForEraMaybe id era of
+                Nothing -> error "Current era not supported"
+                Just a -> pure a
               addField ev $ SystemStart systemStart
               addField ev $ EraHistory eraHistory
               addField ev $ ProtocolParameters protocolParameters
@@ -228,8 +235,10 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                     Constraints.solveConstraints
                       systemStart
                       (toLedgerEpochInfo eraHistory)
-                      protocolParameters
-              case command of
+              ledgerProtocolParameters <- case convertToLedgerProtocolParameters shelleyEra protocolParameters of
+                Left e -> error $ "Failed to convert protocol params: " <> show e
+                Right a -> pure a
+              cardanoEraConstraints era case command of
                 Create mStakeCredential version addresses threadRole roles metadata minAda accounts contract ->
                   withEvent ExecCreate \_ ->
                     execCreate
@@ -238,7 +247,7 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                       contractQueryConnector
                       getCurrentScripts
                       solveConstraints
-                      protocolParameters
+                      ledgerProtocolParameters
                       loadWalletContext
                       loadHelpersContext
                       networkId
@@ -257,6 +266,7 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                     withMarloweVersion version $
                       execApplyInputs
                         era
+                        ledgerProtocolParameters
                         contractQueryConnector
                         getTip
                         systemStart
@@ -276,6 +286,7 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                   withEvent ExecWithdraw \_ ->
                     execWithdraw
                       era
+                      ledgerProtocolParameters
                       solveConstraints
                       loadWalletContext
                       loadPayoutContext
@@ -283,10 +294,10 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                       version
                       addresses
                       payouts
-                Submit ReferenceTxInsScriptsInlineDatumsInBabbageEra tx ->
-                  execSubmit (mkSubmitJob ScriptDataInBabbageEra) trackSubmitJob tx
-                Submit ReferenceTxInsScriptsInlineDatumsInConwayEra tx ->
-                  execSubmit (mkSubmitJob ScriptDataInConwayEra) trackSubmitJob tx
+                Submit BabbageEraOnwardsBabbage tx ->
+                  execSubmit (mkSubmitJob AlonzoEraOnwardsBabbage) trackSubmitJob tx
+                Submit BabbageEraOnwardsConway tx ->
+                  execSubmit (mkSubmitJob AlonzoEraOnwardsConway) trackSubmitJob tx
           , recvMsgAttach = \case
               jobId@(JobIdSubmit txId) ->
                 attachSubmit jobId $ getSubmitJob txId
@@ -308,7 +319,7 @@ execCreate
   -> Connector (QueryClient ContractRequest) m
   -> (MarloweVersion v -> MarloweScripts)
   -> SolveConstraints
-  -> ProtocolParameters
+  -> LedgerProtocolParameters era
   -> LoadWalletContext m
   -> LoadHelpersContext m
   -> NetworkId
@@ -324,8 +335,8 @@ execCreate
   -> NominalDiffTime
   -> m (ServerStCmd MarloweTxCommand Void CreateError (ContractCreated v) m ())
 execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts solveConstraints protocolParameters loadWalletContext loadHelpersContext networkId mStakeCredential version addresses threadRole roleTokens metadata optMinAda accounts contract analysisTimeout = execExceptT do
-  referenceInputsSupported <- referenceInputsSupportedInEra (CreateEraUnsupported $ AnyCardanoEra era) era
-  let adjustMinUtxo = mkAdjustMinimumUtxo referenceInputsSupported protocolParameters version
+  eon <- referenceInputsSupportedInEra (CreateEraUnsupported $ AnyCardanoEra era) era
+  let adjustMinUtxo = mkAdjustMinimumUtxo eon protocolParameters version
   let threadRole' = fromMaybe "" threadRole
   walletContext <- lift $ loadWalletContext addresses
   (_, dummyState) <-
@@ -353,14 +364,14 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
     except $
       note ProtocolParamNoUTxOCostPerByte $
         fromCardanoLovelace
-          <$> minAdaUpperBound referenceInputsSupported protocolParameters version dummyState contract' continuations
+          <$> minAdaUpperBound eon protocolParameters version dummyState contract' continuations
   let minAda = fromMaybe computedMinAdaDeposit optMinAda
   unless (minAda >= computedMinAdaDeposit) $ throwE $ InsufficientMinAdaDeposit computedMinAdaDeposit
   ((datum, assets, rolesCurrency), constraints) <-
     ExceptT $
       buildCreateConstraints
         mkRoleTokenMintingPolicy
-        referenceInputsSupported
+        eon
         version
         walletContext
         threadRole'
@@ -417,7 +428,7 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
         <$> limitAnalysisTime
           ( checkTransactions
               protocolParameters
-              referenceInputsSupported
+              eon
               version
               marloweContext
               helpersContext
@@ -435,10 +446,10 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
   txBody <-
     except $
       first CreateConstraintError $
-        solveConstraints referenceInputsSupported version (Left marloweContext) walletContext helpersContext constraints
+        solveConstraints eon protocolParameters version (Left marloweContext) walletContext helpersContext constraints
   let marloweScriptAddress = Constraints.marloweAddress marloweContext
   pure $
-    ContractCreated referenceInputsSupported $
+    ContractCreated eon $
       ContractCreatedInEra
         { contractId = ContractId $ fromJust $ findMarloweOutput marloweAddress txBody
         , rolesCurrency
@@ -458,15 +469,8 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
         }
 
 referenceInputsSupportedInEra
-  :: (Monad m) => e -> CardanoEra era -> ExceptT e m (ReferenceTxInsScriptsInlineDatumsSupportedInEra era)
-referenceInputsSupportedInEra e = \case
-  ByronEra -> throwE e
-  ShelleyEra -> throwE e
-  AllegraEra -> throwE e
-  MaryEra -> throwE e
-  AlonzoEra -> throwE e
-  BabbageEra -> pure ReferenceTxInsScriptsInlineDatumsInBabbageEra
-  ConwayEra -> pure ReferenceTxInsScriptsInlineDatumsInConwayEra
+  :: (Monad m) => e -> CardanoEra era -> ExceptT e m (BabbageEraOnwards era)
+referenceInputsSupportedInEra e = inEonForEra (throwE e) pure
 
 singletonContinuations :: Contract.ContractWithAdjacency -> Continuations 'V1
 singletonContinuations Contract.ContractWithAdjacency{..} = Map.singleton contractHash contract
@@ -499,10 +503,11 @@ findPayouts version address body@(TxBody TxBodyContent{..}) =
 execApplyInputs
   :: (MonadUnliftIO m, IsCardanoEra era)
   => CardanoEra era
+  -> LedgerProtocolParameters era
   -> Connector (QueryClient ContractRequest) m
   -> STM Chain.ChainPoint
   -> SystemStart
-  -> EraHistory CardanoMode
+  -> EraHistory
   -> SolveConstraints
   -> LoadWalletContext m
   -> LoadMarloweContext m
@@ -517,6 +522,7 @@ execApplyInputs
   -> m (ServerStCmd MarloweTxCommand Void ApplyInputsError (InputsApplied v) m ())
 execApplyInputs
   era
+  protocolParameters
   contractQueryConnector
   getTip
   systemStart
@@ -532,7 +538,7 @@ execApplyInputs
   invalidBefore'
   invalidHereafter'
   inputs = execExceptT do
-    referenceInputsSupported <- referenceInputsSupportedInEra (ApplyInputsEraUnsupported $ AnyCardanoEra era) era
+    eon <- referenceInputsSupportedInEra (ApplyInputsEraUnsupported $ AnyCardanoEra era) era
     marloweContext@MarloweContext{..} <-
       withExceptT ApplyInputsLoadMarloweContextFailed $
         ExceptT $
@@ -567,7 +573,7 @@ execApplyInputs
     txBody <-
       except $
         first ApplyInputsConstraintError $
-          solveConstraints referenceInputsSupported version (Left marloweContext) walletContext helpersContext constraints
+          solveConstraints eon protocolParameters version (Left marloweContext) walletContext helpersContext constraints
     let input = scriptOutput'
     let buildOutput (assets, datum) utxo = TransactionScriptOutput marloweAddress assets utxo datum
     let output =
@@ -576,7 +582,7 @@ execApplyInputs
             , scriptOutput = buildOutput <$> mAssetsAndDatum <*> findMarloweOutput marloweAddress txBody
             }
     pure $
-      InputsApplied referenceInputsSupported $
+      InputsApplied eon $
         InputsAppliedInEra
           { metadata = decodeMarloweTransactionMetadataLenient case txBody of
               TxBody TxBodyContent{..} -> case txMetadata of
@@ -590,6 +596,7 @@ execWithdraw
   :: forall era v m
    . (Monad m, IsCardanoEra era)
   => CardanoEra era
+  -> LedgerProtocolParameters era
   -> SolveConstraints
   -> LoadWalletContext m
   -> LoadPayoutContext m
@@ -598,9 +605,9 @@ execWithdraw
   -> WalletAddresses
   -> Set Chain.TxOutRef
   -> m (ServerStCmd MarloweTxCommand Void WithdrawError (WithdrawTx v) m ())
-execWithdraw era solveConstraints loadWalletContext loadPayoutContext loadHelpersContext version addresses payouts = execExceptT $ case version of
+execWithdraw era protocolParameters solveConstraints loadWalletContext loadPayoutContext loadHelpersContext version addresses payouts = execExceptT $ case version of
   MarloweV1 -> do
-    referenceInputsSupported <- referenceInputsSupportedInEra (WithdrawEraUnsupported $ AnyCardanoEra era) era
+    eon <- referenceInputsSupportedInEra (WithdrawEraUnsupported $ AnyCardanoEra era) era
     payoutContext <- lift $ loadPayoutContext version payouts
     (inputs, constraints) <- buildWithdrawConstraints payoutContext version payouts
     walletContext <- lift $ loadWalletContext addresses
@@ -608,8 +615,8 @@ execWithdraw era solveConstraints loadWalletContext loadPayoutContext loadHelper
     txBody <-
       except $
         first WithdrawConstraintError $
-          solveConstraints referenceInputsSupported version (Right payoutContext) walletContext helpersContext constraints
-    pure $ WithdrawTx referenceInputsSupported $ WithdrawTxInEra{..}
+          solveConstraints eon protocolParameters version (Right payoutContext) walletContext helpersContext constraints
+    pure $ WithdrawTx eon $ WithdrawTxInEra{..}
 
 execSubmit
   :: (MonadUnliftIO m)

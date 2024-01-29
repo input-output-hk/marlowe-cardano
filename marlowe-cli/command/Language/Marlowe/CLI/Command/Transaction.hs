@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  $Headers
@@ -24,15 +25,18 @@ module Language.Marlowe.CLI.Command.Transaction (
 
 import Cardano.Api (
   AddressInEra,
+  BabbageEraOnwards,
   ConsensusModeParams (CardanoModeParams),
   EpochSlots (..),
   File (..),
-  IsShelleyBasedEra,
   LocalNodeConnectInfo (..),
   NetworkId (..),
   SlotNo,
+  TxId,
   TxIn,
   TxOutDatum (TxOutDatumNone),
+  babbageEraOnwardsToShelleyBasedEra,
+  shelleyBasedEraConstraints,
  )
 import Control.Monad.Except (MonadError, MonadIO, liftIO)
 import Data.Maybe (fromMaybe)
@@ -256,15 +260,16 @@ data TransactionCommand era
 
 -- | Run a transaction-related command.
 runTransactionCommand
-  :: (MonadError CliError m)
+  :: forall era m
+   . (MonadError CliError m)
   => (MonadIO m)
-  => (IsShelleyBasedEra era)
   => (MonadReader (CliEnv era) m)
-  => TransactionCommand era
+  => BabbageEraOnwards era
+  -> TransactionCommand era
   -- ^ The command.
   -> m ()
   -- ^ Action for running the command.
-runTransactionCommand command =
+runTransactionCommand era command =
   do
     let network' = network command
         connection =
@@ -273,10 +278,11 @@ runTransactionCommand command =
             , localNodeNetworkId = network'
             , localNodeSocketPath = File $ socketPath command
             }
+        printTxId :: TxId -> m ()
         printTxId = liftIO . putStrLn . ("TxId " <>) . show
         padTxOut (address, value) = (address, TxOutDatumNone, value)
         outputs' = padTxOut <$> outputs command
-    case command of
+    shelleyBasedEraConstraints (babbageEraOnwardsToShelleyBasedEra era) case command of
       BuildTransact{..} ->
         buildSimple
           (mkNodeTxBuildup connection submitTimeout)
@@ -372,39 +378,39 @@ runTransactionCommand command =
 
 -- | Parser for transaction-related commands.
 parseTransactionCommand
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Parser (TransactionCommand era)
-parseTransactionCommand network socket =
+parseTransactionCommand era network socket =
   O.hsubparser $
     O.commandGroup "Low-level commands for creating and submitting transactions:"
-      <> buildContinuingCommand network socket
-      <> buildOutgoingCommand network socket
-      <> buildIncomingCommand network socket
-      <> buildSimpleCommand network socket
-      <> findPublishedCommand network socket
-      <> publishCommand network socket
+      <> buildContinuingCommand era network socket
+      <> buildOutgoingCommand era network socket
+      <> buildIncomingCommand era network socket
+      <> buildSimpleCommand era network socket
+      <> findPublishedCommand era network socket
+      <> publishCommand era network socket
       <> submitCommand network socket
 
 -- | Parser for the "simple" command.
 buildSimpleCommand
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Mod O.CommandFields (TransactionCommand era)
-buildSimpleCommand network socket =
+buildSimpleCommand era network socket =
   O.command "simple" $
-    O.info (buildSimpleOptions network socket) $
+    O.info (buildSimpleOptions era network socket) $
       O.progDesc "Build a non-Marlowe transaction."
 
 -- | Parser for the "simple" options.
 buildSimpleOptions
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Parser (TransactionCommand era)
-buildSimpleOptions network socket =
+buildSimpleOptions era network socket =
   BuildTransact
     <$> parseNetworkId network
     <*> O.strOption
@@ -418,11 +424,11 @@ buildSimpleOptions network socket =
     <*> (O.some . O.option parseTxIn)
       ( O.long "tx-in" <> O.metavar "TXID#TXIX" <> O.help "Transaction input in TxId#TxIx format."
       )
-    <*> (O.many . O.option parseTxOut)
+    <*> (O.many . O.option (parseTxOut era))
       ( O.long "tx-out" <> O.metavar "ADDRESS+VALUE" <> O.help "Transaction output in ADDRESS+VALUE format."
       )
     <*> O.option
-      parseAddress
+      (parseAddress era)
       ( O.long "change-address" <> O.metavar "ADDRESS" <> O.help "Address to receive ADA in excess of fee."
       )
     <*> (O.optional . O.strOption)
@@ -443,22 +449,22 @@ buildSimpleOptions network socket =
 
 -- | Parser for the "create" command.
 buildIncomingCommand
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Mod O.CommandFields (TransactionCommand era)
-buildIncomingCommand network socket =
+buildIncomingCommand era network socket =
   O.command "create" $
-    O.info (buildIncomingOptions network socket) $
+    O.info (buildIncomingOptions era network socket) $
       O.progDesc "Build a transaction that pays to a Marlowe script."
 
 -- | Parser for the "create" options.
 buildIncomingOptions
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Parser (TransactionCommand era)
-buildIncomingOptions network socket =
+buildIncomingOptions era network socket =
   BuildCreate
     <$> parseNetworkId network
     <*> O.strOption
@@ -469,7 +475,7 @@ buildIncomingOptions network socket =
             "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value."
       )
     <*> O.option
-      parseAddress
+      (parseAddress era)
       ( O.long "script-address" <> O.metavar "ADDRESS" <> O.help "Address of the Marlowe contract."
       )
     <*> requiredSignersOpt
@@ -485,13 +491,13 @@ buildIncomingOptions network socket =
     <*> (O.some . O.option parseTxIn)
       ( O.long "tx-in" <> O.metavar "TXID#TXIX" <> O.help "Transaction input in TxId#TxIx format."
       )
-    <*> (O.many . O.option parseTxOut)
+    <*> (O.many . O.option (parseTxOut era))
       ( O.long "tx-out"
           <> O.metavar "ADDRESS+VALUE"
           <> O.help "Transaction output in ADDRESS+VALUE format."
       )
     <*> O.option
-      parseAddress
+      (parseAddress era)
       ( O.long "change-address" <> O.metavar "ADDRESS" <> O.help "Address to receive ADA in excess of fee."
       )
     <*> (O.optional . O.strOption)
@@ -512,22 +518,22 @@ buildIncomingOptions network socket =
 
 -- | Parser for the "advance" command.
 buildContinuingCommand
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Mod O.CommandFields (TransactionCommand era)
-buildContinuingCommand network socket =
+buildContinuingCommand era network socket =
   O.command "advance" $
-    O.info (buildContinuingOptions network socket) $
+    O.info (buildContinuingOptions era network socket) $
       O.progDesc "Build a transaction that both spends from and pays to a Marlowe script."
 
 -- | Parser for the "advance" options.
 buildContinuingOptions
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Parser (TransactionCommand era)
-buildContinuingOptions network socket =
+buildContinuingOptions era network socket =
   BuildAdvance
     <$> parseNetworkId network
     <*> O.strOption
@@ -538,7 +544,7 @@ buildContinuingOptions network socket =
             "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value."
       )
     <*> O.option
-      parseAddress
+      (parseAddress era)
       ( O.long "script-address" <> O.metavar "ADDRESS" <> O.help "Address of the Marlowe contract."
       )
     <*> O.strOption
@@ -571,7 +577,7 @@ buildContinuingOptions network socket =
     <*> (O.some . O.option parseTxIn)
       ( O.long "tx-in" <> O.metavar "TXID#TXIX" <> O.help "Transaction input in TxId#TxIx format."
       )
-    <*> (O.many . O.option parseTxOut)
+    <*> (O.many . O.option (parseTxOut era))
       ( O.long "tx-out"
           <> O.metavar "ADDRESS+VALUE"
           <> O.help "Transaction output in ADDRESS+VALUE format."
@@ -581,7 +587,7 @@ buildContinuingOptions network socket =
       ( O.long "tx-in-collateral" <> O.metavar "TXID#TXIX" <> O.help "Collateral for transaction."
       )
     <*> O.option
-      parseAddress
+      (parseAddress era)
       ( O.long "change-address"
           <> O.metavar "ADDRESS"
           <> O.help "Address to receive ADA in excess of fee."
@@ -612,22 +618,22 @@ buildContinuingOptions network socket =
 
 -- | Parser for the "close" command.
 buildOutgoingCommand
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Mod O.CommandFields (TransactionCommand era)
-buildOutgoingCommand network socket =
+buildOutgoingCommand era network socket =
   O.command "close" $
-    O.info (buildOutgoingOptions network socket) $
+    O.info (buildOutgoingOptions era network socket) $
       O.progDesc "Build a transaction that spends from a Marlowe script."
 
 -- | Parser for the "close" options.
 buildOutgoingOptions
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Parser (TransactionCommand era)
-buildOutgoingOptions network socket =
+buildOutgoingOptions era network socket =
   BuildClose
     <$> parseNetworkId network
     <*> O.strOption
@@ -658,7 +664,7 @@ buildOutgoingOptions network socket =
     <*> (O.some . O.option parseTxIn)
       ( O.long "tx-in" <> O.metavar "TXID#TXIX" <> O.help "Transaction input in TxId#TxIx format."
       )
-    <*> (O.many . O.option parseTxOut)
+    <*> (O.many . O.option (parseTxOut era))
       ( O.long "tx-out"
           <> O.metavar "ADDRESS+VALUE"
           <> O.help "Transaction output in ADDRESS+VALUE format."
@@ -668,7 +674,7 @@ buildOutgoingOptions network socket =
       ( O.long "tx-in-collateral" <> O.metavar "TXID#TXIX" <> O.help "Collateral for transaction."
       )
     <*> O.option
-      parseAddress
+      (parseAddress era)
       ( O.long "change-address"
           <> O.metavar "ADDRESS"
           <> O.help "Address to receive ADA in excess of fee."
@@ -736,22 +742,22 @@ submitOptions network socket =
 
 -- | Parser for the "publish" command.
 publishCommand
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Mod O.CommandFields (TransactionCommand era)
-publishCommand network socket =
+publishCommand era network socket =
   O.command "publish" $
-    O.info (publishOptions network socket) $
+    O.info (publishOptions era network socket) $
       O.progDesc "Publish Marlowe validator and role validator on the chain."
 
 -- | Parser for the "publish" options.
 publishOptions
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Parser (TransactionCommand era)
-publishOptions network socket =
+publishOptions era network socket =
   Publish
     <$> parseNetworkId network
     <*> O.strOption
@@ -763,12 +769,12 @@ publishOptions network socket =
       )
     <*> requiredSignerOpt
     <*> O.option
-      parseAddress
+      (parseAddress era)
       ( O.long "change-address"
           <> O.metavar "ADDRESS"
           <> O.help "Address to receive ADA in excess of fee."
       )
-    <*> O.optional publishingStrategyOpt
+    <*> O.optional (publishingStrategyOpt era)
     <*> txBodyFileOpt
     <*> (O.optional . O.option parseSecond)
       ( O.long "submit"
@@ -778,27 +784,27 @@ publishOptions network socket =
     <*> (O.optional . O.option parseSlotNo)
       ( O.long "expires"
           <> O.metavar "SLOT_NO"
-          <> O.help "The slot number after which miniting is no longer possible."
+          <> O.help "The slot number after which minting is no longer possible."
       )
 
 -- | Parser for the "find-publish" command.
 findPublishedCommand
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Mod O.CommandFields (TransactionCommand era)
-findPublishedCommand network socket =
+findPublishedCommand era network socket =
   O.command "find-published" $
-    O.info (findPublishedOptions network socket) $
+    O.info (findPublishedOptions era network socket) $
       O.progDesc "Publish Marlowe validator and role validator on the chain."
 
 -- | Parser for the "find-publish" options.
 findPublishedOptions
-  :: (IsShelleyBasedEra era)
-  => O.Mod O.OptionFields NetworkId
+  :: BabbageEraOnwards era
+  -> O.Mod O.OptionFields NetworkId
   -> O.Mod O.OptionFields FilePath
   -> O.Parser (TransactionCommand era)
-findPublishedOptions network socket =
+findPublishedOptions era network socket =
   FindPublished
     <$> parseNetworkId network
     <*> O.strOption
@@ -808,4 +814,4 @@ findPublishedOptions network socket =
           <> O.help
             "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value."
       )
-    <*> O.optional publishingStrategyOpt
+    <*> O.optional (publishingStrategyOpt era)

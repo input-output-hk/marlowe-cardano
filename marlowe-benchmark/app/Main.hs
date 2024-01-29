@@ -44,7 +44,7 @@ main =
               either (error . show) pure
                 <=< readFileTextEnvelope (AsSigningKey AsPaymentExtendedKey)
                 $ File key
-            pure $ Just (C.File node, C.BabbageEra, magic, address', key')
+            pure $ Just (C.File node, C.BabbageEraOnwardsBabbage, magic, address', key')
         Nothing -> pure Nothing
     connectToMarloweRuntime host (fromIntegral port) $ measure config' faucet' out
 

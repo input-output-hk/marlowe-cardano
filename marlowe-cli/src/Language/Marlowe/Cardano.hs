@@ -19,12 +19,12 @@ marloweNetworkFromCardanoAddress address = do
       Just $ if network == LC.Mainnet then Marlowe.mainnet else Marlowe.testnet
     _ -> Nothing
 
-marloweNetworkFromCaradnoNetworkId :: C.NetworkId -> Marlowe.Network
-marloweNetworkFromCaradnoNetworkId networkId =
+marloweNetworkFromCardanoNetworkId :: C.NetworkId -> Marlowe.Network
+marloweNetworkFromCardanoNetworkId networkId =
   if networkId == C.Mainnet then Marlowe.mainnet else Marlowe.testnet
 
 marloweNetworkFromLocalNodeConnectInfo
-  :: LocalNodeConnectInfo mode
+  :: LocalNodeConnectInfo
   -> Marlowe.Network
 marloweNetworkFromLocalNodeConnectInfo LocalNodeConnectInfo{localNodeNetworkId} =
-  marloweNetworkFromCaradnoNetworkId localNodeNetworkId
+  marloweNetworkFromCardanoNetworkId localNodeNetworkId

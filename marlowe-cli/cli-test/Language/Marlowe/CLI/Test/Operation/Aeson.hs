@@ -15,13 +15,14 @@ import Data.Aeson.Key qualified as A.Key
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as A.KeyMap
 import Data.Aeson.KeyMap qualified as KeyMap
-import Data.Aeson.OneLine qualified as A
+import Data.Aeson.Text qualified as A
 import Data.Aeson.Types qualified as A
 import Data.Char qualified as Char
 import Data.List qualified as List
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Text qualified as Text
+import Data.Text.Lazy qualified as TL
 import GHC.Base (Alternative ((<|>)))
 import GHC.Generics (Generic (Rep))
 
@@ -160,9 +161,9 @@ parseConstructorBasedJSON prefix preprocess orig = do
     _ ->
       fail $
         "Expecting an object when parsing constructor based JSON, got: "
-          <> Text.unpack (A.renderValue json)
+          <> TL.unpack (A.encodeToLazyText json)
           <> ". The original json was:"
-          <> Text.unpack (A.renderValue orig)
+          <> TL.unpack (A.encodeToLazyText orig)
 
 parseConstructorBasedJSON' :: forall a. (A.GFromJSON A.Zero (Rep a)) => (Generic a) => String -> A.Value -> A.Parser a
 parseConstructorBasedJSON' prefix = parseConstructorBasedJSON prefix mempty

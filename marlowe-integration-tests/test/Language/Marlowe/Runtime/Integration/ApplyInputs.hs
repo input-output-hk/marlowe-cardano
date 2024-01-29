@@ -6,13 +6,14 @@
 module Language.Marlowe.Runtime.Integration.ApplyInputs where
 
 import Cardano.Api (
+  BabbageEraOnwards (BabbageEraOnwardsBabbage),
   CardanoEra (..),
   TxBody (..),
   TxBodyContent (..),
   TxOut (..),
+  babbageEraOnwardsToCardanoEra,
   getTxId,
  )
-import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (ask)
 import Data.Functor (void)
@@ -33,7 +34,6 @@ import Language.Marlowe.Runtime.Cardano.Api (
   fromCardanoTxId,
   fromCardanoTxOutValue,
  )
-import Language.Marlowe.Runtime.Cardano.Feature (CardanoFeature (..))
 import Language.Marlowe.Runtime.ChainSync.Api (AssetId (AssetId), Assets (Assets), TokenName, TxOutRef (..))
 import Language.Marlowe.Runtime.Client (applyInputs, createContract)
 import Language.Marlowe.Runtime.Core.Api hiding (Contract)
@@ -126,7 +126,7 @@ closeSpec = parallel $ describe "Close contract" $ aroundAll setup do
     inputs `shouldBe` []
   it "should only output to the deposit address" $ runAsIntegration \(_, InputsApplied era InputsAppliedInEra{..}) -> do
     wallet <- getGenesisWallet 0
-    let getAddress (TxOut address _ _ _) = fromCardanoAddressInEra (cardanoEraOfFeature era) address
+    let getAddress (TxOut address _ _ _) = fromCardanoAddressInEra (babbageEraOnwardsToCardanoEra era) address
     let paidAddresses = case txBody of TxBody TxBodyContent{..} -> Set.fromList $ getAddress <$> txOuts
     liftIO $ paidAddresses `shouldBe` Set.singleton (changeAddress $ addresses wallet)
   where
@@ -183,7 +183,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
       liftIO $ scriptOutput output `shouldBe` Nothing
     it "should send a payout to the role validator" $ runAsIntegration \PayTestData{..} -> do
       let ContractCreated _ ContractCreatedInEra{payoutScriptAddress, rolesCurrency} = payRoleAccountCreated
-      InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra InputsAppliedInEra{..} <- pure payRoleAccountApplied
+      InputsApplied BabbageEraOnwardsBabbage InputsAppliedInEra{..} <- pure payRoleAccountApplied
       liftIO $
         Map.elems (payouts output)
           `shouldBe` [Payout payoutScriptAddress (Assets 2_000_000 mempty) $ AssetId rolesCurrency "Role"]
@@ -193,7 +193,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
       liftIO $ scriptOutput output `shouldBe` Nothing
     it "should send a payout to the wallet" $ runAsIntegration \PayTestData{..} -> do
       wallet2 <- getGenesisWallet 1
-      InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra InputsAppliedInEra{..} <- pure payAddressAccountApplied
+      InputsApplied BabbageEraOnwardsBabbage InputsAppliedInEra{..} <- pure payAddressAccountApplied
       let isPayout (TxOut address _ _ _) = fromCardanoAddressInEra BabbageEra address == changeAddress (addresses wallet2)
       let getValue (TxOut _ value _ _) = fromCardanoTxOutValue value
       let payoutOutputs = getValue <$> case txBody of TxBody TxBodyContent{..} -> filter isPayout txOuts
@@ -204,7 +204,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
       liftIO $ scriptOutput output `shouldBe` Nothing
     it "should send a payout to the role validator" $ runAsIntegration \PayTestData{..} -> do
       let ContractCreated _ ContractCreatedInEra{payoutScriptAddress, rolesCurrency} = payRolePartyCreated
-      InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra InputsAppliedInEra{..} <- pure payRolePartyApplied
+      InputsApplied BabbageEraOnwardsBabbage InputsAppliedInEra{..} <- pure payRolePartyApplied
       liftIO $
         Map.elems (payouts output)
           `shouldBe` [Payout payoutScriptAddress (Assets 2_000_000 mempty) $ AssetId rolesCurrency "Role"]
@@ -214,7 +214,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
       liftIO $ scriptOutput output `shouldBe` Nothing
     it "should send a payout to the wallet" $ runAsIntegration \PayTestData{..} -> do
       wallet2 <- getGenesisWallet 1
-      InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra InputsAppliedInEra{..} <- pure payAddressPartyApplied
+      InputsApplied BabbageEraOnwardsBabbage InputsAppliedInEra{..} <- pure payAddressPartyApplied
       let isPayout (TxOut address _ _ _) = fromCardanoAddressInEra BabbageEra address == changeAddress (addresses wallet2)
       let getValue (TxOut _ value _ _) = fromCardanoTxOutValue value
       let payoutOutputs = getValue <$> case txBody of TxBody TxBodyContent{..} -> filter isPayout txOuts
@@ -225,7 +225,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
       liftIO $ scriptOutput output `shouldBe` Nothing
     it "should send a payout to the role validator" $ runAsIntegration \PayTestData{..} -> do
       let ContractCreated _ ContractCreatedInEra{payoutScriptAddress, rolesCurrency} = payDepth1Created
-      InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra InputsAppliedInEra{..} <- pure payDepth1Applied
+      InputsApplied BabbageEraOnwardsBabbage InputsAppliedInEra{..} <- pure payDepth1Applied
       liftIO $
         Map.elems (payouts output)
           `shouldBe` [Payout payoutScriptAddress (Assets 2_000_000 mempty) $ AssetId rolesCurrency "Role"]
@@ -245,7 +245,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
             (utcTimeToPOSIXTime $ addUTCTime (secondsToNominalDiffTime 200) startTime)
             Close
     it "should send no payout" $ runAsIntegration \PayTestData{..} -> do
-      InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra InputsAppliedInEra{..} <- pure payDepth2AccountApplied
+      InputsApplied BabbageEraOnwardsBabbage InputsAppliedInEra{..} <- pure payDepth2AccountApplied
       liftIO $ payouts output `shouldBe` mempty
   describe "Pay to party with two inputs inside" do
     it "should contain the correct output" $ runAsIntegration \PayTestData{..} -> do
@@ -264,7 +264,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
             Close
     it "should send a payout to the role validator" $ runAsIntegration \PayTestData{..} -> do
       let ContractCreated _ ContractCreatedInEra{payoutScriptAddress, rolesCurrency} = payDepth2PartyCreated
-      InputsApplied ReferenceTxInsScriptsInlineDatumsInBabbageEra InputsAppliedInEra{..} <- pure payDepth2PartyApplied
+      InputsApplied BabbageEraOnwardsBabbage InputsAppliedInEra{..} <- pure payDepth2PartyApplied
       liftIO $
         Map.elems (payouts output)
           `shouldBe` [Payout payoutScriptAddress (Assets 2_000_000 mempty) $ AssetId rolesCurrency "Role"]

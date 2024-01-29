@@ -3,12 +3,9 @@
 
 module Language.Marlowe.Runtime.ChainIndexer.Database where
 
-import Cardano.Api (BlockHeader, BlockInMode, CardanoMode, ChainPoint (..), TxInMode)
+import Cardano.Api (BlockHeader, BlockInMode, ChainPoint (..))
 import Language.Marlowe.Runtime.ChainIndexer.Genesis (GenesisBlock (..))
 import Ouroboros.Network.Point (WithOrigin)
-
-type CardanoBlock = BlockInMode CardanoMode
-type CardanoTx = TxInMode CardanoMode
 
 -- Commands
 
@@ -21,7 +18,7 @@ instance (Applicative m) => Monoid (CommitRollback m) where
   mempty = CommitRollback \_ -> pure mempty
   mappend = (<>)
 
-newtype CommitBlocks m = CommitBlocks {runCommitBlocks :: [CardanoBlock] -> m ()}
+newtype CommitBlocks m = CommitBlocks {runCommitBlocks :: [BlockInMode] -> m ()}
 
 newtype CommitGenesisBlock m = CommitGenesisBlock {runCommitGenesisBlock :: GenesisBlock -> m ()}
 

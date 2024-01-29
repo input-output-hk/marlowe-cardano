@@ -6,16 +6,13 @@ module Language.Marlowe.Runtime.ChainSync.QueryServer where
 
 import Cardano.Api (
   AnyCardanoEra (..),
-  CardanoMode,
-  ConsensusMode (..),
-  ConsensusModeIsMultiEra (..),
-  EraInMode (..),
   GenesisParameters (..),
   QueryInEra (..),
   QueryInMode (..),
   QueryInShelleyBasedEra (..),
   ShelleyBasedEra (..),
-  toEraInMode,
+  fromLedgerPParams,
+  inEonForEra,
  )
 import qualified Cardano.Api as Cardano
 import Cardano.Api.Shelley (AcquiringFailure)
@@ -33,7 +30,7 @@ data ChainSyncQueryServerDependencies m = ChainSyncQueryServerDependencies
   { queryLocalNodeState
       :: forall result
        . Maybe Cardano.ChainPoint
-      -> QueryInMode CardanoMode result
+      -> QueryInMode result
       -> m (Either AcquiringFailure result)
   , getUTxOs :: Database.GetUTxOs m
   , getTip :: Database.GetTip m
@@ -58,49 +55,46 @@ chainSyncQueryServer ChainSyncQueryServerDependencies{..} = ServerSource $ pure 
             fmap (,serverReq) . traverseReqTree \case
               GetSecurityParameter -> queryGenesisParameters protocolParamSecurity
               GetNetworkId -> queryGenesisParameters protocolParamNetworkId
-              GetProtocolParameters -> queryShelley (const QueryProtocolParameters)
+              GetProtocolParameters -> queryShelley (\era -> QueryInShelleyBasedEraProjection QueryProtocolParameters $ fromLedgerPParams era)
               GetSystemStart -> either (fail . show) pure =<< queryLocalNodeState Nothing QuerySystemStart
-              GetEraHistory -> either (fail . show) pure =<< queryLocalNodeState Nothing (QueryEraHistory CardanoModeIsMultiEra)
+              GetEraHistory -> either (fail . show) pure =<< queryLocalNodeState Nothing QueryEraHistory
               GetUTxOs utxosQuery -> Database.runGetUTxOs getUTxOs utxosQuery
               GetNodeTip -> atomically nodeTip
               GetTip -> runGetTip getTip
-              GetEra -> either (fail . show) pure =<< queryLocalNodeState Nothing (QueryCurrentEra CardanoModeIsMultiEra)
+              GetEra -> either (fail . show) pure =<< queryLocalNodeState Nothing QueryCurrentEra
         }
 
-    queryGenesisParameters :: (GenesisParameters -> a) -> m a
-    queryGenesisParameters f = f <$> queryShelley (const QueryGenesisParameters)
+    queryGenesisParameters :: (forall era. GenesisParameters era -> a) -> m a
+    queryGenesisParameters f = f <$> queryShelley (const $ QueryInShelleyBasedEraProjection QueryGenesisParameters id)
 
     queryShelley
-      :: (forall era. ShelleyBasedEra era -> QueryInShelleyBasedEra era a)
-      -> m a
-    queryShelley query =
+      :: forall r
+       . (forall era. ShelleyBasedEra era -> QueryInShelleyBasedEraProjection era r)
+      -> m r
+    queryShelley mkQuery =
       either fail pure =<< runExceptT do
-        AnyCardanoEra era <-
-          withExceptT show $
-            ExceptT $
-              queryLocalNodeState Nothing $
-                QueryCurrentEra CardanoModeIsMultiEra
-        eraInMode <- case toEraInMode era CardanoMode of
-          Nothing -> throwE $ "cannot convert " <> show era <> " to era in mode"
-          Just eraInMode -> pure eraInMode
-        shelleyBasedEra <- case eraInMode of
-          ByronEraInCardanoMode -> throwE "Cannot query shelley in byron era"
-          ShelleyEraInCardanoMode -> pure ShelleyBasedEraShelley
-          AllegraEraInCardanoMode -> pure ShelleyBasedEraAllegra
-          MaryEraInCardanoMode -> pure ShelleyBasedEraMary
-          AlonzoEraInCardanoMode -> pure ShelleyBasedEraAlonzo
-          BabbageEraInCardanoMode -> pure ShelleyBasedEraBabbage
-          ConwayEraInCardanoMode -> pure ShelleyBasedEraConway
-        result <-
-          withExceptT show $
-            ExceptT $
-              queryLocalNodeState Nothing $
-                QueryInEra eraInMode $
-                  QueryInShelleyBasedEra shelleyBasedEra $
-                    query shelleyBasedEra
-        withExceptT show $ except result
+        AnyCardanoEra era <- withExceptT show $ ExceptT $ queryLocalNodeState Nothing QueryCurrentEra
+        shelleyBasedEra <- inEonForEra (throwE "Cannot query shelley in byron era") pure era
+        withCurrentEra shelleyBasedEra
+      where
+        withCurrentEra :: forall era. ShelleyBasedEra era -> ExceptT String m r
+        withCurrentEra shelleyBasedEra = case mkQuery shelleyBasedEra of
+          QueryInShelleyBasedEraProjection query projection -> do
+            result <-
+              withExceptT show
+                . ExceptT
+                . queryLocalNodeState Nothing
+                . QueryInEra
+                $ QueryInShelleyBasedEra shelleyBasedEra query
+            withExceptT show $ except $ projection <$> result
 
     traverseReqTree :: (forall x. ChainSyncQuery x -> m x) -> ReqTree ChainSyncQuery a -> m a
     traverseReqTree f = \case
       ReqLeaf req -> f req
       ReqBin l r -> (,) <$> traverseReqTree f l <*> traverseReqTree f r
+
+data QueryInShelleyBasedEraProjection era r where
+  QueryInShelleyBasedEraProjection
+    :: QueryInShelleyBasedEra era a
+    -> (a -> r)
+    -> QueryInShelleyBasedEraProjection era r

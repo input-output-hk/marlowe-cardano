@@ -71,15 +71,7 @@ import Language.Marlowe.CLI.Types (
   ),
   SomeMarloweTransaction (SomeMarloweTransaction),
   ValidatorInfo (..),
-  toCardanoEra,
-  toCollateralSupportedInEra,
-  toExtraKeyWitnessesSupportedInEra,
-  toMultiAssetSupportedInEra,
-  toTxFeesExplicitInEra,
-  toValidityLowerBoundSupportedInEra,
-  toValidityUpperBoundSupportedInEra,
   validatorInfoScriptOrReference,
-  withShelleyBasedEra,
  )
 import Language.Marlowe.Core.V1.Merkle (Continuations, MerkleizedContract (..))
 import Language.Marlowe.Core.V1.Plate
@@ -105,9 +97,10 @@ import Language.Marlowe.Core.V1.Semantics.Types (
 import Language.Marlowe.Core.V1.Semantics.Types.Address (mainnet)
 import Language.Marlowe.Scripts.Types (marloweTxInputsFromInputs)
 
-import Cardano.Api (bundleProtocolParams, unsafeHashableScriptData)
+import Cardano.Api (unsafeHashableScriptData)
 import Cardano.Api qualified as Api
 import Cardano.Api qualified as C
+import Cardano.Api.Shelley (ProtocolParameters (protocolParamProtocolVersion))
 import Cardano.Api.Shelley qualified as Api
 import Cardano.Ledger.Credential qualified as Shelley
 import Control.Monad.Writer (WriterT (..))
@@ -120,8 +113,11 @@ import Data.Map.Strict qualified as M (lookup)
 import Data.SatInt (SatInt (..))
 import Data.Set qualified as S (filter, member)
 import Data.Yaml qualified as Y (encode)
+import Language.Marlowe.CLI.Cardano.Api (toPlutusMajorProtocolVersion)
+import Language.Marlowe.CLI.Transaction (babbageEraOnwardsToAllegraEraOnwards, mkTxOutValue)
 import Plutus.V1.Ledger.Ada qualified as P (lovelaceValueOf)
 import Plutus.V1.Ledger.SlotConfig qualified as P (SlotConfig, posixTimeToEnclosingSlot)
+import PlutusLedgerApi.V2 (deserialiseScript)
 import PlutusLedgerApi.V2 qualified as P hiding (evaluateScriptCounting)
 import PlutusTx.AssocMap qualified as AM
 import PlutusTx.Prelude qualified as P
@@ -131,7 +127,7 @@ analyze
   :: forall m
    . (MonadError CliError m)
   => (MonadIO m)
-  => Api.LocalNodeConnectInfo Api.CardanoMode
+  => Api.LocalNodeConnectInfo
   -- ^ The connection info for the local node.
   -> FilePath
   -- ^ The JSON file with the Marlowe inputs, final state, and final contract.
@@ -158,30 +154,27 @@ analyze
 analyze connection marloweFile preconditions roles tokens maximumValue minimumUtxo executionCost transactionSize best verbose =
   do
     SomeMarloweTransaction _ era marlowe <- decodeFileStrict marloweFile
-    case era of
-      Api.ScriptDataInBabbageEra ->
-        do
-          protocol <-
-            (liftCli <=< liftCliIO)
-              . Api.queryNodeLocalState connection Nothing
-              . Api.QueryInEra Api.BabbageEraInCardanoMode
-              $ Api.QueryInShelleyBasedEra Api.ShelleyBasedEraBabbage Api.QueryProtocolParameters
-          result <-
-            analyzeImpl
-              era
-              protocol
-              marlowe
-              preconditions
-              roles
-              tokens
-              maximumValue
-              minimumUtxo
-              executionCost
-              transactionSize
-              best
-              verbose
-          liftIO . BS8.putStr $ Y.encode result
-      _ -> throwError . CliError $ "Analysis not supported for " <> show era <> " era."
+    do
+      protocol <-
+        (liftCli <=< liftCliIO)
+          . Api.queryNodeLocalState connection Nothing
+          . Api.QueryInEra
+          $ Api.QueryInShelleyBasedEra (Api.babbageEraOnwardsToShelleyBasedEra era) Api.QueryProtocolParameters
+      result <-
+        analyzeImpl
+          era
+          (Api.LedgerProtocolParameters protocol)
+          marlowe
+          preconditions
+          roles
+          tokens
+          maximumValue
+          minimumUtxo
+          executionCost
+          transactionSize
+          best
+          verbose
+      liftIO . BS8.putStr $ Y.encode result
 
 -- | A bundle of information describing a contract instance.
 data ContractInstance lang era = ContractInstance
@@ -207,13 +200,12 @@ data ContractInstance lang era = ContractInstance
 -- | Analyze a Marlowe contract for protocol-limit or other violations.
 analyzeImpl
   :: forall m lang era
-   . (Api.IsShelleyBasedEra era)
-  => (C.IsPlutusScriptLanguage lang)
+   . (C.IsPlutusScriptLanguage lang)
   => (MonadError CliError m)
   => (MonadIO m)
-  => Api.ScriptDataSupportedInEra era
+  => Api.BabbageEraOnwards era
   -- ^ The era.
-  -> Api.ProtocolParameters
+  -> Api.LedgerProtocolParameters era
   -- ^ The connection info for the local node.
   -> MarloweTransaction lang era
   -- ^ The the Marlowe inputs, final state, and final contract.
@@ -259,6 +251,7 @@ analyzeImpl era protocol MarloweTransaction{..} preconditions roles tokens maxim
           if condition
             then Just <$> x
             else pure Nothing
+        protocol' = Api.fromLedgerPParams (Api.babbageEraOnwardsToShelleyBasedEra era) $ Api.unLedgerProtocolParameters protocol
     A.toJSON
       . catMaybes
       <$> sequence
@@ -272,12 +265,12 @@ analyzeImpl era protocol MarloweTransaction{..} preconditions roles tokens maxim
             . pure
             $ checkTokens ci
         , guardValue (maximumValue || checkAll) $
-            checkMaximumValue protocol perhapsTransactions verbose
-        , guardValue (minimumUtxo || checkAll)
-            . withShelleyBasedEra era
-            $ checkMinimumUtxo era protocol perhapsTransactions verbose
+            checkMaximumValue protocol' perhapsTransactions verbose
+        , guardValue (minimumUtxo || checkAll) $
+            Api.shelleyBasedEraConstraints (Api.babbageEraOnwardsToShelleyBasedEra era) $
+              checkMinimumUtxo era protocol perhapsTransactions verbose
         , guardValue (executionCost || checkAll) $
-            checkExecutionCost protocol ci transactions verbose
+            checkExecutionCost protocol' ci transactions verbose
         , guardValue (transactionSize || checkAll) $
             checkTransactionSizes era protocol ci transactions verbose
         ]
@@ -395,9 +388,9 @@ checkMinimumUtxo
   :: forall lang era m
    . (Api.IsShelleyBasedEra era)
   => (MonadError CliError m)
-  => Api.ScriptDataSupportedInEra era
+  => Api.BabbageEraOnwards era
   -- ^ The era.
-  -> Api.ProtocolParameters
+  -> Api.LedgerProtocolParameters era
   -- ^ The protocol parameters.
   -> Either (ContractInstance lang era) [Transaction ()]
   -- ^ The bundle of contract information, or the transactions to traverse.
@@ -412,16 +405,20 @@ checkMinimumUtxo era protocol info verbose =
             value <- liftCli (toCardanoValue $ mconcat [P.singleton cs tn 1 | Token cs tn <- toList tokens])
             let address =
                   Api.makeShelleyAddressInEra
+                    (Api.babbageEraOnwardsToShelleyBasedEra era)
                     Api.Mainnet
                     (Api.PaymentCredentialByScript "88888888888888888888888888888888888888888888888888888888")
                     (Api.StakeAddressByValue $ Api.StakeCredentialByKey "99999999999999999999999999999999999999999999999999999999")
                 out =
                   Api.TxOut
                     address
-                    (Api.TxOutValue (toMultiAssetSupportedInEra era) value)
-                    (Api.TxOutDatumHash era "5555555555555555555555555555555555555555555555555555555555555555")
+                    (mkTxOutValue era value)
+                    ( Api.TxOutDatumHash
+                        (Api.babbageEraOnwardsToAlonzoEraOnwards era)
+                        "5555555555555555555555555555555555555555555555555555555555555555"
+                    )
                     Api.ReferenceScriptNone
-            liftCli $ Api.calculateMinimumUTxO Api.shelleyBasedEra out <$> bundleProtocolParams (toCardanoEra era) protocol
+            pure $ Api.calculateMinimumUTxO Api.shelleyBasedEra out $ Api.unLedgerProtocolParameters protocol
     (value, worst) <-
       case info of
         Right transactions ->
@@ -475,10 +472,12 @@ checkExecutionCost protocol ContractInstance{..} transactions verbose =
                   (P.TxOut referenceAddress (P.lovelaceValueOf 1) P.NoOutputDatum (Just semanticsHash))
     semanticsAddress <- fmap snd . liftCli $ marloweAddressFromCardanoAddress $ viAddress ciSemanticsValidator
     payoutAddress <- fmap snd . liftCli $ marloweAddressFromCardanoAddress $ viAddress ciPayoutValidator
+    let protocolVersion = toPlutusMajorProtocolVersion $ protocolParamProtocolVersion protocol
+    script <- liftCli $ deserialiseScript protocolVersion $ viBytes ciSemanticsValidator
     let executor =
           executeTransaction
             evaluationContext
-            (viBytes ciSemanticsValidator)
+            script
             semanticsAddress
             payoutAddress
             referenceInput
@@ -537,11 +536,14 @@ calcMarloweTxExBudgets protocol ContractInstance{..} transactionsPath lockedRole
   semanticsAddress <- fmap snd . liftCli $ marloweAddressFromCardanoAddress $ viAddress ciSemanticsValidator
   payoutAddress <- fmap snd . liftCli $ marloweAddressFromCardanoAddress $ viAddress ciPayoutValidator
   openRoleAddress <- fmap snd . liftCli $ marloweAddressFromCardanoAddress $ viAddress ciOpenRoleValidator
+  let protocolVersion = toPlutusMajorProtocolVersion $ protocolParamProtocolVersion protocol
+  semanticsScript <- liftCli $ deserialiseScript protocolVersion $ viBytes ciSemanticsValidator
+  openRolesScript <- liftCli $ deserialiseScript protocolVersion $ viBytes ciOpenRoleValidator
   let calcTxBudget transaction stillLockedRoles =
         calcMarloweTxExBudget
           evaluationContext
-          (viBytes ciSemanticsValidator, semanticsAddress, useSemanticsReferenceInput)
-          (viBytes ciOpenRoleValidator, openRoleAddress, useOperatorReferenceInput, LockedRoles stillLockedRoles)
+          (semanticsScript, semanticsAddress, useSemanticsReferenceInput)
+          (openRolesScript, openRoleAddress, useOperatorReferenceInput, LockedRoles stillLockedRoles)
           payoutAddress
           (MarloweParams ciRolesCurrency)
           transaction
@@ -558,13 +560,12 @@ calcMarloweTxExBudgets protocol ContractInstance{..} transactionsPath lockedRole
 -- | Check that transactions satisfy the transaction-size protocol limit.
 checkTransactionSizes
   :: forall lang era m
-   . (Api.IsShelleyBasedEra era)
-  => (C.IsPlutusScriptLanguage lang)
+   . (C.IsPlutusScriptLanguage lang)
   => (MonadError CliError m)
   => (MonadIO m)
-  => Api.ScriptDataSupportedInEra era
+  => Api.BabbageEraOnwards era
   -- ^ The era.
-  -> Api.ProtocolParameters
+  -> Api.LedgerProtocolParameters era
   -- ^ The protocol parameters.
   -> ContractInstance lang era
   -- ^ The bundle of contract information.
@@ -578,7 +579,10 @@ checkTransactionSizes era protocol ci transactions verbose =
   do
     sizes <- mapM (liftM2 (<$>) (,) $ checkTransactionSize era protocol ci) transactions
     let (worst, actual) = maximumBy (compare `on` snd) sizes
-        limit = Api.protocolParamMaxTxSize protocol
+        limit =
+          Api.protocolParamMaxTxSize $
+            Api.fromLedgerPParams (Api.babbageEraOnwardsToShelleyBasedEra era) $
+              Api.unLedgerProtocolParameters protocol
     pure $
       putJson "Transaction size" $
         [ "Actual" .= actual
@@ -591,13 +595,12 @@ checkTransactionSizes era protocol ci transactions verbose =
 -- | Check that transactions satisfy the transaction-size protocol limit.
 checkTransactionSize
   :: forall lang era m
-   . (Api.IsShelleyBasedEra era)
-  => (C.IsPlutusScriptLanguage lang)
+   . (C.IsPlutusScriptLanguage lang)
   => (MonadError CliError m)
   => (MonadIO m)
-  => Api.ScriptDataSupportedInEra era
+  => Api.BabbageEraOnwards era
   -- ^ The era.
-  -> Api.ProtocolParameters
+  -> Api.LedgerProtocolParameters era
   -- ^ The protocol parameters.
   -> ContractInstance lang era
   -- ^ The bundle of contract information.
@@ -617,6 +620,7 @@ checkTransactionSize era protocol ContractInstance{..} (Transaction marloweState
     let oneLovelace = Api.lovelaceToValue 1
         creatorAddress =
           Api.makeShelleyAddressInEra
+            (Api.babbageEraOnwardsToShelleyBasedEra era)
             Api.Mainnet
             (Api.PaymentCredentialByScript "88888888888888888888888888888888888888888888888888888888")
             (Api.StakeAddressByValue $ Api.StakeCredentialByKey "99999999999999999999999999999999999999999999999999999999")
@@ -644,8 +648,10 @@ checkTransactionSize era protocol ContractInstance{..} (Transaction marloweState
                in pure $
                     Api.TxOut
                       (viAddress ciSemanticsValidator)
-                      (Api.TxOutValue (toMultiAssetSupportedInEra era) outValue)
-                      (Api.TxOutDatumInTx era . unsafeHashableScriptData . Api.fromPlutusData $ P.toData outDatum)
+                      (mkTxOutValue era outValue)
+                      ( Api.TxOutDatumInTx (Api.babbageEraOnwardsToAlonzoEraOnwards era) . unsafeHashableScriptData . Api.fromPlutusData $
+                          P.toData outDatum
+                      )
                       Api.ReferenceScriptNone
         makePayment (Payment _ (Party (Address network address)) (Token currency name) amount) =
           do
@@ -661,8 +667,8 @@ checkTransactionSize era protocol ContractInstance{..} (Transaction marloweState
                 _ -> throwError $ CliError "Byron addresses are not supported."
             pure
               [ Api.TxOut
-                  (Api.AddressInEra (Api.ShelleyAddressInEra Api.shelleyBasedEra) address'')
-                  (Api.TxOutValue (toMultiAssetSupportedInEra era) value)
+                  (Api.AddressInEra (Api.ShelleyAddressInEra $ Api.babbageEraOnwardsToShelleyBasedEra era) address'')
+                  (mkTxOutValue era value)
                   Api.TxOutDatumNone
                   Api.ReferenceScriptNone
               ]
@@ -672,8 +678,10 @@ checkTransactionSize era protocol ContractInstance{..} (Transaction marloweState
             pure
               [ Api.TxOut
                   (viAddress ciPayoutValidator)
-                  (Api.TxOutValue (toMultiAssetSupportedInEra era) value)
-                  (Api.TxOutDatumInTx era . unsafeHashableScriptData . Api.fromPlutusData $ P.toData (ciRolesCurrency, role))
+                  (mkTxOutValue era value)
+                  ( Api.TxOutDatumInTx (Api.babbageEraOnwardsToAlonzoEraOnwards era) . unsafeHashableScriptData . Api.fromPlutusData $
+                      P.toData (ciRolesCurrency, role)
+                  )
                   Api.ReferenceScriptNone
               ]
         makePayment _ = pure []
@@ -694,7 +702,7 @@ checkTransactionSize era protocol ContractInstance{..} (Transaction marloweState
         outRoles =
           [ Api.TxOut
             creatorAddress
-            (Api.TxOutValue (toMultiAssetSupportedInEra era) role)
+            (mkTxOutValue era role)
             Api.TxOutDatumNone
             Api.ReferenceScriptNone
           | role <- roles
@@ -706,8 +714,10 @@ checkTransactionSize era protocol ContractInstance{..} (Transaction marloweState
                 pure $
                   Api.TxOut
                     creatorAddress
-                    (Api.TxOutValue (toMultiAssetSupportedInEra era) oneLovelace)
-                    (Api.TxOutDatumInTx era . unsafeHashableScriptData . Api.fromPlutusData $ P.toData contract)
+                    (mkTxOutValue era oneLovelace)
+                    ( Api.TxOutDatumInTx (Api.babbageEraOnwardsToAlonzoEraOnwards era) . unsafeHashableScriptData . Api.fromPlutusData $
+                        P.toData contract
+                    )
                     Api.ReferenceScriptNone
               _ -> mempty
             | input <- txInputs
@@ -719,14 +729,14 @@ checkTransactionSize era protocol ContractInstance{..} (Transaction marloweState
         outChange =
           Api.TxOut
             creatorAddress
-            (Api.TxOutValue (toMultiAssetSupportedInEra era) oneLovelace)
+            (mkTxOutValue era oneLovelace)
             Api.TxOutDatumNone
             Api.ReferenceScriptNone
         txIns =
           inFunds
             : inScript
             : inRoles
-        txInsCollateral = Api.TxInsCollateral (toCollateralSupportedInEra era) []
+        txInsCollateral = Api.TxInsCollateral (C.babbageEraOnwardsToAlonzoEraOnwards era) []
         txInsReference = Api.TxInsReferenceNone
         txOuts =
           outChange
@@ -736,18 +746,18 @@ checkTransactionSize era protocol ContractInstance{..} (Transaction marloweState
               <> outMerkle
         txReturnCollateral = Api.TxReturnCollateralNone
         txTotalCollateral = Api.TxTotalCollateralNone
-        txFee = Api.TxFeeExplicit (toTxFeesExplicitInEra era) 1
+        txFee = Api.TxFeeExplicit (C.babbageEraOnwardsToShelleyBasedEra era) 1
         convertSlot = Api.SlotNo . fromIntegral . P.posixTimeToEnclosingSlot ciSlotConfig
-        txValidityRange =
+        (txValidityLowerBound, txValidityUpperBound) =
           bimap
-            (Api.TxValidityLowerBound (toValidityLowerBoundSupportedInEra era) . convertSlot)
-            (Api.TxValidityUpperBound (toValidityUpperBoundSupportedInEra era) . convertSlot)
+            (Api.TxValidityLowerBound (babbageEraOnwardsToAllegraEraOnwards era) . convertSlot)
+            (Api.TxValidityUpperBound (C.babbageEraOnwardsToShelleyBasedEra era) . Just . convertSlot)
             txInterval
         txMetadata = Api.TxMetadataNone
         txAuxScripts = Api.TxAuxScriptsNone
         txExtraKeyWits =
           Api.TxExtraKeyWitnesses
-            (toExtraKeyWitnessesSupportedInEra era)
+            (C.babbageEraOnwardsToAlonzoEraOnwards era)
             $ concat
               [ case address of
                 Api.AddressInEra _ (Api.ShelleyAddress _ (Shelley.KeyHashObj pkh) _) -> pure $ Api.PaymentKeyHash pkh
@@ -760,7 +770,9 @@ checkTransactionSize era protocol ContractInstance{..} (Transaction marloweState
         txUpdateProposal = Api.TxUpdateProposalNone
         txMintValue = Api.TxMintNone
         txScriptValidity = Api.TxScriptValidityNone
-    body <- liftCli $ Api.createAndValidateTransactionBody Api.TxBodyContent{..}
+        txProposalProcedures = Nothing
+        txVotingProcedures = Nothing
+    body <- liftCli $ Api.createAndValidateTransactionBody (C.babbageEraOnwardsToShelleyBasedEra era) Api.TxBodyContent{..}
     keys <-
       liftIO $
         sequence
@@ -770,8 +782,8 @@ checkTransactionSize era protocol ContractInstance{..} (Transaction marloweState
                   _ -> mempty
           , _ <- wits
           ]
-    let tx = Api.signShelleyTransaction body keys
-    pure . BS.length $ Api.serialiseToCBOR tx
+    let tx = Api.signShelleyTransaction (C.babbageEraOnwardsToShelleyBasedEra era) body keys
+    pure . BS.length $ Api.shelleyBasedEraConstraints (Api.babbageEraOnwardsToShelleyBasedEra era) $ Api.serialiseToCBOR tx
 
 -- | Format results of checking as JSON.
 putJson

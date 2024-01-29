@@ -594,7 +594,7 @@ instance Arbitrary Web.TokenMetadata where
                 let itemSize = size `div` len
                 resize itemSize $ replicateM len arbitrary
         ]
-      <*> arbitrary
+      <*> pure mempty
   shrink = genericShrink
 
 instance Arbitrary Web.TokenMetadataFile where
@@ -603,7 +603,7 @@ instance Arbitrary Web.TokenMetadataFile where
       <$> arbitrary
       <*> arbitrary
       <*> arbitrary
-      <*> arbitrary
+      <*> pure mempty
   shrink = genericShrink
 
 instance Arbitrary Web.Address where

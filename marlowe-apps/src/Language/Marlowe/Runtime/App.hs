@@ -9,7 +9,7 @@ module Language.Marlowe.Runtime.App (
   handle,
 ) where
 
-import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
+import Cardano.Api (BabbageEraOnwards (..))
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (race)
 import Control.Exception (SomeException, catch)
@@ -62,11 +62,11 @@ handle config request =
                   reqChange
                   reqCollateral
             Withdraw{..} -> second (mkBody Nothing) <$> buildWithdrawal MarloweV1 reqPayouts reqAddresses reqChange reqCollateral
-            Sign{reqTxEra = ReferenceTxInsScriptsInlineDatumsInBabbageEra, ..} ->
-              pure . Right . uncurry (Tx ReferenceTxInsScriptsInlineDatumsInBabbageEra) $
+            Sign{reqTxEra = BabbageEraOnwardsBabbage, ..} ->
+              pure . Right . uncurry (Tx BabbageEraOnwardsBabbage) $
                 sign reqTxBody reqPaymentKeys reqPaymentExtendedKeys
-            Sign{reqTxEra = ReferenceTxInsScriptsInlineDatumsInConwayEra, ..} ->
-              pure . Right . uncurry (Tx ReferenceTxInsScriptsInlineDatumsInConwayEra) $
+            Sign{reqTxEra = BabbageEraOnwardsConway, ..} ->
+              pure . Right . uncurry (Tx BabbageEraOnwardsConway) $
                 sign reqTxBody reqPaymentKeys reqPaymentExtendedKeys
             Submit{..} -> second TxId <$> submit reqPollingSeconds reqTxEra reqTx
     {-

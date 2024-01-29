@@ -7,9 +7,8 @@ module Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec (
   spec,
 ) where
 
-import Cardano.Api (BabbageEra, ConsensusMode (..), EraHistory (EraHistory), SlotNo (SlotNo))
+import Cardano.Api (EraHistory (EraHistory), SlotNo (SlotNo))
 import qualified Cardano.Api as C
-import Cardano.Api.Shelley (ReferenceTxInsScriptsInlineDatumsSupportedInEra (..))
 import Control.Monad.Trans.Except (runExcept, runExceptT)
 import Data.Function (on)
 import Data.Functor ((<&>))
@@ -18,8 +17,9 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Map.NonEmpty as NEMap
 import Data.Maybe (fromJust, maybeToList)
+import Data.SOP.BasicFunctors (K (..))
 import Data.SOP.Counting (Exactly (..))
-import Data.SOP.Strict (K (..), NP (..))
+import Data.SOP.Strict (NP (..))
 import qualified Data.Set as Set
 import Data.Time (UTCTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
@@ -103,6 +103,11 @@ import Test.QuickCheck (
  )
 import qualified Test.QuickCheck as QuickCheck
 import Test.QuickCheck.Instances ()
+
+type TestEra = C.BabbageEra
+
+babbageEraOnwardsTest :: C.BabbageEraOnwards TestEra
+babbageEraOnwardsTest = C.BabbageEraOnwardsBabbage
 
 spec :: Spec
 spec = do
@@ -233,7 +238,7 @@ flattenMap abc = Map.fromDistinctAscList do
   pure ((a, b), c)
 
 extractSentRoleTokens
-  :: TxConstraints BabbageEra v
+  :: TxConstraints TestEra v
   -> Map (Chain.TokenName, Destination) Chain.Quantity
 extractSentRoleTokens TxConstraints{..} = case roleTokenConstraints of
   RoleTokenConstraintsNone -> mempty
@@ -251,24 +256,24 @@ extractSentRoleTokens TxConstraints{..} = case roleTokenConstraints of
         (addr, q) <- Map.toList dist'
         pure ((token, ToAddress addr), q)
 
-extractMarloweDatum :: TxConstraints BabbageEra v -> Maybe (Datum v)
+extractMarloweDatum :: TxConstraints TestEra v -> Maybe (Datum v)
 extractMarloweDatum TxConstraints{..} = case marloweOutputConstraints of
   MarloweOutput _ datum -> Just datum
   _ -> Nothing
 
-extractMarloweAssets :: TxConstraints BabbageEra v -> Maybe Chain.Assets
+extractMarloweAssets :: TxConstraints TestEra v -> Maybe Chain.Assets
 extractMarloweAssets TxConstraints{..} = case marloweOutputConstraints of
   MarloweOutput assets _ -> Just assets
   _ -> Nothing
 
-runBuildCreateConstraints :: CreateArgs v -> Either CreateError (TxConstraints BabbageEra v)
+runBuildCreateConstraints :: CreateArgs v -> Either CreateError (TxConstraints TestEra v)
 runBuildCreateConstraints CreateArgs{..} =
   snd
     <$> runIdentity
       ( buildCreateConstraints
           -- Since we don't actually run the script, we can just return empty bytes
           (\_ _ -> pure testMintingValidator)
-          ReferenceTxInsScriptsInlineDatumsInBabbageEra
+          babbageEraOnwardsTest
           version
           walletContext
           threadName
@@ -342,10 +347,10 @@ withdrawSpec = Hspec.describe "buildWithdrawConstraints" do
   Hspec.QuickCheck.prop "builds the correct constraints" \payouts' payout -> do
     let payouts = Set.insert payout payouts'
     forAllShrink (genPayoutContext payouts) shrinkPayoutContext \(roleTokens, payoutContext) -> do
-      let actual :: Either Transaction.Api.WithdrawError (TxConstraints BabbageEra 'Core.Api.V1)
+      let actual :: Either Transaction.Api.WithdrawError (TxConstraints TestEra 'Core.Api.V1)
           actual = runIdentity $ runExceptT $ snd <$> BuildConstraints.buildWithdrawConstraints payoutContext Core.Api.MarloweV1 payouts
 
-          expected :: Either Transaction.Api.WithdrawError (TxConstraints BabbageEra 'Core.Api.V1)
+          expected :: Either Transaction.Api.WithdrawError (TxConstraints TestEra 'Core.Api.V1)
           expected =
             Right $
               TxConstraints
@@ -418,7 +423,7 @@ buildApplyInputsConstraintsSpec =
             , eraParams
             }
         eraHistory =
-          EraHistory CardanoMode
+          EraHistory
             . mkInterpreter
             . summaryWithExactly
             $ Exactly

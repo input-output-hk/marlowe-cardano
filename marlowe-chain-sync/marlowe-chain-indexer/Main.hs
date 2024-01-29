@@ -9,7 +9,6 @@
 module Main where
 
 import Cardano.Api (
-  CardanoMode,
   ConsensusModeParams (..),
   EpochSlots (..),
   File (..),
@@ -95,7 +94,7 @@ run Options{..} = do
         , libraryVersion = T.pack $ showVersion version
         }
 
-    localNodeConnectInfo :: LocalNodeConnectInfo CardanoMode
+    localNodeConnectInfo :: LocalNodeConnectInfo
     localNodeConnectInfo =
       LocalNodeConnectInfo
         { -- FIXME read from config - what is the appropriate value?

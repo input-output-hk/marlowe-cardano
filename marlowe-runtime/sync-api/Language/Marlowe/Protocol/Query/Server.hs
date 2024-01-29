@@ -4,7 +4,7 @@
 
 module Language.Marlowe.Protocol.Query.Server where
 
-import Cardano.Api (CardanoMode, EraHistory (..), SlotNo (SlotNo), SystemStart (getSystemStart))
+import Cardano.Api (EraHistory (..), SlotNo (SlotNo), SystemStart (getSystemStart))
 import Control.Monad.IO.Class (MonadIO)
 import Data.Time (UTCTime)
 import Data.Version (Version)
@@ -82,8 +82,8 @@ marloweQueryServer
         runtimeTipUTC <- slotToUTCTime systemStart history runtimeTip
         pure RuntimeStatus{..}
 
-slotToUTCTime :: (MonadIO m) => SystemStart -> EraHistory CardanoMode -> ChainPoint -> m UTCTime
-slotToUTCTime systemStart (EraHistory _ interpreter) = \case
+slotToUTCTime :: (MonadIO m) => SystemStart -> EraHistory -> ChainPoint -> m UTCTime
+slotToUTCTime systemStart (EraHistory interpreter) = \case
   Genesis -> pure $ getSystemStart systemStart
   At BlockHeader{..} -> case interpretQuery interpreter $ slotToWallclock $ SlotNo $ unSlotNo slotNo of
     Left err -> throwIO err

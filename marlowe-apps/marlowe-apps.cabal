@@ -30,19 +30,17 @@ library
     , async
     , base >=4.9 && <5
     , bytestring
-    , cardano-api ^>=8.2
+    , cardano-api ^>=8.37
     , containers
     , data-default
     , eventuo11y >=0.9 && <0.11
     , eventuo11y-dsl ^>=0.2
-    , eventuo11y-json ^>=0.3
-    , general-allocate ^>=0.2
+    , eventuo11y-json ^>=0.3.0.3
     , marlowe-cardano
     , marlowe-chain-sync
     , marlowe-client
     , marlowe-protocols
-    , marlowe-runtime:{marlowe-runtime, config, discovery-api, history-api, proxy-api, sync-api, tx-api}
-    , monad-control
+    , marlowe-runtime:{marlowe-runtime, config, sync-api, tx-api}
     , mtl
     , network
     , optparse-applicative
@@ -51,7 +49,6 @@ library
     , text
     , time
     , time-units
-    , transformers-base
 
   ghc-options:
     -Wall -Wnoncanonical-monad-instances -Wincomplete-uni-patterns
@@ -69,7 +66,7 @@ executable marlowe-pipe
     , bytestring
     , eventuo11y >=0.9 && <0.11
     , eventuo11y-dsl ^>=0.2
-    , eventuo11y-json ^>=0.3
+    , eventuo11y-json ^>=0.3.0.3
     , marlowe-apps
     , mtl
     , optparse-applicative
@@ -99,10 +96,10 @@ executable marlowe-oracle
     , base >=4.9 && <5
     , base16-aeson
     , bytestring
-    , cardano-api ^>=8.2
+    , cardano-api ^>=8.37
     , eventuo11y >=0.9 && <0.11
     , eventuo11y-dsl ^>=0.2
-    , eventuo11y-json ^>=0.3
+    , eventuo11y-json ^>=0.3.0.3
     , http-client
     , http-client-tls
     , marlowe-apps
@@ -111,7 +108,7 @@ executable marlowe-oracle
     , marlowe-runtime
     , mtl
     , optparse-applicative
-    , plutus-ledger-api ^>=1.5
+    , plutus-ledger-api ^>=1.15
     , process
     , servant
     , servant-client

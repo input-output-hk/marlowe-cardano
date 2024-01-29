@@ -9,10 +9,8 @@
 module Main where
 
 import Cardano.Api (
-  CardanoMode,
   ConsensusModeParams (..),
   EpochSlots (..),
-  EraInMode (..),
   File (..),
   GenesisParameters (..),
   LocalNodeConnectInfo (..),
@@ -112,7 +110,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
         (Byron.mkConfigFromFile (toByronRequiresNetworkMagic networkId) genesisConfigFile hash)
   (hash, genesisConfig) <- either (fail . unpack) pure genesisConfigResult
   shelleyGenesis <- either error id <$> eitherDecodeFileStrict shelleyGenesisFile
-  let localNodeConnectInfo :: LocalNodeConnectInfo CardanoMode
+  let localNodeConnectInfo :: LocalNodeConnectInfo
       localNodeConnectInfo =
         LocalNodeConnectInfo
           { -- FIXME read from config - what is the appropriate value?
@@ -141,7 +139,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
       liftIO $
         (either (fail . show) (either (fail . show) $ pure . protocolParamSecurity) =<<) $
           queryNodeLocalState localNodeConnectInfo Nothing $
-            QueryInEra BabbageEraInCardanoMode $
+            QueryInEra $
               QueryInShelleyBasedEra ShelleyBasedEraBabbage QueryGenesisParameters
 
     flip runComponent_ () proc _ -> do
