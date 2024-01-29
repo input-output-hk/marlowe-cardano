@@ -12,10 +12,10 @@ import Cardano.Api (
  )
 import Control.Applicative ((<|>))
 import Control.Monad ((<=<))
-import Data.Aeson (eitherDecodeFileStrict')
 import Data.Default (def)
 import Data.Text (Text)
 import Data.Version (showVersion)
+import Data.Yaml (decodeFileEither)
 import Language.Marlowe.Runtime.Benchmark (measure)
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoAddressAny)
 import Language.Marlowe.Runtime.Client (connectToMarloweRuntime)
@@ -32,7 +32,7 @@ main =
     config' <-
       case config of
         Nothing -> pure def
-        Just config'' -> either error id <$> eitherDecodeFileStrict' config''
+        Just config'' -> either (error . show) id <$> decodeFileEither config''
     faucet' <-
       case faucet of
         Just Faucet{..} ->

@@ -91,3 +91,4 @@ executable marlowe-benchmark
     , text
     , time
     , unliftio
+    , yaml

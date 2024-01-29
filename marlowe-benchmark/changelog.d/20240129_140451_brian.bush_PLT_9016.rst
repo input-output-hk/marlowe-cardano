@@ -1,0 +1,4 @@
+Added
+-----
+
+- Benchmarking of arbitrary complex queries.

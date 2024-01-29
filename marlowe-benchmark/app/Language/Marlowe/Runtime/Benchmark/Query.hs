@@ -5,21 +5,55 @@ module Language.Marlowe.Runtime.Benchmark.Query (
   -- * Benchmarking
   Benchmark (..),
   measure,
+
+  -- * Queries
+  Query (..),
 ) where
 
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Marlowe (MarloweT)
-import Data.Aeson (ToJSON)
+import Data.Aeson (FromJSON, ToJSON)
 import Data.Default (Default (..))
 import Data.Foldable (foldlM)
 import Data.List.Split (chunksOf)
 import Data.Time.Clock (NominalDiffTime, UTCTime, getCurrentTime)
 import Data.Time.Clock.POSIX (getPOSIXTime)
 import GHC.Generics (Generic)
-import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient, getContractHeaders)
-import Language.Marlowe.Protocol.Query.Types (ContractFilter, Order (Ascending), Page (..), Range (..))
+import Language.Marlowe.Protocol.Query.Client (
+  MarloweQueryClient,
+  getContractHeaders,
+  getContractState,
+  getPayout,
+  getPayouts,
+  getTransaction,
+  getTransactions,
+  getWithdrawal,
+  getWithdrawals,
+ )
+import Language.Marlowe.Protocol.Query.Types (
+  ContractFilter,
+  Order (Ascending),
+  Page (..),
+  PayoutFilter,
+  Range (..),
+  WithdrawalFilter,
+ )
+import Language.Marlowe.Runtime.ChainSync.Api (TxId, TxOutRef)
 import Language.Marlowe.Runtime.Client (runMarloweQueryClient)
+import Language.Marlowe.Runtime.Core.Api (ContractId)
 import UnliftIO (forConcurrently)
+
+data Query
+  = QueryHeaders ContractFilter
+  | QueryState ContractId
+  | QueryTransaction TxId
+  | QueryTransactions ContractId
+  | QueryWithdrawal TxId
+  | QueryWithdrawals WithdrawalFilter
+  | QueryPayouts PayoutFilter
+  | QueryPayout TxOutRef
+  deriving (Eq, Generic, Ord, Show)
+  deriving anyclass (FromJSON, ToJSON)
 
 data Benchmark = Benchmark
   { metric :: String
@@ -28,7 +62,7 @@ data Benchmark = Benchmark
   , query :: String
   , queriesPerSecond :: Double
   , pagesPerSecond :: Double
-  , contractsPerSecond :: Double
+  , resultsPerSecond :: Double
   , seconds :: Double
   }
   deriving (Eq, Generic, Ord, Show, ToJSON)
@@ -36,7 +70,7 @@ data Benchmark = Benchmark
 data Statistics = Statistics
   { queries :: Int
   , pages :: Int
-  , contracts :: Int
+  , results :: Int
   , duration :: NominalDiffTime
   }
   deriving (Eq, Generic, Ord, Show, ToJSON)
@@ -54,7 +88,7 @@ measure
   -- ^ Page size for each `Query` client.
   -> String
   -- ^ Label for the contract filter.
-  -> [ContractFilter]
+  -> [Query]
   -- ^ Contract filters to query.
   -> MarloweT IO [Benchmark]
   -- ^ Action to run the benchmark.
@@ -71,7 +105,7 @@ run
   -- ^ Page size for each `Query` client.
   -> String
   -- ^ Label for the contract filter.
-  -> [ContractFilter]
+  -> [Query]
   -- ^ Contract filters to query.
   -> MarloweT IO Benchmark
   -- ^ Action to run the benchmark.
@@ -83,32 +117,73 @@ run metric pageSize query filters =
     let seconds = realToFrac duration
         queriesPerSecond = realToFrac queries / seconds
         pagesPerSecond = realToFrac pages / seconds
-        contractsPerSecond = realToFrac contracts / seconds
+        resultsPerSecond = realToFrac results / seconds
     finish <- liftIO getCurrentTime
     pure Benchmark{..}
 
 -- | Run the benchmark.
 benchmark
   :: (MonadIO m)
-  => NominalDiffTime -- When the benchmark started.
+  => NominalDiffTime
+  -- ^ When the benchmark started.
   -> Int
   -- ^ Page size for each `Query` client.
   -> Statistics
   -- ^ The statistics so far.
-  -> ContractFilter
+  -> Query
   -- ^ The contract filter.
   -> MarloweQueryClient m Statistics
   -- ^ Action to run the benchmark.
-benchmark start pageSize initial@Statistics{queries} cFilter =
-  let accumulate = (. getContractHeaders cFilter) . (=<<) . handleNextPage
+benchmark start pageSize initial (QueryHeaders cFilter) =
+  benchmarkPaged start pageSize initial $ getContractHeaders cFilter
+benchmark start _ initial (QueryState cId) =
+  benchmarkUnpaged start initial =<< getContractState cId
+benchmark start _ initial (QueryTransaction txId) =
+  benchmarkUnpaged start initial =<< getTransaction txId
+benchmark start _ initial (QueryTransactions cId) =
+  benchmarkUnpaged start initial =<< getTransactions cId
+benchmark start _ initial (QueryWithdrawal txId) =
+  benchmarkUnpaged start initial =<< getWithdrawal txId
+benchmark start pageSize initial (QueryWithdrawals wFilter) =
+  benchmarkPaged start pageSize initial $ getWithdrawals wFilter
+benchmark start pageSize initial (QueryPayouts pFilter) =
+  benchmarkPaged start pageSize initial $ getPayouts pFilter
+benchmark start _ initial (QueryPayout txOutRef) =
+  benchmarkUnpaged start initial =<< getPayout txOutRef
+
+benchmarkUnpaged
+  :: (MonadIO m)
+  => NominalDiffTime
+  -> Statistics
+  -> Maybe a
+  -> MarloweQueryClient m Statistics
+benchmarkUnpaged start initial@Statistics{queries, pages} result =
+  do
+    now <- liftIO getPOSIXTime
+    pure $
+      initial
+        { queries = queries + 1
+        , pages = pages + maybe 0 (const 1) result
+        , duration = now - start
+        }
+
+benchmarkPaged
+  :: (MonadIO m)
+  => NominalDiffTime
+  -> Int
+  -> Statistics
+  -> (Range a -> MarloweQueryClient m (Maybe (Page a b)))
+  -> MarloweQueryClient m Statistics
+benchmarkPaged start pageSize initial@Statistics{queries} query =
+  let accumulate = (. query) . (=<<) . handleNextPage
       handleNextPage stats Nothing = pure stats
-      handleNextPage stats@Statistics{pages, contracts} (Just Page{..}) =
+      handleNextPage stats@Statistics{pages, results} (Just Page{..}) =
         do
           now <- liftIO getPOSIXTime
           let stats' =
                 stats
                   { pages = pages + 1
-                  , contracts = contracts + length items
+                  , results = results + length items
                   , duration = now - start
                   }
           case nextRange of

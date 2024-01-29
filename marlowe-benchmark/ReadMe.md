@@ -49,6 +49,7 @@ The optional JSON configuration for benchmarking specifies the number clients ru
 | `queryParallelism`      | `Int`        | Number of parallel clients for `Query` protocol.                     |
 | `queryBatchSize`        | `Int`        | Number of queries to be executed by each `Query` client.             |
 | `queryPageSize`         | `Int`        | Page size for each `Query` client.                                   |
+| `complexQueries`        | `Query`      | Query filters to execute in addition to query for contract headers.  |
 | `lifecycleParallelism`  | `Int`        | Number of parallel clients for running the basic contract lifecycle. |
 | `lifecycleContracts`    | `Int`        | Number of contracts to run for each basic lifecycle client.          |
 
@@ -66,6 +67,7 @@ Here is an example configuration file:
 , "queryParallelism" : 4
 , "queryBatchSize" : 16
 , "queryPageSize" : 256
+, "complexQueries" : {}
 , "lifecycleParallelism" : 4
 , "lifecycleContracts" : 3
 }

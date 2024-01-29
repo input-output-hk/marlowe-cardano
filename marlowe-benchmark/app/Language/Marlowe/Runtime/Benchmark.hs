@@ -7,7 +7,7 @@ module Language.Marlowe.Runtime.Benchmark (
   measure,
 ) where
 
-import Control.Monad (when)
+import Control.Monad (unless, when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Marlowe (MarloweT)
 import Data.Aeson (FromJSON, ToJSON)
@@ -16,6 +16,7 @@ import Data.Maybe (isJust)
 import Data.Time.Clock (getCurrentTime)
 import Data.Word (Word8)
 import GHC.Generics (Generic)
+import Language.Marlowe.Runtime.Benchmark.Query (Query (..))
 import Language.Marlowe.Runtime.ChainSync.Api (Address)
 import System.Directory (doesFileExist, removeFile)
 import System.IO (hPutStrLn, stderr)
@@ -23,6 +24,7 @@ import System.IO (hPutStrLn, stderr)
 import qualified Cardano.Api as C
 import qualified Data.Aeson as A (encode)
 import qualified Data.ByteString.Lazy.Char8 as LBS8 (appendFile, putStrLn, unlines)
+import qualified Data.Map.Strict as M (Map, empty, null, toList)
 import qualified Language.Marlowe.Runtime.Benchmark.BulkSync as Bulk (measure)
 import qualified Language.Marlowe.Runtime.Benchmark.HeaderSync as HeaderSync (measure)
 import qualified Language.Marlowe.Runtime.Benchmark.Lifecycle as Lifecycle (measure)
@@ -51,6 +53,8 @@ data BenchmarkConfig = BenchmarkConfig
   -- ^ Number of queries to be executed by each `Query` client.
   , queryPageSize :: Int
   -- ^ Page size for each `Query` client.
+  , complexQueries :: M.Map String Query
+  -- ^ Set of complex queries to be executed sequentially.
   , lifecycleParallelism :: Int
   -- ^ Number of parallel clients for basic transaction lifecycle.
   , lifecycleContracts :: Int
@@ -71,6 +75,7 @@ instance Default BenchmarkConfig where
       , queryParallelism = 4
       , queryBatchSize = 16
       , queryPageSize = 256
+      , complexQueries = M.empty
       , lifecycleParallelism = 4
       , lifecycleContracts = 3
       }
@@ -101,20 +106,30 @@ measure BenchmarkConfig{..} faucet out =
         when (bulkParallelism > 0) $
           do
             liftIO $ hPutStrLn stderr . ("BulkSync: " <>) . show =<< getCurrentTime
-            bulkResults <- Bulk.measure bulkParallelism bulkPageSize bulkMaxBlocks
-            report bulkResults
+            Bulk.measure bulkParallelism bulkPageSize bulkMaxBlocks
+              >>= report
         when (syncParallelism > 0) $
           do
             liftIO $ hPutStrLn stderr . ("Sync: " <>) . show =<< getCurrentTime
-            syncResults <- Sync.measure syncParallelism syncBatchSize contractIds
-            report syncResults
+            Sync.measure syncParallelism syncBatchSize contractIds
+              >>= report
         when (queryParallelism > 0) $
           do
             liftIO $ hPutStrLn stderr . ("Query: " <>) . show =<< getCurrentTime
-            queryResults <-
-              Query.measure queryParallelism queryBatchSize queryPageSize "No policy ID" $
-                replicate (queryParallelism * queryBatchSize) mempty
-            report queryResults
+            Query.measure
+              queryParallelism
+              queryBatchSize
+              queryPageSize
+              "No policy ID"
+              (replicate (queryParallelism * queryBatchSize) (QueryHeaders mempty))
+              >>= report
+        unless (M.null complexQueries) $
+          do
+            liftIO $ hPutStrLn stderr . ("Complex queries: " <>) . show =<< getCurrentTime
+            sequence_
+              [ Query.measure 1 1 queryPageSize label [query] >>= report
+              | (label, query) <- M.toList complexQueries
+              ]
     when (isJust faucet && lifecycleParallelism > 0) $
       do
         Just (node, era, network, faucetAddress, faucetKey) <- pure faucet
