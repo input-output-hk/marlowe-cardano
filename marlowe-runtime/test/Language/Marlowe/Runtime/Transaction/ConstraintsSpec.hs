@@ -23,7 +23,7 @@ import Control.Monad (guard)
 import Data.Bifunctor (Bifunctor (..))
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
-import Data.Either (fromLeft, fromRight, isRight)
+import Data.Either (fromLeft, isRight)
 import Data.Foldable (fold)
 import Data.Function (on)
 import Data.Functor (($>), (<&>))
@@ -123,7 +123,7 @@ spec = do
   describe "solveInitialTxBodyContent" do
     prop "satisfies the constraints" \(SomeTxConstraints marloweVersion constraints) -> do
       protocol <-
-        fromRight undefined . convertToLedgerProtocolParameters shelleyBasedEraTest
+        either (error . show) id . convertToLedgerProtocolParameters shelleyBasedEraTest
           <$> hedgehog (genProtocolParameters testEra)
       scriptCtx <- genScriptContext marloweVersion constraints
       walletContext <- genWalletContext marloweVersion constraints
@@ -1756,7 +1756,7 @@ byteStringGen = BS.pack <$> arbitrary
 
 protocolTestnet :: LedgerProtocolParameters TestEra
 protocolTestnet =
-  fromRight undefined $
+  either (error . show) id $
     convertToLedgerProtocolParameters
       shelleyBasedEraTest
       ProtocolParameters
