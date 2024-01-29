@@ -217,10 +217,10 @@ source-repository-package
 source-repository-package
    type: git
    location: https://github.com/input-output-hk/marlowe
-   tag: 0ce78a4a94b093130393c836faeb4f825dd3ee93
+   tag: d9042cc6e0e0c2003c9eff47c98896aaf080aa72
    subdir: marlowe-spec-test
            isabelle
-   --sha256: 0ax86ascypf8z26zgwx6bdgv0w21y2mkw55i77da9jpw9g94sxg5
+   --sha256: 1yfbv9bwr71jd2sqfsb5jjq6j5bjfbjpp946fbkhxwwc2npwj0pd
 
 
 source-repository-package
