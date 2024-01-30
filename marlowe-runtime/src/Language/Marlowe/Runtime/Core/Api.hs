@@ -475,10 +475,14 @@ getInputs MarloweV1 = do
     Just r -> pure r
 
 putDatum :: MarloweVersion v -> Datum v -> Put
-putDatum MarloweV1 = put
+putDatum v = put . toChainDatum v
 
 getDatum :: MarloweVersion v -> Get (Datum v)
-getDatum MarloweV1 = get
+getDatum v = do
+  raw <- get
+  case fromChainDatum v raw of
+    Nothing -> fail "failed to decode datum"
+    Just d -> pure d
 
 putPayoutDatum :: MarloweVersion v -> PayoutDatum v -> Put
 putPayoutDatum MarloweV1 = put
