@@ -12,7 +12,6 @@ import Cardano.Api (
  )
 import Control.Applicative ((<|>))
 import Control.Monad ((<=<))
-import Data.Default (def)
 import Data.Text (Text)
 import Data.Version (showVersion)
 import Data.Yaml (decodeFileEither)
@@ -22,6 +21,7 @@ import Language.Marlowe.Runtime.Client (connectToMarloweRuntime)
 import Paths_marlowe_benchmark (version)
 
 import qualified Cardano.Api as C
+import qualified Language.Marlowe.Runtime.Benchmark.Query.Generate as Generate (queries)
 import qualified Options.Applicative as O
 
 -- | Execute the benchmarks.
@@ -31,7 +31,7 @@ main =
     Command{..} <- O.execParser commandParser
     config' <-
       case config of
-        Nothing -> pure def
+        Nothing -> pure Generate.queries
         Just config'' -> either (error . show) id <$> decodeFileEither config''
     faucet' <-
       case faucet of

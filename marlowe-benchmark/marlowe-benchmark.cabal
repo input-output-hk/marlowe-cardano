@@ -67,6 +67,7 @@ executable marlowe-benchmark
     Language.Marlowe.Runtime.Benchmark.Lifecycle
     Language.Marlowe.Runtime.Benchmark.Lifecycle.Scenario
     Language.Marlowe.Runtime.Benchmark.Query
+    Language.Marlowe.Runtime.Benchmark.Query.Generate
     Language.Marlowe.Runtime.Benchmark.Sync
     Paths_marlowe_benchmark
 

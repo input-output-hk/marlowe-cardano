@@ -53,7 +53,7 @@ The optional JSON configuration for benchmarking specifies the number clients ru
 | `lifecycleParallelism`  | `Int`        | Number of parallel clients for running the basic contract lifecycle. |
 | `lifecycleContracts`    | `Int`        | Number of contracts to run for each basic lifecycle client.          |
 
-Here is an example configuration file:
+A complete example is [example-config.yaml](example-config.yaml), but here is a simple example configuration file:
 
 ```json
 {
