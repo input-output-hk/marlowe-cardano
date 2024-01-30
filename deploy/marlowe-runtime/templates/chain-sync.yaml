@@ -77,7 +77,7 @@ spec:
         image: alpine/socat
         args:
         - UNIX-LISTEN:/ipc/node.socket,fork
-        - TCP-CONNECT:cardano-node-{{ $network }}.vela-system:8090
+        - TCP-CONNECT:{{ $instance.cardanoNode }}-{{ $network }}.vela-system:8090
         volumes:
         - name: ipc
           path: /ipc
