@@ -148,14 +148,12 @@ rollForward tipBlockNo f MarloweBlock{..} LiveContracts{..}
     consumeUpdatedContract :: Map TxOutRef a -> MarloweApplyInputsTransaction -> Map TxOutRef a
     consumeUpdatedContract
       liveContracts
-      (MarloweApplyInputsTransaction MarloweV1 UnspentContractOutput{..} Transaction{blockHeader = _, ..})
-        | Map.member txOutRef liveContracts =
-            case scriptOutput output of
-              Nothing -> Map.delete txOutRef liveContracts
-              Just TransactionScriptOutput{..} ->
-                Map.insert utxo (f $ marloweContract datum) $
-                  Map.delete txOutRef liveContracts
-        | otherwise = error $ "rollForward: block consumes non-existent output " <> show txOutRef
+      (MarloweApplyInputsTransaction MarloweV1 UnspentContractOutput{..} Transaction{blockHeader = _, ..}) =
+        case scriptOutput output of
+          Nothing -> Map.delete txOutRef liveContracts
+          Just TransactionScriptOutput{..} ->
+            Map.insert utxo (f $ marloweContract datum) $
+              Map.delete txOutRef liveContracts
 
 trimHistory
   :: Int
