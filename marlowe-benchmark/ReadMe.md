@@ -37,22 +37,23 @@ Available options:
 
 The optional JSON configuration for benchmarking specifies the number clients run in parallel during benchmarking and the quantity of data processed.
 
-| JSON Key                | Haskell Type | Description                                                          |
-|-------------------------|--------------|----------------------------------------------------------------------|
-| `headerSyncParallelism` | `Int`        | Number of parallel clients for `HeaderSync` protocol.                |
-| `headerMaxContracts`    | `Int`        | Maximum number of contracts to be read by each `HeaderSync` client.  |
-| `bulkParallelism`       | `Int`        | Number of parallel clients for the `BulkSync` protocol.              |
-| `bulkPageSize`          | `Word8`      | Number of blocks to fetch at a time for the `BulkSync` clients.      |
-| `bulkMaxBlocks`         | `Int`        | Maximum number of blocks to fetch for each `BulkSync` client.        |
-| `syncParallelism`       | `Int`        | Number of parallel clients for `Sync` protocol.                      |
-| `syncBatchSize`         | `Int`        | Number of contracts to be read by each `Sync` client.                |
-| `queryParallelism`      | `Int`        | Number of parallel clients for `Query` protocol.                     |
-| `queryBatchSize`        | `Int`        | Number of queries to be executed by each `Query` client.             |
-| `queryPageSize`         | `Int`        | Page size for each `Query` client.                                   |
-| `lifecycleParallelism`  | `Int`        | Number of parallel clients for running the basic contract lifecycle. |
-| `lifecycleContracts`    | `Int`        | Number of contracts to run for each basic lifecycle client.          |
+| JSON Key                | Haskell Type                                     | Description                                                          |
+|-------------------------|--------------------------------------------------|----------------------------------------------------------------------|
+| `headerSyncParallelism` | `Int`                                            | Number of parallel clients for `HeaderSync` protocol.                |
+| `headerMaxContracts`    | `Int`                                            | Maximum number of contracts to be read by each `HeaderSync` client.  |
+| `bulkParallelism`       | `Int`                                            | Number of parallel clients for the `BulkSync` protocol.              |
+| `bulkPageSize`          | `Word8`                                          | Number of blocks to fetch at a time for the `BulkSync` clients.      |
+| `bulkMaxBlocks`         | `Int`                                            | Maximum number of blocks to fetch for each `BulkSync` client.        |
+| `syncParallelism`       | `Int`                                            | Number of parallel clients for `Sync` protocol.                      |
+| `syncBatchSize`         | `Int`                                            | Number of contracts to be read by each `Sync` client.                |
+| `queryParallelism`      | `Int`                                            | Number of parallel clients for `Query` protocol.                     |
+| `queryBatchSize`        | `Int`                                            | Number of queries to be executed by each `Query` client.             |
+| `queryPageSize`         | `Int`                                            | Page size for each `Query` client.                                   |
+| `complexQueries`        | `Language.Marlowe.Runtime.Benchmark.Query.Query` | Query filters to execute in addition to query for contract headers.  |
+| `lifecycleParallelism`  | `Int`                                            | Number of parallel clients for running the basic contract lifecycle. |
+| `lifecycleContracts`    | `Int`                                            | Number of contracts to run for each basic lifecycle client.          |
 
-Here is an example configuration file:
+A complete example is [example-config.yaml](example-config.yaml), with results in [example-results.json](example-results.json), but here is a simple example configuration file:
 
 ```json
 {
@@ -66,6 +67,7 @@ Here is an example configuration file:
 , "queryParallelism" : 4
 , "queryBatchSize" : 16
 , "queryPageSize" : 256
+, "complexQueries" : {}
 , "lifecycleParallelism" : 4
 , "lifecycleContracts" : 3
 }

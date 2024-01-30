@@ -561,6 +561,9 @@ newtype TxId = TxId {unTxId :: ByteString}
   deriving newtype (Binary, Variations, Hashable)
   deriving (IsString, Show, ToJSON, ToJSONKey) via Base16
 
+instance FromJSON TxId where
+  parseJSON = Aeson.withText "TxOutRef" $ pure . fromString . T.unpack
+
 newtype TxIx = TxIx {unTxIx :: Word16}
   deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON, ToJSONKey, Variations, Hashable)
@@ -578,6 +581,9 @@ data TxOutRef = TxOutRef
 
 instance IsString TxOutRef where
   fromString = fromJust . parseTxOutRef . T.pack
+
+instance FromJSON TxOutRef where
+  parseJSON = Aeson.withText "TxOutRef" $ pure . fromString . T.unpack
 
 parseTxOutRef :: Text -> Maybe TxOutRef
 parseTxOutRef val = case T.splitOn "#" val of
