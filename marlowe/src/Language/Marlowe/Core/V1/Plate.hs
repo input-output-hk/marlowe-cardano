@@ -10,6 +10,7 @@ module Language.Marlowe.Core.V1.Plate (
   extractAllWithContinuations,
   extractNetworkAddresses,
   extractNetworks,
+  extractParties,
   extractRoleNames,
   extractTokens,
 ) where
@@ -194,6 +195,7 @@ instance Extract BuiltinByteString where
 instance Extract Party where
   extractor =
     let contractPlate' (Pay p (Party p') _ _ _) = F.Constant $ S.fromList [p, p']
+        contractPlate' (Pay p (Account p') _ _ _) = F.Constant $ S.fromList [p, p']
         contractPlate' x = pure x
         actionPlate' (Deposit p p' _ _) = F.Constant $ S.fromList [p, p']
         actionPlate' (Choice (ChoiceId _ p) _) = F.Constant $ S.singleton p
