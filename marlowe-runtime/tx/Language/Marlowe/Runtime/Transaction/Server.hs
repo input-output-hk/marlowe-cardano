@@ -436,9 +436,7 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
         loadHelpersContext version $
           Left (rolesCurrency, roleTokens)
   let -- Fast analysis of safety: examines bounds for transactions.
-      V1.MarloweData{marloweState} = case version of
-        MarloweV1 -> datum
-      contractSafetyErrors = checkContract networkId roleTokens version contract' (Just marloweState) continuations
+      contractSafetyErrors = checkContract networkId (Just roleTokens) version datum continuations
       limitAnalysisTime =
         liftIO
           . fmap (either Right id)
@@ -618,29 +616,31 @@ execApplyInputs
         -- FIXME: We should verify minting policy here as well:
         --  * we should check if trusted minting policy was used
         --  * we should check the role where minted as NFTs or they were redundant (do we check this in creation?)
-        contractSafetyErrors = checkContract networkId RoleTokensNone version contract (Just state) continuations
         limitAnalysisTime =
           liftIO
             . fmap (either Right id)
             . race ([SafetyAnalysisTimeout] <$ threadDelay (floor $ nominalDiffTimeToSeconds analysisTimeout * 1_000_000))
     -- Slow analysis of safety: examines all possible transactions.
-    transactionSafetyErrors <- case mAssetsAndDatum of
+    safetyErrors <- case mAssetsAndDatum of
       Nothing -> pure []
       Just (_, datum) -> do
         let lockedRolesContext = mkLockedRolesContext helpersContext
-        ExceptT $
-          first ApplyInputsSafetyAnalysisError
-            <$> limitAnalysisTime
-              ( checkTransactions
-                  protocolParameters
-                  eon
-                  version
-                  marloweContext
-                  lockedRolesContext
-                  (changeAddress addresses)
-                  datum
-                  continuations
-              )
+            contractSafetyErrors = checkContract networkId Nothing version datum continuations
+        transactionSafetyErrors <-
+          ExceptT $
+            first ApplyInputsSafetyAnalysisError
+              <$> limitAnalysisTime
+                ( checkTransactions
+                    protocolParameters
+                    eon
+                    version
+                    marloweContext
+                    lockedRolesContext
+                    (changeAddress addresses)
+                    datum
+                    continuations
+                )
+        pure $ contractSafetyErrors <> transactionSafetyErrors
     pure $
       InputsApplied eon $
         InputsAppliedInEra
@@ -649,7 +649,7 @@ execApplyInputs
                 TxMetadataNone -> mempty
                 TxMetadataInEra _ m -> fromCardanoTxMetadata m
           , inputs = inputs'
-          , safetyErrors = contractSafetyErrors <> transactionSafetyErrors
+          , safetyErrors
           , ..
           }
 

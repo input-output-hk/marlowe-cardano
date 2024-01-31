@@ -4,15 +4,24 @@ module Language.Marlowe.Runtime.Transaction.SafetySpec where
 
 import qualified Cardano.Api as Cardano
 import qualified Cardano.Api.Shelley as Shelley
+import Cardano.Api.Shelley (CardanoEra (..), ReferenceTxInsScriptsInlineDatumsSupportedInEra (..), bundleProtocolParams)
+import qualified Cardano.Api.Shelley as Shelley (ReferenceScript (..), StakeAddressReference (..))
+import Control.Category ((<<<))
+import Control.Monad (when)
+import Data.Either (fromRight)
 import Data.Foldable (for_)
+import Data.Functor ((<&>))
 import Data.List (isInfixOf, nub)
 import qualified Data.Map.NonEmpty as NEMap
-import qualified Data.Map.Strict as M (empty, fromList, keys, lookup, mapKeys, singleton, toList, (!))
-import Data.Maybe (fromJust)
+import qualified Data.Map.Strict as M (Map, empty, fromList, keys, lookup, mapKeys, singleton, toList, (!))
+import Data.Maybe (fromJust, fromMaybe)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
+import Language.Marlowe.Analysis.Safety.Ledger (checkContinuations)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError (..))
 import Language.Marlowe.Core.V1.Merkle as V1 (MerkleizedContract (..), deepMerkleize, merkleizedContract)
+import qualified Language.Marlowe.Core.V1.Plate as V1
+import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams (rolesCurrency))
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1
@@ -34,7 +43,7 @@ import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain (
  )
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion (MarloweV1))
 import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript (..), MarloweScripts (..), getCurrentScripts)
-import Language.Marlowe.Runtime.Plutus.V2.Api (fromPlutusTokenName)
+import Language.Marlowe.Runtime.Plutus.V2.Api (fromPlutusTokenName, toPlutusCurrencySymbol)
 import Language.Marlowe.Runtime.Transaction.Api (Mint (..), RoleTokensConfig (..))
 import Language.Marlowe.Runtime.Transaction.BuildConstraints (
   MinAdaProvider (..),
@@ -110,6 +119,23 @@ spec =
         payToken token = V1.Pay party payee token $ V1.Constant 1
         payRole role = V1.Pay (V1.Role role) (V1.Party $ V1.Role role) (V1.Token "" "") $ V1.Constant 1
         same x y = nub x == x && nub y == y && not (any (`notElem` x) y) && not (any (`notElem` y) x)
+        ada = V1.Token PV2.adaSymbol PV2.adaToken
+        datumForContract contract rolesCurrency =
+          V1.MarloweData
+            { marloweParams = V1.MarloweParams{rolesCurrency}
+            , marloweContract = contract
+            , marloweState = V1.emptyState 0
+            }
+
+        mockPolicyId = "00000000000000000000000000000000000000000000000000000000"
+        policyIdFromRolesConfig =
+          toPlutusCurrencySymbol <<< \case
+            RoleTokensNone -> ""
+            RoleTokensUsePolicy policyId _ -> policyId
+            RoleTokensMint _ -> "00000000000000000000000000000000000000000000000000000000"
+        datumForContractAndRolesConfig contract rolesConfig = do
+          let rolesCurrency = policyIdFromRolesConfig rolesConfig
+          datumForContract contract rolesCurrency
 
     describe "minAdaUpperBound" $
       do
@@ -150,77 +176,141 @@ spec =
 
     describe "checkContract" $
       do
-        prop "Contract without roles" $ \roleTokensConfig ->
+        prop "Contract and state without roles" $ \roleTokensConfig ->
           let contract = V1.Close
-              actual = checkContract testnet roleTokensConfig version contract Nothing continuations
+              datum = datumForContractAndRolesConfig contract roleTokensConfig
+              actual = checkContract testnet (Just roleTokensConfig) version datum continuations
            in counterexample ("Contract = " <> show contract) $
                 case roleTokensConfig of
                   RoleTokensNone -> actual === []
                   _ -> actual === [ContractHasNoRoles]
-        prop "Contract with roles from minting" $ \mint ->
+        prop "Contract or state with roles from minting" $ \mint doTestContract ->
           let roles = Plutus.TokenName . Plutus.toBuiltin . Chain.unTokenName <$> M.keys (NEMap.toMap $ unMint mint)
-              contract = foldr payRole V1.Close roles
-              actual = checkContract testnet (RoleTokensMint mint) version contract Nothing continuations
+              (contract, datum) =
+                if doTestContract
+                  then do
+                    let cnt = foldr payRole V1.Close roles
+                        dtm = datumForContractAndRolesConfig contract (RoleTokensMint mint)
+                    (cnt, dtm)
+                  else do
+                    let cnt = V1.Close
+                        accounts = AM.fromList $ roles <&> \role -> ((V1.Role role, V1.Token "" ""), 1)
+                        state = (V1.emptyState (PV2.POSIXTime 0)){V1.accounts = accounts}
+                        dtm =
+                          V1.MarloweData
+                            { marloweParams = V1.MarloweParams{rolesCurrency = policyIdFromRolesConfig (RoleTokensMint mint)}
+                            , marloweContract = contract
+                            , marloweState = state
+                            }
+                    (cnt, dtm)
+              roleTokensConfig = RoleTokensMint mint
+              actual = checkContract testnet (Just roleTokensConfig) version datum continuations
            in counterexample ("Contract = " <> show contract) $
                 actual === mempty
-        prop "Contract with roles missing from minting" $ \roleTokensConfig extra ->
+        prop "Contract or state with roles missing from minting" $ \roleTokensConfig extra doTestContract ->
           case roleTokensConfig of
             RoleTokensMint mint ->
-              all (\t -> not (NEMap.member (fromPlutusTokenName t) $ unMint mint)) extra ==>
+              all (\t -> not (NEMap.member (fromPlutusTokenName t) $ unMint mint)) extra && not (null extra) ==>
                 let roles = Plutus.TokenName . Plutus.toBuiltin . Chain.unTokenName <$> M.keys (NEMap.toMap $ unMint mint)
-                    contract = foldr payRole V1.Close $ extra <> roles
-                    actual = checkContract testnet roleTokensConfig version contract Nothing continuations
+                    (contract, datum) =
+                      if doTestContract
+                        then do
+                          let cnt = foldr payRole V1.Close $ extra <> roles
+                              dtm = datumForContractAndRolesConfig contract roleTokensConfig
+                          (cnt, dtm)
+                        else do
+                          let cnt = V1.Close
+                              accounts = AM.fromList $ (extra <> roles) <&> \role -> ((V1.Role role, V1.Token "" ""), 1)
+                              state = (V1.emptyState (PV2.POSIXTime 0)){V1.accounts = accounts}
+                              dtm =
+                                V1.MarloweData
+                                  { marloweParams = V1.MarloweParams{rolesCurrency = policyIdFromRolesConfig roleTokensConfig}
+                                  , marloweContract = contract
+                                  , marloweState = state
+                                  }
+                          (cnt, dtm)
+                    actual = checkContract testnet (Just roleTokensConfig) version datum continuations
                     expected =
                       (MissingRoleToken <$> nub extra)
                         <> [RoleNameTooLong role | role@(Plutus.TokenName name) <- nub extra, Plutus.lengthOfByteString name > 32]
                  in counterexample ("Contract = " <> show contract)
+                      . counterexample ("Datum = " <> show datum)
                       . counterexample ("Actual = " <> show actual)
                       . counterexample ("Expected = " <> show expected)
                       $ actual `same` expected
             _ -> discard
-        prop "Contract with extra roles for minting" $ \roleTokensConfig ->
+        prop "Contract or state with extra roles for minting" $ \roleTokensConfig doTestContract ->
           case roleTokensConfig of
             RoleTokensMint mint ->
               do
-                let roles' = Plutus.TokenName . Plutus.toBuiltin . Chain.unTokenName <$> M.keys (NEMap.toMap $ unMint mint)
-                roles <- sublistOf roles' `suchThat` (not . null)
-                let extra = filter (`notElem` roles) roles'
-                    contract = foldr payRole V1.Close roles
-                    actual = checkContract testnet roleTokensConfig version contract Nothing continuations
-                    expected = ExtraRoleToken <$> extra
+                let mintedRoles = Plutus.TokenName . Plutus.toBuiltin . Chain.unTokenName <$> M.keys (NEMap.toMap $ unMint mint)
+                contractRoles <- sublistOf mintedRoles `suchThat` (not . null)
+                let extraMintedRoles = filter (`notElem` contractRoles) mintedRoles
+                when (null extraMintedRoles) discard
+                let (contract, datum) =
+                      if doTestContract
+                        then do
+                          let cnt = foldr payRole V1.Close contractRoles
+                              dtm = datumForContractAndRolesConfig contract roleTokensConfig
+                          (cnt, dtm)
+                        else do
+                          let cnt = V1.Close
+                              accounts = AM.fromList $ contractRoles <&> \role -> ((V1.Role role, V1.Token "" ""), 1)
+                              state = (V1.emptyState (PV2.POSIXTime 0)){V1.accounts = accounts}
+                              dtm =
+                                V1.MarloweData
+                                  { marloweParams = V1.MarloweParams{rolesCurrency = policyIdFromRolesConfig roleTokensConfig}
+                                  , marloweContract = contract
+                                  , marloweState = state
+                                  }
+                          (cnt, dtm)
+                    actual = checkContract testnet (Just roleTokensConfig) version datum continuations
+                    expected = ExtraRoleToken <$> extraMintedRoles
                 pure
                   . counterexample ("Contract = " <> show contract)
+                  . counterexample ("Datum = " <> show datum)
                   . counterexample ("Actual = " <> show actual)
                   . counterexample ("Expected = " <> show expected)
                   $ actual `same` expected
             _ -> discard
-        prop "Contract with role name too long" $ \roles ->
-          let contract = foldr payRole V1.Close roles
-              actual = checkContract testnet (RoleTokensUsePolicy "" mempty) version contract Nothing continuations
+        prop "Contract or state with role name too long" $ \roles doTestContract -> do
+          let roleTokensConfig = RoleTokensUsePolicy mockPolicyId mempty
+              (contract, datum) =
+                if doTestContract
+                  then do
+                    let cnt = foldr payRole V1.Close roles
+                        dtm = datumForContractAndRolesConfig contract roleTokensConfig
+                    (cnt, dtm)
+                  else do
+                    let cnt = V1.Close
+                        accounts = AM.fromList $ roles <&> \role -> ((V1.Role role, V1.Token "" ""), 1)
+                        state = (V1.emptyState (PV2.POSIXTime 0)){V1.accounts = accounts}
+                        dtm =
+                          V1.MarloweData
+                            { marloweParams = V1.MarloweParams{rolesCurrency = policyIdFromRolesConfig roleTokensConfig}
+                            , marloweContract = contract
+                            , marloweState = state
+                            }
+                    (cnt, dtm)
+              actual = checkContract testnet (Just roleTokensConfig) version datum continuations
               expected =
                 if null roles
                   then [ContractHasNoRoles]
                   else [RoleNameTooLong role | role@(Plutus.TokenName name) <- nub roles, Plutus.lengthOfByteString name > 32]
-           in counterexample ("Contract = " <> show contract)
-                . counterexample ("Actual = " <> show actual)
-                . counterexample ("Expected = " <> show expected)
-                $ actual `same` expected
-        -- prop "State with role name too long" $ \roles ->
-        --   let contract = V1.Close
-        --       state =
-        --       expected =
-        --           [ContractHasNoRoles] <>
-        --           [RoleNameTooLong role | role@(Plutus.TokenName name) <- nub roles, Plutus.lengthOfByteString name > 32]
-        --       actual = checkContract testnet (RoleTokensUsePolicy "" mempty) version contract Nothing continuations
-        --    in counterexample ("Contract = " <> show contract)
-        --         . counterexample ("Actual = " <> show actual)
-        --         . counterexample ("Expected = " <> show expected)
-        --         $ actual `same` expected
-        prop "Contract with illegal token" $ \tokens ->
-          let contract = foldr payToken V1.Close tokens
-              actual = checkContract testnet (RoleTokensUsePolicy "" mempty) version contract Nothing continuations
+          counterexample ("Contract = " <> show contract)
+            . counterexample ("Actual = " <> show actual)
+            . counterexample ("Expected = " <> show expected)
+            $ actual `same` expected
+        prop "Marlowe with illegal token" $ \tokens doTestContract -> do
+          let (contract, state) =
+                if doTestContract
+                  then (foldr payToken V1.Close tokens, Nothing)
+                  else do
+                    let accounts = AM.fromList $ tokens <&> \token -> ((V1.Role "x", token), 1)
+                    (V1.Close, Just (V1.emptyState (PV2.POSIXTime 0)){V1.accounts = accounts})
+
               expected =
-                if contract == V1.Close
+                if null tokens
                   then [ContractHasNoRoles]
                   else
                     nub
@@ -231,20 +321,60 @@ spec =
                             then InvalidCurrencySymbol symbol
                             else TokenNameTooLong name
                       | token@(V1.Token symbol@(Plutus.CurrencySymbol symbol') name@(Plutus.TokenName name')) <- nub tokens
-                      , let ada = symbol' == "" && name' == ""
+                      , let isAda = symbol' == "" && name' == ""
                       , let badToken = symbol' == "" && name' /= ""
                       , let badCurrency = Plutus.lengthOfByteString symbol' /= 28
                       , let badName = Plutus.lengthOfByteString name' > 32
-                      , not ada
+                      , not isAda
                       , badToken || badCurrency || badName
                       ]
-           in counterexample ("Contract = " <> show contract)
-                . counterexample ("Actual = " <> show actual)
-                . counterexample ("Expected = " <> show expected)
-                $ actual `same` expected
-        prop "Contract with missing continuation" $ \contract ->
+              roleTokensConfig = RoleTokensUsePolicy mockPolicyId mempty
+              datum =
+                V1.MarloweData
+                  { marloweParams = V1.MarloweParams{rolesCurrency = policyIdFromRolesConfig roleTokensConfig}
+                  , marloweContract = contract
+                  , marloweState = fromMaybe (V1.emptyState 0) state
+                  }
+              actual = checkContract testnet (Just roleTokensConfig) version datum continuations
+          counterexample ("Contract = " <> show contract)
+            . counterexample ("State = " <> show state)
+            . counterexample ("Actual = " <> show actual)
+            . counterexample ("Expected = " <> show expected)
+            $ actual `same` expected
+        prop "Contract with missing role currency but role token" $ \doTestContract -> do
+          let role = V1.Role "x"
+              (contract, state) =
+                if doTestContract
+                  then (V1.Pay role (V1.Account role) ada (V1.Constant 1) V1.Close, Nothing)
+                  else do
+                    let accounts = AM.fromList [((role, ada), 1)]
+                    (V1.Close, Just (V1.emptyState (PV2.POSIXTime 0)){V1.accounts = accounts})
+              roleTokensConfig = RoleTokensNone
+              state' = fromMaybe (V1.emptyState 0) state
+
+              datum =
+                V1.MarloweData
+                  { marloweParams = V1.MarloweParams{rolesCurrency = policyIdFromRolesConfig roleTokensConfig}
+                  , marloweContract = contract
+                  , marloweState = state'
+                  }
+              expected = [MissingRolesCurrency]
+              actual = checkContract testnet (Just roleTokensConfig) version datum continuations
+              remapContinuations
+                :: M.Map Chain.DatumHash contract
+                -> M.Map Plutus.DatumHash contract
+              remapContinuations = M.mapKeys $ Plutus.DatumHash . Plutus.toBuiltin . Chain.unDatumHash
+              continuations' = remapContinuations continuations
+          counterexample ("Contract = " <> show contract)
+            . counterexample ("ExtractedRoleNames = " <> (show $ V1.extractRoleNames state' contract continuations'))
+            . counterexample ("ExtractedParties = " <> (show $ V1.extractParties state' contract continuations'))
+            . counterexample ("State = " <> show state)
+            . counterexample ("Actual = " <> show actual)
+            . counterexample ("Expected = " <> show expected)
+            $ actual `same` expected
+        prop "Contract with missing continuation" $ \nonMerkleized ->
           do
-            let V1.MerkleizedContract{..} = V1.merkleizedContract $ V1.deepMerkleize contract
+            let V1.MerkleizedContract{..} = V1.merkleizedContract $ V1.deepMerkleize nonMerkleized
                 toChainDatumHash (Plutus.DatumHash x) = Chain.DatumHash $ Plutus.fromBuiltin x
                 continuations' = M.toList $ M.mapKeys toChainDatumHash mcContinuations
             missing <- if null continuations' then pure mempty else pure <$> elements continuations'
@@ -253,15 +383,26 @@ spec =
                 relevant (RoleNameTooLong _) = False
                 relevant (InvalidCurrencySymbol _) = False
                 relevant (TokenNameTooLong _) = False
+                relevant (InvalidToken _) = False
                 relevant _ = True
-                actual =
+                roleTokensConfig = RoleTokensUsePolicy mockPolicyId mempty
+                datum = datumForContractAndRolesConfig mcContract roleTokensConfig
+                wholeReport =
                   filter relevant $
-                    checkContract testnet (RoleTokensUsePolicy "" mempty) version mcContract Nothing (M.fromList remaining)
+                    checkContract testnet (Just roleTokensConfig) version datum (M.fromList remaining)
+                actual = filter relevant wholeReport
+                remapContinuations
+                  :: M.Map Chain.DatumHash contract
+                  -> M.Map Plutus.DatumHash contract
+                remapContinuations = M.mapKeys $ Plutus.DatumHash . Plutus.toBuiltin . Chain.unDatumHash
+                checkResult = checkContinuations mcContract (remapContinuations $ M.fromList remaining)
                 expected = MissingContinuation . Plutus.DatumHash . Plutus.toBuiltin . Chain.unDatumHash . fst <$> missing
             pure
               . counterexample ("Contract = " <> show mcContract)
+              . counterexample ("DirectCheckResult = " <> show checkResult)
               . counterexample ("Missing = " <> show missing)
               . counterexample ("Remaining = " <> show remaining)
+              . counterexample ("WholeReport = " <> show wholeReport)
               . counterexample ("Actual = " <> show actual)
               . counterexample ("Expected = " <> show expected)
               $ actual `same` expected
@@ -272,7 +413,8 @@ spec =
                     [V1.Case (V1.Deposit (V1.Address True address) (V1.Address False address) (V1.Token "" "") (V1.Constant 1)) V1.Close]
                     0
                     V1.Close
-                actual = checkContract testnet RoleTokensNone version contract Nothing mempty
+                datum = datumForContractAndRolesConfig contract RoleTokensNone
+                actual = checkContract testnet (Just RoleTokensNone) version datum mempty
                 expected = [InconsistentNetworks, WrongNetwork]
             counterexample ("Actual = " <> show actual)
               . counterexample ("Expected = " <> show expected)
@@ -280,7 +422,8 @@ spec =
         prop "Contract on wrong network" $ \address ->
           do
             let contract = V1.When [V1.Case (V1.Choice (V1.ChoiceId "Choice" $ V1.Address V1.mainnet address) []) V1.Close] 0 V1.Close
-                actual = checkContract testnet RoleTokensNone version contract Nothing mempty
+                datum = datumForContractAndRolesConfig contract RoleTokensNone
+                actual = checkContract testnet (Just RoleTokensNone) version datum mempty
                 expected = [WrongNetwork]
             counterexample ("Actual = " <> show actual)
               . counterexample ("Expected = " <> show expected)
@@ -293,7 +436,8 @@ spec =
                     (Plutus.PubKeyCredential "0000000000000000000000000000000000000000000000000000000000000000") -- The hash is too long.
                     Nothing
                 contract = V1.When [V1.Case (V1.Choice (V1.ChoiceId "Choice" $ V1.Address False address) []) V1.Close] 0 V1.Close
-                actual = checkContract testnet RoleTokensNone version contract Nothing mempty
+                datum = datumForContractAndRolesConfig contract RoleTokensNone
+                actual = checkContract testnet (Just RoleTokensNone) version datum mempty
                 expected = [IllegalAddress address]
             counterexample ("Actual = " <> show actual)
               . counterexample ("Expected = " <> show expected)
@@ -334,7 +478,6 @@ spec =
       for_ referenceContracts \(name, contract) -> it ("Passes for reference contract " <> name) do
         (policy, address) <- generate arbitrary
         let minAda =
-<<<<<<< HEAD
               maybe 1_500_000 toInteger $
                 minAdaUpperBound
                   babbageEraOnwardsTest
@@ -343,16 +486,6 @@ spec =
                   (V1.emptyState 0)
                   contract
                   mempty
-=======
-              fromIntegral $
-                maybe 1_500_000 toInteger $
-                  minAdaUpperBound
-                    ReferenceTxInsScriptsInlineDatumsInBabbageEra
-                    protocolTestnet
-                    version
-                    (V1.emptyState 0)
-                    contract
-                    mempty
             threadTokenAssetId = ThreadTokenAssetId (Chain.AssetId policy (Chain.TokenName "Thread"))
         datum <-
           either (error "Unable to initialize the state") pure $
@@ -365,7 +498,6 @@ spec =
               (Just threadTokenAssetId)
               minAda
               (MinAdaProvider address)
->>>>>>> 16843ae4a (Introduce safety analysis to the input application)
         actual <-
           checkTransactions
             protocolTestnet
@@ -391,7 +523,6 @@ spec =
               policy = "46e79d4fbf0dd6766f8601fdec651ad708af7115fd8f7b5e14b622e5"
               address = "608db2b806ba9e7ae2909ae38afc6c1bce02f5df3e1cb1b06cbc80546f"
               rolesPolicyId = RolesPolicyId policy
-              ada = V1.Token PV2.adaSymbol PV2.adaToken
               contract =
                 V1.When
                   [ V1.Case (V1.Deposit party party ada $ V1.Constant i) $ V1.Pay party (V1.Party party) ada (V1.Constant i) V1.Close
@@ -428,12 +559,10 @@ spec =
       prop
         "Contract with prohibitive execution closure cost"
         do
-          let adaToken = V1.Token PV2.adaSymbol PV2.adaToken
-              -- Eight payouts is enough to overspend the budget
-              initialAccounts :: V1.Accounts
+          let initialAccounts :: V1.Accounts
               initialAccounts =
                 AM.fromList $
-                  [ ((accountId, adaToken), 1)
+                  [ ((accountId, ada), 1)
                   | i <- [1 .. 8] :: [Int]
                   , let accountId = V1.Role $ PLA.tokenName . Text.encodeUtf8 . Text.pack . show $ i
                   ]
@@ -480,7 +609,6 @@ spec =
               benefactor = "Benefactor"
               beneficiary = "Beneficiary"
               amount = V1.Constant 8_000_000
-              ada = V1.Token "" ""
               contract =
                 V1.When
                   [ V1.Case (V1.Deposit (V1.Role benefactor) (V1.Role benefactor) ada amount) $
