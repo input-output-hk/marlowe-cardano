@@ -422,6 +422,7 @@ mkMint :: NonEmpty (TokenName, Maybe RoleTokenMetadata, Destination, Chain.Quant
 mkMint = foldMap1 \(token, metadata, dest, quantity) ->
   Mint $ NEMap.singleton token $ MintRole metadata $ NEMap.singleton dest quantity
 
+-- Please use safe pattern synonyms which are defined below and exported.
 data RoleTokensConfig
   = RoleTokensNone
   | UnsafeRoleTokensUsePolicy PolicyId (Map TokenName (Map Destination Chain.Quantity))
@@ -463,6 +464,7 @@ pattern RoleTokensUsePolicy
   -> RoleTokensConfig
 pattern RoleTokensUsePolicy policy dist <- UnsafeRoleTokensUsePolicy policy dist
   where
+    RoleTokensUsePolicy "" _ = RoleTokensNone
     RoleTokensUsePolicy policy dist =
       UnsafeRoleTokensUsePolicy policy $
         Map.filter (not . Map.null) $

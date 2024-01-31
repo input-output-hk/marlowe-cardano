@@ -331,6 +331,9 @@ randomCurrencySymbols =
   , "9f92753881b398a247e53b6cad08eab0e158cf1ef5df84c7f5766041"
   , "c1f46ec0147542f9bc155805993497ed44150687a41d0a63af3be466"
   , "cc2189d7adde0ed26355fd03e134feb508e5924959b07a53557f285e"
+  , "cc2189d7adde0ed26355fd03e134feb508e5924959b07a53557f"
+  , "cc2189d7adde0ed26355fd03e134feb508e5924959b07a53557f1234556"
+  , ""
   ]
 
 instance Arbitrary CurrencySymbol where
@@ -354,6 +357,8 @@ randomTokenNames =
   , "ARTISAN CONVERSATION"
   , "SOFTWARE FEEDBACK METHOD"
   , "INDEPENDENCE EXPLANATION REVENUE"
+  , "INDEPENDENCE EXPLANATION REVENUE INDEPENDENCE EXPLANATION REVENUE"
+  , "INDEPENDENCE EXPLANATION REVENUE INDEPENDENCE EXPLANATION REVENUE INDEPENDENCE EXPLANATION REVENUE INDEPENDENCE EXPLANATION REVENUE"
   ]
 
 instance Arbitrary TokenName where
@@ -361,11 +366,7 @@ instance Arbitrary TokenName where
   shrink = shrinkByteString (\(TokenName x) -> x) randomTokenNames
 
 instance Arbitrary Token where
-  arbitrary =
-    oneof
-      [ pure $ Token adaSymbol adaToken
-      , Token <$> arbitrary <*> arbitrary
-      ]
+  arbitrary = Token <$> arbitrary <*> arbitrary
   shrink (Token c n)
     | c == adaSymbol && n == adaToken = []
     | otherwise = Token adaSymbol adaToken : (uncurry Token <$> shrink (c, n))
@@ -438,6 +439,8 @@ randomScriptHashes =
   , "a2bd7ddd1d11c7f4994fa7f41c2781c750525705f9c259f97cb27d0e"
   , "c5b4c54ec387ad8250b183a0d0d181617bb18bcf2eccc0f27fe7aa23"
   , "d877b83fee4a52bd72269ece77d78549fa64e111aa0e20cd4a1c471b"
+  , "d877b83fee4a52bd72269ece77d78549fa64e111aa0e20cd4a1c47"
+  , "d877b83fee4a52bd72269ece77d78549fa64e111aa0e20cd4a1c470908"
   ]
 
 instance Arbitrary POSIXTime where
@@ -464,7 +467,7 @@ randomChoiceNames =
   , "envisage software"
   , "attend unknown animals"
   , "position increated radiation"
-  , "proclaim endless sordid figments"
+  , "candidate apartment reaction replacement"
   ]
 
 -- | Generate a choice name from a few possibilities.

@@ -12,6 +12,7 @@ module Language.Marlowe.Core.V1.Plate (
   extractNetworks,
   extractParties,
   extractRoleNames,
+  extractParties,
   extractTokens,
 ) where
 
@@ -247,7 +248,7 @@ instance StateExtract Token where
 
 -- | List all of the parties in a contract and its state.
 extractParties
-  :: Maybe State
+  :: State
   -- ^ The contract's initial state.
   -> Contract
   -- ^ The contract.
@@ -256,12 +257,12 @@ extractParties
   -> S.Set Party
   -- ^ The parties.
 extractParties state contract continuations =
-  maybe mempty extractFromState state
+  extractFromState state
     <> extractAllWithContinuations contract continuations
 
 -- | List all of the parties in a contract and its state.
 extractRoleNames
-  :: Maybe State
+  :: State
   -- ^ The contract's initial state.
   -> Contract
   -- ^ The contract.
@@ -276,7 +277,7 @@ extractRoleNames =
 
 -- | List all of the network addresses in a contract and its state.
 extractNetworkAddresses
-  :: Maybe State
+  :: State
   -- ^ The contract's initial state.
   -> Contract
   -- ^ The contract.
@@ -291,7 +292,7 @@ extractNetworkAddresses =
 
 -- | List all of the networks in a contract and its state.
 extractNetworks
-  :: Maybe State
+  :: State
   -- ^ The contract's initial state.
   -> Contract
   -- ^ The contract.
@@ -303,7 +304,7 @@ extractNetworks = ((S.map fst .) .) . extractNetworkAddresses
 
 -- | List all of the addresses in a contract and its state.
 extractAddresses
-  :: Maybe State
+  :: State
   -- ^ The contract's initial state.
   -> Contract
   -- ^ The contract.
@@ -315,7 +316,7 @@ extractAddresses = ((S.map snd .) .) . extractNetworkAddresses
 
 -- | List all of the tokens in a contract and its state.
 extractTokens
-  :: Maybe State
+  :: State
   -- ^ The contract's initial state.
   -> Contract
   -- ^ The contract.
@@ -324,5 +325,5 @@ extractTokens
   -> S.Set Token
   -- ^ The tokens.
 extractTokens state contract continuations =
-  maybe mempty extractFromState state
+  extractFromState state
     <> extractAllWithContinuations contract continuations

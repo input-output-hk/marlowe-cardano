@@ -75,6 +75,7 @@ import qualified Cardano.Api.Shelley as Shelley (
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.State.Strict (evalState, get, put)
 import Data.Functor.Identity (runIdentity)
+import Data.List (nub)
 import qualified Data.Map as Map
 import qualified Data.Map.NonEmpty as NEMap
 import qualified Data.Map.Strict as M (
@@ -284,30 +285,35 @@ minAdaBound era pps MarloweV1 assets =
 -- | Check a contract for design errors and ledger violations.
 checkContract
   :: Cardano.NetworkId
-  -> RoleTokensConfig
+  -> Maybe RoleTokensConfig
+  -- FIXME: This should depend on the context:
+  --  * it could be the config used to perform minting
+  --  * it could be minting information gathered from the chain
+  --
+  --  Currently we handle only the first case.
   -> MarloweVersion v
-  -> Contract v
-  -> Maybe V1.State
+  -> Datum v
   -> Continuations v
   -> [SafetyError]
-checkContract network rolesTokenConfig MarloweV1 contract state continuations =
+checkContract network roleTokensConfig MarloweV1 marloweData continuations =
   let continuations' = remapContinuations continuations
-      mintCheck = checkMinting rolesTokenConfig MarloweV1 contract state continuations
-      avoidDuplicateReport = True
-      nameCheck = checkRoleNames avoidDuplicateReport state contract continuations'
+      V1.MarloweData{marloweState = state, marloweParams = V1.MarloweParams{rolesCurrency}, marloweContract = contract} = marloweData
+      mintCheck = flip foldMap roleTokensConfig \roleTokensConfig' ->
+        checkMinting roleTokensConfig' MarloweV1 contract state continuations
+      rolesCheck = checkRoleNames rolesCurrency state contract continuations'
       tokenCheck = checkTokens state contract continuations'
       continuationCheck = checkContinuations contract continuations'
       networksCheck =
         checkNetwork (network == Cardano.Mainnet) state contract continuations'
           <> snd (checkNetworks state contract continuations')
       addressCheck = checkAddresses state contract continuations'
-   in mintCheck <> nameCheck <> tokenCheck <> continuationCheck <> networksCheck <> addressCheck
+   in nub $ mintCheck <> rolesCheck <> tokenCheck <> continuationCheck <> networksCheck <> addressCheck
 
 checkMinting
   :: RoleTokensConfig
   -> MarloweVersion v
   -> Contract v
-  -> Maybe V1.State
+  -> V1.State
   -> Continuations v
   -> [SafetyError]
 checkMinting config MarloweV1 contract state continuations = do
@@ -436,7 +442,7 @@ checkTransaction protocolParameters era version@MarloweV1 marloweContext@Marlowe
         (pure . TransactionValidationError (stripAnnotation transaction) . show)
         (const $ TransactionWarning (stripAnnotation transaction) <$> V1.txOutWarnings txOutput)
       $ solveConstraints' era protocolParameters version (Left marloweContext') walletContext helpersContext' constraints
--- <<<<<<< HEAD
+-- N.B : To handle this piece of code...Should we remove it ?
 --       $ solveConstraints' era protocolParameters version (Left marloweContext') walletContext helpersContext' constraints
 --
 -- -- | Create a helpers context for the specified helper roles.
