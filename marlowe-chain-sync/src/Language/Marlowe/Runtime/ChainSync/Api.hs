@@ -40,6 +40,7 @@ import Cardano.Ledger.Credential (ptrCertIx, ptrSlotNo, ptrTxIx)
 import Cardano.Ledger.Slot (EpochSize)
 import Codec.Serialise (deserialiseOrFail, serialise)
 import Control.Applicative ((<|>))
+import Control.DeepSeq (NFData)
 import Control.Monad (guard, join, when, (<=<), (>=>))
 import Data.Aeson (
   FromJSON (..),
@@ -553,7 +554,7 @@ instance ToJSONKey Base16 where
 
 newtype DatumHash = DatumHash {unDatumHash :: ByteString}
   deriving stock (Eq, Ord, Generic)
-  deriving newtype (Binary, Variations, Hashable)
+  deriving newtype (Binary, Variations, Hashable, NFData)
   deriving (IsString, Show, ToJSON) via Base16
 
 newtype TxId = TxId {unTxId :: ByteString}
