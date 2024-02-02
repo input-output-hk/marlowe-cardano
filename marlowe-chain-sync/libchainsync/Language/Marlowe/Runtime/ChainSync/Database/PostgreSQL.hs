@@ -381,18 +381,29 @@ getRollbackPoint point = case pointParams of
       <$> HT.statement
         pointParams'
         [maybeStatement|
-      WITH RECURSIVE rollbacks AS
-        ( SELECT *
-            FROM chain.block
-          WHERE rollbackToBlock IS NOT NULL AND id = $2 :: bytea AND slotNo = $1 :: bigint
-          UNION
-          SELECT block.*
-            FROM chain.block AS block
-            JOIN rollbacks ON block.id = rollbacks.rollbackToBlock AND block.slotNo = rollbacks.rollbackToSlot
-        )
-      SELECT slotNo :: bigint, id :: bytea, blockNo :: bigint
-        FROM rollbacks
-      WHERE rollbackToSlot IS NULL
+          WITH RECURSIVE rollbacks AS
+            ( SELECT *
+                FROM chain.block
+              WHERE rollbackToBlock IS NOT NULL
+                AND id = $2 :: bytea
+                AND slotNo = $1 :: bigint
+                AND NOT EXISTS
+                  ( SELECT *
+                      FROM chain.block
+                    WHERE rollbackToBlock IS NULL
+                      AND id = $2 :: bytea
+                      AND slotNo = $1 :: bigint
+                  )
+              UNION
+              SELECT block.*
+                FROM chain.block AS block
+                JOIN rollbacks ON block.id = rollbacks.rollbackToBlock AND block.slotNo = rollbacks.rollbackToSlot
+            )
+          SELECT slotNo :: bigint, id :: bytea, blockNo :: bigint
+            FROM rollbacks
+          WHERE rollbackToSlot IS NULL
+          ORDER BY slotNo DESC
+          LIMIT 1
     |]
   where
     pointParams :: Maybe (Int64, ByteString)
@@ -668,6 +679,7 @@ performFindTxsFor networkId credentials point = do
         JOIN txIds                             USING (id)
         JOIN chain.block          AS block     ON block.id = tx.blockId AND block.slotNo = tx.slotNo
         LEFT JOIN chain.assetMint AS assetMint ON assetMint.txId = tx.id AND assetMint.slotNo = tx.slotNo
+       WHERE block.rollbackToBlock IS NULL
     |]
         foldTxs
   case initialResult of

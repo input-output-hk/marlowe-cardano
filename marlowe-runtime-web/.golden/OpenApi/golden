@@ -3273,7 +3273,7 @@
             "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
         },
         "title": "Marlowe Runtime REST API",
-        "version": "0.0.5.1"
+        "version": "0.0.7"
     },
     "openapi": "3.1.0",
     "paths": {
