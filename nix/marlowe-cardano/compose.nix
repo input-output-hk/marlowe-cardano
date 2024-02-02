@@ -98,7 +98,7 @@ let
   '';
 
   node-service = {
-    image = "inputoutput/cardano-node:8.1.2";
+    image = "ghcr.io/input-output-hk/cardano-node:8.7.3";
 
     environment = [
       "NETWORK=${network.name}"

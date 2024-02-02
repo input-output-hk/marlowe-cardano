@@ -6,6 +6,7 @@ module Language.Marlowe.Runtime.Contract.Store.File (
 
 import Codec.Compression.GZip (compress, decompress)
 import Control.Applicative (liftA2)
+import Control.DeepSeq (force)
 import Control.Monad (guard, unless, when)
 import Control.Monad.Catch (MonadMask)
 import Control.Monad.Trans.Maybe (MaybeT (..))
@@ -105,7 +106,7 @@ createContractStore ContractStoreOptions{..} = do
               hash
               state
               input
-      , setGCRoots = atomically . writeTVar gcRootsVar . Just
+      , setGCRoots = atomically . writeTVar gcRootsVar . Just . force
       }
   where
     lockingParameters =

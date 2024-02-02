@@ -368,7 +368,6 @@ library contract
   hs-source-dirs:  contract
   visibility:      public
   exposed-modules:
-    Data.Marlowe.LiveContracts
     Language.Marlowe.Runtime.Contract
     Language.Marlowe.Runtime.Contract.GarbageCollector
     Language.Marlowe.Runtime.Contract.LoadServer
@@ -387,12 +386,14 @@ library contract
     , bytestring >=0.10.12 && <0.12
     , co-log ^>=0.6
     , containers ^>=0.6.5
+    , deepseq
     , dlist ^>=1.0
     , eventuo11y >=0.9 && <0.11
     , eventuo11y-extras ==0.1.1.0
     , eventuo11y-otel ^>=0.1
     , exceptions ^>=0.10
     , filepath ^>=1.4
+    , hashtables ^>=1.3
     , hs-opentelemetry-api ^>=0.0.3
     , lock-file ^>=0.7
     , marlowe-cardano ==0.2.1.0
@@ -799,7 +800,6 @@ test-suite marlowe-runtime-test
   type:               exitcode-stdio-1.0
   main-is:            Spec.hs
   other-modules:
-    Data.Marlowe.LiveContractsSpec
     Language.Marlowe.Protocol.BulkSyncSpec
     Language.Marlowe.Protocol.HeaderSyncSpec
     Language.Marlowe.Protocol.LoadSpec
@@ -834,7 +834,7 @@ test-suite marlowe-runtime-test
     , marlowe-chain-sync:{marlowe-chain-sync, gen, plutus-compat} ==0.0.6
     , marlowe-object:gen
     , marlowe-protocols ==0.3.0.0
-    , marlowe-runtime:{marlowe-runtime, contract, contract-api, gen, sync, sync-api, tx, tx-api} ==0.0.6
+    , marlowe-runtime:{marlowe-runtime, contract-api, gen, sync, sync-api, tx, tx-api} ==0.0.6
     , marlowe-test ==0.2.1.0
     , network-uri >=2.6 && <3
     , nonempty-containers ^>=0.3.4
