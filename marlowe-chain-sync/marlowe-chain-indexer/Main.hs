@@ -63,7 +63,7 @@ run Options{..} = do
             -<
               ChainIndexerDependencies
                 { connectToLocalNode = liftIO . Cardano.connectToLocalNode localNodeConnectInfo
-                , databaseQueries = PostgreSQL.databaseQueries pool genesisBlock
+                , databaseQueries = PostgreSQL.databaseQueries pool
                 , persistRateLimit
                 , genesisBlock
                 , maxCost
