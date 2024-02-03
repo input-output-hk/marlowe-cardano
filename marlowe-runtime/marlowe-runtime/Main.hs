@@ -126,7 +126,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
     NESet.IsNonEmpty scripts -> pure scripts
 
   runAppMTraced instrumentationLibrary (renderRootSelectorOTel dbName dbUser dbHost dbPort) do
-    let chainIndexerDatabaseQueries = ChainIndexerPostgres.databaseQueries pool genesisBlock
+    let chainIndexerDatabaseQueries = ChainIndexerPostgres.databaseQueries pool
 
     runGetGenesisBlock (getGenesisBlock chainIndexerDatabaseQueries) >>= \case
       Just dbGenesisBlock -> unless (dbGenesisBlock == genesisBlock) do

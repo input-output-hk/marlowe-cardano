@@ -242,7 +242,7 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
             byronGenesisConfig
             shelleyGenesisConfig
 
-        chainIndexerDatabaseQueries = ChainIndexer.databaseQueries pool genesisBlock
+        chainIndexerDatabaseQueries = ChainIndexer.databaseQueries pool
 
         chainSyncDatabaseQueries = ChainSync.databaseQueries pool localNodeNetworkId
 
