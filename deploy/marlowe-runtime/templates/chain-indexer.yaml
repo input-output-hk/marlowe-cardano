@@ -38,7 +38,11 @@ spec:
       properties:
         allocateDatabase:
           storage: 400
+          {{ if (eq $network "mainnet") }}
+          instanceClass: db.m7g.xlarge
+          {{ else }}
           instanceClass: db.t3.medium
+          {{- end }}
         name: marlowe-runtime-{{ $instanceName }}-{{ $network }}-chain
     - type: init-container
       properties:
