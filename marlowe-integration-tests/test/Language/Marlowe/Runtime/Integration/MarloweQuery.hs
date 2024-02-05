@@ -691,8 +691,27 @@ txNoToInput MarloweQueryTestData{..} = \case
   Contract3Step3 -> utxo $ fromJust $ scriptOutput $ inputsAppliedOutput $ gimmeTheMoneyChosen contract3Step2
   Contract3Step4 -> utxo $ fromJust $ scriptOutput $ inputsAppliedOutput $ notified contract3Step3
 
+txNoToInputDatum :: MarloweQueryTestData -> TxNo -> Core.Datum 'V1
+txNoToInputDatum MarloweQueryTestData{..} = \case
+  Contract1Step1 -> standardContractDatum contract1
+  Contract1Step2 -> inputsAppliedInputDatum $ gimmeTheMoneyChosen contract1Step2
+  Contract1Step3 -> inputsAppliedInputDatum $ notified contract1Step3
+  Contract1Step4 -> inputsAppliedInputDatum $ returnDeposited contract1Step4
+  Contract2Step1 -> standardContractDatum contract2
+  Contract2Step2 -> inputsAppliedInputDatum $ gimmeTheMoneyChosen contract2Step2
+  Contract2Step3 -> inputsAppliedInputDatum $ notified contract2Step3
+  Contract2Step4 -> inputsAppliedInputDatum $ returnDeposited contract2Step4
+  Contract3Step1 -> standardContractDatum contract3
+  Contract3Step2 -> inputsAppliedInputDatum $ gimmeTheMoneyChosen contract3Step2
+  Contract3Step3 -> inputsAppliedInputDatum $ notified contract3Step3
+  Contract3Step4 -> inputsAppliedInputDatum $ returnDeposited contract3Step4
+
 inputsAppliedOutput :: InputsApplied v -> TransactionOutput v
 inputsAppliedOutput (InputsApplied _ InputsAppliedInEra{..}) = output
+
+inputsAppliedInputDatum :: InputsApplied v -> Core.Datum v
+inputsAppliedInputDatum (InputsApplied _ InputsAppliedInEra{..}) = case input of
+  Core.TransactionScriptOutput{..} -> datum
 
 txNoToConsumer :: MarloweQueryTestData -> TxNo -> Maybe TxId
 txNoToConsumer MarloweQueryTestData{..} =
@@ -801,6 +820,7 @@ txNoToSomeTransaction testData txNo =
   SomeTransaction
     MarloweV1
     (txNoToInput testData txNo)
+    (txNoToInputDatum testData txNo)
     (txNoToConsumer testData txNo)
     (inputsAppliedToTransaction (txNoToBlockHeader testData txNo) (txNoToInputsApplied testData txNo))
 

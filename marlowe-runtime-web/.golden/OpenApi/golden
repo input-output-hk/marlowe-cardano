@@ -582,9 +582,6 @@
                     "block": {
                         "$ref": "#/components/schemas/BlockHeader"
                     },
-                    "continuations": {
-                        "type": "string"
-                    },
                     "contractId": {
                         "$ref": "#/components/schemas/TxOutRef"
                     },
@@ -776,9 +773,6 @@
                     },
                     "block": {
                         "$ref": "#/components/schemas/BlockHeader"
-                    },
-                    "continuations": {
-                        "type": "string"
                     },
                     "contractId": {
                         "$ref": "#/components/schemas/TxOutRef"
@@ -2742,11 +2736,14 @@
                     "consumingTx": {
                         "$ref": "#/components/schemas/TxId"
                     },
-                    "continuations": {
-                        "type": "string"
-                    },
                     "contractId": {
                         "$ref": "#/components/schemas/TxOutRef"
+                    },
+                    "inputContract": {
+                        "$ref": "#/components/schemas/Contract"
+                    },
+                    "inputState": {
+                        "$ref": "#/components/schemas/MarloweState"
                     },
                     "inputUtxo": {
                         "$ref": "#/components/schemas/TxOutRef"
@@ -2784,6 +2781,12 @@
                         },
                         "type": "array"
                     },
+                    "reconstructedSemanticInput": {
+                        "$ref": "#/components/schemas/TransactionInput"
+                    },
+                    "reconstructedSemanticOutput": {
+                        "$ref": "#/components/schemas/TransactionOutput"
+                    },
                     "status": {
                         "$ref": "#/components/schemas/TxStatus"
                     },
@@ -2807,11 +2810,15 @@
                     "metadata",
                     "status",
                     "inputUtxo",
+                    "inputContract",
+                    "inputState",
                     "inputs",
                     "assets",
                     "payouts",
                     "invalidBefore",
-                    "invalidHereafter"
+                    "invalidHereafter",
+                    "reconstructedSemanticInput",
+                    "reconstructedSemanticOutput"
                 ],
                 "type": "object"
             },
@@ -2819,9 +2826,6 @@
                 "properties": {
                     "block": {
                         "$ref": "#/components/schemas/BlockHeader"
-                    },
-                    "continuations": {
-                        "type": "string"
                     },
                     "contractId": {
                         "$ref": "#/components/schemas/TxOutRef"

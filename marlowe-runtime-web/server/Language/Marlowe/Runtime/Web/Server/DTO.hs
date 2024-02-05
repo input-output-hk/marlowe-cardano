@@ -76,11 +76,15 @@ import Cardano.Ledger.Core (EraTxWits, eraProtVerLow)
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Bitraversable (Bitraversable (..))
+import Data.Foldable (Foldable (..))
 import Data.Function (on)
 import Data.Kind (Type)
 import Data.List (groupBy)
 import qualified Data.Map.NonEmpty as NEMap
 import Data.Set (Set)
+import Data.Time (UTCTime, nominalDiffTimeToSeconds)
+import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
+import qualified Language.Marlowe.Core.V1.Semantics as V1
 import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddressBech32, serialiseAddressBech32)
 import Language.Marlowe.Protocol.Query.Types (
   ContractState (..),
@@ -117,6 +121,7 @@ import qualified Language.Marlowe.Runtime.Transaction.Api as Tx
 import qualified Language.Marlowe.Runtime.Web as Web
 import Language.Marlowe.Runtime.Web.Server.TxClient (TempTx (..), TempTxStatus (..))
 import Network.HTTP.Media (MediaType, parseAccept)
+import qualified PlutusLedgerApi.V2 as PV2
 import Servant.Pagination (IsRangeType)
 import qualified Servant.Pagination as Pagination
 import Unsafe.Coerce (unsafeCoerce)
@@ -265,8 +270,7 @@ instance ToDTO Discovery.ContractHeader where
       { contractId = toDTO contractId
       , roleTokenMintingPolicyId = toDTO rolesCurrency
       , version = toDTO marloweVersion
-      , tags = foldMap fst $ toDTO $ marloweMetadata metadata
-      , continuations = snd =<< toDTO (marloweMetadata metadata)
+      , tags = fold $ toDTO $ marloweMetadata metadata
       , metadata = toDTO $ transactionMetadata metadata
       , status = Web.Confirmed
       , block = Just $ toDTO blockHeader
@@ -397,22 +401,20 @@ instance FromDTO Chain.TransactionMetadata where
   fromDTO = fmap Chain.TransactionMetadata . fromDTO
 
 instance HasDTO MarloweMetadata where
-  type DTO MarloweMetadata = (Map Text Web.Metadata, Maybe Text)
+  type DTO MarloweMetadata = Map Text Web.Metadata
 
 instance ToDTO MarloweMetadata where
   toDTO MarloweMetadata{..} =
-    ( Map.mapKeys getMarloweMetadataTag $ maybe (Web.Metadata Null) toDTO <$> tags
-    , continuations
-    )
+    Map.mapKeys getMarloweMetadataTag $ maybe (Web.Metadata Null) toDTO <$> tags
 
 instance FromDTO MarloweMetadata where
-  fromDTO (tags, continuations) =
+  fromDTO tags =
     MarloweMetadata
       <$> ( Map.mapKeys MarloweMetadataTag <$> for tags \case
               Web.Metadata Null -> pure Nothing
               m -> Just <$> fromDTO m
           )
-      <*> pure continuations
+      <*> pure Nothing
 
 instance HasDTO Chain.SlotNo where
   type DTO Chain.SlotNo = Word64
@@ -466,8 +468,7 @@ instance ToDTO SomeContractState where
       { contractId = toDTO contractId
       , roleTokenMintingPolicyId = toDTO roleTokenMintingPolicyId
       , version = Web.V1
-      , tags = foldMap fst $ toDTO $ marloweMetadata metadata
-      , continuations = snd =<< toDTO (marloweMetadata metadata)
+      , tags = fold $ toDTO $ marloweMetadata metadata
       , metadata = toDTO $ transactionMetadata metadata
       , status = Web.Confirmed
       , block = Just $ toDTO initialBlock
@@ -507,12 +508,15 @@ instance ToDTO SomeTransaction where
     Web.Tx
       { contractId = toDTO contractId
       , transactionId = toDTO transactionId
-      , continuations = snd =<< toDTO (marloweMetadata metadata)
-      , tags = foldMap fst $ toDTO $ marloweMetadata metadata
+      , tags = fold $ toDTO $ marloweMetadata metadata
       , metadata = toDTO $ transactionMetadata metadata
       , status = Web.Confirmed
       , block = Just $ toDTO blockHeader
       , inputUtxo = toDTO input
+      , inputContract = case version of
+          MarloweV1 -> Sem.marloweContract inputDatum
+      , inputState = case version of
+          MarloweV1 -> Sem.marloweState inputDatum
       , inputs = case version of
           MarloweV1 -> inputs
       , outputUtxo = toDTO $ utxo <$> scriptOutput
@@ -528,11 +532,30 @@ instance ToDTO SomeTransaction where
       , consumingTx = toDTO consumedBy
       , invalidBefore = validityLowerBound
       , invalidHereafter = validityUpperBound
+      , reconstructedSemanticInput
+      , reconstructedSemanticOutput = case version of
+          MarloweV1 ->
+            V1.computeTransaction
+              reconstructedSemanticInput
+              (Sem.marloweState inputDatum)
+              (Sem.marloweContract inputDatum)
       , txBody = Nothing
       }
     where
       Transaction{..} = transaction
       TransactionOutput{..} = output
+      reconstructedSemanticInput = case version of
+        MarloweV1 ->
+          V1.TransactionInput
+            { txInputs = inputs
+            , txInterval =
+                ( utcToPOSIXTime validityLowerBound
+                , utcToPOSIXTime validityUpperBound - 1
+                )
+            }
+
+utcToPOSIXTime :: UTCTime -> PV2.POSIXTime
+utcToPOSIXTime = PV2.POSIXTime . floor . (1000 *) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds
 
 instance HasDTO TempTxStatus where
   type DTO TempTxStatus = Web.TxStatus
@@ -586,8 +609,7 @@ instance ToDTOWithTxStatus (Tx.ContractCreated v) where
       , roleTokenMintingPolicyId = toDTO rolesCurrency
       , version = case version of
           MarloweV1 -> Web.V1
-      , tags = foldMap fst $ toDTO $ marloweMetadata metadata
-      , continuations = snd =<< toDTO (marloweMetadata metadata)
+      , tags = fold $ toDTO $ marloweMetadata metadata
       , metadata = toDTO $ transactionMetadata metadata
       , status = toDTO status
       , block = Nothing
@@ -617,12 +639,15 @@ instance ToDTOWithTxStatus (Tx.InputsApplied v) where
     Web.Tx
       { contractId = toDTO contractId
       , transactionId = toDTO $ fromCardanoTxId $ getTxId txBody
-      , continuations = snd =<< toDTO (marloweMetadata metadata)
-      , tags = foldMap fst $ toDTO $ marloweMetadata metadata
+      , tags = fold $ toDTO $ marloweMetadata metadata
       , metadata = toDTO $ transactionMetadata metadata
       , status = toDTO status
       , block = Nothing
       , inputUtxo = toDTO $ utxo input
+      , inputContract = case (version, input) of
+          (MarloweV1, TransactionScriptOutput{..}) -> Sem.marloweContract datum
+      , inputState = case (version, input) of
+          (MarloweV1, TransactionScriptOutput{..}) -> Sem.marloweState datum
       , inputs = case version of
           MarloweV1 -> inputs
       , outputUtxo = toDTO $ utxo <$> scriptOutput output
@@ -638,12 +663,29 @@ instance ToDTOWithTxStatus (Tx.InputsApplied v) where
           MarloweV1 ->
             (\(payoutId, Core.Api.Payout{..}) -> Web.Payout (toDTO payoutId) (toDTO . tokenName $ datum) (toDTO assets))
               <$> M.toList (payouts output)
+      , reconstructedSemanticInput
+      , reconstructedSemanticOutput = case (version, input) of
+          (MarloweV1, TransactionScriptOutput{..}) ->
+            V1.computeTransaction
+              reconstructedSemanticInput
+              (Sem.marloweState datum)
+              (Sem.marloweContract datum)
       , txBody = case status of
           Unsigned -> Just case era of
             BabbageEraOnwardsBabbage -> toDTO txBody
             BabbageEraOnwardsConway -> toDTO txBody
           Submitted -> Nothing
       }
+    where
+      reconstructedSemanticInput = case version of
+        MarloweV1 ->
+          V1.TransactionInput
+            { txInputs = inputs
+            , txInterval =
+                ( utcToPOSIXTime invalidBefore
+                , utcToPOSIXTime invalidHereafter - 1
+                )
+            }
 
 emptyAssets :: Web.Assets
 emptyAssets = Web.Assets 0 $ Web.Tokens mempty
@@ -656,8 +698,7 @@ instance ToDTO (Transaction 'V1) where
     Web.TxHeader
       { contractId = toDTO contractId
       , transactionId = toDTO transactionId
-      , continuations = snd =<< toDTO (marloweMetadata metadata)
-      , tags = foldMap fst $ toDTO $ marloweMetadata metadata
+      , tags = fold $ toDTO $ marloweMetadata metadata
       , metadata = toDTO $ transactionMetadata metadata
       , status = Web.Confirmed
       , block = Just $ toDTO blockHeader

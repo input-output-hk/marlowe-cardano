@@ -122,11 +122,12 @@ instance Arbitrary RuntimeStatus where
       ]
 
 instance Arbitrary SomeTransaction where
-  arbitrary = SomeTransaction MarloweV1 <$> arbitrary <*> arbitrary <*> arbitrary
-  shrink (SomeTransaction MarloweV1 input consumedBy state) =
+  arbitrary = SomeTransaction MarloweV1 <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+  shrink (SomeTransaction MarloweV1 input inputDatum consumedBy state) =
     fold
-      [ SomeTransaction MarloweV1 input consumedBy <$> shrink state
-      , SomeTransaction MarloweV1 input <$> shrink consumedBy <*> pure state
+      [ SomeTransaction MarloweV1 input inputDatum consumedBy <$> shrink state
+      , SomeTransaction MarloweV1 input inputDatum <$> shrink consumedBy <*> pure state
+      , SomeTransaction MarloweV1 input <$> shrink inputDatum <*> pure consumedBy <*> pure state
       ]
 
 instance Arbitrary SomeTransactions where

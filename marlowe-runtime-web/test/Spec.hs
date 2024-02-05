@@ -24,6 +24,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Internal.Builder as TB
 import qualified Data.Text.Lazy as TL
+import Language.Marlowe (TransactionInput (..))
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics (Input (..))
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Object.Gen ()
@@ -394,13 +395,11 @@ instance Arbitrary Web.ContractHeader where
       <*> arbitrary
       <*> arbitrary
       <*> arbitrary
-      <*> arbitrary
 
 instance Arbitrary Web.TxHeader where
   arbitrary =
     Web.TxHeader
       <$> arbitrary
-      <*> arbitrary
       <*> arbitrary
       <*> arbitrary
       <*> arbitrary
@@ -424,7 +423,6 @@ instance Arbitrary Web.ContractState where
   arbitrary =
     Web.ContractState
       <$> arbitrary
-      <*> arbitrary
       <*> arbitrary
       <*> arbitrary
       <*> arbitrary
@@ -483,7 +481,10 @@ instance Arbitrary Web.Withdrawal where
   shrink = genericShrink
 
 instance Arbitrary Web.Tx where
-  arbitrary =
+  arbitrary = do
+    -- size of 6 will result in a 1-layer deep contract being generated (this is
+    -- all we care about for the purposes of schema checking).
+    contract <- resize 6 arbitrary
     Web.Tx
       <$> arbitrary
       <*> arbitrary
@@ -492,18 +493,19 @@ instance Arbitrary Web.Tx where
       <*> arbitrary
       <*> arbitrary
       <*> arbitrary
+      <*> pure contract
       <*> arbitrary
       <*> arbitraryNormal -- FIXME: This should handle merkleized input, too.
       <*> arbitrary
-      -- size of 6 will result in a 1-layer deep contract being generated (this is
-      -- all we care about for the purposes of schema checking).
+      <*> elements [Nothing, Just contract]
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> (TransactionInput <$> arbitrary <*> arbitraryNormal)
       <*> resize 6 arbitrary
-      <*> arbitrary
-      <*> arbitrary
-      <*> arbitrary
-      <*> arbitrary
-      <*> arbitrary
-      <*> arbitrary
       <*> arbitrary
   shrink = genericShrink
 
