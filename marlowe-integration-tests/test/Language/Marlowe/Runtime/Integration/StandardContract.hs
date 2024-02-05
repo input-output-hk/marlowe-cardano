@@ -21,6 +21,7 @@ import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Client (createContract, runMarloweLoadClient)
 import Language.Marlowe.Runtime.Core.Api (
   ContractId,
+  Datum,
   MarloweMetadata (..),
   MarloweMetadataTag,
   MarloweTransactionMetadata (..),
@@ -69,6 +70,9 @@ standardContractHeader StandardContractInit{..} = contractCreatedToContractHeade
 
 standardContractId :: StandardContractInit v -> ContractId
 standardContractId StandardContractInit{contractCreated = ContractCreated _ ContractCreatedInEra{..}} = contractId
+
+standardContractDatum :: StandardContractInit v -> Datum v
+standardContractDatum StandardContractInit{contractCreated = ContractCreated _ ContractCreatedInEra{..}} = datum
 
 standardContractPayout :: StandardContractClosed 'V1 -> Maybe (WithdrawTx 'V1) -> PayoutHeader
 standardContractPayout StandardContractClosed{returnDeposited = InputsApplied _ InputsAppliedInEra{..}} mWithdraw =

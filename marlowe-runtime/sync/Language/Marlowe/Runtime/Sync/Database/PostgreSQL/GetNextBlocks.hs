@@ -226,7 +226,7 @@ getApplyInputsTransactions blocks = do
           (ARRAY_AGG(applyTx.slotNo))[1] :: bigint,
           (ARRAY_AGG(applyTx.blockId))[1] :: bytea,
           (ARRAY_AGG(applyTx.blockNo))[1] :: bigint,
-          (ARRAY_AGG(contractTxOut.rolesCurrency))[1] :: bytea?,
+          (ARRAY_AGG(inputContractTxOut.rolesCurrency))[1] :: bytea,
           (ARRAY_AGG(contractTxOut.state))[1] :: bytea?,
           (ARRAY_AGG(contractTxOut.contract))[1] :: bytea?,
           (ARRAY_AGG(txOut.address))[1] :: bytea?,
@@ -317,7 +317,7 @@ type ApplyInputsTransactionRow =
   , Int64
   , ByteString
   , Int64
-  , Maybe ByteString
+  , ByteString
   , Maybe ByteString
   , Maybe ByteString
   , Maybe ByteString

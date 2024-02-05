@@ -80,7 +80,7 @@ postCreateTxBody PostContractsRequest{..} stakeAddressDTO changeAddressDTO mAddr
   marloweMetadata <-
     fromDTOThrow
       (badRequest' "Invalid tags value")
-      if Map.null tags then Nothing else Just (tags, Nothing)
+      if Map.null tags then Nothing else Just tags
   let ContractOrSourceId contract' = contract
   createContract
     stakeAddress

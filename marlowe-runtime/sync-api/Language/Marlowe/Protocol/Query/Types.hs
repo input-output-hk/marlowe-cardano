@@ -23,6 +23,7 @@ import GHC.Show (showSpace)
 import Language.Marlowe.Runtime.ChainSync.Api (Address, AssetId, BlockHeader, ChainPoint, PolicyId, TxId, TxOutRef)
 import Language.Marlowe.Runtime.Core.Api (
   ContractId,
+  IsMarloweVersion (..),
   MarloweMetadataTag,
   MarloweTransactionMetadata,
   MarloweVersion (..),
@@ -428,12 +429,13 @@ data SomeTransaction = forall v.
   SomeTransaction
   { version :: MarloweVersion v
   , input :: TxOutRef
+  , inputDatum :: Datum v
   , consumedBy :: Maybe TxId
   , transaction :: Transaction v
   }
 
 instance Show SomeTransaction where
-  showsPrec p (SomeTransaction MarloweV1 input consumedBy transaction) =
+  showsPrec p (SomeTransaction MarloweV1 input inputDatum consumedBy transaction) =
     showParen
       (p >= 11)
       ( showString "SomeTransaction"
@@ -442,35 +444,39 @@ instance Show SomeTransaction where
           . showSpace
           . showsPrec 11 input
           . showSpace
+          . showsPrec 11 inputDatum
+          . showSpace
           . showsPrec 11 consumedBy
           . showSpace
           . showsPrec 11 transaction
       )
 
 instance Eq SomeTransaction where
-  SomeTransaction v input consumedBy tx == SomeTransaction v' input' consumedBy' tx' = case testEquality v v' of
+  SomeTransaction v input inputDatum consumedBy tx == SomeTransaction v' input' inputDatum' consumedBy' tx' = case testEquality v v' of
     Nothing -> False
     Just Refl -> case v of
-      MarloweV1 -> input == input' && consumedBy == consumedBy' && tx == tx'
+      MarloweV1 -> input == input' && inputDatum == inputDatum' && consumedBy == consumedBy' && tx == tx'
 
 instance Binary SomeTransaction where
-  put (SomeTransaction MarloweV1 input consumedBy tx) = do
+  put (SomeTransaction MarloweV1 input inputDatum consumedBy tx) = do
     put $ SomeMarloweVersion MarloweV1
     put input
+    put inputDatum
     put consumedBy
     put tx
   get = do
     SomeMarloweVersion MarloweV1 <- get
-    SomeTransaction MarloweV1 <$> get <*> get <*> get
+    SomeTransaction MarloweV1 <$> get <*> get <*> get <*> get
 
 instance Variations SomeTransaction where
-  variations = SomeTransaction MarloweV1 <$> variations `varyAp` variations `varyAp` variations
+  variations = SomeTransaction MarloweV1 <$> variations `varyAp` variations `varyAp` variations `varyAp` variations
 
 instance ToJSON SomeTransaction where
-  toJSON (SomeTransaction MarloweV1 input consumedBy tx) =
+  toJSON (SomeTransaction MarloweV1 input inputDatum consumedBy tx) =
     object
       [ "version" .= MarloweV1
       , "input" .= input
+      , "inputDatum" .= inputDatum
       , "consumedBy" .= consumedBy
       , "transaction" .= tx
       ]

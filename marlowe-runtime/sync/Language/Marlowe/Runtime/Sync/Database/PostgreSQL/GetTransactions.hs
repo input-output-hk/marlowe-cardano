@@ -64,7 +64,7 @@ getTransactions (ContractId createTxOutRef@TxOutRef{..}) = runMaybeT do
         (ARRAY_AGG(applyTx.slotNo))[1] :: bigint,
         (ARRAY_AGG(applyTx.blockId))[1] :: bytea,
         (ARRAY_AGG(applyTx.blockNo))[1] :: bigint,
-        (ARRAY_AGG(contractTxOut.rolesCurrency))[1] :: bytea?,
+        (ARRAY_AGG(inputContractTxOut.rolesCurrency))[1] :: bytea,
         (ARRAY_AGG(contractTxOut.state))[1] :: bytea?,
         (ARRAY_AGG(contractTxOut.contract))[1] :: bytea?,
         (ARRAY_AGG(txOut.address))[1] :: bytea?,
@@ -73,6 +73,9 @@ getTransactions (ContractId createTxOutRef@TxOutRef{..}) = runMaybeT do
         ARRAY_REMOVE(ARRAY_AGG(txOutAsset.name), NULL) :: bytea[],
         ARRAY_REMOVE(ARRAY_AGG(txOutAsset.quantity), NULL) :: bigint[]
       FROM marlowe.applyTx
+      JOIN marlowe.contractTxOut AS inputContractTxOut
+        ON applyTx.inputTxId = inputContractTxOut.txId
+          AND applyTx.inputTxIx = inputContractTxOut.txIx
       LEFT JOIN marlowe.contractTxOut
         ON contractTxOut.txId = applyTx.txId
         AND contractTxOut.txIx = applyTx.outputTxIx

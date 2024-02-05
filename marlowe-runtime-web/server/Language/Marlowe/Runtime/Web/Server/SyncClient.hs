@@ -139,7 +139,7 @@ syncClient = arr \SyncClientDependencies{..} ->
           Just contract -> pure $ Just $ Right contract
     , loadTransaction = \contractId txId -> runConnector connector $ RunMarloweQueryClient do
         result <- getTransaction txId
-        let matchesContract (SomeTransaction _ _ _ Transaction{contractId = cid}) = cid == contractId
+        let matchesContract (SomeTransaction _ _ _ _ Transaction{contractId = cid}) = cid == contractId
         case mfilter matchesContract result of
           Nothing -> liftIO $ atomically $ fmap Left <$> lookupTempTransaction contractId txId
           Just contract -> pure $ Just $ Right contract

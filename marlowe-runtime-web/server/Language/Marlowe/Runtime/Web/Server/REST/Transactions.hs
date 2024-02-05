@@ -87,7 +87,7 @@ postCreateTxBody contractId PostTransactionsRequest{..} changeAddressDTO mAddres
   marloweMetadata <-
     fromDTOThrow
       (badRequest' "Invalid tags value")
-      if Map.null tags then Nothing else Just (tags, Nothing)
+      if Map.null tags then Nothing else Just tags
   applyInputs v WalletAddresses{..} contractId' MarloweTransactionMetadata{..} invalidBefore invalidHereafter inputs >>= \case
     Left err -> throwDTOError err
     Right (InputsApplied BabbageEraOnwardsBabbage InputsAppliedInEra{txBody}) -> pure $ TxBodyInAnyEra txBody

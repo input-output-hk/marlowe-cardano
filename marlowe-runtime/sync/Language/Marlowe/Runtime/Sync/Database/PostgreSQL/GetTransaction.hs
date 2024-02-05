@@ -26,6 +26,7 @@ import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetContractState (
   decodeBlockHeader,
   decodeContractId,
   decodeDatumBytes,
+  decodeMarloweData,
   decodeMetadata,
   decodePayout,
   decodeTransactionScriptOutput,
@@ -35,7 +36,7 @@ import Prelude hiding (init)
 
 getTransaction :: TxId -> T.Transaction (Maybe SomeTransaction)
 getTransaction txId = runMaybeT do
-  SomeTransaction MarloweV1 input consumedBy tx <-
+  SomeTransaction MarloweV1 input inputDatum consumedBy tx <-
     fmap decodeSomeTransaction $
       MaybeT $
         T.statement
@@ -48,6 +49,9 @@ getTransaction txId = runMaybeT do
         (ARRAY_AGG(applyTx.outputTxIx))[1] :: smallint?,
         (ARRAY_AGG(applyTx.inputTxId))[1] :: bytea,
         (ARRAY_AGG(applyTx.inputTxIx))[1] :: smallint,
+        (ARRAY_AGG(contractTxIn.rolesCurrency))[1] :: bytea,
+        (ARRAY_AGG(contractTxIn.state))[1] :: bytea,
+        (ARRAY_AGG(contractTxIn.contract))[1] :: bytea,
         (ARRAY_AGG(consumer.txId))[1] :: bytea?,
         (ARRAY_AGG(applyTx.metadata))[1] :: bytea?,
         (ARRAY_AGG(applyTx.inputs))[1] :: bytea,
@@ -56,7 +60,6 @@ getTransaction txId = runMaybeT do
         (ARRAY_AGG(applyTx.slotNo))[1] :: bigint,
         (ARRAY_AGG(applyTx.blockId))[1] :: bytea,
         (ARRAY_AGG(applyTx.blockNo))[1] :: bigint,
-        (ARRAY_AGG(contractTxOut.rolesCurrency))[1] :: bytea?,
         (ARRAY_AGG(contractTxOut.state))[1] :: bytea?,
         (ARRAY_AGG(contractTxOut.contract))[1] :: bytea?,
         (ARRAY_AGG(txOut.address))[1] :: bytea?,
@@ -65,6 +68,9 @@ getTransaction txId = runMaybeT do
         ARRAY_REMOVE(ARRAY_AGG(txOutAsset.name), NULL) :: bytea[],
         ARRAY_REMOVE(ARRAY_AGG(txOutAsset.quantity), NULL) :: bigint[]
       FROM marlowe.applyTx
+      JOIN marlowe.contractTxOut AS contractTxIn
+        ON contractTxIn.txId = applyTx.inputTxId
+        AND contractTxIn.txIx = applyTx.inputTxIx
       LEFT JOIN marlowe.contractTxOut
         ON contractTxOut.txId = applyTx.txId
         AND contractTxOut.txIx = applyTx.outputTxIx
@@ -105,7 +111,7 @@ getTransaction txId = runMaybeT do
       ORDER BY payoutTxOut.txId, payoutTxOut.txIx
     |]
 
-  pure $ SomeTransaction MarloweV1 input consumedBy tx{output = (output tx){payouts}}
+  pure $ SomeTransaction MarloweV1 input inputDatum consumedBy tx{output = (output tx){payouts}}
 
 type ResultRow =
   ( ByteString
@@ -114,6 +120,9 @@ type ResultRow =
   , Maybe Int16
   , ByteString
   , Int16
+  , ByteString
+  , ByteString
+  , ByteString
   , Maybe ByteString
   , Maybe ByteString
   , ByteString
@@ -122,7 +131,6 @@ type ResultRow =
   , Int64
   , ByteString
   , Int64
-  , Maybe ByteString
   , Maybe ByteString
   , Maybe ByteString
   , Maybe ByteString
@@ -137,6 +145,7 @@ decodeSomeTransaction row =
   SomeTransaction
     { version = MarloweV1
     , input
+    , inputDatum = decodeMarloweData rolesCurrency inputState inputContract
     , consumedBy = TxId <$> consumedBy
     , transaction
     }
@@ -147,6 +156,9 @@ decodeSomeTransaction row =
       , outputTxIx
       , inputTxId
       , inputTxIx
+      , rolesCurrency
+      , inputState
+      , inputContract
       , consumedBy
       , metadata
       , inputs
@@ -155,7 +167,6 @@ decodeSomeTransaction row =
       , slotNo
       , hash
       , blockNo
-      , rolesCurrency
       , state
       , contract
       , address
@@ -203,7 +214,7 @@ decodeTransaction
      , Int64
      , ByteString
      , Int64
-     , Maybe ByteString
+     , ByteString
      , Maybe ByteString
      , Maybe ByteString
      , Maybe ByteString
@@ -254,7 +265,7 @@ decodeTransaction
                 <*> pure policyIds
                 <*> pure tokenNames
                 <*> pure quantities
-                <*> rolesCurrency
+                <*> pure rolesCurrency
                 <*> state
                 <*> contract
         }

@@ -65,6 +65,7 @@ import Data.Word (Word16, Word32, Word64)
 import GHC.Exts (IsList)
 import GHC.Generics (Generic)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError)
+import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics
 import Language.Marlowe.Object.Types (Label (..))
 import Language.Marlowe.Runtime.Web.Orphans ()
@@ -379,7 +380,6 @@ data ContractState = ContractState
   { contractId :: TxOutRef
   , roleTokenMintingPolicyId :: PolicyId
   , version :: MarloweVersion
-  , continuations :: Maybe Text
   , tags :: Map Text Metadata
   , metadata :: Map Word64 Metadata
   , status :: TxStatus
@@ -403,7 +403,6 @@ data ContractHeader = ContractHeader
   { contractId :: TxOutRef
   , roleTokenMintingPolicyId :: PolicyId
   , version :: MarloweVersion
-  , continuations :: Maybe Text
   , tags :: Map Text Metadata
   , metadata :: Map Word64 Metadata
   , status :: TxStatus
@@ -555,7 +554,6 @@ instance ToSchema Metadata where
 data TxHeader = TxHeader
   { contractId :: TxOutRef
   , transactionId :: TxId
-  , continuations :: Maybe Text
   , tags :: Map Text Metadata
   , metadata :: Map Word64 Metadata
   , status :: TxStatus
@@ -571,12 +569,13 @@ instance ToSchema TxHeader
 data Tx = Tx
   { contractId :: TxOutRef
   , transactionId :: TxId
-  , continuations :: Maybe Text
   , tags :: Map Text Metadata
   , metadata :: Map Word64 Metadata
   , status :: TxStatus
   , block :: Maybe BlockHeader
   , inputUtxo :: TxOutRef
+  , inputContract :: Semantics.Contract
+  , inputState :: Semantics.State
   , inputs :: [Semantics.Input]
   , outputUtxo :: Maybe TxOutRef
   , outputContract :: Maybe Semantics.Contract
@@ -586,6 +585,8 @@ data Tx = Tx
   , consumingTx :: Maybe TxId
   , invalidBefore :: UTCTime
   , invalidHereafter :: UTCTime
+  , reconstructedSemanticInput :: V1.TransactionInput
+  , reconstructedSemanticOutput :: V1.TransactionOutput
   , txBody :: Maybe TextEnvelope
   }
   deriving (Show, Eq, Generic)
