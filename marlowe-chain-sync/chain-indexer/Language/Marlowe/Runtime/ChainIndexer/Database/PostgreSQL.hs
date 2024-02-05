@@ -128,11 +128,10 @@ databaseQueries
   :: forall r s env m
    . (MonadInjectEvent r QuerySelector s m, MonadUnliftIO m, WithLog env Message m)
   => Pool
-  -> GenesisBlock
   -> DatabaseQueries m
-databaseQueries pool genesisBlock =
+databaseQueries pool =
   DatabaseQueries
-    (hoistCommitRollback (transact "commitRollback" "INSERT" TS.Write) $ commitRollback genesisBlock)
+    (hoistCommitRollback (transact "commitRollback" "INSERT" TS.Write) commitRollback)
     ( CommitBlocks \blocks -> withRunInIO \runInIO -> do
         result <- Pool.use pool $ runCommitBlocks (commitBlocks runInIO) blocks
         either throwIO pure result
@@ -227,47 +226,60 @@ getIntersectionPoints =
 
 -- CommitRollback
 
-commitRollback :: GenesisBlock -> CommitRollback Transaction
-commitRollback GenesisBlock{..} = CommitRollback \point -> do
-  let slotNo = case point of
-        ChainPointAtGenesis -> -1
-        ChainPoint s _ -> slotNoToParam s
-      hash = case point of
-        ChainPointAtGenesis -> genesisBlockHash
-        ChainPoint _ h -> h
-  HT.statement
-    (slotNo, headerHashToParam hash)
-    [resultlessStatement|
-      WITH blockUpdates AS
-        ( UPDATE chain.block
-             SET rollbackToSlot  = $1 :: bigint
-               , rollbackToBlock = $2 :: bytea
-           WHERE slotNo > $1 :: bigint
-        )
-      , deleteTxs AS
-        ( DELETE
-            FROM chain.tx
-           WHERE slotNo > $1 :: bigint
-        )
-      , deleteTxOuts AS
-        ( DELETE
-            FROM chain.txOut
-           WHERE slotNo > $1 :: bigint
-        )
-      , deleteTxIns AS
-        ( DELETE
-            FROM chain.txIn
-           WHERE slotNo > $1 :: bigint
-        )
-      , deleteAssetOuts AS
-        ( DELETE
-            FROM chain.assetOut
-           WHERE slotNo > $1 :: bigint
-        )
-      DELETE
-        FROM chain.assetMint
-       WHERE slotNo > $1 :: bigint
-    |]
+commitRollback :: CommitRollback Transaction
+commitRollback = CommitRollback \case
+  ChainPointAtGenesis ->
+    HT.statement
+      ()
+      [resultlessStatement|
+        WITH deleteBlocks AS
+          ( DELETE FROM chain.block WHERE slotNo >= 0)
+        , deleteTxs AS
+          ( DELETE FROM chain.tx WHERE slotNo >= 0)
+        , deleteTxOuts AS
+          ( DELETE FROM chain.txOut WHERE slotNo >= 0)
+        , deleteTxIns AS
+          ( DELETE FROM chain.txIn WHERE slotNo >= 0)
+        , deleteAssetOuts AS
+          ( DELETE FROM chain.assetOut WHERE slotNo >= 0)
+        DELETE FROM chain.assetMint WHERE slotNo >= 0
+      |]
+  ChainPoint s h -> do
+    let slotNo = slotNoToParam s
+        hash = h
+    HT.statement
+      (slotNo, headerHashToParam hash)
+      [resultlessStatement|
+        WITH blockUpdates AS
+          ( UPDATE chain.block
+              SET rollbackToSlot  = $1 :: bigint
+                , rollbackToBlock = $2 :: bytea
+            WHERE slotNo > $1 :: bigint
+          )
+        , deleteTxs AS
+          ( DELETE
+              FROM chain.tx
+            WHERE slotNo > $1 :: bigint
+          )
+        , deleteTxOuts AS
+          ( DELETE
+              FROM chain.txOut
+            WHERE slotNo > $1 :: bigint
+          )
+        , deleteTxIns AS
+          ( DELETE
+              FROM chain.txIn
+            WHERE slotNo > $1 :: bigint
+          )
+        , deleteAssetOuts AS
+          ( DELETE
+              FROM chain.assetOut
+            WHERE slotNo > $1 :: bigint
+          )
+        DELETE
+          FROM chain.assetMint
+        WHERE slotNo > $1 :: bigint
+      |]
 
 -- CommitGenesisBlock
 
