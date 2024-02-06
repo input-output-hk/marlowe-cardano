@@ -6,22 +6,39 @@
 module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Alonzo where
 
 import Cardano.Binary (serialize')
-import Cardano.Ledger.Alonzo
-import Cardano.Ledger.Alonzo.Tx (AlonzoTx (..), IsValid (..), ScriptPurpose (Spending), indexedRdmrs, txdats')
+import Cardano.Ledger.Allegra.Core (
+  Era (EraCrypto),
+  EraTx (Tx),
+  EraTxAuxData (TxAuxData),
+  ValidityInterval,
+ )
+import Cardano.Ledger.Alonzo (
+  AlonzoEra,
+  AlonzoTxAuxData,
+  AlonzoTxOut,
+ )
+import Cardano.Ledger.Alonzo.Scripts (
+  AlonzoEraScript (PlutusPurpose),
+  AlonzoPlutusPurpose (AlonzoSpending),
+  AsItem (..),
+ )
+import Cardano.Ledger.Alonzo.Tx (AlonzoTx (..), IsValid (..), indexRedeemers, txdats')
 import Cardano.Ledger.Alonzo.TxAuxData (AlonzoTxAuxData (..))
-import Cardano.Ledger.Alonzo.TxBody (AlonzoTxBody (..), AlonzoTxOut (..))
+import Cardano.Ledger.Alonzo.TxBody (AlonzoEraTxBody, AlonzoTxBody (..), AlonzoTxOut (..))
 import Cardano.Ledger.Alonzo.TxWits (AlonzoEraTxWits, TxDats)
 import qualified Cardano.Ledger.Alonzo.TxWits as Alonzo
 import Cardano.Ledger.BaseTypes (shelleyProtVer)
 import qualified Cardano.Ledger.Binary as L
-import Cardano.Ledger.Core (Era (..), EraTx, Tx, TxAuxData)
-import Cardano.Ledger.Crypto
-import Cardano.Ledger.Mary.TxBody (MaryEraTxBody, ValidityInterval)
+import Cardano.Ledger.Crypto (StandardCrypto)
 import Cardano.Ledger.Plutus.Data (dataToBinaryData)
-import Cardano.Ledger.Shelley.API
+import Cardano.Ledger.Shelley.API (
+  ShelleyTxOut (ShelleyTxOut),
+  StrictMaybe,
+  TxIn,
+ )
 import Data.ByteString (ByteString)
 import Data.Foldable (Foldable (..))
-import Data.Int
+import Data.Int (Int16, Int64)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Mary (maryAssetMintRows, maryTxOutRow, maryTxRow)
@@ -30,7 +47,15 @@ import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Shelley (
   originalBytea,
   shelleyTxInRow,
  )
-import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types
+import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types (
+  Bytea (..),
+  SqlBool (..),
+  TxInRow (..),
+  TxOutRow (datumBytes, datumHash),
+  TxOutRowGroup,
+  TxRow,
+  TxRowGroup,
+ )
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types as Marlowe
 
 alonzoTxToRows :: Int64 -> Bytea -> Bytea -> AlonzoTx (AlonzoEra StandardCrypto) -> TxRowGroup
@@ -62,10 +87,12 @@ convertIsValid :: IsValid -> SqlBool
 convertIsValid (IsValid b) = SqlBool b
 
 alonzoTxInRows
-  :: ( MaryEraTxBody era
+  :: ( AlonzoEraTxBody era
      , AlonzoEraTxWits era
      , EraTx era
      , EraCrypto era ~ StandardCrypto
+     , PlutusPurpose AsItem era
+        ~ AlonzoPlutusPurpose AsItem era
      )
   => Int64
   -> Bytea
@@ -81,10 +108,12 @@ alonzoTxInRows slot txId (IsValid isValid) tx inputs collateralInputs
       pure TxInRow{isCollateral = SqlBool True, ..}
 
 alonzoTxInRow
-  :: ( MaryEraTxBody era
+  :: ( AlonzoEraTxBody era
      , AlonzoEraTxWits era
      , EraTx era
      , EraCrypto era ~ StandardCrypto
+     , PlutusPurpose AsItem era
+        ~ AlonzoPlutusPurpose AsItem era
      )
   => Int64
   -> Bytea
@@ -94,7 +123,7 @@ alonzoTxInRow
 alonzoTxInRow slotNo txInId tx txIn =
   (shelleyTxInRow slotNo txInId txIn)
     { redeemerDatumBytes = do
-        (datum, _) <- indexedRdmrs tx $ Spending txIn
+        (datum, _) <- indexRedeemers tx $ AlonzoSpending (AsItem txIn)
         pure $ originalBytea $ dataToBinaryData datum
     }
 

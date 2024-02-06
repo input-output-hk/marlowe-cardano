@@ -5,13 +5,43 @@
 module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Byron where
 
 import Cardano.Chain.Common (Address, unsafeGetLovelace)
-import Cardano.Chain.UTxO
+import Cardano.Chain.UTxO (Tx (..), TxIn (..), TxOut (..))
 import Cardano.Crypto (AbstractHash, hashToBytes)
 import Cardano.Ledger.Binary (byronProtVer, serialize')
 import qualified Data.ByteString as BS
-import Data.Int
+import Data.Int (Int16, Int64)
 import qualified Data.List.NonEmpty as NE
-import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types
+import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types (
+  Bytea (..),
+  SqlBool (SqlBool),
+  TxInRow (..),
+  TxOutRow (
+    TxOutRow,
+    address,
+    addressHeader,
+    addressPaymentCredential,
+    addressStakeAddressReference,
+    datumBytes,
+    datumHash,
+    isCollateral,
+    lovelace,
+    slotNo,
+    txId,
+    txIx
+  ),
+  TxOutRowGroup,
+  TxRow (
+    TxRow,
+    blockHash,
+    isValid,
+    metadata,
+    slotNo,
+    txId,
+    validityLowerBound,
+    validityUpperBound
+  ),
+  TxRowGroup,
+ )
 
 byronTxRow :: Int64 -> Bytea -> Bytea -> Tx -> TxRowGroup
 byronTxRow slotNo blockHash txId UnsafeTx{..} =

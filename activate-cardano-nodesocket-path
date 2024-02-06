@@ -1,0 +1,8 @@
+export CARDANO_NODE_SOCKET_PATH=$(docker volume inspect sanchonet-integration_shared | jq -r '.[].Mountpoint')/node.socket
+sudo chmod o+xrw $CARDANO_NODE_SOCKET_PATH
+sudo chmod o+rx $(dirname $CARDANO_NODE_SOCKET_PATH)
+sudo chmod o+rx $(dirname $(dirname $CARDANO_NODE_SOCKET_PATH))
+sudo chmod o+rx $(dirname $(dirname $(dirname $CARDANO_NODE_SOCKET_PATH)))
+sudo chmod o+rx $(dirname $(dirname $(dirname $(dirname $CARDANO_NODE_SOCKET_PATH))))
+sudo chmod o+rx $(dirname $(dirname $(dirname $(dirname $(dirname $CARDANO_NODE_SOCKET_PATH)))))
+export CARDANO_NODE_CONFIG=$(ps aux | grep 'cardano-node run' | grep -v grep | sed 's/.* --config \([^ ]*\).*/\1/')

@@ -1,0 +1,144 @@
+{
+    "masterFaucetInfo": {
+        "currentBalance": {
+            "": {
+                "": 49564904475
+            }
+        },
+        "fundedTxs": [
+            {
+                "txFee": 176369,
+                "txId": "c6b1981c84ebc3206796ecbe7a4a6aa7ebbff8170a3098eba3bb7f4fd41d3b0b"
+            }
+        ],
+        "initialBalance": {
+            "": {
+                "": 49567418490
+            }
+        },
+        "submittedTxs": [
+            {
+                "txFee": 169725,
+                "txId": "a5c85e6b446e0a467da80f7ee92c0312ffa3631e184f3e54badfc37a87d74b12"
+            },
+            {
+                "txFee": 167921,
+                "txId": "fe6aea1ff1436130c6230ec1770671189352d8fee0b63c65a80a76991936138a"
+            }
+        ],
+        "totalKnownFees": 514015
+    },
+    "results": [
+        {
+            "contracts": {
+                "contract-bgzjmjug": {
+                    "continuationsFile": null,
+                    "contractFile": "/tmp/nix-shell.u8nHyb/contract-contract-bgzjmjug81832-3.json",
+                    "contractId": "c6b1981c84ebc3206796ecbe7a4a6aa7ebbff8170a3098eba3bb7f4fd41d3b0b#1",
+                    "roleCurrency": null
+                }
+            },
+            "currencies": [],
+            "error": {
+                "InterpreterError": {
+                    "contents": {
+                        "RuntimeOperationFailed": {
+                            "info": [
+                                [
+                                    "label",
+                                    "RuntimeApplyInputs"
+                                ]
+                            ],
+                            "message": "[RuntimeApplyInputs] Failed to submit contract: SubmitFailed \"TxValidationErrorInCardanoMode (ShelleyTxValidationError ShelleyBasedEraConway (ApplyTxError [ConwayUtxowFailure (AlonzoInBabbageUtxowPredFailure (ShelleyInAlonzoUtxowPredFailure (MissingScriptWitnessesUTXOW (fromList [ScriptHash \\\"377325ad84a55ba0282d844dff2d5f0f18c33fd4a28a0a9d73c6f60d\\\"])))),ConwayUtxowFailure (AlonzoInBabbageUtxowPredFailure (NotAllowedSupplementalDatums (fromList [SafeHash \\\"285111d0fa2e23de7bf2a7ba8064135cb5b8b8e61641f3f5a9d562346f2fe621\\\"]) (fromList []))),ConwayUtxowFailure (AlonzoInBabbageUtxowPredFailure (ExtraRedeemers [ConwaySpending 1])),ConwayUtxowFailure (AlonzoInBabbageUtxowPredFailure (PPViewHashesDontMatch (SJust (SafeHash \\\"48ef5ed79442a80c8a19182ffcf2f316ba310750004ce4cf8bfdce5babdc2666\\\")) (SJust (SafeHash \\\"e86a02be15500ee5701a182cf2efb92326b0b31770da40d21c47dfe4ab5e2e0e\\\")))),ConwayUtxowFailure (UtxoFailure (AlonzoInBabbageUtxoPredFailure (BadInputsUTxO (fromList [TxIn (TxId {unTxId = SafeHash \\\"dec7a723d65edc96405576a91462d6b43692f2d0d8bce1b5a1b67fdea5c72af9\\\"}) (TxIx 1)]))))]))\""
+                        }
+                    }
+                }
+            },
+            "logs": [
+                {
+                    "info": {},
+                    "label": "RuntimeCreateContract",
+                    "message": ""
+                },
+                {
+                    "info": {},
+                    "label": "RuntimeCreateContract",
+                    "message": "Invoking contract creation: ContractNickname {unContractNickname = \"contract-bgzjmjug\"}"
+                },
+                {
+                    "info": {},
+                    "label": "RuntimeCreateContract",
+                    "message": "Creating contract: ContractId {unContractId = TxOutRef {txId = \"c6b1981c84ebc3206796ecbe7a4a6aa7ebbff8170a3098eba3bb7f4fd41d3b0b\", txIx = TxIx {unTxIx = 1}}}"
+                },
+                {
+                    "info": {},
+                    "label": "RuntimeCreateContract",
+                    "message": "Submitting contract: ContractId {unContractId = TxOutRef {txId = \"c6b1981c84ebc3206796ecbe7a4a6aa7ebbff8170a3098eba3bb7f4fd41d3b0b\", txIx = TxIx {unTxIx = 1}}}"
+                },
+                {
+                    "info": {},
+                    "label": "RuntimeCreateContract",
+                    "message": "SubmittedContractId {unContractId = TxOutRef {txId = \"c6b1981c84ebc3206796ecbe7a4a6aa7ebbff8170a3098eba3bb7f4fd41d3b0b\", txIx = TxIx {unTxIx = 1}}}"
+                },
+                {
+                    "info": {},
+                    "label": "RuntimeCreateContract",
+                    "message": "Contract created: ShelleyTx ShelleyBasedEraConway (AlonzoTx {body = TxBodyConstr ConwayTxBodyRaw {ctbrSpendInputs = fromList [TxIn (TxId {unTxId = SafeHash \"a5c85e6b446e0a467da80f7ee92c0312ffa3631e184f3e54badfc37a87d74b12\"}) (TxIx 1)], ctbrCollateralInputs = fromList [], ctbrReferenceInputs = fromList [], ctbrOutputs = StrictSeq {fromStrict = fromList [Sized {sizedValue = (Addr Testnet (KeyHashObj (KeyHash \"9a52bc572ff9df04f2051ca58acb6dd9f9881e8b77e449476838b7ee\")) StakeRefNull,MaryValue (Coin 17064247) (MultiAsset (fromList [])),NoDatum,SNothing), sizedSize = 37},Sized {sizedValue = (Addr Testnet (ScriptHashObj (ScriptHash \"377325ad84a55ba0282d844dff2d5f0f18c33fd4a28a0a9d73c6f60d\")) StakeRefNull,MaryValue (Coin 2000000) (MultiAsset (fromList [])),DatumHash (SafeHash \"285111d0fa2e23de7bf2a7ba8064135cb5b8b8e61641f3f5a9d562346f2fe621\"),SNothing), sizedSize = 71}]}, ctbrCollateralReturn = SNothing, ctbrTotalCollateral = SNothing, ctbrCerts = OSet {osSSeq = StrictSeq {fromStrict = fromList []}, osSet = fromList []}, ctbrWithdrawals = Withdrawals {unWithdrawals = fromList []}, ctbrTxfee = Coin 176369, ctbrVldt = ValidityInterval {invalidBefore = SNothing, invalidHereafter = SNothing}, ctbrReqSignerHashes = fromList [], ctbrMint = MultiAsset (fromList []), ctbrScriptIntegrityHash = SJust (SafeHash \"c4156df565b7eaf05c81d76f90fa47dc34970fdf038b4d1c32106d257541c074\"), ctbrAuxDataHash = SJust (AuxiliaryDataHash {unsafeAuxiliaryDataHash = SafeHash \"9621fb87caa88c470d1f6fe9b4ea3626e04cc5caed89eca0caeaefed7840edc3\"}), ctbrTxNetworkId = SNothing, ctbrVotingProcedures = VotingProcedures {unVotingProcedures = fromList []}, ctbrProposalProcedures = OSet {osSSeq = StrictSeq {fromStrict = fromList []}, osSet = fromList []}, ctbrCurrentTreasuryValue = SNothing, ctbrTreasuryDonation = Coin 0} (blake2b_256: SafeHash \"c6b1981c84ebc3206796ecbe7a4a6aa7ebbff8170a3098eba3bb7f4fd41d3b0b\"), wits = AlonzoTxWitsRaw {atwrAddrTxWits = fromList [WitVKeyInternal {wvkKey = VKey (VerKeyEd25519DSIGN \"833853bda4c37059e19c618960ffc7784a77b49d7bc1ea114cab4036a232f8fb\"), wvkSig = SignedDSIGN (SigEd25519DSIGN \"f3768e87ab22b935982cd16c17846bf9ab709dc8cea1caece28c9f316a73b3053dbdc3af4b97640650a954953ef4011539ccfd2827182a60d58df5dc1625d009\"), wvkKeyHash = KeyHash \"9a52bc572ff9df04f2051ca58acb6dd9f9881e8b77e449476838b7ee\", wvkBytes = \"\\130X \\131\\&8S\\189\\164\\195pY\\225\\156a\\137`\\255\\199xJw\\180\\157{\\193\\234\\DC1L\\171@6\\162\\&2\\248\\251X@\\243v\\142\\135\\171\\\"\\185\\&5\\152,\\209l\\ETB\\132k\\249\\171p\\157\\200\\206\\161\\202\\236\\226\\140\\159\\&1js\\179\\ENQ=\\189\\195\\175K\\151d\\ACKP\\169T\\149>\\244\\SOH\\NAK9\\204\\253('\\CAN*`\\213\\141\\245\\220\\SYN%\\208\\t\"}], atwrBootAddrTxWits = fromList [], atwrScriptTxWits = fromList [], atwrDatsTxWits = TxDatsConstr TxDatsRaw {unTxDatsRaw = fromList [(SafeHash \"285111d0fa2e23de7bf2a7ba8064135cb5b8b8e61641f3f5a9d562346f2fe621\",DataConstr Constr 0 [Constr 0 [B \"\"],Constr 0 [Map [(Constr 0 [Constr 0 [Constr 0 [],Constr 0 [Constr 0 [B \"\\154R\\188W/\\249\\223\\EOT\\242\\ENQ\\FS\\165\\138\\203m\\217\\249\\136\\RS\\139w\\228IGh8\\183\\238\"],Constr 1 []]],Constr 0 [B \"\",B \"\"]],I 2000000)],Map [],Map [],I 0],Constr 0 []] (blake2b_256: SafeHash \"285111d0fa2e23de7bf2a7ba8064135cb5b8b8e61641f3f5a9d562346f2fe621\"))]} (blake2b_256: SafeHash \"72bc7c142badf502a5c189880bee0fcce01bf44e23529354d2e8b9829828e972\"), atwrRdmrsTxWits = RedeemersConstr fromList [] (blake2b_256: SafeHash \"45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0\")} (blake2b_256: SafeHash \"1cef1fd7d525d2d2e9b49e88bedf8423bda6f863d213ea272599b367d72e8ccd\"), isValid = IsValid True, auxiliaryData = SJust (AuxiliaryDataConstr AlonzoTxAuxDataRaw {atadrMetadata = fromList [(1564,List [I 2,List []])], atadrTimelock = StrictSeq {fromStrict = fromList []}, atadrPlutus = fromList []} (blake2b_256: SafeHash \"9621fb87caa88c470d1f6fe9b4ea3626e04cc5caed89eca0caeaefed7840edc3\"))})"
+                },
+                {
+                    "info": {},
+                    "label": "RuntimeApplyInputs",
+                    "message": ""
+                },
+                {
+                    "info": {},
+                    "label": "RuntimeApplyInputs",
+                    "message": "Applying inputs:[]"
+                },
+                {
+                    "info": {},
+                    "label": "RuntimeApplyInputs",
+                    "message": "Successful application."
+                },
+                {
+                    "info": {},
+                    "label": "RuntimeApplyInputs",
+                    "message": "Submitting..."
+                },
+                {
+                    "info": {},
+                    "label": "RuntimeApplyInputs",
+                    "message": "Submitted and confirmed."
+                },
+                {
+                    "info": {},
+                    "label": "Error",
+                    "message": "[RuntimeApplyInputs] Failed to submit contract: SubmitFailed \"TxValidationErrorInCardanoMode (ShelleyTxValidationError ShelleyBasedEraConway (ApplyTxError [ConwayUtxowFailure (AlonzoInBabbageUtxowPredFailure (ShelleyInAlonzoUtxowPredFailure (MissingScriptWitnessesUTXOW (fromList [ScriptHash \\\"377325ad84a55ba0282d844dff2d5f0f18c33fd4a28a0a9d73c6f60d\\\"])))),ConwayUtxowFailure (AlonzoInBabbageUtxowPredFailure (NotAllowedSupplementalDatums (fromList [SafeHash \\\"285111d0fa2e23de7bf2a7ba8064135cb5b8b8e61641f3f5a9d562346f2fe621\\\"]) (fromList []))),ConwayUtxowFailure (AlonzoInBabbageUtxowPredFailure (ExtraRedeemers [ConwaySpending 1])),ConwayUtxowFailure (AlonzoInBabbageUtxowPredFailure (PPViewHashesDontMatch (SJust (SafeHash \\\"48ef5ed79442a80c8a19182ffcf2f316ba310750004ce4cf8bfdce5babdc2666\\\")) (SJust (SafeHash \\\"e86a02be15500ee5701a182cf2efb92326b0b31770da40d21c47dfe4ab5e2e0e\\\")))),ConwayUtxowFailure (UtxoFailure (AlonzoInBabbageUtxoPredFailure (BadInputsUTxO (fromList [TxIn (TxId {unTxId = SafeHash \\\"dec7a723d65edc96405576a91462d6b43692f2d0d8bce1b5a1b67fdea5c72af9\\\"}) (TxIx 1)]))))]))\""
+                }
+            ],
+            "name": "Runtime operations test case",
+            "result": "failed",
+            "retries": [],
+            "testSource": "./test/operations/runtime.yaml",
+            "wallets": [
+                [
+                    "Faucet",
+                    {
+                        "address": "addr_test1vzd990zh9lua7p8jq5w2tzktdhvlnzq73dm7gj28dqut0ms3qpn05",
+                        "balanceCheckBaseline": {
+                            "": {
+                                "": 19240616
+                            }
+                        },
+                        "txs": [
+                            {
+                                "txFee": 176369,
+                                "txId": "c6b1981c84ebc3206796ecbe7a4a6aa7ebbff8170a3098eba3bb7f4fd41d3b0b"
+                            }
+                        ]
+                    }
+                ]
+            ]
+        }
+    ]
+}

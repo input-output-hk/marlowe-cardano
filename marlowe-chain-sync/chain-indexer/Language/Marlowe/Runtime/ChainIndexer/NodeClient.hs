@@ -15,7 +15,6 @@ module Language.Marlowe.Runtime.ChainIndexer.NodeClient (
 ) where
 
 import Cardano.Api (
-  Block (..),
   BlockHeader (..),
   BlockInMode (..),
   BlockNo (..),
@@ -30,6 +29,7 @@ import Cardano.Api (
   getBlockHeader,
   serialiseToRawBytes,
  )
+import Cardano.Api.Block (Block (..))
 import Cardano.Api.ChainSync.ClientPipelined (
   ClientPipelinedStIdle (..),
   ClientPipelinedStIntersect (..),

@@ -180,7 +180,7 @@ maps to the volume (one-liner: `docker volume inspect marlowe-cardano_shared | j
 To use this with `cardano-cli`:
 
 ----
-export CARDANO_NODE_SOCKET_PATH=$(docker volume inspect marlowe-cardano_shared | jq -r '.[].Mountpoint')
+export CARDANO_NODE_SOCKET_PATH=$(docker volume inspect sanchonet-integration_shared | jq -r '.[].Mountpoint')
 # -E passes the current environment to sudo
 sudo -E cardano-cli ...
 ----

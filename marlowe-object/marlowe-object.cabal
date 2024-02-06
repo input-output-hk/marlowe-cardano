@@ -63,8 +63,8 @@ library
     , base16 ^>=0.3.2
     , binary ^>=0.8.8
     , bytestring >=0.10.12 && <0.12
-    , cardano-api ^>=8.37
-    , cardano-ledger-core ^>=1.9
+    , cardano-api ^>=8.38
+    , cardano-ledger-core ^>=1.10
     , dlist ^>=1.0
     , filepath ^>=1.4
     , hashable >=1.3 && <2
@@ -73,7 +73,7 @@ library
     , marlowe-protocols ==0.3.0.0
     , mtl >=2.2 && <3
     , pipes ^>=4.3.16
-    , plutus-ledger-api ^>=1.15
+    , plutus-ledger-api ^>=1.21
     , text ^>=2.0
     , time >=1.9 && <2
     , transformers ^>=0.5.6

@@ -284,6 +284,7 @@ import Language.Marlowe.CLI.Types (
 import Language.Marlowe.CLI.Types qualified as PayToScript (PayToScript (value))
 import Language.Marlowe.Scripts
 import Ouroboros.Consensus.HardFork.History (interpreterToEpochInfo)
+import Ouroboros.Network.Protocol.LocalStateQuery.Type (Target (VolatileTip))
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
 import PlutusLedgerApi.V1 (Datum (..), POSIXTime (..), Redeemer (..), TokenName (..), fromBuiltin, toData)
 import System.IO (hPutStrLn, stderr)
@@ -1962,10 +1963,10 @@ querySlotConfig connection =
     epochNo <- queryInEra connection QueryEpoch
     systemStart <-
       liftCliIO $
-        queryNodeLocalState connection Nothing QuerySystemStart
+        queryNodeLocalState connection VolatileTip QuerySystemStart
     EraHistory interpreter <-
       liftCliIO
-        . queryNodeLocalState connection Nothing
+        . queryNodeLocalState connection VolatileTip
         $ QueryEraHistory
     let epochInfo =
           hoistEpochInfo (liftCli . runExcept) $

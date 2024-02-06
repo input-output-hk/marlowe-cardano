@@ -24,6 +24,7 @@ module Spec.Analysis (
 
 import Cardano.Api qualified as C
 import Cardano.Api.Shelley qualified as C
+import Cardano.Ledger.BaseTypes qualified as CI
 import Control.Monad.Except (runExceptT)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (runReaderT)
@@ -345,7 +346,7 @@ protocolTestnet =
     , protocolParamStakeAddressDeposit = C.Lovelace 2000000
     , protocolParamStakePoolDeposit = C.Lovelace 500000000
     , protocolParamMinPoolCost = C.Lovelace 340000000
-    , protocolParamPoolRetireMaxEpoch = C.EpochNo 18
+    , protocolParamPoolRetireMaxEpoch = CI.EpochInterval 18
     , protocolParamStakePoolTargetNum = 500
     , protocolParamPoolPledgeInfluence = 3 % 10
     , protocolParamMonetaryExpansion = 3 % 1000

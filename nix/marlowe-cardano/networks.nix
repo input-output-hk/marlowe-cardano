@@ -14,6 +14,10 @@ in
   testnet = mkNetwork environments.testnet // {
     magic = 1097911063;
   };
+  sanchonet = mkNetwork environments.sanchonet // {
+    name = "sanchonet";
+    magic = 4;
+  };
   preview = mkNetwork environments.preview // {
     name = "preview";
     magic = 2;

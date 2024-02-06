@@ -57,7 +57,7 @@ library
     , async-components
     , base >=4.9 && <5
     , bytestring
-    , cardano-api ^>=8.37
+    , cardano-api ^>=8.38
     , cardano-crypto-wrapper
     , cardano-integration
     , cardano-ledger-byron

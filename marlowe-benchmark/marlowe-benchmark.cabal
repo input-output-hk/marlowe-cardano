@@ -75,7 +75,8 @@ executable marlowe-benchmark
     , aeson
     , base >=4.9 && <5
     , bytestring
-    , cardano-api:{cardano-api, gen}
+    , cardano-api
+    , cardano-api-gen
     , containers
     , data-default
     , directory
@@ -85,6 +86,7 @@ executable marlowe-benchmark
     , marlowe-client
     , marlowe-runtime:{marlowe-runtime, sync-api, tx-api}
     , optparse-applicative
+    , ouroboros-network-protocols
     , plutus-ledger-api
     , QuickCheck
     , random

@@ -40,6 +40,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (WithGenesis (..))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as ChainSync
 import Observe.Event (addField)
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Client as Q
+import Ouroboros.Network.Protocol.LocalStateQuery.Type (Target (SpecificPoint, VolatileTip))
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Type as Q
 import qualified Ouroboros.Network.Protocol.LocalTxSubmission.Client as S
 import UnliftIO (MonadIO, MonadUnliftIO, STM, atomically, newEmptyTMVarIO, newTVar, readTVar, writeTVar)
@@ -163,7 +164,7 @@ queryClient channel =
   let next =
         do
           QueryJob{..} <- atomically $ readTChan channel
-          pure . Q.SendMsgAcquire point $
+          pure . Q.SendMsgAcquire (maybe VolatileTip SpecificPoint point) $
             Q.ClientStAcquiring
               { recvMsgAcquired =
                   pure . Q.SendMsgQuery query $

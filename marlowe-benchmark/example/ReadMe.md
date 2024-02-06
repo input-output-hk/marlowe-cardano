@@ -1,6 +1,6 @@
 # Benchmark examples
 
-This example walks through executing and plotting a complete set of benchmarks for the `preprod` network.
+This example walks through executing and plotting a complete set of benchmarks for the `sanchonet` network.
 
 ## Prerequisites
 
@@ -20,14 +20,14 @@ The following tools must be on the `PATH`:
 
 ## 0. Select the network
 
-In this example, we use the `preprod` network.
+In this example, we use the `sanchonet` network.
 
 ```bash
-cd preprod
+cd sanchonet
 mkdir -p config
 for f in {config,topology,byron-genesis,shelley-genesis,alonzo-genesis}.json
 do
-  curl https://raw.githubusercontent.com/IntersectMBO/cardano-world/master/docs/environments/preprod/$f -o config/$f
+  curl https://raw.githubusercontent.com/IntersectMBO/cardano-world/master/docs/environments/sanchonet/$f -o config/$f
 done
 mv config/{config,node}.json
 ```
@@ -57,9 +57,16 @@ source environment
 ## 3. Create the pod and containers
 
 ```bash
-podman play kube --replace=true --start=false benchmark-preprod.yaml
+podman play kube --replace=true --start=false benchmark-sanchonet.yaml
 ```
 
+marlowe-benchmark \
+  --port $MARLOWE_RT_PORT \
+  --node-socket-path $CARDANO_NODE_SOCKET_PATH \
+  --testnet-magic 4 \
+  --address $FAUCET_ADDRESS \
+  --signing-key-file $FAUCET_SKEY \
+  --out-file results.json
 
 ## 4. Measure the performance of syncing from genesis
 
@@ -69,11 +76,11 @@ podman play kube --replace=true --start=false benchmark-preprod.yaml
 
 ```console
 --- Environment variables ---
-PODNAME=benchmark-preprod
+PODNAME=benchmark-sanchonet
 DB_PORT=54321
 CARDANO_NODE_SOCKET_PATH=node.socket
-CARDANO_TESTNET_MAGIC=1
-MAGIC=--testnet-magic 1
+CARDANO_TESTNET_MAGIC=4
+MAGIC=--testnet-magic 4
 SYNC_PODSTAT_FILE=sync-podstat.json
 SYNC_RESULT_FILE=sync-results.tsv
 
@@ -84,21 +91,21 @@ psql (PostgreSQL) 14.9
 jq-1.6
 GNU Awk 5.2.2, API 3.2, PMA Avon 8-g1
 
-Starting container benchmark-preprod-postgres
+Starting container benchmark-sanchonet-postgres
 Waiting for postgresql
 
-Starting container benchmark-preprod-node
+Starting container benchmark-sanchonet-node
 Waiting for node socket
 
 Node sync: 99.99%
 
-Starting container benchmark-preprod-chain-indexer
+Starting container benchmark-sanchonet-chain-indexer
 Waiting for chain schema
 Chain indexer lag: 0 slots
 
-Starting container benchmark-preprod-chain-sync
+Starting container benchmark-sanchonet-chain-sync
 
-Starting container benchmark-preprod-marlowe-indexer
+Starting container benchmark-sanchonet-marlowe-indexer
 Waiting for marlowe schema
 Marlowe indexer lag: 0 slots
 
@@ -109,7 +116,7 @@ Starting remaining containers in pod b9463cbd7f198bf43ceb38869b2e9b4d4b0c385b7ab
 ## 5. Optionally, restart the pod to free up memory held by the syncing from genesis
 
 ```bash
-podman pod restart benchmark-preprod
+podman pod restart benchmark-sanchonet
 ```
 
 
@@ -120,8 +127,8 @@ podman pod restart benchmark-preprod
 ```
 
 ```console
-PODNAME=benchmark-preprod
-NETWORK=preprod
+PODNAME=benchmark-sanchonet
+NETWORK=sanchonet
 BENCHMARK_CONFIG=../benchmark-config.json
 MARLOWE_RT_HOST=oryx
 MARLOWE_RT_PORT=37001

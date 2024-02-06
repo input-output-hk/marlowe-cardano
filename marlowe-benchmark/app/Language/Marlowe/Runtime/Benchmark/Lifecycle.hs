@@ -50,6 +50,7 @@ import qualified Data.List.NonEmpty as NE (fromList)
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain (Address (Address))
+import qualified Ouroboros.Network.Protocol.LocalStateQuery.Type as Net.Query
 import qualified Test.Gen.Cardano.Api.Typed as C (genShelleyWitnessSigningKey)
 
 data Benchmark = Benchmark
@@ -116,13 +117,13 @@ fundAddress
 fundAddress node era network srcAddress srcKey changeAddress dstAddressAmount =
   do
     let local = C.LocalNodeConnectInfo (C.CardanoModeParams $ C.EpochSlots 432_000) network node
-    Right systemStart <- liftIO $ C.queryNodeLocalState local Nothing C.QuerySystemStart
+    Right systemStart <- liftIO $ C.queryNodeLocalState local Net.Query.VolatileTip C.QuerySystemStart
     Right ledgerEpochInfo <-
       liftIO $
         fmap (fmap C.toLedgerEpochInfo) $
           C.queryNodeLocalState
             local
-            Nothing
+            Net.Query.VolatileTip
             C.QueryEraHistory
     Right protocol <-
       liftIO $
