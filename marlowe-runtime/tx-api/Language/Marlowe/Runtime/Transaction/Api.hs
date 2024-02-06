@@ -35,10 +35,9 @@ module Language.Marlowe.Runtime.Transaction.Api (
   NFTMetadataFile (..),
   RoleToken (..),
   RoleTokenFilter (
+    ..,
     RoleTokensOr,
     RoleTokensAnd,
-    RoleTokenFilterAny,
-    RoleTokenFilterNone,
     RoleTokenFilterByContracts,
     RoleTokenFilterByPolicyIds,
     RoleTokenFilterByTokens
@@ -59,6 +58,7 @@ module Language.Marlowe.Runtime.Transaction.Api (
   getTokenQuantities,
   hasRecipient,
   mkMint,
+  optimizeRoleTokenFilter,
 ) where
 
 import Cardano.Api (
@@ -861,6 +861,16 @@ data RoleTokenFilter
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Variations)
 
+optimizeRoleTokenFilter :: RoleTokenFilter -> RoleTokenFilter
+optimizeRoleTokenFilter = \case
+  RoleTokensOr a b -> RoleTokensOr (optimizeRoleTokenFilter a) (optimizeRoleTokenFilter b)
+  RoleTokensAnd a b -> RoleTokensAnd (optimizeRoleTokenFilter a) (optimizeRoleTokenFilter b)
+  RoleTokenFilterAny -> RoleTokenFilterAny
+  RoleTokenFilterNone -> RoleTokenFilterNone
+  RoleTokenFilterByContracts a -> RoleTokenFilterByContracts a
+  RoleTokenFilterByPolicyIds a -> RoleTokenFilterByPolicyIds a
+  RoleTokenFilterByTokens a -> RoleTokenFilterByTokens a
+
 instance Binary RoleTokenFilter where
   put (RoleTokensOr a b) = do
     putWord8 0
@@ -925,7 +935,9 @@ pattern RoleTokensOr a b <- MkRoleTokensOr a b
             then RoleTokensOr (RoleTokenFilterByTokens tokens) (RoleTokenFilterByPolicyIds b)
             else MkRoleTokensOr (RoleTokenFilterByTokens tokens) (RoleTokenFilterByPolicyIds b)
     RoleTokensOr a (RoleTokensOr b c) = RoleTokensOr (RoleTokensOr a b) c
-    RoleTokensOr a b = MkRoleTokensOr a b
+    RoleTokensOr a b
+      | a == b = a
+      | otherwise = MkRoleTokensOr a b
 
 pattern RoleTokensAnd :: RoleTokenFilter -> RoleTokenFilter -> RoleTokenFilter
 pattern RoleTokensAnd a b <- MkRoleTokensAnd a b
@@ -945,7 +957,9 @@ pattern RoleTokensAnd a b <- MkRoleTokensAnd a b
     RoleTokensAnd (RoleTokenFilterByTokens a) (RoleTokenFilterByPolicyIds b) =
       RoleTokenFilterByTokens $ Set.filter (flip Set.member b . policyId) a
     RoleTokensAnd a (RoleTokensAnd b c) = RoleTokensAnd (RoleTokensAnd a b) c
-    RoleTokensAnd a b = MkRoleTokensAnd a b
+    RoleTokensAnd a b
+      | a == b = a
+      | otherwise = MkRoleTokensAnd a b
 
 pattern RoleTokenFilterByContracts :: Set ContractId -> RoleTokenFilter
 pattern RoleTokenFilterByContracts contracts <- MkRoleTokenFilterByContracts contracts
