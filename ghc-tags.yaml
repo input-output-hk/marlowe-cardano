@@ -1,0 +1,23 @@
+language : Haskell2010
+extensions : 
+  - DeriveFoldable
+  - DeriveFunctor
+  - DeriveGeneric
+  - DeriveLift
+  - DeriveTraversable
+  - ExplicitForAll
+  - FlexibleContexts
+  - GeneralizedNewtypeDeriving
+  - ImportQualifiedPost
+  - MultiParamTypeClasses
+  - ScopedTypeVariables
+  - StandaloneDeriving
+  - LambdaCase
+  - DataKinds
+  - DuplicateRecordFields
+  - FlexibleInstances
+  - MultiParamTypeClasses
+  - OverloadedLists
+  - StrictData
+  - TypeFamilies
+  - UndecidableInstances
