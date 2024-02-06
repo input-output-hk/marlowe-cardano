@@ -163,6 +163,7 @@ test-suite marlowe-test
   main-is:        Spec.hs
   other-modules:
     Spec.Marlowe.Marlowe
+    Spec.Marlowe.Plate
     Spec.Marlowe.Plutus
     Spec.Marlowe.Plutus.AssocMap
     Spec.Marlowe.Plutus.Lens

@@ -17,6 +17,7 @@ import Test.Tasty (TestTree, defaultMain, testGroup)
 import Test.Tasty.QuickCheck
 
 import qualified Spec.Marlowe.Marlowe (prop_noFalsePositives, tests)
+import qualified Spec.Marlowe.Plate (tests)
 import qualified Spec.Marlowe.Plutus (tests)
 import qualified Spec.Marlowe.Semantics (tests)
 import qualified Spec.Marlowe.Serialization (tests)
@@ -42,6 +43,7 @@ tests =
   testGroup
     "Marlowe"
     [ Spec.Marlowe.Marlowe.tests
+    , Spec.Marlowe.Plate.tests
     , testGroup
         "Static Analysis"
         [ testProperty "No false positives" $ Spec.Marlowe.Marlowe.prop_noFalsePositives timeout
