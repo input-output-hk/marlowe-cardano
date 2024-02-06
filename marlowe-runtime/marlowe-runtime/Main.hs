@@ -77,8 +77,34 @@ import Network.Protocol.Driver.Trace (tcpServerTraced)
 import Network.Socket (HostName, PortNumber)
 import Network.TypedProtocol (unsafeIntToNat)
 import Observe.Event.Backend (injectSelector)
-import OpenTelemetry.Trace
-import Options.Applicative
+import OpenTelemetry.Trace (
+  InstrumentationLibrary (
+    InstrumentationLibrary,
+    libraryName,
+    libraryVersion
+  ),
+ )
+import Options.Applicative (
+  Mod,
+  OptionFields,
+  ReadM,
+  auto,
+  execParser,
+  fullDesc,
+  header,
+  help,
+  helper,
+  info,
+  long,
+  metavar,
+  option,
+  progDesc,
+  short,
+  showDefault,
+  strOption,
+  value,
+ )
+import Ouroboros.Network.Protocol.LocalStateQuery.Type (Target (VolatileTip))
 import Paths_marlowe_runtime (version)
 import System.Environment (lookupEnv)
 import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
@@ -138,7 +164,7 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
     securityParameter <-
       liftIO $
         (either (fail . show) (either (fail . show) $ pure . protocolParamSecurity) =<<) $
-          queryNodeLocalState localNodeConnectInfo Nothing $
+          queryNodeLocalState localNodeConnectInfo VolatileTip $
             QueryInEra $
               QueryInShelleyBasedEra ShelleyBasedEraBabbage QueryGenesisParameters
 

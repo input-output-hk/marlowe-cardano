@@ -143,8 +143,8 @@ ggsave(g, file="sync.png", width=5, height=3, units="in")
 
 g <- ggplot(
   melt(
-    rawQuery[, .(`Metric`=metric, `Queries [/s]`=queriesPerSecond, `Contracts [/s]`=contractsPerSecond, `Pages [/s]`=pagesPerSecond)],
-    id.vars=c("Metric"), variable.name="Benchmark", measure.vars=c("Queries [/s]", "Pages [/s]", "Contracts [/s]"), value.name="Measurement"
+    rawQuery[, .(`Metric`=metric, `Queries [/s]`=queriesPerSecond, `Pages [/s]`=pagesPerSecond)],
+    id.vars=c("Metric"), variable.name="Benchmark", measure.vars=c("Queries [/s]", "Pages [/s]"), value.name="Measurement"
   ),
   aes(y=Measurement)
 ) +

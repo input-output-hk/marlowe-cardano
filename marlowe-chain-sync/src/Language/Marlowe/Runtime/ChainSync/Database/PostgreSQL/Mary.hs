@@ -9,20 +9,32 @@ import qualified Cardano.Ledger.Allegra.Scripts as Allegra
 import Cardano.Ledger.Allegra.TxAuxData (AllegraTxAuxData (..))
 import Cardano.Ledger.Binary (serialize', shelleyProtVer)
 import Cardano.Ledger.Core (TxAuxData)
-import Cardano.Ledger.Crypto
-import Cardano.Ledger.Mary
-import Cardano.Ledger.Mary.TxBody (MaryTxBody (..), ValidityInterval (..))
+import Cardano.Ledger.Crypto (StandardCrypto)
+import Cardano.Ledger.Mary (MaryEra, ShelleyTx, ShelleyTxOut)
+import Cardano.Ledger.Mary.TxBody (MaryTxBody (..))
 import Cardano.Ledger.Mary.Value (AssetName (..), MaryValue (..), MultiAsset (..), PolicyID (..))
-import Cardano.Ledger.Shelley.API
+import Cardano.Ledger.Shelley.API (
+  ScriptHash (ScriptHash),
+  ShelleyTx (ShelleyTx, auxiliaryData, body, wits),
+  ShelleyTxOut (ShelleyTxOut),
+  StrictMaybe,
+ )
 import Data.ByteString (ByteString)
 import Data.ByteString.Short (fromShort)
 import Data.Foldable (Foldable (..))
-import Data.Int
+import Data.Int (Int16, Int64)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Allegra (allegraTxOutRow, allegraTxRow)
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Shelley (hashToBytea, shelleyTxInRow)
-import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types
+import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types (
+  AssetMintRow (AssetMintRow),
+  AssetOutRow (AssetOutRow),
+  Bytea (..),
+  TxOutRowGroup,
+  TxRow,
+  TxRowGroup,
+ )
 
 maryTxToRows :: Int64 -> Bytea -> Bytea -> ShelleyTx (MaryEra StandardCrypto) -> TxRowGroup
 maryTxToRows slotNo blockHash txId ShelleyTx{..} =
@@ -40,10 +52,10 @@ maryTxRow
   -> Int64
   -> Bytea
   -> Bytea
-  -> ValidityInterval
+  -> Allegra.ValidityInterval
   -> StrictMaybe (TxAuxData era)
   -> TxRow
-maryTxRow encodeMetadata slotNo blockHash txId ValidityInterval{..} =
+maryTxRow encodeMetadata slotNo blockHash txId Allegra.ValidityInterval{..} =
   allegraTxRow encodeMetadata slotNo blockHash txId Allegra.ValidityInterval{..}
 
 maryTxOutRow :: Int64 -> Bytea -> Int16 -> ShelleyTxOut (MaryEra StandardCrypto) -> TxOutRowGroup

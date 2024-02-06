@@ -4,14 +4,14 @@ module Network.Protocol.Driver.Untyped where
 
 import Control.Exception (Exception)
 import Control.Monad (guard)
-import Data.Binary
+import Data.Binary (Binary (get, put), Get, Put)
 import Data.Binary.Get (ByteOffset, Decoder (..), isEmpty, label, pushChunk, runGetIncremental)
 import Data.Binary.Put (runPut)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import Data.Text (Text)
 import GHC.Generics (Generic)
-import Network.Channel
+import Network.Channel (Channel (..))
 
 -- | An untyped protocol driver. Sits between a @Network.TypedProtocol.Driver@ which
 -- is a stateful, typed channel for a specific protocol, and a @Network.Channel@ which is an unstructured,

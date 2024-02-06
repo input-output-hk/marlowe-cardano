@@ -20,10 +20,10 @@ import Cardano.Ledger.Alonzo.TxWits (AlonzoTxWits (..))
 import Cardano.Ledger.BaseTypes (maybeToStrictMaybe)
 import qualified Cardano.Ledger.Core
 import Cardano.Ledger.Era (Era (EraCrypto))
-import Cardano.Ledger.Keys (KeyRole (Witness))
-import Cardano.Ledger.Shelley.TxBody (WitVKey)
+import Cardano.Ledger.Keys (KeyRole (Witness), WitVKey)
+
 import Data.Set (Set)
-import Servant.Pagination
+import Servant.Pagination (RangeOrder (..))
 
 applyRangeToAscList :: (Eq f) => (a -> f) -> Maybe f -> Int -> Int -> RangeOrder -> [a] -> Maybe [a]
 applyRangeToAscList getField startFrom limit offset order =
@@ -43,10 +43,9 @@ type WitVKeys era = Set (WitVKey 'Witness (EraCrypto (ShelleyLedgerEra era)))
 makeSignedTxWithWitnessKeys
   :: forall era shelleyLedgerEra
    . ( ShelleyLedgerEra era ~ shelleyLedgerEra
-     , Cardano.Ledger.Era.Era shelleyLedgerEra
      , Cardano.Ledger.Core.TxWits shelleyLedgerEra ~ AlonzoTxWits shelleyLedgerEra
      , Cardano.Ledger.Core.Tx shelleyLedgerEra ~ AlonzoTx shelleyLedgerEra
-     , Cardano.Ledger.Core.Script shelleyLedgerEra ~ Cardano.Ledger.Alonzo.Scripts.AlonzoScript shelleyLedgerEra
+     , Cardano.Ledger.Alonzo.Scripts.AlonzoEraScript shelleyLedgerEra
      )
   => TxBody era
   -> WitVKeys era
