@@ -11,15 +11,12 @@ import Cardano.Ledger.Alonzo.TxAuxData (AlonzoTxAuxData (..))
 import Cardano.Ledger.Alonzo.TxWits (AlonzoTxWits (..), TxDats, unTxDats)
 import Cardano.Ledger.Babbage (AlonzoScript, BabbageEra, BabbageTxOut)
 import Cardano.Ledger.Babbage.Core (EraScript (..))
-import Cardano.Ledger.Babbage.Scripts (AlonzoScript (..))
 import Cardano.Ledger.Babbage.Tx (IsValid (..))
 import Cardano.Ledger.Babbage.TxBody (BabbageTxBody (..), BabbageTxOut (..), Datum (..))
 import Cardano.Ledger.Binary (Sized (..), shelleyProtVer)
 import qualified Cardano.Ledger.Binary as L
 import Cardano.Ledger.Crypto
 import Cardano.Ledger.Plutus.Data (binaryDataToData, hashBinaryData)
-import Cardano.Ledger.Plutus.Language (Plutus (..))
-import qualified Cardano.Ledger.Plutus.Language as P
 import Cardano.Ledger.Shelley.API (ScriptHash (..), ShelleyTxOut (..), StrictMaybe (..))
 import Control.Arrow (Arrow (..))
 import Data.ByteString (ByteString)
@@ -60,10 +57,6 @@ babbageScriptRow (ScriptHash hash) script =
   ScriptRow
     { scriptHash = hashToBytea hash
     , scriptBytes = originalBytea script
-    , scriptLanguage = case script of
-        TimelockScript _ -> Timelock
-        PlutusScript (Plutus P.PlutusV1 _) -> PlutusV1
-        PlutusScript _ -> PlutusV2
     }
 
 babbageTxOutRows

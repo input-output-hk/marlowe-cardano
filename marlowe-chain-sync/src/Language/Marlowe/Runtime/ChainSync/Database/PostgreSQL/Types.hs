@@ -6,7 +6,6 @@ module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types where
 import Cardano.Api hiding (ScriptLanguage)
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (encodeBase16)
-import qualified Data.ByteString.Char8 as BS
 import Data.Csv
 import Data.Int
 import Data.Text.Encoding (encodeUtf8)
@@ -112,15 +111,8 @@ type TxOutRowGroup = (TxOutRow, [AssetOutRow])
 data ScriptRow = ScriptRow
   { scriptHash :: !Bytea
   , scriptBytes :: !Bytea
-  , scriptLanguage :: !ScriptLanguage
   }
   deriving (Generic, ToRow)
-
-data ScriptLanguage = MultiSig | Timelock | PlutusV1 | PlutusV2 | PlutusV3
-  deriving (Show, Read, Eq, Ord, Enum, Bounded, Generic)
-
-instance PS.ToField ScriptLanguage where
-  toField = PS.Escape . BS.pack . show
 
 serialiseToBytea :: (SerialiseAsRawBytes a) => a -> Bytea
 serialiseToBytea = Bytea . serialiseToRawBytes

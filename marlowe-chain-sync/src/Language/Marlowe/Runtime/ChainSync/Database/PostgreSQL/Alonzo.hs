@@ -7,7 +7,6 @@ module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Alonzo where
 
 import Cardano.Binary (serialize')
 import Cardano.Ledger.Alonzo
-import Cardano.Ledger.Alonzo.Scripts (AlonzoScript (..))
 import Cardano.Ledger.Alonzo.Tx (AlonzoTx (..), IsValid (..), ScriptPurpose (Spending), indexedRdmrs, txdats')
 import Cardano.Ledger.Alonzo.TxAuxData (AlonzoTxAuxData (..))
 import Cardano.Ledger.Alonzo.TxBody (AlonzoTxBody (..), AlonzoTxOut (..))
@@ -55,9 +54,6 @@ alonzoScriptRow (ScriptHash hash) script =
   ScriptRow
     { scriptHash = hashToBytea hash
     , scriptBytes = originalBytea script
-    , scriptLanguage = case script of
-        TimelockScript _ -> Timelock
-        PlutusScript _ -> PlutusV1
     }
 
 alonzoTxRow

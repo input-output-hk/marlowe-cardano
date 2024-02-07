@@ -285,7 +285,7 @@ runInsertScripts dbUri rowQueue = withConnection dbUri \conn -> do
           guard $ not $ null rows
           pure rows
         let (rows', reachedEnd) = foldr (\r (acc, end) -> maybe (acc, True) ((,end) . (: acc)) r) ([], False) rows
-        _ <- executeMany conn [sql| INSERT INTO chain.script VALUES (?,?,?) ON CONFLICT (id) DO NOTHING |] rows'
+        _ <- executeMany conn [sql| INSERT INTO chain.script VALUES (?,?) ON CONFLICT (id) DO NOTHING |] rows'
         unless reachedEnd go
   go
 

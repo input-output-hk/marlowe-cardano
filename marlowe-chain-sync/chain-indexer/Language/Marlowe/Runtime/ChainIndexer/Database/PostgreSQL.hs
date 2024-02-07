@@ -433,7 +433,7 @@ copyScripts
   -> [ScriptRow]
   -> m ()
 copyScripts conn rows = do
-  let query = [sql| INSERT INTO chain.script VALUES (?,?,?) ON CONFLICT (id) DO NOTHING |]
+  let query = [sql| INSERT INTO chain.script VALUES (?,?) ON CONFLICT (id) DO NOTHING |]
   withEvent CopyScripts \ev -> do
     count <- liftIO $ executeMany conn query rows
     addField ev count
