@@ -3,6 +3,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE EmptyDataDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE PatternSynonyms #-}
@@ -26,6 +27,7 @@ module Language.Marlowe.Runtime.Transaction.Api (
   Destination (..),
   InputsApplied (..),
   InputsAppliedInEra (..),
+  IsToken (..),
   JobId (..),
   LoadHelpersContextError (..),
   LoadMarloweContextError (..),
@@ -33,15 +35,8 @@ module Language.Marlowe.Runtime.Transaction.Api (
   Mint (..),
   MintRole (..),
   NFTMetadataFile (..),
-  RoleToken (..),
-  RoleTokenFilter (
-    ..,
-    RoleTokensOr,
-    RoleTokensAnd,
-    RoleTokenFilterByContracts,
-    RoleTokenFilterByPolicyIds,
-    RoleTokenFilterByTokens
-  ),
+  RoleTokenFilter' (..),
+  RoleTokenFilter,
   RoleTokenMetadata (..),
   RoleTokensConfig (RoleTokensNone, RoleTokensUsePolicy, RoleTokensMint),
   SubmitError (..),
@@ -54,11 +49,11 @@ module Language.Marlowe.Runtime.Transaction.Api (
   decodeRoleTokenMetadata,
   encodeRoleTokenMetadata,
   evalRoleTokenFilter,
-  filterRoleTokens,
   getTokenQuantities,
   hasRecipient,
   mkMint,
   optimizeRoleTokenFilter,
+  rewriteRoleTokenFilter,
 ) where
 
 import Cardano.Api (
@@ -144,6 +139,7 @@ import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript)
 import Language.Marlowe.Runtime.History.Api (ExtractCreationError, ExtractMarloweTransactionError)
 import Network.HTTP.Media (MediaType)
 
+import Control.Lens (Plated (..), rewrite)
 import Control.Monad (join)
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as Aeson
@@ -844,163 +840,166 @@ data Account
   deriving anyclass (Binary, ToJSON, Variations)
 
 data BurnError
-  = BurnRolesActive (Set AssetId)
+  = BurnEraUnsupported AnyCardanoEra
+  | BurnRolesActive (Set AssetId)
   | BurnNoTokens
   | BurnBalancingError String
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary, ToJSON, Variations)
 
-data RoleTokenFilter
-  = MkRoleTokensOr RoleTokenFilter RoleTokenFilter
-  | MkRoleTokensAnd RoleTokenFilter RoleTokenFilter
+data RoleTokenFilter' c p t
+  = RoleTokensOr (RoleTokenFilter' c p t) (RoleTokenFilter' c p t)
+  | RoleTokensAnd (RoleTokenFilter' c p t) (RoleTokenFilter' c p t)
+  | RoleTokensNot (RoleTokenFilter' c p t)
   | RoleTokenFilterAny
   | RoleTokenFilterNone
-  | MkRoleTokenFilterByContracts (Set ContractId)
-  | MkRoleTokenFilterByPolicyIds (Set PolicyId)
-  | MkRoleTokenFilterByTokens (Set AssetId)
+  | RoleTokenFilterByContracts (Set c)
+  | RoleTokenFilterByPolicyIds (Set p)
+  | RoleTokenFilterByTokens (Set t)
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Variations)
+  deriving anyclass (Variations, Binary)
 
-optimizeRoleTokenFilter :: RoleTokenFilter -> RoleTokenFilter
-optimizeRoleTokenFilter = \case
-  RoleTokensOr a b -> RoleTokensOr (optimizeRoleTokenFilter a) (optimizeRoleTokenFilter b)
-  RoleTokensAnd a b -> RoleTokensAnd (optimizeRoleTokenFilter a) (optimizeRoleTokenFilter b)
-  RoleTokenFilterAny -> RoleTokenFilterAny
-  RoleTokenFilterNone -> RoleTokenFilterNone
-  RoleTokenFilterByContracts a -> RoleTokenFilterByContracts a
-  RoleTokenFilterByPolicyIds a -> RoleTokenFilterByPolicyIds a
-  RoleTokenFilterByTokens a -> RoleTokenFilterByTokens a
+instance Plated (RoleTokenFilter' c p t) where
+  plate f = \case
+    RoleTokensOr f1 f2 -> RoleTokensOr <$> f f1 <*> f f2
+    RoleTokensAnd f1 f2 -> RoleTokensAnd <$> f f1 <*> f f2
+    RoleTokensNot f' -> RoleTokensNot <$> f f'
+    rf -> pure rf
 
-instance Binary RoleTokenFilter where
-  put (RoleTokensOr a b) = do
-    putWord8 0
-    put a
-    put b
-  put (RoleTokensAnd a b) = do
-    putWord8 1
-    put a
-    put b
-  put RoleTokenFilterAny = putWord8 2
-  put RoleTokenFilterNone = putWord8 3
-  put (RoleTokenFilterByContracts contracts) = do
-    putWord8 4
-    put contracts
-  put (RoleTokenFilterByPolicyIds policies) = do
-    putWord8 5
-    put policies
-  put (RoleTokenFilterByTokens tokens) = do
-    putWord8 6
-    put tokens
+type RoleTokenFilter = RoleTokenFilter' ContractId PolicyId AssetId
 
-  get = label "RoleTokenFilter" do
-    tag <- getWord8
-    join $ label "tag" case tag of
-      0 -> pure $ label "RoleTokensOr" $ RoleTokensOr <$> label "lhs" get <*> label "rhs" get
-      1 -> pure $ label "RoleTokensAnd" $ RoleTokensAnd <$> label "lhs" get <*> label "rhs" get
-      2 -> pure $ pure RoleTokenFilterAny
-      3 -> pure $ pure RoleTokenFilterNone
-      4 -> pure $ label "RoleTokenFilterByContracts" $ RoleTokenFilterByContracts <$> get
-      5 -> pure $ label "RoleTokenFilterByPolicyIds" $ RoleTokenFilterByPolicyIds <$> get
-      6 -> pure $ label "RoleTokenFilterByTokens" $ RoleTokenFilterByTokens <$> get
-      _ -> fail $ "invalid value: " <> show tag
+class IsToken t p | t -> p where
+  tokenPolicyId :: t -> p
 
-{-# COMPLETE
-  RoleTokensOr
-  , RoleTokensAnd
-  , RoleTokenFilterAny
-  , RoleTokenFilterNone
-  , RoleTokenFilterByContracts
-  , RoleTokenFilterByPolicyIds
-  , RoleTokenFilterByTokens
-  #-}
+instance IsToken AssetId PolicyId where
+  tokenPolicyId = policyId
 
-pattern RoleTokensOr :: RoleTokenFilter -> RoleTokenFilter -> RoleTokenFilter
-pattern RoleTokensOr a b <- MkRoleTokensOr a b
-  where
-    RoleTokensOr RoleTokenFilterAny _ = RoleTokenFilterAny
-    RoleTokensOr _ RoleTokenFilterAny = RoleTokenFilterAny
-    RoleTokensOr RoleTokenFilterNone b = b
-    RoleTokensOr a RoleTokenFilterNone = a
-    RoleTokensOr (RoleTokenFilterByContracts a) (RoleTokenFilterByContracts b) =
-      RoleTokenFilterByContracts (Set.union a b)
-    RoleTokensOr (RoleTokenFilterByPolicyIds a) (RoleTokenFilterByPolicyIds b) =
-      RoleTokenFilterByPolicyIds (Set.union a b)
-    RoleTokensOr (RoleTokenFilterByTokens a) (RoleTokenFilterByTokens b) =
-      RoleTokenFilterByTokens (Set.union a b)
-    RoleTokensOr (RoleTokenFilterByPolicyIds a) (RoleTokenFilterByTokens b) =
-      RoleTokensOr (RoleTokenFilterByTokens b) (RoleTokenFilterByPolicyIds a)
-    RoleTokensOr (RoleTokenFilterByTokens a) (RoleTokenFilterByPolicyIds b) =
-      let tokens = Set.filter (not . flip Set.member b . policyId) a
-       in if tokens == a
-            then RoleTokensOr (RoleTokenFilterByTokens tokens) (RoleTokenFilterByPolicyIds b)
-            else MkRoleTokensOr (RoleTokenFilterByTokens tokens) (RoleTokenFilterByPolicyIds b)
-    RoleTokensOr a (RoleTokensOr b c) = RoleTokensOr (RoleTokensOr a b) c
-    RoleTokensOr a b
-      | a == b = a
-      | otherwise = MkRoleTokensOr a b
-
-pattern RoleTokensAnd :: RoleTokenFilter -> RoleTokenFilter -> RoleTokenFilter
-pattern RoleTokensAnd a b <- MkRoleTokensAnd a b
-  where
-    RoleTokensAnd RoleTokenFilterAny b = b
-    RoleTokensAnd a RoleTokenFilterAny = a
-    RoleTokensAnd RoleTokenFilterNone _ = RoleTokenFilterNone
-    RoleTokensAnd _ RoleTokenFilterNone = RoleTokenFilterNone
-    RoleTokensAnd (RoleTokenFilterByContracts a) (RoleTokenFilterByContracts b) =
-      RoleTokenFilterByContracts (Set.intersection a b)
-    RoleTokensAnd (RoleTokenFilterByPolicyIds a) (RoleTokenFilterByPolicyIds b) =
-      RoleTokenFilterByPolicyIds (Set.intersection a b)
-    RoleTokensAnd (RoleTokenFilterByTokens a) (RoleTokenFilterByTokens b) =
-      RoleTokenFilterByTokens (Set.intersection a b)
-    RoleTokensAnd (RoleTokenFilterByPolicyIds a) (RoleTokenFilterByTokens b) =
-      RoleTokensAnd (RoleTokenFilterByTokens b) (RoleTokenFilterByPolicyIds a)
-    RoleTokensAnd (RoleTokenFilterByTokens a) (RoleTokenFilterByPolicyIds b) =
-      RoleTokenFilterByTokens $ Set.filter (flip Set.member b . policyId) a
-    RoleTokensAnd a (RoleTokensAnd b c) = RoleTokensAnd (RoleTokensAnd a b) c
-    RoleTokensAnd a b
-      | a == b = a
-      | otherwise = MkRoleTokensAnd a b
-
-pattern RoleTokenFilterByContracts :: Set ContractId -> RoleTokenFilter
-pattern RoleTokenFilterByContracts contracts <- MkRoleTokenFilterByContracts contracts
-  where
-    RoleTokenFilterByContracts contracts
-      | Set.null contracts = RoleTokenFilterNone
-      | otherwise = MkRoleTokenFilterByContracts contracts
-
-pattern RoleTokenFilterByPolicyIds :: Set PolicyId -> RoleTokenFilter
-pattern RoleTokenFilterByPolicyIds policies <- MkRoleTokenFilterByPolicyIds policies
-  where
-    RoleTokenFilterByPolicyIds policies
-      | Set.null policies = RoleTokenFilterNone
-      | otherwise = MkRoleTokenFilterByPolicyIds policies
-
-pattern RoleTokenFilterByTokens :: Set AssetId -> RoleTokenFilter
-pattern RoleTokenFilterByTokens tokens <- MkRoleTokenFilterByTokens tokens
-  where
-    RoleTokenFilterByTokens tokens
-      | Set.null tokens = RoleTokenFilterNone
-      | otherwise = MkRoleTokenFilterByTokens tokens
-
-data RoleToken = RoleToken
-  { roleTokenAssetId :: AssetId
-  , roleTokenContract :: ContractId
-  }
-
-evalRoleTokenFilter :: RoleTokenFilter -> RoleToken -> Bool
-evalRoleTokenFilter f RoleToken{..} = go f
+evalRoleTokenFilter :: (Ord c, Ord p, Ord t, IsToken t p) => RoleTokenFilter' c p t -> c -> t -> Bool
+evalRoleTokenFilter f roleTokenContract roleToken = go f
   where
     go = \case
       RoleTokensOr f1 f2 -> go f1 || go f2
       RoleTokensAnd f1 f2 -> go f1 && go f2
+      RoleTokensNot f' -> not $ go f'
       RoleTokenFilterAny -> True
       RoleTokenFilterNone -> False
       RoleTokenFilterByContracts contracts -> Set.member roleTokenContract contracts
-      RoleTokenFilterByPolicyIds policies -> Set.member (policyId roleTokenAssetId) policies
-      RoleTokenFilterByTokens tokens -> Set.member roleTokenAssetId tokens
+      RoleTokenFilterByPolicyIds policies -> Set.member (tokenPolicyId roleToken) policies
+      RoleTokenFilterByTokens tokens -> Set.member roleToken tokens
 
-filterRoleTokens :: RoleTokenFilter -> Set RoleToken -> Set RoleToken
-filterRoleTokens = Set.filter . evalRoleTokenFilter
+optimizeRoleTokenFilter :: (Ord c, Ord p, Ord t, IsToken t p) => RoleTokenFilter' c p t -> RoleTokenFilter' c p t
+optimizeRoleTokenFilter = rewrite rewriteRoleTokenFilter
+
+rewriteRoleTokenFilter :: (Ord c, Ord p, Ord t, IsToken t p) => RoleTokenFilter' c p t -> Maybe (RoleTokenFilter' c p t)
+rewriteRoleTokenFilter = \case
+  RoleTokenFilterAny -> Nothing
+  RoleTokenFilterNone -> Nothing
+  -- rule double-negation
+  RoleTokensNot (RoleTokensNot a) -> Just a
+  -- rule not-any
+  RoleTokensNot RoleTokenFilterAny -> Just RoleTokenFilterNone
+  -- rule not-none
+  RoleTokensNot RoleTokenFilterNone -> Just RoleTokenFilterAny
+  RoleTokenFilterByContracts contracts
+    -- rule null-contracts
+    | Set.null contracts -> Just RoleTokenFilterNone
+    | otherwise -> Nothing
+  RoleTokenFilterByPolicyIds policies
+    -- rule null-policy-ids
+    | Set.null policies -> Just RoleTokenFilterNone
+    | otherwise -> Nothing
+  RoleTokenFilterByTokens tokens
+    -- rule null-tokens
+    | Set.null tokens -> Just RoleTokenFilterNone
+    | otherwise -> Nothing
+  RoleTokensAnd a b -> rewriteRoleTokensAnd a b <|> rewriteRoleTokensAnd b a
+  RoleTokensOr a b -> rewriteRoleTokensOr a b <|> rewriteRoleTokensOr b a
+  _ -> Nothing
+
+rewriteRoleTokensAnd
+  :: (Ord c, Ord p, Ord t, IsToken t p)
+  => RoleTokenFilter' c p t
+  -> RoleTokenFilter' c p t
+  -> Maybe (RoleTokenFilter' c p t)
+rewriteRoleTokensAnd = curry \case
+  -- rule and-annulment
+  (_, RoleTokenFilterNone) -> Just RoleTokenFilterNone
+  -- rule and-identity
+  (a, RoleTokenFilterAny) -> Just a
+  -- rule de-morgan
+  (RoleTokensNot a, RoleTokensNot b) -> Just $ RoleTokensNot $ a `RoleTokensOr` b
+  -- and-distribute
+  (RoleTokensOr a b, RoleTokensOr c d)
+    | a == c -> Just $ a `RoleTokensAnd` (b `RoleTokensOr` d)
+    | a == d -> Just $ a `RoleTokensAnd` (b `RoleTokensOr` c)
+    | b == c -> Just $ b `RoleTokensAnd` (a `RoleTokensOr` d)
+    | b == d -> Just $ b `RoleTokensAnd` (a `RoleTokensOr` c)
+  -- rule and-contracts
+  (RoleTokenFilterByContracts a, RoleTokenFilterByContracts b) ->
+    Just $ RoleTokenFilterByContracts $ Set.intersection a b
+  -- rule and-policies
+  (RoleTokenFilterByPolicyIds a, RoleTokenFilterByPolicyIds b) ->
+    Just $ RoleTokenFilterByPolicyIds $ Set.intersection a b
+  -- rule and-tokens
+  (RoleTokenFilterByTokens a, RoleTokenFilterByTokens b) ->
+    Just $ RoleTokenFilterByTokens $ Set.intersection a b
+  -- rule and-policies-tokens
+  (RoleTokenFilterByPolicyIds p, RoleTokenFilterByTokens t) ->
+    Just $ RoleTokenFilterByTokens $ Set.filter (flip Set.member p . tokenPolicyId) t
+  -- rule and-complement
+  (a, RoleTokensNot a') | a == a' -> Just RoleTokenFilterNone
+  -- rule and-absorption
+  (a, RoleTokensOr b c)
+    | a == b || a == c -> Just a
+    | b == RoleTokensNot a -> Just $ a `RoleTokensAnd` c
+    | c == RoleTokensNot a -> Just $ a `RoleTokensAnd` b
+  -- rule and-idempotent
+  (a, a') | a == a' -> Just a
+  _ -> Nothing
+
+rewriteRoleTokensOr
+  :: (Ord c, Ord p, Ord t, IsToken t p)
+  => RoleTokenFilter' c p t
+  -> RoleTokenFilter' c p t
+  -> Maybe (RoleTokenFilter' c p t)
+rewriteRoleTokensOr = curry \case
+  -- rule or-annulment
+  (_, RoleTokenFilterAny) -> Just RoleTokenFilterAny
+  -- rule or-identity
+  (a, RoleTokenFilterNone) -> Just a
+  -- rule de-morgan
+  (RoleTokensNot a, RoleTokensNot b) -> Just $ RoleTokensNot $ a `RoleTokensAnd` b
+  -- or-distribute
+  (RoleTokensOr a b, RoleTokensOr c d)
+    | a == c -> Just $ a `RoleTokensOr` (b `RoleTokensOr` d)
+    | a == d -> Just $ a `RoleTokensOr` (b `RoleTokensOr` c)
+    | b == c -> Just $ b `RoleTokensOr` (a `RoleTokensOr` d)
+    | b == d -> Just $ b `RoleTokensOr` (a `RoleTokensOr` c)
+  -- rule or-contracts
+  (RoleTokenFilterByContracts a, RoleTokenFilterByContracts b) ->
+    Just $ RoleTokenFilterByContracts $ Set.union a b
+  -- rule or-policies
+  (RoleTokenFilterByPolicyIds a, RoleTokenFilterByPolicyIds b) ->
+    Just $ RoleTokenFilterByPolicyIds $ Set.union a b
+  -- rule or-tokens
+  (RoleTokenFilterByTokens a, RoleTokenFilterByTokens b) ->
+    Just $ RoleTokenFilterByTokens $ Set.union a b
+  -- rule or-policies-tokens
+  (RoleTokenFilterByPolicyIds p, RoleTokenFilterByTokens t) ->
+    let t' = Set.filter (not . flip Set.member p . tokenPolicyId) t
+     in if t == t'
+          then Nothing
+          else Just $ RoleTokensOr (RoleTokenFilterByPolicyIds p) (RoleTokenFilterByTokens t')
+  -- rule or-complement
+  (a, RoleTokensNot a') | a == a' -> Just RoleTokenFilterAny
+  -- rule or-absorption
+  (a, RoleTokensAnd b c)
+    | a == b || a == c -> Just a
+    | b == RoleTokensNot a -> Just $ a `RoleTokensOr` c
+    | c == RoleTokensNot a -> Just $ a `RoleTokensOr` b
+  -- rule or-idempotent
+  (a, a') | a == a' -> Just a
+  _ -> Nothing
 
 -- | The low-level runtime API for building and submitting transactions.
 data MarloweTxCommand status err result where
