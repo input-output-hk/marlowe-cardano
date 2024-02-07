@@ -366,7 +366,7 @@ instance Arbitrary Account where
       ]
   shrink = genericShrink
 
-instance Arbitrary RoleTokenFilter where
+instance (Arbitrary c, Ord c, Arbitrary p, Ord p, Arbitrary t, Ord t) => Arbitrary (RoleTokenFilter' c p t) where
   arbitrary = sized \case
     0 -> frequency leaves
     size -> frequency $ leaves <> nodes size
@@ -374,13 +374,14 @@ instance Arbitrary RoleTokenFilter where
       leaves =
         [ (1, pure RoleTokenFilterAny)
         , (1, pure RoleTokenFilterNone)
-        , (5, MkRoleTokenFilterByContracts <$> arbitrary)
-        , (5, MkRoleTokenFilterByPolicyIds <$> arbitrary)
-        , (5, MkRoleTokenFilterByTokens <$> arbitrary)
+        , (5, RoleTokenFilterByContracts <$> arbitrary)
+        , (5, RoleTokenFilterByPolicyIds <$> arbitrary)
+        , (5, RoleTokenFilterByTokens <$> arbitrary)
         ]
       nodes size =
-        [ (5, resize (size `div` 2) $ MkRoleTokensOr <$> arbitrary <*> arbitrary)
-        , (5, resize (size `div` 2) $ MkRoleTokensAnd <$> arbitrary <*> arbitrary)
+        [ (5, resize (size `div` 2) $ RoleTokensOr <$> arbitrary <*> arbitrary)
+        , (5, resize (size `div` 2) $ RoleTokensAnd <$> arbitrary <*> arbitrary)
+        , (5, resize (size - 1) $ RoleTokensNot <$> arbitrary)
         ]
   shrink = genericShrink
 

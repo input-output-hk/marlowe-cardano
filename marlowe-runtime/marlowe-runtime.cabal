@@ -485,6 +485,7 @@ library tx-api
     , containers ^>=0.6.5
     , http-media ^>=0.8
     , keys
+    , lens >=5.2 && <6
     , marlowe-cardano ==0.2.1.0
     , marlowe-chain-sync ==0.0.6
     , marlowe-protocols ==0.3.0.0
@@ -504,6 +505,7 @@ library tx
   exposed-modules:
     Language.Marlowe.Runtime.Transaction
     Language.Marlowe.Runtime.Transaction.BuildConstraints
+    Language.Marlowe.Runtime.Transaction.Burn
     Language.Marlowe.Runtime.Transaction.Chain
     Language.Marlowe.Runtime.Transaction.Constraints
     Language.Marlowe.Runtime.Transaction.Query
@@ -815,6 +817,7 @@ test-suite marlowe-runtime-test
     Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec
     Language.Marlowe.Runtime.Transaction.CommandSpec
     Language.Marlowe.Runtime.Transaction.ConstraintsSpec
+    Language.Marlowe.Runtime.Transaction.RoleTokenFilterSpec
     Language.Marlowe.Runtime.Transaction.SafetySpec
     Paths_marlowe_runtime
 
