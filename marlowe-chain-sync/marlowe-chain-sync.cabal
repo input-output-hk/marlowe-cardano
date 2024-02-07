@@ -131,6 +131,7 @@ library libchainsync
     , bytestring >=0.10.12 && <0.12
     , cardano-api:{cardano-api, internal} ^>=8.39.2.0
     , cardano-binary
+    , cardano-ledger-binary ^>=1.2
     , co-log ^>=0.6
     , containers ^>=0.6.5
     , eventuo11y >=0.9 && <0.11

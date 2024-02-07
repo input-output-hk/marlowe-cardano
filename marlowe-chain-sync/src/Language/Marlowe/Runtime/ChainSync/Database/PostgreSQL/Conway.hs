@@ -54,8 +54,6 @@ import Cardano.Ledger.Conway.TxBody (ConwayTxBody (..))
 import Cardano.Ledger.Conway.TxWits (AlonzoTxWits (..))
 import Cardano.Ledger.Core (EraScript (..), ScriptHash (..))
 import Cardano.Ledger.Crypto
-import Cardano.Ledger.Plutus.Language (Plutus (..))
-import qualified Cardano.Ledger.Plutus.Language as P
 import Control.Arrow (Arrow (..))
 import Data.ByteString (ByteString)
 import Data.Foldable (Foldable (..))
@@ -103,11 +101,6 @@ conwayScriptRow (ScriptHash hash) script =
   ScriptRow
     { scriptHash = hashToBytea hash
     , scriptBytes = originalBytea script
-    , scriptLanguage = case script of
-        TimelockScript _ -> Timelock
-        PlutusScript (Plutus P.PlutusV1 _) -> PlutusV1
-        PlutusScript (Plutus P.PlutusV2 _) -> PlutusV2
-        PlutusScript (Plutus P.PlutusV3 _) -> PlutusV3
     }
 
 coerceTxOut

@@ -56,7 +56,6 @@ shelleyScriptRow (ScriptHash hash) script =
   ScriptRow
     { scriptHash = hashToBytea hash
     , scriptBytes = originalBytea script
-    , scriptLanguage = MultiSig
     }
 
 mapStrictMaybe :: (a -> b) -> StrictMaybe a -> Maybe b
