@@ -30,7 +30,7 @@ import Cardano.Api (
   getBlockHeader,
  )
 import Cardano.Api.ChainSync.Client (ClientStIdle (..), ClientStNext (..))
-import Control.Monad (join, when)
+import Control.Monad (guard, join, unless, when)
 import Data.ByteString.Lazy (toChunks)
 import Data.Csv (ToRecord)
 import Data.Csv.Incremental (encode, encodeRecord)
@@ -39,7 +39,7 @@ import Data.Functor (void)
 import Data.Int (Int64)
 import Data.String (IsString (..))
 import Data.Version (showVersion)
-import Database.PostgreSQL.Simple (Connection, Query, close, connectPostgreSQL, execute_)
+import Database.PostgreSQL.Simple (Connection, Query, close, connectPostgreSQL, executeMany, execute_)
 import Database.PostgreSQL.Simple.Copy (copy_, putCopyData, putCopyEnd, putCopyError)
 import Database.PostgreSQL.Simple.SqlQQ (sql)
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Cardano (blockToRows)
@@ -57,6 +57,7 @@ import UnliftIO (
   atomically,
   bracket,
   finally,
+  flushTBQueue,
   mask,
   newTBQueueIO,
   onException,
@@ -94,6 +95,7 @@ main = do
   txInRowQueue <- newTBQueueIO maxTxInsInQueue
   assetOutRowQueue <- newTBQueueIO maxAssetOutsInQueue
   assetMintRowQueue <- newTBQueueIO maxAssetMintsInQueue
+  scriptQueue <- newTBQueueIO maxBlocksInQueue
   bracket (truncateTablesAndDisableIndexes databaseUri) enableIndexes \_ -> runConcurrently do
     Concurrently $
       runBlockProcessor
@@ -104,6 +106,7 @@ main = do
         txInRowQueue
         assetOutRowQueue
         assetMintRowQueue
+        scriptQueue
     Concurrently $ runCopy databaseUri "block (id, slotNo, blockNo)" blockRowQueue
     Concurrently $
       runCopy databaseUri "tx (blockId, id, slotNo, validityLowerBound, validityUpperBound, metadata, isValid)" txRowQueue
@@ -116,6 +119,7 @@ main = do
       runCopy databaseUri "txIn (txOutId, txOutIx, txInId, slotNo, redeemerDatumBytes, isCollateral)" txInRowQueue
     Concurrently $ runCopy databaseUri "assetOut (txOutId, txOutIx, slotNo, policyId, name, quantity)" assetOutRowQueue
     Concurrently $ runCopy databaseUri "assetMint (txId, slotNo, policyId, name, quantity)" assetMintRowQueue
+    Concurrently $ runInsertScripts databaseUri scriptQueue
     Concurrently $
       runChainSync
         blockQueue
@@ -134,8 +138,9 @@ runBlockProcessor
   -> TBQueueMaybe TxInRow
   -> TBQueueMaybe AssetOutRow
   -> TBQueueMaybe AssetMintRow
+  -> TBQueueMaybe ScriptRow
   -> IO ()
-runBlockProcessor blockQueue blockRowQueue txRowQueue txOutRowQueue txInRowQueue assetOutRowQueue assetMintRowQueue = go
+runBlockProcessor blockQueue blockRowQueue txRowQueue txOutRowQueue txInRowQueue assetOutRowQueue assetMintRowQueue scriptQueue = go
   where
     go = join $ atomically do
       mBlock <- readTBQueue blockQueue
@@ -151,13 +156,14 @@ runBlockProcessor blockQueue blockRowQueue txRowQueue txOutRowQueue txInRowQueue
         Just block -> do
           let (blockRow, txRows) = blockToRows block
           writeTBQueue blockRowQueue $ Just blockRow
-          for_ txRows \(txRow, txInRows, txOutRows, txMintRows) -> do
+          for_ txRows \(txRow, txInRows, txOutRows, txMintRows, scriptRows) -> do
             writeTBQueue txRowQueue $ Just txRow
             traverse_ (writeTBQueue txInRowQueue . Just) txInRows
             for_ txOutRows \(txOutRow, assetOutRows) -> do
               writeTBQueue txOutRowQueue $ Just txOutRow
               traverse_ (writeTBQueue assetOutRowQueue . Just) assetOutRows
             traverse_ (writeTBQueue assetMintRowQueue . Just) txMintRows
+            traverse_ (writeTBQueue scriptQueue . Just) scriptRows
           pure go
 
 type TBQueueMaybe a = TBQueue (Maybe a)
@@ -270,6 +276,18 @@ runCopy dbUri table rowQueue = withConnection dbUri \conn -> mask \restore -> do
       throwIO ex
     Right _ -> do
       putCopyEnd conn
+
+runInsertScripts :: String -> TBQueueMaybe ScriptRow -> IO ()
+runInsertScripts dbUri rowQueue = withConnection dbUri \conn -> do
+  let go = do
+        rows <- atomically do
+          rows <- flushTBQueue rowQueue
+          guard $ not $ null rows
+          pure rows
+        let (rows', reachedEnd) = foldr (\r (acc, end) -> maybe (acc, True) ((,end) . (: acc)) r) ([], False) rows
+        _ <- executeMany conn [sql| INSERT INTO chain.script VALUES (?,?,?) ON CONFLICT (id) DO NOTHING |] rows'
+        unless reachedEnd go
+  go
 
 withConnection :: (MonadUnliftIO m) => String -> (Connection -> m a) -> m a
 withConnection uri = bracket (liftIO $ connectPostgreSQL $ fromString uri) (liftIO . close)

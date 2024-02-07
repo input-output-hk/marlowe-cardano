@@ -12,7 +12,7 @@ TRUNCATE chain.txOut CASCADE;
 TRUNCATE chain.assetOut;
 TRUNCATE chain.assetMint;
 
-CREATE TYPE chain.SCRIPTLANG as ENUM ('SimpleScript', 'PlutusV1', 'PlutusV2', 'PlutusV3');
+CREATE TYPE chain.SCRIPTLANG as ENUM ('MultiSig', 'Timelock', 'PlutusV1', 'PlutusV2', 'PlutusV3');
 
 CREATE TABLE chain.script
   ( id BYTEA PRIMARY KEY

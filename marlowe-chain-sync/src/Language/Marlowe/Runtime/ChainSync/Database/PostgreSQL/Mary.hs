@@ -5,6 +5,7 @@
 
 module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Mary where
 
+import Cardano.Ledger.Allegra.Scripts (Timelock)
 import qualified Cardano.Ledger.Allegra.Scripts as Allegra
 import Cardano.Ledger.Allegra.TxAuxData (AllegraTxAuxData (..))
 import Cardano.Ledger.Binary (serialize', shelleyProtVer)
@@ -14,6 +15,7 @@ import Cardano.Ledger.Mary
 import Cardano.Ledger.Mary.TxBody (MaryTxBody (..), ValidityInterval (..))
 import Cardano.Ledger.Mary.Value (AssetName (..), MaryValue (..), MultiAsset (..), PolicyID (..))
 import Cardano.Ledger.Shelley.API
+import Cardano.Ledger.Shelley.TxWits (ShelleyTxWits (..))
 import Data.ByteString (ByteString)
 import Data.ByteString.Short (fromShort)
 import Data.Foldable (Foldable (..))
@@ -21,7 +23,7 @@ import Data.Int
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Allegra (allegraTxOutRow, allegraTxRow)
-import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Shelley (hashToBytea, shelleyTxInRow)
+import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Shelley (hashToBytea, originalBytea, shelleyTxInRow)
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types
 
 maryTxToRows :: Int64 -> Bytea -> Bytea -> ShelleyTx (MaryEra StandardCrypto) -> TxRowGroup
@@ -30,10 +32,22 @@ maryTxToRows slotNo blockHash txId ShelleyTx{..} =
   , shelleyTxInRow slotNo txId <$> Set.toAscList (mtbInputs body)
   , zipWith (maryTxOutRow slotNo txId) [0 ..] $ toList $ mtbOutputs body
   , maryAssetMintRows slotNo txId $ mtbMint body
+  , maryTxScripts wits
   )
 
 encodeMaryMetadata :: AllegraTxAuxData (MaryEra StandardCrypto) -> ByteString
 encodeMaryMetadata (AllegraTxAuxData md _) = serialize' shelleyProtVer md
+
+maryTxScripts :: ShelleyTxWits (MaryEra StandardCrypto) -> [ScriptRow]
+maryTxScripts ShelleyTxWits{..} = uncurry maryScriptRow <$> Map.toList scriptWits
+
+maryScriptRow :: ScriptHash StandardCrypto -> Timelock (MaryEra StandardCrypto) -> ScriptRow
+maryScriptRow (ScriptHash hash) script =
+  ScriptRow
+    { scriptHash = hashToBytea hash
+    , scriptBytes = originalBytea script
+    , scriptLanguage = Timelock
+    }
 
 maryTxRow
   :: (TxAuxData era -> ByteString)

@@ -3,18 +3,25 @@
 
 module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types where
 
-import Cardano.Api
+import Cardano.Api hiding (ScriptLanguage)
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (encodeBase16)
+import qualified Data.ByteString.Char8 as BS
 import Data.Csv
 import Data.Int
 import Data.Text.Encoding (encodeUtf8)
+import Database.PostgreSQL.Simple (ToRow)
+import qualified Database.PostgreSQL.Simple.ToField as PS
 import GHC.Generics (Generic)
 
 newtype Bytea = Bytea ByteString
+  deriving (Show, Read, Eq)
 
 instance ToField Bytea where
   toField (Bytea bs) = "\\x" <> encodeUtf8 (encodeBase16 bs)
+
+instance PS.ToField Bytea where
+  toField (Bytea bs) = PS.EscapeByteA bs
 
 newtype SqlBool = SqlBool Bool
 
@@ -98,9 +105,22 @@ instance ToRecord AssetMintRow
 
 type BlockRowGroup = (BlockRow, [TxRowGroup])
 
-type TxRowGroup = (TxRow, [TxInRow], [TxOutRowGroup], [AssetMintRow])
+type TxRowGroup = (TxRow, [TxInRow], [TxOutRowGroup], [AssetMintRow], [ScriptRow])
 
 type TxOutRowGroup = (TxOutRow, [AssetOutRow])
+
+data ScriptRow = ScriptRow
+  { scriptHash :: !Bytea
+  , scriptBytes :: !Bytea
+  , scriptLanguage :: !ScriptLanguage
+  }
+  deriving (Generic, ToRow)
+
+data ScriptLanguage = MultiSig | Timelock | PlutusV1 | PlutusV2 | PlutusV3
+  deriving (Show, Read, Eq, Ord, Enum, Bounded, Generic)
+
+instance PS.ToField ScriptLanguage where
+  toField = PS.Escape . BS.pack . show
 
 serialiseToBytea :: (SerialiseAsRawBytes a) => a -> Bytea
 serialiseToBytea = Bytea . serialiseToRawBytes
