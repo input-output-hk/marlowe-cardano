@@ -23,14 +23,15 @@ import qualified Ouroboros.Consensus.Byron.Ledger as C
 blockToRows :: BlockInMode -> BlockRowGroup
 blockToRows (BlockInMode _ block) =
   ( BlockRow{..}
-  , case block of
+  , txGroups
+  )
+  where
+    txGroups = case block of
       ByronBlock (C.ByronBlock (LB.ABOBBlock (LB.ABlock _ body _)) _ _) ->
         (\tx -> byronTxRow slotNo hash (byronTxId tx) $ taTx tx) <$> aUnTxPayload (LB.bodyTxPayload body)
       ByronBlock C.ByronBlock{} -> []
       _ -> case block of
         Block _ txs -> txRow <$> txs
-  )
-  where
     BlockHeader slot headerHash blockNo' = getBlockHeader block
     hash = serialiseToBytea headerHash
     slotNo = convertSlotNo slot

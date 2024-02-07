@@ -57,7 +57,9 @@ import Data.ByteString.Short (fromShort, toShort)
 import Data.Csv (ToRecord)
 import Data.Csv.Incremental (Builder, encode, encodeRecord)
 import Data.Foldable (traverse_)
+import Data.Function (on)
 import Data.Int (Int64)
+import Data.List (nubBy)
 import Data.Profunctor (rmap)
 import qualified Data.Set as Set
 import Data.String (IsString (..))
@@ -65,9 +67,11 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Vector (Vector)
 import qualified Data.Vector as V
+import Database.PostgreSQL.Simple (executeMany)
 import qualified Database.PostgreSQL.Simple as PS
 import Database.PostgreSQL.Simple.Copy (copy, putCopyData, putCopyEnd, putCopyError)
 import qualified Database.PostgreSQL.Simple.Internal as PS
+import Database.PostgreSQL.Simple.SqlQQ (sql)
 import Database.PostgreSQL.Simple.Transaction (withTransactionSerializable)
 import qualified Database.PostgreSQL.Simple.Types as PS
 import Hasql.Connection (withLibPQConnection)
@@ -117,6 +121,7 @@ data QuerySelector f where
   CopyTxIns :: QuerySelector Int64
   CopyAssetOuts :: QuerySelector Int64
   CopyAssetMints :: QuerySelector Int64
+  CopyScripts :: QuerySelector Int64
 
 data QueryField
   = SqlStatement ByteString
@@ -331,7 +336,7 @@ commitBlocks
 commitBlocks runInIO = CommitBlocks \blocks -> do
   liftIO $ runInIO $ logInfo $ "Saving " <> T.pack (show $ length blocks) <> " blocks"
   let blockGroups = blockToRows <$> blocks
-  let (blockRows, txRows, txOutRows, txInRows, assetOutRows, assetMintRows) = flattenBlockGroups blockGroups
+  let (blockRows, txRows, txOutRows, txInRows, assetOutRows, assetMintRows, scripts) = flattenBlockGroups blockGroups
   sessionConnection <- ask
   liftIO $ withLibPQConnection sessionConnection \libPqConnection -> do
     connectionHandle <- newMVar libPqConnection
@@ -345,26 +350,34 @@ commitBlocks runInIO = CommitBlocks \blocks -> do
       runInIO $ copyTxIns connection txInRows
       runInIO $ copyAssetOuts connection assetOutRows
       runInIO $ copyAssetMints connection assetMintRows
+      runInIO $ copyScripts connection $ nubBy (on (==) scriptHash) scripts
 
-flattenBlockGroups :: [BlockRowGroup] -> ([BlockRow], [TxRow], [TxOutRow], [TxInRow], [AssetOutRow], [AssetMintRow])
-flattenBlockGroups = foldr foldBlockGroup ([], [], [], [], [], [])
+flattenBlockGroups
+  :: [BlockRowGroup] -> ([BlockRow], [TxRow], [TxOutRow], [TxInRow], [AssetOutRow], [AssetMintRow], [ScriptRow])
+flattenBlockGroups = foldr foldBlockGroup ([], [], [], [], [], [], [])
   where
     foldBlockGroup
       :: BlockRowGroup
-      -> ([BlockRow], [TxRow], [TxOutRow], [TxInRow], [AssetOutRow], [AssetMintRow])
-      -> ([BlockRow], [TxRow], [TxOutRow], [TxInRow], [AssetOutRow], [AssetMintRow])
-    foldBlockGroup (blockRow, txGroups) (blockRows, txRows, txOutRows, txInRows, assetOutRows, assetMintRows) =
-      (blockRow : blockRows, txRows', txOutRows', txInRows', assetOutRows', assetMintRows')
+      -> ([BlockRow], [TxRow], [TxOutRow], [TxInRow], [AssetOutRow], [AssetMintRow], [ScriptRow])
+      -> ([BlockRow], [TxRow], [TxOutRow], [TxInRow], [AssetOutRow], [AssetMintRow], [ScriptRow])
+    foldBlockGroup (blockRow, txGroups) (blockRows, txRows, txOutRows, txInRows, assetOutRows, assetMintRows, scriptRows) =
+      (blockRow : blockRows, txRows', txOutRows', txInRows', assetOutRows', assetMintRows', scriptRows')
       where
-        (txRows', txOutRows', txInRows', assetOutRows', assetMintRows') =
-          foldr foldTxGroup (txRows, txOutRows, txInRows, assetOutRows, assetMintRows) txGroups
+        (txRows', txOutRows', txInRows', assetOutRows', assetMintRows', scriptRows') =
+          foldr foldTxGroup (txRows, txOutRows, txInRows, assetOutRows, assetMintRows, scriptRows) txGroups
 
     foldTxGroup
       :: TxRowGroup
-      -> ([TxRow], [TxOutRow], [TxInRow], [AssetOutRow], [AssetMintRow])
-      -> ([TxRow], [TxOutRow], [TxInRow], [AssetOutRow], [AssetMintRow])
-    foldTxGroup (txRow, txInRows, txOutGroups, assetMintRows) (txRows, txOutRows, txInRows', assetOutRows, assetMintRows') =
-      (txRow : txRows, txOutRows', foldr (:) txInRows' txInRows, assetOutRows', foldr (:) assetMintRows' assetMintRows)
+      -> ([TxRow], [TxOutRow], [TxInRow], [AssetOutRow], [AssetMintRow], [ScriptRow])
+      -> ([TxRow], [TxOutRow], [TxInRow], [AssetOutRow], [AssetMintRow], [ScriptRow])
+    foldTxGroup (txRow, txInRows, txOutGroups, assetMintRows, scripts) (txRows, txOutRows, txInRows', assetOutRows, assetMintRows', scripts') =
+      ( txRow : txRows
+      , txOutRows'
+      , foldr (:) txInRows' txInRows
+      , assetOutRows'
+      , foldr (:) assetMintRows' assetMintRows
+      , foldr (:) scripts' scripts
+      )
       where
         (txOutRows', assetOutRows') =
           foldr foldTxOutGroup (txOutRows, assetOutRows) txOutGroups
@@ -413,6 +426,18 @@ copyAssetMints
 copyAssetMints conn =
   copyBuilder CopyAssetMints conn "assetMint (txId, slotNo, policyId, name, quantity)"
     . foldMap encodeRecord
+
+copyScripts
+  :: (MonadInjectEvent r QuerySelector s m, MonadUnliftIO m)
+  => PS.Connection
+  -> [ScriptRow]
+  -> m ()
+copyScripts conn rows = do
+  let query = [sql| INSERT INTO chain.script VALUES (?,?,?) ON CONFLICT (id) DO NOTHING |]
+  withEvent CopyScripts \ev -> do
+    count <- liftIO $ executeMany conn query rows
+    addField ev count
+    pure ()
 
 copyBuilder
   :: ( MonadInjectEvent r QuerySelector s m

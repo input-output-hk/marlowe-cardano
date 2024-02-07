@@ -100,6 +100,7 @@ library
     , ouroboros-consensus-cardano
     , plutus-core ^>=1.21
     , plutus-ledger-api ^>=1.21
+    , postgresql-simple
     , scientific
     , serialise ^>=0.2.6
     , sop-core

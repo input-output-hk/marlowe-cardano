@@ -23,6 +23,9 @@ import Cardano.Ledger.Alonzo.Scripts (
   AsItem (..),
  )
 import Cardano.Ledger.Alonzo.Tx (AlonzoTx (..), IsValid (..), indexRedeemers, txdats')
+import Cardano.Ledger.Alonzo
+import Cardano.Ledger.Alonzo.Scripts (AlonzoScript (..))
+import Cardano.Ledger.Alonzo.Tx (AlonzoTx (..), IsValid (..), ScriptPurpose (Spending), indexedRdmrs, txdats')
 import Cardano.Ledger.Alonzo.TxAuxData (AlonzoTxAuxData (..))
 import Cardano.Ledger.Alonzo.TxBody (AlonzoEraTxBody, AlonzoTxBody (..), AlonzoTxOut (..))
 import Cardano.Ledger.Alonzo.TxWits (AlonzoEraTxWits, TxDats)
@@ -43,6 +46,7 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Mary (maryAssetMintRows, maryTxOutRow, maryTxRow)
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Shelley (
+  hashToBytea,
   mapStrictMaybe,
   originalBytea,
   shelleyTxInRow,
@@ -64,10 +68,24 @@ alonzoTxToRows slotNo blockHash txId tx@AlonzoTx{..} =
   , alonzoTxInRows slotNo txId isValid tx (atbInputs body) (atbCollateral body)
   , zipWith (alonzoTxOutRow slotNo txId $ txdats' wits) [0 ..] $ toList $ atbOutputs body
   , maryAssetMintRows slotNo txId $ atbMint body
+  , alonzoTxScripts wits
   )
 
 encodeAlonzoMetadata :: AlonzoTxAuxData (AlonzoEra StandardCrypto) -> ByteString
 encodeAlonzoMetadata (AlonzoTxAuxData md _ _) = L.serialize' shelleyProtVer md
+
+alonzoTxScripts :: Alonzo.AlonzoTxWits (AlonzoEra StandardCrypto) -> [ScriptRow]
+alonzoTxScripts Alonzo.AlonzoTxWits{..} = uncurry alonzoScriptRow <$> Map.toList txscripts
+
+alonzoScriptRow :: ScriptHash StandardCrypto -> AlonzoScript (AlonzoEra StandardCrypto) -> ScriptRow
+alonzoScriptRow (ScriptHash hash) script =
+  ScriptRow
+    { scriptHash = hashToBytea hash
+    , scriptBytes = originalBytea script
+    , scriptLanguage = case script of
+        TimelockScript _ -> Timelock
+        PlutusScript _ -> PlutusV1
+    }
 
 alonzoTxRow
   :: (TxAuxData era -> ByteString)
