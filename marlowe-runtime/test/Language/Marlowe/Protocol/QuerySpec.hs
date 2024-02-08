@@ -96,16 +96,28 @@ instance ArbitraryRequest MarloweSyncRequest where
     TagRoleCurrencies -> shrink
 
 instance Arbitrary RoleCurrency where
-  arbitrary = RoleCurrency <$> arbitrary <*> arbitrary
+  arbitrary = RoleCurrency <$> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink
 
 instance Arbitrary RoleCurrencyFilter where
-  arbitrary =
-    frequency
-      [ (1, pure RoleCurrencyFilterNone)
-      , (1, pure RoleCurrencyFilterAny)
-      , (10, RoleCurrencyFilter <$> arbitrary <*> arbitrary)
-      ]
+  arbitrary = sized \case
+    0 ->
+      frequency
+        [ (1, pure RoleCurrencyFilterNone)
+        , (1, pure RoleCurrencyFilterAny)
+        , (5, RoleCurrencyFilterByContract <$> arbitrary)
+        , (5, RoleCurrencyFilterByPolicy <$> arbitrary)
+        ]
+    size ->
+      frequency
+        [ (1, pure RoleCurrencyFilterNone)
+        , (1, pure RoleCurrencyFilterAny)
+        , (5, resize (size `div` 2) $ RoleCurrencyOr <$> arbitrary <*> arbitrary)
+        , (5, resize (size `div` 2) $ RoleCurrencyAnd <$> arbitrary <*> arbitrary)
+        , (3, resize (size - 1) $ RoleCurrencyNot <$> arbitrary)
+        , (5, RoleCurrencyFilterByContract <$> arbitrary)
+        , (5, RoleCurrencyFilterByPolicy <$> arbitrary)
+        ]
   shrink = genericShrink
 
 instance Arbitrary SomeContractState where
