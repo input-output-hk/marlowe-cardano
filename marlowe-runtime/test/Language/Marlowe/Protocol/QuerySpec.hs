@@ -32,6 +32,7 @@ instance ArbitraryRequest MarloweSyncRequest where
       , SomeTag TagWithdrawals
       , SomeTag TagPayout
       , SomeTag TagPayouts
+      , SomeTag TagRoleCurrencies
       , SomeTag TagStatus
       ]
   arbitraryReq = \case
@@ -44,6 +45,7 @@ instance ArbitraryRequest MarloweSyncRequest where
     TagStatus -> pure ReqStatus
     TagPayouts -> ReqPayouts <$> arbitrary <*> arbitrary
     TagPayout -> ReqPayout <$> arbitrary
+    TagRoleCurrencies -> ReqRoleCurrencies <$> arbitrary
 
   shrinkReq = \case
     ReqContractHeaders cFilter range ->
@@ -67,6 +69,7 @@ instance ArbitraryRequest MarloweSyncRequest where
         , ReqPayouts pFilter <$> shrink range
         ]
     ReqPayout payoutId -> ReqPayout <$> shrink payoutId
+    ReqRoleCurrencies cFilter -> ReqRoleCurrencies <$> shrink cFilter
 
   arbitraryResult = \case
     TagContractHeaders -> arbitrary
@@ -78,6 +81,7 @@ instance ArbitraryRequest MarloweSyncRequest where
     TagStatus -> arbitrary
     TagPayouts -> arbitrary
     TagPayout -> arbitrary
+    TagRoleCurrencies -> arbitrary
 
   shrinkResult = \case
     TagContractHeaders -> shrink
@@ -89,6 +93,20 @@ instance ArbitraryRequest MarloweSyncRequest where
     TagStatus -> shrink
     TagPayouts -> shrink
     TagPayout -> shrink
+    TagRoleCurrencies -> shrink
+
+instance Arbitrary RoleCurrency where
+  arbitrary = RoleCurrency <$> arbitrary <*> arbitrary
+  shrink = genericShrink
+
+instance Arbitrary RoleCurrencyFilter where
+  arbitrary =
+    frequency
+      [ (1, pure RoleCurrencyFilterNone)
+      , (1, pure RoleCurrencyFilterAny)
+      , (10, RoleCurrencyFilter <$> arbitrary <*> arbitrary)
+      ]
+  shrink = genericShrink
 
 instance Arbitrary SomeContractState where
   arbitrary = SomeContractState MarloweV1 <$> arbitrary

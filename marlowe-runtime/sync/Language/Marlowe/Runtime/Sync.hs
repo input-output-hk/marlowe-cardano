@@ -140,6 +140,9 @@ renderDatabaseSelectorOTel dbName dbUser host port = \case
   GetPayout ->
     renderQuerySelectorOTel "get_payout" $
       Just . toAttribute . renderTxOutRef
+  GetRoleCurrencies ->
+    renderQuerySelectorOTel "get_role_currencies" $
+      Just . fromString . show
   where
     renderQuerySelectorOTel :: Text -> (p -> Maybe Attribute) -> OTelRendered (QueryField p r)
     renderQuerySelectorOTel queryName renderArguments =

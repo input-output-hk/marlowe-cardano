@@ -6,6 +6,7 @@ module Language.Marlowe.Protocol.Query.Server where
 
 import Cardano.Api (EraHistory (..), SlotNo (SlotNo), SystemStart (getSystemStart))
 import Control.Monad.IO.Class (MonadIO)
+import Data.Set (Set)
 import Data.Time (UTCTime)
 import Data.Version (Version)
 import Language.Marlowe.Protocol.Query.Types
@@ -43,6 +44,7 @@ marloweQueryServer
   -> (WithdrawalFilter -> Range TxId -> m (Maybe (Page TxId Withdrawal)))
   -> (PayoutFilter -> Range TxOutRef -> m (Maybe (Page TxOutRef PayoutHeader)))
   -> (TxOutRef -> m (Maybe SomePayoutState))
+  -> (RoleCurrencyFilter -> m (Set RoleCurrency))
   -> MarloweQueryServer m ()
 marloweQueryServer
   runtimeVersion
@@ -55,7 +57,8 @@ marloweQueryServer
   getWithdrawal
   getWithdrawals
   getPayouts
-  getPayout =
+  getPayout
+  getRoleCurrencies =
     respond concurrently \case
       ReqContractHeaders cFilter range -> getContractHeaders cFilter range
       ReqContractState contractId -> getContractState contractId
@@ -65,6 +68,7 @@ marloweQueryServer
       ReqWithdrawals wFilter range -> getWithdrawals wFilter range
       ReqPayouts pFilter range -> getPayouts pFilter range
       ReqPayout payoutId -> getPayout payoutId
+      ReqRoleCurrencies cFilter -> getRoleCurrencies cFilter
       ReqStatus -> do
         ((nodeTip, runtimeChainTip, systemStart, history, networkId), runtimeTip) <-
           concurrently
