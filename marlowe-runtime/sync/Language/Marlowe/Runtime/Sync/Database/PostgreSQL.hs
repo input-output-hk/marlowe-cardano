@@ -39,3 +39,4 @@ databaseQueries =
     (fmap (T.transaction T.Serializable T.Read) . getWithdrawals)
     (fmap (T.transaction T.Serializable T.Read) . getPayouts)
     (T.transaction T.Serializable T.Read . getPayout)
+    (T.transaction T.Serializable T.Read . undefined)

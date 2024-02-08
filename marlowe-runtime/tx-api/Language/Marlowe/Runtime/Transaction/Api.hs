@@ -54,6 +54,7 @@ module Language.Marlowe.Runtime.Transaction.Api (
   mkMint,
   optimizeRoleTokenFilter,
   rewriteRoleTokenFilter,
+  roleTokenFilterToRoleCurrencyFilter,
 ) where
 
 import Cardano.Api (
@@ -153,6 +154,7 @@ import Data.Map.NonEmpty (NEMap)
 import qualified Data.Map.NonEmpty as NEMap
 import Data.Semigroup.Foldable (Foldable1 (foldMap1))
 import qualified Data.Set as Set
+import Language.Marlowe.Protocol.Query.Types (RoleCurrencyFilter (..))
 import Network.Protocol.Codec.Spec (Variations (..), varyAp)
 import Network.Protocol.Handshake.Types (HasSignature (..))
 import Network.Protocol.Job.Types
@@ -889,6 +891,20 @@ evalRoleTokenFilter f roleTokenContract roleToken = go f
 
 optimizeRoleTokenFilter :: (Ord c, Ord p, Ord t, IsToken t p) => RoleTokenFilter' c p t -> RoleTokenFilter' c p t
 optimizeRoleTokenFilter = rewrite rewriteRoleTokenFilter
+
+roleTokenFilterToRoleCurrencyFilter :: RoleTokenFilter -> RoleCurrencyFilter
+roleTokenFilterToRoleCurrencyFilter = go
+  where
+    go :: RoleTokenFilter -> RoleCurrencyFilter
+    go = \case
+      RoleTokensOr f1 f2 -> go f1 <> go f2
+      RoleTokensAnd f1 f2 -> go f1 <> go f2
+      RoleTokensNot f' -> go f'
+      RoleTokenFilterAny -> RoleCurrencyFilterAny
+      RoleTokenFilterNone -> mempty
+      RoleTokenFilterByContracts contracts -> RoleCurrencyFilter mempty contracts
+      RoleTokenFilterByPolicyIds policies -> RoleCurrencyFilter policies mempty
+      RoleTokenFilterByTokens tokens -> RoleCurrencyFilter (Set.map policyId tokens) mempty
 
 rewriteRoleTokenFilter :: (Ord c, Ord p, Ord t, IsToken t p) => RoleTokenFilter' c p t -> Maybe (RoleTokenFilter' c p t)
 rewriteRoleTokenFilter = \case
