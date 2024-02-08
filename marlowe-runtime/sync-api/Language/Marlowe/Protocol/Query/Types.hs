@@ -7,6 +7,7 @@
 module Language.Marlowe.Protocol.Query.Types where
 
 import Cardano.Api (NetworkId)
+import Control.Monad (join)
 import Data.Aeson (FromJSON, ToJSON (..), Value (String), object, (.=))
 import Data.Bifunctor (Bifunctor (..))
 import Data.Binary (Binary (..), getWord8, putWord8)
@@ -118,26 +119,34 @@ data RuntimeStatus = RuntimeStatus
 data RoleCurrency = RoleCurrency
   { rolePolicyId :: PolicyId
   , roleContract :: ContractId
+  , active :: Bool
   }
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary, Variations)
 
 data RoleCurrencyFilter
-  = RoleCurrencyFilterNone
-  | RoleCurrencyFilter (Set PolicyId) (Set ContractId)
+  = RoleCurrencyAnd RoleCurrencyFilter RoleCurrencyFilter
+  | RoleCurrencyOr RoleCurrencyFilter RoleCurrencyFilter
+  | RoleCurrencyNot RoleCurrencyFilter
+  | RoleCurrencyFilterNone
+  | RoleCurrencyFilterByContract (Set ContractId)
+  | RoleCurrencyFilterByPolicy (Set PolicyId)
   | RoleCurrencyFilterAny
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, Variations, ToJSON)
+  deriving anyclass (Binary, ToJSON)
 
-instance Semigroup RoleCurrencyFilter where
-  RoleCurrencyFilterNone <> a = a
-  a <> RoleCurrencyFilterNone = a
-  RoleCurrencyFilterAny <> _ = RoleCurrencyFilterAny
-  _ <> RoleCurrencyFilterAny = RoleCurrencyFilterAny
-  RoleCurrencyFilter p c <> RoleCurrencyFilter p' c' = RoleCurrencyFilter (p <> p') (c <> c')
-
-instance Monoid RoleCurrencyFilter where
-  mempty = RoleCurrencyFilterNone
+instance Variations RoleCurrencyFilter where
+  variations =
+    join $
+      NE.fromList
+        [ pure (RoleCurrencyOr RoleCurrencyFilterNone RoleCurrencyFilterNone)
+        , pure (RoleCurrencyAnd RoleCurrencyFilterNone RoleCurrencyFilterNone)
+        , pure (RoleCurrencyNot RoleCurrencyFilterNone)
+        , pure RoleCurrencyFilterNone
+        , pure RoleCurrencyFilterAny
+        , RoleCurrencyFilterByContract <$> variations
+        , RoleCurrencyFilterByPolicy <$> variations
+        ]
 
 data MarloweSyncRequest a where
   ReqStatus :: MarloweSyncRequest RuntimeStatus

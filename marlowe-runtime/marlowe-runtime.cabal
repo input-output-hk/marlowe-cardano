@@ -430,6 +430,7 @@ library sync
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetNextSteps
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetPayout
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetPayouts
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetRoleCurrencies
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTip
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTipForContract
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTransaction

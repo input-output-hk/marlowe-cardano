@@ -571,6 +571,7 @@ instance CommandVariations MarloweTxCommand where
       , SomeTag $ TagApplyInputs Core.MarloweV1
       , SomeTag $ TagWithdraw Core.MarloweV1
       , SomeTag TagSubmit
+      , SomeTag TagBurn
       ]
   cmdVariations = \case
     TagCreate Core.MarloweV1 ->

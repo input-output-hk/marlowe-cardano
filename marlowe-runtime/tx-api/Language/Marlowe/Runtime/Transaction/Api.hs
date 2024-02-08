@@ -859,7 +859,20 @@ data RoleTokenFilter' c p t
   | RoleTokenFilterByPolicyIds (Set p)
   | RoleTokenFilterByTokens (Set t)
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Variations, Binary)
+  deriving anyclass (Binary)
+
+instance (Variations c, Variations p, Variations t) => Variations (RoleTokenFilter' c p t) where
+  variations =
+    join
+      [ pure (RoleTokensOr RoleTokenFilterNone RoleTokenFilterNone)
+      , pure (RoleTokensAnd RoleTokenFilterNone RoleTokenFilterNone)
+      , pure (RoleTokensNot RoleTokenFilterNone)
+      , pure RoleTokenFilterNone
+      , pure RoleTokenFilterAny
+      , RoleTokenFilterByContracts <$> variations
+      , RoleTokenFilterByPolicyIds <$> variations
+      , RoleTokenFilterByTokens <$> variations
+      ]
 
 instance Plated (RoleTokenFilter' c p t) where
   plate f = \case
@@ -897,14 +910,14 @@ roleTokenFilterToRoleCurrencyFilter = go
   where
     go :: RoleTokenFilter -> RoleCurrencyFilter
     go = \case
-      RoleTokensOr f1 f2 -> go f1 <> go f2
-      RoleTokensAnd f1 f2 -> go f1 <> go f2
-      RoleTokensNot f' -> go f'
+      RoleTokensOr f1 f2 -> go f1 `RoleCurrencyOr` go f2
+      RoleTokensAnd f1 f2 -> go f1 `RoleCurrencyAnd` go f2
+      RoleTokensNot f' -> RoleCurrencyNot $ go f'
       RoleTokenFilterAny -> RoleCurrencyFilterAny
-      RoleTokenFilterNone -> mempty
-      RoleTokenFilterByContracts contracts -> RoleCurrencyFilter mempty contracts
-      RoleTokenFilterByPolicyIds policies -> RoleCurrencyFilter policies mempty
-      RoleTokenFilterByTokens tokens -> RoleCurrencyFilter (Set.map policyId tokens) mempty
+      RoleTokenFilterNone -> RoleCurrencyFilterNone
+      RoleTokenFilterByContracts contracts -> RoleCurrencyFilterByContract contracts
+      RoleTokenFilterByPolicyIds policies -> RoleCurrencyFilterByPolicy policies
+      RoleTokenFilterByTokens tokens -> RoleCurrencyFilterByPolicy (Set.map policyId tokens)
 
 rewriteRoleTokenFilter :: (Ord c, Ord p, Ord t, IsToken t p) => RoleTokenFilter' c p t -> Maybe (RoleTokenFilter' c p t)
 rewriteRoleTokenFilter = \case
