@@ -33,6 +33,7 @@ import Language.Marlowe.Protocol.Query.Client (
   getContractHeaders,
   getContractState,
   getPayouts,
+  getRoleCurrencies,
   getTransaction,
   getTransactions,
   getWithdrawal,
@@ -84,6 +85,7 @@ spec = describe "MarloweQuery" $ aroundAll setup do
   getWithdrawalSpec
   describe "GetPayouts" $ paginatedQuerySpec GetPayouts runMarloweQueryIntegrationTest
   bulkSyncTest
+  getRoleCurrenciesSpec
 
 data GetHeaders = GetHeaders
 data GetWithdrawals = GetWithdrawals
@@ -424,6 +426,110 @@ getWithdrawalSpec = describe "getWithdrawal" do
   it "Returns Just for a withdrawal txId" $ runMarloweQueryIntegrationTest \testData@MarloweQueryTestData{..} -> do
     actual <- getWithdrawal case fst contract1Step5 of WithdrawTx _ WithdrawTxInEra{..} -> fromCardanoTxId $ getTxId txBody
     liftIO $ actual `shouldBe` Just (contract1Step5Withdrawal testData)
+
+getRoleCurrenciesSpec :: SpecWith MarloweQueryTestData
+getRoleCurrenciesSpec = describe "getRoleCurrencies" do
+  for_ allRoleCurrencyFilters \rcFilter ->
+    it (show rcFilter) $ runMarloweQueryIntegrationTest \testData -> do
+      let actualFilter = convertRoleCurrencyFilter testData rcFilter
+      let expected = evalTestRoleCurrencyFilter testData rcFilter
+      actual <- getRoleCurrencies actualFilter
+      liftIO $ actual `shouldBe` expected
+
+data TestRoleCurrencyFilter
+  = TestAnd TestRoleCurrencyFilter TestRoleCurrencyFilter
+  | TestOr TestRoleCurrencyFilter TestRoleCurrencyFilter
+  | TestNot TestRoleCurrencyFilter
+  | TestAny
+  | TestNone
+  | TestByContract (Set (WithUnknown (RefSym GetHeaders)))
+  | TestByPolicy (Set (WithUnknown (RefSym GetHeaders)))
+  deriving (Show)
+
+allRoleCurrencyFilters :: [TestRoleCurrencyFilter]
+allRoleCurrencyFilters = go (2 :: Int)
+  where
+    go depthBudget =
+      TestAny
+        : TestNone
+        : [ TestByContract c
+          | c <-
+              (Set.singleton Unknown :) $
+                Set.toList $
+                  Set.powerSet $
+                    Set.fromList $
+                      Known <$> [minBound .. maxBound]
+          ]
+        ++ [ TestByPolicy c
+           | c <-
+              (Set.singleton Unknown :) $
+                Set.toList $
+                  Set.powerSet $
+                    Set.fromList $
+                      Known <$> [minBound .. maxBound]
+           ]
+        ++ if depthBudget > 0
+          then do
+            let nextLayer = go $ depthBudget - 1
+            let firstInNextLayer = head nextLayer
+            (TestAnd <$> nextLayer <*> pure firstInNextLayer)
+              ++ (TestAnd firstInNextLayer <$> nextLayer)
+              ++ (TestOr <$> nextLayer <*> pure firstInNextLayer)
+              ++ (TestOr firstInNextLayer <$> nextLayer)
+              ++ (TestNot <$> nextLayer)
+          else []
+
+evalTestRoleCurrencyFilter :: MarloweQueryTestData -> TestRoleCurrencyFilter -> Set RoleCurrency
+evalTestRoleCurrencyFilter MarloweQueryTestData{..} = go
+  where
+    go = \case
+      TestAnd f g -> go f `Set.intersection` go g
+      TestOr f g -> go f <> go g
+      TestNot f -> go TestAny `Set.difference` go f
+      TestAny -> Set.fromList $ Map.elems roleCurrenciesByContract
+      TestNone -> mempty
+      TestByContract contracts -> Set.fromList $ Map.elems $ Map.restrictKeys roleCurrenciesByContract contracts
+      TestByPolicy policies -> Set.fromList $ Map.elems $ Map.restrictKeys roleCurrenciesByContract policies
+    roleCurrenciesByContract =
+      Map.fromList
+        [ (Known Contract1, standardContractRoleCurrency' contract1 False)
+        , (Known Contract2, standardContractRoleCurrency' contract2 False)
+        , (Known Contract3, standardContractRoleCurrency' contract3 False)
+        , (Known Contract4, standardContractRoleCurrency' contract4 True)
+        ]
+
+standardContractRoleCurrency' :: StandardContractInit 'V1 -> Bool -> RoleCurrency
+standardContractRoleCurrency' contract active =
+  RoleCurrency
+    { rolePolicyId = standardContractRoleCurrency contract
+    , roleContract = standardContractId contract
+    , ..
+    }
+
+convertRoleCurrencyFilter :: MarloweQueryTestData -> TestRoleCurrencyFilter -> RoleCurrencyFilter
+convertRoleCurrencyFilter MarloweQueryTestData{..} = go
+  where
+    go = \case
+      TestAnd f g -> RoleCurrencyAnd (go f) (go g)
+      TestOr f g -> RoleCurrencyOr (go f) (go g)
+      TestNot f -> RoleCurrencyNot $ go f
+      TestAny -> RoleCurrencyFilterAny
+      TestNone -> RoleCurrencyFilterNone
+      TestByContract contracts -> RoleCurrencyFilterByContract $ Set.map convertContractId contracts
+      TestByPolicy policies -> RoleCurrencyFilterByPolicy $ Set.map convertPolicyId policies
+
+    convertContractId Unknown =
+      ContractId $ TxOutRef "0000000000000000000000000000000000000000000000000000000000000000" 1
+    convertContractId (Known Contract1) = standardContractId contract1
+    convertContractId (Known Contract2) = standardContractId contract2
+    convertContractId (Known Contract3) = standardContractId contract3
+    convertContractId (Known Contract4) = standardContractId contract4
+
+    convertPolicyId Unknown = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    convertPolicyId (Known Contract1) = standardContractRoleCurrency contract1
+    convertPolicyId (Known Contract2) = standardContractRoleCurrency contract2
+    convertPolicyId (Known Contract3) = standardContractRoleCurrency contract3
+    convertPolicyId (Known Contract4) = standardContractRoleCurrency contract4
 
 setup :: ActionWith MarloweQueryTestData -> IO ()
 setup runSpec = withLocalMarloweRuntime $ runIntegrationTest do
