@@ -41,7 +41,7 @@ module Language.Marlowe.Runtime.Transaction.Constraints (
   solveInitialTxBodyContent,
 ) where
 
-import Cardano.Api (unsafeHashableScriptData)
+import Cardano.Api (TxBodyContent (..), unsafeHashableScriptData)
 import qualified Cardano.Api as C
 import qualified Cardano.Api.Shelley as C
 import Control.Applicative ((<|>))
@@ -1061,27 +1061,16 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
   txExtraKeyWits <- solveTxExtraKeyWits
   txMintValue <- solveTxMintValue
   pure
-    C.TxBodyContent
+    (C.defaultTxBodyContent shelleyEra)
       { txIns
-      , txInsCollateral = C.TxInsCollateralNone
       , txInsReference
       , txOuts
-      , txTotalCollateral = C.TxTotalCollateralNone
-      , txReturnCollateral = C.TxReturnCollateralNone
-      , txFee = C.TxFeeExplicit shelleyEra 0
       , txValidityLowerBound
       , txValidityUpperBound
       , txMetadata
-      , txAuxScripts = C.TxAuxScriptsNone
       , txExtraKeyWits
       , txProtocolParams = C.BuildTxWith $ Just protocol
-      , txProposalProcedures = Nothing
-      , txVotingProcedures = Nothing
-      , txWithdrawals = C.TxWithdrawalsNone
-      , txCertificates = C.TxCertificatesNone
-      , txUpdateProposal = C.TxUpdateProposalNone
       , txMintValue
-      , txScriptValidity = C.TxScriptValidityNone
       }
   where
     shelleyEra :: C.ShelleyBasedEra era
