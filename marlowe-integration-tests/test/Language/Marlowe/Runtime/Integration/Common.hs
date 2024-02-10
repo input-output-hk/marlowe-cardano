@@ -104,11 +104,13 @@ import Language.Marlowe.Runtime.Core.Api (
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader (..))
 import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep (..), MarloweBlock)
 import Language.Marlowe.Runtime.Transaction.Api (
+  BurnTx,
   ContractCreated (..),
   ContractCreatedInEra (..),
   InputsApplied (..),
   InputsAppliedInEra (..),
   MarloweTxCommand (..),
+  RoleTokenFilter,
   SubmitError,
   WalletAddresses (..),
   WithdrawTx (..),
@@ -420,6 +422,14 @@ withdraw
 withdraw Wallet{..} payouts = do
   result <- Client.withdraw MarloweV1 addresses payouts
   expectRight "Failed to create withdraw transaction" result
+
+burn
+  :: Wallet
+  -> RoleTokenFilter
+  -> Integration BurnTx
+burn Wallet{..} tokenFilter = do
+  result <- Client.burn addresses tokenFilter
+  expectRight "Failed to create burn transaction" result
 
 timeout :: NominalDiffTime
 timeout = secondsToNominalDiffTime 2

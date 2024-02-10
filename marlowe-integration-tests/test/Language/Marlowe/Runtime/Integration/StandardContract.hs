@@ -16,7 +16,7 @@ import Language.Marlowe.Extended.V1 (ada)
 import Language.Marlowe.Protocol.Load.Client (pushContract)
 import Language.Marlowe.Protocol.Query.Types (PayoutHeader (..))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, TxId)
+import Language.Marlowe.Runtime.ChainSync.Api (AssetId (..), BlockHeader, PolicyId, TxId)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Client (createContract, runMarloweLoadClient)
 import Language.Marlowe.Runtime.Core.Api (
@@ -35,6 +35,7 @@ import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Language.Marlowe.Runtime.Integration.Common (
   Integration,
   Wallet (..),
+  burn,
   choose,
   contractCreatedToContractHeader,
   deposit,
@@ -46,11 +47,13 @@ import Language.Marlowe.Runtime.Integration.Common (
  )
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
 import Language.Marlowe.Runtime.Transaction.Api (
+  BurnTx,
   ContractCreated (..),
   ContractCreatedInEra (..),
   Destination (ToAddress),
   InputsApplied (..),
   InputsAppliedInEra (..),
+  RoleTokenFilter' (..),
   RoleTokensConfig (..),
   WalletAddresses (changeAddress),
   WithdrawTx (..),
@@ -108,6 +111,11 @@ data StandardContractNotified v = StandardContractNotified
 
 data StandardContractClosed v = StandardContractClosed
   { withdrawPartyAFunds :: Integration (WithdrawTx v, BlockHeader)
+  , rolesCurrency :: PolicyId
+  , burnPartyARoleTokenByToken :: Integration BurnTx
+  , burnPartyARoleTokenByContractId :: Integration BurnTx
+  , burnPartyARoleTokenByPolicyId :: Integration BurnTx
+  , burnPartyARoleTokenByAny :: Integration BurnTx
   , returnDeposited :: InputsApplied v
   , returnDepositBlock :: BlockHeader
   }
@@ -169,7 +177,7 @@ createStandardContractWithTagsAndRolesConfig threadName rolesConfig tags partyAW
       Nothing
       mempty
       (Right contractHash)
-  contractCreated@(ContractCreated era0 ContractCreatedInEra{contractId, txBody = createTxBody}) <-
+  contractCreated@(ContractCreated era0 ContractCreatedInEra{contractId, txBody = createTxBody, rolesCurrency}) <-
     expectRight "failed to create standard contract" result
   createdBlock <- submit partyAWallet era0 createTxBody
 
@@ -225,14 +233,23 @@ createStandardContractWithTagsAndRolesConfig threadName rolesConfig tags partyAW
                                       100_000_000
                                   returnDepositBlock <- submit partyBWallet era4 returnTxBody
 
+                                  let mkBurn = burn partyAWallet
                                   pure
                                     StandardContractClosed
-                                      { returnDepositBlock
+                                      { rolesCurrency
+                                      , returnDepositBlock
                                       , returnDeposited
                                       , withdrawPartyAFunds = do
                                           withdrawTx@(WithdrawTx era5 WithdrawTxInEra{txBody = withdrawTxBody}) <-
                                             withdraw partyAWallet $ Map.keysSet $ payouts output
                                           (withdrawTx,) <$> submit partyAWallet era5 withdrawTxBody
+                                      , burnPartyARoleTokenByToken =
+                                          mkBurn $ RoleTokenFilterByTokens $ Set.singleton $ AssetId rolesCurrency "Party A"
+                                      , burnPartyARoleTokenByContractId =
+                                          mkBurn $ RoleTokenFilterByContracts $ Set.singleton contractId
+                                      , burnPartyARoleTokenByPolicyId =
+                                          mkBurn $ RoleTokenFilterByPolicyIds $ Set.singleton rolesCurrency
+                                      , burnPartyARoleTokenByAny = mkBurn RoleTokenFilterAny
                                       }
                               }
                       }
