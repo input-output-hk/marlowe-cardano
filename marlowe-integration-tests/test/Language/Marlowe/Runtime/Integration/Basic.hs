@@ -8,6 +8,7 @@ module Language.Marlowe.Runtime.Integration.Basic where
 
 import Cardano.Api (getTxId)
 import Control.Monad.IO.Class (MonadIO (liftIO))
+import Data.Functor (void)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
 import Data.Time (addUTCTime, getCurrentTime, secondsToNominalDiffTime)
@@ -25,7 +26,7 @@ import qualified Language.Marlowe.Protocol.BulkSync.Client as BulkSync
 import qualified Language.Marlowe.Protocol.HeaderSync.Client as HeaderSync
 import qualified Language.Marlowe.Protocol.Sync.Client as MarloweSync
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
-import Language.Marlowe.Runtime.ChainSync.Api (AssetId (..), BlockHeader, TxOutRef (..))
+import Language.Marlowe.Runtime.ChainSync.Api (AssetId (..), BlockHeader, Tokens (..), TxOutRef (..))
 import Language.Marlowe.Runtime.Client (
   createContract,
   runMarloweBulkSyncClient,
@@ -57,6 +58,8 @@ import Language.Marlowe.Runtime.Integration.ApplyInputs (utcTimeToPOSIXTime)
 import Language.Marlowe.Runtime.Integration.Common
 import Language.Marlowe.Runtime.Integration.StandardContract
 import Language.Marlowe.Runtime.Transaction.Api (
+  BurnTx (..),
+  BurnTxInEra (..),
   ContractCreated (..),
   ContractCreatedInEra (..),
   InputsApplied (..),
@@ -212,7 +215,6 @@ spec = describe "Basic scenarios" do
                         -- 27. Cancel
                         -- 28. Done
                         pure $ bulkSyncRequestNextExpectWait $ pure $ BulkSync.SendMsgCancel $ BulkSync.SendMsgDone ()
-
     startClient
 
   -- This is an adaptation of https://nbviewer.org/gist/bwbush/4e8a7196902bfdb0f7f6f7f4a6e3e643
@@ -260,7 +262,7 @@ basicScenarioWithCreator createStandardContractArg = do
     partyAWallet <- getGenesisWallet 0
     partyBWallet <- getGenesisWallet 1
     let -- 1. Start MarloweHeaderSyncClient (request next)
-        startDiscoveryClient :: Integration TxOutRef
+        startDiscoveryClient :: Integration (StandardContractClosed 'V1)
         startDiscoveryClient = runMarloweHeaderSyncClient $
           HeaderSync.MarloweHeaderSyncClient $
             pure
@@ -279,20 +281,20 @@ basicScenarioWithCreator createStandardContractArg = do
         continueWithNewHeaders contract = pure $ HeaderSync.SendMsgRequestNext $ headerSyncExpectWait do
           -- 8. Deposit funds
           fundsDeposited <- makeInitialDeposit contract
-          txOutRef <- runMarloweSyncClient $ marloweSyncClient contract fundsDeposited
+          closed <- runMarloweSyncClient $ marloweSyncClient contract fundsDeposited
           -- 33. Poll
           -- 34. Expect wait
           -- 35. Cancel
           -- 36. Done
-          pure $ HeaderSync.SendMsgPoll $ headerSyncExpectWait $ pure $ HeaderSync.SendMsgCancel $ HeaderSync.SendMsgDone txOutRef
+          pure $ HeaderSync.SendMsgPoll $ headerSyncExpectWait $ pure $ HeaderSync.SendMsgCancel $ HeaderSync.SendMsgDone closed
 
         -- 9. Start MarloweSyncClient (follow contract)
         marloweSyncClient
           :: StandardContractInit 'V1
           -> StandardContractFundsDeposited 'V1
-          -> MarloweSync.MarloweSyncClient Integration TxOutRef
+          -> MarloweSync.MarloweSyncClient Integration (StandardContractClosed 'V1)
         marloweSyncClient StandardContractInit{..} StandardContractFundsDeposited{..} = MarloweSync.MarloweSyncClient do
-          let ContractCreated _ ContractCreatedInEra{contractId, rolesCurrency} = contractCreated
+          let ContractCreated _ ContractCreatedInEra{contractId} = contractCreated
           pure $
             MarloweSync.SendMsgFollowContract contractId
             -- 10. Expect contract found
@@ -324,7 +326,7 @@ basicScenarioWithCreator createStandardContractArg = do
                             StandardContractNotified{..} <- sendNotify
 
                             -- 21. Deposit as party B
-                            StandardContractClosed{..} <- makeReturnDeposit
+                            closed@StandardContractClosed{..} <- makeReturnDeposit
 
                             -- 22. Withdraw as party A
                             (WithdrawTx _ WithdrawTxInEra{txBody = withdrawTxBody}, withdrawBlock) <- withdrawPartyAFunds
@@ -350,21 +352,19 @@ basicScenarioWithCreator createStandardContractArg = do
                                     -- 30. Expect wait
                                     -- 31. Cancel
                                     -- 32. Done
-                                    let InputsApplied _ InputsAppliedInEra{output} = notified
-                                    TransactionScriptOutput{utxo = notifyTxOutRef} <- expectJust "Failed to obtain deposit output" $ scriptOutput output
-                                    pure $ marloweSyncRequestNextExpectWait $ pure $ MarloweSync.SendMsgCancel $ MarloweSync.SendMsgDone notifyTxOutRef
+                                    pure $ marloweSyncRequestNextExpectWait $ pure $ MarloweSync.SendMsgCancel $ MarloweSync.SendMsgDone closed
 
-    txOutRef <- startDiscoveryClient
-    -- 37. Start MarloweSyncClient (follow a tx in the contract)
-    -- 38. Expect contract not found
-    runMarloweSyncClient $
-      MarloweSync.MarloweSyncClient $
-        pure $
-          MarloweSync.SendMsgFollowContract (ContractId txOutRef) $
-            MarloweSync.ClientStFollow
-              { recvMsgContractFound = \_ _ _ -> fail "Expected contract not found, got contract found"
-              , recvMsgContractNotFound = pure ()
-              }
+    StandardContractClosed{..} <- startDiscoveryClient
+    -- 37. Burn role tokens
+    BurnTx era BurnTxInEra{burnedTokens = burnedByToken, txBody} <- burnPartyARoleTokenByToken
+    BurnTx _ BurnTxInEra{burnedTokens = burnedByContractId} <- burnPartyARoleTokenByContractId
+    BurnTx _ BurnTxInEra{burnedTokens = burnedByPolicyId} <- burnPartyARoleTokenByPolicyId
+    BurnTx _ BurnTxInEra{burnedTokens = burnedByAny} <- burnPartyARoleTokenByAny
+    liftIO $ burnedByToken `shouldBe` Tokens (Map.singleton (AssetId rolesCurrency "Party A") 1)
+    liftIO $ burnedByToken `shouldBe` burnedByContractId
+    liftIO $ burnedByContractId `shouldBe` burnedByPolicyId
+    liftIO $ burnedByPolicyId `shouldBe` burnedByAny
+    void $ submit partyAWallet era txBody
 
 inputsAppliedToUnspentContractOutput :: ContractCreated 'V1 -> InputsApplied 'V1 -> UnspentContractOutput
 inputsAppliedToUnspentContractOutput created (InputsApplied _ InputsAppliedInEra{..}) = case output of
