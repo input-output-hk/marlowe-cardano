@@ -390,7 +390,10 @@ instance Arbitrary BurnError where
     frequency
       [ (5, BurnRolesActive <$> arbitrary)
       , (1, pure BurnNoTokens)
-      , (3, BurnBalancingError <$> arbitrary)
+      , (1, pure BurnFromCardanoError)
+      , (3, BurnConstraintError <$> arbitrary)
+      , (3, BurnEraUnsupported <$> arbitrary)
+      , (3, BurnInvalidPolicyId <$> arbitrary)
       ]
   shrink = genericShrink
 

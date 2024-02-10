@@ -814,7 +814,7 @@ instance Binary BurnTx where
       _ -> fail $ "Invalid era tag value: " <> show eraTag
 
 data BurnTxInEra era = BurnTxInEra
-  { burnedTokens :: Chain.Assets
+  { burnedTokens :: Chain.Tokens
   , txBody :: TxBody era
   }
 
@@ -843,9 +843,14 @@ data Account
 
 data BurnError
   = BurnEraUnsupported AnyCardanoEra
-  | BurnRolesActive (Set AssetId)
+  | BurnRolesActive (Set PolicyId)
+  | BurnInvalidPolicyId (Set PolicyId)
   | BurnNoTokens
-  | BurnBalancingError String
+  | BurnFromCardanoError
+  | -- FIXME most of this error is not relevant to burning, but due to the current
+    -- constraint solving being too marlowe-specific, and because we use the
+    -- final balancing pipeline for burning, we sadly need to use this type here.
+    BurnConstraintError ConstraintError
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary, ToJSON, Variations)
 

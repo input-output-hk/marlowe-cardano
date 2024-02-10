@@ -69,6 +69,7 @@ import Data.Time (NominalDiffTime, UTCTime, nominalDiffTimeToSeconds)
 import Data.Void (Void)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError (SafetyAnalysisTimeout))
 import qualified Language.Marlowe.Core.V1.Semantics as V1
+import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient, getRoleCurrencies)
 import Language.Marlowe.Runtime.Cardano.Api (
   fromCardanoAddressInEra,
   fromCardanoLovelace,
@@ -129,6 +130,8 @@ import Language.Marlowe.Runtime.Transaction.Api (
   WithdrawError (..),
   WithdrawTx (..),
   WithdrawTxInEra (..),
+  optimizeRoleTokenFilter,
+  roleTokenFilterToRoleCurrencyFilter,
  )
 import Language.Marlowe.Runtime.Transaction.BuildConstraints (
   MkRoleTokenMintingPolicy,
@@ -199,6 +202,7 @@ data TransactionServerDependencies m = TransactionServerDependencies
   , loadMarloweContext :: LoadMarloweContext m
   , loadPayoutContext :: LoadPayoutContext m
   , loadHelpersContext :: LoadHelpersContext m
+  , marloweQueryConnector :: Connector MarloweQueryClient m
   , chainSyncQueryConnector :: Connector (QueryClient ChainSyncQuery) m
   , contractQueryConnector :: Connector (QueryClient ContractRequest) m
   , getTip :: STM Chain.ChainPoint
@@ -306,6 +310,10 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                 Burn addresses tokenFilter ->
                   withEvent ExecWithdraw \_ ->
                     execBurn
+                      systemStart
+                      eraHistory
+                      chainSyncQueryConnector
+                      marloweQueryConnector
                       era
                       ledgerProtocolParameters
                       loadWalletContext
@@ -700,15 +708,22 @@ execExceptT = fmap (either (flip SendMsgFail ()) (flip SendMsgSucceed ())) . run
 
 execBurn
   :: (MonadUnliftIO m, IsCardanoEra era)
-  => CardanoEra era
+  => SystemStart
+  -> EraHistory
+  -> Connector (QueryClient ChainSyncQuery) m
+  -> Connector MarloweQueryClient m
+  -> CardanoEra era
   -> LedgerProtocolParameters era
   -> LoadWalletContext m
   -> WalletAddresses
   -> RoleTokenFilter
   -> m (ServerStCmd MarloweTxCommand Void BurnError BurnTx m ())
-execBurn era protocol loadWalletContext addresses tokenFilter = execExceptT do
+execBurn start history chainQueryConnector marloweQueryConnector era protocol loadWalletContext addresses tokenFilter = execExceptT do
   eon <- toBabbageEraOnwards (BurnEraUnsupported $ AnyCardanoEra era) era
-  when (tokenFilter == RoleTokenFilterNone) $ throwE BurnNoTokens
+  let tokenFilter' = optimizeRoleTokenFilter tokenFilter
+  when (tokenFilter' == RoleTokenFilterNone) $ throwE BurnNoTokens
   walletContext <- lift $ loadWalletContext addresses
-  burnTx <- burnRoleTokens eon protocol walletContext tokenFilter
+  currencies <-
+    lift $ runConnector marloweQueryConnector $ getRoleCurrencies $ roleTokenFilterToRoleCurrencyFilter tokenFilter'
+  burnTx <- burnRoleTokens start history chainQueryConnector eon protocol walletContext currencies tokenFilter'
   pure $ BurnTx eon burnTx
