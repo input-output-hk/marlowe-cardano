@@ -87,5 +87,5 @@ cabal run exe:marlowe-cli -- \
   ./test/templates/role-based/runtime/swap.yaml \
   ./test/templates/role-based/runtime/zero-coupon-bond.yaml \
 
-# Fails in simulation mode - PLT-7509:
-# ./test/inline/role-based/cli/zero-coupon-bond-delayed-timeout.yaml \
+# # Fails in simulation mode - PLT-7509:
+# # ./test/inline/role-based/cli/zero-coupon-bond-delayed-timeout.yaml \
