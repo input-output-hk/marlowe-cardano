@@ -140,7 +140,7 @@ createStandardContractWithTags tags partyAWallet =
     Nothing
     ( RoleTokensMint $
         mkMint $
-          pure ("Party A", Nothing, ToAddress . changeAddress $ addresses partyAWallet, 1)
+          pure ("Party A", Nothing, ToAddress . changeAddress $ addresses partyAWallet, Chain.Quantity 1)
     )
     tags
     partyAWallet

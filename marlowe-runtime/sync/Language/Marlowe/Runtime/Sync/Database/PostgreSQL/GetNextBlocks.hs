@@ -34,6 +34,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   ChainPoint,
   ScriptHash (..),
   TxId (..),
+  TxIx (TxIx),
   TxOutRef (..),
   WithGenesis (..),
  )
@@ -183,7 +184,7 @@ decodeMarloweCreateTransactions =
         MarloweCreateTransaction
           { txId = TxId txId
           , newContracts =
-              Map.singleton (fromIntegral txIx) $
+              Map.singleton (TxIx $ fromIntegral txIx) $
                 SomeCreateStep
                   MarloweV1
                   CreateStep

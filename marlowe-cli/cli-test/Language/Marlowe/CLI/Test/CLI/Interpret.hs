@@ -108,6 +108,7 @@ import Language.Marlowe.CLI.Test.Wallet.Interpret (
   addWalletTransaction,
   decodeContractJSON,
   decodeInputJSON,
+  decodeStateJSON,
   fetchWalletValue,
   findWalletByUniqueToken,
   getCurrency,
@@ -369,15 +370,23 @@ interpret co@Initialize{..} = do
   address <- _waAddress <$> getWallet submitterNickname
   submitterParty <- uncurry M.Address <$> rethrowCliError (marloweAddressFromCardanoAddress address)
 
-  currencySymbol <- case coRoleCurrency of
-    Nothing -> pure P.adaSymbol
-    Just nickname -> do
-      Currency{ccCurrencySymbol} <- getCurrency nickname
-      pure ccCurrencySymbol
+  marloweParams <-
+    Client.marloweParams <$> case coRoleCurrency of
+      Nothing -> pure P.adaSymbol
+      Just nickname -> do
+        Currency{ccCurrencySymbol} <- getCurrency nickname
+        pure ccCurrencySymbol
 
-  let Lovelace minAda = coMinLovelace
-      marloweState = initialMarloweState submitterParty minAda
-      marloweParams = Client.marloweParams currencySymbol
+  marloweState <- case (coMinLovelace, coInitialState) of
+    (Just (Lovelace minAda), Nothing) -> pure $ initialMarloweState submitterParty minAda
+    (Nothing, Just parametrizedStateJson) -> do
+      decodeStateJSON parametrizedStateJson
+    (Just _, Just _) ->
+      throwLabeledError co $
+        testExecutionFailed' "Both min lovelace and initial state were specified but only one is allowed."
+    (Nothing, Nothing) ->
+      throwLabeledError co $
+        testExecutionFailed' "Neither min lovelace nor initial state were specified so unable to initialize Marlowe contract."
 
   era <- view eraL
   slotConfig <- view slotConfigL

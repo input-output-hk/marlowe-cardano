@@ -49,6 +49,7 @@ cabal run exe:marlowe-cli -- \
   ./test/operations/burn-distributed.yaml \
   ./test/operations/burn-multi-asset.yaml \
   ./test/operations/burn.yaml \
+  ./test/operations/initialize-with-state.yaml \
   ./test/operations/mint-distributed.yaml \
   ./test/operations/mint-multiple.yaml \
   ./test/operations/mint-to-open-role-script.yaml \

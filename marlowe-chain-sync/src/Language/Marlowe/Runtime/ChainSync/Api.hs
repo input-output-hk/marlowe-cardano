@@ -5,6 +5,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE StrictData #-}
@@ -57,6 +58,7 @@ import Data.Aeson (
   ToJSON,
   ToJSONKey,
   toJSON,
+  (.:),
  )
 import qualified Data.Aeson as A
 import qualified Data.Aeson as Aeson
@@ -75,6 +77,7 @@ import qualified Data.ByteString.Lazy as LBS
 import Data.Foldable (Foldable (..))
 import Data.Function (on)
 import Data.Functor (($>))
+import Data.Group (Group (invert))
 import Data.Hashable (Hashable)
 import Data.List (sortOn)
 import qualified Data.List.NonEmpty as NE
@@ -109,9 +112,14 @@ import GHC.Generics (Generic)
 import GHC.Natural (Natural)
 import GHC.Show (showSpace)
 import Language.Marlowe.Runtime.Cardano.Feature (hush)
-import Network.Protocol.ChainSeek.Client
+import Network.Protocol.ChainSeek.Client (ChainSeekClient (..), ChainSeekClientSelector)
 import qualified Network.Protocol.ChainSeek.Client as ChainSeekClient
-import Network.Protocol.ChainSeek.Server
+import Network.Protocol.ChainSeek.Server (
+  ChainSeekQueryOTelRendered (ChainSeekQueryOTelRendered),
+  ChainSeekServer (..),
+  ChainSeekServerSelector,
+  RenderChainSeekQueryOTel,
+ )
 import qualified Network.Protocol.ChainSeek.Server as ChainSeekServer
 import Network.Protocol.ChainSeek.Types
 import qualified Network.Protocol.ChainSeek.Types as ChainSeek
@@ -416,7 +424,7 @@ data TransactionInput = TransactionInput
 data TransactionOutput = TransactionOutput
   { address :: Address
   -- ^ The address that receives the assets of this output.
-  , assets :: Assets
+  , assets :: TxOutAssets
   -- ^ The assets this output produces.
   , datumHash :: Maybe DatumHash
   -- ^ The hash of the script datum associated with this output.
@@ -477,6 +485,26 @@ instance ToJSON Datum where
         , ("value", toJSON . map toJSON $ props)
         ]
 
+instance FromJSON Datum where
+  parseJSON = \case
+    Aeson.String s -> do
+      Base16 bs <- parseJSON $ Aeson.String s
+      pure $ B bs
+    Aeson.Number n ->
+      case Scientific.floatingOrInteger n :: Either Double Integer of
+        Left _ -> fail "not an integer"
+        Right i -> pure $ I i
+    Aeson.Object props -> do
+      (tag :: Text) <- props .: "tag"
+      case tag of
+        "map" -> Map <$> props .: "value"
+        "list" -> List <$> props .: "value"
+        "constr" -> Constr <$> props .: "idx" <*> props .: "value"
+        _ -> fail $ "unknown tag: " <> show tag
+    Aeson.Bool _ -> fail "Booleans not allowed"
+    Aeson.Null -> fail "Null not allowed"
+    Aeson.Array _ -> fail "Arrays not allowed"
+
 fromDatum :: (Plutus.FromData a) => Datum -> Maybe a
 fromDatum = Plutus.fromData . toPlutusData
 
@@ -520,14 +548,55 @@ instance Ord Assets where
   compare (Assets a1 t1) (Assets a2 t2) = compare (a1, t1) (a2, t2)
 
 instance Semigroup Assets where
-  a <> b =
+  (Assets a1 t1) <> (Assets a2 t2) =
     Assets
-      { ada = on (+) ada a b
-      , tokens = on (<>) tokens a b
+      { ada = a1 <> a2
+      , tokens = t1 <> t2
       }
 
 instance Monoid Assets where
-  mempty = Assets 0 mempty
+  mempty = Assets mempty mempty
+
+instance Group Assets where
+  invert (Assets a t) = Assets (invert a) (invert t)
+
+-- We protect basic invariant which is that lovelace and tokens are non negative.
+-- More advanced ledger invariants (min ADA) are not checked here.
+newtype TxOutAssets = TxOutAssets {unTxOutAssets :: Assets}
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving newtype (Binary, ToJSON, Variations)
+
+instance Semigroup TxOutAssets where
+  (TxOutAssets a1) <> (TxOutAssets a2) = TxOutAssets $ a1 <> a2
+
+-- We provide an mempty value for `TxOutAssets` because we want to
+-- allow creation of outputs which we adjust for min ADA later.
+instance Monoid TxOutAssets where
+  mempty = TxOutAssets mempty
+
+{-# COMPLETE TxOutAssetsContent #-}
+pattern TxOutAssetsContent :: Assets -> TxOutAssets
+pattern TxOutAssetsContent assets <- TxOutAssets assets
+
+-- | Check if lovelace and tokens are non negative.
+mkTxOutAssets :: Assets -> Maybe TxOutAssets
+mkTxOutAssets assets@Assets{ada, tokens} = do
+  guard $ ada >= mempty
+  -- In the map we expect all quantities to be positive.
+  guard $ all (> mempty) $ unTokens tokens
+  pure $ TxOutAssets assets
+
+unsafeTxOutAssets :: Assets -> TxOutAssets
+unsafeTxOutAssets = TxOutAssets
+
+subtractTxOutAssets :: TxOutAssets -> TxOutAssets -> Maybe TxOutAssets
+subtractTxOutAssets (TxOutAssets a1) (TxOutAssets a2) = mkTxOutAssets $ a1 <> invert a2
+
+subtractTxOutAssetsRounding :: TxOutAssets -> TxOutAssets -> TxOutAssets
+subtractTxOutAssetsRounding (TxOutAssets a1) (TxOutAssets a2) = do
+  let Assets lovelace tokens = a1 <> invert a2
+  -- Now we should go and remove everything which is non positive
+  TxOutAssets $ Assets (max mempty lovelace) (Tokens $ Map.filter (> mempty) $ unTokens tokens)
 
 -- | A collection of token quantities by their asset ID.
 newtype Tokens = Tokens {unTokens :: Map AssetId Quantity}
@@ -535,10 +604,13 @@ newtype Tokens = Tokens {unTokens :: Map AssetId Quantity}
   deriving newtype (Binary, ToJSON, Variations)
 
 instance Semigroup Tokens where
-  (<>) = fmap Tokens . on (Map.unionWith (+)) unTokens
+  (<>) = fmap Tokens . on (Map.unionWith (<>)) unTokens
 
 instance Monoid Tokens where
   mempty = Tokens mempty
+
+instance Group Tokens where
+  invert (Tokens m) = Tokens $ Map.map invert m
 
 -- | A newtype wrapper for parsing base 16 strings as byte strings.
 newtype Base16 = Base16 {unBase16 :: ByteString}
@@ -576,11 +648,11 @@ instance FromJSON TxId where
 
 newtype TxIx = TxIx {unTxIx :: Word16}
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON, ToJSONKey, Variations, Hashable)
+  deriving newtype (Binary, Bounded, Enum, ToJSON, ToJSONKey, Variations, Hashable)
 
 newtype CertIx = CertIx {unCertIx :: Word64}
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, Variations, Hashable)
+  deriving newtype (Binary, Bounded, Enum, Variations, Hashable)
 
 data TxOutRef = TxOutRef
   { txId :: TxId
@@ -652,13 +724,31 @@ instance FromJSON TokenName where
 instance FromJSONKey TokenName where
   fromJSONKey = FromJSONKeyText (TokenName . BSC.pack . T.unpack)
 
-newtype Quantity = Quantity {unQuantity :: Word64}
+newtype Quantity = Quantity {unQuantity :: Integer}
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON, Variations)
+  deriving newtype (Binary, ToJSON, Variations)
 
-newtype Lovelace = Lovelace {unLovelace :: Word64}
+instance Semigroup Quantity where
+  (Quantity q1) <> (Quantity q2) = Quantity $ q1 + q2
+
+instance Monoid Quantity where
+  mempty = Quantity 0
+
+instance Group Quantity where
+  invert = Quantity . negate . unQuantity
+
+newtype Lovelace = Lovelace {unLovelace :: Integer}
   deriving stock (Show, Eq, Ord, Generic)
-  deriving newtype (Num, Integral, Real, Enum, Bounded, Binary, ToJSON, Variations)
+  deriving newtype (Binary, ToJSON, Variations)
+
+instance Semigroup Lovelace where
+  (Lovelace l1) <> (Lovelace l2) = Lovelace $ l1 + l2
+
+instance Monoid Lovelace where
+  mempty = Lovelace 0
+
+instance Group Lovelace where
+  invert = Lovelace . negate . unLovelace
 
 newtype Address = Address {unAddress :: ByteString}
   deriving stock (Eq, Ord, Generic)
@@ -769,9 +859,6 @@ fromCardanoStakeAddressReference = \case
         (SlotNo $ Cardano.unSlotNo $ ptrSlotNo ptr)
         (let Base.TxIx txIx = ptrTxIx ptr in TxIx $ fromIntegral txIx)
         (let Base.CertIx certIx = ptrCertIx ptr in CertIx certIx)
-
-fromCardanoStakeAddressPointer :: Cardano.StakeAddressPointer -> Word64
-fromCardanoStakeAddressPointer = error "not implemented"
 
 fromCardanoStakeCredential :: Cardano.StakeCredential -> StakeCredential
 fromCardanoStakeCredential = \case

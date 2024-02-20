@@ -490,7 +490,7 @@ performAdvanceBlocks blocks point = do
     |]
 
 performFindConsumingTx :: TxOutRef -> ChainPoint -> HT.Transaction (PerformMoveResult UTxOError Transaction)
-performFindConsumingTx TxOutRef{..} point = do
+performFindConsumingTx TxOutRef{txIx = TxIx txIx, ..} point = do
   initialResult <-
     HT.statement (pointSlot point, unTxId txId, fromIntegral txIx) $
       [foldStatement|
@@ -810,7 +810,7 @@ decodeTxIn :: ReadTxInRow -> TransactionInput
 decodeTxIn (txId, txIx, address, datumBytes, redeemerDatumBytes) =
   TransactionInput
     { txId = TxId txId
-    , txIx = fromIntegral txIx
+    , txIx = TxIx . fromIntegral $ txIx
     , address = Address address
     , datumBytes = fromPlutusData . C.toPlutusData . unsafeDeserialize' <$> datumBytes
     , redeemer = Redeemer . fromPlutusData . C.toPlutusData . unsafeDeserialize' <$> redeemerDatumBytes
@@ -843,20 +843,22 @@ queryTxOuts slotNo txId =
           TransactionOutput
             { address = Address address
             , assets =
-                Assets
-                  { ada = Lovelace $ fromIntegral lovelace
-                  , tokens = decodeTokens policyId tokenName quantity
-                  }
+                unsafeTxOutAssets $
+                  Assets
+                    { ada = Lovelace $ fromIntegral lovelace
+                    , tokens = decodeTokens policyId tokenName quantity
+                    }
             , datumHash = DatumHash <$> datumHash
             , datum = fromPlutusData . C.toPlutusData . unsafeDeserialize' <$> datumBytes
             }
 
-        mergeTxOut txOut@TransactionOutput{assets = assets@Assets{..}} =
+        mergeTxOut txOut@TransactionOutput{assets = (TxOutAssetsContent assets@(Assets{..}))} =
           txOut
             { assets =
-                assets
-                  { tokens = tokens <> decodeTokens policyId tokenName quantity
-                  }
+                unsafeTxOutAssets $
+                  assets
+                    { tokens = tokens <> decodeTokens policyId tokenName quantity
+                    }
             }
 
 queryTxInsBulk :: Set TxId -> HT.Transaction (Map TxId (Set.Set TransactionInput))
@@ -924,20 +926,22 @@ queryTxOutsBulk txIds =
           TransactionOutput
             { address = Address address
             , assets =
-                Assets
-                  { ada = Lovelace $ fromIntegral lovelace
-                  , tokens = decodeTokens policyId tokenName quantity
-                  }
+                unsafeTxOutAssets $
+                  Assets
+                    { ada = Lovelace $ fromIntegral lovelace
+                    , tokens = decodeTokens policyId tokenName quantity
+                    }
             , datumHash = DatumHash <$> datumHash
             , datum = fromPlutusData . C.toPlutusData . unsafeDeserialize' <$> datumBytes
             }
 
-        mergeTxOut txOut@TransactionOutput{assets = assets@Assets{..}} =
+        mergeTxOut txOut@TransactionOutput{assets = TxOutAssetsContent assets@Assets{..}} =
           txOut
             { assets =
-                assets
-                  { tokens = tokens <> decodeTokens policyId tokenName quantity
-                  }
+                unsafeTxOutAssets $
+                  assets
+                    { tokens = tokens <> decodeTokens policyId tokenName quantity
+                    }
             }
 
 -- GetTip
@@ -1015,26 +1019,28 @@ getUTxOs =
             (Fold foldRow mempty id)
   where
     foldRow acc (txId, txIx, address, lovelace, datumHash, datumBytes, policyId, tokenName, quantity) =
-      Map.alter (Just . maybe newTxOut mergeTxOut) (TxOutRef (TxId txId) (fromIntegral txIx)) acc
+      Map.alter (Just . maybe newTxOut mergeTxOut) (TxOutRef (TxId txId) (TxIx $ fromIntegral txIx)) acc
       where
         newTxOut =
           TransactionOutput
             { address = Address address
             , assets =
-                Assets
-                  { ada = Lovelace $ fromIntegral lovelace
-                  , tokens = decodeTokens policyId tokenName quantity
-                  }
+                unsafeTxOutAssets $
+                  Assets
+                    { ada = Lovelace $ fromIntegral lovelace
+                    , tokens = decodeTokens policyId tokenName quantity
+                    }
             , datumHash = DatumHash <$> datumHash
             , datum = fromPlutusData . C.toPlutusData . unsafeDeserialize' <$> datumBytes
             }
 
-        mergeTxOut txOut@TransactionOutput{assets = assets@Assets{..}} =
+        mergeTxOut txOut@TransactionOutput{assets = TxOutAssetsContent assets@Assets{..}} =
           txOut
             { assets =
-                assets
-                  { tokens = tokens <> decodeTokens policyId tokenName quantity
-                  }
+                unsafeTxOutAssets $
+                  assets
+                    { tokens = tokens <> decodeTokens policyId tokenName quantity
+                    }
             }
 
 decodeTokens :: Maybe ByteString -> Maybe ByteString -> Maybe Int64 -> Tokens

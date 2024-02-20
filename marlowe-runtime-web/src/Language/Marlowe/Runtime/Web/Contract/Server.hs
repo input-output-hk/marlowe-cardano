@@ -35,6 +35,7 @@ import Language.Marlowe.Runtime.Web.Adapter.Pagination (
 import Language.Marlowe.Runtime.Web.Adapter.Servant (ListObject (..))
 import Language.Marlowe.Runtime.Web.Adapter.Server.ApiError (
   ApiError (ApiError),
+import Language.Marlowe.Runtime.Web.Server.REST.ApiError (
   badRequest',
   notFound',
   rangeNotSatisfiable',

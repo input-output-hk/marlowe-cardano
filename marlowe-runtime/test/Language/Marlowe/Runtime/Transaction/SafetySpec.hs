@@ -4,11 +4,8 @@ module Language.Marlowe.Runtime.Transaction.SafetySpec where
 
 import qualified Cardano.Api as Cardano
 import qualified Cardano.Api.Shelley as Shelley
-import Cardano.Api.Shelley (CardanoEra (..), ReferenceTxInsScriptsInlineDatumsSupportedInEra (..), bundleProtocolParams)
-import qualified Cardano.Api.Shelley as Shelley (ReferenceScript (..), StakeAddressReference (..))
 import Control.Category ((<<<))
 import Control.Monad (when)
-import Data.Either (fromRight)
 import Data.Foldable (for_)
 import Data.Functor ((<&>))
 import Data.List (isInfixOf, nub)
@@ -19,12 +16,14 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Language.Marlowe.Analysis.Safety.Ledger (checkContinuations)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError (..))
+import qualified Language.Marlowe.Analysis.Safety.Types as S
 import Language.Marlowe.Core.V1.Merkle as V1 (MerkleizedContract (..), deepMerkleize, merkleizedContract)
 import qualified Language.Marlowe.Core.V1.Plate as V1
 import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams (rolesCurrency))
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1
+import Language.Marlowe.Runtime.Cardano.Api (fromCardanoLovelace)
 import qualified Language.Marlowe.Runtime.Cardano.Api as Chain (
   assetsToCardanoValue,
   fromCardanoAddressInEra,
@@ -32,11 +31,13 @@ import qualified Language.Marlowe.Runtime.Cardano.Api as Chain (
   toCardanoDatumHash,
   toCardanoPaymentCredential,
  )
+import qualified Language.Marlowe.Runtime.ChainSync.Api as CS
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain (
   AssetId (..),
   Assets (..),
   Credential (..),
   DatumHash (..),
+  Lovelace (..),
   PolicyId (..),
   TokenName (..),
   Tokens (..),
@@ -83,7 +84,7 @@ import qualified PlutusTx.AssocMap as AM
 import qualified PlutusTx.Builtins as Plutus (fromBuiltin, lengthOfByteString, toBuiltin)
 import Spec.Marlowe.Reference (readReferenceContracts)
 import Spec.Marlowe.Semantics.Arbitrary ()
-import Test.Hspec (Spec, describe, expectationFailure, it, runIO)
+import Test.Hspec (Spec, describe, expectationFailure, it, runIO, shouldBe)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck (counterexample, discard, elements, generate, sublistOf, suchThat, (===), (==>))
 import Test.QuickCheck.Arbitrary (arbitrary)
@@ -139,8 +140,7 @@ spec =
 
     describe "minAdaUpperBound" $
       do
-        let
-        prop "At least Cardano.Api" $ \(address, hash, assets@(Chain.Assets _ tokens')) ->
+        prop "At least Cardano.Api" $ \(address, hash, assets@(CS.TxOutAssetsContent (Chain.Assets _ tokens'))) ->
           do
             let value = fromJust $ Chain.assetsToCardanoValue assets
                 toToken (Chain.AssetId (Chain.PolicyId p) (Chain.TokenName n)) =
@@ -149,30 +149,31 @@ spec =
                     (Plutus.TokenName $ Plutus.toBuiltin n)
                 tokens = fmap toToken . M.keys $ Chain.unTokens tokens'
                 expected =
-                  Cardano.calculateMinimumUTxO
-                    shelleyBasedEraTest
-                    ( Cardano.TxOut
-                        (Cardano.anyAddressInShelleyBasedEra shelleyBasedEraTest . fromJust $ Chain.toCardanoAddressAny address)
-                        (mkTxOutValue maryEraOnwardsTest value)
-                        (Cardano.TxOutDatumHash alonzoEraOnwardsTest . fromJust $ Chain.toCardanoDatumHash hash)
-                        Shelley.ReferenceScriptNone
+                  fromCardanoLovelace
+                    ( Cardano.calculateMinimumUTxO
+                        shelleyBasedEraTest
+                        ( Cardano.TxOut
+                            (Cardano.anyAddressInShelleyBasedEra shelleyBasedEraTest . fromJust $ Chain.toCardanoAddressAny address)
+                            (mkTxOutValue maryEraOnwardsTest value)
+                            (Cardano.TxOutDatumHash alonzoEraOnwardsTest . fromJust $ Chain.toCardanoDatumHash hash)
+                            Shelley.ReferenceScriptNone
+                        )
+                        $ Shelley.unLedgerProtocolParameters protocolTestnet
+                        :: Cardano.Lovelace
                     )
-                    $ Shelley.unLedgerProtocolParameters protocolTestnet
-                    :: Cardano.Lovelace
                 contract = foldr payToken V1.Close tokens -- The tokens just need to appear somewhere in the contract.
                 actual =
-                  fromJust $
-                    minAdaUpperBound
-                      babbageEraOnwardsTest
-                      protocolTestnet
-                      version
-                      (V1.emptyState 0)
-                      contract
-                      continuations
-                    :: Cardano.Lovelace
+                  minAdaUpperBound
+                    babbageEraOnwardsTest
+                    protocolTestnet
+                    version
+                    (V1.emptyState 0)
+                    contract
+                    continuations
             counterexample ("Expected minUTxO = " <> show expected) $
-              counterexample ("Actual minUTxO = " <> show actual) $
-                actual >= expected
+              counterexample ("Actual minUTxO = " <> show actual) $ fromMaybe False do
+                a <- actual
+                pure (a >= expected)
 
     describe "checkContract" $
       do
@@ -397,6 +398,10 @@ spec =
                 remapContinuations = M.mapKeys $ Plutus.DatumHash . Plutus.toBuiltin . Chain.unDatumHash
                 checkResult = checkContinuations mcContract (remapContinuations $ M.fromList remaining)
                 expected = MissingContinuation . Plutus.DatumHash . Plutus.toBuiltin . Chain.unDatumHash . fst <$> missing
+                -- Illegal addresses are generated by Arbitrary instance but we want to ignore them in this test.
+                actual' = flip filter actual \case
+                  IllegalAddress _ -> False
+                  _ -> True
             pure
               . counterexample ("Contract = " <> show mcContract)
               . counterexample ("DirectCheckResult = " <> show checkResult)
@@ -405,7 +410,7 @@ spec =
               . counterexample ("WholeReport = " <> show wholeReport)
               . counterexample ("Actual = " <> show actual)
               . counterexample ("Expected = " <> show expected)
-              $ actual `same` expected
+              $ actual' `same` expected
         prop "Contract with inconsistent networks" $ \address ->
           do
             let contract =
@@ -415,7 +420,9 @@ spec =
                     V1.Close
                 datum = datumForContractAndRolesConfig contract RoleTokensNone
                 actual = checkContract testnet (Just RoleTokensNone) version datum mempty
-                expected = [InconsistentNetworks, WrongNetwork]
+                expected = case V1.deserialiseAddressBech32 $ V1.serialiseAddressBech32 False address of
+                  Just _ -> [WrongNetwork, InconsistentNetworks]
+                  Nothing -> [WrongNetwork, InconsistentNetworks, IllegalAddress address]
             counterexample ("Actual = " <> show actual)
               . counterexample ("Expected = " <> show expected)
               $ actual `same` expected
@@ -424,7 +431,9 @@ spec =
             let contract = V1.When [V1.Case (V1.Choice (V1.ChoiceId "Choice" $ V1.Address V1.mainnet address) []) V1.Close] 0 V1.Close
                 datum = datumForContractAndRolesConfig contract RoleTokensNone
                 actual = checkContract testnet (Just RoleTokensNone) version datum mempty
-                expected = [WrongNetwork]
+                expected = case V1.deserialiseAddressBech32 $ V1.serialiseAddressBech32 False address of
+                  Just _ -> [WrongNetwork]
+                  Nothing -> [WrongNetwork, IllegalAddress address]
             counterexample ("Actual = " <> show actual)
               . counterexample ("Expected = " <> show expected)
               $ actual `same` expected
@@ -478,16 +487,14 @@ spec =
       for_ referenceContracts \(name, contract) -> it ("Passes for reference contract " <> name) do
         (policy, address) <- generate arbitrary
         let minAda =
-              fromIntegral $
-                maybe 1_500_000 toInteger $
-                  minAdaUpperBound
-                    ReferenceTxInsScriptsInlineDatumsInBabbageEra
-                    protocolTestnet
-                    version
-                    (V1.emptyState 0)
-                    contract
-                    mempty
-            threadTokenAssetId = ThreadTokenAssetId (Chain.AssetId policy (Chain.TokenName "Thread"))
+              fromMaybe (Chain.Lovelace 1_500_000) $
+                minAdaUpperBound
+                  babbageEraOnwardsTest
+                  protocolTestnet
+                  version
+                  (V1.emptyState 0)
+                  contract
+                  mempty
         datum <-
           either (error "Unable to initialize the state") pure $
             initialMarloweDatum
@@ -496,7 +503,7 @@ spec =
               adjustMinUtxo
               mempty
               MarloweV1
-              (Just threadTokenAssetId)
+              Nothing
               minAda
               (MinAdaProvider address)
         actual <-
@@ -514,20 +521,20 @@ spec =
           Right errs
             | all overspentOrWarning errs -> pure ()
           -- An ambiguous time interval occurs when the timeouts have non-zero milliseconds are too close for there to be a valid slot for a transaction.
-          Left "ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed \"TEAmbiguousTimeIntervalError\")" -> pure ()
+          Left "ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed TEAmbiguousTimeIntervalError)" -> pure ()
           -- All other results are test failures.
           _otherwise -> expectationFailure $ "Unexpected result: " <> show actual
       prop
         "Contract with prohibitive execution cost"
         do
-          let minAda = 3_000_000
+          let minAda = Chain.Lovelace 3_000_000
               policy = "46e79d4fbf0dd6766f8601fdec651ad708af7115fd8f7b5e14b622e5"
               address = "608db2b806ba9e7ae2909ae38afc6c1bce02f5df3e1cb1b06cbc80546f"
               rolesPolicyId = RolesPolicyId policy
               contract =
                 V1.When
                   [ V1.Case (V1.Deposit party party ada $ V1.Constant i) $ V1.Pay party (V1.Party party) ada (V1.Constant i) V1.Close
-                  | i <- [1 .. 50]
+                  | i <- [1 .. 60]
                   ]
                   1000
                   V1.Close
@@ -555,7 +562,7 @@ spec =
               continuations
           case actual of
             Right errs
-              | all overspent errs -> pure ()
+              | not (null errs) && all overspent errs -> pure ()
             _otherwise -> expectationFailure $ "Unexpected result: " <> show actual
       prop
         "Contract with prohibitive execution closure cost"
@@ -564,7 +571,7 @@ spec =
               initialAccounts =
                 AM.fromList $
                   [ ((accountId, ada), 1)
-                  | i <- [1 .. 8] :: [Int]
+                  | i <- [1 .. 10 :: Int]
                   , let accountId = V1.Role $ PLA.tokenName . Text.encodeUtf8 . Text.pack . show $ i
                   ]
               policy = "46e79d4fbf0dd6766f8601fdec651ad708af7115fd8f7b5e14b622e5"
@@ -584,7 +591,7 @@ spec =
           actual <-
             checkTransactions
               protocolTestnet
-              ReferenceTxInsScriptsInlineDatumsInBabbageEra
+              babbageEraOnwardsTest
               version
               marloweContext
               emptyLockedRolesContext
@@ -592,8 +599,15 @@ spec =
               datum
               continuations
           case actual of
-            Right [] -> expectationFailure "We expected overspending the budget n this case"
-            Right errs | all overspentOrWarning errs -> pure ()
+            Right [] -> expectationFailure "Budget overspending expected"
+            Right [TransactionValidationError t1 _, TransactionValidationError t2 _] -> do
+              let S.Transaction _ _ i1 _ _ = t1
+                  S.Transaction _ _ i2 _ _ = t2
+                  -- We can reach `Close` either by the `Notify` or by the `Close` timeout.
+                  expectedInputs = [[V1.NormalInput V1.INotify], []]
+
+              map V1.txInputs [i1, i2] `shouldBe` expectedInputs
+
             -- All other results are test failures.
             _otherwise -> expectationFailure $ "Unexpected result: " <> show actual
       prop
@@ -630,7 +644,7 @@ spec =
                   ]
                   10_000
                   V1.Close
-              minAda = 3_000_000
+              minAda = Chain.Lovelace 3_000_000
 
           datum <-
             either (error "Unable to initialize the state") pure $
@@ -658,6 +672,6 @@ spec =
             Right errs
               | all overspentOrWarning errs -> pure ()
             -- An ambiguous time interval occurs when the timeouts have non-zero milliseconds are too close for there to be a valid slot for a transaction.
-            Left "ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed \"TEAmbiguousTimeIntervalError\")" -> pure ()
+            Left "ApplyInputsConstraintsBuildupFailed (MarloweComputeTransactionFailed TEAmbiguousTimeIntervalError)" -> pure ()
             -- All other results are test failures.
             _otherwise -> expectationFailure $ "Unexpected result: " <> show actual

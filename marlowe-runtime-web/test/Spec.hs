@@ -607,7 +607,7 @@ instance Arbitrary (Web.WithdrawTxEnvelope tx) where
   shrink = genericShrink
 
 instance Arbitrary (Web.ApplyInputsTxEnvelope tx) where
-  arbitrary = Web.ApplyInputsTxEnvelope <$> arbitrary <*> arbitrary <*> arbitrary
+  arbitrary = Web.ApplyInputsTxEnvelope <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
   shrink = genericShrink
 
 instance Arbitrary (Web.BurnRoleTokensTxEnvelope tx) where

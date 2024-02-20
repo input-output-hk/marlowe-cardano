@@ -25,12 +25,17 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   Assets (..),
   BlockHeader (..),
   BlockHeaderHash (..),
+  Lovelace (Lovelace),
   PolicyId (..),
+  Quantity (Quantity),
   TokenName (TokenName),
   Tokens (Tokens),
   TxId (..),
+  TxIx (TxIx),
   TxOutRef (..),
   fromDatum,
+  unTxIx,
+  unsafeTxOutAssets,
  )
 import Language.Marlowe.Runtime.Core.Api (
   ContractId (..),
@@ -46,7 +51,7 @@ import Prelude hiding (init)
 
 getContractState :: ContractId -> T.Transaction (Maybe SomeContractState)
 getContractState (ContractId TxOutRef{..}) = runMaybeT do
-  let params = (unTxId txId, fromIntegral txIx)
+  let params = (unTxId txId, fromIntegral $ unTxIx txIx)
   (contractId, roleTokenMintingPolicyId, metadata, initialBlock, initialOutput) <-
     fmap decodeCreateResults $
       MaybeT $
@@ -252,10 +257,11 @@ decodePayout row =
   , Payout
       { address = Address address
       , assets =
-          Assets
-            { ada = fromIntegral lovelace
-            , tokens = decodeTokens policyIds tokenNames quantities
-            }
+          unsafeTxOutAssets $
+            Assets
+              { ada = Lovelace $ fromIntegral lovelace
+              , tokens = decodeTokens policyIds tokenNames quantities
+              }
       , datum = AssetId (PolicyId rolesCurrency) (TokenName role)
       }
   )
@@ -281,7 +287,7 @@ decodeContractId :: ByteString -> Int16 -> ContractId
 decodeContractId = fmap ContractId . decodeTxOutRef
 
 decodeTxOutRef :: ByteString -> Int16 -> TxOutRef
-decodeTxOutRef txId txIx = TxOutRef (TxId txId) (fromIntegral txIx)
+decodeTxOutRef txId txIx = TxOutRef (TxId txId) (TxIx $ fromIntegral txIx)
 
 decodeBlockHeader :: Int64 -> ByteString -> Int64 -> BlockHeader
 decodeBlockHeader slotNo hash blockNo =
@@ -303,10 +309,11 @@ decodeTransactionScriptOutput txId txIx address lovelace policyIds tokenNames qu
   TransactionScriptOutput
     { address = Address address
     , assets =
-        Assets
-          { ada = fromIntegral lovelace
-          , tokens = decodeTokens policyIds tokenNames quantities
-          }
+        unsafeTxOutAssets $
+          Assets
+            { ada = Lovelace $ fromIntegral lovelace
+            , tokens = decodeTokens policyIds tokenNames quantities
+            }
     , utxo = decodeTxOutRef txId txIx
     , datum = decodeMarloweData rolesCurrency state contract
     }
@@ -331,7 +338,7 @@ decodeTokens policyIds tokenNames quantities =
   Tokens $
     Map.fromList $
       zipWith3
-        (\p t q -> (AssetId (PolicyId p) (TokenName t), fromIntegral q))
+        (\p t q -> (AssetId (PolicyId p) (TokenName t), Quantity $ fromIntegral q))
         (V.toList policyIds)
         (V.toList tokenNames)
         (V.toList quantities)

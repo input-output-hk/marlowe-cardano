@@ -9,7 +9,7 @@ import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
 import Hasql.Statement (Statement (..))
 import Language.Marlowe.Protocol.Query.Types (ContractFilter (..), Order (..), Range (..))
-import Language.Marlowe.Runtime.ChainSync.Api (Address (..), AssetId (..), TxId (..), TxOutRef (..))
+import Language.Marlowe.Runtime.ChainSync.Api (Address (..), AssetId (..), TxId (..), TxIx (unTxIx), TxOutRef (..))
 import Language.Marlowe.Runtime.Core.Api (ContractId (..), MarloweMetadataTag (..))
 import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetHeaders
 import Test.Hspec
@@ -29,7 +29,7 @@ spec = describe "SQL queries" $ for_ (Set.powerSet $ Set.fromList [minBound .. m
           , Just $ showStatement "Total count statement" $ totalCountStatement cFilter
           , Just $ showStatement "Headers statement" $ headersStatement cFilter range do
               ContractId TxOutRef{..} <- rangeStart range
-              pure $ DelimiterRow (unTxId txId) (fromIntegral txIx) 0
+              pure $ DelimiterRow (unTxId txId) (fromIntegral $ unTxIx txIx) 0
           ]
 
 showStatement :: String -> Statement a b -> String

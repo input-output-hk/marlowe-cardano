@@ -43,9 +43,10 @@ import Language.Marlowe.Runtime.Cardano.Api (
 import Language.Marlowe.Runtime.ChainSync.Api (
   AssetId (..),
   Assets (..),
-  Lovelace,
+  Lovelace (..),
   Metadata (..),
   PolicyId (..),
+  Quantity (..),
   StakeCredential,
   StakeReference (..),
   Tokens (..),
@@ -286,13 +287,13 @@ roleTokenSpec = \case
               TxMintNone -> mempty
               TxMintValue _ value _ -> tokens $ assetsFromCardanoValue value
           expectedTokens = case testCase of
-            MintRoleTokensMultiple -> Tokens $ Map.singleton (AssetId rolesCurrency "Role") 3
-            _ -> Tokens $ Map.singleton (AssetId rolesCurrency "Role") 1
+            MintRoleTokensMultiple -> Tokens $ Map.singleton (AssetId rolesCurrency "Role") (Quantity 3)
+            _ -> Tokens $ Map.singleton (AssetId rolesCurrency "Role") (Quantity 1)
       mintedTokens `shouldBe` expectedTokens
     it "Should distribute the role tokens" \(TestData{..}, ContractCreated era ContractCreatedInEra{..}) -> do
       let tokenDistribution = case txBody of
             TxBody TxBodyContent{..} ->
-              Map.unionsWith (+) $
+              Map.unionsWith (<>) $
                 txOuts <&> \(TxOut address value _ _) ->
                   Map.fromList
                     $ fmap
@@ -306,10 +307,10 @@ roleTokenSpec = \case
           expectedDistribution = case testCase of
             MintRoleTokensMultiple ->
               Map.fromList
-                [ ((changeAddress singleAddressInsufficientBalanceWallet, AssetId rolesCurrency "Role"), 2)
-                , ((changeAddress multiAddressInsufficientBalanceWallet, AssetId rolesCurrency "Role"), 1)
+                [ ((changeAddress singleAddressInsufficientBalanceWallet, AssetId rolesCurrency "Role"), Quantity 2)
+                , ((changeAddress multiAddressInsufficientBalanceWallet, AssetId rolesCurrency "Role"), Quantity 1)
                 ]
-            _ -> Map.singleton (changeAddress singleAddressInsufficientBalanceWallet, AssetId rolesCurrency "Role") 1
+            _ -> Map.singleton (changeAddress singleAddressInsufficientBalanceWallet, AssetId rolesCurrency "Role") (Quantity 1)
       tokenDistribution `shouldBe` expectedDistribution
 
 metadataSpec :: RoleTokenCase -> MetadataCase -> Maybe (SpecWith (TestData, ContractCreated 'V1))
@@ -401,20 +402,20 @@ mkRoleTokensConfig TestData{..} = \case
     RoleTokensMint $
       mkMint $
         NE.fromList
-          [ ("Role", Nothing, ToAddress $ changeAddress singleAddressInsufficientBalanceWallet, 1)
+          [ ("Role", Nothing, ToAddress $ changeAddress singleAddressInsufficientBalanceWallet, Quantity 1)
           ]
   MintRoleTokensMetadata ->
     RoleTokensMint $
       mkMint $
         NE.fromList
-          [ ("Role", Just testNftMetadata, ToAddress $ changeAddress singleAddressInsufficientBalanceWallet, 1)
+          [ ("Role", Just testNftMetadata, ToAddress $ changeAddress singleAddressInsufficientBalanceWallet, Quantity 1)
           ]
   MintRoleTokensMultiple ->
     RoleTokensMint $
       mkMint $
         NE.fromList
-          [ ("Role", Nothing, ToAddress $ changeAddress singleAddressInsufficientBalanceWallet, 2)
-          , ("Role", Nothing, ToAddress $ changeAddress multiAddressInsufficientBalanceWallet, 1)
+          [ ("Role", Nothing, ToAddress $ changeAddress singleAddressInsufficientBalanceWallet, Quantity 2)
+          , ("Role", Nothing, ToAddress $ changeAddress multiAddressInsufficientBalanceWallet, Quantity 1)
           ]
 
 testNftMetadata :: RoleTokenMetadata
@@ -472,8 +473,8 @@ mkExtraMetadata (ExtraMetadataCase extraRandomMetadata extraMarloweMetadata extr
 mkMinLovelace :: MinLovelaceCase -> Maybe Lovelace
 mkMinLovelace = \case
   MinLovelaceOmitted -> Nothing
-  MinLovelaceSufficient -> Just 5_000_000
-  MinLovelaceInsufficient -> Just 500_000
+  MinLovelaceSufficient -> Just $ Lovelace 5_000_000
+  MinLovelaceInsufficient -> Just $ Lovelace 500_000
 
 mkContract :: RoleTokenCase -> V1.Contract
 mkContract = \case

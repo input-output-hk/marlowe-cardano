@@ -162,6 +162,12 @@ data TestResult lang era
       , retries :: [FailureReport lang era]
       }
 
+testResultLogs :: TestResult lang era -> Maybe Logs
+testResultLogs = \case
+  TestSucceeded InterpretState{_isLogs} -> Just _isLogs
+  TestSkipped _ -> Nothing
+  TestFailed FailureReport{_frInterpretState = InterpretState{_isLogs}} _ -> Just _isLogs
+
 data TestOperation
   = CLIOperation CLIOperation
   | RuntimeOperation RuntimeOperation
@@ -468,3 +474,5 @@ testResultToJSON testFile testName@(TestName name) = \case
   TestFailed err retries -> failureReportToJSON testFile testName err retries
 
 newtype FaucetsNumber = FaucetsNumber Int
+
+makeLenses 'FailureReport

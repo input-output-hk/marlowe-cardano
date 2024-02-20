@@ -36,8 +36,10 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   ScriptHash (..),
   TokenName (..),
   TxId (..),
+  TxIx (TxIx),
   TxOutRef (..),
   paymentCredential,
+  unTxIx,
  )
 import Language.Marlowe.Runtime.Core.Api (
   ContractId (..),
@@ -101,7 +103,7 @@ decodeContractHeader
   -> ContractHeader
 decodeContractHeader slotNo blockHeaderHash blockNo txId txIx rolesCurrency metadata address payoutScriptHash =
   ContractHeader
-    { contractId = ContractId (TxOutRef (TxId txId) (fromIntegral txIx))
+    { contractId = ContractId (TxOutRef (TxId txId) (TxIx $ fromIntegral txIx))
     , rolesCurrency = PolicyId rolesCurrency
     , metadata = maybe emptyMarloweTransactionMetadata (runGet get . fromStrict) metadata
     , marloweScriptHash = fromJust do
@@ -144,7 +146,7 @@ delimiterStatement cFilter (ContractId TxOutRef{..}) = buildStatement DelimiterR
   (withClause, fromClause) <- delimiterTables cFilter
   -- Allocate parameters for the delimiter.
   txIdParam <- param $ unTxId txId
-  txIxParam <- param @Int16 $ fromIntegral txIx
+  txIxParam <- param @Int16 $ fromIntegral $ unTxIx txIx
   whereClause <- filterCondition cFilter $ Just $ delimiterIdCond txIdParam txIxParam
   let selectClause =
         NormalSimpleSelect

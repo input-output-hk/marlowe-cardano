@@ -113,7 +113,7 @@ toCardanoStakeAddressReference :: Maybe StakeReference -> Maybe C.StakeAddressRe
 toCardanoStakeAddressReference = \case
   Nothing -> Just C.NoStakeAddress
   Just (StakeCredential cred) -> C.StakeAddressByValue <$> toCardanoStakeCredential cred
-  Just (StakePointer slotNo txIx certIx) ->
+  Just (StakePointer slotNo (TxIx txIx) certIx) ->
     Just $
       C.StakeAddressByPointer $
         C.StakeAddressPointer $
@@ -123,11 +123,11 @@ fromCardanoStakeAddressReference :: C.StakeAddressReference -> Maybe StakeRefere
 fromCardanoStakeAddressReference = \case
   C.NoStakeAddress -> Nothing
   C.StakeAddressByValue credential -> Just $ StakeCredential $ fromCardanoStakeCredential credential
-  C.StakeAddressByPointer (C.StakeAddressPointer (Ptr slotNo (L.TxIx txIx) certIx)) ->
+  C.StakeAddressByPointer (C.StakeAddressPointer (Ptr slotNo (L.TxIx txIx) certIx)) -> do
     Just $
       StakePointer
         (fromCardanoSlotNo slotNo)
-        (fromIntegral txIx)
+        (TxIx $ fromIntegral txIx)
         (fromCardanoCertIx certIx)
 
 toCardanoPaymentKeyHash :: PaymentKeyHash -> Maybe (C.Hash C.PaymentKey)
@@ -149,10 +149,10 @@ fromCardanoAssetName :: C.AssetName -> TokenName
 fromCardanoAssetName (C.AssetName name) = TokenName name
 
 toCardanoQuantity :: Quantity -> C.Quantity
-toCardanoQuantity = C.Quantity . fromIntegral . unQuantity
+toCardanoQuantity = C.Quantity . unQuantity
 
 fromCardanoQuantity :: C.Quantity -> Quantity
-fromCardanoQuantity (C.Quantity q) = Quantity $ fromIntegral q
+fromCardanoQuantity (C.Quantity q) = Quantity q
 
 toCardanoTxId :: TxId -> Maybe C.TxId
 toCardanoTxId = hush . C.deserialiseFromRawBytes C.AsTxId . unTxId
@@ -195,10 +195,10 @@ fromCardanoAddressInEra era =
     Address . C.serialiseToRawBytes
 
 toCardanoLovelace :: Lovelace -> C.Lovelace
-toCardanoLovelace = C.Lovelace . fromIntegral . unLovelace
+toCardanoLovelace = C.Lovelace . unLovelace
 
 fromCardanoLovelace :: C.Lovelace -> Lovelace
-fromCardanoLovelace (C.Lovelace l) = Lovelace $ fromIntegral l
+fromCardanoLovelace (C.Lovelace l) = Lovelace l
 
 tokensToCardanoValue :: Tokens -> Maybe C.Value
 tokensToCardanoValue = fmap C.valueFromList . traverse toCardanoValue' . Map.toList . unTokens
@@ -217,8 +217,8 @@ tokensFromCardanoValue = Tokens . Map.fromList . mapMaybe fromCardanoValue' . C.
     fromCardanoValue' (C.AssetId policy name, q) =
       Just (AssetId (fromCardanoPolicyId policy) (fromCardanoAssetName name), fromCardanoQuantity q)
 
-assetsToCardanoValue :: Assets -> Maybe C.Value
-assetsToCardanoValue Assets{..} =
+assetsToCardanoValue :: TxOutAssets -> Maybe C.Value
+assetsToCardanoValue (TxOutAssetsContent (Assets{..})) =
   fold
     <$> sequence
       [ Just $ C.valueFromList [(C.AdaAssetId, C.lovelaceToQuantity $ toCardanoLovelace ada)]
@@ -232,7 +232,7 @@ assetsFromCardanoValue value =
     , tokens = tokensFromCardanoValue value
     }
 
-toCardanoTxOutValue :: C.MaryEraOnwards era -> Assets -> Maybe (C.TxOutValue era)
+toCardanoTxOutValue :: C.MaryEraOnwards era -> TxOutAssets -> Maybe (C.TxOutValue era)
 toCardanoTxOutValue C.MaryEraOnwardsMary assets =
   C.TxOutValueShelleyBased C.ShelleyBasedEraMary . C.toLedgerValue C.MaryEraOnwardsMary <$> assetsToCardanoValue assets
 toCardanoTxOutValue C.MaryEraOnwardsAlonzo assets =
@@ -277,7 +277,7 @@ fromCardanoTxOutDatum = \case
   C.TxOutDatumInline _ datum -> (Nothing, Just $ fromCardanoScriptData $ getScriptData datum)
 
 toCardanoTxOut :: C.MaryEraOnwards era -> TransactionOutput -> Maybe (C.TxOut C.CtxTx era)
-toCardanoTxOut era TransactionOutput{..} =
+toCardanoTxOut era TransactionOutput{..} = do
   printIfNone $
     C.TxOut
       <$> toCardanoAddressInEra (C.maryEraOnwardsToCardanoEra era) address
@@ -310,13 +310,15 @@ toCardanoTxOut' era TransactionOutput{..} mScript = do
 fromCardanoTxOut
   :: C.CardanoEra era
   -> C.TxOut C.CtxTx era
-  -> TransactionOutput
-fromCardanoTxOut era (C.TxOut address value txOutDatum _) =
-  TransactionOutput
-    (fromCardanoAddressInEra era address)
-    (fromCardanoTxOutValue value)
-    hash
-    datum
+  -> Maybe TransactionOutput
+fromCardanoTxOut era (C.TxOut address value txOutDatum _) = do
+  txOutAssets <- mkTxOutAssets (fromCardanoTxOutValue value)
+  pure $
+    TransactionOutput
+      (fromCardanoAddressInEra era address)
+      txOutAssets
+      hash
+      datum
   where
     (hash, datum) = fromCardanoTxOutDatum txOutDatum
 

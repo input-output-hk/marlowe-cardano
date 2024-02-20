@@ -30,12 +30,6 @@ import Contrib.Cardano.Api (lovelaceFromInt, lovelaceToInt)
 import Contrib.Control.Exception (liftEitherIO)
 import Contrib.Control.Monad.Trans.State.IO (unsafeExecIOStateT)
 import Contrib.Data.Foldable (foldMapFlipped)
-import Contrib.Monad.Loops (
-  MaxRetries (..),
-  PrevResult (PrevResult),
-  retryTillJust,
-  retryTillRight,
- )
 import Contrib.UnliftIO.Async.Pool qualified as UnliftIO
 import Contrib.UnliftIO.Control.Concurrent (threadDelayBy)
 import Control.Concurrent.STM (
@@ -83,6 +77,12 @@ import Language.Marlowe.CLI.Cardano.Api (
 import Language.Marlowe.CLI.Cardano.Api.Value (
   lovelaceToPlutusValue,
   toPlutusValue,
+ )
+import Language.Marlowe.CLI.Test.Contrib.Monad.Loops (
+  MaxRetries (..),
+  PrevResult (PrevResult),
+  retryTillJust,
+  retryTillRight,
  )
 import Language.Marlowe.CLI.Test.ExecutionMode qualified as ExecutionMode
 import Language.Marlowe.CLI.Test.Interpret (interpret)

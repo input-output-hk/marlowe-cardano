@@ -3,6 +3,14 @@
 A library that supports spinning up Marlowe Runtime instances in an ephemeral
 testnet for integration testing.
 
+## Running
+
+In order to run the test suite you can invoke `cabal` directly. You can also pass a filter to the command to select a subset of the test suite:
+
+```
+$ cabal run marlowe-integration-tests -- --match "POST /contracts safety report"
+```
+
 ## Prerequisites
 
 The library functions use `exec` to spawn external processes, and therefore the
@@ -14,6 +22,37 @@ following programs need to be in the `PATH` when you use them:
 
 Additionally, you are required to have a PostgreSQL server running and
 available.
+
+### Setting local user space PostgreSQL
+
+It is possible to setup for testing a fully local postresql cluster - it is pretty lightweight solution.
+
+``` shell
+$ mkdir .pgdata # PLEASE READ MORE DETAILS ABOUT THE PATH LENGTH
+$ export PGDATA=.pgdata
+$ pg_ctl init
+```
+
+If your current working directory has long absolute path PostgreSQL can actually fail to run (it has sever limit on the length of the path).
+To fix this you can link just created directory to some shorter path like:
+
+```
+$ ln -s $PWD/.pgdata /home/user/.pgdata
+$ export PGDATA=/home/user/.pgdata
+```
+
+In order it to work we should change few things in the `.pgdata/postgresql.conf`:
+
+* `unix_socket_directories = '.'`
+
+* `port = SOME_NON_STANDARD_PORT_LIKE_15432`
+
+Then to use this setup during testing you should setup db user so it is the same as your current system user:
+
+```shell
+export MARLOWE_RT_TEST_DB_USER=myuser
+export MARLOWE_RT_TEST_DB_PORT=USE_THE_SAME_PORT_AS_ABOVE
+```
 
 ### Setting up a PostgreSQL database (NixOS)
 
@@ -42,7 +81,24 @@ You can configure the connection settings by exporting the following environment
 - `MARLOWE_RT_TEST_DB_USER` sets the user that will be used to connect to the postgresql server as part of the tests (by default: `postgresql`). User must have rights to create databases (`CREATEDB`).
 - `MARLOWE_RT_TEST_DB_PASSWORD` sets the password that will be used to authenticate the connection to postgresql server as part of the tests (by default no password or the empty string).
 - `MARLOWE_RT_TEST_TEMP_DB` sets the template database to be used when creating test databases (by default `template1`), it needs to exist and be accessible by the user specified.
+- `MARLOWE_RT_TEST_DB` sets the test database name so you can easily connect to it and inspect the data. By default the database name is random.
 - `MARLOWE_RT_TEST_CLEANUP_DATABASE` determines whether to delete the test databases after the tests (by default `true`).
+
+### Inspecting database during test execution
+
+Sometimes when a particular test case is failing it can be beneficial to suspend the execution, connect to the test database and inspect the data. In order to this we have to
+
+* put some suspension into your test case: `threadDelay (5 * 60 * 1000_000)`
+
+* define test database name: `$ export MARLOWE_RT_TEST_DB_NAME=runtime-integration`
+
+* run the test case
+
+* then you can jump into to db shell: `$ psql -U myuser --host=$PGDATA --port=THE_SAME_PORT_AS_ABOVE runtime-integration`
+
+* in order to inspect marlowe indexer data you **have to** set appropriate schema: `psql> SET search_path TO marlowe;`
+
+* in order to inspect chain indexer data you **have to** set appropriate schema: `psql> SET search_path TO chain;`
 
 
 ## Usage

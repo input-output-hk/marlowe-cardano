@@ -7,6 +7,9 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# OPTIONS_GHC -Wno-unused-imports #-}
+{-# OPTIONS_GHC -Wno-unused-local-binds #-}
+{-# OPTIONS_GHC -Wno-unused-matches #-}
 
 module Language.Marlowe.Runtime.Transaction.Server where
 
@@ -48,10 +51,14 @@ import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (race)
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, modifyTVar, newEmptyTMVar, newTVar, putTMVar, readTMVar, readTVar, retry)
+import qualified Control.DeepSeq as DeepSeq
 import Control.Error (MaybeT (..))
 import Control.Error.Util (hush, note, noteT)
 import Control.Exception (Exception (..), SomeException)
 import Control.Monad (guard, unless, when, (<=<))
+import Control.Exception (ErrorCall, Exception (..), SomeException, catch)
+import qualified Control.Exception as Exception
+import Control.Monad (guard, unless, (<=<))
 import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Trans.Class (lift)
@@ -88,6 +95,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   DatumHash (..),
   TxId (..),
   fromCardanoTxMetadata,
+  mkTxOutAssets,
  )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest, getContract, merkleizeInputs)
@@ -301,7 +309,6 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                         getTip
                         systemStart
                         eraHistory
-                        protocolParameters
                         solveConstraints
                         loadWalletContext
                         loadMarloweContext
@@ -357,6 +364,29 @@ attachSubmit
   -> m (ServerStAttach MarloweTxCommand SubmitStatus SubmitError BlockHeader m ())
 attachSubmit jobId = submitJobServerAttach jobId <=< atomically
 
+limitAnalysisTime :: NominalDiffTime -> IO (Either String [SafetyError]) -> IO (Either String [SafetyError])
+limitAnalysisTime timeout analysis = do
+  let analysis' = runExceptT do
+        let go = do
+              errs <- analysis >>= (Exception.evaluate . DeepSeq.force)
+              pure $ Right errs
+        res <-
+          ExceptT $
+            go `catch` \(e :: SomeException) -> do
+              pure $ Left (show e)
+        except res
+  res <-
+    race
+      (threadDelay (floor $ nominalDiffTimeToSeconds timeout * 1_000_000))
+      analysis'
+  case res of
+    -- Timeout reached
+    Left () -> pure $ Right [SafetyAnalysisTimeout]
+    -- Analysis finished with exception or internal error
+    Right (Left e) -> pure $ Left e
+    -- Analysis finished successfully
+    Right (Right res') -> pure $ Right res'
+
 execCreate
   :: forall era m v
    . (MonadUnliftIO m, IsCardanoEra era)
@@ -398,7 +428,7 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
               RoleTokensMint (unMint -> mint) -> any (NEMap.member (ToScript OpenRoleScript) . roleTokenRecipients) mint
               RoleTokensUsePolicy _ distribution -> any (Map.member (ToScript OpenRoleScript)) distribution
           )
-          (fromMaybe 0 optMinAda)
+          (fromMaybe mempty optMinAda)
           (MinAdaProvider changeAddress)
   (contract', continuations) <- case contract of
     Right hash -> case version of
@@ -411,8 +441,7 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
   computedMinAdaDeposit <-
     except $
       note ProtocolParamNoUTxOCostPerByte $
-        fromCardanoLovelace
-          <$> minAdaUpperBound eon protocolParameters version dummyState contract' continuations
+        minAdaUpperBound eon protocolParameters version dummyState contract' continuations
   let minAda = fromMaybe computedMinAdaDeposit optMinAda
   unless (minAda >= computedMinAdaDeposit) $ throwE $ InsufficientMinAdaDeposit computedMinAdaDeposit
   ((datum, assets, RolesPolicyId rolesCurrency), constraints) <-
@@ -465,27 +494,23 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
           Left (rolesCurrency, roleTokens)
   let -- Fast analysis of safety: examines bounds for transactions.
       contractSafetyErrors = checkContract networkId (Just roleTokens) version datum continuations
-      limitAnalysisTime =
-        liftIO
-          . fmap (either Right id)
-          . race ([SafetyAnalysisTimeout] <$ threadDelay (floor $ nominalDiffTimeToSeconds analysisTimeout * 1_000_000))
   -- Slow analysis of safety: examines all possible transactions.
   transactionSafetyErrors <- do
     let threadTokenAssetId = ThreadTokenAssetId (Chain.AssetId rolesCurrency threadRole')
         lockedRolesContext = mockLockedRolesContext threadTokenAssetId adjustMinUtxo helpersContext
     ExceptT $
-      first CreateSafetyAnalysisError
-        <$> limitAnalysisTime
-          ( checkTransactions
-              protocolParameters
-              eon
-              version
-              marloweContext
-              lockedRolesContext
-              (changeAddress addresses)
-              datum
-              continuations
-          )
+      liftIO $
+        fmap (first CreateSafetyAnalysisError) . limitAnalysisTime analysisTimeout $
+          checkTransactions
+            protocolParameters
+            eon
+            version
+            marloweContext
+            lockedRolesContext
+            (changeAddress addresses)
+            datum
+            continuations
+
   let safetyErrors = contractSafetyErrors <> transactionSafetyErrors
   unless (Map.null (unAccounts accounts) || null safetyErrors) do
     throwE $ CreateSafetyAnalysisFailed safetyErrors
@@ -529,7 +554,7 @@ findMarloweOutput address = \case
   body@(TxBody TxBodyContent{..}) ->
     fmap (Chain.TxOutRef (fromCardanoTxId $ getTxId body) . fst) $
       find (isToCurrentScriptAddress . snd) $
-        zip [0 ..] txOuts
+        zip [minBound ..] txOuts
   where
     isToCurrentScriptAddress (TxOut address' _ _ _) =
       address == fromCardanoAddressInEra (cardanoEra @era) address'
@@ -537,14 +562,15 @@ findMarloweOutput address = \case
 findPayouts
   :: forall era v. (IsCardanoEra era) => MarloweVersion v -> Chain.Address -> TxBody era -> Map Chain.TxOutRef (Payout v)
 findPayouts version address body@(TxBody TxBodyContent{..}) =
-  Map.fromDistinctAscList $ mapMaybe (uncurry parsePayout) $ zip [0 ..] txOuts
+  Map.fromDistinctAscList $ mapMaybe (uncurry parsePayout) $ zip [minBound ..] txOuts
   where
     txId = fromCardanoTxId $ getTxId body
     parsePayout :: Chain.TxIx -> TxOut CtxTx era -> Maybe (Chain.TxOutRef, Payout v)
     parsePayout txIx (TxOut addr value datum _) = do
       guard $ fromCardanoAddressInEra (cardanoEra @era) addr == address
       datum' <- fromChainPayoutDatum version =<< snd (fromCardanoTxOutDatum datum)
-      pure (Chain.TxOutRef txId txIx, Payout address (fromCardanoTxOutValue value) datum')
+      assets <- mkTxOutAssets $ fromCardanoTxOutValue value
+      pure (Chain.TxOutRef txId txIx, Payout address assets datum')
 
 execApplyInputs
   :: (MonadUnliftIO m, IsCardanoEra era)
@@ -554,7 +580,6 @@ execApplyInputs
   -> STM Chain.ChainPoint
   -> SystemStart
   -> EraHistory
-  -> ProtocolParameters
   -> SolveConstraints
   -> LoadWalletContext m
   -> LoadMarloweContext m
@@ -576,7 +601,6 @@ execApplyInputs
   getTip
   systemStart
   eraHistory
-  protocolParameters
   solveConstraints
   loadWalletContext
   loadMarloweContext
@@ -641,13 +665,9 @@ execApplyInputs
         Just c -> pure c
 
     let -- Fast analysis of safety: examines bounds for transactions.
-        -- FIXME: We should verify minting policy here as well:
-        --  * we should check if trusted minting policy was used
-        --  * we should check the role where minted as NFTs or they were redundant (do we check this in creation?)
-        limitAnalysisTime =
-          liftIO
-            . fmap (either Right id)
-            . race ([SafetyAnalysisTimeout] <$ threadDelay (floor $ nominalDiffTimeToSeconds analysisTimeout * 1_000_000))
+    -- FIXME: We should verify minting policy here as well:
+    --  * we should check if trusted minting policy was used
+    --  * we should check the role where minted as NFTs or they were redundant (do we check this in creation?)
     -- Slow analysis of safety: examines all possible transactions.
     safetyErrors <- case mAssetsAndDatum of
       Nothing -> pure []
@@ -656,18 +676,18 @@ execApplyInputs
             contractSafetyErrors = checkContract networkId Nothing version datum continuations
         transactionSafetyErrors <-
           ExceptT $
-            first ApplyInputsSafetyAnalysisError
-              <$> limitAnalysisTime
-                ( checkTransactions
-                    protocolParameters
-                    eon
-                    version
-                    marloweContext
-                    lockedRolesContext
-                    (changeAddress addresses)
-                    datum
-                    continuations
-                )
+            liftIO $
+              fmap (first ApplyInputsSafetyAnalysisError) . limitAnalysisTime analysisTimeout $
+                checkTransactions
+                  protocolParameters
+                  eon
+                  version
+                  marloweContext
+                  lockedRolesContext
+                  (changeAddress addresses)
+                  datum
+                  continuations
+
         pure $ contractSafetyErrors <> transactionSafetyErrors
     pure $
       InputsApplied eon $

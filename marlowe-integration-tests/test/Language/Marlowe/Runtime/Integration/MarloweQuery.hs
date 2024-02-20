@@ -41,7 +41,15 @@ import Language.Marlowe.Protocol.Query.Client (
  )
 import Language.Marlowe.Protocol.Query.Types
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
-import Language.Marlowe.Runtime.ChainSync.Api (Address, AssetId (..), BlockHeader, PolicyId, TxId, TxOutRef (..))
+import Language.Marlowe.Runtime.ChainSync.Api (
+  Address,
+  AssetId (..),
+  BlockHeader,
+  PolicyId,
+  TxId,
+  TxIx (..),
+  TxOutRef (..),
+ )
 import Language.Marlowe.Runtime.Client (runMarloweBulkSyncClient, runMarloweQueryClient)
 import Language.Marlowe.Runtime.Core.Api (
   ContractId (..),
@@ -119,7 +127,7 @@ instance PaginatedQuery GetHeaders where
           not (Set.null $ Set.intersection (partyAddressesForContract ref) partyAddressesSym)
             || Set.member ref partyRolesSym
   toRef _ MarloweQueryTestData{..} = \case
-    Unknown -> ContractId $ TxOutRef "0000000000000000000000000000000000000000000000000000000000000000" 1
+    Unknown -> ContractId $ TxOutRef "0000000000000000000000000000000000000000000000000000000000000000" (TxIx 1)
     Known Contract1 -> standardContractId contract1
     Known Contract2 -> standardContractId contract2
     Known Contract3 -> standardContractId contract3
@@ -291,7 +299,7 @@ instance PaginatedQuery GetPayouts where
         Just True -> ref == Payout1 || ref == Payout2
         Just False -> ref == Payout3
   toRef p testData = \case
-    Unknown -> TxOutRef "0000000000000000000000000000000000000000000000000000000000000000" 1
+    Unknown -> TxOutRef "0000000000000000000000000000000000000000000000000000000000000000" (TxIx 1)
     Known payout -> case toItem p testData payout of PayoutHeader{..} -> payoutId
   toItem _ MarloweQueryTestData{..} = \case
     Payout1 -> standardContractPayout contract1Step4 $ Just $ fst contract1Step5

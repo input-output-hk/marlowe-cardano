@@ -18,7 +18,7 @@ import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Data.Void (Void)
 import Language.Marlowe (POSIXTime (..))
 import Language.Marlowe.Runtime.App.Types (Client, TxBodyInEraWithReferenceScripts (..))
-import Language.Marlowe.Runtime.ChainSync.Api (Address, Lovelace (..), TokenName, TxOutRef)
+import Language.Marlowe.Runtime.ChainSync.Api (Address, Lovelace (..), Quantity (Quantity), TokenName, TxOutRef)
 import Language.Marlowe.Runtime.Core.Api (ContractId, IsMarloweVersion (..), MarloweTransactionMetadata, MarloweVersion)
 import Language.Marlowe.Runtime.Transaction.Api (
   ContractCreated (..),
@@ -56,7 +56,7 @@ buildCreation version' contract roles minUtxo metadata' =
         if M.null roles
           then RoleTokensNone
           else
-            RoleTokensMint . mkMint . fmap (\(token, addr) -> (token, Nothing, ToAddress addr, 1)) . NE.fromList . M.toList $
+            RoleTokensMint . mkMint . fmap (\(token, addr) -> (token, Nothing, ToAddress addr, Quantity 1)) . NE.fromList . M.toList $
               roles
    in build show (\(ContractCreated era ContractCreatedInEra{..}) -> (contractId, TxBodyInEraWithReferenceScripts era txBody)) $
         \w -> Create Nothing version' w Nothing roles' metadata' minUtxo mempty $ Left contract

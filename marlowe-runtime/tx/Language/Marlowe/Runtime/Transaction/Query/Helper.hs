@@ -44,7 +44,9 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   TxId,
   TxOutRef (TxOutRef),
   WithGenesis (At, Genesis),
+  unTxOutAssets,
  )
+import qualified Language.Marlowe.Runtime.ChainSync.Api as CS
 import Language.Marlowe.Runtime.Core.Api (
   ContractId (ContractId),
   MarloweVersion (..),
@@ -188,7 +190,7 @@ loadHelpersContext getCurrentScripts getScripts networkId chainSyncConnector des
                             findHelperScriptOutput (helperTxOutRef, helperTransactionOutput@TransactionOutput{address, assets}) =
                               do
                                 roleName <-
-                                  case filter ((== helperPolicyId) . policyId) . Map.keys . unTokens . tokens $ assets of
+                                  case filter ((== helperPolicyId) . policyId) . Map.keys . unTokens . tokens . unTxOutAssets $ assets of
                                     -- Helper scripts never receive more than one role token.
                                     [AssetId{tokenName}] -> pure tokenName
                                     -- Silently ignore script output without exactly one role token: do not through an error
@@ -196,7 +198,7 @@ loadHelpersContext getCurrentScripts getScripts networkId chainSyncConnector des
                                     _ -> Nothing
                                 helperScriptInfo <- address `Map.lookup` scripts
                                 pure (roleName, HelperScriptState helperScriptInfo $ Just (helperTxOutRef, helperTransactionOutput))
-                            initialStates = mapMaybe findHelperScriptOutput $ zip (TxOutRef creationTxId <$> [0 ..]) $ outputs tx
+                            initialStates = mapMaybe findHelperScriptOutput $ zip (TxOutRef creationTxId <$> [minBound ..]) $ outputs tx
                             helperScriptStates = mempty
                         pure $ clientFollowHelper HelpersContext{..} initialStates
           , recvMsgWait = do
@@ -233,9 +235,9 @@ loadHelpersContext getCurrentScripts getScripts networkId chainSyncConnector des
                   pure $ SendMsgDone $ Left RollForwardToGenesisError
                 (At _, [(_, Transaction{txId, outputs})]) -> do
                   emitImmediateEventFields_ TxOutRefConsumed [(helperTxOutRef, txId)]
-                  let isHelperScriptOutput (_, TransactionOutput{address, assets = Assets{tokens}}) =
+                  let isHelperScriptOutput (_, TransactionOutput{address, assets = CS.TxOutAssetsContent (Assets{tokens})}) =
                         address == helperAddress && AssetId helperPolicyId roleName `Map.member` unTokens tokens
-                  case filter isHelperScriptOutput $ zip (TxOutRef txId <$> [0 ..]) outputs of
+                  case filter isHelperScriptOutput $ zip (TxOutRef txId <$> [minBound ..]) outputs of
                     [(helperTxOutRef', helperTransactionOutput')] ->
                       -- The head's helper script output has been consumed.
                       pure

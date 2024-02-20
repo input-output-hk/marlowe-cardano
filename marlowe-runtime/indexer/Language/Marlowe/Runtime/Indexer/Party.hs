@@ -35,7 +35,7 @@ import qualified Hasql.Transaction.Sessions as T
 import Language.Marlowe.Core.V1.Plate (Extract (..))
 import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId (..), Contract, Party (..), State (..))
 import Language.Marlowe.Core.V1.Semantics.Types.Address (serialiseAddress)
-import Language.Marlowe.Runtime.ChainSync.Api (SlotNo (..), TxId (..), TxOutRef (..), fromDatum)
+import Language.Marlowe.Runtime.ChainSync.Api (SlotNo (..), TxId (..), TxIx (TxIx), TxOutRef (..), fromDatum, unTxIx)
 import Language.Marlowe.Runtime.Core.Api (ContractId (..))
 import qualified PlutusLedgerApi.V2 as PV2
 import qualified PlutusTx.AssocMap as Map
@@ -117,8 +117,8 @@ decodeContractTxOut
   :: (ByteString, Int16, ByteString, Int16, ByteString, ByteString, Int64, ByteString) -> ContractTxOut
 decodeContractTxOut (txId, txIx, createTxId, createTxIx, contract, state, slotNo, rolesCurrency) =
   ContractTxOut
-    { contractOut = TxOutRef (TxId txId) (fromIntegral txIx)
-    , contractId = ContractId $ TxOutRef (TxId createTxId) (fromIntegral createTxIx)
+    { contractOut = TxOutRef (TxId txId) (TxIx $ fromIntegral txIx)
+    , contractId = ContractId $ TxOutRef (TxId createTxId) (TxIx $ fromIntegral createTxIx)
     , contract = fromJust $ fromDatum $ runGet get $ LBS.fromStrict contract
     , state = fromJust $ fromDatum $ runGet get $ LBS.fromStrict state
     , slotNo = fromIntegral slotNo
@@ -203,9 +203,9 @@ encodeAddress ContractTxOutParty{..} = case party of
     Just
       ( serialiseAddress network address
       , unTxId $ txId contractOut
-      , fromIntegral $ txIx contractOut
+      , fromIntegral . unTxIx . txIx $ contractOut
       , unTxId $ txId $ unContractId contractId
-      , fromIntegral $ txIx $ unContractId contractId
+      , fromIntegral . unTxIx . txIx . unContractId $ contractId
       )
   _ -> Nothing
 
@@ -216,9 +216,9 @@ encodeRole ContractTxOutParty{..} = case party of
       ( rolesCurrency
       , PV2.fromBuiltin role
       , unTxId $ txId contractOut
-      , fromIntegral $ txIx contractOut
+      , fromIntegral . unTxIx . txIx $ contractOut
       , unTxId $ txId $ unContractId contractId
-      , fromIntegral $ txIx $ unContractId contractId
+      , fromIntegral . unTxIx . txIx . unContractId $ contractId
       )
   _ -> Nothing
 
