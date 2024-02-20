@@ -1,0 +1,52 @@
+testName: Test if initilization is done correctly
+
+operations:
+
+- CreateWallet: Party-1
+
+- CreateWallet: Party-2
+
+- Comment: "Let's initialize contract which will payout money to two parties"
+
+- Initialize:
+    submitter: Faucet
+    marloweValidators:
+      publishCurrent:
+        permanently: true
+    initialState:
+      accounts:
+        - - [{"address": "Party-1"}, "ADA"]
+          - 1000000
+        - - [{"address": "Party-2"}, "ADA"]
+          - 1000000
+      choices: []
+      boundValues: []
+      minTime: 0
+    source:
+      timeout:
+        relative: +3600
+      timeout_continuation: close
+      unless:
+        notify_if: true
+      then: close
+
+- Prepare:
+    inputs:
+      - input_notify
+    minimumTime:
+      relative: -15 # ~ now
+    maximumTime:
+      relative: 1800
+
+- AutoRun
+
+- CheckBalance:
+    wallet: Party-1
+    balance:
+      - [ADA, 1]
+
+- CheckBalance:
+    wallet: Party-2
+    balance:
+      - [ADA, 1]
+
