@@ -35,6 +35,7 @@ import Data.Aeson.Text qualified as A
 import Data.Bifunctor qualified as Bifunctor
 import Data.Coerce (coerce)
 import Data.Foldable (for_)
+import Data.List.NonEmpty (NonEmpty)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (fromMaybe, isJust, isNothing)
 import Data.Set qualified as Set
@@ -277,14 +278,14 @@ runtimeAwaitTxsConfirmed ro possibleContractNickname timeout = do
   (contractNickname, ContractInfo{_ciMarloweThread = interpreterMarloweThread}) <-
     getContractInfo possibleContractNickname
   startMonitoring contractNickname
-  let txInfos :: [RuntimeTxInfo]
+  let txInfos :: NonEmpty RuntimeTxInfo
       txInfos = overAnyMarloweThread marloweThreadTxInfos interpreterMarloweThread
 
       check runtimeMarloweThread = do
-        let runtimeConfirmedTxs :: [C.TxId]
+        let runtimeConfirmedTxs :: NonEmpty C.TxId
             runtimeConfirmedTxs = overAnyMarloweThread marloweThreadTxInfos runtimeMarloweThread
 
-            allTxIds = map (\RuntimeTxInfo{_rtiTxId} -> _rtiTxId) txInfos
+            allTxIds = fmap (\RuntimeTxInfo{_rtiTxId} -> _rtiTxId) txInfos
         all (`elem` runtimeConfirmedTxs) allTxIds
 
   rms <- getMonitorState

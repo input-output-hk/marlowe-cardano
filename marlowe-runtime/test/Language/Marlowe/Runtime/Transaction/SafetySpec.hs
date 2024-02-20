@@ -4,11 +4,9 @@ module Language.Marlowe.Runtime.Transaction.SafetySpec where
 
 import qualified Cardano.Api as Cardano
 import qualified Cardano.Api.Shelley as Shelley
-import Cardano.Api.Shelley (CardanoEra (..), ReferenceTxInsScriptsInlineDatumsSupportedInEra (..), bundleProtocolParams)
-import qualified Cardano.Api.Shelley as Shelley (ReferenceScript (..), StakeAddressReference (..))
 import Control.Category ((<<<))
 import Control.Monad (when)
-import Data.Either (fromRight)
+import Control.Monad.IO.Class (liftIO)
 import Data.Foldable (for_)
 import Data.Functor ((<&>))
 import Data.List (isInfixOf, nub)
@@ -25,6 +23,7 @@ import Language.Marlowe.Core.V1.Semantics (MarloweData (..), MarloweParams (role
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1
+import Language.Marlowe.Runtime.Cardano.Api (fromCardanoLovelace)
 import qualified Language.Marlowe.Runtime.Cardano.Api as Chain (
   assetsToCardanoValue,
   fromCardanoAddressInEra,
@@ -32,11 +31,13 @@ import qualified Language.Marlowe.Runtime.Cardano.Api as Chain (
   toCardanoDatumHash,
   toCardanoPaymentCredential,
  )
+import qualified Language.Marlowe.Runtime.ChainSync.Api as CS
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain (
   AssetId (..),
   Assets (..),
   Credential (..),
   DatumHash (..),
+  Lovelace (..),
   PolicyId (..),
   TokenName (..),
   Tokens (..),
@@ -140,7 +141,7 @@ spec =
     describe "minAdaUpperBound" $
       do
         let
-        prop "At least Cardano.Api" $ \(address, hash, assets@(Chain.Assets _ tokens')) ->
+        prop "At least Cardano.Api" $ \(address, hash, assets@(CS.TxOutAssetsContent (Chain.Assets _ tokens'))) ->
           do
             let value = fromJust $ Chain.assetsToCardanoValue assets
                 toToken (Chain.AssetId (Chain.PolicyId p) (Chain.TokenName n)) =
@@ -149,30 +150,31 @@ spec =
                     (Plutus.TokenName $ Plutus.toBuiltin n)
                 tokens = fmap toToken . M.keys $ Chain.unTokens tokens'
                 expected =
-                  Cardano.calculateMinimumUTxO
-                    shelleyBasedEraTest
-                    ( Cardano.TxOut
-                        (Cardano.anyAddressInShelleyBasedEra shelleyBasedEraTest . fromJust $ Chain.toCardanoAddressAny address)
-                        (mkTxOutValue maryEraOnwardsTest value)
-                        (Cardano.TxOutDatumHash alonzoEraOnwardsTest . fromJust $ Chain.toCardanoDatumHash hash)
-                        Shelley.ReferenceScriptNone
+                  fromCardanoLovelace
+                    ( Cardano.calculateMinimumUTxO
+                        shelleyBasedEraTest
+                        ( Cardano.TxOut
+                            (Cardano.anyAddressInShelleyBasedEra shelleyBasedEraTest . fromJust $ Chain.toCardanoAddressAny address)
+                            (mkTxOutValue maryEraOnwardsTest value)
+                            (Cardano.TxOutDatumHash alonzoEraOnwardsTest . fromJust $ Chain.toCardanoDatumHash hash)
+                            Shelley.ReferenceScriptNone
+                        )
+                        $ Shelley.unLedgerProtocolParameters protocolTestnet
+                        :: Cardano.Lovelace
                     )
-                    $ Shelley.unLedgerProtocolParameters protocolTestnet
-                    :: Cardano.Lovelace
                 contract = foldr payToken V1.Close tokens -- The tokens just need to appear somewhere in the contract.
                 actual =
-                  fromJust $
-                    minAdaUpperBound
-                      babbageEraOnwardsTest
-                      protocolTestnet
-                      version
-                      (V1.emptyState 0)
-                      contract
-                      continuations
-                    :: Cardano.Lovelace
+                  minAdaUpperBound
+                    babbageEraOnwardsTest
+                    protocolTestnet
+                    version
+                    (V1.emptyState 0)
+                    contract
+                    continuations
             counterexample ("Expected minUTxO = " <> show expected) $
-              counterexample ("Actual minUTxO = " <> show actual) $
-                actual >= expected
+              counterexample ("Actual minUTxO = " <> show actual) $ fromMaybe False do
+                a <- actual
+                pure (a >= expected)
 
     describe "checkContract" $
       do
@@ -478,7 +480,7 @@ spec =
       for_ referenceContracts \(name, contract) -> it ("Passes for reference contract " <> name) do
         (policy, address) <- generate arbitrary
         let minAda =
-              maybe 1_500_000 toInteger $
+              fromMaybe (Chain.Lovelace 1_500_000) $
                 minAdaUpperBound
                   babbageEraOnwardsTest
                   protocolTestnet
@@ -519,14 +521,14 @@ spec =
       prop
         "Contract with prohibitive execution cost"
         do
-          let minAda = 3_000_000
+          let minAda = Chain.Lovelace 3_000_000
               policy = "46e79d4fbf0dd6766f8601fdec651ad708af7115fd8f7b5e14b622e5"
               address = "608db2b806ba9e7ae2909ae38afc6c1bce02f5df3e1cb1b06cbc80546f"
               rolesPolicyId = RolesPolicyId policy
               contract =
                 V1.When
                   [ V1.Case (V1.Deposit party party ada $ V1.Constant i) $ V1.Pay party (V1.Party party) ada (V1.Constant i) V1.Close
-                  | i <- [1 .. 50]
+                  | i <- [1 .. 60]
                   ]
                   1000
                   V1.Close
@@ -554,7 +556,7 @@ spec =
               continuations
           case actual of
             Right errs
-              | all overspent errs -> pure ()
+              | not (null errs) && all overspent errs -> pure ()
             _otherwise -> expectationFailure $ "Unexpected result: " <> show actual
       prop
         "Contract with prohibitive execution closure cost"
@@ -563,7 +565,7 @@ spec =
               initialAccounts =
                 AM.fromList $
                   [ ((accountId, ada), 1)
-                  | i <- [1 .. 8] :: [Int]
+                  | i <- [1 .. 10 :: Int]
                   , let accountId = V1.Role $ PLA.tokenName . Text.encodeUtf8 . Text.pack . show $ i
                   ]
               policy = "46e79d4fbf0dd6766f8601fdec651ad708af7115fd8f7b5e14b622e5"
@@ -583,7 +585,7 @@ spec =
           actual <-
             checkTransactions
               protocolTestnet
-              ReferenceTxInsScriptsInlineDatumsInBabbageEra
+              babbageEraOnwardsTest
               version
               marloweContext
               emptyLockedRolesContext
@@ -592,7 +594,10 @@ spec =
               continuations
           case actual of
             Right [] -> expectationFailure "We expected overspending the budget n this case"
-            Right errs | all overspentOrWarning errs -> pure ()
+            Right errs | all overspentOrWarning errs -> do
+              liftIO $ putStrLn "Expected overspending the budget"
+              liftIO $ print errs
+              pure ()
             -- All other results are test failures.
             _otherwise -> expectationFailure $ "Unexpected result: " <> show actual
       prop
@@ -629,7 +634,7 @@ spec =
                   ]
                   10_000
                   V1.Close
-              minAda = 3_000_000
+              minAda = Chain.Lovelace 3_000_000
 
           datum <-
             either (error "Unable to initialize the state") pure $

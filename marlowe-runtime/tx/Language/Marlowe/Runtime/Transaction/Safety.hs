@@ -18,8 +18,9 @@ module Language.Marlowe.Runtime.Transaction.Safety (
 import Control.Monad (foldM)
 import Control.Monad.Trans.Except (except, runExceptT)
 import Data.Bifunctor (bimap, first)
-import Data.Maybe (fromJust, isJust)
-import Data.SOP.Strict (K (..), NP (..))
+import Data.Maybe (catMaybes, fromMaybe, isJust)
+import Data.SOP.BasicFunctors (K (..))
+import Data.SOP.Strict (NP (..))
 import Data.String (fromString)
 import Data.Time (UTCTime, addUTCTime, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
@@ -51,6 +52,7 @@ import Language.Marlowe.Runtime.Transaction.BuildConstraints (
   AdjustMinUTxO (..),
   ThreadTokenAssetId (..),
   buildApplyInputsConstraints,
+  marloweAccountsAssets,
   safeLovelace,
  )
 import Language.Marlowe.Runtime.Transaction.Constraints (
@@ -72,7 +74,7 @@ import qualified Cardano.Api.Shelley as Shelley (
   EraHistory (..),
   SystemStart (..),
  )
-import Control.Monad.IO.Class (MonadIO)
+import Control.Error (note)
 import Control.Monad.Trans.State.Strict (evalState, get, put)
 import Data.Functor.Identity (runIdentity)
 import Data.List (nub)
@@ -84,7 +86,6 @@ import qualified Data.Map.Strict as M (
   empty,
   fromList,
   keysSet,
-  map,
   mapKeys,
   singleton,
   size,
@@ -101,24 +102,29 @@ import qualified Language.Marlowe.Core.V1.Semantics as V1 (
   TransactionInput (..),
   TransactionOutput (..),
  )
-import qualified Language.Marlowe.Core.V1.Semantics.Types as V1 (State (..), Token (..))
+import qualified Language.Marlowe.Core.V1.Semantics.Types as V1 (State (..))
+import Language.Marlowe.Runtime.Cardano.Api (fromCardanoLovelace)
 import qualified Language.Marlowe.Runtime.Cardano.Api as Chain (
   assetsToCardanoValue,
   fromCardanoDatumHash,
   toCardanoScriptData,
  )
+import Language.Marlowe.Runtime.ChainSync.Api (mkTxOutAssets, subtractTxOutAssetsRounding, unsafeTxOutAssets)
+import qualified Language.Marlowe.Runtime.ChainSync.Api as CS
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain (
   Address (..),
   AssetId (..),
   Assets (..),
   Datum (B),
   DatumHash (..),
+  Lovelace,
   PolicyId (..),
   SlotNo (..),
   TokenName (..),
   Tokens (..),
   TransactionMetadata (..),
   TransactionOutput (..),
+  TxOutAssets,
   TxOutRef,
   UTxOs (..),
  )
@@ -145,11 +151,8 @@ import qualified PlutusLedgerApi.V2 as Plutus (
   CurrencySymbol (..),
   DatumHash (..),
   POSIXTime (..),
-  TokenName (..),
-  fromBuiltin,
   toBuiltin,
  )
-import qualified PlutusTx.AssocMap as AM (toList)
 
 -- FIXME: Relocate this definition when full support for Merkleization is added to Runtime.
 type Continuations v = M.Map Chain.DatumHash (Contract v)
@@ -182,7 +185,9 @@ mockLockedRolesContext (ThreadTokenAssetId threadTokenAssetId) (AdjustMinUTxO ad
           put (ix + 1)
           let txOutRef = fromString ("EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE#" <> show ix)
               address = helperAddress helperScriptInfo
-              assets = adjustMinUtxo . Chain.Assets safeLovelace . Chain.Tokens $ M.fromList [(roleTokenAssetId, 1)]
+              assets =
+                adjustMinUtxo . unsafeTxOutAssets . Chain.Assets safeLovelace . Chain.Tokens $
+                  M.fromList [(roleTokenAssetId, CS.Quantity 1)]
               datum = Just $ Chain.B $ Chain.unTokenName threadTokenName
               datumHash =
                 Chain.fromCardanoDatumHash
@@ -222,12 +227,14 @@ minAdaUpperBound
   -> V1.State
   -> Contract v
   -> Continuations v
-  -> Maybe Cardano.Lovelace
-minAdaUpperBound era pps MarloweV1 state contract continuations =
-  minAdaBound era pps MarloweV1
-    . Chain.fromPlutusValue
-    . worstValue (Just state) contract
-    $ remapContinuations continuations
+  -> Maybe Chain.Lovelace
+minAdaUpperBound era pps MarloweV1 state contract continuations = do
+  assets <-
+    mkTxOutAssets
+      . Chain.fromPlutusValue
+      . worstValue (Just state) contract
+      $ remapContinuations continuations
+  minAdaBound era pps MarloweV1 assets
 
 -- | Adjust the ada in a TxOut upwards, if needed to satisfy the minimum UTxO ledger rule. Assume that a datum hash is
 -- present in the TxOut and that the address contains a stake credential.
@@ -238,13 +245,14 @@ mkAdjustMinUTxO
   -> MarloweVersion v
   -> AdjustMinUTxO
 mkAdjustMinUTxO era pps MarloweV1 =
-  AdjustMinUTxO \assets@Chain.Assets{ada, tokens} -> do
+  AdjustMinUTxO \assets@(CS.TxOutAssetsContent (Chain.Assets{ada, tokens})) -> do
     let minLovelace =
-          maybe 30_000_000 toInteger $ -- Safe for all UTxOs.
+          maybe (CS.Lovelace 30_000_000) id $ -- Safe for all UTxOs.
             minAdaBound era pps MarloweV1 assets
-    if minLovelace > toInteger ada
-      then Chain.Assets (fromInteger minLovelace) tokens
-      else assets
+    fromMaybe assets $
+      if minLovelace > ada
+        then mkTxOutAssets $ Chain.Assets minLovelace tokens
+        else Nothing
 
 -- | Compute a worst-case bound on the minimum TxOut value for assets. Assume that a datum hash is present in the
 --   TxOut and that the address contains a stake credential.
@@ -253,13 +261,13 @@ minAdaBound
    . C.BabbageEraOnwards era
   -> C.LedgerProtocolParameters era
   -> MarloweVersion v
-  -> Chain.Assets
-  -> Maybe Cardano.Lovelace
+  -> Chain.TxOutAssets
+  -> Maybe Chain.Lovelace
 minAdaBound era pps MarloweV1 assets =
   do
-    let -- Ugh, the era handling can be done much better, but this is how it's done elsewhere in the codebase.
-        maryEraOnwards :: C.MaryEraOnwards era
+    let maryEraOnwards :: C.MaryEraOnwards era
         maryEraOnwards = C.babbageEraOnwardsToMaryEraOnwards era
+
         alonzoEraOnwards :: C.AlonzoEraOnwards era
         alonzoEraOnwards = C.babbageEraOnwardsToAlonzoEraOnwards era
         shelleyBasedEra = C.babbageEraOnwardsToShelleyBasedEra era
@@ -280,7 +288,7 @@ minAdaBound era pps MarloweV1 assets =
             (mkTxOutValue maryEraOnwards value)
             (Cardano.TxOutDatumHash alonzoEraOnwards "45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0")
             C.ReferenceScriptNone
-    pure $ Cardano.calculateMinimumUTxO shelleyBasedEra txOut $ C.unLedgerProtocolParameters pps
+    pure $ fromCardanoLovelace $ Cardano.calculateMinimumUTxO shelleyBasedEra txOut $ C.unLedgerProtocolParameters pps
 
 -- | Check a contract for design errors and ledger violations.
 checkContract
@@ -335,8 +343,7 @@ checkMinting config MarloweV1 contract state continuations = do
 
 -- | Mock-execute all possible transactions for a contract.
 checkTransactions
-  :: (MonadIO m)
-  => C.LedgerProtocolParameters era
+  :: C.LedgerProtocolParameters era
   -> C.BabbageEraOnwards era
   -> MarloweVersion v
   -> MarloweContext v
@@ -344,7 +351,7 @@ checkTransactions
   -> Chain.Address
   -> Datum v
   -> Continuations v
-  -> m (Either String [SafetyError])
+  -> IO (Either String [SafetyError])
 checkTransactions protocolParameters era version@MarloweV1 marloweContext lockedRolesContext changeAddress datum continuations =
   runExceptT $
     do
@@ -411,8 +418,10 @@ checkTransaction protocolParameters era version@MarloweV1 marloweContext@Marlowe
               , Just $ max end (addUTCTime 1 earliest)
               )
         marloweData = V1.MarloweData rolesCurrency' txState txContract
-        scriptIncoming = foldMap (uncurry makeValue . first snd) . AM.toList . V1.accounts $ V1.marloweState marloweData
-        marloweOutput = TransactionScriptOutput marloweAddress scriptIncoming scriptTxOutRef marloweData
+
+    scriptIncoming <-
+      note "Invalid initial accounts state" $ marloweAccountsAssets . V1.accounts $ V1.marloweState marloweData
+    let marloweOutput = TransactionScriptOutput marloweAddress scriptIncoming scriptTxOutRef marloweData
         marloweContext' = marloweContext{scriptOutput = Just marloweOutput}
         metadata = MarloweTransactionMetadata Nothing $ Chain.TransactionMetadata mempty
         (start, history) =
@@ -436,47 +445,12 @@ checkTransaction protocolParameters era version@MarloweV1 marloweContext@Marlowe
               intervalEnd
               txInputs
     let walletContext = walletForConstraints version marloweContext changeAddress constraints
-        LockedRolesContext helperContext = lockedRolesContext
+        LockedRolesContext helpersContext = lockedRolesContext
     pure
       . either
         (pure . TransactionValidationError (stripAnnotation transaction) . show)
         (const $ TransactionWarning (stripAnnotation transaction) <$> V1.txOutWarnings txOutput)
-      $ solveConstraints' era protocolParameters version (Left marloweContext') walletContext helpersContext' constraints
--- <<<<<<< HEAD
---       $ solveConstraints' era protocolParameters version (Left marloweContext') walletContext helpersContext' constraints
---
--- -- | Create a helpers context for the specified helper roles.
--- helpersForRoles
---   :: Chain.PolicyId
---   -> Chain.TokenName
---   -> S.Set Plutus.TokenName
---   -> (Chain.Assets -> Chain.Assets)
---   -> HelpersContext
---   -> HelpersContext
--- helpersForRoles policyId threadRole helperRoles adjustMinUtxo helpersContext =
---   let activeHelperScripts =
---         M.toList
---           . M.intersection (helperScriptStates helpersContext)
---           . M.fromSet (const ())
---           $ S.map Chain.fromPlutusTokenName helperRoles
---       buildHelperState ix (role, helperScriptInfo -> helperScriptInfo) =
---         ( role
---         , let helperTxOutRef = helperTxOutRef' ix
---               address = helperAddress helperScriptInfo
---               assets = adjustMinUtxo . Chain.Assets safeLovelace . Chain.Tokens $ M.fromList [(Chain.AssetId policyId role, 1)]
---               datumHash =
---                 Chain.fromCardanoDatumHash
---                   . C.hashScriptDataBytes
---                   . C.unsafeHashableScriptData
---                   . Chain.toCardanoScriptData
---                   <$> datum
---               datum = Just $ Chain.B $ Chain.unTokenName threadRole
---               helperTransactionOutput = Chain.TransactionOutput{..}
---            in HelperScriptState helperScriptInfo $ Just (helperTxOutRef, helperTransactionOutput)
---         )
---    in helpersContext{helperScriptStates = M.fromList $ uncurry buildHelperState <$> zip [0 ..] activeHelperScripts}
--- =======
---      $ solveConstraints' era version (Left marloweContext') walletContext helperContext constraints
+      $ solveConstraints' era protocolParameters version (Left marloweContext') walletContext helpersContext constraints
 
 -- | Create a wallet context that will satisfy the given constraints.
 walletForConstraints
@@ -486,67 +460,55 @@ walletForConstraints
   -> TxConstraints era v
   -> WalletContext
 walletForConstraints MarloweV1 MarloweContext{scriptOutput} changeAddress TxConstraints{..} =
-  let padValue assets@(Chain.Assets _ (Chain.Tokens tokens)) = assets <> makeLovelace (toInteger $ 2_000_000 * M.size tokens)
-      scriptIncoming = maybe (makeLovelace 0) (\(TransactionScriptOutput _ assets _ _) -> assets) scriptOutput
+  let mkTxOutAssets' = fromMaybe mempty . mkTxOutAssets
+      lovelaceAssets
+        :: Integer
+        -> Chain.TxOutAssets
+      lovelaceAssets quantity = mkTxOutAssets' $ Chain.Assets (CS.Lovelace quantity) $ Chain.Tokens M.empty
+
+      padValue assets@(CS.TxOutAssetsContent (Chain.Assets _ (Chain.Tokens tokens))) =
+        assets <> lovelaceAssets (toInteger $ 2_000_000 * M.size tokens)
+
+      mkTransactionOutput addr value = do
+        let padded = padValue value
+        if padded == mempty
+          then Nothing
+          else Just $ Chain.TransactionOutput addr padded Nothing Nothing
+      mkUtxo txOutRef addr value = (txOutRef,) <$> mkTransactionOutput addr value
+
+      scriptIncoming = maybe mempty (\(TransactionScriptOutput _ assets _ _) -> assets) scriptOutput
       scriptOutgoing =
         case marloweOutputConstraints of
           MarloweOutput assets _ -> assets
           _ -> mempty
       roles =
         case roleTokenConstraints of
-          SpendRoleTokens assets -> foldMap (Chain.Assets 0 . Chain.Tokens . flip M.singleton 1) assets
+          SpendRoleTokens assets -> mkTxOutAssets' $ foldMap (Chain.Assets mempty . Chain.Tokens . flip M.singleton (CS.Quantity 1)) assets
           _ -> mempty
       payments = mconcat $ M.elems payToAddresses <> M.elems payToRoles
-      requiredValue = roles <> payments <> scriptOutgoing <> negateAssets scriptIncoming
-      bufferValue = makeLovelace 50_000_000 -- Generously cover min-UTxO and fee.
+      bufferValue = lovelaceAssets 50_000_000 -- Generously cover min-UTxO and fee.
       workaround = True
       collateralUtxos = Set.singleton collateralTxOutRef
       availableUtxos =
         Chain.UTxOs $
           M.fromList $
-            if workaround -- FIXME: Workaround for coin-selection bug.
-              then
-                [ (collateralTxOutRef, Chain.TransactionOutput changeAddress bufferValue Nothing Nothing)
-                , (fundingTxOutRef 0, Chain.TransactionOutput changeAddress (padValue roles) Nothing Nothing)
-                , (fundingTxOutRef 1, Chain.TransactionOutput changeAddress (padValue payments) Nothing Nothing)
-                ,
-                  ( fundingTxOutRef 2
-                  , Chain.TransactionOutput changeAddress (padValue $ scriptOutgoing <> negateAssets scriptIncoming) Nothing Nothing
-                  )
-                ]
-              else
-                [ (collateralTxOutRef, Chain.TransactionOutput changeAddress bufferValue Nothing Nothing)
-                , (fundingTxOutRef 0, Chain.TransactionOutput changeAddress (padValue requiredValue) Nothing Nothing)
-                ]
+            if workaround
+              then do
+                -- FIXME: Workaround for coin-selection bug.
+                let requiredScriptAssets = scriptOutgoing `subtractTxOutAssetsRounding` scriptIncoming
+                catMaybes
+                  [ mkUtxo collateralTxOutRef changeAddress bufferValue
+                  , mkUtxo (fundingTxOutRef 0) changeAddress roles
+                  , mkUtxo (fundingTxOutRef 1) changeAddress payments
+                  , mkUtxo (fundingTxOutRef 2) changeAddress requiredScriptAssets
+                  ]
+              else do
+                let requiredValue = (roles <> payments <> scriptOutgoing) `subtractTxOutAssetsRounding` scriptIncoming
+                catMaybes
+                  [ mkUtxo collateralTxOutRef changeAddress bufferValue
+                  , mkUtxo (fundingTxOutRef 0) changeAddress requiredValue
+                  ]
    in WalletContext{..}
-
--- | Negate asset values.
-negateAssets
-  :: Chain.Assets
-  -> Chain.Assets
-negateAssets Chain.Assets{..} =
-  Chain.Assets
-    { ada = negate ada
-    , tokens = Chain.Tokens . M.map negate $ Chain.unTokens tokens
-    }
-
--- | Convert an integer to lovelace.
-makeLovelace
-  :: Integer
-  -> Chain.Assets
-makeLovelace quantity = Chain.Assets (fromInteger quantity) $ Chain.Tokens M.empty
-
--- | Make a given quantity of token.
-makeValue
-  :: V1.Token
-  -> Integer
-  -> Chain.Assets
-makeValue (V1.Token "" "") quantity = makeLovelace quantity
-makeValue (V1.Token (Plutus.CurrencySymbol p) (Plutus.TokenName n)) quantity =
-  Chain.Assets 0 . Chain.Tokens $
-    M.singleton
-      (Chain.AssetId (Chain.PolicyId $ Plutus.fromBuiltin p) (Chain.TokenName $ Plutus.fromBuiltin n))
-      (fromInteger quantity)
 
 -- | Convert UTC time to a slot number.
 utcTimeToSlotNo

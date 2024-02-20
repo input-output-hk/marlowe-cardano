@@ -23,7 +23,14 @@ import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import GHC.Float (sqrtDouble)
 import Language.Marlowe.Core.V1.Semantics (MarloweData (..))
 import Language.Marlowe.Core.V1.Semantics.Types (Contract)
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader (..), BlockNo, TxId (..), TxOutRef (..), WithGenesis (..))
+import Language.Marlowe.Runtime.ChainSync.Api (
+  BlockHeader (..),
+  BlockNo,
+  TxId (..),
+  TxIx (unTxIx),
+  TxOutRef (..),
+  WithGenesis (..),
+ )
 import Language.Marlowe.Runtime.Core.Api (
   ContractId (..),
   MarloweVersion (..),
@@ -275,7 +282,7 @@ genCreateTransaction = do
       }
 
 hashTxOutRef :: TxOutRef -> BuiltinByteString
-hashTxOutRef TxOutRef{..} = dataHash (toBuiltin $ unTxId txId, fromIntegral @_ @Integer txIx)
+hashTxOutRef TxOutRef{..} = dataHash (toBuiltin $ unTxId txId, fromIntegral @_ @Integer $ unTxIx txIx)
 
 genRollBackwardArgs :: ValidRollbackState -> Gen (WithGenesis BlockNo, WithGenesis BlockNo)
 genRollBackwardArgs ValidRollbackState{..} = do

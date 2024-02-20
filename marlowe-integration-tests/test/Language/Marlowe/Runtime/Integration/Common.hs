@@ -32,7 +32,7 @@ import Cardano.Api.Byron (deserialiseFromTextEnvelope)
 import qualified Cardano.Api.Shelley as C
 import Control.Concurrent (threadDelay)
 import Control.DeepSeq (NFData)
-import Control.Monad (guard, void, (<=<))
+import Control.Monad (guard, void, when, (<=<))
 import Control.Monad.Event.Class (NoopEventT (..))
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (ReaderT (..), ask, runReaderT)
@@ -41,9 +41,12 @@ import Control.Monad.Reader.Class (asks)
 import Control.Monad.State (StateT, runStateT, state)
 import Control.Monad.Trans.Class (lift)
 import Data.Aeson (FromJSON (..), Value (..), decodeFileStrict, eitherDecodeStrict)
+import qualified Data.Aeson as A
+import qualified Data.Aeson.Encode.Pretty as A
 import Data.Aeson.Types (parseFail)
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16)
+import qualified Data.ByteString.Lazy as LBS
 import Data.Foldable (fold)
 import Data.Function (on)
 import Data.Functor (($>))
@@ -76,11 +79,11 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   BlockHeader (..),
   BlockHeaderHash (..),
   BlockNo (..),
-  Lovelace,
   SlotNo (..),
   TxId,
   TxOutRef,
   fromBech32,
+  mkTxOutAssets,
  )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Client (
@@ -136,11 +139,24 @@ import UnliftIO.Environment (setEnv, unsetEnv)
 
 type Integration = ReaderT MarloweRuntime (MarloweT (NoopEventT RuntimeRef RuntimeSelector IO))
 
+mkEmptyWallet :: Integration Wallet
+mkEmptyWallet = do
+  signingKey <- liftIO $ generateSigningKey AsPaymentKey
+  networkId' <- networkId
+  let verificationKey = getVerificationKey signingKey
+  let paymentCredential = PaymentCredentialByKey $ verificationKeyHash verificationKey
+  let address = fromCardanoAddressAny $ AddressShelley $ makeShelleyAddress networkId' paymentCredential NoStakeAddress
+  pure $
+    Wallet
+      { addresses = WalletAddresses address mempty mempty
+      , signingKeys = [WitnessPaymentKey signingKey]
+      }
+
 -- Important - the TxId is lazily computed and depends on the resulting Tx. So
 -- it should not be used to compute the transaction outputs written.
 type TxBuilder = ReaderT TxId (StateT [Chain.TransactionOutput] Integration)
 
-allocateWallet :: [[(Bool, Lovelace)]] -> TxBuilder Wallet
+allocateWallet :: [[(Bool, Integer)]] -> TxBuilder Wallet
 allocateWallet balances = do
   txId <- ask
   (addresses, signingKeys, collateralUtxos) <-
@@ -152,8 +168,10 @@ allocateWallet balances = do
       let address = fromCardanoAddressAny $ AddressShelley $ makeShelleyAddress networkId' paymentCredential NoStakeAddress
       collateralUtxos <-
         Set.fromList . catMaybes <$> for utxos \(isCollateral, balance) -> state \outputs ->
-          ( guard isCollateral $> Chain.TxOutRef txId (fromIntegral $ length outputs)
-          , Chain.TransactionOutput address (Assets balance mempty) Nothing Nothing : outputs
+          ( guard isCollateral $> Chain.TxOutRef txId (Chain.TxIx $ fromIntegral $ length outputs)
+          , do
+              let assets = fold $ mkTxOutAssets $ Assets (Chain.Lovelace balance) mempty
+              Chain.TransactionOutput address assets Nothing Nothing : outputs
           )
       pure (address, WitnessPaymentKey signingKey, collateralUtxos)
   pure
@@ -262,10 +280,20 @@ runIntegrationTest m runtime@MarloweRuntime.MarloweRuntime{protocolConnector} =
 runWebClient :: (NFData a) => ClientM a -> Integration (Either ClientError a)
 runWebClient client = ReaderT \runtime -> liftIO $ MarloweRuntime.runWebClient runtime client
 
+runWebClient' :: (NFData a) => ClientM a -> Integration a
+runWebClient' clientM = do
+  res <- runWebClient clientM
+  case res of
+    Left err -> fail $ show err
+    Right a -> pure a
+
 expectJust :: (MonadFail m) => String -> Maybe a -> m a
 expectJust msg = \case
   Nothing -> fail msg
   Just a -> pure a
+
+expectJustM :: (MonadFail m) => String -> m (Maybe a) -> m a
+expectJustM msg = (expectJust msg =<<)
 
 expectRight :: (MonadFail m) => (Show a) => String -> Either a b -> m b
 expectRight msg = \case
@@ -295,6 +323,8 @@ getStakeCredential nodeNum = do
 getGenesisWallet :: Int -> Integration Wallet
 getGenesisWallet walletIx = do
   LocalTestnet{..} <- testnet
+  when (walletIx >= length wallets) do
+    fail $ "Genesis wallet index out of bounds. Maximal index: " <> show (length wallets - 1)
   let PaymentKeyPair{..} = wallets !! walletIx
   mAddress <-
     fromBech32 . fromString
@@ -784,3 +814,6 @@ execMarlowe_ = void . execMarlowe
 
 execMarlowe' :: [String] -> Integration (ExitCode, String, String)
 execMarlowe' = exec' "marlowe-runtime-cli" <=< prepareCliArgs
+
+prettyJSON :: A.Value -> T.Text
+prettyJSON = T.decodeUtf8 . LBS.toStrict . A.encodePretty

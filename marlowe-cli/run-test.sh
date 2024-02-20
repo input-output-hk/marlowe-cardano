@@ -25,8 +25,6 @@ cabal run exe:marlowe-cli -- \
   --faucet-skey-file "$FAUCET_SKEY_FILE" \
   --faucet-address "$FAUCET_VKEY" \
   --marlowe-runtime-port "$MARLOWE_RT_PORT" \
-  --chain-seek-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
-  --chain-seek-cmd-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
   --write-to-json-file report.json \
   --max-retries 3 \
   --stream-json \
@@ -51,6 +49,7 @@ cabal run exe:marlowe-cli -- \
   ./test/operations/burn-distributed.yaml \
   ./test/operations/burn-multi-asset.yaml \
   ./test/operations/burn.yaml \
+  ./test/operations/initialize-with-state.yaml \
   ./test/operations/mint-distributed.yaml \
   ./test/operations/mint-multiple.yaml \
   ./test/operations/mint-to-open-role-script.yaml \

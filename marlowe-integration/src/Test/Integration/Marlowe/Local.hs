@@ -15,6 +15,7 @@ module Test.Integration.Marlowe.Local (
   module Test.Integration.Cardano,
   Test.Integration.Cardano.exec,
   defaultMarloweRuntimeOptions,
+  localTestnetToLocalNodeConnectInfo,
   withLocalMarloweRuntime,
   withLocalMarloweRuntime',
 ) where
@@ -59,7 +60,7 @@ import Control.Monad.Trans.Resource (allocate, runResourceT, unprotect)
 import Data.Aeson (eitherDecodeFileStrict)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as BS
-import Data.Foldable (for_)
+import Data.Foldable (Foldable (fold), for_)
 import Data.Functor (void)
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
@@ -103,6 +104,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   BlockNo (..),
   TransactionOutput (..),
   fromCardanoScriptHash,
+  mkTxOutAssets,
  )
 import qualified Language.Marlowe.Runtime.ChainSync.Database as ChainSync
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as ChainSync
@@ -149,7 +151,6 @@ import qualified System.Process as SP
 import System.Random (randomRIO)
 import Test.Integration.Cardano hiding (exec)
 import qualified Test.Integration.Cardano (exec)
-import qualified Test.Integration.Cardano as SpoNode (SpoNode (..))
 import Text.Read (readMaybe)
 import UnliftIO (Concurrently (..), MonadUnliftIO, atomically, throwIO, withRunInIO)
 
@@ -173,12 +174,21 @@ data MarloweRuntime = MarloweRuntime
   , testnet :: LocalTestnet
   }
 
+localTestnetToLocalNodeConnectInfo :: LocalTestnet -> LocalNodeConnectInfo
+localTestnetToLocalNodeConnectInfo LocalTestnet{..} =
+  LocalNodeConnectInfo
+    { localConsensusModeParams = CardanoModeParams $ EpochSlots 500
+    , localNodeNetworkId = Testnet $ NetworkMagic $ fromIntegral testnetMagic
+    , localNodeSocketPath = File . socket . head $ spoNodes
+    }
+
 data MarloweRuntimeOptions = MarloweRuntimeOptions
   { databaseHost :: ByteString
   , databasePort :: Word16
   , databaseUser :: ByteString
   , databasePassword :: ByteString
   , tempDatabase :: ByteString
+  , testDatabase :: Maybe ByteString
   , cleanup :: Bool
   , submitConfirmationBlocks :: BlockNo
   , localTestnetOptions :: LocalTestnetOptions
@@ -191,6 +201,7 @@ defaultMarloweRuntimeOptions = do
   databaseUser <- lookupEnv "MARLOWE_RT_TEST_DB_USER"
   databasePassword <- lookupEnv "MARLOWE_RT_TEST_DB_PASSWORD"
   tempDatabase <- lookupEnv "MARLOWE_RT_TEST_TEMP_DB"
+  testDatabase <- lookupEnv "MARLOWE_RT_TEST_DB"
   cleanupDatabase <- lookupEnv "MARLOWE_RT_TEST_CLEANUP_DATABASE"
   submitConfirmationBlocks <- lookupEnv "MARLOWE_RT_TEST_SUBMIT_CONFIRMATION_BLOCKS"
   pure $
@@ -200,6 +211,7 @@ defaultMarloweRuntimeOptions = do
       (maybe "postgres" fromString databaseUser)
       (maybe "" fromString databasePassword)
       (maybe "template1" fromString tempDatabase)
+      (fromString <$> testDatabase)
       (fromMaybe True $ readMaybe =<< cleanupDatabase)
       (BlockNo $ fromMaybe 2 $ readMaybe =<< submitConfirmationBlocks)
       defaultOptions
@@ -212,12 +224,11 @@ withLocalMarloweRuntime test = do
 withLocalMarloweRuntime' :: (MonadUnliftIO m) => MarloweRuntimeOptions -> (MarloweRuntime -> m ()) -> m ()
 withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO ->
   withLocalTestnet' localTestnetOptions \testnet@LocalTestnet{..} -> runResourceT do
-    let localConsensusModeParams = CardanoModeParams $ EpochSlots 500
     let localNodeNetworkId = Testnet $ NetworkMagic $ fromIntegral testnetMagic
-    let localNodeSocketPath = File . SpoNode.socket . head $ spoNodes
-    let localNodeConnectInfo = LocalNodeConnectInfo{..}
+    let localNodeConnectInfo = localTestnetToLocalNodeConnectInfo testnet
     marloweScripts <- liftIO $ publishCurrentScripts testnet localNodeConnectInfo
-    (dbReleaseKey, dbName) <- allocate (createDatabase workspace) (cleanupDatabase 10_000)
+    let dbName = fromMaybe (fromString $ "chain_test_" <> show (workspaceId workspace)) testDatabase
+    (dbReleaseKey, _) <- allocate (createDatabase dbName) (const $ cleanupDatabase 10_000 dbName)
     liftIO $ migrateDatabase dbName
     let connectionString = settings databaseHost databasePort databaseUser databasePassword dbName
     let acquirePool = Pool.acquire 100 (Just 5000000) connectionString
@@ -320,15 +331,13 @@ withLocalMarloweRuntime' MarloweRuntimeOptions{..} test = withRunInIO \runInIO -
           Just "" -> pure ()
           Just msg -> fail $ "Error creating database: " <> show msg
 
-    createDatabase workspace = do
+    createDatabase dbName = do
       connection <- connectdb rootConnectionString
-      let dbName = fromString $ "chain_test_" <> show (workspaceId workspace)
       result1 <- exec connection $ "CREATE DATABASE \"" <> dbName <> "\"" <> ";"
       result2 <- exec connection $ "GRANT ALL PRIVILEGES ON DATABASE \"" <> dbName <> "\" TO " <> databaseUser <> ";"
       checkResult connection result1
       checkResult connection result2
       finish connection
-      pure dbName
 
     cleanupDatabase retryDelay dbName = when cleanup do
       catch
@@ -467,7 +476,7 @@ toMarloweScripts testnetMagic MarloweScriptsRefs{..} = MarloweScripts{..}
         , txOut =
             TransactionOutput
               { address = fromCardanoAddressInEra BabbageEra $ refScriptPublisher mrMarloweValidator
-              , assets = assetsFromCardanoValue $ refScriptValue mrMarloweValidator
+              , assets = fold $ mkTxOutAssets $ assetsFromCardanoValue $ refScriptValue mrMarloweValidator
               , datumHash = Nothing
               , datum = Nothing
               }
@@ -479,7 +488,7 @@ toMarloweScripts testnetMagic MarloweScriptsRefs{..} = MarloweScripts{..}
         , txOut =
             TransactionOutput
               { address = fromCardanoAddressInEra BabbageEra $ refScriptPublisher mrRolePayoutValidator
-              , assets = assetsFromCardanoValue $ refScriptValue mrRolePayoutValidator
+              , assets = fold $ mkTxOutAssets $ assetsFromCardanoValue $ refScriptValue mrRolePayoutValidator
               , datumHash = Nothing
               , datum = Nothing
               }
@@ -495,7 +504,7 @@ toMarloweScripts testnetMagic MarloweScriptsRefs{..} = MarloweScripts{..}
           , txOut =
               TransactionOutput
                 { address = fromCardanoAddressInEra BabbageEra $ refScriptPublisher mrOpenRoleValidator
-                , assets = assetsFromCardanoValue $ refScriptValue mrOpenRoleValidator
+                , assets = fold $ mkTxOutAssets $ assetsFromCardanoValue $ refScriptValue mrOpenRoleValidator
                 , datumHash = Nothing
                 , datum = Nothing
                 }

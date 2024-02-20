@@ -107,6 +107,7 @@ module Language.Marlowe.Core.V1.Semantics (
 ) where
 
 import Control.Applicative ((<*>), (<|>))
+import Control.DeepSeq (NFData)
 import qualified Data.Aeson as JSON
 import Data.Aeson.Types (
   FromJSON (parseJSON),
@@ -221,6 +222,8 @@ import qualified Prelude as Haskell
 data Payment = Payment AccountId Payee Token Integer
   deriving stock (Haskell.Eq, Generic, Haskell.Show)
 
+instance NFData Payment
+
 instance ToJSON Payment where
   toJSON (Payment accountId payee token amount) =
     object
@@ -307,6 +310,8 @@ data TransactionWarning
   deriving stock (Haskell.Show, Generic, Haskell.Eq)
   deriving anyclass (Pretty)
 
+instance NFData TransactionWarning
+
 -- | Transaction error
 data TransactionError
   = TEAmbiguousTimeIntervalError
@@ -315,6 +320,8 @@ data TransactionError
   | TEUselessTransaction
   | TEHashMismatch
   deriving stock (Haskell.Show, Generic, Haskell.Eq)
+
+instance NFData TransactionError
 
 instance ToJSON TransactionError where
   toJSON TEAmbiguousTimeIntervalError = JSON.String "TEAmbiguousTimeIntervalError"
@@ -345,6 +352,8 @@ data TransactionInput = TransactionInput
   }
   deriving stock (Haskell.Show, Haskell.Eq, Generic)
 
+instance NFData TransactionInput
+
 instance Pretty TransactionInput where
   prettyFragment tInp = text "TransactionInput" <> space <> lbrace <> line <> txIntLine <> line <> txInpLine
     where
@@ -361,6 +370,8 @@ data TransactionOutput
       }
   | Error TransactionError
   deriving stock (Haskell.Eq, Generic, Haskell.Show)
+
+instance NFData TransactionOutput
 
 instance ToJSON TransactionOutput where
   toJSON TransactionOutput{..} =

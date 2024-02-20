@@ -88,6 +88,7 @@ module Language.Marlowe.CLI.Types (
   toAddressAny',
   toAsType,
   toShelleyAddress,
+  txWitnessSigningKeyToSomePaymentSigningKey,
 
   -- * accessors and converters
   anUTxOValue,
@@ -233,6 +234,13 @@ somePaymentSigningKeyToTxWitness (SomePaymentSigningKeyPaymentExtended skey) =
   CS.WitnessPaymentExtendedKey skey
 somePaymentSigningKeyToTxWitness (SomePaymentSigningKeyGenesisUTxO skey) =
   CS.WitnessGenesisUTxOKey skey
+
+txWitnessSigningKeyToSomePaymentSigningKey :: CS.ShelleyWitnessSigningKey -> Maybe SomePaymentSigningKey
+txWitnessSigningKeyToSomePaymentSigningKey = \case
+  CS.WitnessPaymentKey skey -> Just $ SomePaymentSigningKeyPayment skey
+  CS.WitnessPaymentExtendedKey skey -> Just $ SomePaymentSigningKeyPaymentExtended skey
+  CS.WitnessGenesisUTxOKey skey -> Just $ SomePaymentSigningKeyGenesisUTxO skey
+  _ -> Nothing
 
 -- | A marlowe transaction in an existentially quantified era
 data SomeMarloweTransaction

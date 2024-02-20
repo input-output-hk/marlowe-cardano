@@ -144,12 +144,18 @@ instance Arbitrary Assets where
   arbitrary = Assets <$> arbitrary <*> arbitrary
   shrink = genericShrink
 
+instance Arbitrary TxOutAssets where
+  arbitrary = do
+    assets <- arbitrary
+    maybe arbitrary pure (mkTxOutAssets assets)
+  shrink = genericShrink
+
 instance Arbitrary Lovelace where
   arbitrary = Lovelace <$> arbitrary
   shrink = genericShrink
 
 instance Arbitrary Quantity where
-  arbitrary = Quantity <$> chooseWord64 (1, maxBound)
+  arbitrary = Quantity . fromIntegral <$> chooseWord64 (1, maxBound)
   shrink = genericShrink
 
 instance Arbitrary Tokens where

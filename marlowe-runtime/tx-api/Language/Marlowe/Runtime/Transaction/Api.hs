@@ -12,7 +12,7 @@
 
 module Language.Marlowe.Runtime.Transaction.Api (
   Account (..),
-  Accounts,
+  Accounts (AccountsContent),
   ApplyInputsConstraintsBuildupError (..),
   ApplyInputsError (..),
   CoinSelectionError (..),
@@ -121,6 +121,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   TokenName (..),
   Tokens,
   TxId,
+  TxOutAssets,
   TxOutRef,
   parseMetadataList,
   parseMetadataMap,
@@ -138,6 +139,7 @@ import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as Aeson
 import Data.Bifunctor (Bifunctor (..))
 import Data.Binary.Get (label)
+import Data.Foldable (Foldable (fold))
 import Data.Function (on)
 import Data.Key (forWithKey)
 import Data.List (nub)
@@ -354,11 +356,11 @@ instance Semigroup MintRole where
   a <> b =
     MintRole
       { roleMetadata = on (<|>) roleMetadata a b
-      , roleTokenRecipients = on (NEMap.unionWith (+)) roleTokenRecipients a b
+      , roleTokenRecipients = on (NEMap.unionWith (<>)) roleTokenRecipients a b
       }
 
 getTokenQuantities :: Mint -> NEMap TokenName Chain.Quantity
-getTokenQuantities = fmap (sum . roleTokenRecipients) . unMint
+getTokenQuantities = fmap (fold . roleTokenRecipients) . unMint
 
 hasRecipient :: Destination -> Mint -> Bool
 hasRecipient destination = any (NEMap.member destination . roleTokenRecipients) . unMint
@@ -424,7 +426,7 @@ pattern RoleTokensUsePolicy policy dist <- UnsafeRoleTokensUsePolicy policy dist
     RoleTokensUsePolicy policy dist =
       UnsafeRoleTokensUsePolicy policy $
         Map.filter (not . Map.null) $
-          Map.filter (> 0) <$> dist
+          Map.filter (> mempty) <$> dist
 
 pattern RoleTokensMint :: Mint -> RoleTokensConfig
 pattern RoleTokensMint mint <- UnsafeRoleTokensMint mint
@@ -434,7 +436,7 @@ pattern RoleTokensMint mint <- UnsafeRoleTokensMint mint
         . NEMap.nonEmptyMap
         . NEMap.mapMaybe
           ( \MintRole{..} -> do
-              recipients <- NEMap.nonEmptyMap $ NEMap.filter (> 0) roleTokenRecipients
+              recipients <- NEMap.nonEmptyMap $ NEMap.filter (> mempty) roleTokenRecipients
               pure MintRole{roleTokenRecipients = recipients, ..}
           )
         $ mint
@@ -508,9 +510,9 @@ data ContractCreatedInEra era v = ContractCreatedInEra
   , payoutScriptAddress :: Address
   , version :: MarloweVersion v
   , datum :: Datum v
-  , assets :: Assets
+  , assets :: TxOutAssets
   , txBody :: TxBody era
-  , safetyErrors :: [SafetyError]
+  , safetyErrors :: ![SafetyError]
   }
 
 deriving instance Show (ContractCreatedInEra BabbageEra 'V1)
@@ -775,7 +777,12 @@ data Account
   deriving anyclass (Binary, ToJSON, Variations)
 
 -- | User-defined initial account balances which should hold only positive values.
-newtype Accounts = Accounts (Map Account Assets)
+-- | TODO: We introduce TxOutAssets which can be now used instead of this wrapper.
+newtype Accounts = Accounts (Map Account TxOutAssets)
+
+{-# COMPLETE AccountsContent #-}
+pattern AccountsContent :: Map Account TxOutAssets -> Accounts
+pattern AccountsContent a <- Accounts a
 
 deriving newtype instance Eq Accounts
 deriving instance Show Accounts
@@ -785,7 +792,7 @@ deriving newtype instance Monoid Accounts
 instance Variations Accounts where
   variations = Accounts <$> variations
 
-unAccounts :: Accounts -> Map Account Assets
+unAccounts :: Accounts -> Map Account TxOutAssets
 unAccounts (Accounts accounts) = accounts
 
 newtype NonPositiveBalances = NonPositiveBalances [Account]
@@ -793,12 +800,13 @@ deriving instance Show NonPositiveBalances
 deriving newtype instance Semigroup NonPositiveBalances
 deriving newtype instance Monoid NonPositiveBalances
 
-mkAccounts :: Map Account Assets -> Either NonPositiveBalances Accounts
+mkAccounts :: Map Account TxOutAssets -> Either NonPositiveBalances Accounts
 mkAccounts accounts = Accounts <$> Map.traverseWithKey checkPositive accounts
   where
-    checkPositive account assets@(Assets lovelace tokens) =
-      if lovelace >= 0 && all (> 0) (unTokens tokens)
-        then pure assets
+    checkPositive account assets@(Chain.TxOutAssetsContent (Assets lovelace tokens)) = do
+      let tokensMap = unTokens tokens
+      if lovelace >= mempty && all (> mempty) tokensMap && assets /= mempty
+        then Right assets
         else Left $ NonPositiveBalances [account]
 
 -- | The low-level runtime API for building and submitting transactions.
@@ -1087,6 +1095,7 @@ data ConstraintError
   | InvalidPayoutDatum TxOutRef (Maybe Chain.Datum)
   | InvalidHelperDatum TxOutRef (Maybe Chain.Datum)
   | InvalidPayoutScriptAddress TxOutRef Address
+  | InvalidTokenQuantity Chain.AssetId Chain.Quantity
   | CalculateMinUtxoFailed String
   | CoinSelectionFailed CoinSelectionError
   | BalancingError String
@@ -1130,7 +1139,7 @@ instance ToJSON CreateError
 data CreateBuildupError
   = MintingUtxoSelectionFailed
   | AddressesDecodingFailed [Address]
-  | NonPositiveBalancesError [Account]
+  | InvalidInitialState
   | MintingScriptDecodingFailed PlutusScript
   deriving (Eq, Ord, Show, Generic)
   deriving anyclass (Binary, ToJSON, Variations)
@@ -1159,6 +1168,7 @@ instance ToJSON ApplyInputsError
 
 data ApplyInputsConstraintsBuildupError
   = MarloweComputeTransactionFailed V1.TransactionError
+  | InvalidMarloweState
   | UnableToDetermineTransactionTimeout
   deriving (Eq, Show, Generic)
   deriving anyclass (Binary, Variations, ToJSON)

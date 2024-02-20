@@ -11,6 +11,7 @@ import Data.Aeson (Value (Null))
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
+import Language.Marlowe.Analysis.Safety.Types (SafetyError)
 import Language.Marlowe.Protocol.Query.Types (Page (..))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
@@ -31,7 +32,6 @@ import Language.Marlowe.Runtime.Web.Server.Monad (
   submitTransaction,
  )
 import Language.Marlowe.Runtime.Web.Server.REST.ApiError (
-  ApiError (ApiError),
   badRequest',
   notFound',
   rangeNotSatisfiable',
@@ -73,7 +73,7 @@ postCreateTxBody
   -> Address
   -> Maybe (CommaList Address)
   -> Maybe (CommaList TxOutRef)
-  -> ServerM TxBodyInAnyEra
+  -> ServerM (TxBodyInAnyEra, [SafetyError])
 postCreateTxBody contractId PostTransactionsRequest{..} changeAddressDTO mAddresses mCollateralUtxos = do
   SomeMarloweVersion v@MarloweV1 <- fromDTOThrow (badRequest' "Invalid Marlowe version") version
   changeAddress <- fromDTOThrow (badRequest' "Invalid change address") changeAddressDTO
@@ -90,8 +90,8 @@ postCreateTxBody contractId PostTransactionsRequest{..} changeAddressDTO mAddres
       if Map.null tags then Nothing else Just (tags, Nothing)
   applyInputs v WalletAddresses{..} contractId' MarloweTransactionMetadata{..} invalidBefore invalidHereafter inputs >>= \case
     Left err -> throwDTOError err
-    Right (InputsApplied BabbageEraOnwardsBabbage InputsAppliedInEra{txBody}) -> pure $ TxBodyInAnyEra txBody
-    Right (InputsApplied BabbageEraOnwardsConway InputsAppliedInEra{txBody}) -> pure $ TxBodyInAnyEra txBody
+    Right (InputsApplied BabbageEraOnwardsBabbage InputsAppliedInEra{txBody, safetyErrors}) -> pure (TxBodyInAnyEra txBody, safetyErrors)
+    Right (InputsApplied BabbageEraOnwardsConway InputsAppliedInEra{txBody, safetyErrors}) -> pure (TxBodyInAnyEra txBody, safetyErrors)
 
 postCreateTxBodyResponse
   :: TxOutRef
@@ -101,10 +101,10 @@ postCreateTxBodyResponse
   -> Maybe (CommaList TxOutRef)
   -> ServerM (PostTransactionsResponse CardanoTxBody)
 postCreateTxBodyResponse contractId req changeAddressDTO mAddresses mCollateralUtxos = do
-  TxBodyInAnyEra txBody <- postCreateTxBody contractId req changeAddressDTO mAddresses mCollateralUtxos
+  (TxBodyInAnyEra txBody, safetyErrors) <- postCreateTxBody contractId req changeAddressDTO mAddresses mCollateralUtxos
   let txBody' = toDTO txBody
   let txId = toDTO $ fromCardanoTxId $ getTxId txBody
-  let body = ApplyInputsTxEnvelope contractId txId txBody'
+  let body = ApplyInputsTxEnvelope contractId txId txBody' safetyErrors
   pure $ IncludeLink (Proxy @"transaction") body
 
 postCreateTxResponse
@@ -115,11 +115,11 @@ postCreateTxResponse
   -> Maybe (CommaList TxOutRef)
   -> ServerM (PostTransactionsResponse CardanoTx)
 postCreateTxResponse contractId req changeAddressDTO mAddresses mCollateralUtxos = do
-  TxBodyInAnyEra txBody <- postCreateTxBody contractId req changeAddressDTO mAddresses mCollateralUtxos
+  (TxBodyInAnyEra txBody, safetyErrors) <- postCreateTxBody contractId req changeAddressDTO mAddresses mCollateralUtxos
   let txId = toDTO $ fromCardanoTxId $ getTxId txBody
   let tx = makeSignedTransaction [] txBody
   let tx' = toDTO tx
-  let body = ApplyInputsTxEnvelope contractId txId tx'
+  let body = ApplyInputsTxEnvelope contractId txId tx' safetyErrors
   pure $ IncludeLink (Proxy @"transaction") body
 
 transactionServer :: TxOutRef -> TxId -> ServerT TransactionAPI ServerM

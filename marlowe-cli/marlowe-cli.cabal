@@ -7,9 +7,9 @@ license-files:
   NOTICE
 
 build-type:      Simple
-maintainer:      brian.bush@iohk.io
+maintainer:      brian.bush@iohk.io, tomasz.rybarczyk@iohk.io
 stability:       stable
-author:          Brian W Bush
+author:          Brian W Bush, paluh (aka Tomasz Rybarczyk)
 synopsis:
   Command-line tool for running Marlowe financial contracts on Cardano Computation Layer
 
@@ -134,6 +134,7 @@ library
 library cli-test
   import:          lang
   hs-source-dirs:  cli-test
+  visibility:      public
   other-modules:
     Contrib.Cardano.Api
     Contrib.Control.Concurrent.Async
@@ -144,7 +145,6 @@ library cli-test
     Contrib.Data.Aeson.Traversals
     Contrib.Data.List.Random
     Contrib.Data.Time.Clock
-    Contrib.Monad.Loops
     Contrib.UnliftIO.Async.Pool
     Contrib.UnliftIO.Control.Concurrent
 
@@ -157,6 +157,7 @@ library cli-test
     Language.Marlowe.CLI.Test.Contract.ContractNickname
     Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON
     Language.Marlowe.CLI.Test.Contract.Source
+    Language.Marlowe.CLI.Test.Contrib.Monad.Loops
     Language.Marlowe.CLI.Test.ExecutionMode
     Language.Marlowe.CLI.Test.ExecutionMode.ExecutionMode
     Language.Marlowe.CLI.Test.Interpret
@@ -205,6 +206,7 @@ library cli-test
     , plutus-ledger-slot
     , plutus-tx
     , random
+    , semigroupoids
     , stm
     , temporary
     , text

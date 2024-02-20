@@ -11,6 +11,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   TxId (..),
   TxOutRef (..),
   WithGenesis (..),
+  unTxIx,
  )
 import Language.Marlowe.Runtime.Core.Api (ContractId (..))
 
@@ -50,7 +51,7 @@ getTipForContract (ContractId TxOutRef{..}) =
     LIMIT 1
   |]
   where
-    params = (unTxId txId, fromIntegral txIx)
+    params = (unTxId txId, fromIntegral $ unTxIx txIx)
     decodePoint = \case
       Nothing -> Genesis
       Just (slot, hash, block) ->

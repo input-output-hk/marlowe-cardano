@@ -13,6 +13,7 @@
 module Language.Marlowe.Runtime.Web.Types where
 
 import Control.Applicative ((<|>))
+import Control.DeepSeq (NFData)
 import Control.Lens hiding ((.=))
 import Control.Monad (unless, (<=<))
 import Data.Aeson
@@ -74,7 +75,9 @@ import Servant.Pagination (HasPagination (..))
 
 -- | A newtype for Base16 decoding and encoding ByteStrings
 newtype Base16 = Base16 {unBase16 :: ByteString}
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Generic)
+
+instance NFData Base16
 
 instance Show Base16 where
   show = T.unpack . encodeBase16 . unBase16
@@ -115,6 +118,12 @@ newtype Tokens = Tokens {unTokens :: Map PolicyId (Map Text Integer)}
   deriving (Eq, Show, Ord, Generic)
   deriving newtype (ToJSON, FromJSON, ToSchema)
 
+instance Semigroup Tokens where
+  Tokens a <> Tokens b = Tokens $ Map.unionWith (Map.unionWith (+)) a b
+
+instance Monoid Tokens where
+  mempty = Tokens mempty
+
 newtype ContractSourceId = ContractSourceId {unContractSourceId :: ByteString}
   deriving (Eq, Ord, Generic)
   deriving (Show, ToHttpApiData, ToJSON) via Base16
@@ -139,6 +148,8 @@ instance ToParamSchema ContractSourceId where
 newtype TxId = TxId {unTxId :: ByteString}
   deriving (Eq, Ord, Generic)
   deriving (Show, ToHttpApiData, ToJSON) via Base16
+
+instance NFData TxId
 
 instance FromHttpApiData TxId where
   parseUrlPiece = fmap TxId . (hasLength 32 . unBase16 <=< parseUrlPiece)
@@ -225,6 +236,8 @@ newtype PolicyId = PolicyId {unPolicyId :: ByteString}
   deriving (Eq, Ord, Generic)
   deriving (Show, ToHttpApiData, FromHttpApiData, ToJSON, ToJSONKey, FromJSON, FromJSONKey) via Base16
 
+instance NFData PolicyId
+
 instance ToSchema PolicyId where
   declareNamedSchema proxy = pure $ NamedSchema (Just "PolicyId") $ toParamSchema proxy
 
@@ -294,6 +307,8 @@ data TxOutRef = TxOutRef
   }
   deriving (Show, Eq, Ord, Generic)
 
+instance NFData TxOutRef
+
 instance FromHttpApiData TxOutRef where
   parseUrlPiece t = case splitOn "#" t of
     [idText, ixText] -> TxOutRef <$> parseUrlPiece idText <*> parseUrlPiece ixText
@@ -338,7 +353,9 @@ instance ToJSONKey TxOutRef where
   toJSONKey = toJSONKeyText toUrlPiece
 
 data MarloweVersion = V1
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Generic)
+
+instance NFData MarloweVersion
 
 instance ToJSON MarloweVersion where
   toJSON V1 = String "v1"
@@ -411,6 +428,7 @@ data ContractHeader = ContractHeader
   }
   deriving (Show, Eq, Ord, Generic)
 
+instance NFData ContractHeader
 instance ToJSON ContractHeader
 instance FromJSON ContractHeader
 instance ToSchema ContractHeader
@@ -514,8 +532,10 @@ instance HasPagination ContractHeader "contractId" where
   getFieldValue _ ContractHeader{..} = contractId
 
 newtype Metadata = Metadata {unMetadata :: Value}
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Generic)
   deriving newtype (ToJSON, FromJSON)
+
+instance NFData Metadata
 
 instance ToSchema Metadata where
   declareNamedSchema _ = do
@@ -602,7 +622,9 @@ data TxStatus
   = Unsigned
   | Submitted
   | Confirmed
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Generic)
+
+instance NFData TxStatus
 
 instance ToJSON TxStatus where
   toJSON Unsigned = String "unsigned"
@@ -631,6 +653,7 @@ data BlockHeader = BlockHeader
   }
   deriving (Show, Eq, Ord, Generic)
 
+instance NFData BlockHeader
 instance ToJSON BlockHeader
 instance FromJSON BlockHeader
 instance ToSchema BlockHeader
@@ -837,7 +860,7 @@ data PostContractsRequest = PostContractsRequest
   , threadTokenName :: Maybe Text
   , contract :: ContractOrSourceId
   , accounts :: Map Party Assets
-  , minUTxODeposit :: Maybe Word64
+  , minUTxODeposit :: Maybe Integer
   }
   deriving (Show, Eq, Generic)
 
@@ -916,7 +939,7 @@ data RoleTokenConfig = RoleTokenConfig
   }
   deriving (Show, Eq, Ord, Generic)
 
-type RoleTokenRecipients = Map RoleTokenRecipient Word64
+type RoleTokenRecipients = Map RoleTokenRecipient Integer
 
 data RoleTokenRecipient
   = ClosedRole Address
@@ -1159,8 +1182,9 @@ data ApplyInputsTxEnvelope tx = ApplyInputsTxEnvelope
   { contractId :: TxOutRef
   , transactionId :: TxId
   , txEnvelope :: TextEnvelope
+  , safetyErrors :: [SafetyError]
   }
-  deriving (Show, Eq, Ord, Generic)
+  deriving (Show, Eq, Generic)
 
 instance ToJSON (ApplyInputsTxEnvelope CardanoTx) where
   toJSON ApplyInputsTxEnvelope{..} =
@@ -1168,6 +1192,7 @@ instance ToJSON (ApplyInputsTxEnvelope CardanoTx) where
       [ ("contractId", toJSON contractId)
       , ("transactionId", toJSON transactionId)
       , ("tx", toJSON txEnvelope)
+      , ("safetyErrors", toJSON safetyErrors)
       ]
 instance ToJSON (ApplyInputsTxEnvelope CardanoTxBody) where
   toJSON ApplyInputsTxEnvelope{..} =
@@ -1175,6 +1200,7 @@ instance ToJSON (ApplyInputsTxEnvelope CardanoTxBody) where
       [ ("contractId", toJSON contractId)
       , ("transactionId", toJSON transactionId)
       , ("txBody", toJSON txEnvelope)
+      , ("safetyErrors", toJSON safetyErrors)
       ]
 
 instance FromJSON (ApplyInputsTxEnvelope CardanoTx) where
@@ -1182,6 +1208,7 @@ instance FromJSON (ApplyInputsTxEnvelope CardanoTx) where
     contractId <- obj .: "contractId"
     transactionId <- obj .: "transactionId"
     txEnvelope <- obj .: "tx"
+    safetyErrors <- obj .: "safetyErrors"
     pure ApplyInputsTxEnvelope{..}
 
 instance FromJSON (ApplyInputsTxEnvelope CardanoTxBody) where
@@ -1189,6 +1216,7 @@ instance FromJSON (ApplyInputsTxEnvelope CardanoTxBody) where
     contractId <- obj .: "contractId"
     transactionId <- obj .: "transactionId"
     txEnvelope <- obj .: "txBody"
+    safetyErrors <- obj .: "safetyErrors"
     pure ApplyInputsTxEnvelope{..}
 
 instance ToSchema (ApplyInputsTxEnvelope CardanoTx) where
@@ -1196,6 +1224,7 @@ instance ToSchema (ApplyInputsTxEnvelope CardanoTx) where
     contractIdSchema <- declareSchemaRef (Proxy :: Proxy TxOutRef)
     transactionIdSchema <- declareSchemaRef (Proxy :: Proxy TxId)
     txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
+    safetyErrorsSchema <- declareSchemaRef (Proxy :: Proxy [SafetyError])
     return $
       NamedSchema (Just "ApplyInputsTxEnvelope") $
         mempty
@@ -1205,6 +1234,7 @@ instance ToSchema (ApplyInputsTxEnvelope CardanoTx) where
             .~ [ ("contractId", contractIdSchema)
                , ("transactionId", transactionIdSchema)
                , ("tx", txEnvelopeSchema)
+               , ("safetyErrors", safetyErrorsSchema)
                ]
           & required .~ ["contractId", "transactionId", "tx"]
 
@@ -1213,6 +1243,7 @@ instance ToSchema (ApplyInputsTxEnvelope CardanoTxBody) where
     contractIdSchema <- declareSchemaRef (Proxy :: Proxy TxOutRef)
     transactionIdSchema <- declareSchemaRef (Proxy :: Proxy TxId)
     txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
+    safetyErrorsSchema <- declareSchemaRef (Proxy :: Proxy [SafetyError])
     return $
       NamedSchema (Just "ApplyInputsTxEnvelope") $
         mempty
@@ -1222,6 +1253,7 @@ instance ToSchema (ApplyInputsTxEnvelope CardanoTxBody) where
             .~ [ ("contractId", contractIdSchema)
                , ("transactionId", transactionIdSchema)
                , ("txBody", txEnvelopeSchema)
+               , ("safetyErrors", safetyErrorsSchema)
                ]
           & required .~ ["contractId", "transactionId", "txBody"]
 
@@ -1325,3 +1357,29 @@ instance ToParamSchema NetworkId where
     mempty
       & oneOf ?~ [Inline (mempty & type_ ?~ OpenApiString), Inline (mempty & type_ ?~ OpenApiInteger)]
       & OpenApi.description ?~ "The latest known point in the chain on a peer."
+
+-- | Basic error type for the API. Should be turned into a proper sum type and used with servant's `UVerb` in the future.
+data ApiError = ApiError
+  { message :: String
+  , errorCode :: String
+  , details :: Value
+  , statusCode :: Int
+  }
+  deriving (Eq, Show)
+
+instance ToJSON ApiError where
+  toJSON ApiError{..} =
+    object
+      [ "message" .= message
+      , "errorCode" .= errorCode
+      , "details" .= details
+      , "statusCode" .= statusCode
+      ]
+
+instance FromJSON ApiError where
+  parseJSON = withObject "ApiError" \obj ->
+    ApiError
+      <$> obj .: "message"
+      <*> obj .: "errorCode"
+      <*> obj .: "details"
+      <*> obj .: "statusCode"

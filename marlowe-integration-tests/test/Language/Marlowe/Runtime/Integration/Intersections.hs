@@ -7,7 +7,7 @@ module Language.Marlowe.Runtime.Integration.Intersections where
 
 import Cardano.Api (getTxId)
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, TxId, TxOutRef (..))
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, TxId, TxIx (..), TxOutRef (..))
 import Language.Marlowe.Runtime.Core.Api (ContractId (..))
 import Language.Marlowe.Runtime.Integration.Common
 import Language.Marlowe.Runtime.Integration.StandardContract
@@ -69,7 +69,7 @@ spec = it "Intersections" $ withLocalMarloweRuntime $ runIntegrationTest do
   headerSyncIntersectExpectNotFound [pX, pA0, pB0, pC0]
   -- 26. Do a MarloweSync Intersect for "contractId" of tx at point A1 with points [A1..A5]
   -- 27. Expect Intersect not found
-  marloweSyncIntersectExpectNotFound (ContractId $ TxOutRef txIdA1 1) [pA1, pA2, pA3, pA4, pA5]
+  marloweSyncIntersectExpectNotFound (ContractId $ TxOutRef txIdA1 $ TxIx 1) [pA1, pA2, pA3, pA4, pA5]
 
 completeContract
   :: StandardContractInit v -> Integration (BlockHeader, TxId, BlockHeader, BlockHeader, BlockHeader, BlockHeader)

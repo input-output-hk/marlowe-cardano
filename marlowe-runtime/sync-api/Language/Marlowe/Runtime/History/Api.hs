@@ -322,7 +322,7 @@ extractMarloweTransaction version systemStart eraHistory contractId scriptAddres
   let payoutOutputs =
         Map.filter (isToScriptHash payoutValidatorHash) $
           Map.fromList $
-            (\(txIx, output) -> (Chain.TxOutRef{..}, output)) <$> zip [0 ..] outputs
+            (\(txIx, output) -> (Chain.TxOutRef{txIx = Chain.TxIx txIx, ..}, output)) <$> zip [0 ..] outputs
   payouts <- flip Map.traverseWithKey payoutOutputs \txOut Chain.TransactionOutput{address, datum = mPayoutDatum, assets} -> do
     rawPayoutDatum <- note (NoPayoutDatum txOut) mPayoutDatum
     payoutDatum <- note (InvalidPayoutDatum txOut) $ fromChainPayoutDatum version rawPayoutDatum

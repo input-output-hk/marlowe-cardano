@@ -32,6 +32,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   TokenName (..),
   TxId (..),
   TxOutRef (..),
+  unTxIx,
  )
 import Language.Marlowe.Runtime.Core.Api (ContractId (..))
 import Language.Marlowe.Runtime.Schema (countAll, equals, innerJoinOn, leftJoinOn, naturalJoin, unnestParams, withCTEs)
@@ -83,7 +84,7 @@ delimiterStatement pFilter TxOutRef{..} = buildStatement DelimiterRow Decoders.r
   (withClause, fromClause) <- tables False pFilter
   -- Allocate parameters for the delimiter.
   txIdParam <- param $ unTxId txId
-  txIxParam <- param @Int16 $ fromIntegral txIx
+  txIxParam <- param @Int16 $ fromIntegral $ unTxIx txIx
   let selectClause =
         NormalSimpleSelect
           ( NormalTargeting $
@@ -255,7 +256,7 @@ contractIdsTables contractIds
       -- Process the set of ContractIds into two vectors of ByteStrings and Int16s to be used as parameters
       let contractIdsVector = unContractId <$> Vector.fromList (Set.toList contractIds)
       let txIds = unTxId . txId <$> contractIdsVector
-      let txIxs = fromIntegral @_ @Int16 . txIx <$> contractIdsVector
+      let txIxs = fromIntegral @_ @Int16 . unTxIx . txIx <$> contractIdsVector
       -- Allocate the parameters
       txIdsParam <- param txIds
       txIxsParam <- param txIxs

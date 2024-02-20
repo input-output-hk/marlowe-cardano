@@ -27,9 +27,9 @@ import Language.Marlowe.Runtime.Core.Api (MarloweVersion (..))
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses (..), WithdrawTx (..), WithdrawTxInEra (..))
 import Language.Marlowe.Runtime.Web hiding (Unsigned)
 import Language.Marlowe.Runtime.Web.Server.DTO
+import Language.Marlowe.Runtime.Web.Server.DTO.ApiError ()
 import Language.Marlowe.Runtime.Web.Server.Monad (ServerM, loadWithdrawal, loadWithdrawals, submitWithdrawal, withdraw)
 import Language.Marlowe.Runtime.Web.Server.REST.ApiError (
-  ApiError (ApiError),
   badRequest',
   notFound',
   rangeNotSatisfiable',

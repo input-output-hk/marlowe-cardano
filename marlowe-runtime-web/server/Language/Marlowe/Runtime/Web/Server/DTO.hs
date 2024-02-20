@@ -94,7 +94,7 @@ import Language.Marlowe.Protocol.Query.Types (
  )
 import qualified Language.Marlowe.Protocol.Query.Types as Query
 import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType, fromCardanoTxId)
-import Language.Marlowe.Runtime.ChainSync.Api (AssetId (..), fromBech32, toBech32)
+import Language.Marlowe.Runtime.ChainSync.Api (AssetId (..), fromBech32, mkTxOutAssets, toBech32)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (
   ContractId (..),
@@ -218,7 +218,7 @@ instance ToDTO Chain.Tokens where
       . Map.fromDistinctAscList
       . fmap ((fst . head) &&& fmap snd)
       . groupBy (on (==) fst)
-      . fmap (\(Chain.AssetId policy name, quantity) -> (toDTO policy, (toDTO name, fromIntegral quantity)))
+      . fmap (\(Chain.AssetId policy name, Chain.Quantity quantity) -> (toDTO policy, (toDTO name, quantity)))
       . Map.toAscList
       . Chain.unTokens
 
@@ -227,14 +227,14 @@ instance FromDTO Chain.Tokens where
     fmap (Chain.Tokens . Map.fromAscList . concat)
       . traverse
         ( \(policy, tokens) -> for tokens \(name, quantity) ->
-            (,fromIntegral quantity) <$> (Chain.AssetId <$> fromDTO policy <*> fromDTO name)
+            (,Chain.Quantity quantity) <$> (Chain.AssetId <$> fromDTO policy <*> fromDTO name)
         )
       . Map.toAscList
       . fmap Map.toAscList
       . Web.unTokens
 
 instance HasDTO Chain.Quantity where
-  type DTO Chain.Quantity = Word64
+  type DTO Chain.Quantity = Integer
 
 instance ToDTO Chain.Quantity where
   toDTO = Chain.unQuantity
@@ -242,19 +242,21 @@ instance ToDTO Chain.Quantity where
 instance FromDTO Chain.Quantity where
   fromDTO = pure . Chain.Quantity
 
-instance HasDTO Chain.Assets where
-  type DTO Chain.Assets = Web.Assets
+instance HasDTO Chain.TxOutAssets where
+  type DTO Chain.TxOutAssets = Web.Assets
 
-instance ToDTO Chain.Assets where
-  toDTO Chain.Assets{..} =
+instance ToDTO Chain.TxOutAssets where
+  toDTO (Chain.TxOutAssetsContent (Chain.Assets{..})) =
     Web.Assets
-      { lovelace = fromIntegral ada
+      { lovelace = Chain.unLovelace ada
       , tokens = toDTO tokens
       }
 
-instance FromDTO Chain.Assets where
-  fromDTO Web.Assets{..} =
-    Chain.Assets (fromIntegral lovelace) <$> fromDTO tokens
+instance FromDTO Chain.TxOutAssets where
+  fromDTO Web.Assets{..} = do
+    tokens' <- fromDTO tokens
+    let assets' = Chain.Assets (Chain.Lovelace lovelace) tokens'
+    mkTxOutAssets assets'
 
 instance HasDTO Discovery.ContractHeader where
   type DTO Discovery.ContractHeader = Web.ContractHeader
@@ -691,6 +693,9 @@ instance HasDTO Chain.ScriptHash where
 instance ToDTO Chain.ScriptHash where
   toDTO = coerce
 
+instance FromDTO Chain.ScriptHash where
+  fromDTO = pure . coerce
+
 instance HasDTO (TxBody era) where
   type DTO (TxBody era) = Web.TextEnvelope
 
@@ -815,7 +820,7 @@ instance FromDTO Tx.RoleTokensConfig where
     Just (Web.UsePolicyWithOpenRoles policy openRoleNames) ->
       Tx.RoleTokensUsePolicy
         <$> fromDTO policy
-        <*> (Map.fromList . fmap (,Map.singleton (Tx.ToScript OpenRoleScript) 1) <$> fromDTO openRoleNames)
+        <*> (Map.fromList . fmap (,Map.singleton (Tx.ToScript OpenRoleScript) (Chain.Quantity 1)) <$> fromDTO openRoleNames)
     Just (Web.Mint mint) -> Tx.RoleTokensMint <$> fromDTO mint
 
 instance HasDTO Tx.Mint where

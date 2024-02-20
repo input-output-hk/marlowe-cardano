@@ -17,7 +17,7 @@ import Test.Hspec (Spec, describe, it)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
 spec :: Spec
-spec = describe "POST /contracts/{contractId}/transactions" do
+spec = describe "PUT /contracts/{contractId}" do
   it "returns the transaction header" $ withLocalMarloweRuntime $ runIntegrationTest do
     partyAWallet@Wallet{signingKeys} <- getGenesisWallet 0
     partyBWallet <- getGenesisWallet 1

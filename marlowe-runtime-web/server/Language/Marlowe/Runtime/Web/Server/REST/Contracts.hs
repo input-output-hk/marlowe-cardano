@@ -34,7 +34,6 @@ import Language.Marlowe.Runtime.Web.Server.Monad (
   submitContract,
  )
 import Language.Marlowe.Runtime.Web.Server.REST.ApiError (
-  ApiError (ApiError),
   badRequest',
   notFound',
   rangeNotSatisfiable',

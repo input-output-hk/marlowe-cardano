@@ -67,6 +67,7 @@ library
     , bytestring >=0.10.12 && <0.12
     , cardano-api ^>=8.37
     , containers ^>=0.6.5
+    , deepseq
     , deriving-aeson ^>=0.2.9
     , either ^>=5.0.2
     , ilist ==0.4.0.1

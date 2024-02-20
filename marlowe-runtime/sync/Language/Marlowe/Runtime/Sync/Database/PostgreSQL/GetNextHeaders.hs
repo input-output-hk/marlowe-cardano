@@ -20,6 +20,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   PolicyId (..),
   ScriptHash (..),
   TxId (..),
+  TxIx (TxIx),
   TxOutRef (..),
   WithGenesis (..),
   paymentCredential,
@@ -104,7 +105,7 @@ getNextHeaders point = do
         , payoutScriptHash
         ) =
         ContractHeader
-          { contractId = ContractId $ TxOutRef (TxId txId) (fromIntegral txIx)
+          { contractId = ContractId $ TxOutRef (TxId txId) (TxIx $ fromIntegral txIx)
           , rolesCurrency = PolicyId rolesCurrency
           , metadata = maybe emptyMarloweTransactionMetadata (runGet get . fromStrict) metadata
           , marloweScriptHash = fromJust do

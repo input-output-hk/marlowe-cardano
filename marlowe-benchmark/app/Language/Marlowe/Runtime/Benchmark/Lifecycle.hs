@@ -24,7 +24,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input (NormalInput), 
 import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddress)
 import Language.Marlowe.Runtime.Benchmark.Lifecycle.Scenario (Scenario (..), randomScenario)
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId, toCardanoAddressAny, toCardanoAddressInEra)
-import Language.Marlowe.Runtime.ChainSync.Api (Address (unAddress), TokenName (TokenName), TxId)
+import Language.Marlowe.Runtime.ChainSync.Api (Address (unAddress), Quantity (Quantity), TokenName (TokenName), TxId)
 import Language.Marlowe.Runtime.Core.Api (ContractId, MarloweVersion (..), emptyMarloweTransactionMetadata)
 import Language.Marlowe.Runtime.Transaction.Api (
   ContractCreated (..),
@@ -253,7 +253,7 @@ create
 create partyCredentials contract =
   do
     let (_, (change, key)) = M.findMin partyCredentials
-        distributeRole (Role token) (address, _) = Just (TokenName . fromBuiltin $ unTokenName token, Nothing, ToAddress address, 1)
+        distributeRole (Role token) (address, _) = Just (TokenName . fromBuiltin $ unTokenName token, Nothing, ToAddress address, Quantity 1)
         distributeRole _ _ = Nothing
         distributeRoles = mapMaybe (uncurry distributeRole) $ M.toList partyCredentials
         roles =

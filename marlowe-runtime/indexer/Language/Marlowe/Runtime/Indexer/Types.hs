@@ -34,6 +34,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   TransactionInput (..),
   TransactionOutput (..),
   TxId,
+  TxIx (TxIx),
   TxOutRef (..),
   paymentCredential,
  )
@@ -126,7 +127,7 @@ extractCreateTx marloweScriptHashes Transaction{..} = do
     let -- Find all outputs that create a new Marlowe contract
         contractIds =
           mapMaybe (uncurry $ extractContractId marloweScriptHashes) $
-            zip (TxOutRef txId <$> [0 ..]) outputs
+            zip (TxOutRef txId . TxIx <$> [0 ..]) outputs
 
     existingContracts <- gets $ Map.keysSet . unspentContractOutputs
 

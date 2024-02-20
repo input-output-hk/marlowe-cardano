@@ -34,7 +34,18 @@ import Language.Marlowe.Runtime.Cardano.Api (
   fromCardanoTxId,
   fromCardanoTxOutValue,
  )
-import Language.Marlowe.Runtime.ChainSync.Api (AssetId (AssetId), Assets (Assets), TokenName, TxOutRef (..))
+import Language.Marlowe.Runtime.ChainSync.Api (
+  AssetId (AssetId),
+  Assets (Assets),
+  Lovelace (..),
+  Quantity (..),
+  TokenName,
+  Tokens,
+  TxIx (..),
+  TxOutAssets,
+  TxOutRef (..),
+  unsafeTxOutAssets,
+ )
 import Language.Marlowe.Runtime.Client (applyInputs, createContract)
 import Language.Marlowe.Runtime.Core.Api hiding (Contract)
 import Language.Marlowe.Runtime.Integration.Common (
@@ -112,7 +123,7 @@ closeSpec = parallel $ describe "Close contract" $ aroundAll setup do
   it "should contain the correct input" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}, InputsApplied _ InputsAppliedInEra{input}) -> do
     let address = marloweScriptAddress
     let txId = fromCardanoTxId $ getTxId txBody
-    let utxo = TxOutRef txId 1
+    let utxo = TxOutRef txId $ TxIx 1
     liftIO $ input `shouldBe` TransactionScriptOutput{..}
   it "should contain no output" $ runAsIntegration \(_, InputsApplied _ InputsAppliedInEra{..}) -> do
     liftIO $ scriptOutput output `shouldBe` Nothing
@@ -175,6 +186,9 @@ data PayTestData = PayTestData
   , startTime :: UTCTime
   }
 
+mkAssets :: Integer -> Tokens -> TxOutAssets
+mkAssets amount tokens = unsafeTxOutAssets $ Assets (Lovelace amount) tokens
+
 paySpec :: Spec
 paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
   describe "Pay to role account" do
@@ -186,7 +200,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
       InputsApplied BabbageEraOnwardsBabbage InputsAppliedInEra{..} <- pure payRoleAccountApplied
       liftIO $
         Map.elems (payouts output)
-          `shouldBe` [Payout payoutScriptAddress (Assets 2_000_000 mempty) $ AssetId rolesCurrency "Role"]
+          `shouldBe` [Payout payoutScriptAddress (mkAssets 2_000_000 mempty) $ AssetId rolesCurrency "Role"]
   describe "Pay to address account" do
     it "should contain no output" $ runAsIntegration \PayTestData{..} -> do
       InputsApplied _ InputsAppliedInEra{..} <- pure payAddressAccountApplied
@@ -197,7 +211,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
       let isPayout (TxOut address _ _ _) = fromCardanoAddressInEra BabbageEra address == changeAddress (addresses wallet2)
       let getValue (TxOut _ value _ _) = fromCardanoTxOutValue value
       let payoutOutputs = getValue <$> case txBody of TxBody TxBodyContent{..} -> filter isPayout txOuts
-      liftIO $ payoutOutputs `shouldBe` [Assets 2_000_000 mempty]
+      liftIO $ payoutOutputs `shouldBe` [Assets (Lovelace 2_000_000) mempty]
   describe "Pay to role party" do
     it "should contain no output" $ runAsIntegration \PayTestData{..} -> do
       InputsApplied _ InputsAppliedInEra{..} <- pure payRolePartyApplied
@@ -207,7 +221,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
       InputsApplied BabbageEraOnwardsBabbage InputsAppliedInEra{..} <- pure payRolePartyApplied
       liftIO $
         Map.elems (payouts output)
-          `shouldBe` [Payout payoutScriptAddress (Assets 2_000_000 mempty) $ AssetId rolesCurrency "Role"]
+          `shouldBe` [Payout payoutScriptAddress (mkAssets 2_000_000 mempty) $ AssetId rolesCurrency "Role"]
   describe "Pay to address party" do
     it "should contain no output" $ runAsIntegration \PayTestData{..} -> do
       InputsApplied _ InputsAppliedInEra{..} <- pure payAddressPartyApplied
@@ -218,7 +232,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
       let isPayout (TxOut address _ _ _) = fromCardanoAddressInEra BabbageEra address == changeAddress (addresses wallet2)
       let getValue (TxOut _ value _ _) = fromCardanoTxOutValue value
       let payoutOutputs = getValue <$> case txBody of TxBody TxBodyContent{..} -> filter isPayout txOuts
-      liftIO $ payoutOutputs `shouldBe` [Assets 2_000_000 mempty]
+      liftIO $ payoutOutputs `shouldBe` [Assets (Lovelace 2_000_000) mempty]
   describe "Pay with input inside" do
     it "should contain no output" $ runAsIntegration \PayTestData{..} -> do
       InputsApplied _ InputsAppliedInEra{..} <- pure payDepth1Applied
@@ -228,7 +242,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
       InputsApplied BabbageEraOnwardsBabbage InputsAppliedInEra{..} <- pure payDepth1Applied
       liftIO $
         Map.elems (payouts output)
-          `shouldBe` [Payout payoutScriptAddress (Assets 2_000_000 mempty) $ AssetId rolesCurrency "Role"]
+          `shouldBe` [Payout payoutScriptAddress (mkAssets 2_000_000 mempty) $ AssetId rolesCurrency "Role"]
   describe "Pay to account with two inputs inside" do
     it "should contain the correct output" $ runAsIntegration \PayTestData{..} -> do
       let ContractCreated _ ContractCreatedInEra{marloweScriptAddress, assets} = payDepth2AccountCreated
@@ -236,7 +250,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
       TransactionScriptOutput address assets' utxo' MarloweData{..} <- expectJust "Expected an output" $ scriptOutput output
       liftIO $ address `shouldBe` marloweScriptAddress
       liftIO $ assets' `shouldBe` assets
-      liftIO $ utxo' `shouldBe` TxOutRef (fromCardanoTxId $ getTxId txBody) 1
+      liftIO $ utxo' `shouldBe` TxOutRef (fromCardanoTxId $ getTxId txBody) (TxIx 1)
       liftIO $
         marloweContract
           `shouldBe` When
@@ -253,8 +267,8 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
       InputsApplied _ InputsAppliedInEra{..} <- pure payDepth2PartyApplied
       TransactionScriptOutput address assets' utxo' MarloweData{..} <- expectJust "Expected an output" $ scriptOutput output
       liftIO $ address `shouldBe` marloweScriptAddress
-      liftIO $ assets' `shouldBe` Assets 8_000_000 mempty
-      liftIO $ utxo' `shouldBe` TxOutRef (fromCardanoTxId $ getTxId txBody) 1
+      liftIO $ assets' `shouldBe` mkAssets 8_000_000 mempty
+      liftIO $ utxo' `shouldBe` TxOutRef (fromCardanoTxId $ getTxId txBody) (TxIx 1)
       liftIO $
         marloweContract
           `shouldBe` When
@@ -267,7 +281,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
       InputsApplied BabbageEraOnwardsBabbage InputsAppliedInEra{..} <- pure payDepth2PartyApplied
       liftIO $
         Map.elems (payouts output)
-          `shouldBe` [Payout payoutScriptAddress (Assets 2_000_000 mempty) $ AssetId rolesCurrency "Role"]
+          `shouldBe` [Payout payoutScriptAddress (mkAssets 2_000_000 mempty) $ AssetId rolesCurrency "Role"]
   where
     setup :: ActionWith (MarloweRuntime, PayTestData) -> IO ()
     setup runTests = withLocalMarloweRuntime $ runIntegrationTest do
@@ -287,7 +301,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
             Nothing
             (mkRoleTokens [("Role", wallet2)])
             emptyMarloweTransactionMetadata
-            (Just 2_000_000)
+            (Just $ Lovelace 2_000_000)
             mempty
             (Left $ mkPay (Account $ Role "Role") ada (Constant 2_000_000) Close)
       submitCreate wallet1 payRoleAccountCreated
@@ -300,7 +314,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
             Nothing
             RoleTokensNone
             emptyMarloweTransactionMetadata
-            (Just 2_000_000)
+            (Just $ Lovelace 2_000_000)
             mempty
             (Left $ mkPay (Account $ walletParty wallet2) ada (Constant 2_000_000) Close)
       submitCreate wallet1 payAddressAccountCreated
@@ -313,7 +327,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
             Nothing
             (mkRoleTokens [("Role", wallet2)])
             emptyMarloweTransactionMetadata
-            (Just 2_000_000)
+            (Just $ Lovelace 2_000_000)
             mempty
             (Left $ mkPay (Party $ Role "Role") ada (Constant 2_000_000) Close)
       submitCreate wallet1 payRolePartyCreated
@@ -326,7 +340,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
             Nothing
             RoleTokensNone
             emptyMarloweTransactionMetadata
-            (Just 2_000_000)
+            (Just $ Lovelace 2_000_000)
             mempty
             (Left $ mkPay (Party $ walletParty wallet2) ada (Constant 2_000_000) Close)
       submitCreate wallet1 payAddressPartyCreated
@@ -339,7 +353,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
             Nothing
             (mkRoleTokens [("Role", wallet2)])
             emptyMarloweTransactionMetadata
-            (Just 2_000_000)
+            (Just $ Lovelace 2_000_000)
             mempty
             ( Left $
                 mkPay (Account $ Role "Role") ada (Constant 2_000_000) $
@@ -359,7 +373,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
             Nothing
             (mkRoleTokens [("Role", wallet2)])
             emptyMarloweTransactionMetadata
-            (Just 10_000_000)
+            (Just $ Lovelace 10_000_000)
             mempty
             ( Left $
                 mkPay (Account $ Role "Role") ada (Constant 2_000_000) $
@@ -384,7 +398,7 @@ paySpec = parallel $ describe "Pay contracts" $ aroundAll setup do
             Nothing
             (mkRoleTokens [("Role", wallet2)])
             emptyMarloweTransactionMetadata
-            (Just 10_000_000)
+            (Just $ Lovelace 10_000_000)
             mempty
             ( Left $
                 mkPay (Party $ Role "Role") ada (Constant 2_000_000) $
@@ -515,7 +529,7 @@ whenTimeoutSpec = parallel $ describe "Timed out contracts" $ aroundAll setup do
       TransactionScriptOutput address assets' utxo' MarloweData{..} <- expectJust "Expected an output" $ scriptOutput output
       liftIO $ address `shouldBe` marloweScriptAddress
       liftIO $ assets' `shouldBe` assets
-      liftIO $ utxo' `shouldBe` TxOutRef (fromCardanoTxId $ getTxId txBody) 1
+      liftIO $ utxo' `shouldBe` TxOutRef (fromCardanoTxId $ getTxId txBody) (TxIx 1)
       liftIO $
         marloweContract `shouldBe` When [] (utcTimeToPOSIXTime $ addUTCTime (secondsToNominalDiffTime 200) startTime) Close
   where
@@ -1088,7 +1102,7 @@ mkRoleTokens :: [(TokenName, Wallet)] -> RoleTokensConfig
 mkRoleTokens =
   RoleTokensMint
     . mkMint
-    . fmap (\(token, Wallet{..}) -> (token, Nothing, ToAddress $ changeAddress addresses, 1))
+    . fmap (\(token, Wallet{..}) -> (token, Nothing, ToAddress $ changeAddress addresses, Quantity 1))
     . NE.fromList
 
 submitCreate :: Wallet -> ContractCreated 'V1 -> Integration ()

@@ -523,6 +523,7 @@ library tx
     , cardano-ledger-core ^>=1.9
     , co-log ^>=0.6
     , containers ^>=0.6.5
+    , deepseq
     , errors >=2.3 && <3
     , eventuo11y >=0.9 && <0.11
     , eventuo11y-extras ==0.1.1.0
@@ -826,6 +827,7 @@ test-suite marlowe-runtime-test
     , cardano-api-gen ^>=8.1
     , containers ^>=0.6.5
     , errors >=2.3 && <3
+    , groups
     , hasql >=1.6 && <2
     , hedgehog-quickcheck ^>=0.1
     , hspec

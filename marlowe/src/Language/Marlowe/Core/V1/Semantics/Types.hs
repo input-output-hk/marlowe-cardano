@@ -77,6 +77,7 @@ module Language.Marlowe.Core.V1.Semantics.Types (
 ) where
 
 import Control.Applicative ((<*>), (<|>))
+import Control.DeepSeq (NFData)
 import Control.Newtype.Generics (Newtype)
 import qualified Data.Aeson as A
 import qualified Data.Aeson as JSON
@@ -121,6 +122,8 @@ data Party
     Role TokenName
   deriving stock (Generic, Haskell.Eq, Haskell.Ord)
 
+instance NFData Party
+
 instance Pretty Party where
   prettyFragment (Address network address) = parens $ text "Address " Haskell.<> prettyFragment (serialiseAddressBech32 network address)
   prettyFragment (Role role) = parens $ text "Role " Haskell.<> prettyFragment role
@@ -156,11 +159,15 @@ data ChoiceId = ChoiceId BuiltinByteString Party
   deriving stock (Haskell.Show, Generic, Haskell.Eq, Haskell.Ord)
   deriving anyclass (Pretty)
 
+instance NFData ChoiceId
+
 -- | Token - represents a currency or token, it groups
 --   a pair of a currency symbol and token name.
 data Token = Token CurrencySymbol TokenName
   deriving stock (Generic, Haskell.Eq, Haskell.Ord)
   deriving anyclass (Pretty)
+
+instance NFData Token
 
 instance Haskell.Show Token where
   showsPrec p (Token cs tn) =
@@ -174,6 +181,8 @@ newtype ValueId = ValueId BuiltinByteString
   deriving (IsString, Haskell.Show) via TokenName
   deriving stock (Haskell.Eq, Haskell.Ord, Generic)
   deriving anyclass (Newtype)
+
+instance NFData ValueId
 
 -- | Values include some quantities that change with time,
 --   including “the time interval”, “the current balance of an account”,
@@ -196,6 +205,8 @@ data Value a
   deriving stock (Haskell.Show, Generic, Haskell.Eq, Haskell.Ord)
   deriving anyclass (Pretty)
 
+instance (NFData a) => NFData (Value a)
+
 -- | Observations are Boolean values derived by comparing values,
 --   and can be combined using the standard Boolean operators.
 --
@@ -216,10 +227,14 @@ data Observation
   deriving stock (Haskell.Show, Generic, Haskell.Eq, Haskell.Ord)
   deriving anyclass (Pretty)
 
+instance NFData Observation
+
 -- | The (inclusive) bound on a choice number.
 data Bound = Bound Integer Integer
   deriving stock (Haskell.Show, Generic, Haskell.Eq, Haskell.Ord)
   deriving anyclass (Pretty)
+
+instance NFData Bound
 
 -- | Actions happen at particular points during execution.
 --   Three kinds of action are possible:
@@ -239,6 +254,8 @@ data Action
   deriving stock (Haskell.Show, Generic, Haskell.Eq, Haskell.Ord)
   deriving anyclass (Pretty)
 
+instance NFData Action
+
 -- | A payment can be made to one of the parties to the contract,
 --   or to one of the accounts of the contract,
 --   and this is reflected in the definition.
@@ -247,6 +264,8 @@ data Payee
   | Party Party
   deriving stock (Haskell.Show, Generic, Haskell.Eq, Haskell.Ord)
   deriving anyclass (Pretty)
+
+instance NFData Payee
 
 -- | A case is a branch of a when clause, guarded by an action.
 --   The continuation of the contract may be merkleized or not.
@@ -258,6 +277,8 @@ data Case a
   | MerkleizedCase Action BuiltinByteString
   deriving stock (Haskell.Show, Generic, Haskell.Eq, Haskell.Ord)
   deriving anyclass (Pretty)
+
+instance (NFData a) => NFData (Case a)
 
 -- | Extract the @Action@ from a @Case@.
 getAction :: Case a -> Action
@@ -280,6 +301,8 @@ data Contract
   deriving stock (Haskell.Show, Generic, Haskell.Eq, Haskell.Ord)
   deriving anyclass (Pretty)
 
+instance NFData Contract
+
 -- | Marlowe contract internal state. Stored in a /Datum/ of a transaction output.
 data State = State
   { accounts :: Accounts
@@ -288,6 +311,8 @@ data State = State
   , minTime :: POSIXTime
   }
   deriving stock (Haskell.Show, Haskell.Eq, Generic)
+
+instance NFData State
 
 -- | Execution environment. Contains a time interval of a transaction.
 newtype Environment = Environment {timeInterval :: TimeInterval}
@@ -311,6 +336,8 @@ data InputContent
   | INotify
   deriving stock (Haskell.Show, Haskell.Eq, Generic)
   deriving anyclass (Pretty)
+
+instance NFData InputContent
 
 instance FromJSON InputContent where
   parseJSON (String "input_notify") = return INotify
@@ -347,6 +374,8 @@ data Input
   | MerkleizedInput InputContent BuiltinByteString Contract
   deriving stock (Haskell.Show, Haskell.Eq, Generic)
   deriving anyclass (Pretty)
+
+instance NFData Input
 
 instance FromJSON Input where
   parseJSON (String s) = NormalInput <$> parseJSON (String s)
@@ -387,6 +416,8 @@ data IntervalError
   = InvalidInterval TimeInterval
   | IntervalInPastError POSIXTime TimeInterval
   deriving stock (Haskell.Show, Generic, Haskell.Eq)
+
+instance NFData IntervalError
 
 instance ToJSON IntervalError where
   toJSON (InvalidInterval (s, e)) =

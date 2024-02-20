@@ -17,7 +17,7 @@ import qualified Data.Vector as V
 import Hasql.TH (maybeStatement, vectorStatement)
 import qualified Hasql.Transaction as T
 import Language.Marlowe.Protocol.Query.Types
-import Language.Marlowe.Runtime.ChainSync.Api (TxId (..), TxOutRef (..))
+import Language.Marlowe.Runtime.ChainSync.Api (TxId (..), TxOutRef (..), unTxIx)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as TxOutRef (TxOutRef (..))
 import Language.Marlowe.Runtime.Core.Api (
   ContractId (..),
@@ -34,7 +34,7 @@ import Prelude hiding (init)
 
 getTransactions :: ContractId -> T.Transaction (Maybe SomeTransactions)
 getTransactions (ContractId createTxOutRef@TxOutRef{..}) = runMaybeT do
-  let params = (unTxId txId, fromIntegral txIx)
+  let params = (unTxId txId, fromIntegral $ unTxIx txIx)
 
   _ <-
     MaybeT $

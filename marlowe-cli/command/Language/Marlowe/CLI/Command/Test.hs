@@ -18,6 +18,7 @@ module Language.Marlowe.CLI.Command.Test (
   TestCommand,
   mkParseTestCommand,
   runTestCommand,
+  txBuildupContextParser,
 ) where
 
 import Cardano.Api (BabbageEraOnwards, IsShelleyBasedEra, NetworkId)

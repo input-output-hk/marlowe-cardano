@@ -89,6 +89,7 @@ executable marlowe-integration-tests
 
   build-depends:
     , aeson
+    , aeson-pretty
     , async-components
     , base >=4.9 && <5
     , base16
@@ -97,11 +98,14 @@ executable marlowe-integration-tests
     , co-log ^>=0.6
     , containers
     , deepseq
+    , errors
     , eventuo11y-extras
     , hspec
     , http-types
+    , lens
     , marlowe-cardano
     , marlowe-chain-sync:{marlowe-chain-sync, plutus-compat}
+    , marlowe-cli:{marlowe-cli, cli-test}
     , marlowe-client
     , marlowe-integration
     , marlowe-object:{marlowe-object, gen}
@@ -113,12 +117,14 @@ executable marlowe-integration-tests
     , network-uri
     , pipes ^>=4.3.16
     , plutus-ledger-api
+    , plutus-tx ^>=1.15
     , QuickCheck
     , resourcet
     , servant-client
     , servant-pagination
     , text
     , time
+    , time-units
     , transformers
     , typed-protocols
     , unliftio

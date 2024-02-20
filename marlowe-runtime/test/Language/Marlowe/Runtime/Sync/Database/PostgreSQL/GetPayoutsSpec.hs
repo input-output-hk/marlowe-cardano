@@ -9,7 +9,7 @@ import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
 import Hasql.Statement (Statement (..))
 import Language.Marlowe.Protocol.Query.Types (Order (..), PayoutFilter (..), Range (..))
-import Language.Marlowe.Runtime.ChainSync.Api (AssetId (..), TxId (..), TxOutRef (..))
+import Language.Marlowe.Runtime.ChainSync.Api (AssetId (..), TxId (..), TxIx (unTxIx), TxOutRef (..))
 import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetPayouts
 import Test.Hspec
 import Test.Hspec.Golden (defaultGolden)
@@ -28,7 +28,7 @@ spec = describe "SQL queries" $ for_ (Set.filter removeDuplicateWithdrawnSets $ 
           , Just $ showStatement "Total count statement" $ totalCountStatement pFilter
           , Just $ showStatement "Payouts statement" $ payoutsStatement pFilter range do
               TxOutRef{..} <- rangeStart range
-              pure $ DelimiterRow (unTxId txId) (fromIntegral txIx) 0
+              pure $ DelimiterRow (unTxId txId) (fromIntegral $ unTxIx txIx) 0
           ]
 
 showStatement :: String -> Statement a b -> String
