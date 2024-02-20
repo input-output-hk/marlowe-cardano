@@ -147,5 +147,18 @@ operations:
     minimumTime: -15s
     maximumTime: +2m
 
+- AutoRun
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: Role04
+        that_deposits: 1
+        of_token: [NFTs, Token04]
+        into_account:
+          address: Faucet
+    minimumTime: -15s
+    maximumTime: +2m
+
 - ShouldFail: AutoRun
 

@@ -12,17 +12,18 @@ operations:
 
 - Mint:
     issuer: Faucet
-    nickname: RoleTokenCurrency
+    nickname: RoleTokenCurrencyForTripleDeposit
     minLovelace: 2000000
     tokenDistribution:
       - [{ script: OpenRole, threadTokenName: "thread-token-name" }, Depositor-1, 1]
       - [{ script: OpenRole, threadTokenName: "thread-token-name" }, Depositor-2, 1]
+      - [{ script: OpenRole, threadTokenName: "thread-token-name" }, Depositor-3, 1]
       - [Faucet, "thread-token-name", 1]
 
 - Initialize:
-    contractNickname: "Contract with valid thread token"
+    contractNickname: "Contract with valid thread token and triple deposit"
     minLovelace: 2000000
-    roleCurrency: RoleTokenCurrency
+    roleCurrency: RoleTokenCurrencyForTripleDeposit
     marloweValidators:
       publishCurrent:
         permanently: true
@@ -36,7 +37,144 @@ operations:
           address: Faucet
         deposits: 1
         of_token:
-          currency_symbol: RoleTokenCurrency
+          currency_symbol: RoleTokenCurrencyForTripleDeposit
+          token_name: 'thread-token-name'
+        into_account:
+          address: Faucet
+      then:
+        timeout:
+          relative: +3600
+        timeout_continuation: close
+        unless:
+          party:
+            role_token: Depositor-1
+          deposits: 2000000
+          of_token:
+            currency_symbol: ''
+            token_name: ''
+          into_account:
+            role_token: Depositor-1
+        then:
+          timeout:
+            relative: +3600
+          timeout_continuation: close
+          unless:
+            party:
+              role_token: Depositor-2
+            deposits: 2000000
+            of_token:
+              currency_symbol: ''
+              token_name: ''
+            into_account:
+              role_token: Depositor-2
+          then:
+            timeout:
+              relative: +3600
+            timeout_continuation: close
+            unless:
+              party:
+                role_token: Depositor-3
+              deposits: 2000000
+              of_token:
+                currency_symbol: ''
+                token_name: ''
+              into_account:
+                role_token: Depositor-3
+            then:
+              timeout:
+                relative: +3600
+              timeout_continuation: close
+              unless:
+                notify_if: true
+              then: close
+
+- AutoRun:
+    contractNickname: "Contract with valid thread token and triple deposit"
+
+- Comment: Manually deposit invalid thread token to the script.
+
+- Prepare:
+    contractNickname: "Contract with valid thread token and triple deposit"
+    inputs:
+      - input_from_party:
+          address: Faucet
+        that_deposits: 1
+        of_token: [RoleTokenCurrencyForTripleDeposit, 'thread-token-name']
+        into_account:
+          address: Faucet
+    minimumTime: -15s
+    maximumTime: +2m
+
+- AutoRun:
+    submitter: Faucet
+    contractNickname: "Contract with valid thread token and triple deposit"
+
+- Prepare:
+    contractNickname: "Contract with valid thread token and triple deposit"
+    inputs:
+      - input_from_party:
+          role_token: Depositor-1
+        that_deposits: 2000000
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          role_token: Depositor-1
+      - input_from_party:
+          role_token: Depositor-2
+        that_deposits: 2000000
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          role_token: Depositor-2
+      - input_from_party:
+          role_token: Depositor-3
+        that_deposits: 2000000
+        of_token:
+          currency_symbol: ''
+          token_name: ''
+        into_account:
+          role_token: Depositor-3
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- Comment: Triple open role based deposit action fails
+
+- ShouldFail:
+    AutoRun:
+      contractNickname: "Contract with valid thread token and triple deposit"
+
+
+- Mint:
+    issuer: Faucet
+    nickname: RoleTokenCurrencyForDoulbeDeposit
+    minLovelace: 2000000
+    tokenDistribution:
+      - [{ script: OpenRole, threadTokenName: "thread-token-name" }, Depositor-1, 1]
+      - [{ script: OpenRole, threadTokenName: "thread-token-name" }, Depositor-2, 1]
+      - [Faucet, "thread-token-name", 1]
+
+- Initialize:
+    contractNickname: "Contract with valid thread token and double deposit"
+    minLovelace: 2000000
+    roleCurrency: RoleTokenCurrencyForDoulbeDeposit
+    marloweValidators:
+      publishCurrent:
+        permanently: true
+    submitter: Faucet
+    source:
+      timeout:
+        relative: +3600
+      timeout_continuation: close
+      unless:
+        party:
+          address: Faucet
+        deposits: 1
+        of_token:
+          currency_symbol: RoleTokenCurrencyForDoulbeDeposit
           token_name: 'thread-token-name'
         into_account:
           address: Faucet
@@ -75,17 +213,17 @@ operations:
             then: close
 
 - AutoRun:
-    contractNickname: "Contract with valid thread token"
+    contractNickname: "Contract with valid thread token and double deposit"
 
 - Comment: Manually deposit invalid thread token to the script.
 
 - Prepare:
-    contractNickname: "Contract with valid thread token"
+    contractNickname: "Contract with valid thread token and double deposit"
     inputs:
       - input_from_party:
           address: Faucet
         that_deposits: 1
-        of_token: [RoleTokenCurrency, 'thread-token-name']
+        of_token: [RoleTokenCurrencyForDoulbeDeposit, 'thread-token-name']
         into_account:
           address: Faucet
     minimumTime: -15s
@@ -93,10 +231,10 @@ operations:
 
 - AutoRun:
     submitter: Faucet
-    contractNickname: "Contract with valid thread token"
+    contractNickname: "Contract with valid thread token and double deposit"
 
 - Prepare:
-    contractNickname: "Contract with valid thread token"
+    contractNickname: "Contract with valid thread token and double deposit"
     inputs:
       - input_from_party:
           role_token: Depositor-1
@@ -119,13 +257,9 @@ operations:
     maximumTime:
       relative: 120
 
-- ShouldFail:
-    AutoRun:
-      contractNickname: "Contract with valid thread token"
+- Comment: Double open role based deposit action succeeds
 
-# - CheckBalance:
-#     wallet: Faucet
-#     balance:
-#       - [ADA, -6]
-#       - [RoleTokenCurrency, Depositor-1, 1]
-#       - [RoleTokenCurrency, Depositor-2, 1]
+- AutoRun:
+    submitter: Faucet
+    contractNickname: "Contract with valid thread token and double deposit"
+

@@ -21,6 +21,7 @@ operations:
           - [Token05, 1]
           - [Token06, 1]
           - [Token07, 1]
+          - [Token08, 1]
 
 - Initialize:
     minLovelace: 2000000
@@ -122,7 +123,22 @@ operations:
                       token_name: Token07
                     into_account:
                       address: Faucet
-                  then: close
+                  then:
+                    # If we drop this part the 6th deposit succeeds ;-)
+                    # On the other hand those six deposits are really the limit.
+                    timeout:
+                      relative: +3600
+                    timeout_continuation: close
+                    unless:
+                      party:
+                        address: Faucet
+                      deposits: 1
+                      of_token:
+                        currency_symbol: NFTs
+                        token_name: Token08
+                      into_account:
+                        address: Faucet
+                    then: close
 
 - Comment: Deposit all the NFT's on by one
 
@@ -228,7 +244,7 @@ operations:
     maximumTime:
       relative: 120
 
-- ShouldFail: AutoRun
+- AutoRun
 
 - Comment: It is expected that we fail at seventh deposit...
 
@@ -247,5 +263,21 @@ operations:
     maximumTime:
       relative: 120
 
-- ShouldFail: AutoRun
+- AutoRun
 
+- Prepare:
+    inputs:
+      - input_from_party:
+          address: Faucet
+        that_deposits: 1
+        of_token:
+          currency_symbol: NFTs
+          token_name: Token08
+        into_account:
+          address: Faucet
+    minimumTime:
+      relative: -15
+    maximumTime:
+      relative: 120
+
+- ShouldFail: AutoRun
