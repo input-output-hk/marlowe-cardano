@@ -23,7 +23,11 @@ import Data.Int
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Allegra (allegraTxOutRow, allegraTxRow)
-import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Shelley (hashToBytea, originalBytea, shelleyTxInRow)
+import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Shelley (
+  hashToBytea,
+  serializeBytea,
+  shelleyTxInRow,
+ )
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types
 
 maryTxToRows :: Int64 -> Bytea -> Bytea -> ShelleyTx (MaryEra StandardCrypto) -> TxRowGroup
@@ -45,7 +49,7 @@ maryScriptRow :: ScriptHash StandardCrypto -> Timelock (MaryEra StandardCrypto) 
 maryScriptRow (ScriptHash hash) script =
   ScriptRow
     { scriptHash = hashToBytea hash
-    , scriptBytes = originalBytea script
+    , scriptBytes = serializeBytea shelleyProtVer script
     }
 
 maryTxRow

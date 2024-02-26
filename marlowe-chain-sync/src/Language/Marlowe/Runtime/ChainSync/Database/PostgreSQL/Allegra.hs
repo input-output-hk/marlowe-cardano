@@ -23,7 +23,7 @@ import qualified Data.Set as Set
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Shelley (
   hashToBytea,
   mapStrictMaybe,
-  originalBytea,
+  serializeBytea,
   shelleyTxInRow,
   shelleyTxOutRow,
  )
@@ -48,7 +48,7 @@ allegraScriptRow :: ScriptHash StandardCrypto -> Timelock (AllegraEra StandardCr
 allegraScriptRow (ScriptHash hash) script =
   ScriptRow
     { scriptHash = hashToBytea hash
-    , scriptBytes = originalBytea script
+    , scriptBytes = serializeBytea shelleyProtVer script
     }
 
 allegraTxRow

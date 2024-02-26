@@ -29,6 +29,7 @@ import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Shelley (
   hashToBytea,
   mapStrictMaybe,
   originalBytea,
+  serializeBytea,
   shelleyTxInRow,
  )
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types
@@ -53,7 +54,7 @@ alonzoScriptRow :: ScriptHash StandardCrypto -> AlonzoScript (AlonzoEra Standard
 alonzoScriptRow (ScriptHash hash) script =
   ScriptRow
     { scriptHash = hashToBytea hash
-    , scriptBytes = originalBytea script
+    , scriptBytes = serializeBytea shelleyProtVer script
     }
 
 alonzoTxRow
