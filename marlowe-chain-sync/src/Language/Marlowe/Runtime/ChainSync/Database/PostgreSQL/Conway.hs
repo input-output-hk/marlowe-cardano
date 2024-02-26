@@ -62,7 +62,7 @@ import qualified Data.Map as Map
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Alonzo (alonzoTxInRows, alonzoTxRow)
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Babbage (babbageTxOutRows)
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Mary (maryAssetMintRows)
-import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Shelley (hashToBytea, originalBytea)
+import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Shelley (hashToBytea, serializeBytea)
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -100,7 +100,7 @@ conwayScriptRow :: ScriptHash StandardCrypto -> AlonzoScript (ConwayEra Standard
 conwayScriptRow (ScriptHash hash) script =
   ScriptRow
     { scriptHash = hashToBytea hash
-    , scriptBytes = originalBytea script
+    , scriptBytes = serializeBytea shelleyProtVer script
     }
 
 coerceTxOut

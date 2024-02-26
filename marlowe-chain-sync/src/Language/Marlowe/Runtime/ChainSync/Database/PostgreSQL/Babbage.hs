@@ -27,7 +27,7 @@ import Data.Int
 import qualified Data.Map as Map
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Alonzo (alonzoTxInRows, alonzoTxRow)
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Mary (maryAssetMintRows, maryTxOutRow)
-import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Shelley (hashToBytea, originalBytea)
+import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Shelley (hashToBytea, originalBytea, serializeBytea)
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types
 
 babbageTxToRows :: Int64 -> Bytea -> Bytea -> AlonzoTx (BabbageEra StandardCrypto) -> TxRowGroup
@@ -58,7 +58,7 @@ babbageScriptRow :: ScriptHash StandardCrypto -> AlonzoScript (BabbageEra Standa
 babbageScriptRow (ScriptHash hash) script =
   ScriptRow
     { scriptHash = hashToBytea hash
-    , scriptBytes = originalBytea script
+    , scriptBytes = serializeBytea shelleyProtVer script
     }
 
 babbageTxOutRows

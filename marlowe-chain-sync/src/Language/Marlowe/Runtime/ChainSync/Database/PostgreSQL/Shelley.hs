@@ -6,8 +6,8 @@ module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Shelley where
 
 import qualified Cardano.Crypto.Hash as Hash
 import Cardano.Ledger.Address (BootstrapAddress (..), putPtr, serialiseAddr)
-import Cardano.Ledger.BaseTypes (TxIx (..), shelleyProtVer)
-import Cardano.Ledger.Binary (serialize')
+import Cardano.Ledger.BaseTypes (TxIx (..), Version, shelleyProtVer)
+import Cardano.Ledger.Binary (EncCBOR, serialize')
 import Cardano.Ledger.Crypto
 import Cardano.Ledger.SafeHash (SafeToHash (..))
 import Cardano.Ledger.Shelley
@@ -55,8 +55,11 @@ shelleyScriptRow :: ScriptHash StandardCrypto -> MultiSig (ShelleyEra StandardCr
 shelleyScriptRow (ScriptHash hash) script =
   ScriptRow
     { scriptHash = hashToBytea hash
-    , scriptBytes = originalBytea script
+    , scriptBytes = serializeBytea shelleyProtVer script
     }
+
+serializeBytea :: (EncCBOR a) => Version -> a -> Bytea
+serializeBytea v = Bytea . serialize' v
 
 mapStrictMaybe :: (a -> b) -> StrictMaybe a -> Maybe b
 mapStrictMaybe f = \case

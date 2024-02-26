@@ -35,7 +35,7 @@ import Cardano.Api (BabbageEraOnwards (..), ShelleyBasedEra (..))
 import Cardano.Api.Shelley (fromShelleyBasedScript)
 import qualified Cardano.Api.Shelley as C
 import Cardano.Binary (unsafeDeserialize')
-import Cardano.Ledger.Binary (DecCBOR (decCBOR), decodeFullAnnotator, shelleyProtVer)
+import Cardano.Ledger.Binary (DecCBOR (decCBOR), decodeFullAnnotator)
 import Control.Applicative ((<|>))
 import Control.Arrow (Arrow (..), (***))
 import Control.Foldl (Fold (Fold))
@@ -156,14 +156,14 @@ getScripts = Database.GetScripts go
             ( ScriptHash scriptHash
             , fromShelleyBasedScript ShelleyBasedEraBabbage $
                 either (error . show) id $
-                  decodeFullAnnotator shelleyProtVer "Script" decCBOR $
+                  decodeFullAnnotator maxBound "Script" decCBOR $
                     LBS.fromStrict scriptBytes
             )
           BabbageEraOnwardsConway -> \(scriptHash, scriptBytes) ->
             ( ScriptHash scriptHash
             , fromShelleyBasedScript ShelleyBasedEraConway $
                 either (error . show) id $
-                  decodeFullAnnotator shelleyProtVer "Script" decCBOR $
+                  decodeFullAnnotator maxBound "Script" decCBOR $
                     LBS.fromStrict scriptBytes
             )
 
