@@ -5,7 +5,15 @@
 
 module Language.Marlowe.Runtime.Transaction.Burn where
 
-import Cardano.Api (BabbageEraOnwards, BuildTx, ScriptInEra, SystemStart, TxBodyContent (..), defaultTxBodyContent)
+import Cardano.Api (
+  BabbageEraOnwards,
+  BuildTx,
+  BuildTxWith (..),
+  ScriptInEra,
+  SystemStart,
+  TxBodyContent (..),
+  defaultTxBodyContent,
+ )
 import qualified Cardano.Api as C
 import Cardano.Api.Shelley (LedgerProtocolParameters, PlutusScriptOrReferenceInput (..), ReferenceScript (..))
 import Control.Error (ExceptT, note, throwE)
@@ -115,7 +123,7 @@ burnRoleTokens start history chainQueryConnector era protocol walletCtx@WalletCo
   let missingScriptHashes = Set.difference policyScriptHashes $ Map.keysSet scripts
   unless (Set.null missingScriptHashes) $ throwE $ BurnRolesActive $ Set.mapMonotonic coerce missingScriptHashes
   -- Build the transaction body
-  txBodyContent <- except $ note BurnFromCardanoError $ buildBurn era inputs scripts
+  txBodyContent <- except $ note BurnFromCardanoError $ buildBurn era protocol inputs scripts
   -- FIXME there is no reason we need these except that selectCoins and balanceTx require them. Refactor
   -- those two functions to remove these dummy contexts.
   let scriptCtx = Right $ PayoutContext mempty mempty
@@ -148,15 +156,16 @@ activeCurrency RoleCurrency{..}
 buildBurn
   :: forall era
    . BabbageEraOnwards era
+  -> LedgerProtocolParameters era
   -> Map TxOutRef (Tokens, (Address, Assets))
   -> Map ScriptHash (ScriptInEra era)
   -> Maybe (TxBodyContent BuildTx era)
-buildBurn era inputs scripts = do
+buildBurn era protocol inputs scripts = do
   txIns <- traverse buildInput $ Map.keys inputs
   (outputsWithTokens, adaOnlyOutputs) <- fold <$> traverse (uncurry buildOutput . snd) inputs
   let txOuts = mergeAdaOnly adaOnlyOutputs <> outputsWithTokens
   txMintValue <- buildMint
-  pure (defaultTxBodyContent shelleyEra){txIns, txOuts, txMintValue}
+  pure (defaultTxBodyContent shelleyEra){txIns, txOuts, txMintValue, txProtocolParams = BuildTxWith $ Just protocol}
   where
     shelleyEra :: C.ShelleyBasedEra era
     shelleyEra = C.babbageEraOnwardsToShelleyBasedEra era
