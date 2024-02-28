@@ -8,6 +8,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module Language.Marlowe.CLI.Test.Runtime.Interpret where
@@ -44,7 +45,7 @@ import Data.Traversable (for)
 import Language.Marlowe.CLI.Test.Contract (ContractNickname (ContractNickname), Source (InlineContract, UseTemplate))
 import Language.Marlowe.CLI.Test.Contract.Source (useTemplate)
 import Language.Marlowe.CLI.Test.InterpreterError (runtimeOperationFailed', testExecutionFailed', timeoutReached')
-import Language.Marlowe.CLI.Test.Log (Label, logStoreLabeledMsg, throwLabeledError)
+import Language.Marlowe.CLI.Test.Log (Label, logStoreLabeledMsg, logTxBody, throwLabeledError)
 import Language.Marlowe.CLI.Test.Runtime.Types (
   ContractInfo (ContractInfo, _ciContinuations, _ciContract, _ciContractId, _ciMarloweThread, _ciRoleCurrency),
   DoMerkleize (ClientSide, RuntimeSide),
@@ -372,6 +373,7 @@ withdraw ro contractId tokenName walletNickname Wallet{_waAddress, _waSigningKey
 interpret
   :: forall era env m st
    . (InterpretMonad env st m era)
+  => (C.IsShelleyBasedEra era)
   => RuntimeOperation
   -> m ()
 interpret ro@RuntimeAwaitTxsConfirmed{..} = do
@@ -575,6 +577,11 @@ interpret ro@RuntimeCreateContract{..} = do
         res <- liftIO $ flip runMarloweT connector do
           Marlowe.Class.submitAndWait BabbageEraOnwardsConway tx
         logStoreLabeledMsg ro $ "Submitted" <> show contractId
+
+        case C.cardanoEra @era of
+          C.ConwayEra -> logTxBody ("Submitted tx" :: String) "" txBody id
+          _ -> pure ()
+
         case res of
           Right _ -> do
             logStoreLabeledMsg ro $ "Contract created: " <> show tx
@@ -707,6 +714,10 @@ interpret ro@RuntimeApplyInputs{..} = do
         res <- liftIO $ flip runMarloweT connector do
           Marlowe.Class.submitAndWait BabbageEraOnwardsConway tx
         logStoreLabeledMsg ro "Submitted and confirmed."
+
+        case C.cardanoEra @era of
+          C.ConwayEra -> logTxBody ("Submitted tx" :: String) "" txBody id
+          _ -> pure ()
 
         case res of
           Right bl -> do
