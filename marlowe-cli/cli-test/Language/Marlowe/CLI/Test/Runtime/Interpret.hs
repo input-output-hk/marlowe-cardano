@@ -534,6 +534,11 @@ interpret ro@RuntimeCreateContract{..} = do
         res <- liftIO $ flip runMarloweT connector do
           Marlowe.Class.submitAndWait BabbageEraOnwardsBabbage tx
         logStoreLabeledMsg ro $ "Submitted" <> show contractId
+
+        case C.cardanoEra @era of
+          C.BabbageEra -> logTxBody ("Submitted tx" :: String) "" txBody id
+          _ -> pure ()
+
         case res of
           Right _ -> do
             logStoreLabeledMsg ro $ "Contract created: " <> show tx
@@ -668,6 +673,10 @@ interpret ro@RuntimeApplyInputs{..} = do
         res <- liftIO $ flip runMarloweT connector do
           Marlowe.Class.submitAndWait BabbageEraOnwardsBabbage tx
         logStoreLabeledMsg ro "Submitted and confirmed."
+
+        case C.cardanoEra @era of
+          C.BabbageEra -> logTxBody ("Submitted tx" :: String) "" txBody id
+          _ -> pure ()
 
         case res of
           Right bl -> do
