@@ -24,7 +24,7 @@ let
       shell.withHoogle = false;
 
       inputMap = {
-        "https://input-output-hk.github.io/cardano-haskell-packages" = inputs.iogx.inputs.CHaP;
+        "https://chap.intersectmbo.org/" = inputs.iogx.inputs.CHaP;
       };
 
       modules = [{

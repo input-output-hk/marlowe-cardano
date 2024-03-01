@@ -95,7 +95,7 @@ dropped.
 
 ## Step 6: Publish Haskell Libraries to CHaP
 
-See [here](https://input-output-hk.github.io/cardano-haskell-packages/#how-to-add-a-new-package-version).
+See [here](https://chap.intersectmbo.org/#how-to-add-a-new-package-version).
 
 ## Step 7: Publish a Release on GitHub
 
