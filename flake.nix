@@ -9,8 +9,7 @@
       inputs.n2c.follows = "n2c";
     };
 
-    # Use upstream when https://github.com/nlewo/nix2container/pull/82 is merged
-    n2c.url = "github:shlevy/nix2container/no-Size-on-dir";
+    n2c.url = "github:nlewo/nix2container";
 
     marlowe-plutus.url = "github:input-output-hk/marlowe-plutus";
 
