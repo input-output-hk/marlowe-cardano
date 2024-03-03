@@ -14,7 +14,7 @@ let
 
       src = ../.;
 
-      compiler-nix-name = "ghc928";
+      compiler-nix-name = "ghc964";
 
       flake.variants.profiled.modules = [{
         enableProfiling = true;
