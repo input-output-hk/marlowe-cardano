@@ -28,7 +28,8 @@ module Language.Marlowe.CLI.Analyze (
 ) where
 
 import Control.Monad (guard, liftM2, (<=<))
-import Control.Monad.Except (MonadError (throwError), MonadIO (..))
+import Control.Monad.Except (MonadError (throwError))
+import Control.Monad.IO.Class (MonadIO (..))
 import Data.Aeson (object, (.=))
 import Data.Bifunctor (bimap)
 import Data.Foldable (toList)

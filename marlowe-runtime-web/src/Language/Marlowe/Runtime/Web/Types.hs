@@ -23,7 +23,7 @@ import Data.Aeson.Types (Parser, parseFail, toJSONKeyText)
 import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
-import Data.ByteString.Base16 (decodeBase16, encodeBase16)
+import Data.ByteString.Base16 (decodeBase16Untyped, encodeBase16)
 import Data.Char (isSpace)
 import Data.Foldable (fold)
 import Data.Map (Map)
@@ -49,6 +49,8 @@ import Data.OpenApi (
   required,
   toParamSchema,
  )
+
+import Data.Base16.Types (extractBase16)
 import qualified Data.OpenApi as OpenApi
 import Data.OpenApi.Schema (ToSchema (..))
 import Data.Set (Set)
@@ -78,10 +80,10 @@ newtype Base16 = Base16 {unBase16 :: ByteString}
   deriving (Eq, Ord)
 
 instance Show Base16 where
-  show = T.unpack . encodeBase16 . unBase16
+  show = T.unpack . extractBase16 . encodeBase16 . unBase16
 
 instance IsString Base16 where
-  fromString = either (error . T.unpack) Base16 . decodeBase16 . encodeUtf8 . T.pack
+  fromString = either (error . T.unpack) Base16 . decodeBase16Untyped . encodeUtf8 . T.pack
 
 instance ToJSON Base16 where
   toJSON = String . toUrlPiece
@@ -97,10 +99,10 @@ instance FromJSONKey Base16 where
   fromJSONKey = FromJSONKeyTextParser $ either (parseFail . T.unpack) pure . parseUrlPiece
 
 instance ToHttpApiData Base16 where
-  toUrlPiece = encodeBase16 . unBase16
+  toUrlPiece = extractBase16 . encodeBase16 . unBase16
 
 instance FromHttpApiData Base16 where
-  parseUrlPiece = fmap Base16 . decodeBase16 . encodeUtf8
+  parseUrlPiece = fmap Base16 . decodeBase16Untyped . encodeUtf8
 
 instance ToSchema Base16 where
   declareNamedSchema _ = NamedSchema Nothing <$> declareSchema (Proxy @String)

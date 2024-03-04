@@ -57,11 +57,12 @@ import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Aeson.Text (encodeToLazyText)
 import Data.Aeson.Types (Parser, parseFail, toJSONKeyText)
 import qualified Data.Attoparsec.ByteString.Char8 as Atto
+import Data.Base16.Types (extractBase16)
 import Data.Bifunctor (Bifunctor (..), bimap)
 import Data.Binary (Binary (..), get, getWord8, put, putWord8)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
-import Data.ByteString.Base16 (decodeBase16, encodeBase16)
+import Data.ByteString.Base16 (decodeBase16Untyped, encodeBase16)
 import qualified Data.ByteString.Char8 as BSC
 import Data.Foldable (Foldable (..))
 import Data.Function (on)
@@ -268,7 +269,7 @@ instance FromJSON Metadata where
       go (Aeson.String s)
         | Just s' <- T.stripPrefix "0x" s
         , let bs' = T.encodeUtf8 s'
-        , Right bs <- decodeBase16 bs'
+        , Right bs <- (decodeBase16Untyped) bs'
         , not (BSC.any (\c -> c >= 'A' && c <= 'F') bs') =
             pure $ MetadataBytes bs
       go (Aeson.String s) = pure $ MetadataText s
@@ -312,7 +313,7 @@ instance FromJSON Metadata where
         _ <- Atto.string "0x"
         remaining <- Atto.takeByteString
         when (BSC.any hexUpper remaining) $ fail ("Unexpected uppercase hex characters in " <> show remaining)
-        case decodeBase16 remaining of
+        case (decodeBase16Untyped $ remaining) of
           Right bs -> return bs
           _ -> fail ("Expecting base16 encoded string, found: " <> show remaining)
         where
@@ -449,7 +450,7 @@ instance Variations Datum where
 
 instance ToJSON Datum where
   toJSON = \case
-    B bs -> toJSON (encodeBase16 bs)
+    B bs -> toJSON (extractBase16 . encodeBase16 $ bs)
     I i -> toJSON i
     List elems ->
       A.object
@@ -535,22 +536,22 @@ instance Monoid Tokens where
 newtype Base16 = Base16 {unBase16 :: ByteString}
 
 instance Show Base16 where
-  show = show . encodeBase16 . unBase16
+  show = show . extractBase16 . encodeBase16 . unBase16
 
 instance IsString Base16 where
-  fromString = either (error . T.unpack) Base16 . decodeBase16 . encodeUtf8 . T.pack
+  fromString = either (error . T.unpack) Base16 . decodeBase16Untyped . encodeUtf8 . T.pack
 
 instance FromJSON Base16 where
-  parseJSON = either (parseFail . T.unpack) (pure . Base16) . decodeBase16 . encodeUtf8 <=< parseJSON
+  parseJSON = either (parseFail . T.unpack) (pure . Base16) . decodeBase16Untyped . encodeUtf8 <=< parseJSON
 
 instance FromJSONKey Base16 where
-  fromJSONKey = FromJSONKeyTextParser $ either (parseFail . T.unpack) (pure . Base16) . decodeBase16 . encodeUtf8
+  fromJSONKey = FromJSONKeyTextParser $ either (parseFail . T.unpack) (pure . Base16) . decodeBase16Untyped . encodeUtf8
 
 instance ToJSON Base16 where
-  toJSON = toJSON . encodeBase16 . unBase16
+  toJSON = toJSON . extractBase16 . encodeBase16 . unBase16
 
 instance ToJSONKey Base16 where
-  toJSONKey = toJSONKeyText $ encodeBase16 . unBase16
+  toJSONKey = toJSONKeyText $ extractBase16 . encodeBase16 . unBase16
 
 newtype DatumHash = DatumHash {unDatumHash :: ByteString}
   deriving stock (Eq, Ord, Generic)
@@ -590,14 +591,14 @@ parseTxOutRef :: Text -> Maybe TxOutRef
 parseTxOutRef val = case T.splitOn "#" val of
   [txId, txIx] ->
     TxOutRef
-      <$> (TxId <$> either (const Nothing) Just (decodeBase16 . encodeUtf8 $ txId))
+      <$> (TxId <$> either (const Nothing) Just (decodeBase16Untyped . encodeUtf8 $ txId))
       <*> (TxIx <$> readMaybe (T.unpack txIx))
   _ -> Nothing
 
 renderTxOutRef :: TxOutRef -> Text
 renderTxOutRef TxOutRef{..} =
   mconcat
-    [ encodeBase16 $ unTxId txId
+    [ extractBase16 . encodeBase16 $ unTxId txId
     , "#"
     , T.pack $ show $ unTxIx txIx
     ]

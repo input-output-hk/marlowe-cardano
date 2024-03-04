@@ -23,9 +23,9 @@ module Spec.Marlowe.Semantics.Compute (
   tests,
 ) where
 
-import Control.Applicative (liftA2)
 import Control.Lens.Getter (Getter, to, view)
-import Control.Monad.Except (MonadError (throwError), unless, when)
+import Control.Monad (unless, when)
+import Control.Monad.Except (MonadError (throwError))
 import Control.Monad.Reader (ReaderT (runReaderT))
 import Data.Bifunctor (Bifunctor (..), second)
 import Data.Default (Default (..))

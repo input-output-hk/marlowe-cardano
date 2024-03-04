@@ -7,7 +7,7 @@ import Cardano.Api (AsType (..), NetworkId (..), NetworkMagic (..), PlutusScript
 import Data.Aeson (FromJSON, FromJSONKey, ToJSON (..), ToJSONKey)
 import Data.Binary (Binary)
 import Data.ByteString (ByteString)
-import Data.ByteString.Base16 (decodeBase16)
+import Data.ByteString.Base16 (decodeBase16Untyped)
 import Data.Foldable (asum)
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -811,7 +811,7 @@ readHex =
   either (error . show) id
     . deserialiseFromCBOR (AsPlutusScript AsPlutusScriptV2)
     . either (error . T.unpack) id
-    . decodeBase16
+    . decodeBase16Untyped
 
 -- | The set of known script hash sets for Marlowe V1.
 v1Scripts :: Set MarloweScripts

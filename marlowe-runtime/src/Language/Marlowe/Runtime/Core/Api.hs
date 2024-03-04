@@ -24,12 +24,13 @@ import Data.Aeson (
   encode,
  )
 import Data.Aeson.Types (Parser, parse, parseFail, toJSONKeyText)
+import Data.Base16.Types (extractBase16)
 import Data.Bifunctor (first)
 import Data.Binary (Binary (..), Get, Put, getWord8, putWord8)
 import Data.Binary.Get (getWord32be)
 import Data.Binary.Put (putWord32be)
 import Data.ByteString (ByteString)
-import Data.ByteString.Base16 (decodeBase16, encodeBase16)
+import Data.ByteString.Base16 (decodeBase16Untyped, encodeBase16)
 import Data.Either (fromRight)
 import Data.Kind (Type)
 import qualified Data.List.NonEmpty as NE
@@ -503,16 +504,16 @@ payoutDatumToJSON = \case
   MarloweV1 -> \case
     Chain.AssetId policyId tokenName ->
       toJSON
-        ( String . encodeBase16 . unPolicyId $ policyId
-        , String . encodeBase16 . unTokenName $ tokenName
+        ( String . extractBase16 . encodeBase16 . unPolicyId $ policyId
+        , String . extractBase16 . encodeBase16 . unTokenName $ tokenName
         )
 
 payoutDatumFromJSON :: MarloweVersion v -> Value -> Parser (PayoutDatum v)
 payoutDatumFromJSON = \case
   MarloweV1 -> \json -> do
     (p, t) <- parseJSON json
-    p' <- either (parseFail . T.unpack) (pure . Chain.PolicyId) . decodeBase16 . encodeUtf8 $ t
-    t' <- either (parseFail . T.unpack) (pure . Chain.TokenName) . decodeBase16 . encodeUtf8 $ p
+    p' <- either (parseFail . T.unpack) (pure . Chain.PolicyId) . decodeBase16Untyped . encodeUtf8 $ t
+    t' <- either (parseFail . T.unpack) (pure . Chain.TokenName) . decodeBase16Untyped . encodeUtf8 $ p
     pure $ Chain.AssetId p' t'
 
 datumToJSON :: MarloweVersion v -> Datum v -> Value

@@ -5,7 +5,8 @@
 module Language.Marlowe.Oracle.Process where
 
 import Control.Monad (void)
-import Control.Monad.Except (ExceptT (ExceptT), liftIO, runExceptT)
+import Control.Monad.Except (ExceptT (ExceptT), runExceptT)
+import Control.Monad.IO.Class (liftIO)
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
 import Language.Marlowe.Core.V1.Semantics.Types (

@@ -9,7 +9,6 @@
 -- driver and a codec.
 module Network.Protocol.Query.Client where
 
-import Control.Applicative (liftA2)
 import Control.Monad (join)
 import Control.Monad.Event.Class (MonadEvent)
 import Control.Monad.IO.Class (MonadIO (..))

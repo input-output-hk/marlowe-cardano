@@ -26,13 +26,13 @@ import Cardano.Api.Shelley (
 import Cardano.Ledger.BaseTypes (Network (..))
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Credential (Ptr (..))
-import Control.Applicative (liftA2)
 import Control.Lens (Fold, folding, makePrisms, traverseOf_, (^.))
 import Control.Monad (when)
 import Control.Monad.Trans.RWS (RWS, evalRWS)
 import qualified Control.Monad.Trans.RWS as RWS
 import Control.Monad.Trans.State
 import Data.Aeson (FromJSON, ToJSON)
+import Data.Base16.Types (extractBase16)
 import Data.Bifunctor (Bifunctor (..))
 import Data.Binary (Binary)
 import Data.ByteString.Base16 (encodeBase16)
@@ -506,7 +506,7 @@ fromLinkedObject lbl = \case
 
 hashLabel :: (ToData a) => Text -> a -> O.Label
 hashLabel prefix a =
-  O.Label $ prefix <> "-" <> encodeBase16 (fromBuiltin $ dataHash a)
+  O.Label $ prefix <> "-" <> extractBase16 (encodeBase16 (fromBuiltin $ dataHash a))
 
 linkedChildren :: Fold LinkedObject LinkedObject
 linkedChildren = folding \case

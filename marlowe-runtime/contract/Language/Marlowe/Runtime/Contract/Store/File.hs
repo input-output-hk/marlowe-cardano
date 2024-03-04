@@ -5,15 +5,15 @@ module Language.Marlowe.Runtime.Contract.Store.File (
 ) where
 
 import Codec.Compression.GZip (compress, decompress)
-import Control.Applicative (liftA2)
 import Control.DeepSeq (force)
 import Control.Monad (guard, unless, when)
 import Control.Monad.Catch (MonadMask)
 import Control.Monad.Trans.Maybe (MaybeT (..))
+import Data.Base16.Types (extractBase16)
 import Data.Binary (Word64, get, put)
 import Data.Binary.Get (runGet)
 import Data.Binary.Put (runPut)
-import Data.ByteString.Base16 (decodeBase16, encodeBase16)
+import Data.ByteString.Base16 (decodeBase16Untyped, encodeBase16)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Foldable (fold, foldl')
 import Data.Function (on)
@@ -127,7 +127,7 @@ createContractStore ContractStoreOptions{..} = do
         roots <- readTVar gcRootsVar
         maybe retrySTM pure roots
       let getClosure (DatumHash hash) = runMaybeT do
-            let path = contractStoreDirectory </> (T.unpack $ encodeBase16 hash) <.> "closure"
+            let path = contractStoreDirectory </> (T.unpack $ extractBase16 (encodeBase16 hash)) <.> "closure"
             guard =<< doesFileExist path
             liftIO $ Set.fromList . runGet get <$> LBS.readFile path
       liveContracts <- foldMap fold <$> pooledMapConcurrently getClosure (Set.toList @DatumHash gcRoots)
@@ -135,7 +135,7 @@ createContractStore ContractStoreOptions{..} = do
       freedSpace <-
         sum . catMaybes <$> pooledForConcurrently storeFiles \file -> runMaybeT do
           let path = contractStoreDirectory </> file
-          fileHash <- MaybeT $ pure $ either (const Nothing) Just $ decodeBase16 $ encodeUtf8 $ T.pack $ takeBaseName path
+          fileHash <- MaybeT $ pure $ either (const Nothing) Just $ decodeBase16Untyped $ encodeUtf8 $ T.pack $ takeBaseName path
           lastModified <- getModificationTime path
           now <- liftIO getCurrentTime
           guard $ now `diffUTCTime` lastModified >= minContractAge
@@ -157,7 +157,7 @@ createContractStore ContractStoreOptions{..} = do
                 , closure = Set.singleton closeHash
                 }
       | otherwise = (if lock then withLockFile lockingParameters lockfile else id) $ runMaybeT do
-          let mkFilePath = (contractStoreDirectory </>) . (T.unpack (encodeBase16 $ unDatumHash contractHash) <.>)
+          let mkFilePath = (contractStoreDirectory </>) . (T.unpack (extractBase16 . encodeBase16 $ unDatumHash contractHash) <.>)
           let contractFilePath = mkFilePath "contract"
           let adjacencyFilePath = mkFilePath "adjacency"
           let closureFilePath = mkFilePath "closure"
@@ -207,7 +207,7 @@ createContractStore ContractStoreOptions{..} = do
           -- Returns a list of file-writing actions to save the contents of a
           -- contract record.
           flushContractRecord ContractRecord{..} =
-            let basePath = directory </> T.unpack (encodeBase16 $ unDatumHash hash)
+            let basePath = directory </> T.unpack (extractBase16 . encodeBase16 $ unDatumHash hash)
                 writeIndex name hashes = do
                   let filePath = basePath <.> name
                   -- Do not compress the index files for speed.
@@ -289,7 +289,7 @@ createContractStore ContractStoreOptions{..} = do
                 if HashMap.member hash buffer
                   then pure True
                   else do
-                    let contractFileName = T.unpack (encodeBase16 $ unDatumHash hash) <.> ".contract"
+                    let contractFileName = T.unpack (extractBase16 . encodeBase16 $ unDatumHash hash) <.> ".contract"
                     let stagingAreaPath = directory </> contractFileName
                     let storePath = contractStoreDirectory </> contractFileName
                     on (liftA2 (||)) doesFileExist stagingAreaPath storePath

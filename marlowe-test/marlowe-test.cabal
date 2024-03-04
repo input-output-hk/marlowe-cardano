@@ -152,6 +152,7 @@ library
     , plutus-tx ^>=1.15
     , QuickCheck >=2.14 && <3
     , tasty-quickcheck ^>=0.10
+    , transformers
 
   if flag(trace-plutus)
     cpp-options: -DTRACE_PLUTUS
@@ -215,7 +216,7 @@ test-suite marlowe-test
     , plutus-tx ^>=1.15
     , QuickCheck >=2.14 && <3
     , quickcheck-instances ^>=0.3.29
-    , sbv >=8.4
+    , sbv >=10.3
     , tasty ^>=1.4.2
     , tasty-hunit ^>=0.10
     , tasty-quickcheck ^>=0.10

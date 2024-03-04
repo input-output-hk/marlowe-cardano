@@ -4,7 +4,6 @@ module Language.Marlowe.Runtime.Transaction.ApiSpec (
   spec,
 ) where
 
-import Control.Applicative (liftA2)
 import Control.Arrow ((&&&), (***))
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as Aeson.KeyMap

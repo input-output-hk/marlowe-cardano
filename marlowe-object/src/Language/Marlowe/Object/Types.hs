@@ -26,16 +26,17 @@ import Cardano.Api (
   serialiseToBech32,
  )
 import Cardano.Api.Byron (ShelleyAddr)
-import Control.Applicative (empty, liftA2)
+import Control.Applicative (empty)
 import Control.Lens (Lens', Plated (..), Prism', makeLensesFor, makePrisms, prism', traversal)
 import Control.Monad (join)
 import Data.Aeson hiding (Object, String, Value)
 import qualified Data.Aeson as A hiding (Object)
 import Data.Aeson.Applicative (parseObject)
 import Data.Aeson.Types (parseFail, toJSONKeyText)
+import Data.Base16.Types (extractBase16)
 import Data.Binary (Binary (..), getWord8, putWord8)
 import Data.ByteString (ByteString)
-import Data.ByteString.Base16 (decodeBase16', encodeBase16)
+import Data.ByteString.Base16 (decodeBase16Untyped, encodeBase16)
 import qualified Data.ByteString.Char8 as BS8
 import Data.Either (fromRight)
 import Data.Foldable (asum)
@@ -47,6 +48,7 @@ import Data.Maybe (isJust)
 import Data.String (IsString (..))
 import Data.Text (Text)
 import qualified Data.Text as T
+import Data.Text.Encoding (encodeUtf8)
 import qualified Data.Text.Encoding as T
 import Data.Time (UTCTime, nominalDiffTimeToSeconds, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
@@ -721,23 +723,23 @@ instance Show Base16 where
 instance Read Base16 where
   readPrec = do
     String s <- lexP
-    Right parsed <- pure $ decodeBase16' $ T.pack s
+    Right parsed <- pure $ decodeBase16Untyped $ BS8.pack s
     pure $ Base16 parsed
 
 instance IsString Base16 where
-  fromString = either (error . showString "fromString(Base16): " . T.unpack) Base16 . decodeBase16' . T.pack
+  fromString = either (error . showString "fromString(Base16): " . T.unpack) Base16 . decodeBase16Untyped . BS8.pack
 
 instance ToJSON Base16 where
-  toJSON = A.String . encodeBase16 . unBase16
+  toJSON = A.String . extractBase16 . encodeBase16 . unBase16
 
 instance ToJSONKey Base16 where
-  toJSONKey = toJSONKeyText $ encodeBase16 . unBase16
+  toJSONKey = toJSONKeyText $ extractBase16 . encodeBase16 . unBase16
 
 instance FromJSON Base16 where
-  parseJSON = withText "Base16" $ either (fail . T.unpack) (pure . Base16) . decodeBase16'
+  parseJSON = withText "Base16" $ either (fail . T.unpack) (pure . Base16) . decodeBase16Untyped . encodeUtf8
 
 instance FromJSONKey Base16 where
-  fromJSONKey = FromJSONKeyTextParser $ either (fail . T.unpack) (pure . Base16) . decodeBase16'
+  fromJSONKey = FromJSONKeyTextParser $ either (fail . T.unpack) (pure . Base16) . decodeBase16Untyped . encodeUtf8
 
 data Bound = Bound Integer Integer
   deriving stock (Show, Read, Generic, Eq, Ord)

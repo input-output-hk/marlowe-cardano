@@ -8,7 +8,6 @@ module Language.Marlowe.Runtime.Integration.Contract where
 
 import Cardano.Api (ScriptData (ScriptDataBytes), hashScriptDataBytes, unsafeHashableScriptData)
 import Colog (HasLog (..), LogAction, Message)
-import Control.Applicative (Applicative (..))
 import Control.Arrow (Arrow (..), returnA)
 import Control.Concurrent.Component
 import Control.Monad (foldM, unless)
@@ -16,12 +15,14 @@ import Control.Monad.Event.Class (Inject (..), NoopEventT (runNoopEventT))
 import Control.Monad.Reader (ReaderT, ask, runReaderT)
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import Control.Monad.Writer (execWriter, runWriter)
-import Data.ByteString.Base16 (decodeBase16', encodeBase16)
+import Data.Base16.Types (extractBase16)
+import Data.ByteString.Base16 (decodeBase16Untyped, encodeBase16)
 import Data.Either (fromRight)
 import Data.Foldable (for_)
 import Data.Function (on)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
+import Data.Text.Encoding (encodeUtf8)
 import Language.Marlowe.Core.V1.Merkle (deepMerkleize)
 import Language.Marlowe.Core.V1.Plate (extractAll)
 import Language.Marlowe.Core.V1.Semantics (TransactionInput (..), TransactionOutput (..), computeTransaction)
@@ -256,7 +257,8 @@ transferSpec = do
       hash <- expectJust "failed to push contract" $ runLoad $ pushContract contract
       ObjectBundle bundle <- expectJust "failed to export contract" $ runTransfer $ exportContract 100 hash
       Api.ContractWithAdjacency{closure} <- expectJust "failed to get contract" $ runQuery $ Api.getContract hash
-      liftIO $ Set.fromList (unLabel . _label <$> bundle) `shouldBe` Set.map (encodeBase16 . unDatumHash) closure
+      liftIO $
+        Set.fromList (unLabel . _label <$> bundle) `shouldBe` Set.map (extractBase16 . encodeBase16 . unDatumHash) closure
 
     prop "Labels are hashes" \contract -> runContractTest do
       hash <- expectJust "failed to push contract" $ runLoad $ pushContract contract
@@ -265,7 +267,7 @@ transferSpec = do
             LinkedContract c -> pure (LinkedContract c, c)
             a -> fail $ "Unexpected non-contract object in exported bundle " <> show a
       (linked, _) <- expectRight "" $ linkBundle' bundle expectOnlyContracts mempty
-      liftIO $ for_ linked \(Label label, c) -> label `shouldBe` encodeBase16 (unDatumHash $ hashContract c)
+      liftIO $ for_ linked \(Label label, c) -> label `shouldBe` extractBase16 (encodeBase16 (unDatumHash $ hashContract c))
 
     prop "import . export" \contract -> do
       ObjectBundle bundle <- runContractTest do
@@ -274,7 +276,9 @@ transferSpec = do
       hashes <- runContractTest $ expectRight "failed to import bundle" $ runTransfer $ importBundle $ ObjectBundle bundle
       hashes
         `shouldBe` Map.fromList
-          ((_label &&& DatumHash . fromRight (error "fromRight: left") . decodeBase16' . unLabel . _label) <$> bundle)
+          ( (_label &&& DatumHash . fromRight (error "fromRight: left") . decodeBase16Untyped . encodeUtf8 . unLabel . _label)
+              <$> bundle
+          )
 
     prop "incremental" \contract -> runContractTest do
       hash <- expectJust "failed to push contract" $ runLoad $ pushContract contract

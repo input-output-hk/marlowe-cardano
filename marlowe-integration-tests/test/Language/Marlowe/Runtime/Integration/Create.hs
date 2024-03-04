@@ -19,7 +19,6 @@ import Cardano.Api (
   valueToList,
  )
 import qualified Cardano.Api as C
-import Control.Applicative (liftA2)
 import Control.Monad (guard)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (ask)

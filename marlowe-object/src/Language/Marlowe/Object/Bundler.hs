@@ -10,7 +10,6 @@
 --   object definition and replaces usages with a reference.
 module Language.Marlowe.Object.Bundler where
 
-import Control.Applicative (Applicative (liftA2))
 import Control.Monad.Cont (ContT)
 import Control.Monad.Except (MonadError (..))
 import Control.Monad.IO.Class (MonadIO (..))

@@ -40,7 +40,9 @@ module Language.Marlowe.Analysis.Safety.Transaction (
   firstRoleAuthorizationAnnotator,
 ) where
 
-import Control.Monad.Except (MonadError (throwError), MonadIO (..), foldM, liftEither, liftIO)
+import Control.Monad (foldM)
+import Control.Monad.Except (MonadError, liftEither, throwError)
+import Control.Monad.IO.Class (MonadIO (..), liftIO)
 import Data.Bifunctor (first)
 import Data.List (nub, nubBy)
 import Data.String (IsString (..))

@@ -72,7 +72,7 @@ library
     , aeson ^>=2.2
     , attoparsec
     , base >=4.9 && <5
-    , base16 ^>=0.3.2
+    , base16 ^>=1.0
     , binary ^>=0.8.8
     , bytestring >=0.10.12 && <0.12
     , cardano-api ^>=8.37
@@ -147,7 +147,7 @@ library libchainsync
     , ouroboros-network-protocols ^>=0.6.0
     , stm ^>=2.5
     , text ^>=2.0
-    , transformers ^>=0.5.6
+    , transformers ^>=0.6.1
     , unliftio ^>=0.2.1
     , vector ^>=0.13
 
@@ -167,7 +167,7 @@ library chain-indexer
   build-depends:
     , async-components ==0.1.1.0
     , base >=4.9 && <5
-    , base16 ^>=0.3.2
+    , base16 ^>=1.0
     , bytestring >=0.10.12 && <0.12
     , cardano-api ^>=8.37
     , cardano-crypto-wrapper ^>=1.5
@@ -197,7 +197,7 @@ library chain-indexer
     , stm-delay ^>=0.1.1
     , text ^>=2.0
     , time >=1.9 && <2
-    , transformers ^>=0.5.6
+    , transformers ^>=0.6.1
     , unliftio ^>=0.2.1
     , vector ^>=0.13
     , witherable ^>=0.4
@@ -210,7 +210,7 @@ library plutus-compat
   other-modules:
   build-depends:
     , base >=4.9 && <5
-    , base16 ^>=0.3.2
+    , base16 ^>=1.0
     , cardano-api ^>=8.37
     , cardano-ledger-binary ^>=1.2
     , cardano-ledger-byron ^>=1.0
@@ -228,7 +228,7 @@ library gen
   build-depends:
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
-    , cardano-api ^>=8.37
+    , cardano-api ^>=8.37.0
     , cardano-api-gen ^>=8.1
     , containers ^>=0.6.5
     , hedgehog-quickcheck ^>=0.1
@@ -277,7 +277,7 @@ executable marlowe-chain-indexer
     , async-components ==0.1.1.0
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
-    , cardano-api ^>=8.37
+    , cardano-api ^>=8.37.0
     , cardano-crypto-wrapper ^>=1.5
     , cardano-ledger-byron ^>=1.0
     , eventuo11y >=0.9 && <0.11
@@ -292,7 +292,7 @@ executable marlowe-chain-indexer
     , postgresql-libpq ^>=0.9
     , text ^>=2.0
     , time >=1.9 && <2
-    , transformers ^>=0.5.6
+    , transformers ^>=0.6.1
     , unliftio ^>=0.2.1
 
 executable marlowe-chain-sync
@@ -310,7 +310,7 @@ executable marlowe-chain-sync
     , async-components ==0.1.1.0
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
-    , cardano-api ^>=8.37
+    , cardano-api ^>=8.37.0
     , eventuo11y >=0.9 && <0.11
     , eventuo11y-extras ==0.1.1.0
     , eventuo11y-otel ^>=0.1
@@ -339,7 +339,7 @@ executable marlowe-chain-copy
   build-depends:
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
-    , cardano-api ^>=8.37
+    , cardano-api ^>=8.37.0
     , cassava
     , marlowe-chain-sync ==0.0.6
     , optparse-applicative

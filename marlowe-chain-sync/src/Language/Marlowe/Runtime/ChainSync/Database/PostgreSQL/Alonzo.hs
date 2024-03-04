@@ -2,6 +2,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Alonzo where
 

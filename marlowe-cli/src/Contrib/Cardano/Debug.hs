@@ -8,6 +8,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
 
 -- | A local copy of the cardano-cli `Contrib.Cardano.CLI.Run.Friendly`
 -- | because I'm not able to use `cardano-cli` lib in our current setup.

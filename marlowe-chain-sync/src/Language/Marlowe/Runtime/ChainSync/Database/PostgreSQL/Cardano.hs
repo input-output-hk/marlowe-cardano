@@ -25,7 +25,7 @@ blockToRows (BlockInMode _ block) =
   , case block of
       ByronBlock (C.ByronBlock (LB.ABOBBlock (LB.ABlock _ body _)) _ _) ->
         (\tx -> byronTxRow slotNo hash (byronTxId tx) $ taTx tx) <$> aUnTxPayload (LB.bodyTxPayload body)
-      ByronBlock C.ByronBlock{} -> []
+      ByronBlock (C.ByronBlock{}) -> []
       _ -> case block of
         Block _ txs -> txRow <$> txs
   )

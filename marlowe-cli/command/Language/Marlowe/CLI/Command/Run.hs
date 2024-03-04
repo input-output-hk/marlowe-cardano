@@ -29,7 +29,8 @@ import Cardano.Api (
   StakeAddressReference (..),
   TxIn,
  )
-import Control.Monad.Except (MonadError, MonadIO, liftIO)
+import Control.Monad.Except (MonadError)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Foldable (asum)
 import Data.Maybe (fromMaybe)
 import Language.Marlowe.CLI.Analyze (analyze)

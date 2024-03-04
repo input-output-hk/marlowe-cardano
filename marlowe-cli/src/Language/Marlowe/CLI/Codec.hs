@@ -16,7 +16,8 @@ module Language.Marlowe.CLI.Codec (
   encodeBech32,
 ) where
 
-import Control.Monad.Except (MonadError, MonadIO, liftIO)
+import Control.Monad.Except (MonadError)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Language.Marlowe.CLI.IO (liftCli, liftCliMaybe)
 import Language.Marlowe.CLI.Types (CliError)
 import System.IO (hPutStrLn, stderr)

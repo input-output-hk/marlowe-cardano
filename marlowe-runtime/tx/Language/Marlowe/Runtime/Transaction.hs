@@ -14,6 +14,7 @@ import Control.Concurrent.Component.Probes
 import Control.Concurrent.STM (STM, atomically)
 import Control.Monad.Event.Class (MonadInjectEvent)
 import Data.Aeson (KeyValue (..), encode, object)
+import Data.Base16.Types (extractBase16)
 import qualified Data.ByteString as BS
 import Data.ByteString.Base16 (encodeBase16)
 import qualified Data.ByteString.Char8 as BS8
@@ -308,7 +309,7 @@ mkCommandLineRoleTokenMintingPolicy cmd TxOutRef{..} roleTokens = bracket
             object
               [ "seedInputId" .= txId
               , "seedInputIx" .= txIx
-              , "roleTokens" .= Map.mapKeys (encodeBase16 . unTokenName) roleTokens
+              , "roleTokens" .= Map.mapKeys (extractBase16 . encodeBase16 . unTokenName) roleTokens
               ]
     hFlush stdIn
     exitCode <- waitForProcess handle
