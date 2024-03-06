@@ -190,6 +190,7 @@ type API =
     ( "contracts" :> ContractsAPI
         :<|> "withdrawals" :> WithdrawalsAPI
         :<|> "payouts" :> PayoutsAPI
+        :<|> "role-token-burns" :> BurnsAPI
         :<|> "healthcheck"
           :> ( Summary "Test server status"
                 :> Description "Check if the server is running and ready to respond to requests."
@@ -197,6 +198,26 @@ type API =
                 :> Get '[JSON] NoContent
              )
     )
+
+-- | /role-token-burns sub-API
+type BurnsAPI =
+  BurnsAPI
+    :<|> PostBurnsAPI
+    :<|> Capture "burnId" TxId :> BurnAPI
+
+-- | POST /role-token-burns sub-API
+type PostBurnsAPI =
+  Summary "Burn role tokens"
+    :> Description
+        "Build an unsigned (Cardano) transaction body which burns role tokens matching a filter. \
+        \Role tokens used by active contracts will not be burned and the request will fail if active role tokens are included. \
+        \To submit the signed transaction, use the PUT /role-token-burns/{burnId} endpoint."
+    :> OperationId "burnRoleTokens"
+    :> RenameResponseSchema "BurnRoleTokensResponse"
+    :> ( ReqBody '[JSON] PostBurnRequest :> PostTxAPI (PostCreated '[JSON] (PostBurnResponse CardanoTxBody))
+          :<|> ReqBody '[JSON] PostBurnRequest
+            :> PostTxAPI (PostCreated '[TxJSON BurnTx] (PostBurnResponse CardanoTx))
+       )
 
 -- | /contracts sub-API
 type ContractsAPI =
@@ -562,6 +583,8 @@ type PostWithdrawalsAPI =
 type PostWithdrawalsResponse tx = WithLink "withdrawal" (WithdrawTxEnvelope tx)
 
 data WithdrawTx
+
+data BurnTx
 
 instance Accept (TxJSON WithdrawTx) where
   contentType _ = "application" // "vendor.iog.marlowe-runtime.withdraw-tx-json"
