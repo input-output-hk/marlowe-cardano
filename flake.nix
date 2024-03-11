@@ -12,8 +12,7 @@
     # Use upstream when https://github.com/nlewo/nix2container/pull/82 is merged
     n2c.url = "github:shlevy/nix2container/no-Size-on-dir";
 
-    # Version of marlowe-plutus supporting aarch64-linux (TODO: Merge on main)
-    marlowe-plutus.url = "github:input-output-hk/marlowe-plutus/9b19078c02e9a6741d5d76e109cce910322eb3e6";
+    marlowe-plutus.url = "github:input-output-hk/marlowe-plutus";
 
     cardano-node.url = "github:input-output-hk/cardano-node?ref=8.7.3";
 
