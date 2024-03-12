@@ -46,7 +46,7 @@
   outputs = inputs: inputs.iogx.lib.mkFlake {
     inherit inputs;
     repoRoot = ./.;
-    systems = [ "x86_64-linux" "x86_64-darwin" "aarch64-darwin" ];
+    systems = [ "x86_64-linux" "x86_64-darwin" "aarch64-darwin" "aarch64-linux" ];
     outputs = import ./nix/outputs.nix;
   };
 

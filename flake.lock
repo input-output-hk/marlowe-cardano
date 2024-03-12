@@ -2408,11 +2408,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1703278640,
-        "narHash": "sha256-NBkdhcslPcif8zqpRWvSTM64DLdyJvE8HRoBMxjX9TI=",
+        "lastModified": 1710149994,
+        "narHash": "sha256-kvb0YtGf/if62DHLMQLuc164bIH66XBWMpNx1U1sRBM=",
         "owner": "input-output-hk",
         "repo": "marlowe-plutus",
-        "rev": "2156e3bc0819b93f6ef8774f0be9022c0d55a34a",
+        "rev": "581e95bb9c93a16dc5c9a3181e90abed4639f728",
         "type": "github"
       },
       "original": {
