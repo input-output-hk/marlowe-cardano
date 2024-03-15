@@ -54,6 +54,7 @@ import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, TVar, modifyTVar, newTVar, readTVar, writeTVar)
 import Control.Monad (guard, when)
 import Control.Monad.IO.Class (liftIO)
+import Data.Base16.Types (extractBase16)
 import Data.ByteString.Base16 (encodeBase16)
 import Data.IORef (IORef)
 import Data.IntMap.Lazy (IntMap)
@@ -236,7 +237,7 @@ pipelinedClient costModel maxCost changesVar getIntersectionPoints =
       (At (BlockHeader _ hash no) : _) ->
         logInfo $
           fromString $
-            printf "Tip of local chain: %s (#%d)" (encodeBase16 (serialiseToRawBytes hash)) (unBlockNo no)
+            printf "Tip of local chain: %s (#%d)" (extractBase16 (encodeBase16 (serialiseToRawBytes hash))) (unBlockNo no)
       _ -> logInfo "Local chain empty"
     pure $
       SendMsgFindIntersect
@@ -350,7 +351,7 @@ mkClientStNext lastLog costModel maxCost changesVar slotNoToBlockNo pipelineDeci
             fromString $
               printf
                 "Rolled forward to block %s (#%d of %d) (%d%%)"
-                (encodeBase16 (serialiseToRawBytes hash))
+                (extractBase16 (encodeBase16 (serialiseToRawBytes hash)))
                 localBlockNo
                 remoteBlockNo
                 ((localBlockNo * 100) `div` remoteBlockNo)
@@ -383,7 +384,11 @@ mkClientStNext lastLog costModel maxCost changesVar slotNoToBlockNo pipelineDeci
         logInfo case snd tip of
           ChainTipAtGenesis -> "Local node rolled back to genesis."
           ChainTip _ hash no ->
-            fromString $ printf "Local node switched to new tip %s (#%d)" (encodeBase16 (serialiseToRawBytes hash)) (unBlockNo no)
+            fromString $
+              printf
+                "Local node switched to new tip %s (#%d)"
+                (extractBase16 (encodeBase16 (serialiseToRawBytes hash)))
+                (unBlockNo no)
         let remote = case fst tip of
               Origin -> 0
               At r -> unBlockNo r
@@ -393,7 +398,7 @@ mkClientStNext lastLog costModel maxCost changesVar slotNoToBlockNo pipelineDeci
             fromString $
               printf
                 "Rolled back to block %s (#%d of %d) (%d%%)"
-                (encodeBase16 (serialiseToRawBytes hash))
+                (extractBase16 (encodeBase16 (serialiseToRawBytes hash)))
                 local
                 remote
                 ((local * 100) `div` remote)

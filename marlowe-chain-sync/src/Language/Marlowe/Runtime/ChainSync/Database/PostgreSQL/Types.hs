@@ -4,6 +4,7 @@
 module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types where
 
 import Cardano.Api
+import Data.Base16.Types (extractBase16)
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (encodeBase16)
 import Data.Csv
@@ -14,7 +15,7 @@ import GHC.Generics (Generic)
 newtype Bytea = Bytea ByteString
 
 instance ToField Bytea where
-  toField (Bytea bs) = "\\x" <> encodeUtf8 (encodeBase16 bs)
+  toField (Bytea bs) = "\\x" <> encodeUtf8 (extractBase16 . encodeBase16 $ bs)
 
 newtype SqlBool = SqlBool Bool
 

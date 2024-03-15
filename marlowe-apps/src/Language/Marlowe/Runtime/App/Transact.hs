@@ -24,7 +24,8 @@ module Language.Marlowe.Runtime.App.Transact (
 
 import Control.Concurrent (threadDelay)
 import Control.Monad (join, when)
-import Control.Monad.Except (ExceptT (..), catchError, liftIO, throwError)
+import Control.Monad.Except (ExceptT (..), catchError, throwError)
+import Control.Monad.IO.Class (liftIO)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input)
 import Language.Marlowe.Runtime.App.Types (
   App,

@@ -11,7 +11,6 @@ import Cardano.Api (
   ShelleyBasedEra (ShelleyBasedEraBabbage, ShelleyBasedEraConway),
   shelleyBasedEra,
  )
-import Control.Applicative (liftA2)
 import qualified Data.ByteString.Char8 as BS
 import Data.Foldable (fold)
 import qualified Data.List.NonEmpty as NE

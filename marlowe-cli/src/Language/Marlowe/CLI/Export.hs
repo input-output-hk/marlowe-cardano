@@ -80,7 +80,8 @@ import Cardano.Api (
  )
 import Cardano.Api.Shelley (fromPlutusData)
 import Control.Monad (join, when)
-import Control.Monad.Except (MonadError, MonadIO, liftEither, liftIO)
+import Control.Monad.Except (MonadError, liftEither)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Aeson (encode)
 import Language.Marlowe.CLI.IO (
   decodeFileStrict,

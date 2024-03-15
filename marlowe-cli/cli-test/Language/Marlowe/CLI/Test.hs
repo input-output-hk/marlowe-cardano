@@ -35,8 +35,8 @@ import Control.Concurrent.STM (
  )
 import Control.Lens ((^.))
 import Control.Monad.Error.Class (throwError)
-import Control.Monad.Except (MonadError, MonadIO, catchError)
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Except (MonadError, catchError)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (ReaderT (runReaderT))
 import Control.Monad.Reader.Class (MonadReader)
 import Data.Aeson.Encode.Pretty qualified as A

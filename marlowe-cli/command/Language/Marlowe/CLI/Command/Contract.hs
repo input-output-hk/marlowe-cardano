@@ -21,7 +21,8 @@ module Language.Marlowe.CLI.Command.Contract (
 ) where
 
 import Cardano.Api (NetworkId (..), StakeAddressReference (..))
-import Control.Monad.Except (MonadError, MonadIO)
+import Control.Monad.Except (MonadError)
+import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Reader.Class (MonadReader)
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)

@@ -5,7 +5,8 @@ module Main (
   main,
 ) where
 
-import Control.Monad.Except (liftIO, runExceptT)
+import Control.Monad.Except (runExceptT)
+import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (eitherDecode, encode)
 import Data.Text (Text)
 import Language.Marlowe.Runtime.App.Parser (getConfigParser)

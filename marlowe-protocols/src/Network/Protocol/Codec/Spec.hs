@@ -7,6 +7,7 @@
 
 module Network.Protocol.Codec.Spec where
 
+import Data.Base16.Types (extractBase16)
 import qualified Data.ByteString as BS
 import Data.ByteString.Lazy (ByteString, fromStrict, toChunks)
 import qualified Data.ByteString.Lazy as LBS
@@ -256,7 +257,7 @@ codecGoldenTests protocolName = describe "Message Golden Tests" do
               AnyMessageAndAgency tok message <- NE.toList variations
               pure
                 ( "Show: " <> showsPrecMessage 0 tok message ""
-                , "Binary: " <> TL.unpack (encodeBase16 $ encode tok message)
+                , "Binary: " <> TL.unpack (extractBase16 . encodeBase16 $ encode tok message)
                 )
 
 checkPropCodec

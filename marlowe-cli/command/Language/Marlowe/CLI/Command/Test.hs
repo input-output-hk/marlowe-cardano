@@ -21,7 +21,8 @@ module Language.Marlowe.CLI.Command.Test (
 ) where
 
 import Cardano.Api (BabbageEraOnwards, IsShelleyBasedEra, NetworkId)
-import Control.Monad.Except (MonadError, MonadIO)
+import Control.Monad.Except (MonadError)
+import Control.Monad.IO.Class (MonadIO)
 import Data.Maybe (fromMaybe)
 import Language.Marlowe.CLI.Command.Parse (parseAddress, parseNetworkId)
 import Language.Marlowe.CLI.Test (runTestSuite)

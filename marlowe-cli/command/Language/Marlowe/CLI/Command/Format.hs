@@ -22,7 +22,8 @@ module Language.Marlowe.CLI.Command.Format (
   parseFormatCommand,
 ) where
 
-import Control.Monad.Except (MonadError, MonadIO (..))
+import Control.Monad.Except (MonadError)
+import Control.Monad.IO.Class (MonadIO (..))
 import Data.Char (toUpper)
 import Language.Marlowe.CLI.Format (
   maybeWriteJson,

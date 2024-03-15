@@ -16,6 +16,7 @@ import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Resource (runResourceT)
+import Data.Base16.Types (extractBase16)
 import Data.Binary (get, put)
 import Data.Binary.Get (runGet)
 import Data.Binary.Put (runPut)
@@ -455,10 +456,10 @@ renderDriverSelectorOTel = \case
                   ClientAgency tok' -> showsPrecClientHasAgency 0 tok' ""
                   ServerAgency tok' -> showsPrecServerHasAgency 0 tok' ""
               )
-            , ("typed-protocols.driver_state_before_span", toAttribute $ foldMap encodeBase16 state)
+            , ("typed-protocols.driver_state_before_span", toAttribute $ foldMap (extractBase16 . encodeBase16) state)
             ]
-          RecvMessageStateBeforeMessage state -> [("typed-protocols.driver_state_before_message", toAttribute $ foldMap encodeBase16 state)]
-          RecvMessageStateAfterMessage state -> [("typed-protocols.driver_state_after_message", toAttribute $ foldMap encodeBase16 state)]
+          RecvMessageStateBeforeMessage state -> [("typed-protocols.driver_state_before_message", toAttribute $ foldMap (extractBase16 . encodeBase16) state)]
+          RecvMessageStateAfterMessage state -> [("typed-protocols.driver_state_after_message", toAttribute $ foldMap (extractBase16 . encodeBase16) state)]
           RecvMessageMessage msg -> messageToAttributes $ AnyMessageAndAgency tok msg
       }
 

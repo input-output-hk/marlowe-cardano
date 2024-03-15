@@ -31,7 +31,8 @@ module Spec.Marlowe.Reference (
 ) where
 
 import Control.Monad (forM)
-import Control.Monad.Except (ExceptT (..), lift, throwError)
+import Control.Monad.Except (ExceptT (..), throwError)
+import Control.Monad.Trans.Class (lift)
 import Data.Aeson (FromJSON, ToJSON, eitherDecodeFileStrict, encodeFile)
 import Data.Bifunctor (first)
 import Data.List (isSuffixOf)

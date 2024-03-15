@@ -32,7 +32,8 @@ import Cardano.Api (
   babbageEraOnwardsToShelleyBasedEra,
   shelleyBasedEraConstraints,
  )
-import Control.Monad.Except (MonadError, MonadIO, liftIO, runExceptT)
+import Control.Monad.Except (MonadError, runExceptT)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Foldable (Foldable (fold), asum)
 import Language.Marlowe.CLI.Command.Contract (ContractCommand, parseContractCommand, runContractCommand)
 import Language.Marlowe.CLI.Command.Format (FormatCommand, parseFormatCommand, runFormatCommand)

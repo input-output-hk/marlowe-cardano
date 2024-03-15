@@ -1,5 +1,5 @@
 repository cardano-haskell-packages
-  url: https://input-output-hk.github.io/cardano-haskell-packages
+  url: https://chap.intersectmbo.org/
   secure: True
   root-keys:
     3e0cce471cf09815f930210f7827266fd09045445d65923e6d0238a6cd15126f
@@ -194,17 +194,15 @@ source-repository-package
   --sha256: sha256-69iE7LrigHTSKJrgq6uGU+U4j+NtBwR4ae18vsLyVvI=
   subdir: core
 
--- These constraints needed for plutus-apps
-constraints:
-  -- 0.3.6.2 switched from cryptonite to crypton, and this causes linker
-  -- failures when other packages depend on cryptonite.
-  -- Can be removed when this is resolved: https://github.com/snoyberg/http-client/issues/508
-  http-client-tls < 0.3.6.2,
-  ouroboros-network-framework ==0.10.1.0
 
 allow-newer:
-  primitive,
-  optparse-applicative
+  eventuo11y-otel:base,
+  eventuo11y:base,
+  eventuo11y-dsl:base,
+  eventuo11y-dsl:template-haskell,
+  eventuo11y-json:base,
+  eventuo11y-json:template-haskell,
+
 
 
 source-repository-package
@@ -221,7 +219,6 @@ source-repository-package
    subdir: marlowe-spec-test
            isabelle
    --sha256: 1yfbv9bwr71jd2sqfsb5jjq6j5bjfbjpp946fbkhxwwc2npwj0pd
-
 
 source-repository-package
    type: git

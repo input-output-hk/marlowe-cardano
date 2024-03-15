@@ -17,7 +17,7 @@ module Language.Marlowe.CLI.Command.Input (
   runInputCommand,
 ) where
 
-import Control.Monad.Except (MonadIO)
+import Control.Monad.IO.Class (MonadIO)
 import Language.Marlowe.CLI.Command.Parse (parseParty, parseToken)
 import Language.Marlowe.CLI.Run (makeChoice, makeDeposit, makeNotification)
 import Language.Marlowe.Core.V1.Semantics.Types (AccountId, ChoiceName, ChosenNum, Party, Token)

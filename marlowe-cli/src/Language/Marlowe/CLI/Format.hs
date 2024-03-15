@@ -23,7 +23,8 @@ module Language.Marlowe.CLI.Format (
 ) where
 
 import Control.Monad.Combinators as C
-import Control.Monad.Except (MonadError, MonadIO, liftEither, liftIO)
+import Control.Monad.Except (MonadError, liftEither)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Bifunctor (first)
 import Data.ByteString.Base16 qualified as Base16
 import Data.ByteString.Char8 qualified as BS (getContents, pack)

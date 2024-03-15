@@ -2,6 +2,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+-- for the Alternative Either a instance
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 -----------------------------------------------------------------------------
 --
@@ -80,7 +82,7 @@ import Cardano.Api (
   valueFromList,
  )
 import Cardano.Api.Shelley (StakeAddress (..), fromShelleyStakeCredential)
-import Control.Applicative ((<|>))
+import Control.Applicative -- ((<|>))
 import Data.List.Split (splitOn)
 import Language.Marlowe.CLI.Types (
   OutputQuery (..),
@@ -110,6 +112,12 @@ import Language.Marlowe qualified as M
 import Options.Applicative qualified as O
 import PlutusLedgerApi.Common (MajorProtocolVersion)
 import PlutusLedgerApi.Common.Versions (alonzoPV, vasilPV)
+
+-- | Backport from Control.Monad.Trans.Error, because we use Alternative Either here.
+instance (Monoid e) => Alternative (Either e) where
+  empty = Left mempty
+  Left _ <|> n = n
+  m <|> _ = m
 
 -- | Parser for network ID.
 parseNetworkId :: O.Mod O.OptionFields NetworkId -> O.Parser NetworkId

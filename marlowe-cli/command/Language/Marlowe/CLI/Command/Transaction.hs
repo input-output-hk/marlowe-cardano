@@ -38,7 +38,8 @@ import Cardano.Api (
   babbageEraOnwardsToShelleyBasedEra,
   shelleyBasedEraConstraints,
  )
-import Control.Monad.Except (MonadError, MonadIO, liftIO)
+import Control.Monad.Except (MonadError)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Maybe (fromMaybe)
 import Language.Marlowe.CLI.Command.Parse (
   parseAddress,

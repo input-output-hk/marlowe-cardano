@@ -43,7 +43,7 @@ import Control.Monad.Trans.Class (lift)
 import Data.Aeson (FromJSON (..), Value (..), decodeFileStrict, eitherDecodeStrict)
 import Data.Aeson.Types (parseFail)
 import Data.ByteString (ByteString)
-import Data.ByteString.Base16 (decodeBase16)
+import Data.ByteString.Base16 (decodeBase16Untyped)
 import Data.Foldable (fold)
 import Data.Function (on)
 import Data.Functor (($>))
@@ -322,7 +322,7 @@ newtype CliHash = CliHash {unCliHash :: ByteString}
 
 instance FromJSON CliHash where
   parseJSON = \case
-    String s -> either (parseFail . T.unpack) (pure . CliHash) $ decodeBase16 $ encodeUtf8 s
+    String s -> either (parseFail . T.unpack) (pure . CliHash) $ decodeBase16Untyped $ encodeUtf8 s
     _ -> parseFail "Expected a string"
 
 data CliBlockHeader = CliBlockHeader

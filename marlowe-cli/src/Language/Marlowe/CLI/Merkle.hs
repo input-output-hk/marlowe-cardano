@@ -19,7 +19,8 @@ module Language.Marlowe.CLI.Merkle (
   demerkleize,
 ) where
 
-import Control.Monad.Except (MonadError, MonadIO)
+import Control.Monad.Except (MonadError)
+import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Reader (runReaderT)
 import Control.Monad.Writer (runWriter)
 import Language.Marlowe.CLI.IO (decodeFileStrict, maybeWriteJson)

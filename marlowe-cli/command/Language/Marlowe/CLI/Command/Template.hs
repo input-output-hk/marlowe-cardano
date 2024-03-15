@@ -25,7 +25,8 @@ module Language.Marlowe.CLI.Command.Template (
 ) where
 
 import Actus.Marlowe (defaultRiskFactors, genContract')
-import Control.Monad.Except (MonadError, MonadIO)
+import Control.Monad.Except (MonadError)
+import Control.Monad.IO.Class (MonadIO)
 import Data.Map qualified as Map
 import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Command.Parse (

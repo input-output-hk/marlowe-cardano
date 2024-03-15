@@ -15,7 +15,7 @@ module Language.Marlowe.CLI.Examples (
   makeExample,
 ) where
 
-import Control.Monad.Except (MonadIO, liftIO)
+import Control.Monad.IO.Class (MonadIO (..), liftIO)
 import Data.Aeson.Encode.Pretty (encodePretty)
 
 import Data.ByteString.Lazy qualified as LBS (writeFile)

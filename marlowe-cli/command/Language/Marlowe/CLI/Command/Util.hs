@@ -38,7 +38,8 @@ import Cardano.Api (
  )
 import Control.Applicative ((<|>))
 import Control.Category ((>>>))
-import Control.Monad.Except (MonadError, MonadIO, liftIO)
+import Control.Monad.Except (MonadError)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (MonadReader)
 import Data.List.NonEmpty qualified as L
 import Data.List.Split (splitOn)
