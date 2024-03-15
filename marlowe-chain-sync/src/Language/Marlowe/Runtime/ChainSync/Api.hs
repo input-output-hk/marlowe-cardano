@@ -753,7 +753,7 @@ instance Group Lovelace where
 newtype Address = Address {unAddress :: ByteString}
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Binary, Variations, Hashable)
-  deriving (IsString, Show, ToJSON, FromJSON) via Base16
+  deriving (IsString, Show, ToJSON, FromJSON, ToJSONKey) via Base16
 
 toBech32 :: Address -> Maybe Text
 toBech32 =
@@ -829,7 +829,7 @@ fromCardanoStakeKeyHash = StakeKeyHash . Cardano.serialiseToRawBytes
 newtype ScriptHash = ScriptHash {unScriptHash :: ByteString}
   deriving stock (Eq, Ord, Generic)
   deriving newtype (Hashable)
-  deriving (IsString, Show, ToJSON) via Base16
+  deriving (IsString, Show, ToJSON, ToJSONKey) via Base16
   deriving anyclass (Binary, Variations)
 
 policyIdToScriptHash :: PolicyId -> ScriptHash

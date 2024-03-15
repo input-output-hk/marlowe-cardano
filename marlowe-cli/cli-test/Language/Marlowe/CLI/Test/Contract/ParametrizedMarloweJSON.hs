@@ -40,7 +40,6 @@ import Data.Text.Lazy qualified as TL
 import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
 import Data.Time.Units (Microsecond, TimeUnit (..))
 import Data.Vector qualified as Vector
-import Debug.Trace (traceM)
 import GHC.Generics (Generic)
 import Language.Marlowe qualified as Marlowe
 import Language.Marlowe.CLI.Run (toPlutusAddress)
@@ -164,7 +163,6 @@ rewriteTimeouts (Now n) (ParametrizedMarloweJSON json) = ParametrizedMarloweJSON
                   A.fromJSON str & \case
                     A.Success (RelativeTimeout diff) -> A.toJSON $ nominalDiffTimeToMilliseconds (n + diff)
                     _ -> obj
-            traceM $ show (A.fromJSON str :: A.Result SomeTimeout)
             pure $ A.object $ Map.toList $ Map.insert "timeout" v props
           _ -> pure obj
       v -> pure v

@@ -42,13 +42,15 @@ module Language.Marlowe.Runtime.Transaction.Constraints (
 ) where
 
 import Cardano.Api (TxBodyContent (..), unsafeHashableScriptData)
+import Cardano.Api (SystemStart, unsafeHashableScriptData)
 import qualified Cardano.Api as C
 import qualified Cardano.Api.Shelley as C
 import Control.Applicative ((<|>))
 import Control.Error (hoistMaybe, note, noteT, runExceptT)
 import Control.Monad (forM, unless, when, (<=<))
 import Control.Monad.Trans.Class (MonadTrans (..))
-import Data.Aeson (ToJSON)
+import Data.Aeson (ToJSON (toJSON), (.=))
+import qualified Data.Aeson as A
 import Data.Crosswalk (Crosswalk (sequenceL))
 import Data.Foldable (Foldable (fold))
 import Data.Function (on)
@@ -106,7 +108,6 @@ import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript, ReferenceScri
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
 import Language.Marlowe.Runtime.Transaction.Api (CoinSelectionError (..), ConstraintError (..), Destination (..))
 import qualified Language.Marlowe.Scripts.Types as V1
-import Ouroboros.Consensus.BlockchainTime (SystemStart)
 
 -- | Describes a set of Marlowe-specific conditions that a transaction must satisfy.
 data TxConstraints era v = TxConstraints
@@ -122,6 +123,8 @@ data TxConstraints era v = TxConstraints
 
 deriving instance Show (TxConstraints era 'V1)
 deriving instance Eq (TxConstraints era 'V1)
+deriving instance Generic (TxConstraints era 'V1)
+deriving instance ToJSON (TxConstraints era 'V1)
 
 -- | Constraints related to role tokens.
 data RoleTokenConstraints era
@@ -130,6 +133,26 @@ data RoleTokenConstraints era
   | NEDistributeRoleTokens NEDistribution
   | NESpendRoleTokens (NESet Chain.AssetId)
   deriving (Eq, Show)
+
+instance ToJSON (RoleTokenConstraints era) where
+  toJSON = \case
+    RoleTokenConstraintsNone -> A.Null
+    NEMintRoleTokens out _ dist ->
+      A.object
+        [ "mint"
+            .= A.object
+              [ "out" .= out
+              , "distribution" .= dist
+              ]
+        ]
+    NEDistributeRoleTokens dist ->
+      A.object
+        [ "distribute" .= dist
+        ]
+    NESpendRoleTokens roles ->
+      A.object
+        [ "spend" .= roles
+        ]
 
 {-# COMPLETE RoleTokenConstraintsNone, MintRoleTokens, DistributeRoleTokens, SpendRoleTokens #-}
 
@@ -168,7 +191,7 @@ instance Monoid (RoleTokenConstraints era) where
 data NEDistribution
   = NESendToAddresses (NEMap Chain.AssetId (NEMap Chain.Address Chain.Quantity))
   | NESendToScripts Chain.AssetId (NEMap Chain.AssetId (NEMap Destination Chain.Quantity))
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic, ToJSON)
 
 nonEmptyDistribution :: Distribution -> Maybe NEDistribution
 nonEmptyDistribution = \case
@@ -265,6 +288,8 @@ data MarloweOutputConstraints v
 
 deriving instance Show (MarloweOutputConstraints 'V1)
 deriving instance Eq (MarloweOutputConstraints 'V1)
+deriving instance Generic (MarloweOutputConstraints 'V1)
+deriving instance ToJSON (MarloweOutputConstraints 'V1)
 
 instance Semigroup (MarloweOutputConstraints v) where
   a <> MarloweOutputConstraintsNone = a
@@ -331,6 +356,8 @@ data MarloweInputConstraints v
 
 deriving instance Show (MarloweInputConstraints 'V1)
 deriving instance Eq (MarloweInputConstraints 'V1)
+deriving instance Generic (MarloweInputConstraints 'V1)
+deriving instance ToJSON (MarloweInputConstraints 'V1)
 
 instance Semigroup (MarloweInputConstraints v) where
   a <> MarloweInputConstraintsNone = a
@@ -449,7 +476,7 @@ data PayoutContext = PayoutContext
   , payoutScriptOutputs :: Map Chain.ScriptHash ReferenceScriptUtxo
   -- ^ The unspent payout reference script outputs indexed by script hash.
   }
-  deriving (Generic, Show, Eq)
+  deriving (Generic, Show, Eq, ToJSON)
 
 -- Data from Helper Scripts needed to solve the constraints.
 data HelpersContext = HelpersContext
@@ -485,9 +512,8 @@ data HelperScriptInfo = HelperScriptInfo
 deriving instance Show HelperScriptInfo
 deriving instance ToJSON HelperScriptInfo
 
-type SolveConstraints =
-  forall era v
-   . C.BabbageEraOnwards era
+type SolveConstraints era v =
+  C.BabbageEraOnwards era
   -> C.LedgerProtocolParameters era
   -> Core.MarloweVersion v
   -> Either (MarloweContext v) PayoutContext
@@ -499,10 +525,11 @@ type SolveConstraints =
 -- | Given a set of constraints and the context of a wallet, produces a
 -- balanced, unsigned transaction that satisfies the constraints.
 solveConstraints
-  :: SystemStart
+  :: forall era v
+   . SystemStart
   -> C.LedgerEpochInfo
-  -> SolveConstraints
-solveConstraints start history era protocol version scriptCtx walletCtx helpersCtx constraints =
+  -> SolveConstraints era v
+solveConstraints start history era protocol version scriptCtx walletCtx helpersCtx constraints = do
   solveInitialTxBodyContent era protocol version scriptCtx walletCtx helpersCtx constraints
     >>= adjustTxForMinUtxo era protocol (either (Just . marloweAddress) (const Nothing) scriptCtx)
     >>= selectCoins era protocol version scriptCtx walletCtx helpersCtx
@@ -576,7 +603,13 @@ adjustTxForMinUtxo era protocol mMarloweAddress txBodyContent = do
 
   if origMarloweValue == getMarloweOutputValue adjustedTxOuts
     then Right $ txBodyContent{C.txOuts = adjustedTxOuts}
-    else Left $ CalculateMinUtxoFailed "Marlowe output value changed during output adjustment"
+    else
+      Left $
+        CalculateMinUtxoFailed $
+          "Marlowe output value changed during output adjustment:"
+            <> show origMarloweValue
+            <> " /= "
+            <> show (getMarloweOutputValue adjustedTxOuts)
 
 -- | Compute the maximum fee for any transaction.
 maximumFee :: C.ProtocolParameters -> C.Lovelace

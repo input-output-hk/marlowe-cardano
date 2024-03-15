@@ -208,6 +208,7 @@ buildCreateConstraints mkRoleTokenMintingPolicy era version walletCtx roles thre
 type MkRoleTokenMintingPolicy m = TxOutRef -> Map TokenName Integer -> m CS.PlutusScript
 
 newtype ThreadTokenAssetId = ThreadTokenAssetId {unThreadTokenAssetId :: AssetId}
+  deriving (Eq, Show)
 
 -- | Creates a set of Tx constraints that are used to build a transaction that
 -- instantiates a contract.
@@ -372,8 +373,10 @@ invalidAddressesError (InvalidAddresses addresses) =
   CreateBuildupFailed $ AddressesDecodingFailed addresses
 
 newtype MinAdaProvider = MinAdaProvider Address
+  deriving (Eq, Show)
 
 newtype RolesPolicyId = RolesPolicyId PolicyId
+  deriving (Eq, Show)
 
 toMarloweParty :: Account -> Either InvalidAddresses V1.Party
 toMarloweParty (AddressAccount address) = note (InvalidAddresses [address]) do

@@ -1,6 +1,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecursiveDo #-}
 
@@ -85,7 +87,7 @@ import qualified Cardano.Api.Shelley as C
 import Control.Concurrent (threadDelay)
 import Control.DeepSeq (NFData)
 import Control.Monad (guard, void, when, (<=<))
-import Control.Monad.Event.Class (NoopEventT (..))
+import Control.Monad.Event.Class (Inject (inject), NoopEventT (..))
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (ReaderT (..), ask, runReaderT)
 import qualified Control.Monad.Reader as Reader
@@ -106,6 +108,7 @@ import Data.Aeson.Types (parseFail)
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16)
 import qualified Data.ByteString.Lazy as LBS
+import Data.Either (isRight)
 import Data.Foldable (fold)
 import Data.Function (on)
 import Data.Functor (($>))
@@ -145,6 +148,15 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   mkTxOutAssets,
  )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
+import qualified Language.Marlowe.Runtime.ChainSync.Api as ChainSync
+import Language.Marlowe.Runtime.Client (
+  MarloweT,
+  applyInputs,
+  runMarloweHeaderSyncClient,
+  runMarloweSyncClient,
+  runMarloweT,
+  runMarloweTxClient,
+ )
 import qualified Language.Marlowe.Runtime.Client as Client
 import Language.Marlowe.Runtime.Core.Api (
   ContractId (..),
@@ -169,8 +181,15 @@ import Language.Marlowe.Runtime.Transaction.Api (
   WalletAddresses (..),
   WithdrawTx (..),
  )
+import Language.Marlowe.Runtime.Transaction.Constraints (WalletContext (availableUtxos))
+import qualified Language.Marlowe.Runtime.Transaction.Query as Transaction
+import Network.Protocol.Connection (runConnector)
+import Network.Protocol.Driver.Trace (HasSpanContext (context, wrapContext))
 import Network.Protocol.Job.Client (liftCommandWait)
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (Target (VolatileTip))
+import Network.Protocol.Peer.Trace (defaultSpanContext)
+import Network.Protocol.Query.Client (request)
+import Observe.Event.Explicit (injectSelector)
 import qualified PlutusLedgerApi.V2 as PV2
 import Servant.Client (ClientError)
 import Servant.Client.Streaming (ClientM)
@@ -180,18 +199,36 @@ import Test.Integration.Marlowe (
   LocalTestnet (..),
   MarloweRuntime (MarloweRuntime),
   PaymentKeyPair (..),
-  RuntimeRef,
-  RuntimeSelector,
   SpoNode (..),
   exec,
   exec',
   execCli,
+  retryTillTrue,
  )
+import Test.Integration.Marlowe.Local (Attempts (..))
 import qualified Test.Integration.Marlowe.Local as MarloweRuntime
 import UnliftIO (bracket_)
 import UnliftIO.Environment (setEnv, unsetEnv)
 
-type Integration = ReaderT MarloweRuntime (MarloweT (NoopEventT RuntimeRef RuntimeSelector IO))
+data RuntimeRef = RuntimeRef
+
+instance Semigroup RuntimeRef where
+  (<>) = const
+
+instance Monoid RuntimeRef where
+  mempty = RuntimeRef
+
+instance HasSpanContext RuntimeRef where
+  context _ = pure defaultSpanContext
+  wrapContext _ = RuntimeRef
+
+data RuntimeSelector f where
+  AnyEvent :: s f -> RuntimeSelector f
+
+instance Inject s RuntimeSelector where
+  inject = injectSelector AnyEvent
+
+type Integration = ReaderT MarloweRuntime (MarloweT IO)
 
 mkEmptyWallet :: Integration Wallet
 mkEmptyWallet = do
@@ -241,7 +278,7 @@ submitBuilder wallet builder = withCurrentEra go
     go era = mdo
       -- Note - the txId is not evaluated yet - we're referring to it lazily.
       (a, txOuts) <- runStateT (runReaderT builder txId) []
-      utxo <- getUTxO era wallet
+      utxo <- getCardanoNodeUTxO era wallet
       multiAsset <- C.inEonForShelleyBasedEra (fail $ "Era not Mary or later" <> show era) pure era
       referenceScripts <- C.inEonForShelleyBasedEra (fail $ "Era not Babbage or later" <> show era) pure era
       let txBodyContent =
@@ -284,8 +321,8 @@ balanceTx era (Wallet WalletAddresses{..} _) utxo txBodyContent = do
           Nothing
   pure txBody
 
-getUTxO :: C.ShelleyBasedEra era -> Wallet -> Integration (C.UTxO era)
-getUTxO era (Wallet WalletAddresses{..} _) =
+getCardanoNodeUTxO :: C.ShelleyBasedEra era -> Wallet -> Integration (C.UTxO era)
+getCardanoNodeUTxO era (Wallet WalletAddresses{..} _) =
   queryShelley 0 $
     C.QueryInShelleyBasedEra era $
       C.QueryUTxO $
@@ -329,7 +366,7 @@ instance Semigroup Wallet where
 
 runIntegrationTest :: Integration a -> MarloweRuntime -> IO a
 runIntegrationTest m runtime@MarloweRuntime.MarloweRuntime{protocolConnector} =
-  runNoopEventT $ runMarloweT (runReaderT m runtime) protocolConnector
+  runMarloweT (runReaderT m runtime) protocolConnector
 
 runWebClient :: (NFData a) => ClientM a -> Integration (Either ClientError a)
 runWebClient client = ReaderT \runtime -> liftIO $ MarloweRuntime.runWebClient runtime client
@@ -446,7 +483,12 @@ submit'
   -> Integration (Either SubmitError BlockHeader)
 submit' Wallet{..} era txBody = do
   let tx = signShelleyTransaction (C.babbageEraOnwardsToShelleyBasedEra era) txBody signingKeys
-  runMarloweTxClient $ liftCommandWait $ Submit era tx
+  res <- runMarloweTxClient $ liftCommandWait $ Submit era tx
+  let cTxId = C.getTxId txBody
+      txId = fromCardanoTxId cTxId
+  when (isRight res) do
+    waitForTx txId
+  pure res
 
 deposit
   :: Wallet
@@ -696,6 +738,39 @@ bulkSyncExpectRollForward recvMsgRollForward = do
                   pure $ BulkSync.SendMsgPoll next
           }
   pure next
+
+loadWalletContext :: WalletAddresses -> Integration WalletContext
+loadWalletContext walletAddresses = do
+  chainSyncQueryConnector <- asks MarloweRuntime.chainSyncQueryConnector
+  let runQuery :: Chain.GetUTxOsQuery -> NoopEventT RuntimeRef RuntimeSelector IO Chain.UTxOs
+      runQuery = NoopEventT . runConnector chainSyncQueryConnector . request . ChainSync.GetUTxOs
+  liftIO $ runNoopEventT $ Transaction.loadWalletContext runQuery walletAddresses
+
+-- Wait till chain sync catches up and the wallet has funds.
+waitTillWalletHasFunds :: Wallet -> Integration ()
+waitTillWalletHasFunds Wallet{..} = do
+  retryTillTrue (Attempts 60) do
+    walletContext <- loadWalletContext addresses
+    pure $ not . null . Map.toList . Chain.unUTxOs . availableUtxos $ walletContext
+
+queryUTxOs :: Set Chain.TxOutRef -> Integration Chain.UTxOs
+queryUTxOs txOutRefs = do
+  chainSyncQueryConnector <- asks MarloweRuntime.chainSyncQueryConnector
+  let runQuery = runConnector chainSyncQueryConnector . request . ChainSync.GetUTxOs . ChainSync.GetUTxOsForTxOutRefs
+  lift $ lift $ runQuery txOutRefs
+
+waitForUTxOs :: Set Chain.TxOutRef -> Integration ()
+waitForUTxOs txOutRefs = do
+  retryTillTrue (Attempts 60) do
+    Chain.UTxOs utxos <- queryUTxOs txOutRefs
+    -- check if all the txOutRefs are present in the UTxOs
+    pure $ txOutRefs `Set.isSubsetOf` Map.keysSet utxos
+
+waitForTx :: Chain.TxId -> Integration ()
+waitForTx txId = do
+  let -- TxOut corresponding to the transaction
+      txOuts = Set.singleton (Chain.TxOutRef txId (Chain.TxIx 0))
+  waitForUTxOs txOuts
 
 marloweSyncExpectContractFound
   :: (MonadFail m)

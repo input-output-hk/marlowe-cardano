@@ -43,6 +43,7 @@ packages:
   libs/aeson-record
   libs/aeson-via-serialise
   libs/base16-aeson
+  libs/cardano-debug
   libs/plutus-ledger-aeson
   libs/plutus-ledger-ada
   libs/plutus-ledger-slot

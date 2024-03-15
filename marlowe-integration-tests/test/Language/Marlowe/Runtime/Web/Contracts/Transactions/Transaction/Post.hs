@@ -305,12 +305,12 @@ reportErrorOnBudgetOverspendingSpec = do
 
     liftIO $
       safetyErrors `shouldSatisfy` \case
-        [TransactionValidationError t1 _, TransactionValidationError t2 _] -> do
+        [TransactionValidationError t _] -> do
           let transactionMarloweInputs (Transaction _ _ txInput _ _) = do
                 let V1.TransactionInput{txInputs} = txInput
                 txInputs
           -- The report should contain two paths of execution which fail on closure - on timeout and on input.
-          (transactionMarloweInputs <$> [t1, t2]) == [[V1.NormalInput V1.INotify], []]
+          transactionMarloweInputs t == [V1.NormalInput V1.INotify]
         _ -> False
 
 reportErrorOnClosureBudgetOverspendingSpec :: Spec

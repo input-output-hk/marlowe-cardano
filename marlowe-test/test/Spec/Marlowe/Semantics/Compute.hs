@@ -107,6 +107,7 @@ import Test.Tasty.QuickCheck (
  )
 
 import Control.Monad.Writer (runWriter)
+import Language.Marlowe.Analysis.FSSemantics (SlotLength (SlotLength))
 import Language.Marlowe.Util (dataHash)
 import qualified PlutusTx.AssocMap as AM
 
@@ -184,9 +185,10 @@ arbitraryValid :: Gen MarloweContext
 arbitraryValid =
   let randomContext =
         do
+          let slotLength = SlotLength 1000
           mcContract <- arbitrary `suchThat` (/= Close)
           (time, inputs') <-
-            case unsafePerformIO $ getAllInputs mcContract Nothing of
+            case unsafePerformIO $ getAllInputs slotLength mcContract Nothing of
               Right candidates -> elements candidates
               Left _ -> discard
           let -- TODO: Generalize to arbitrary starting state.

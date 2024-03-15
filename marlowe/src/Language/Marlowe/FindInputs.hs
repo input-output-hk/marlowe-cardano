@@ -7,7 +7,7 @@ module Language.Marlowe.FindInputs (
 import Data.Bifunctor (Bifunctor (second), bimap)
 import Data.Maybe (catMaybes)
 import Data.SBV (ThmResult)
-import Language.Marlowe.Analysis.FSSemantics (onlyAssertionsWithState)
+import Language.Marlowe.Analysis.FSSemantics (SlotLength, onlyAssertionsWithState)
 import Language.Marlowe.Core.V1.Semantics (TransactionInput)
 import Language.Marlowe.Core.V1.Semantics.Types (Case (..), Contract (..), Observation (..), State)
 import PlutusLedgerApi.V2 (POSIXTime)
@@ -50,12 +50,14 @@ expandContract (When cas sl con) =
 expandContract (Let vi va con) = [Let vi va c | c <- expandContract con]
 expandContract (Assert _ con) = expandContract con
 
-getInputs :: Contract -> Maybe State -> IO (Either (ThmResult, Contract) (Maybe (POSIXTime, [TransactionInput])))
-getInputs c st = bimap (,c) (fmap (\(s, t, _) -> (s, t))) <$> onlyAssertionsWithState c st
+getInputs
+  :: SlotLength -> Contract -> Maybe State -> IO (Either (ThmResult, Contract) (Maybe (POSIXTime, [TransactionInput])))
+getInputs sl c st = bimap (,c) (fmap (\(s, t, _) -> (s, t))) <$> onlyAssertionsWithState sl c st
 
 -- | Uses static analysis to obtain a list of "unit tests" (lists of transactions) that
 -- | cover the different branches of the given contract. If static analysis fails
 -- | it returns a tuple that includes the error by the solver and the offending
 -- | extension of the contract
-getAllInputs :: Contract -> Maybe State -> IO (Either (ThmResult, Contract) [(POSIXTime, [TransactionInput])])
-getAllInputs c st = second catMaybes . sequence <$> mapM (flip getInputs st) (expandContract (removeAsserts c))
+getAllInputs
+  :: SlotLength -> Contract -> Maybe State -> IO (Either (ThmResult, Contract) [(POSIXTime, [TransactionInput])])
+getAllInputs sl c st = second catMaybes . sequence <$> mapM (flip (getInputs sl) st) (expandContract (removeAsserts c))

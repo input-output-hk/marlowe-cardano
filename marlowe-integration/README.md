@@ -23,25 +23,24 @@ following programs need to be in the `PATH` when you use them:
 Additionally, you are required to have a PostgreSQL server running and
 available.
 
-### Setting local user space PostgreSQL
+### Setting up User-Space PostgreSQL
 
-It is possible to setup for testing a fully local postresql cluster - it is pretty lightweight solution.
+It is possible to set up a PostgreSQL cluster at the user level without needing to adjust system-level configuration or require superuser privileges. To set up a local database cluster, you can use the following commands:
 
 ``` shell
-$ mkdir .pgdata # PLEASE READ MORE DETAILS ABOUT THE PATH LENGTH
+$ mkdir .pgdata
 $ export PGDATA=.pgdata
 $ pg_ctl init
 ```
 
-If your current working directory has long absolute path PostgreSQL can actually fail to run (it has sever limit on the length of the path).
-To fix this you can link just created directory to some shorter path like:
+If your current working directory has a long absolute path, PostgreSQL may fail to run due to its severe limitation on the length of the path. To fix this, you can link the newly created directory to a shorter path, like:
 
 ```
-$ ln -s $PWD/.pgdata /home/user/.pgdata
-$ export PGDATA=/home/user/.pgdata
+$ ln -s $PWD/.pgdata /home/myuser/.marlowe-integration-pgdata
+$ export PGDATA=/home/myuser/.marlowe-integration-pgdata
 ```
 
-In order it to work we should change few things in the `.pgdata/postgresql.conf`:
+Additinally we have to adjust two postgresql options in `.pgdata/postgresql.conf` to enforce custom port (so you don't experience conflicts with your system postgresql instance) and to allow local connections:
 
 * `unix_socket_directories = '.'`
 
@@ -84,23 +83,6 @@ You can configure the connection settings by exporting the following environment
 - `MARLOWE_RT_TEST_DB` sets the test database name so you can easily connect to it and inspect the data. By default the database name is random.
 - `MARLOWE_RT_TEST_CLEANUP_DATABASE` determines whether to delete the test databases after the tests (by default `true`).
 
-### Inspecting database during test execution
-
-Sometimes when a particular test case is failing it can be beneficial to suspend the execution, connect to the test database and inspect the data. In order to this we have to
-
-* put some suspension into your test case: `threadDelay (5 * 60 * 1000_000)`
-
-* define test database name: `$ export MARLOWE_RT_TEST_DB_NAME=runtime-integration`
-
-* run the test case
-
-* then you can jump into to db shell: `$ psql -U myuser --host=$PGDATA --port=THE_SAME_PORT_AS_ABOVE runtime-integration`
-
-* in order to inspect marlowe indexer data you **have to** set appropriate schema: `psql> SET search_path TO marlowe;`
-
-* in order to inspect chain indexer data you **have to** set appropriate schema: `psql> SET search_path TO chain;`
-
-
 ## Usage
 
 The functions `withLocalMarloweRuntime` and `withLocalMarloweRuntime'` allow
@@ -119,6 +101,25 @@ the `MarloweRuntime` record contains:
 
 - Client runners for all public-facing Marlowe runtime APIs
 - The `LocalTestnet` record for the Cardano network.
+
+## Debugging
+
+### Inspecting Database During Test Execution
+
+Sometimes, when a particular test case is failing, it can be beneficial to suspend the execution, connect to the test database, and inspect the data. To do this, follow these steps:
+
+1. Insert a suspension point in your test case: `threadDelay (5 * 60 * 1000_000)`.
+2. Define the test database name: `export MARLOWE_RT_TEST_DB_NAME=runtime-integration`.
+3. Run the test case.
+4. Then, connect to the database shell using: `psql -U myuser --host=$PGDATA --port=THE_SAME_PORT_AS_ABOVE runtime-integration`.
+5. To inspect Marlowe indexer data, set the appropriate schema with: `psql> SET search_path TO marlowe;`.
+6. To inspect chain indexer data, set the appropriate schema with: `psql> SET search_path TO chain;`.
+
+### Logs and Traces
+
+During test execution, Marlowe Runtime traces and logs are written to text files under the "workspace" directory. Workspaces are created as subdirectories of `/tmp/workspaces`. The name of each workspace is generated randomly. To simplify debugging, consider cleaning up this directory before running a specific single scenario. Please note that workspaces are **cleaned up** after a successful run, so logs from failed test runs are the ones available.
+
+To enable Runtime logging to `stderr`, use the following environment variable: `export MARLOWE_RT_LOG_STDERR=True`. The same information is also written to the log file in the workspace directory.
 
 ## Notes on performance
 

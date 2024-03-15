@@ -11,7 +11,14 @@
 
 -- | A local copy of the cardano-cli `Contrib.Cardano.CLI.Run.Friendly`
 -- | because I'm not able to use `cardano-cli` lib in our current setup.
-module Contrib.Cardano.Debug (friendlyTxOut, friendlyTxBS, friendlyTxBody, friendlyTxBodyBS) where
+module Cardano.Debug (
+  friendlyTxOut,
+  friendlyTxBS,
+  friendlyTxBody,
+  friendlyTxBodyContentBS,
+  friendlyTxBodyContent,
+  friendlyTxBodyBS,
+) where
 
 import Prelude
 
@@ -75,28 +82,40 @@ friendlyTxBodyBS era =
   Yaml.encodePretty yamlConfig . object . friendlyTxBody era
 
 friendlyTxBody :: CardanoEra era -> TxBody era -> [Aeson.Pair]
-friendlyTxBody
+friendlyTxBody era (TxBody txBodyContent) = friendlyTxBodyContent era txBodyContent
+
+friendlyTxBodyContentBS :: CardanoEra era -> TxBodyContent view era -> BSC.ByteString
+friendlyTxBodyContentBS era =
+  Yaml.encodePretty yamlConfig . object . friendlyTxBodyContent era
+
+friendlyTxBodyContent :: forall era view. CardanoEra era -> TxBodyContent view era -> [Aeson.Pair]
+friendlyTxBodyContent
   era
-  ( TxBody
-      TxBodyContent
-        { txAuxScripts
-        , txCertificates
-        , txExtraKeyWits
-        , txFee
-        , txIns
-        , txInsCollateral
-        , txMetadata
-        , txMintValue
-        , txOuts
-        , txUpdateProposal
-        , txValidityLowerBound
-        , txValidityUpperBound
-        , txWithdrawals
-        }
+  ( TxBodyContent
+      { txAuxScripts
+      , txCertificates
+      , txExtraKeyWits
+      , txFee
+      , txIns
+      , txInsCollateral
+      , txTotalCollateral
+      , txReturnCollateral
+      , txMetadata
+      , txMintValue
+      , txOuts
+      , txUpdateProposal
+      , txValidityLowerBound
+      , txValidityUpperBound
+      , txWithdrawals
+      }
     ) =
     [ "auxiliary scripts" .= friendlyAuxScripts txAuxScripts
     , "certificates" .= friendlyCertificates txCertificates
     , "collateral inputs" .= friendlyCollateralInputs txInsCollateral
+    , -- , txTotalCollateral = C.TxTotalCollateralNone
+      -- , txReturnCollateral = C.TxReturnCollateralNone
+      "total collateral" .= friendlyTxTotalCollateral txTotalCollateral
+    , "return collateral" .= withCardanoEra era (friendlyTxReturnCollateral txReturnCollateral)
     , "era" .= era
     , "fee" .= friendlyFee txFee
     , "inputs" .= friendlyInputs txIns
@@ -109,6 +128,16 @@ friendlyTxBody
     , "validity range" .= friendlyValidityRange (txValidityLowerBound, txValidityUpperBound)
     , "withdrawals" .= friendlyWithdrawals txWithdrawals
     ]
+
+friendlyTxTotalCollateral :: TxTotalCollateral era -> Aeson.Value
+friendlyTxTotalCollateral = \case
+  TxTotalCollateralNone -> Null
+  TxTotalCollateral _ lovelace -> friendlyLovelace lovelace
+
+friendlyTxReturnCollateral :: (IsCardanoEra era) => TxReturnCollateral CtxTx era -> Aeson.Value
+friendlyTxReturnCollateral = \case
+  TxReturnCollateralNone -> Null
+  TxReturnCollateral _ txOut -> friendlyTxOut txOut
 
 withCardanoEra :: forall era a. CardanoEra era -> ((IsCardanoEra era) => a) -> a
 withCardanoEra = \case
@@ -138,7 +167,7 @@ friendlyValidityRange = \case
       , "upper bound" .= maybe Null toJSON upperBound
       ]
 
-friendlyWithdrawals :: TxWithdrawals ViewTx era -> Aeson.Value
+friendlyWithdrawals :: forall era view. TxWithdrawals view era -> Aeson.Value
 friendlyWithdrawals TxWithdrawalsNone = Null
 friendlyWithdrawals (TxWithdrawals _ withdrawals) =
   array
@@ -283,7 +312,7 @@ friendlyPrices ExecutionUnitPrices{priceExecutionMemory, priceExecutionSteps} =
     , "steps" .= friendlyRational priceExecutionSteps
     ]
 
-friendlyCertificates :: TxCertificates ViewTx era -> Aeson.Value
+friendlyCertificates :: forall era view. TxCertificates view era -> Aeson.Value
 friendlyCertificates = \case
   TxCertificatesNone -> Null
   TxCertificates ShelleyBasedEraShelley cs _ -> array $ map friendlyCertificate cs
@@ -398,7 +427,7 @@ friendlyCoin (Coin.Coin value) = String $ textShow value <> " Lovelace"
 friendlyLovelace :: Lovelace -> Aeson.Value
 friendlyLovelace (Lovelace value) = String $ textShow value <> " Lovelace"
 
-friendlyMintValue :: TxMintValue ViewTx era -> Aeson.Value
+friendlyMintValue :: forall era view. TxMintValue view era -> Aeson.Value
 friendlyMintValue = \case
   TxMintNone -> Null
   TxMintValue _ v _ -> friendlyValue v

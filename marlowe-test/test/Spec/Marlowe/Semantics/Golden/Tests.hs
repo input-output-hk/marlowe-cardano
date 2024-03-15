@@ -22,6 +22,7 @@ import Language.Marlowe.FindInputs (getAllInputs)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (assertBool, testCase)
 
+import Language.Marlowe.Analysis.FSSemantics (SlotLength (..))
 import Spec.Marlowe.Semantics.Golden (GoldenCase)
 import qualified Spec.Marlowe.Semantics.Golden.Escrow as Escrow (contract, invalids, valids)
 import qualified Spec.Marlowe.Semantics.Golden.Negative as Negative (contract, invalids, valids)
@@ -74,7 +75,8 @@ testGolden name printIt contract valids invalids =
 printValids :: Contract -> IO ()
 printValids contract =
   do
-    Right is <- getAllInputs contract Nothing
+    let slotLength = SlotLength 1000
+    Right is <- getAllInputs slotLength contract Nothing
     sequence_
       [ case playTrace t contract i of
         Error{} -> pure ()

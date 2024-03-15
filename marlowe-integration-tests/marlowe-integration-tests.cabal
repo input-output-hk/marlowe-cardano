@@ -99,6 +99,7 @@ executable marlowe-integration-tests
     , containers
     , deepseq
     , errors
+    , eventuo11y >=0.9 && <0.11
     , eventuo11y-extras
     , hspec
     , http-types

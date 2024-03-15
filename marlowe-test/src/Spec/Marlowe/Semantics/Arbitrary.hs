@@ -23,6 +23,7 @@ module Spec.Marlowe.Semantics.Arbitrary (
   Context,
   IsValid (..),
   SemiArbitrary (..),
+  ValidContractStructure (..),
 
   -- * Generators
   arbitraryAssocMap,
@@ -126,6 +127,7 @@ import Test.QuickCheck (
 import Data.Functor ((<&>))
 
 import Control.Monad.Writer (runWriter)
+import qualified Data.Aeson as A
 import Language.Marlowe.Util (dataHash)
 import qualified PlutusLedgerApi.V2 as Ledger (Address (..))
 import qualified PlutusTx.AssocMap as AM (Map, delete, empty, fromList, keys, toList)
@@ -309,6 +311,8 @@ randomPubKeyHashes =
   , "a2bd7dd7f41c2781d1d11c7f4994fac750525705f9c259f97cb27d0e"
   , "c5b4c543a0d0d181ec387ad8250b18617bb18bcf2eccc0f27fe7aa23"
   , "d877b83ece77d785fee4a52bd7226949fa64e111aa0e20cd4a1c471b"
+  , "d877b83fee4a52bd72269ece77d78549fa64e111aa0e20cd4a1c47"
+  , "d877b83fee4a52bd72269ece77d78549fa64e111aa0e20cd4a1c470908"
   ]
 
 instance Arbitrary PubKeyHash where
@@ -410,7 +414,7 @@ instance Arbitrary Ledger.Address where
   arbitrary = Ledger.Address <$> arbitrary <*> arbitrary
 
 instance Arbitrary Credential where
-  arbitrary =
+  arbitrary = do
     frequency
       [ (39, PubKeyCredential <$> arbitrary)
       , (1, ScriptCredential <$> arbitrary)
@@ -1336,3 +1340,13 @@ instance (Arbitrary a) => Arbitrary (Transaction a) where
       <> [transaction{txContract = contract} | contract <- shrink txContract]
       <> [transaction{txInput = input} | input <- shrink txInput]
       <> [transaction{txOutput = output} | output <- shrink txOutput]
+
+newtype ValidContractStructure = ValidContractStructure Contract
+  deriving (Eq, Show)
+
+instance Arbitrary ValidContractStructure where
+  arbitrary = do
+    contract <- arbitrary
+    case A.fromJSON . A.toJSON $ contract of
+      A.Success (_ :: Contract) -> pure $ ValidContractStructure contract
+      A.Error _ -> arbitrary
