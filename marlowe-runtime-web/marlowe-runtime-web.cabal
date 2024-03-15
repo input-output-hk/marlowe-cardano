@@ -99,6 +99,7 @@ library server
     Language.Marlowe.Runtime.Web.Server
     Language.Marlowe.Runtime.Web.Server.DTO
     Language.Marlowe.Runtime.Web.Server.DTO.ApiError
+    Language.Marlowe.Runtime.Web.Server.Logging
     Language.Marlowe.Runtime.Web.Server.Monad
     Language.Marlowe.Runtime.Web.Server.OpenAPI
     Language.Marlowe.Runtime.Web.Server.REST.ApiError
@@ -133,7 +134,9 @@ library server
     , errors >=2.3 && <3
     , eventuo11y >=0.9 && <0.11
     , eventuo11y-extras ==0.1.1.0
+    , eventuo11y-otel ^>=0.1
     , exceptions >=0.10 && <0.12
+    , hs-opentelemetry-sdk ^>=0.0.3
     , http-media ^>=0.8
     , http-types
     , insert-ordered-containers >=0.2.5 && <0.3
@@ -148,6 +151,7 @@ library server
     , marlowe-runtime:{marlowe-runtime, contract-api, proxy-api, sync-api, tx-api} ==0.0.6
     , monad-control ^>=1
     , mtl >=2.2 && <3
+    , network
     , nonempty-containers ^>=0.3.4
     , openapi3 >=3.2 && <4
     , pipes ^>=4.3.16
@@ -180,19 +184,14 @@ executable marlowe-web-server
     , base >=4.9 && <5
     , co-log ^>=0.6
     , eventuo11y >=0.9 && <0.11
-    , eventuo11y-otel ^>=0.1
     , hs-opentelemetry-sdk ^>=0.0.3
-    , http-types
     , marlowe-client
-    , marlowe-protocols
     , marlowe-runtime-web:server
     , marlowe-runtime:config
     , mtl >=2.2 && <3
     , network
     , optparse-applicative
-    , text ^>=2.0
     , unliftio ^>=0.2.1
-    , wai >=3.2 && <4
     , warp
 
   ghc-options:    -threaded

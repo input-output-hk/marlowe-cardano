@@ -99,6 +99,7 @@ executable marlowe-integration-tests
     , containers
     , deepseq
     , errors
+    , eventuo11y >=0.9 && <0.11
     , eventuo11y-extras
     , hspec
     , http-types
@@ -111,7 +112,7 @@ executable marlowe-integration-tests
     , marlowe-object:{marlowe-object, gen}
     , marlowe-protocols
     , marlowe-runtime-web:{marlowe-runtime-web, server}
-    , marlowe-runtime:{marlowe-runtime, contract, contract-api, sync-api, tx-api}
+    , marlowe-runtime:{marlowe-runtime, contract, contract-api, sync-api, tx, tx-api}
     , marlowe-test
     , mtl
     , network-uri

@@ -17,9 +17,13 @@ import Data.Maybe (isJust)
 import Observe.Event (EventBackend)
 import Observe.Event.Backend (hoistEventBackend, noopEventBackend)
 import Observe.Event.Render.OpenTelemetry (RenderSelectorOTel, tracerEventBackend)
+import OpenTelemetry.Exporter.Handle (defaultFormatter, makeHandleExporter)
+import OpenTelemetry.Processor.Batch (batchProcessor, batchTimeoutConfig)
 import OpenTelemetry.Trace
 import OpenTelemetry.Trace.Core (getSpanContext, wrapSpanContext)
+import OpenTelemetry.Trace.Sampler (alwaysOn)
 import System.Environment (lookupEnv)
+import System.IO (Handle)
 import UnliftIO (BufferMode (..), MonadUnliftIO, bracket, hSetBuffering, newMVar, stderr, stdout, withMVar, withRunInIO)
 
 newtype AppM r s a = AppM
@@ -27,35 +31,80 @@ newtype AppM r s a = AppM
   }
   deriving newtype (Functor, Applicative, Monad, MonadIO, MonadUnliftIO, MonadThrow, MonadCatch, MonadMask, MonadFail)
 
-runAppMTraced :: forall s a. InstrumentationLibrary -> RenderSelectorOTel s -> AppM Span s a -> IO a
-runAppMTraced library render app = bracket
-  initializeTracerProvider'
+data TracingConfig s
+  = UseEmptyTracerProvider
+      InstrumentationLibrary
+  | UseDefaultTracerProvider
+      InstrumentationLibrary
+      (RenderSelectorOTel s)
+  | UseHandleDebugTracerProvider
+      Handle
+      InstrumentationLibrary
+      (RenderSelectorOTel s)
+
+mkEventBackend :: TracingConfig s -> IO (EventBackend IO Span s, IO ())
+mkEventBackend = \case
+  UseEmptyTracerProvider library -> do
+    provider <- createTracerProvider [] emptyTracerProviderOptions
+    let tracer = makeTracer provider library tracerOptions
+    dummyContext <- inSpan' tracer "dummy" defaultSpanArguments getSpanContext
+    pure
+      ( noopEventBackend $ wrapSpanContext dummyContext
+      , shutdownTracerProvider provider
+      )
+  UseDefaultTracerProvider library render -> do
+    provider <- initializeTracerProvider
+    let tracer = makeTracer provider library tracerOptions
+    pure
+      ( tracerEventBackend tracer render
+      , shutdownTracerProvider provider
+      )
+  UseHandleDebugTracerProvider handle library render -> do
+    provider <- do
+      (_, tracerOptions') <- getTracerProviderInitializationOptions
+      stderrProc <- batchProcessor batchTimeoutConfig $ makeHandleExporter handle (pure . defaultFormatter)
+      let processors' = [stderrProc]
+      createTracerProvider processors' (tracerOptions'{tracerProviderOptionsSampler = alwaysOn})
+    let tracer = makeTracer provider library tracerOptions
+    pure
+      ( tracerEventBackend tracer render
+      , shutdownTracerProvider provider
+      )
+
+runAppMTraced
+  :: forall s a
+   . InstrumentationLibrary
+  -> RenderSelectorOTel s
+  -> AppM Span s a
+  -> IO a
+runAppMTraced library render app = do
+  otelExporterEndpointConfigured <- isJust <$> lookupEnv "OTEL_EXPORTER_OTLP_ENDPOINT"
+  stderrDebugExporterConfigured <- isJust <$> lookupEnv "OTEL_EXPORTER_STDERR_DEBUG"
+  logAction <- concurrentLogger
+  tracingConfig <- case (otelExporterEndpointConfigured, stderrDebugExporterConfigured) of
+    (True, True) -> do
+      usingLoggerT logAction $
+        logWarning
+          "Both OTEL_EXPORTER_OTLP_ENDPOINT and OTEL_EXPORTER_STDERR_DEBUG are set. Ignoring OTEL_EXPORTER_STDERR_DEBUG."
+      pure $ UseDefaultTracerProvider library render
+    (True, False) -> pure $ UseDefaultTracerProvider library render
+    (_, True) -> pure $ UseHandleDebugTracerProvider stderr library render
+    _ -> pure $ UseEmptyTracerProvider library
+  runAppMTraced' tracingConfig logAction app
+
+runAppMTraced'
+  :: forall s a
+   . TracingConfig s
+  -> LogAction IO Message
+  -> AppM Span s a
+  -> IO a
+runAppMTraced' tracingConfig logAction app = bracket
+  (mkEventBackend tracingConfig)
   snd
   \(backend, _) -> do
     hSetBuffering stderr LineBuffering
     hSetBuffering stdout LineBuffering
-    logAction <- concurrentLogger
     runAppM backend logAction app
-  where
-    initializeTracerProvider' :: IO (EventBackend IO Span s, IO ())
-    initializeTracerProvider' = do
-      endpointConfigured <- isJust <$> lookupEnv "OTEL_EXPORTER_OTLP_ENDPOINT"
-      if endpointConfigured
-        then do
-          provider <- initializeTracerProvider
-          let tracer = makeTracer provider library tracerOptions
-          pure
-            ( tracerEventBackend tracer render
-            , shutdownTracerProvider provider
-            )
-        else do
-          provider <- createTracerProvider [] emptyTracerProviderOptions
-          let tracer = makeTracer provider library tracerOptions
-          dummyContext <- inSpan' tracer "dummy" defaultSpanArguments getSpanContext
-          pure
-            ( noopEventBackend $ wrapSpanContext dummyContext
-            , shutdownTracerProvider provider
-            )
 
 runAppM :: EventBackend IO r s -> LogAction IO Message -> AppM r s a -> IO a
 runAppM eventBackend logAction (AppM action) = do

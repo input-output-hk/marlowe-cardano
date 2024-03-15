@@ -136,7 +136,7 @@ createSpec = Hspec.describe "buildCreateConstraints" do
   Hspec.QuickCheck.prop "sends the minAda deposit to the marlowe output" \(SomeCreateArgs args) ->
     let result = fmap Chain.ada . extractMarloweAssets' <$> runBuildCreateConstraints args
      in case version args of
-          MarloweV1 -> result === (Right $ Just $ minAda args)
+          MarloweV1 -> result === (Right $ Just $ max (minAda args) safeLovelace)
           :: Property
   Hspec.QuickCheck.prop "sends minted role tokens to the right destinations" \(SomeCreateArgs args) ->
     let result = extractSentRoleTokens <$> runBuildCreateConstraints args
@@ -315,7 +315,7 @@ instance Arbitrary (CreateArgs 'V1) where
       <*> arbitrary
       <*> (noMetadata <$> arbitrary)
       <*> arbitrary
-      <*> ((<> safeLovelace) . Chain.Lovelace <$> arbitrary)
+      <*> arbitrary
       <*> arbitrary
   shrink args@CreateArgs{..} =
     concat

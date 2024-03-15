@@ -60,7 +60,6 @@ library
   import:          lang
   hs-source-dirs:  src
   exposed-modules:
-    Contrib.Cardano.Debug
     Contrib.Cardano.TxBody
     Contrib.Cardano.UTxO
     Contrib.Control.Concurrent
@@ -184,6 +183,7 @@ library cli-test
     , base16-aeson ==0.1.0.0
     , bytestring
     , cardano-api ^>=8.37
+    , cardano-debug
     , containers
     , data-has
     , errors

@@ -72,7 +72,7 @@ import Pipes (each, yield, (>->))
 import qualified Pipes.Internal as PI
 import qualified Pipes.Prelude as P
 import qualified PlutusLedgerApi.V2 as PV2
-import Spec.Marlowe.Semantics.Arbitrary (arbitraryNonnegativeInteger)
+import Spec.Marlowe.Semantics.Arbitrary (ValidContractStructure (ValidContractStructure), arbitraryNonnegativeInteger)
 import Spec.Marlowe.Semantics.Path (genContractPath, getContract, getInputs)
 import Test.Hspec
 import Test.Hspec.QuickCheck (prop)
@@ -180,7 +180,7 @@ getContractSpec = describe "getContract" do
 transferSpec :: Spec
 transferSpec = do
   describe "Import" do
-    prop "Produces the same results as load" \label contract -> do
+    prop "Produces the same results as load" \label (ValidContractStructure contract) -> do
       hash <- runContractTest $ expectJust "failed to push contract" $ runLoad $ pushContract contract
       labelMap <-
         runContractTest $
@@ -190,14 +190,14 @@ transferSpec = do
                 ObjectBundle [LabelledObject label ContractType $ fromCoreContract contract]
       labelMap `shouldBe` Map.singleton label hash
 
-    prop "All hashes can be found in the store" \contract -> runContractTest do
+    prop "All hashes can be found in the store" \(ValidContractStructure contract) -> runContractTest do
       labelMap <-
         expectRight "failed to import contract" $ runTransfer $ importBundle $ snd $ unlink $ LinkedContract contract
       for_ (Map.elems labelMap) \hash -> do
         result <- runQuery $ Api.getContract hash
         liftIO $ Api.contractHash <$> result `shouldBe` Just hash
 
-    prop "Produces the correct contract" \contract ->
+    prop "Produces the correct contract" \(ValidContractStructure contract) ->
       let (rootLabel, bundle) = unlink $ LinkedContract contract
        in counterexample ("Root Label: " <> show rootLabel) $
             counterexample ("Bundle: " <> show bundle) $
@@ -207,7 +207,7 @@ transferSpec = do
                 result <- runQuery $ Api.getContract hash
                 liftIO $ Api.contract <$> result `shouldBe` Api.contract <$> result
 
-    prop "Produces the correct closure" \contract -> do
+    prop "Produces the correct closure" \(ValidContractStructure contract) -> do
       let (rootLabel, bundle) = unlink $ LinkedContract contract
        in counterexample ("Root Label: " <> show rootLabel) $
             counterexample ("Bundle: " <> show bundle) $
@@ -219,7 +219,7 @@ transferSpec = do
                 let expectedClosure = Set.insert hash $ Set.map fromPlutusDatumHash $ Map.keysSet continuations
                 liftIO $ foldMap Api.closure result `shouldBe` expectedClosure
 
-    prop "Is possible to build the correct continuation map with the closure" \contract -> do
+    prop "Is possible to build the correct continuation map with the closure" \(ValidContractStructure contract) -> do
       let (rootLabel, bundle) = unlink $ LinkedContract contract
        in counterexample ("Root Label: " <> show rootLabel) $
             counterexample ("Bundle: " <> show bundle) $
@@ -236,7 +236,7 @@ transferSpec = do
                 actualContinuations <- foldM insertContinuation mempty closureWithoutRoot
                 liftIO $ actualContinuations `shouldBe` expectedContinuations
 
-    prop "incremental" \contract ->
+    prop "incremental" \(ValidContractStructure contract) ->
       let (_, ObjectBundle bundle) = unlink $ LinkedContract contract
        in forAll (genChunks bundle) \chunks -> do
             expected <-
@@ -252,13 +252,13 @@ transferSpec = do
             expected `shouldBe` actual
 
   describe "Export" do
-    prop "Labels map to closure" \contract -> runContractTest do
+    prop "Labels map to closure" \(ValidContractStructure contract) -> runContractTest do
       hash <- expectJust "failed to push contract" $ runLoad $ pushContract contract
       ObjectBundle bundle <- expectJust "failed to export contract" $ runTransfer $ exportContract 100 hash
       Api.ContractWithAdjacency{closure} <- expectJust "failed to get contract" $ runQuery $ Api.getContract hash
       liftIO $ Set.fromList (unLabel . _label <$> bundle) `shouldBe` Set.map (encodeBase16 . unDatumHash) closure
 
-    prop "Labels are hashes" \contract -> runContractTest do
+    prop "Labels are hashes" \(ValidContractStructure contract) -> runContractTest do
       hash <- expectJust "failed to push contract" $ runLoad $ pushContract contract
       bundle <- expectJust "failed to export contract" $ runTransfer $ exportContract 100 hash
       let expectOnlyContracts = \case
@@ -267,7 +267,7 @@ transferSpec = do
       (linked, _) <- expectRight "" $ linkBundle' bundle expectOnlyContracts mempty
       liftIO $ for_ linked \(Label label, c) -> label `shouldBe` encodeBase16 (unDatumHash $ hashContract c)
 
-    prop "import . export" \contract -> do
+    prop "import . export" \(ValidContractStructure contract) -> do
       ObjectBundle bundle <- runContractTest do
         hash <- expectJust "failed to push contract" $ runLoad $ pushContract contract
         expectJust "failed to export contract" $ runTransfer $ exportContract 100 hash
@@ -276,7 +276,7 @@ transferSpec = do
         `shouldBe` Map.fromList
           ((_label &&& DatumHash . fromRight (error "fromRight: left") . decodeBase16' . unLabel . _label) <$> bundle)
 
-    prop "incremental" \contract -> runContractTest do
+    prop "incremental" \(ValidContractStructure contract) -> runContractTest do
       hash <- expectJust "failed to push contract" $ runLoad $ pushContract contract
       expected <- expectJust "failed to export contract" $ runTransfer $ exportContract 100 hash
       actual <-

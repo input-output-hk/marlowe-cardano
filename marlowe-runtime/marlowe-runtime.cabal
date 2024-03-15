@@ -544,6 +544,7 @@ library tx
     , sop-extras
     , stm ^>=2.5
     , strict-sop-core
+    , text
     , time >=1.9 && <2
     , transformers ^>=0.5.6
     , unliftio ^>=0.2.1
@@ -586,14 +587,21 @@ library runtime
   import:          lang
   hs-source-dirs:  runtime
   visibility:      public
-  exposed-modules: Language.Marlowe.Runtime
+  exposed-modules:
+    Language.Marlowe.Runtime
+    Language.Marlowe.Runtime.Logging
+
   build-depends:
     , async-components ==0.1.1.0
     , base >=4.9 && <5
+    , bytestring >=0.10.12 && <0.12
     , cardano-api ^>=8.37
     , co-log ^>=0.6
     , containers ^>=0.6.5
+    , eventuo11y >=0.9 && <0.11
     , eventuo11y-extras ==0.1.1.0
+    , eventuo11y-otel ^>=0.1
+    , hs-opentelemetry-sdk ^>=0.0.3
     , marlowe-chain-sync:{marlowe-chain-sync, chain-indexer, libchainsync} ==0.0.6
     , marlowe-protocols ==0.3.0.0
     , marlowe-runtime:{marlowe-runtime, contract, indexer, proxy, proxy-api, sync, sync-api, tx} ==0.0.6
@@ -761,22 +769,17 @@ executable marlowe-runtime
   import:          lang
   hs-source-dirs:  marlowe-runtime
   main-is:         Main.hs
-  other-modules:
-    Logging
-    Paths_marlowe_runtime
-
+  other-modules:   Paths_marlowe_runtime
   autogen-modules: Paths_marlowe_runtime
   build-depends:
     , aeson ^>=2.2
     , async-components ==0.1.1.0
     , base >=4.9 && <5
-    , bytestring >=0.10.12 && <0.12
     , cardano-api ^>=8.37
     , cardano-crypto-wrapper ^>=1.5
     , cardano-ledger-byron ^>=1.0
     , eventuo11y >=0.9 && <0.11
     , eventuo11y-extras ==0.1.1.0
-    , eventuo11y-otel ^>=0.1
     , hasql >=1.6 && <2
     , hasql-pool ^>=0.8
     , hs-opentelemetry-sdk ^>=0.0.3

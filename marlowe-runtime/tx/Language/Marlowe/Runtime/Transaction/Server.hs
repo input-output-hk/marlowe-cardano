@@ -7,9 +7,6 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# OPTIONS_GHC -Wno-unused-imports #-}
-{-# OPTIONS_GHC -Wno-unused-local-binds #-}
-{-# OPTIONS_GHC -Wno-unused-matches #-}
 
 module Language.Marlowe.Runtime.Transaction.Server where
 
@@ -40,12 +37,14 @@ import Cardano.Api (
   makeShelleyAddress,
   toLedgerEpochInfo,
  )
+import qualified Cardano.Api as C
 import Cardano.Api.Shelley (
   LedgerProtocolParameters,
   ProtocolParameters,
   convertToLedgerProtocolParameters,
  )
-import Colog (Message, WithLog)
+import qualified Cardano.Api.Shelley as C
+import Colog (Message, WithLog, logDebug)
 import Control.Applicative ((<|>))
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (race)
@@ -54,13 +53,15 @@ import Control.Concurrent.STM (STM, modifyTVar, newEmptyTMVar, newTVar, putTMVar
 import qualified Control.DeepSeq as DeepSeq
 import Control.Error (MaybeT (..))
 import Control.Error.Util (hush, note, noteT)
-import Control.Exception (ErrorCall, Exception (..), SomeException, catch)
+import Control.Exception (Exception (..), SomeException, catch)
 import qualified Control.Exception as Exception
 import Control.Monad (guard, unless, (<=<))
 import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), except, runExceptT, throwE, withExceptT)
+import qualified Data.Aeson as A
+import qualified Data.Aeson.Text as A
 import Data.Bifunctor (first)
 import Data.Foldable (foldl')
 import Data.List (find)
@@ -70,6 +71,8 @@ import qualified Data.Map.NonEmpty as NEMap
 import Data.Maybe (fromJust, fromMaybe)
 import Data.Set (Set)
 import qualified Data.Set as Set
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
 import Data.Time (NominalDiffTime, UTCTime, nominalDiffTimeToSeconds)
 import Data.Traversable (for)
 import Data.Void (Void)
@@ -78,7 +81,6 @@ import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.Cardano.Api (
   fromCardanoAddressInEra,
-  fromCardanoLovelace,
   fromCardanoTxId,
   fromCardanoTxOutDatum,
   fromCardanoTxOutValue,
@@ -246,12 +248,21 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
               shelleyEra <- case inEonForEraMaybe id era of
                 Nothing -> error "Current era not supported"
                 Just a -> pure a
+
               addField ev $ SystemStart systemStart
               addField ev $ EraHistory eraHistory
               addField ev $ ProtocolParameters protocolParameters
               addField ev $ NetworkId networkId
               addField ev $ Era $ AnyCardanoEra era
-              let solveConstraints :: Constraints.SolveConstraints
+
+              logDebug $
+                "Server received a command: " <> case command of
+                  Create{} -> "Create"
+                  ApplyInputs{} -> "ApplyInputs"
+                  Withdraw{} -> "Withdraw"
+                  Submit{} -> "Submit"
+
+              let solveConstraints :: Constraints.SolveConstraints era v
                   solveConstraints =
                     Constraints.solveConstraints
                       systemStart
@@ -357,14 +368,85 @@ limitAnalysisTime timeout analysis = do
     -- Analysis finished successfully
     Right (Right res') -> pure $ Right res'
 
+type GetCurrentScripts v = MarloweVersion v -> MarloweScripts
+
+mkMarloweContext
+  :: (MonadUnliftIO m)
+  => NetworkId
+  -> MarloweVersion v
+  -> GetCurrentScripts v
+  -> Maybe Chain.StakeCredential
+  -> ExceptT CreateError m (MarloweContext v)
+mkMarloweContext networkId version getCurrentScripts mStakeCredential = do
+  mCardanoStakeCredential <- except $ traverse (note CreateToCardanoError . toCardanoStakeCredential) mStakeCredential
+  let scripts@MarloweScripts{..} = getCurrentScripts version
+      stakeReference = maybe NoStakeAddress StakeAddressByValue mCardanoStakeCredential
+      marloweAddress =
+        fromCardanoAddressInEra BabbageEra $
+          AddressInEra (ShelleyAddressInEra ShelleyBasedEraBabbage) $
+            makeShelleyAddress
+              networkId
+              (fromJust $ toCardanoPaymentCredential $ ScriptCredential marloweScript)
+              stakeReference
+      payoutAddress =
+        fromCardanoAddressInEra BabbageEra $
+          AddressInEra (ShelleyAddressInEra ShelleyBasedEraBabbage) $
+            makeShelleyAddress
+              networkId
+              (fromJust $ toCardanoPaymentCredential $ ScriptCredential payoutScript)
+              NoStakeAddress
+  except $ first CreateLoadMarloweContextFailed do
+    marloweScriptUTxO <- lookupMarloweScriptUtxo networkId scripts
+    payoutScriptUTxO <- lookupPayoutScriptUtxo networkId scripts
+    pure
+      MarloweContext
+        { scriptOutput = Nothing
+        , marloweAddress
+        , payoutAddress
+        , marloweScriptUTxO
+        , payoutScriptUTxO
+        , marloweScriptHash = marloweScript
+        , payoutScriptHash = payoutScript
+        }
+
+logSolveConstraintsParams
+  :: (WithLog env Message m)
+  => C.BabbageEraOnwards era
+  -> C.LedgerProtocolParameters era
+  -> MarloweVersion v
+  -> Either (MarloweContext v) Constraints.PayoutContext
+  -> WalletContext
+  -> Constraints.HelpersContext
+  -> TxConstraints era v
+  -> m ()
+logSolveConstraintsParams era protocol version scriptCtx walletCtx helpersCtx constraints = case version of
+  MarloweV1 -> do
+    let shelleyBasedEra = C.babbageEraOnwardsToShelleyBasedEra era
+        protocolParams = C.fromLedgerPParams shelleyBasedEra $ C.unLedgerProtocolParameters protocol
+
+        entry =
+          A.object
+            [ ("era", A.String . T.pack . show $ era)
+            , ("protocol", A.toJSON protocolParams)
+            , ("version", A.toJSON version)
+            , case scriptCtx of
+                Left marloweCtx -> ("marloweCtx", A.toJSON marloweCtx)
+                Right payoutCtx -> ("payoutCtx", A.toJSON payoutCtx)
+            , ("walletCtx", A.toJSON walletCtx)
+            , ("helpersCtx", A.toJSON helpersCtx)
+            , ("constraints", A.toJSON constraints)
+            ]
+    logDebug . TL.toStrict . A.encodeToLazyText $ entry
+    logDebug . T.pack $ show (era, protocolParams, version, scriptCtx, walletCtx, helpersCtx, constraints)
+
 execCreate
-  :: forall era m v
-   . (MonadUnliftIO m, IsCardanoEra era)
+  :: forall env era m v
+   . (MonadUnliftIO m, IsCardanoEra era, WithLog env Message m)
   => MkRoleTokenMintingPolicy m
   -> CardanoEra era
   -> Connector (QueryClient ContractRequest) m
-  -> (MarloweVersion v -> MarloweScripts)
-  -> SolveConstraints
+  -> GetCurrentScripts v
+  -> SolveConstraints era v
   -> LedgerProtocolParameters era
   -> LoadWalletContext m
   -> LoadHelpersContext m
@@ -407,7 +489,6 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
         Contract.ContractWithAdjacency{contract = c, ..} <- getContract' hash
         (c :: Contract v,) <$> foldMapM (fmap singletonContinuations . getContract') (Set.delete hash closure)
     Left c -> pure (c, noContinuations version)
-  mCardanoStakeCredential <- except $ traverse (note CreateToCardanoError . toCardanoStakeCredential) mStakeCredential
   computedMinAdaDeposit <-
     except $
       note ProtocolParamNoUTxOCostPerByte $
@@ -415,7 +496,7 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
   let minAda = fromMaybe computedMinAdaDeposit optMinAda
   unless (minAda >= computedMinAdaDeposit) $ throwE $ InsufficientMinAdaDeposit computedMinAdaDeposit
   ((datum, assets, RolesPolicyId rolesCurrency), constraints) <-
-    ExceptT $
+    ExceptT $ do
       buildCreateConstraints
         mkRoleTokenMintingPolicy
         eon
@@ -428,35 +509,12 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
         accounts
         adjustMinUtxo
         contract'
-  let scripts@MarloweScripts{..} = getCurrentScripts version
-      stakeReference = maybe NoStakeAddress StakeAddressByValue mCardanoStakeCredential
-      marloweAddress =
-        fromCardanoAddressInEra BabbageEra $
-          AddressInEra (ShelleyAddressInEra ShelleyBasedEraBabbage) $
-            makeShelleyAddress
-              networkId
-              (fromJust $ toCardanoPaymentCredential $ ScriptCredential marloweScript)
-              stakeReference
-      payoutAddress =
-        fromCardanoAddressInEra BabbageEra $
-          AddressInEra (ShelleyAddressInEra ShelleyBasedEraBabbage) $
-            makeShelleyAddress
-              networkId
-              (fromJust $ toCardanoPaymentCredential $ ScriptCredential payoutScript)
-              NoStakeAddress
-  marloweContext <- except $ first CreateLoadMarloweContextFailed do
-    marloweScriptUTxO <- lookupMarloweScriptUtxo networkId scripts
-    payoutScriptUTxO <- lookupPayoutScriptUtxo networkId scripts
-    pure
-      MarloweContext
-        { scriptOutput = Nothing
-        , marloweAddress
-        , payoutAddress
-        , marloweScriptUTxO
-        , payoutScriptUTxO
-        , marloweScriptHash = marloweScript
-        , payoutScriptHash = payoutScript
-        }
+  marloweContext@MarloweContext{marloweAddress} <-
+    mkMarloweContext
+      networkId
+      version
+      getCurrentScripts
+      mStakeCredential
   helpersContext <-
     withExceptT CreateLoadHelpersContextFailed $
       ExceptT $
@@ -484,10 +542,12 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
   let safetyErrors = contractSafetyErrors <> transactionSafetyErrors
   unless (Map.null (unAccounts accounts) || null safetyErrors) do
     throwE $ CreateSafetyAnalysisFailed safetyErrors
+
   txBody <-
     except $
       first CreateConstraintError $
         solveConstraints eon protocolParameters version (Left marloweContext) walletContext helpersContext constraints
+
   let marloweScriptAddress = Constraints.marloweAddress marloweContext
   pure $
     ContractCreated eon $
@@ -543,14 +603,14 @@ findPayouts version address body@(TxBody TxBodyContent{..}) =
       pure (Chain.TxOutRef txId txIx, Payout address assets datum')
 
 execApplyInputs
-  :: (MonadUnliftIO m, IsCardanoEra era)
+  :: (MonadUnliftIO m, IsCardanoEra era, WithLog env Message m)
   => CardanoEra era
   -> LedgerProtocolParameters era
   -> Connector (QueryClient ContractRequest) m
   -> STM Chain.ChainPoint
   -> SystemStart
   -> EraHistory
-  -> SolveConstraints
+  -> SolveConstraints era v
   -> LoadWalletContext m
   -> LoadMarloweContext m
   -> LoadHelpersContext m
@@ -621,6 +681,7 @@ execApplyInputs
       except $
         first ApplyInputsConstraintError $
           solveConstraints eon protocolParameters version (Left marloweContext) walletContext helpersContext constraints
+
     let input = scriptOutput'
     let buildOutput (assets, datum) utxo = TransactionScriptOutput marloweAddress assets utxo datum
     let output =
@@ -715,7 +776,7 @@ execWithdraw
    . (Monad m, IsCardanoEra era)
   => CardanoEra era
   -> LedgerProtocolParameters era
-  -> SolveConstraints
+  -> SolveConstraints era v
   -> LoadWalletContext m
   -> LoadPayoutContext m
   -> LoadHelpersContext m

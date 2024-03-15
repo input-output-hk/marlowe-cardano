@@ -31,7 +31,7 @@ import Language.Marlowe (
   TransactionWarning (..),
   Value (..),
  )
-import Language.Marlowe.Analysis.FSSemantics (warningsTrace)
+import Language.Marlowe.Analysis.FSSemantics (SlotLength (..), warningsTrace)
 import Spec.Marlowe.Common (alicePk)
 import Test.Tasty.HUnit (assertBool, assertEqual, testCase)
 
@@ -55,10 +55,13 @@ isTransactionAssertionFailed :: TransactionWarning -> Bool
 isTransactionAssertionFailed (TransactionAssertionFailed{}) = True
 isTransactionAssertionFailed _ = False
 
+slotLength :: SlotLength
+slotLength = SlotLength 1000
+
 getWarning :: Contract -> IO (Maybe TransactionWarning)
 getWarning contract =
   do
-    res <- warningsTrace contract
+    res <- warningsTrace slotLength contract
     return $ case res of
       Right (Just (_, _, w : _)) -> Just w
       _ -> Nothing
@@ -70,13 +73,13 @@ analysisWorks = do
           (DivValue (Constant n) (Constant d) `ValueGE` Constant 5)
           Close
           (Pay alicePk (Party alicePk) Language.Marlowe.Util.ada (Constant (-100)) Close)
-  result <- warningsTrace (contract 10 11)
+  result <- warningsTrace slotLength (contract 10 11)
   assertBool "Analyse a contract" $ isRight result
 
 emptyTrace :: IO ()
 emptyTrace = do
   let contract = Close
-  result <- warningsTrace contract
+  result <- warningsTrace slotLength contract
   assertBool "Close passes static analysis" $ isRight result && isNothing (fromRight Nothing result)
 
 nonPositivePay :: IO ()

@@ -12,8 +12,6 @@ module Language.Marlowe.Runtime.ChainSync (
 ) where
 
 import Cardano.Api (ShelleyBasedEra, Tx, TxValidationErrorInCardanoMode)
-import qualified Cardano.Api as Cardano
-import Cardano.Api.Shelley (AcquiringFailure)
 import Control.Arrow (returnA)
 import Control.Concurrent.Component
 import Control.Concurrent.Component.Probes
@@ -27,7 +25,11 @@ import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL (QuerySelector)
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL as DB
 import Language.Marlowe.Runtime.ChainSync.JobServer (ChainSyncJobServerDependencies (..), chainSyncJobServer)
 import Language.Marlowe.Runtime.ChainSync.NodeClient (NodeClientSelector (..))
-import Language.Marlowe.Runtime.ChainSync.QueryServer (ChainSyncQueryServerDependencies (..), chainSyncQueryServer)
+import Language.Marlowe.Runtime.ChainSync.QueryServer (
+  ChainSyncQueryServerDependencies (..),
+  QueryLocalNodeState,
+  chainSyncQueryServer,
+ )
 import Language.Marlowe.Runtime.ChainSync.Server (ChainSyncServerDependencies (..), chainSyncServer)
 import Network.Protocol.Connection (ServerSource (..))
 import Network.Protocol.Job.Server (JobServer)
@@ -41,11 +43,7 @@ import UnliftIO (MonadUnliftIO, STM)
 
 data ChainSyncDependencies m = ChainSyncDependencies
   { databaseQueries :: DatabaseQueries m
-  , queryLocalNodeState
-      :: Maybe Cardano.ChainPoint
-      -> forall result
-       . Cardano.QueryInMode result
-      -> m (Either AcquiringFailure result)
+  , queryLocalNodeState :: QueryLocalNodeState m
   , submitTxToNodeLocal
       :: forall era
        . ShelleyBasedEra era

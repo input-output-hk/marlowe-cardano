@@ -70,6 +70,7 @@ import qualified Cardano.Api.Shelley as CS
 import Control.Applicative ((<|>))
 import Data.Aeson (
   ToJSON (..),
+  ToJSONKey,
   Value (..),
   object,
   (.!=),
@@ -336,7 +337,7 @@ data Destination
   = ToAddress Address
   | ToScript HelperScript
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON, Variations)
+  deriving anyclass (Binary, ToJSON, Variations, ToJSONKey)
 
 data MintRole = MintRole
   { roleMetadata :: Maybe RoleTokenMetadata

@@ -88,6 +88,7 @@ import Data.Maybe (catMaybes)
 import qualified Data.Set as S
 import Data.Traversable (for)
 import Language.Marlowe (Input (..))
+import Language.Marlowe.Analysis.FSSemantics (SlotLength (..))
 import qualified PlutusLedgerApi.Common as P
 import qualified PlutusLedgerApi.Common.Versions as P
 import qualified PlutusLedgerApi.V2 as P hiding (evaluateScriptCounting)
@@ -685,9 +686,12 @@ findPaths
   -- ^ The state of the contract.
   -> m [(P.POSIXTime, [TransactionInput])]
   -- ^ The paths through the Marlowe contract.
-findPaths requireContinuations MerkleizedContract{..} state =
+findPaths requireContinuations MerkleizedContract{..} state = do
+  let -- Slot length in milliseconds
+      slotLength = SlotLength 1_000
+
   liftEither . first (fromString . show)
-    =<< liftIO . flip getAllInputs (Just state)
+    =<< liftIO . flip (getAllInputs slotLength) (Just state)
     =<< demerkleizeContract mcContinuations (deepDemerkleize requireContinuations mcContract)
 
 -- | Do not annotate.

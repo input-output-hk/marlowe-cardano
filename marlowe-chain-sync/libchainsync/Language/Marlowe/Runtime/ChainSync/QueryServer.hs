@@ -26,12 +26,14 @@ import Network.Protocol.Query.Server (QueryServer (..), ServerStReq (..))
 import Network.Protocol.Query.Types
 import UnliftIO (MonadUnliftIO, atomically)
 
+type QueryLocalNodeState m =
+  forall result
+   . Maybe Cardano.ChainPoint
+  -> QueryInMode result
+  -> m (Either AcquiringFailure result)
+
 data ChainSyncQueryServerDependencies m = ChainSyncQueryServerDependencies
-  { queryLocalNodeState
-      :: forall result
-       . Maybe Cardano.ChainPoint
-      -> QueryInMode result
-      -> m (Either AcquiringFailure result)
+  { queryLocalNodeState :: QueryLocalNodeState m
   , getUTxOs :: Database.GetUTxOs m
   , getTip :: Database.GetTip m
   , nodeTip :: STM ChainPoint

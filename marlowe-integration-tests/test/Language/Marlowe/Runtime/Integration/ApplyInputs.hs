@@ -156,17 +156,17 @@ closeSpec = parallel $ describe "Close contract" $ aroundAll setup do
         (Left Close)
         >>= expectRight "Failed to create contract"
         >>= \created@(ContractCreated era0 ContractCreatedInEra{txBody = createBody, contractId}) -> do
-          _ <- submit wallet era0 createBody
-          inputsApplied <-
-            expectRight "Failed to close contract"
-              =<< applyInputs
-                MarloweV1
-                (addresses wallet)
-                contractId
-                emptyMarloweTransactionMetadata
-                []
-          runtime <- ask
-          liftIO $ runTests (runtime, (created, inputsApplied))
+          submit' wallet era0 createBody >>= expectRight "Failed to submit create" >> do
+            inputsApplied <-
+              expectRight "Failed to close contract"
+                =<< applyInputs
+                  MarloweV1
+                  (addresses wallet)
+                  contractId
+                  emptyMarloweTransactionMetadata
+                  []
+            runtime <- ask
+            liftIO $ runTests (runtime, (created, inputsApplied))
 
 data PayTestData = PayTestData
   { payRoleAccountCreated :: ContractCreated 'V1

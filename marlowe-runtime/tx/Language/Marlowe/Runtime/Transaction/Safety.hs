@@ -15,7 +15,7 @@ module Language.Marlowe.Runtime.Transaction.Safety (
   noContinuations,
 ) where
 
-import Control.Monad (foldM)
+import Control.Monad (foldM, when)
 import Control.Monad.Trans.Except (except, runExceptT)
 import Data.Bifunctor (bimap, first)
 import Data.Maybe (catMaybes, fromMaybe, isJust)
@@ -281,14 +281,24 @@ minAdaBound era pps MarloweV1 assets =
           C.deserialiseAddress
             (C.AsAddressInEra C.AsConwayEra)
             "addr1x8ur42seq20ytdzm33fhjf3c2pxskxf3gzxq706qk7p5muhc824pjq57gk69hrzn0ynrs5zdpvvnzsyvpul5pdurfheq28w2dx"
-    value <- Chain.assetsToCardanoValue assets
-    let txOut =
-          Cardano.TxOut
-            address
-            (mkTxOutValue maryEraOnwards value)
-            (Cardano.TxOutDatumHash alonzoEraOnwards "45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0")
-            C.ReferenceScriptNone
-    pure $ fromCardanoLovelace $ Cardano.calculateMinimumUTxO shelleyBasedEra txOut $ C.unLedgerProtocolParameters pps
+    let -- Let's just check if cardano-node fixed the issue
+        CS.TxOutAssetsContent (Chain.Assets origLovelace tokens) = assets
+        minAdaLoop counter totalLovelace = do
+          when (counter == (0 :: Int)) do
+            Nothing
+          let assets' = unsafeTxOutAssets (Chain.Assets totalLovelace tokens)
+          value <- Chain.assetsToCardanoValue assets'
+          let txOut =
+                Cardano.TxOut
+                  address
+                  (mkTxOutValue maryEraOnwards value)
+                  (C.TxOutDatumInTx alonzoEraOnwards . C.unsafeHashableScriptData . Chain.toCardanoScriptData $ Chain.B "")
+                  C.ReferenceScriptNone
+              minUTxOLovelace = fromCardanoLovelace $ Cardano.calculateMinimumUTxO shelleyBasedEra txOut $ C.unLedgerProtocolParameters pps
+          if minUTxOLovelace > totalLovelace
+            then minAdaLoop (counter - 1) minUTxOLovelace
+            else pure minUTxOLovelace
+    minAdaLoop 5 origLovelace
 
 -- | Check a contract for design errors and ledger violations.
 checkContract
@@ -368,6 +378,7 @@ checkTransactions protocolParameters era version@MarloweV1 marloweContext locked
       (_, res) <- except $ foldMFlipped (lockedRolesContext, []) transactions \(lockedRolesCtx, acc) tx@(Transaction{txInput}) -> do
         let usedRoles = roleAuthorizations txInput
             lockedRolesCtx' = unlockRoles (Set.map Chain.fromPlutusTokenName usedRoles) lockedRolesCtx
+
         (txRes :: [SafetyError]) <-
           checkTransaction
             protocolParameters
@@ -381,6 +392,25 @@ checkTransactions protocolParameters era version@MarloweV1 marloweContext locked
         pure (lockedRolesCtx', txRes : acc)
 
       pure $ concat res
+
+plainInterval
+  :: Plutus.POSIXTime
+  -> (Plutus.POSIXTime, Plutus.POSIXTime)
+  -> (UTCTime, UTCTime, UTCTime)
+plainInterval minTime marloweInterval = do
+  let beginPOSIX = fst marloweInterval
+      begin = posixTimeToUTCTime beginPOSIX
+      -- We have to revert back from the `MarloweTimeInterval` to the TxInterval:
+      --
+      -- \* on the Plutus side we do this millisecond subtraction to compute
+      --  the end of Marlowe level interval based on tx level interval:
+      -- https://github.com/input-output-hk/marlowe-plutus/blob/d9c3093270e7af8b335ee2ddce9c0a18be2bd9a3/marlowe-plutus/src/Language/Marlowe/Plutus/Script.hs#L190
+      --
+      -- \* we have to do the opposite here:
+      endPOSIX = snd marloweInterval + 1
+      end = posixTimeToUTCTime endPOSIX
+      minTime' = posixTimeToUTCTime $ max minTime beginPOSIX
+  (minTime', begin, end)
 
 -- | Check a transaction for safety issues.
 checkTransaction
@@ -397,27 +427,9 @@ checkTransaction protocolParameters era version@MarloweV1 marloweContext@Marlowe
   do
     let V1.TransactionInput{..} = txInput
         rolesCurrency' = V1.MarloweParams . Plutus.CurrencySymbol $ Plutus.toBuiltin rolesCurrency
-        -- Truncate updward to slot number.
-        earliest = posixTimeToUTCTime . (* 1000) . (`div` 1000) . (+ 999) . V1.minTime $ V1.marloweState marloweData
-        -- Truncate inward to the slot number (inclusive).
-        begin = posixTimeToUTCTime . (* 1000) . (`div` 1000) . (+ 999) $ fst txInterval
-        -- Truncate inward to the slot number (exclusive).
-        end = posixTimeToUTCTime . (* 1000) . (+ 2) . (`div` 1000) . (+ (-999)) $ snd txInterval
-        -- Find the current time and slot-compatible interval.
-        (now, intervalBegin, intervalEnd)
-          -- For a timeout, the current time must not be before the timeout.
-          | null txInputs =
-              ( begin
-              , Just begin
-              , Just $ max (addUTCTime 1 begin) end
-              )
-          -- For application of input, the current time must not be before the minimum time.
-          | otherwise =
-              ( max begin earliest
-              , Just $ min begin (addUTCTime (-1) end)
-              , Just $ max end (addUTCTime 1 earliest)
-              )
         marloweData = V1.MarloweData rolesCurrency' txState txContract
+        minTime = V1.minTime txState
+        (now, intervalBegin, intervalEnd) = plainInterval minTime txInterval
 
     scriptIncoming <-
       note "Invalid initial accounts state" $ marloweAccountsAssets . V1.accounts $ V1.marloweState marloweData
@@ -431,7 +443,7 @@ checkTransaction protocolParameters era version@MarloweV1 marloweContext@Marlowe
       utcTimeToSlotNo start history now
     constraints <-
       bimap show snd $
-        runIdentity $
+        runIdentity $ do
           runExceptT $
             buildApplyInputsConstraints
               (const $ pure Nothing)
@@ -441,9 +453,10 @@ checkTransaction protocolParameters era version@MarloweV1 marloweContext@Marlowe
               marloweOutput
               tipSlot
               metadata
-              intervalBegin
-              intervalEnd
+              (Just intervalBegin)
+              (Just intervalEnd)
               txInputs
+
     let walletContext = walletForConstraints version marloweContext changeAddress constraints
         LockedRolesContext helpersContext = lockedRolesContext
     pure

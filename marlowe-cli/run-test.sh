@@ -41,6 +41,7 @@ cabal run exe:marlowe-cli -- \
   ./test/inline/role-based/cli/zero-coupon-bond-too-late.yaml \
   ./test/inline/role-based/cli/zero-coupon-bond.yaml \
   ./test/on-chain-limits/accounts-map-size.yaml \
+  ./test/on-chain-limits/closure-payouts-chain.yaml \
   ./test/on-chain-limits/deposits-chain-with-open-roles-and-merkleization.yaml \
   ./test/on-chain-limits/deposits-chain-with-open-roles.yaml \
   ./test/on-chain-limits/deposits-chain-with-roles.yaml \
@@ -87,5 +88,5 @@ cabal run exe:marlowe-cli -- \
   ./test/templates/role-based/runtime/swap.yaml \
   ./test/templates/role-based/runtime/zero-coupon-bond.yaml \
 
-# # Fails in simulation mode - PLT-7509:
-# # ./test/inline/role-based/cli/zero-coupon-bond-delayed-timeout.yaml \
+# Fails in simulation mode - PLT-7509:
+# ./test/inline/role-based/cli/zero-coupon-bond-delayed-timeout.yaml \

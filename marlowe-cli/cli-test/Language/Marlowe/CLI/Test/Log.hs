@@ -29,7 +29,7 @@ where
 
 import Cardano.Api (File (..))
 import Cardano.Api qualified as C
-import Contrib.Cardano.Debug as C.Debug
+import Cardano.Debug as C.Debug
 import Control.Lens (Lens', view, (%=), (^.))
 import Control.Lens.Type (Getter)
 import Control.Monad.Error.Class (MonadError (throwError))

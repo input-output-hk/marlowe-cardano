@@ -7,7 +7,7 @@ module Spec.Marlowe.Analysis where
 import Data.Maybe (isJust)
 import Data.Time.Clock (UTCTime)
 import qualified Language.Marlowe as C
-import Language.Marlowe.Analysis.FSSemantics (warningsTrace)
+import Language.Marlowe.Analysis.FSSemantics (SlotLength (SlotLength), warningsTrace)
 import Language.Marlowe.Extended.V1
 import Marlowe.Contracts.Common
 import Marlowe.Contracts.UTC.Options
@@ -28,7 +28,8 @@ tests =
 
 hasWarnings :: Maybe C.Contract -> IO Bool
 hasWarnings (Just c) = do
-  result <- warningsTrace c
+  let slotLength = SlotLength 1000
+  result <- warningsTrace slotLength c
   case result of
     Left errDesc -> assertFailure ("Analysis failed: " ++ show errDesc)
     Right counterExample -> return $ isJust counterExample

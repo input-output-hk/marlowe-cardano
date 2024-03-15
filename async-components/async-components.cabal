@@ -61,6 +61,7 @@ library
     , exceptions ^>=0.10
     , general-allocate ^>=0.2
     , hs-opentelemetry-api ^>=0.0.3
+    , hs-opentelemetry-exporter-handle ^>=0.0.1.1
     , hs-opentelemetry-sdk ^>=0.0.3
     , mtl >=2.2 && <3
     , servant-client ^>=0.20

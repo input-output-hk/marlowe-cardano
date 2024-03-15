@@ -43,6 +43,7 @@ packages:
   libs/aeson-record
   libs/aeson-via-serialise
   libs/base16-aeson
+  libs/cardano-debug
   libs/plutus-ledger-aeson
   libs/plutus-ledger-ada
   libs/plutus-ledger-slot
@@ -229,3 +230,4 @@ source-repository-package
    tag: 8a539a8e63d8c410a329e3bc028d8339f32e4c8f
    subdir: cardano-api
    --sha256: 0r2zi4is8ayjryq80b144zcfl95ylx60gjp9n1qdcr1hcyrm76aj
+

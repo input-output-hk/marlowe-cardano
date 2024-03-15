@@ -157,16 +157,22 @@ withLocalTestnet = withLocalTestnet' defaultOptions
 
 -- | A version of @@withLocalTestnet@@ that accepts custom options.
 withLocalTestnet'
-  :: (MonadUnliftIO m, MonadBaseControl IO m, MonadThrow m)
+  :: forall a m
+   . (MonadUnliftIO m, MonadBaseControl IO m, MonadThrow m)
   => LocalTestnetOptions
   -> (LocalTestnet -> m a)
   -> m a
 withLocalTestnet' options test = runResourceT do
   testnet <- startLocalTestnet options
+  let onHUnitFailure :: HUnitFailure -> m (Either HUnitFailure a)
+      onHUnitFailure ex = do
+        let LocalTestnet{workspace} = testnet
+        void $ unprotect $ W.releaseKey workspace
+        pure $ Left ex
   result <-
     lift $
       (Right <$> test testnet)
-        `catch` (\ex@HUnitFailure{} -> pure $ Left ex)
+        `catch` onHUnitFailure
         `catch` rethrowAsTestnetException testnet
   either throw pure result
 

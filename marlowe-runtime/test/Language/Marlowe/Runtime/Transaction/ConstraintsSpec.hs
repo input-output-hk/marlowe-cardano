@@ -16,19 +16,24 @@ import Cardano.Api.Shelley (
   SimpleScriptOrReferenceInput (..),
   convertToLedgerProtocolParameters,
  )
+import qualified Cardano.Api.Shelley as C
 import Control.Applicative (Alternative)
 import Control.Arrow (Arrow ((&&&), (***)))
-import Control.Error (catMaybes, note)
+import Control.Error (MaybeT (runMaybeT), catMaybes, hoistMaybe, hush, hushT, note)
 import Control.Monad (guard)
+import Control.Monad.Trans.Except (ExceptT (..))
+import qualified Data.Aeson as A
 import Data.Bifunctor (Bifunctor (..))
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BL
 import Data.Either (fromLeft, isRight)
 import Data.Foldable (fold)
 import Data.Function (on)
 import Data.Functor (($>), (<&>))
 import Data.Group (Group (invert))
 import Data.List (find, isPrefixOf)
+import qualified Data.List.NonEmpty as NonEmptyList
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Map.Strict as SMap (filterWithKey, toList)
@@ -41,6 +46,7 @@ import Data.SOP.Strict (NP (Nil, (:*)))
 import qualified Data.Set as Set
 import qualified Data.Text as T
 import Data.Time (UTCTime)
+import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Data.Traversable (for)
 import Data.Word (Word32)
 import Language.Marlowe (MarloweData (..), MarloweParams (..), txInputs)
@@ -53,6 +59,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   paymentCredential,
   renderTxOutRef,
   unTransactionMetadata,
+  unsafeTxOutAssets,
  )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import qualified Language.Marlowe.Runtime.ChainSync.Gen ()
@@ -66,11 +73,18 @@ import Language.Marlowe.Runtime.Core.Api (
   toChainDatum,
   toChainPayoutDatum,
  )
+import qualified Language.Marlowe.Runtime.Core.Api as Runtime
 import qualified Language.Marlowe.Runtime.Core.Gen ()
 import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript (OpenRoleScript), ReferenceScriptUtxo (..))
+import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
+import Language.Marlowe.Runtime.Transaction (mkCommandLineRoleTokenMintingPolicy)
 import Language.Marlowe.Runtime.Transaction.Api (CoinSelectionError (NoCollateralFound), Destination (..))
+import qualified Language.Marlowe.Runtime.Transaction.Api as Transaction
+import qualified Language.Marlowe.Runtime.Transaction.BuildConstraints as Transaction
 import Language.Marlowe.Runtime.Transaction.Constraints
 import qualified Language.Marlowe.Runtime.Transaction.Gen ()
+import Language.Marlowe.Runtime.Transaction.Safety (mkAdjustMinUTxO)
+import qualified Language.Marlowe.Runtime.Transaction.Server as Transaction
 import qualified Language.Marlowe.Scripts.Types as V1
 import Ouroboros.Consensus.BlockchainTime (RelativeTime (..), mkSlotLength)
 import Ouroboros.Consensus.HardFork.History (
@@ -119,8 +133,43 @@ maryEraOnwardsTest = MaryEraOnwardsBabbage
 allegraEraOnwardsTest :: AllegraEraOnwards TestEra
 allegraEraOnwardsTest = AllegraEraOnwardsBabbage
 
+unboundedEraSummary :: Integer -> EraSummary
+unboundedEraSummary i =
+  EraSummary
+    { eraStart = oneMillisecondBound i
+    , eraEnd = EraUnbounded
+    , eraParams =
+        EraParams
+          { eraEpochSize = 1
+          , eraSlotLength = mkSlotLength 0.001
+          , eraSafeZone = UnsafeIndefiniteSafeZone
+          }
+    }
+
+oneMillisecondEraSummary :: Integer -> EraSummary
+oneMillisecondEraSummary i =
+  EraSummary
+    { eraStart = oneMillisecondBound i
+    , eraEnd = EraEnd $ oneMillisecondBound $ i + 1
+    , eraParams =
+        EraParams
+          { eraEpochSize = 1
+          , eraSlotLength = mkSlotLength 0.001
+          , eraSafeZone = UnsafeIndefiniteSafeZone
+          }
+    }
+
+oneMillisecondBound :: Integer -> Bound
+oneMillisecondBound i =
+  Bound
+    { boundTime = RelativeTime $ fromInteger i / 1000
+    , boundSlot = fromInteger i
+    , boundEpoch = fromInteger i
+    }
+
 spec :: Spec
 spec = do
+  regressions
   describe "solveInitialTxBodyContent" do
     prop "satisfies the constraints" \(SomeTxConstraints marloweVersion constraints) -> do
       protocol <-
@@ -778,40 +827,6 @@ spec = do
                               :* K (unboundedEraSummary 6) -- Conway never ends
                               :* Nil
 
-                  unboundedEraSummary :: Integer -> EraSummary
-                  unboundedEraSummary i =
-                    EraSummary
-                      { eraStart = oneMillisecondBound i
-                      , eraEnd = EraUnbounded
-                      , eraParams =
-                          EraParams
-                            { eraEpochSize = 1
-                            , eraSlotLength = mkSlotLength 0.001
-                            , eraSafeZone = UnsafeIndefiniteSafeZone
-                            }
-                      }
-
-                  oneMillisecondEraSummary :: Integer -> EraSummary
-                  oneMillisecondEraSummary i =
-                    EraSummary
-                      { eraStart = oneMillisecondBound i
-                      , eraEnd = EraEnd $ oneMillisecondBound $ i + 1
-                      , eraParams =
-                          EraParams
-                            { eraEpochSize = 1
-                            , eraSlotLength = mkSlotLength 0.001
-                            , eraSafeZone = UnsafeIndefiniteSafeZone
-                            }
-                      }
-
-                  oneMillisecondBound :: Integer -> Bound
-                  oneMillisecondBound i =
-                    Bound
-                      { boundTime = RelativeTime $ fromInteger i / 1000
-                      , boundSlot = fromInteger i
-                      , boundEpoch = fromInteger i
-                      }
-
                   -- We need to make a TxBodyContent that would have come from executing
                   -- selectCoins, containing the tx information in the WalletContext we
                   -- will also be passing to balanceTx. To do so, we'll use the
@@ -874,6 +889,115 @@ spec = do
                         then counterexample ("balancing shouldn't have failed\n" <> err) False
                         else label "non-balanceable test cases" True
                     Left _ -> label "non-balanceable test cases" True
+
+regressions :: Spec
+regressions = do
+  let expectRight msg = \case
+        Right a -> pure a
+        Left e -> fail $ msg <> show e
+
+  describe "regressions" do
+    it "contract creation failure on one utxo wallet" $ do
+      babbageParamsFile <- BL.readFile "./configuration/babbage-preprod-protocol-params.json"
+      pp :: C.ProtocolParameters <-
+        expectRight "Protocol params json decoding failed with:" $ A.eitherDecode babbageParamsFile
+      pp' <- expectRight "PP conversion failed" $ C.LedgerProtocolParameters <$> C.toLedgerPParams C.ShelleyBasedEraBabbage pp
+      let eon = C.BabbageEraOnwardsBabbage
+          walletCtx =
+            WalletContext
+              { availableUtxos =
+                  Chain.UTxOs $
+                    Map.fromList
+                      [
+                        ( Chain.TxOutRef "df96f8c4265bdb1f9865a2f904b4e4dd02aee9319d96e5dfd48f0647f11aa19f" (Chain.TxIx 0)
+                        , Chain.TransactionOutput
+                            "60145148f28c2cbf969f6714ca343187a523b3847f83db1beb68b7f010"
+                            (unsafeTxOutAssets $ Chain.Assets (Chain.Lovelace 300000000000) mempty)
+                            Nothing
+                            Nothing
+                        )
+                      ]
+              , collateralUtxos = mempty
+              , changeAddress = "60145148f28c2cbf969f6714ca343187a523b3847f83db1beb68b7f010"
+              }
+          threadTokenName = ""
+          roleTokens =
+            Transaction.RoleTokensMint $
+              Transaction.mkMint $
+                NonEmptyList.singleton
+                  ( "Party A"
+                  , Nothing
+                  , ToAddress "60145148f28c2cbf969f6714ca343187a523b3847f83db1beb68b7f010"
+                  , Chain.Quantity 1
+                  )
+          metadata = Runtime.MarloweTransactionMetadata Nothing mempty
+          minAda = Chain.Lovelace 1116290
+          -- accounts :: Chain.Accounts
+          accounts = mempty
+          contract =
+            V1.When
+              [ V1.MerkleizedCase
+                  (V1.Deposit "Party A" "Party A" (V1.Token "" "") (V1.Constant 100000000))
+                  "\245E\192\249\166\177\186%\176@I\143#\135\153R\154\159E\169\186\ETBP.&\166\226\255\&5\174R\218"
+              ]
+              1709639332286
+              V1.Close
+          adjustMinUtxo = mkAdjustMinUTxO eon pp' MarloweV1
+          mkRoleTokenMintingPolicy = mkCommandLineRoleTokenMintingPolicy "marlowe-minting-validator"
+
+      possibleTxBody <- runMaybeT do
+        (_, constraints) <-
+          hushT $
+            ExceptT $
+              Transaction.buildCreateConstraints
+                mkRoleTokenMintingPolicy
+                eon
+                MarloweV1
+                walletCtx
+                threadTokenName
+                roleTokens
+                metadata
+                minAda
+                accounts
+                adjustMinUtxo
+                contract
+        let getCurrentScripts = const ScriptRegistry.caseAsDataV1Scripts
+
+        marloweContext <- hushT $ Transaction.mkMarloweContext (Testnet (NetworkMagic 1)) MarloweV1 getCurrentScripts Nothing
+
+        let helpersContext = HelpersContext mempty "" mempty
+            start = posixSecondsToUTCTime 1709639332286
+            systemStart = SystemStart start
+            eraHistory :: EraHistory
+            eraHistory =
+              EraHistory $
+                mkInterpreter $
+                  summaryWithExactly $
+                    Exactly $
+                      K (oneMillisecondEraSummary 0) -- Byron lasted 1 ms
+                        :* K (oneMillisecondEraSummary 1) -- Shelley lasted 1 ms
+                        :* K (oneMillisecondEraSummary 2) -- Allegra lasted 1 ms
+                        :* K (oneMillisecondEraSummary 3) -- Mary lasted 1 ms
+                        :* K (oneMillisecondEraSummary 4) -- Alonzo lasted 1 ms
+                        :* K (unboundedEraSummary 5) -- Babbage never ends
+                        :* K (unboundedEraSummary 6) -- Conway never ends
+                        :* Nil
+        hoistMaybe $
+          hush $
+            solveConstraints
+              systemStart
+              (toLedgerEpochInfo eraHistory)
+              eon
+              pp'
+              MarloweV1
+              (Left marloweContext)
+              walletCtx
+              helpersContext
+              constraints
+
+      case possibleTxBody of
+        Nothing -> fail "Failed to build tx body"
+        Just _ -> pure ()
 
 genHelperContext :: TxConstraints TestEra v -> Gen HelpersContext
 genHelperContext TxConstraints{..} = do

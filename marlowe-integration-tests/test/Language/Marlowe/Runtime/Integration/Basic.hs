@@ -212,7 +212,6 @@ spec = describe "Basic scenarios" do
                         -- 27. Cancel
                         -- 28. Done
                         pure $ bulkSyncRequestNextExpectWait $ pure $ BulkSync.SendMsgCancel $ BulkSync.SendMsgDone ()
-
     startClient
 
   -- This is an adaptation of https://nbviewer.org/gist/bwbush/4e8a7196902bfdb0f7f6f7f4a6e3e643
