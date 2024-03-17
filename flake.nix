@@ -9,13 +9,12 @@
       inputs.n2c.follows = "n2c";
     };
 
-    # Use upstream when https://github.com/nlewo/nix2container/pull/82 is merged
-    n2c.url = "github:shlevy/nix2container/no-Size-on-dir";
-
+    n2c.url = "github:nlewo/nix2container";
+    
     marlowe-plutus.url = "github:input-output-hk/marlowe-plutus";
 
-    cardano-node.url = "github:input-output-hk/cardano-node?ref=8.8.1-pre";
-
+    cardano-node.url = "github:input-output-hk/cardano-node?ref=8.9.0";
+    
     iogx = {
       url = "github:input-output-hk/iogx";
       inputs.hackage.follows = "hackage";

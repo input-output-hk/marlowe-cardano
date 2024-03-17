@@ -1,38 +1,41 @@
-# Benchmark examples
+# Benchmarking Marlowe on a selected network
 
-This example walks through executing and plotting a complete set of benchmarks for the `sanchonet` network.
+
+This example walks through executing and plotting a complete set of benchmarks for one of the selected networks (`preview` | `preprod` | `sanchonet` | `mainnet`).
 
 ## Prerequisites
 
 The following tools must be on the `PATH`:
 
-- `podman`
-- `cardano-cli`
-- `marlowe-benchmark`
-- `psql`
-- `jq`
-- `dasel`
-- `gawk`
-- `sed`
-- `bc`
-- `curl`
+- `podman`: A tool for managing containers, used to manage the runtime containers for benchmarking.
+- `cardano-cli`: The command-line interface for interacting with the Cardano blockchain.
+- `marlowe-benchmark`: A benchmarking tool for Marlowe, a domain-specific language for financial contracts on Cardano.
+- `psql`: The command-line interface for interacting with PostgreSQL, used for managing the database.
+- `jq`: A lightweight and flexible command-line JSON processor, used for manipulating JSON data.
+- `dasel`: A command-line tool for querying and modifying JSON and YAML data structures.
+- `gawk`: The GNU implementation of the AWK programming language, used for text processing.
+- `sed`: A stream editor for filtering and transforming text, used for text processing.
+- `bc`: A command-line calculator, used for performing arithmetic calculations.
+- `curl`: A command-line tool for making HTTP requests, used for downloading files from a URL.
 
+# Select the network and fetch network configs
 
-## 0. Select the network
-
-In this example, we use the `sanchonet` network.
+To begin, select the network you want to benchmark (`sanchonet`, `preview`, `preprod`) and fetch the network configuration files.
 
 ```bash
-cd sanchonet
+NETWORK_NAME=sanchonet ## Select the one you want to benchmark {sanchonet, preview, preprod, mainnet}
+cd $NETWORK_NAME
+rm -rf config
 mkdir -p config
 for f in {config,topology,byron-genesis,shelley-genesis,alonzo-genesis}.json
 do
-  curl https://raw.githubusercontent.com/IntersectMBO/cardano-world/master/docs/environments/sanchonet/$f -o config/$f
+  curl "https://raw.githubusercontent.com/IntersectMBO/cardano-world/master/docs/environments/$NETWORK_NAME/$f" -o config/$f
 done
 mv config/{config,node}.json
 ```
+**Note**: Stay in the current folder until the end of the process.
 
-## 1. Make the database folders
+## 1. Create the database folders
 
 ```bash
 for f in pg.db node.db contract.db
@@ -46,27 +49,25 @@ do
 done
 ```
 
-
 ## 2. Set the environment variables
+
+To create and submit a transaction to the selected network, you'll need to provide the FAUCET details through two environment variables :
+# export FAUCET_ADDRESS= <YOUR FAUCET ADDRESS> 
+# export FAUCET_SKEY= <YOUR FAUCET PRIVATE KEY > 
+
+To source the other environment variables that should not be modified in a normal process, use the following command:
 
 ```bash
 source environment
 ```
 
-
 ## 3. Create the pod and containers
 
-```bash
-podman play kube --replace=true --start=false benchmark-sanchonet.yaml
-```
+**Note**: The runtime containers for benchmarking are managed by Podman.
 
-marlowe-benchmark \
-  --port $MARLOWE_RT_PORT \
-  --node-socket-path $CARDANO_NODE_SOCKET_PATH \
-  --testnet-magic 4 \
-  --address $FAUCET_ADDRESS \
-  --signing-key-file $FAUCET_SKEY \
-  --out-file results.json
+```bash
+podman play kube --replace=true --start=false compose.yaml
+```
 
 ## 4. Measure the performance of syncing from genesis
 
@@ -116,7 +117,7 @@ Starting remaining containers in pod b9463cbd7f198bf43ceb38869b2e9b4d4b0c385b7ab
 ## 5. Optionally, restart the pod to free up memory held by the syncing from genesis
 
 ```bash
-podman pod restart benchmark-sanchonet
+podman pod restart "benchmark-$NETWORK_NAME"
 ```
 
 
@@ -171,4 +172,11 @@ Done: 2024-01-20 16:02:21.70079731 UTC
 ../plot-sync.R
 ../plot-benchmarks.R
 ```
+
+## 9. Creating a PDF from the generated index.html
+
+```bash
+wkhtmltopdf 
+```
+
 

@@ -75,7 +75,7 @@ library
     , base16 ^>=0.3.2
     , binary ^>=0.8.8
     , bytestring >=0.10.12 && <0.12
-    , cardano-api:{cardano-api, internal} ^>=8.38
+    , cardano-api:{cardano-api, internal} ^>=8.39.2.0
     , cardano-binary
     , cardano-crypto-class
     , cardano-crypto-wrapper ^>=1.5
@@ -96,7 +96,7 @@ library
     , hs-opentelemetry-api ^>=0.0.3
     , marlowe-protocols ==0.3.0.0
     , nonempty-containers ^>=0.3.4
-    , ouroboros-consensus ^>=0.15
+    , ouroboros-consensus ^>=0.16
     , ouroboros-consensus-cardano
     , plutus-core ^>=1.21
     , plutus-ledger-api ^>=1.21
@@ -128,7 +128,7 @@ library libchainsync
     , async-components ==0.1.1.0
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
-    , cardano-api:{cardano-api, internal} ^>=8.38
+    , cardano-api:{cardano-api, internal} ^>=8.39.2.0
     , cardano-binary
     , co-log ^>=0.6
     , containers ^>=0.6.5
@@ -144,7 +144,7 @@ library libchainsync
     , marlowe-chain-sync ==0.0.6
     , marlowe-protocols ==0.3.0.0
     , nonempty-containers ^>=0.3.4
-    , ouroboros-network-protocols ^>=0.7.0
+    , ouroboros-network-protocols ^>=0.8
     , stm ^>=2.5
     , text ^>=2.0
     , transformers ^>=0.5.6
@@ -169,7 +169,7 @@ library chain-indexer
     , base >=4.9 && <5
     , base16 ^>=0.3.2
     , bytestring >=0.10.12 && <0.12
-    , cardano-api:{cardano-api, internal} ^>=8.38
+    , cardano-api:{cardano-api, internal} ^>=8.39.2.0
     , cardano-crypto-wrapper ^>=1.5
     , cardano-ledger-alonzo ^>=1.6
     , cardano-ledger-byron ^>=1.0
@@ -190,7 +190,7 @@ library chain-indexer
     , marlowe-chain-sync ==0.0.6
     , mtl >=2.2 && <3
     , ouroboros-consensus-cardano
-    , ouroboros-network-api ^>=0.6.0
+    , ouroboros-network-api ^>=0.7.0
     , postgresql-simple
     , profunctors >=5.6 && <6
     , stm ^>=2.5
@@ -211,7 +211,7 @@ library plutus-compat
   build-depends:
     , base >=4.9 && <5
     , base16 ^>=0.3.2
-    , cardano-api ^>=8.38
+    , cardano-api ^>=8.39.2.0
     , cardano-ledger-binary ^>=1.3
     , cardano-ledger-byron ^>=1.0
     , containers ^>=0.6.5
@@ -229,13 +229,13 @@ library gen
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
     , cardano-api-gen ^>=8.1
-    , cardano-api:{cardano-api, internal} ^>=8.38
+    , cardano-api:{cardano-api, internal} ^>=8.39.2.0
     , containers ^>=0.6.5
     , hedgehog-quickcheck ^>=0.1
     , marlowe-chain-sync ==0.0.6
     , marlowe-protocols ==0.3.0.0
     , nonempty-containers ^>=0.3.4
-    , ouroboros-consensus ^>=0.15
+    , ouroboros-consensus ^>=0.16
     , QuickCheck >=2.14 && <3
     , sop-core
     , sop-extras
@@ -277,7 +277,7 @@ executable marlowe-chain-indexer
     , async-components ==0.1.1.0
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
-    , cardano-api:{cardano-api, internal} ^>=8.38
+    , cardano-api:{cardano-api, internal} ^>=8.39.2.0
     , cardano-crypto-wrapper ^>=1.5
     , cardano-ledger-byron ^>=1.0
     , eventuo11y >=0.9 && <0.11
@@ -310,7 +310,7 @@ executable marlowe-chain-sync
     , async-components ==0.1.1.0
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
-    , cardano-api:{cardano-api, internal} ^>=8.38
+    , cardano-api:{cardano-api, internal} ^>=8.39.2.0
     , eventuo11y >=0.9 && <0.11
     , eventuo11y-extras ==0.1.1.0
     , eventuo11y-otel ^>=0.1
@@ -339,7 +339,7 @@ executable marlowe-chain-copy
   build-depends:
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
-    , cardano-api:{cardano-api, internal} ^>=8.38
+    , cardano-api:{cardano-api, internal} ^>=8.39.2.0
     , cassava
     , marlowe-chain-sync ==0.0.6
     , optparse-applicative

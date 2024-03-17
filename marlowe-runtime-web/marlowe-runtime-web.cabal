@@ -121,7 +121,7 @@ library server
     , async-components ==0.1.1.0
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
-    , cardano-api ^>=8.38
+    , cardano-api ^>=8.39.2.0
     , cardano-ledger-alonzo ^>=1.6
     , cardano-ledger-binary ^>=1.3
     , cardano-ledger-core ^>=1.10

@@ -188,7 +188,7 @@ chainSyncClient
   -> ChainSyncClient BlockInMode ChainPoint ChainTip m ()
 chainSyncClient nodeTipVar =
   let stStart :: ClientStIdle BlockInMode ChainPoint ChainTip m ()
-      stStart = SendMsgRequestNext stFirst $ pure stNext
+      stStart = SendMsgRequestNext (pure ()) stFirst
       stFirst :: ClientStNext BlockInMode ChainPoint ChainTip m ()
       stFirst =
         ClientStNext
@@ -207,7 +207,7 @@ chainSyncClient nodeTipVar =
             , recvMsgIntersectNotFound = \tip' -> ChainSyncClient . pure $ stTip tip' -- The tip was not found, so try again.
             }
       stIdle :: ClientStIdle BlockInMode ChainPoint ChainTip m ()
-      stIdle = SendMsgRequestNext stNext $ pure stNext
+      stIdle = SendMsgRequestNext (pure ()) stNext
       stNext :: ClientStNext BlockInMode ChainPoint ChainTip m ()
       stNext =
         ClientStNext

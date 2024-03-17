@@ -97,7 +97,7 @@ library
     , base16-bytestring
     , bech32
     , bytestring
-    , cardano-api ^>=8.38
+    , cardano-api ^>=8.39.2.0
     , cardano-crypto-class
     , cardano-ledger-alonzo
     , cardano-ledger-byron ^>=1.0
@@ -182,7 +182,7 @@ library cli-test
     , base >=4.9 && <5
     , base16-aeson ==0.1.0.0
     , bytestring
-    , cardano-api ^>=8.38
+    , cardano-api ^>=8.39.2.0
     , containers
     , data-has
     , errors
@@ -280,7 +280,7 @@ test-suite marlowe-cli-test
     , aeson-pretty
     , base >=4.9 && <5
     , bytestring
-    , cardano-api ^>=8.38
+    , cardano-api ^>=8.39.2.0
     , cardano-ledger-core ^>=1.10
     , containers
     , marlowe-cardano

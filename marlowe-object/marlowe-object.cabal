@@ -63,7 +63,7 @@ library
     , base16 ^>=0.3.2
     , binary ^>=0.8.8
     , bytestring >=0.10.12 && <0.12
-    , cardano-api ^>=8.38
+    , cardano-api ^>=8.39.2.0
     , cardano-ledger-core ^>=1.10
     , dlist ^>=1.0
     , filepath ^>=1.4

@@ -14,10 +14,10 @@ repository cardano-haskell-packages
 -- We duplicate the hackage index-state first for haskell.nix, even though cabal ignores it.
 -- This must always match the hackage index-state on the next line.
 -- See https://github.com/input-output-hk/haskell.nix/issues/1869#issuecomment-1449272480
-index-state: 2024-02-15T11:36:53Z
+index-state: 2024-03-07T07:48:20Z
 index-state:
-    hackage.haskell.org 2024-02-15T11:36:53Z
-  , cardano-haskell-packages 2024-02-14T10:17:08Z
+  , hackage.haskell.org 2024-03-07T07:48:20Z
+  , cardano-haskell-packages 2024-03-05T10:16:08Z
 
 packages:
   async-components
@@ -194,10 +194,6 @@ source-repository-package
   --sha256: sha256-69iE7LrigHTSKJrgq6uGU+U4j+NtBwR4ae18vsLyVvI=
   subdir: core
 
-constraints:
-  cardano-ledger-core ==1.10.0.0,
-  ouroboros-consensus-cardano ^>= 0.13
-
 allow-newer:
   primitive,
   optparse-applicative
@@ -217,6 +213,7 @@ source-repository-package
    subdir: marlowe-spec-test
            isabelle
    --sha256: 1yfbv9bwr71jd2sqfsb5jjq6j5bjfbjpp946fbkhxwwc2npwj0pd
+
 
 source-repository-package
    type: git

@@ -21,13 +21,15 @@ in
     repoRoot.nix.marlowe-cardano.cardano-tools.cardano-cli
 
     inputs.marlowe-plutus.packages.marlowe-minting-validator
-
+    inputs.n2c.packages.skopeo-nix2container
     pkgs.z3
     pkgs.sqitchPg
     pkgs.postgresql
     pkgs.scriv
     pkgs.jq
     pkgs.docker-compose
+
+    inputs.n2c.packages.skopeo-nix2container
   ];
 
 
