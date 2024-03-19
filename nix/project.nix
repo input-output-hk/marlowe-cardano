@@ -2,6 +2,9 @@
 
 let
 
+  static-bzip2 = pkgs.bzip2.override { linkStatic = true; };
+
+
   cabalProject = pkgs.haskell-nix.cabalProject' ({ config, pkgs, ... }:
     let
       mkIfDarwin = lib.mkIf pkgs.stdenv.hostPlatform.isDarwin;
@@ -14,7 +17,7 @@ let
 
       src = ../.;
 
-      compiler-nix-name = "ghc928";
+      compiler-nix-name = lib.mkDefault "ghc928";
 
       flake.variants.profiled.modules = [{
         enableProfiling = true;
@@ -75,11 +78,12 @@ let
           async-components.ghcOptions = [ "-Werror" ];
           cardano-integration.ghcOptions = [ "-Werror" ];
           eventuo11y-extras.ghcOptions = [ "-Werror" ];
+
           marlowe.ghcOptions = [ "-Werror" ];
           marlowe-actus.ghcOptions = [ "-Werror" ];
           marlowe-contracts.ghcOptions = [ "-Werror" ];
-          marlowe-cli.ghcOptions = [ "-Werror" ];
-          marlowe-apps.ghcOptions = [ "-Werror" ];
+          marlowe-cli.ghcOptions = [ "-Werror" ] ++ lib.optional pkgs.stdenv.hostPlatform.isMusl "-L${static-bzip2.out}/lib";
+          marlowe-apps.ghcOptions = [ "-Werror" ] ++ lib.optional pkgs.stdenv.hostPlatform.isMusl "-L${static-bzip2.out}/lib";
           marlowe-chain-sync.ghcOptions = [ "-Werror" ];
           marlowe-client.ghcOptions = [ "-Werror" ];
           marlowe-integration.ghcOptions = [ "-Werror" ];
