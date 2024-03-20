@@ -10,11 +10,11 @@
     };
 
     n2c.url = "github:nlewo/nix2container";
-    
+
     marlowe-plutus.url = "github:input-output-hk/marlowe-plutus";
 
     cardano-node.url = "github:input-output-hk/cardano-node?ref=8.9.0";
-    
+
     iogx = {
       url = "github:input-output-hk/iogx";
       inputs.hackage.follows = "hackage";
