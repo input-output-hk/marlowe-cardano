@@ -83,7 +83,10 @@ let
           marlowe-actus.ghcOptions = [ "-Werror" ];
           marlowe-contracts.ghcOptions = [ "-Werror" ];
           marlowe-cli.ghcOptions = [ "-Werror" ] ++ lib.optional pkgs.stdenv.hostPlatform.isMusl "-L${static-bzip2.out}/lib";
+          # We need to be a bit more careful with setting the static-bzip2 flag here.
+          # We do not want it to end up in the library component of marlowe-apps.
           marlowe-apps.ghcOptions = [ "-Werror" ] ++ lib.optional pkgs.stdenv.hostPlatform.isMusl "-L${static-bzip2.out}/lib";
+          marlowe-apps.components.library.ghcOptions = [ "-Werror" ];
           marlowe-chain-sync.ghcOptions = [ "-Werror" ];
           marlowe-client.ghcOptions = [ "-Werror" ];
           marlowe-integration.ghcOptions = [ "-Werror" ];
