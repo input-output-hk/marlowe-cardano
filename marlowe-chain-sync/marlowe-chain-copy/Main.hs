@@ -47,6 +47,7 @@ import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types (
   AssetMintRow,
   AssetOutRow,
   BlockRow,
+  ScriptRow,
   TxInRow,
   TxOutRow,
   TxRow,

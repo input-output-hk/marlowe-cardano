@@ -45,13 +45,13 @@ import Colog (cmap, fmtMessage, logTextHandle)
 import Control.Arrow (returnA)
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (race_)
-import Control.Concurrent.Component
+import Control.Concurrent.Component (Component (unComponent))
 import Control.Concurrent.Component.Run (AppM, runAppM)
 import Control.DeepSeq (NFData)
 import Control.Exception (bracketOnError, catch, onException, throw, try)
 import Control.Monad (when, (<=<))
-import Control.Monad.Catch hiding (bracketOnError, catch, onException, try)
-import Control.Monad.Event.Class
+import Control.Monad.Catch (SomeException (..))
+import Control.Monad.Event.Class (Inject (..), NoopEventT (..))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Reader (ReaderT (..), runReaderT)
@@ -116,9 +116,13 @@ import qualified Language.Marlowe.Runtime.Sync.Database as Sync
 import qualified Language.Marlowe.Runtime.Sync.Database.PostgreSQL as Sync
 import Language.Marlowe.Runtime.Transaction (mkCommandLineRoleTokenMintingPolicy)
 import Language.Marlowe.Runtime.Web.Client (healthcheck)
-import Language.Marlowe.Runtime.Web.Server (ServerDependencies (..), server)
+import Language.Marlowe.Runtime.Web.RuntimeServer (ServerDependencies (..), runtimeServer)
 import Network.HTTP.Client (defaultManagerSettings, newManager)
-import Network.Protocol.Connection
+import Network.Protocol.Connection (
+  Connector,
+  directConnector,
+  ihoistConnector,
+ )
 import Network.Protocol.Driver (TcpServerDependencies (TcpServerDependencies), tcpServer)
 import Network.Protocol.Driver.Trace (HasSpanContext (..))
 import Network.Protocol.Peer.Trace (defaultSpanContext)
@@ -557,7 +561,7 @@ testContainer = proc TestContainerDependencies{..} -> do
     -<
       TcpServerDependencies "127.0.0.1" (fromIntegral proxyPort) serverSource marloweRuntimeServerDirectPeer
 
-  server
+  runtimeServer
     -<
       ServerDependencies
         { openAPIEnabled = False

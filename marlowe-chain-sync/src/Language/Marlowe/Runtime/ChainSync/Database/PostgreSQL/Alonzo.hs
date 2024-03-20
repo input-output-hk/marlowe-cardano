@@ -14,6 +14,7 @@ import Cardano.Ledger.Allegra.Core (
  )
 import Cardano.Ledger.Alonzo (
   AlonzoEra,
+  AlonzoScript,
   AlonzoTxAuxData,
   AlonzoTxOut,
  )
@@ -23,8 +24,6 @@ import Cardano.Ledger.Alonzo.Scripts (
   AsItem (..),
  )
 import Cardano.Ledger.Alonzo.Tx (AlonzoTx (..), IsValid (..), indexRedeemers, txdats')
-import Cardano.Ledger.Alonzo
-import Cardano.Ledger.Alonzo.Tx (AlonzoTx (..), IsValid (..), ScriptPurpose (Spending), indexedRdmrs, txdats')
 import Cardano.Ledger.Alonzo.TxAuxData (AlonzoTxAuxData (..))
 import Cardano.Ledger.Alonzo.TxBody (AlonzoEraTxBody, AlonzoTxBody (..), AlonzoTxOut (..))
 import Cardano.Ledger.Alonzo.TxWits (AlonzoEraTxWits, TxDats)
@@ -34,6 +33,7 @@ import qualified Cardano.Ledger.Binary as L
 import Cardano.Ledger.Crypto (StandardCrypto)
 import Cardano.Ledger.Plutus.Data (dataToBinaryData)
 import Cardano.Ledger.Shelley.API (
+  ScriptHash (..),
   ShelleyTxOut (ShelleyTxOut),
   StrictMaybe,
   TxIn,
@@ -53,6 +53,7 @@ import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Shelley (
  )
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types (
   Bytea (..),
+  ScriptRow (..),
   SqlBool (..),
   TxInRow (..),
   TxOutRow (datumBytes, datumHash),

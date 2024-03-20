@@ -12,10 +12,8 @@ import Cardano.Ledger.Alonzo.TxAuxData (AlonzoTxAuxData (..))
 import Cardano.Ledger.Alonzo.TxWits (TxDats (..))
 import Cardano.Ledger.Babbage (BabbageEra, BabbageTxOut)
 import Cardano.Ledger.Babbage.Tx (
-  AlonzoTx (..),
   IsValid (..),
   indexRedeemers,
-  txdats',
  )
 import Cardano.Ledger.Babbage.TxBody (BabbageTxOut (..))
 import Cardano.Ledger.Binary (Sized (..), shelleyProtVer)
@@ -29,41 +27,38 @@ import Cardano.Ledger.Conway.Core (
   Era (EraCrypto),
   EraTx (Tx),
  )
-import Cardano.Ledger.Conway.Scripts (ConwayPlutusPurpose (ConwaySpending))
+import Cardano.Ledger.Conway.Scripts (
+  AlonzoScript (..),
+  ConwayPlutusPurpose (ConwaySpending),
+ )
 import Cardano.Ledger.Conway.TxBody (ConwayTxBody (..))
+import Cardano.Ledger.Conway.TxWits (AlonzoTxWits (..))
+import Cardano.Ledger.Core (EraScript (..), ScriptHash (..))
 import Cardano.Ledger.Crypto (StandardCrypto)
 import Cardano.Ledger.Plutus.Data (dataToBinaryData)
 import Cardano.Ledger.Shelley.API (TxIn)
+import Control.Arrow (Arrow (..))
 import Data.ByteString (ByteString)
 import Data.Foldable (Foldable (..))
 import Data.Int (Int64)
+import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Alonzo (alonzoTxRow)
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Babbage (babbageTxOutRows)
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Mary (maryAssetMintRows)
-import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Shelley (originalBytea, shelleyTxInRow)
+import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Shelley (
+  hashToBytea,
+  originalBytea,
+  serializeBytea,
+  shelleyTxInRow,
+ )
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types (
   Bytea,
+  ScriptRow (..),
   SqlBool (SqlBool),
   TxInRow (..),
   TxRowGroup,
  )
-
-import Cardano.Ledger.Conway.Scripts (AlonzoScript (..))
-import Cardano.Ledger.Conway.TxBody (ConwayTxBody (..))
-import Cardano.Ledger.Conway.TxWits (AlonzoTxWits (..))
-import Cardano.Ledger.Core (EraScript (..), ScriptHash (..))
-import Cardano.Ledger.Crypto
-import Control.Arrow (Arrow (..))
-import Data.ByteString (ByteString)
-import Data.Foldable (Foldable (..))
-import Data.Int
-import qualified Data.Map as Map
-import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Alonzo (alonzoTxInRows, alonzoTxRow)
-import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Babbage (babbageTxOutRows)
-import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Mary (maryAssetMintRows)
-import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Shelley (hashToBytea, serializeBytea)
-import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types
 import Unsafe.Coerce (unsafeCoerce)
 
 conwayTxToRows :: Int64 -> Bytea -> Bytea -> AlonzoTx (ConwayEra StandardCrypto) -> TxRowGroup
@@ -122,12 +117,12 @@ conwayTxInRows
      )
   => Int64
   -> Bytea
-  -> IsValid
+  -> Cardano.Ledger.Babbage.Tx.IsValid
   -> Tx era
   -> Set.Set (TxIn StandardCrypto)
   -> Set.Set (TxIn StandardCrypto)
   -> [TxInRow]
-conwayTxInRows slot txId (IsValid isValid) tx inputs collateralInputs
+conwayTxInRows slot txId (Cardano.Ledger.Babbage.Tx.IsValid isValid) tx inputs collateralInputs
   | isValid = conwayTxInRow slot txId tx <$> Set.toAscList inputs
   | otherwise = do
       TxInRow{..} <- shelleyTxInRow slot txId <$> Set.toAscList collateralInputs
@@ -149,6 +144,6 @@ conwayTxInRow
 conwayTxInRow slotNo txInId tx txIn =
   (shelleyTxInRow slotNo txInId txIn)
     { redeemerDatumBytes = do
-        (datum, _) <- indexRedeemers tx $ ConwaySpending (AsItem txIn)
+        (datum, _) <- Cardano.Ledger.Babbage.Tx.indexRedeemers tx $ ConwaySpending (AsItem txIn)
         pure $ originalBytea $ dataToBinaryData datum
     }

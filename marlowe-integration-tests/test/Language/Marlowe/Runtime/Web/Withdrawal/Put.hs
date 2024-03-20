@@ -2,13 +2,19 @@ module Language.Marlowe.Runtime.Web.Withdrawal.Put where
 
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import qualified Data.Set as Set
-import Language.Marlowe.Runtime.Integration.Common
+import Language.Marlowe.Runtime.Integration.Common (
+  Wallet (Wallet, addresses, signingKeys),
+  getGenesisWallet,
+  runIntegrationTest,
+  runWebClient,
+ )
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses (..))
-import Language.Marlowe.Runtime.Web (PayoutHeader (..))
-import qualified Language.Marlowe.Runtime.Web as Web
+
 import Language.Marlowe.Runtime.Web.Client (Page (..), getPayouts, postWithdrawal, putWithdrawal)
 import Language.Marlowe.Runtime.Web.Common (signShelleyTransaction')
-import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO (toDTO))
+
+import Language.Marlowe.Runtime.Web.Adapter.Server.DTO (ToDTO (toDTO))
+import Language.Marlowe.Runtime.Web.Payout.API (PayoutHeader (..), PayoutStatus (..))
 import Language.Marlowe.Runtime.Web.StandardContract (
   StandardContractChoiceMade (..),
   StandardContractClosed (..),
@@ -17,7 +23,9 @@ import Language.Marlowe.Runtime.Web.StandardContract (
   StandardContractNotified (..),
   createStandardContract,
  )
-import Language.Marlowe.Runtime.Web.Types (PayoutStatus (..))
+
+import qualified Language.Marlowe.Runtime.Web.Tx.API as Web
+import qualified Language.Marlowe.Runtime.Web.Withdrawal.API as Web
 import Test.Hspec (Spec, describe, it)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 

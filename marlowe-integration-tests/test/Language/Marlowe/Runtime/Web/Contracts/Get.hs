@@ -7,10 +7,12 @@ import Data.Functor (void)
 import Data.Proxy (Proxy (Proxy))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Integration.Common (Wallet, getGenesisWallet, runIntegrationTest, runWebClient)
-import qualified Language.Marlowe.Runtime.Web as Web
+
+import Language.Marlowe.Runtime.Web.Adapter.Server.DTO (ToDTO (toDTO))
 import Language.Marlowe.Runtime.Web.Client (Page (..), getContracts)
 import Language.Marlowe.Runtime.Web.Common (createCloseContract)
-import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO (toDTO))
+import qualified Language.Marlowe.Runtime.Web.Contract.API as Web
+import qualified Language.Marlowe.Runtime.Web.Core.Tx as Web
 import Network.HTTP.Types (Status (..))
 import Servant.Client (ClientError (FailureResponse))
 import Servant.Client.Streaming (ResponseF (Response, responseStatusCode))

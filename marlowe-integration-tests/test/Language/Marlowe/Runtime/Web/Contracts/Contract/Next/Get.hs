@@ -7,12 +7,11 @@ import Control.Monad.IO.Class (MonadIO (liftIO))
 import qualified Control.Monad.Reader as Reader
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Integration.Common (Wallet, getGenesisWallet, runIntegrationTest, runWebClient)
-import qualified Language.Marlowe.Runtime.Web.Types as Web
 
 import qualified Data.Time as Time
+import Language.Marlowe.Runtime.Web.Adapter.Server.DTO (ToDTO (toDTO))
 import Language.Marlowe.Runtime.Web.Client (getContract, getContractNext)
 import Language.Marlowe.Runtime.Web.Common (createCloseContract, waitUntilConfirmed)
-import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO (toDTO))
 import Network.HTTP.Types (Status (..))
 import Servant.Client (ClientError (FailureResponse))
 import Servant.Client.Streaming (ResponseF (Response, responseStatusCode))
@@ -23,6 +22,8 @@ import Data.Functor (void)
 import Language.Marlowe.Core.V1.Next (Next (..))
 import Language.Marlowe.Core.V1.Next.Applicables (emptyApplicables)
 import Language.Marlowe.Core.V1.Next.CanReduce (CanReduce (..))
+import qualified Language.Marlowe.Runtime.Web.Contract.API as Web
+import qualified Language.Marlowe.Runtime.Web.Core.Tx as Web
 
 spec :: Spec
 spec = describe "GET /contract/{contractId}/next" $ aroundAll setup do

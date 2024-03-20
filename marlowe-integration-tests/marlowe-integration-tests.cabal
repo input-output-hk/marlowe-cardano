@@ -106,7 +106,7 @@ executable marlowe-integration-tests
     , marlowe-integration
     , marlowe-object:{marlowe-object, gen}
     , marlowe-protocols
-    , marlowe-runtime-web:{marlowe-runtime-web, server}
+    , marlowe-runtime-web
     , marlowe-runtime:{marlowe-runtime, contract, contract-api, sync-api, tx-api}
     , marlowe-test
     , mtl
