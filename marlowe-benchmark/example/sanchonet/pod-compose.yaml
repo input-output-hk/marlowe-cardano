@@ -1,0 +1,315 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: benchmark-sanchonet
+  labels:
+    app: benchmark-sanchonet
+spec:
+  hostname: benchmark-sanchonet
+  containers:
+  - name: postgres
+    image: docker.io/postgres:14.10-alpine3.19
+    args:
+    - -c
+    - listen_addresses=0.0.0.0
+    - -c
+    - max_connections=1000
+    - -c
+    - superuser_reserved_connections=5
+    - -c
+    - huge_pages=try
+    - -c
+    - max_wal_size=6GB
+    - -c
+    - max_locks_per_transaction=256
+    - -c
+    - max_pred_locks_per_transaction=256
+    - -c
+    - work_mem=32MB
+    - -c
+    - maintenance_work_mem=256MB
+    - -c
+    - synchronous_commit=off
+    env:
+    - name: POSTGRES_USER
+      value: postgres
+    - name: POSTGRES_PASSWORD
+      value: postgres
+    - name: POSTGRES_HOST_AUTH_METHOD
+      value: trust
+    - name: TZ
+      value: UTC
+    ports:
+    - hostPort: 54322
+      containerPort: 5432
+    volumeMounts:
+    - mountPath: /var/lib/postgresql/data
+      name: pg-db
+  - name: node
+    image: ghcr.io/intersectmbo/cardano-node:8.9.0
+    command:
+    - /usr/local/bin/entrypoint
+    env:
+    - name: NETWORK
+      value: sanchonet
+    volumeMounts:
+    - mountPath: /ipc
+      name: shared
+    - mountPath: /data/db
+      name: node-db
+  - name: chain-indexer
+    image: docker.io/library/marlowe-chain-indexer:conway-cardano-8.9.0
+    depends_on:
+    - node
+    env:
+    - name: CARDANO_NODE_SOCKET_PATH
+      value: /ipc/node.socket
+    - name: NODE_CONFIG
+      value: /ipc/config/node.json
+    - name: DB_HOST
+      value: benchmark-sanchonet
+    - name: DB_USER
+      value: postgres
+    - name: DB_PASS
+      value: postgres
+    - name: DB_NAME
+      value: postgres
+    - name: HTTP_PORT
+      value: 3781
+    volumeMounts:
+    - mountPath: /ipc
+      name: shared
+    - mountPath: /data/db
+      name: node-db
+  - name: chain-sync
+    image: docker.io/library/marlowe-chain-sync:conway-cardano-8.9.0
+    depends_on:
+    - node
+    env:
+    - name: HOST
+      value: benchmark-sanchonet
+    - name: PORT
+      value: 3715
+    - name: QUERY_PORT
+      value: 3716
+    - name: JOB_PORT
+      value: 3720
+    - name: CARDANO_NODE_SOCKET_PATH
+      value: /ipc/node.socket
+    - name: NODE_CONFIG
+      value: /ipc/config/node.json
+    - name: DB_HOST
+      value: benchmark-sanchonet
+    - name: DB_USER
+      value: postgres
+    - name: DB_PASS
+      value: postgres
+    - name: DB_NAME
+      value: postgres
+    - name: HTTP_PORT
+      value: 3782
+#   ports:
+#   - hostPort: 3715
+#     containerPort: 3715
+#   - hostPort: 3716
+#     containerPort: 3716
+#   - hostPort: 3720
+#     containerPort: 3720
+    volumeMounts:
+    - mountPath: /ipc
+      name: shared
+  - name: marlowe-indexer
+    image: docker.io/library/marlowe-indexer:conway-cardano-8.9.0
+    depends_on:
+    - chain-sync
+    env:
+    - name: MARLOWE_CHAIN_SYNC_HOST
+      value: benchmark-sanchonet
+    - name: MARLOWE_CHAIN_SYNC_PORT
+      value: 3715
+    - name: MARLOWE_CHAIN_SYNC_QUERY_PORT
+      value: 3716
+    - name: DB_HOST
+      value: benchmark-sanchonet
+    - name: DB_USER
+      value: postgres
+    - name: DB_PASS
+      value: postgres
+    - name: DB_NAME
+      value: postgres
+    - name: HTTP_PORT
+      value: 3783
+  - name: marlowe-sync
+    image: docker.io/library/marlowe-sync:conway-cardano-8.9.0
+    env:
+    - name: MARLOWE_CHAIN_SYNC_HOST
+      value: benchmark-sanchonet
+    - name: MARLOWE_CHAIN_SYNC_QUERY_PORT
+      value: 3716
+    - name: HOST
+      value: benchmark-sanchonet
+    - name: MARLOWE_SYNC_PORT
+      value: 3724
+    - name: MARLOWE_HEADER_SYNC_PORT
+      value: 3725
+    - name: MARLOWE_QUERY_PORT
+      value: 3726
+    - name: MARLOWE_BULK_SYNC_PORT
+      value: 3730
+    - name: DB_HOST
+      value: benchmark-sanchonet
+    - name: DB_USER
+      value: postgres
+    - name: DB_PASS
+      value: postgres
+    - name: DB_NAME
+      value: postgres
+    - name: HTTP_PORT
+      value: 3784
+#   ports:
+#   - hostPort: 3724
+#     containerPort: 3724
+#   - hostPort: 3725
+#     containerPort: 3725
+#   - hostPort: 3726
+#     containerPort: 3726
+#   - hostPort: 3730
+#     containerPort: 3730
+  - name: contract
+    image: docker.io/library/marlowe-contract:conway-cardano-8.9.0
+    env:
+    - name: HOST
+      value: benchmark-sanchonet
+    - name: PORT
+      value: 3727
+    - name: QUERY_PORT
+      value: 3728
+    - name: TRANSFER_PORT
+      value: 3729
+    - name: STORE_DIR
+      value: /store
+    - name: MARLOWE_CHAIN_SYNC_HOST
+      value: benchmark-sanchonet
+    - name: MARLOWE_CHAIN_SYNC_QUERY_PORT
+      value: 3716
+    - name: SYNC_HOST
+      value: benchmark-sanchonet
+    - name: MARLOWE_BULK_SYNC_PORT
+      value: 3730
+    - name: HTTP_PORT
+      value: 3786
+#   ports:
+#   - hostPort: 3727
+#     containerPort: 3727
+#   - hostPort: 3728
+#     containerPort: 3728
+#   - hostPort: 3729
+#     containerPort: 3729
+    volumeMounts:
+    - mountPath: /store
+      name: contracts
+  - name: tx
+    image: docker.io/library/marlowe-tx:conway-cardano-8.9.0
+    depends_on:
+    - chain-sync
+    env:
+    - name: HOST
+      value: benchmark-sanchonet
+    - name: PORT
+      value: 3723
+    - name: MARLOWE_CHAIN_SYNC_HOST
+      value: benchmark-sanchonet
+    - name: MARLOWE_CHAIN_SYNC_PORT
+      value: 3715
+    - name: MARLOWE_CHAIN_SYNC_QUERY_PORT
+      value: 3716
+    - name: MARLOWE_CHAIN_SYNC_COMMAND_PORT
+      value: 3720
+    - name: CONTRACT_HOST
+      value: benchmark-sanchonet
+    - name: CONTRACT_QUERY_PORT
+      value: 3728
+    - name: HTTP_PORT
+      value: 3785
+#   ports:
+#   - hostPort: 3723
+#     containerPort: 3723
+  - name: proxy
+    image: docker.io/library/marlowe-proxy:conway-cardano-8.9.0
+    depends_on:
+    - marlowe-sync
+    - tx
+    - contract
+    env:
+    - name: HOST
+      value: benchmark-sanchonet
+    - name: PORT
+      value: 3700
+    - name: TRACED_PORT
+      value: 3701
+    - name: TX_HOST
+      value: benchmark-sanchonet
+    - name: TX_PORT
+      value: 3723
+    - name: SYNC_HOST
+      value: benchmark-sanchonet
+    - name: MARLOWE_SYNC_PORT
+      value: 3724
+    - name: MARLOWE_HEADER_SYNC_PORT
+      value: 3725
+    - name: MARLOWE_QUERY_PORT
+      value: 3726
+    - name: CONTRACT_HOST
+      value: benchmark-sanchonet
+    - name: LOAD_PORT
+      value: 3727
+    - name: CONTRACT_QUERY_PORT
+      value: 3728
+    - name: TRANSFER_PORT
+      value: 3729
+    - name: SYNC_HOST
+      value: benchmark-sanchonet
+    - name: MARLOWE_BULK_SYNC_PORT
+      value: 3730
+    - name: HTTP_PORT
+      value: 3787
+    ports:
+    - hostPort: 37002
+      containerPort: 3700
+    - hostPort: 37012
+      containerPort: 3701
+  - name: web-server
+    image: docker.io/library/marlowe-web-server:conway-cardano-8.9.0
+    depends_on:
+    - proxy
+    env:
+    - name: PORT
+      value: 3780
+    - name: RUNTIME_HOST
+      value: benchmark-sanchonet
+    - name: RUNTIME_PORT
+      value: 3701
+    ports:
+    - hostPort: 37802
+      containerPort: 3780
+  volumes:
+  - name: shared
+    hostPath:
+      type: Directory
+      path: ./.
+  - name: pg-db
+    hostPath:
+      type: Directory
+      path: ./pg.db
+  - name: node-db
+    hostPath:
+      type: Directory
+      path: ./node.db
+  - name: contracts
+    hostPath:
+      type: Directory
+      path: ./contract.db
+  restartPolicy: Always
+  enableServiceLinks: false
+  automountServiceAccountToken: false
+status: {}

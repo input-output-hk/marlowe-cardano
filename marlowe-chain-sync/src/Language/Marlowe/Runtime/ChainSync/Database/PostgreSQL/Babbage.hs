@@ -11,11 +11,11 @@ import Cardano.Ledger.Alonzo.TxAuxData (AlonzoTxAuxData (..))
 import Cardano.Ledger.Alonzo.TxWits (TxDats, unTxDats)
 import Cardano.Ledger.Babbage (BabbageEra, BabbageTxOut)
 import Cardano.Ledger.Babbage.Tx (IsValid (..))
-import Cardano.Ledger.Babbage.TxBody (BabbageTxBody (..), BabbageTxOut (..), Datum (..))
+import Cardano.Ledger.Babbage.TxBody (BabbageTxBody (..), BabbageTxOut (..))
 import Cardano.Ledger.Binary (Sized (..), shelleyProtVer)
 import qualified Cardano.Ledger.Binary as L
 import Cardano.Ledger.Crypto
-import Cardano.Ledger.Plutus.Data (binaryDataToData, hashBinaryData)
+import Cardano.Ledger.Plutus.Data (Datum (..), binaryDataToData, hashBinaryData)
 import Cardano.Ledger.Shelley.API (ShelleyTxOut (..), StrictMaybe (..))
 import Data.ByteString (ByteString)
 import Data.Foldable (Foldable (..))

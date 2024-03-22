@@ -14,23 +14,21 @@
 # MARLOWE_CHAIN_SYNC_COMMAND_PORT - port to run the chain sync command server.
 #
 # FAUCET_SKEY_FILE - private key file for the faucet.
-# FAUCET_VKEY - faucet address.
+# FAUCET_ADDRESS - faucet address.
 #
 #
 cabal run exe:marlowe-cli -- \
-  --babbage-era test \
-  --testnet-magic 1 \
+  --conway-era test \
+  --testnet-magic "$CARDANO_NODE_NETWORK_ID" \
   --max-concurrent-runners 8 \
   --socket-path "$CARDANO_NODE_SOCKET_PATH" \
   --faucet-skey-file "$FAUCET_SKEY_FILE" \
-  --faucet-address "$FAUCET_VKEY" \
+  --faucet-address "$FAUCET_ADDRESS" \
   --marlowe-runtime-port "$MARLOWE_RT_PORT" \
-  --chain-seek-sync-port "$MARLOWE_CHAIN_SYNC_PORT" \
-  --chain-seek-cmd-port "$MARLOWE_CHAIN_SYNC_COMMAND_PORT" \
   --write-to-json-file report.json \
   --max-retries 3 \
   --stream-json \
-  --simulation-mode \
+  ./test/operations/runtime.yaml 
   ./test/inline/role-based/cli/contract-for-differences-with-oracle.yaml \
   ./test/inline/role-based/cli/contract-for-differences.yaml \
   ./test/inline/role-based/cli/coupon-bond-guaranteed.yaml \

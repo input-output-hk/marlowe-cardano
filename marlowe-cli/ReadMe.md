@@ -158,6 +158,7 @@ marlowe-cli --help
       --version                Show version.
       --alonzo-era             Read and write Alonzo transactions
       --babbage-era            Read and write Babbage transactions
+      --conway-era             Read and write Conway transactions
 
     High-level commands:
       run                      Run a contract.
