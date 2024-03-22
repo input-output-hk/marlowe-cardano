@@ -47,7 +47,7 @@ jobs:
           nix build --dry-run --json .#integration-tests > test-store-path.json
       - name: Cache test results
         id: cache-results
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           # Use run_attempt in the cache key so that explicitly re-running the
           # tests will force the test to run again.
@@ -71,7 +71,7 @@ jobs:
           MARLOWE_RT_TEST_SUBMIT_CONFIRMATION_BLOCKS: 0
       - if: ${{ failure() && steps.cache-results.outputs.cache-hit != 'true' }}
         name: Upload failed test directories as artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: workspaces
           path: |
