@@ -115,6 +115,7 @@ import Data.Set qualified as S (filter, member)
 import Data.Yaml qualified as Y (encode)
 import Language.Marlowe.CLI.Cardano.Api (toPlutusMajorProtocolVersion)
 import Language.Marlowe.CLI.Transaction (babbageEraOnwardsToAllegraEraOnwards, mkTxOutValue)
+import Ouroboros.Network.Protocol.LocalStateQuery.Type (Target (VolatileTip))
 import Plutus.V1.Ledger.Ada qualified as P (lovelaceValueOf)
 import Plutus.V1.Ledger.SlotConfig qualified as P (SlotConfig, posixTimeToEnclosingSlot)
 import PlutusLedgerApi.V2 (deserialiseScript)
@@ -157,7 +158,7 @@ analyze connection marloweFile preconditions roles tokens maximumValue minimumUt
     do
       protocol <-
         (liftCli <=< liftCliIO)
-          . Api.queryNodeLocalState connection Nothing
+          . Api.queryNodeLocalState connection VolatileTip
           . Api.QueryInEra
           $ Api.QueryInShelleyBasedEra (Api.babbageEraOnwardsToShelleyBasedEra era) Api.QueryProtocolParameters
       result <-

@@ -2,6 +2,9 @@
 
 let
 
+  static-bzip2 = pkgs.bzip2.override { linkStatic = true; };
+
+
   cabalProject = pkgs.haskell-nix.cabalProject' ({ config, pkgs, ... }:
     let
       mkIfDarwin = lib.mkIf pkgs.stdenv.hostPlatform.isDarwin;
@@ -14,7 +17,7 @@ let
 
       src = ../.;
 
-      compiler-nix-name = "ghc928";
+      compiler-nix-name = lib.mkDefault "ghc928";
 
       flake.variants.profiled.modules = [{
         enableProfiling = true;
@@ -24,7 +27,7 @@ let
       shell.withHoogle = false;
 
       inputMap = {
-        "https://input-output-hk.github.io/cardano-haskell-packages" = inputs.iogx.inputs.CHaP;
+        "https://chap.intersectmbo.org/" = inputs.iogx.inputs.CHaP;
       };
 
       modules = [{
@@ -75,11 +78,15 @@ let
           async-components.ghcOptions = [ "-Werror" ];
           cardano-integration.ghcOptions = [ "-Werror" ];
           eventuo11y-extras.ghcOptions = [ "-Werror" ];
+
           marlowe.ghcOptions = [ "-Werror" ];
           marlowe-actus.ghcOptions = [ "-Werror" ];
           marlowe-contracts.ghcOptions = [ "-Werror" ];
-          marlowe-cli.ghcOptions = [ "-Werror" ];
-          marlowe-apps.ghcOptions = [ "-Werror" ];
+          marlowe-cli.ghcOptions = [ "-Werror" ] ++ lib.optional pkgs.stdenv.hostPlatform.isMusl "-L${static-bzip2.out}/lib";
+          # We need to be a bit more careful with setting the static-bzip2 flag here.
+          # We do not want it to end up in the library component of marlowe-apps.
+          marlowe-apps.ghcOptions = [ "-Werror" ] ++ lib.optional pkgs.stdenv.hostPlatform.isMusl "-L${static-bzip2.out}/lib";
+          marlowe-apps.components.library.ghcOptions = [ "-Werror" ];
           marlowe-chain-sync.ghcOptions = [ "-Werror" ];
           marlowe-client.ghcOptions = [ "-Werror" ];
           marlowe-integration.ghcOptions = [ "-Werror" ];

@@ -18,7 +18,10 @@ import qualified Data.Text as T
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.ChainSync.Api (Assets (..), ScriptHash, TxOutRef, fromBech32)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Language.Marlowe.Runtime.Core.Api
+import Language.Marlowe.Runtime.Core.Api (
+  MarloweVersion (..),
+  SomeMarloweVersion (..),
+ )
 import Network.Protocol.Codec.Spec (Variations)
 
 instance Ord NetworkId where
@@ -62,6 +65,9 @@ preprodNetworkId = Testnet $ NetworkMagic 1
 previewNetworkId :: NetworkId
 previewNetworkId = Testnet $ NetworkMagic 2
 
+sanchonetNetworkId :: NetworkId
+sanchonetNetworkId = Testnet $ NetworkMagic 4
+
 -- | The current pair of static script hashes for Marlowe V1 as of the current git
 -- commit. Enforced in the test suite for the Marlowe Runtime.
 --
@@ -99,6 +105,22 @@ caseAsDataV1Scripts =
                           fromJust $
                             fromBech32 "addr1q8cmu4u3quhxgansnxvfuzn5a9u6khvff4kggy35f5xl2qtsluv29uarg9hhghehhf7r7kmyrh6wsvtgg2caanrf94uscc58wh"
                       , assets = Assets 48_776_270 mempty
+                      , datum = Nothing
+                      , datumHash = Nothing
+                      }
+                , script = caseAsDataV1MarloweScript
+                }
+            )
+          ,
+            ( sanchonetNetworkId
+            , ReferenceScriptUtxo
+                { txOutRef = "20cdaf23baa04c87f65e2eac8e7dbf7f81ba9cfa0a28e3f1368e0d4beb9eeacb#1"
+                , txOut =
+                    Chain.TransactionOutput
+                      { address =
+                          fromJust $
+                            fromBech32 "addr_test1vrcmu4u3quhxgansnxvfuzn5a9u6khvff4kggy35f5xl2qggkt5p7"
+                      , assets = Assets 48_655_590 mempty
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -153,6 +175,22 @@ caseAsDataV1Scripts =
                 }
             )
           ,
+            ( sanchonetNetworkId
+            , ReferenceScriptUtxo
+                { txOutRef = "20cdaf23baa04c87f65e2eac8e7dbf7f81ba9cfa0a28e3f1368e0d4beb9eeacb#2"
+                , txOut =
+                    Chain.TransactionOutput
+                      { address =
+                          fromJust $
+                            fromBech32 "addr_test1vq0ph6lw0n2xdqgcy8qct5xpkhyy3cqkn8hjmctkq8zszucser4wx"
+                      , assets = Assets 11_537_870 mempty
+                      , datum = Nothing
+                      , datumHash = Nothing
+                      }
+                , script = caseAsDataV1PayoutScript
+                }
+            )
+          ,
             ( preprodNetworkId
             , ReferenceScriptUtxo
                 { txOutRef = "9679fc6b0bb0d3d5e1fb09a4be589707553caefe6028bd726c8421066ec6bff7#2"
@@ -193,6 +231,22 @@ caseAsDataV1Scripts =
                           fromJust $
                             fromBech32 "addr1q9heun9n9qjlgtkv7ldvl56wagju53ykr5ps49h80enx7grsluv29uarg9hhghehhf7r7kmyrh6wsvtgg2caanrf94usf2tt99"
                       , assets = Assets 17_765_820 mempty
+                      , datum = Nothing
+                      , datumHash = Nothing
+                      }
+                , script = caseAsDataV1OpenRoleScript
+                }
+            )
+          ,
+            ( (OpenRoleScript, sanchonetNetworkId)
+            , ReferenceScriptUtxo
+                { txOutRef = "cf31c53fde7430b9877d9ddee52130fb5ada800cb0185c6fbae52a604b5dd639#1"
+                , txOut =
+                    Chain.TransactionOutput
+                      { address =
+                          fromJust $
+                            fromBech32 "addr_test1vpheun9n9qjlgtkv7ldvl56wagju53ykr5ps49h80enx7gq6yq5en"
+                      , assets = Assets 17_645_140 mempty
                       , datum = Nothing
                       , datumHash = Nothing
                       }

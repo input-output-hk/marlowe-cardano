@@ -441,10 +441,14 @@ instance ToJSON PayoutStatus where
       Withdrawn -> "withdrawn"
 
 instance FromJSON PayoutStatus where
-  parseJSON = withText "PayoutStatus" \str -> case T.toLower str of
-    "available" -> pure Available
-    "withdrawn" -> pure Withdrawn
-    _ -> fail "expected \"available\" or \"withdrawn\""
+  parseJSON =
+    withText
+      "PayoutStatus"
+      ( \str -> case T.toLower str of
+          "available" -> pure Available
+          "withdrawn" -> pure Withdrawn
+          _ -> fail "expected \"available\" or \"withdrawn\""
+      )
 
 instance ToHttpApiData PayoutStatus where
   toQueryParam = \case
@@ -659,16 +663,24 @@ instance ToJSON (WithdrawTxEnvelope CardanoTxBody) where
       ]
 
 instance FromJSON (WithdrawTxEnvelope CardanoTx) where
-  parseJSON = withObject "WithdrawTxEnvelope" \obj ->
-    WithdrawTxEnvelope
-      <$> obj .: "withdrawalId"
-      <*> obj .: "tx"
+  parseJSON =
+    withObject
+      "WithdrawTxEnvelope"
+      ( \obj ->
+          WithdrawTxEnvelope
+            <$> obj .: "withdrawalId"
+            <*> obj .: "tx"
+      )
 
 instance FromJSON (WithdrawTxEnvelope CardanoTxBody) where
-  parseJSON = withObject "WithdrawTxEnvelope" \obj ->
-    WithdrawTxEnvelope
-      <$> obj .: "withdrawalId"
-      <*> obj .: "txBody"
+  parseJSON =
+    withObject
+      "WithdrawTxEnvelope"
+      ( \obj ->
+          WithdrawTxEnvelope
+            <$> obj .: "withdrawalId"
+            <*> obj .: "txBody"
+      )
 
 instance ToSchema (WithdrawTxEnvelope CardanoTx) where
   declareNamedSchema _ = do
@@ -723,18 +735,26 @@ instance ToJSON (CreateTxEnvelope CardanoTxBody) where
       ]
 
 instance FromJSON (CreateTxEnvelope CardanoTx) where
-  parseJSON = withObject "CreateTxEnvelope" \obj ->
-    CreateTxEnvelope
-      <$> obj .: "contractId"
-      <*> obj .: "tx"
-      <*> obj .: "safetyErrors"
+  parseJSON =
+    withObject
+      "CreateTxEnvelope"
+      ( \obj ->
+          CreateTxEnvelope
+            <$> obj .: "contractId"
+            <*> obj .: "tx"
+            <*> obj .: "safetyErrors"
+      )
 
 instance FromJSON (CreateTxEnvelope CardanoTxBody) where
-  parseJSON = withObject "CreateTxEnvelope" \obj ->
-    CreateTxEnvelope
-      <$> obj .: "contractId"
-      <*> obj .: "txBody"
-      <*> obj .: "safetyErrors"
+  parseJSON =
+    withObject
+      "CreateTxEnvelope"
+      ( \obj ->
+          CreateTxEnvelope
+            <$> obj .: "contractId"
+            <*> obj .: "txBody"
+            <*> obj .: "safetyErrors"
+      )
 
 instance ToSchema (CreateTxEnvelope CardanoTx) where
   declareNamedSchema _ = do
@@ -786,11 +806,15 @@ instance ToJSON TextEnvelope where
       ]
 
 instance FromJSON TextEnvelope where
-  parseJSON = withObject "TextEnvelope" \obj ->
-    TextEnvelope
-      <$> obj .: "type"
-      <*> obj .: "description"
-      <*> obj .: "cborHex"
+  parseJSON =
+    withObject
+      "TextEnvelope"
+      ( \obj ->
+          TextEnvelope
+            <$> obj .: "type"
+            <*> obj .: "description"
+            <*> obj .: "cborHex"
+      )
 
 instance ToSchema TextEnvelope where
   declareNamedSchema _ = do
@@ -965,9 +989,12 @@ instance FromJSON RoleTokenConfig where
           mAddress <- obj .:? "address"
           mScriptRole <- do
             mScript :: Maybe String <- obj .:? "script"
-            for mScript \case
-              "OpenRole" -> pure OpenRole
-              _ -> fail "Expected \'OpenRole\""
+            for
+              mScript
+              ( \case
+                  "OpenRole" -> pure OpenRole
+                  _ -> fail "Expected \'OpenRole\""
+              )
           metadata <- obj .:? "metadata"
           recipients <- case (mRecipients, mAddress, mScriptRole) of
             (Just recipients, _, _) -> pure recipients
@@ -1041,22 +1068,26 @@ data TokenMetadata = TokenMetadata
   deriving (Show, Eq, Ord, Generic)
 
 instance FromJSON TokenMetadata where
-  parseJSON = withObject "TokenMetadata" \obj -> do
-    imageJSON <- obj .: "image"
-    let additionalProps =
-          AMap.delete "name"
-            . AMap.delete "image"
-            . AMap.delete "mediaType"
-            . AMap.delete "description"
-            . AMap.delete "files"
-            $ obj
-    TokenMetadata
-      <$> obj .: "name"
-      <*> uriFromJSON imageJSON
-      <*> obj .:? "mediaType"
-      <*> obj .:? "description"
-      <*> obj .:? "files"
-      <*> pure additionalProps
+  parseJSON =
+    withObject
+      "TokenMetadata"
+      ( \obj -> do
+          imageJSON <- obj .: "image"
+          let additionalProps =
+                AMap.delete "name"
+                  . AMap.delete "image"
+                  . AMap.delete "mediaType"
+                  . AMap.delete "description"
+                  . AMap.delete "files"
+                  $ obj
+          TokenMetadata
+            <$> obj .: "name"
+            <*> uriFromJSON imageJSON
+            <*> obj .:? "mediaType"
+            <*> obj .:? "description"
+            <*> obj .:? "files"
+            <*> pure additionalProps
+      )
 
 instance ToJSON TokenMetadata where
   toJSON TokenMetadata{..} =
@@ -1098,18 +1129,22 @@ data TokenMetadataFile = TokenMetadataFile
   deriving (Show, Eq, Ord, Generic)
 
 instance FromJSON TokenMetadataFile where
-  parseJSON = withObject "TokenMetadataFile" \obj -> do
-    srcJSON <- obj .: "src"
-    let additionalProps =
-          AMap.delete "name"
-            . AMap.delete "mediaType"
-            . AMap.delete "src"
-            $ obj
-    TokenMetadataFile
-      <$> obj .: "name"
-      <*> uriFromJSON srcJSON
-      <*> obj .: "mediaType"
-      <*> pure additionalProps
+  parseJSON =
+    withObject
+      "TokenMetadataFile"
+      ( \obj -> do
+          srcJSON <- obj .: "src"
+          let additionalProps =
+                AMap.delete "name"
+                  . AMap.delete "mediaType"
+                  . AMap.delete "src"
+                  $ obj
+          TokenMetadataFile
+            <$> obj .: "name"
+            <*> uriFromJSON srcJSON
+            <*> obj .: "mediaType"
+            <*> pure additionalProps
+      )
 
 instance ToJSON TokenMetadataFile where
   toJSON TokenMetadataFile{..} =
@@ -1179,18 +1214,26 @@ instance ToJSON (ApplyInputsTxEnvelope CardanoTxBody) where
       ]
 
 instance FromJSON (ApplyInputsTxEnvelope CardanoTx) where
-  parseJSON = withObject "ApplyInputsTxEnvelope" \obj -> do
-    contractId <- obj .: "contractId"
-    transactionId <- obj .: "transactionId"
-    txEnvelope <- obj .: "tx"
-    pure ApplyInputsTxEnvelope{..}
+  parseJSON =
+    withObject
+      "ApplyInputsTxEnvelope"
+      ( \obj -> do
+          contractId <- obj .: "contractId"
+          transactionId <- obj .: "transactionId"
+          txEnvelope <- obj .: "tx"
+          pure ApplyInputsTxEnvelope{..}
+      )
 
 instance FromJSON (ApplyInputsTxEnvelope CardanoTxBody) where
-  parseJSON = withObject "ApplyInputsTxEnvelope" \obj -> do
-    contractId <- obj .: "contractId"
-    transactionId <- obj .: "transactionId"
-    txEnvelope <- obj .: "txBody"
-    pure ApplyInputsTxEnvelope{..}
+  parseJSON =
+    withObject
+      "ApplyInputsTxEnvelope"
+      ( \obj -> do
+          contractId <- obj .: "contractId"
+          transactionId <- obj .: "transactionId"
+          txEnvelope <- obj .: "txBody"
+          pure ApplyInputsTxEnvelope{..}
+      )
 
 instance ToSchema (ApplyInputsTxEnvelope CardanoTx) where
   declareNamedSchema _ = do
@@ -1267,14 +1310,18 @@ instance ToJSON ChainTip where
         ]
 
 instance FromJSON ChainTip where
-  parseJSON = withObject "ChainTip" \obj -> do
-    genesisTimeUTC <- obj .:? "genesisTimeUTC"
-    blockHeader <- obj .:? "blockHeader"
-    slotTimeUTC <- obj .:? "slotTimeUTC"
-    case (genesisTimeUTC, blockHeader, slotTimeUTC) of
-      (Nothing, Just blockHeader', Just slotTimeUTC') -> pure $ ChainTip blockHeader' slotTimeUTC'
-      (Just genesisTimeUTC', Nothing, Nothing) -> pure $ ChainTipGenesis genesisTimeUTC'
-      _ -> parseFail "Invalid keys, expecting ([\"genesisTimeUTC\"] | [\"blockHeader\", \"slotTimeUTC\"])"
+  parseJSON =
+    withObject
+      "ChainTip"
+      ( \obj -> do
+          genesisTimeUTC <- obj .:? "genesisTimeUTC"
+          blockHeader <- obj .:? "blockHeader"
+          slotTimeUTC <- obj .:? "slotTimeUTC"
+          case (genesisTimeUTC, blockHeader, slotTimeUTC) of
+            (Nothing, Just blockHeader', Just slotTimeUTC') -> pure $ ChainTip blockHeader' slotTimeUTC'
+            (Just genesisTimeUTC', Nothing, Nothing) -> pure $ ChainTipGenesis genesisTimeUTC'
+            _ -> parseFail "Invalid keys, expecting ([\"genesisTimeUTC\"] | [\"blockHeader\", \"slotTimeUTC\"])"
+      )
 
 instance ToHttpApiData ChainTip where
   toUrlPiece = TL.toStrict . encodeToLazyText
