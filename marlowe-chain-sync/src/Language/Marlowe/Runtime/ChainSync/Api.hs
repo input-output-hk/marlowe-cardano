@@ -36,6 +36,7 @@ import qualified Cardano.Api as Cardano
 import Cardano.Api.Shelley (ProtocolParameters)
 import qualified Cardano.Api.Shelley as Cardano
 import qualified Cardano.Ledger.BaseTypes as Base
+import qualified Cardano.Ledger.BaseTypes as C
 import Cardano.Ledger.Credential (ptrCertIx, ptrSlotNo, ptrTxIx)
 import Cardano.Ledger.Slot (EpochSize)
 import Codec.Serialise (deserialiseOrFail, serialise)
@@ -1580,6 +1581,8 @@ instance Variations C.Lovelace where
   variations = C.Lovelace <$> variations
 
 instance Variations C.EpochNo
+
+instance Variations C.EpochInterval
 
 instance Variations C.AnyPlutusScriptVersion where
   variations =

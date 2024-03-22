@@ -729,7 +729,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
           emptyMarloweTransactionMetadata
           [NormalInput $ IDeposit address address ada 1_000_000]
     SubmitFailed msg <- expectLeft "Expected a failure" =<< submit' wallet era txBody
-    liftIO $ msg `shouldContain` "MissingRequiredSigners"
+    liftIO $ msg `shouldContain` "MissingVKeyWitnessesUTXOW"
   it "should accept a Role2 deposit from wallet 2" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
     wallet <- getGenesisWallet 1
     InputsApplied _ InputsAppliedInEra{output} <-
@@ -764,7 +764,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
           emptyMarloweTransactionMetadata
           [NormalInput $ IDeposit address address ada 1_000_000]
     SubmitFailed msg <- expectLeft "Expected a failure" =<< submit' wallet era txBody
-    liftIO $ msg `shouldContain` "MissingRequiredSigners"
+    liftIO $ msg `shouldContain` "MissingVKeyWitnessesUTXOW"
   it "should accept wallet3's deposit from wallet 3" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{contractId}) -> do
     wallet <- getGenesisWallet 2
     let address = Types.Address Address.testnet $ fromJust $ toPlutusAddress $ changeAddress $ addresses wallet
@@ -832,7 +832,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
           emptyMarloweTransactionMetadata
           [NormalInput $ IChoice (ChoiceId "choice3" address) 0]
     SubmitFailed msg <- expectLeft "Expected a failure" =<< submit' wallet era txBody
-    liftIO $ msg `shouldContain` "MissingRequiredSigners"
+    liftIO $ msg `shouldContain` "MissingVKeyWitnessesUTXOW"
   it "should accept a Role2 choice from wallet 2" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{..}) -> do
     wallet <- getGenesisWallet 1
     InputsApplied _ InputsAppliedInEra{output} <-
@@ -867,7 +867,7 @@ whenNonEmptySpec = parallel $ describe "Non-Empty When contracts" $ aroundAll se
           emptyMarloweTransactionMetadata
           [NormalInput $ IChoice (ChoiceId "choice3" address) 0]
     SubmitFailed msg <- expectLeft "Expected a failure" =<< submit' wallet era txBody
-    liftIO $ msg `shouldContain` "MissingRequiredSigners"
+    liftIO $ msg `shouldContain` "MissingVKeyWitnessesUTXOW"
   it "should accept the correct choice from wallet 3" $ runAsIntegration \(ContractCreated _ ContractCreatedInEra{contractId}) -> do
     wallet <- getGenesisWallet 2
     let address = Types.Address Address.testnet $ fromJust $ toPlutusAddress $ changeAddress $ addresses wallet

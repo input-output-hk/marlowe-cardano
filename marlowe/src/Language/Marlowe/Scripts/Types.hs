@@ -28,19 +28,56 @@ module Language.Marlowe.Scripts.Types (
   readPlutusScript,
 ) where
 
-import Cardano.Api
+import Cardano.Api (
+  AsType (
+    AsPlutusScript,
+    AsPlutusScriptV1,
+    AsPlutusScriptV2,
+    AsPlutusScriptV3
+  ),
+  File (File),
+  FromSomeType (FromSomeType),
+  IsPlutusScriptLanguage (..),
+  PlutusScript,
+  PlutusScriptV1,
+  PlutusScriptV2,
+  PlutusScriptVersion (
+    PlutusScriptV1,
+    PlutusScriptV2,
+    PlutusScriptV3
+  ),
+  readFileTextEnvelopeAnyOf,
+ )
 import Cardano.Api.Shelley (PlutusScript (..))
 import Data.ByteString.Char8 qualified as B8
 import Data.ByteString.Internal qualified as B
 import Data.ByteString.Short qualified as SBS
 import Data.ByteString.Unsafe qualified as BS
 import GHC.Generics (Generic)
-import Language.Haskell.TH
+import Language.Haskell.TH (
+  Exp (AppE, AppTypeE, ConE, LitE, VarE),
+  Lit (IntegerL),
+  Q,
+  Type (ConT),
+  bytesPrimL,
+  mkBytes,
+  runIO,
+ )
 import Language.Haskell.TH.Syntax (qAddDependentFile)
-import Language.Marlowe.Core.V1.Semantics.Types as Semantics
+import Language.Marlowe.Core.V1.Semantics.Types as Semantics (
+  Input (..),
+  InputContent,
+ )
 import Language.Marlowe.Pretty (Pretty (..))
 import PlutusTx (makeIsDataIndexed, makeLift)
-import PlutusTx.Prelude as PlutusTxPrelude hiding (traceError, traceIfFalse)
+import PlutusTx.Prelude as PlutusTxPrelude (
+  BuiltinByteString,
+  Functor (fmap),
+  either,
+  id,
+  ($),
+  (.),
+ )
 import System.IO.Unsafe (unsafePerformIO)
 import Prelude qualified as Haskell
 
