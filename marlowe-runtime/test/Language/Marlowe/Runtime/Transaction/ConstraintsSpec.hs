@@ -16,6 +16,7 @@ import Cardano.Api.Shelley (
   SimpleScriptOrReferenceInput (..),
   convertToLedgerProtocolParameters,
  )
+import Cardano.Ledger.BaseTypes (EpochInterval (..))
 import Control.Applicative (Alternative)
 import Control.Arrow (Arrow ((&&&), (***)))
 import Control.Error (catMaybes, note)
@@ -1772,13 +1773,12 @@ protocolTestnet =
         , protocolParamStakeAddressDeposit = Lovelace 2000000
         , protocolParamStakePoolDeposit = Lovelace 500000000
         , protocolParamMinPoolCost = Lovelace 340000000
-        , protocolParamPoolRetireMaxEpoch = EpochNo 18
+        , protocolParamPoolRetireMaxEpoch = EpochInterval 18
         , protocolParamStakePoolTargetNum = 500
         , protocolParamPoolPledgeInfluence = 3 % 10
         , protocolParamMonetaryExpansion = 3 % 1000
         , protocolParamTreasuryCut = 1 % 5
-        , -- , protocolParamUTxOCostPerWord = Nothing
-          protocolParamCostModels =
+        , protocolParamCostModels =
             Map.singleton
               (AnyPlutusScriptVersion PlutusScriptV2)
               . CostModel

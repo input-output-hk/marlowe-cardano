@@ -18,14 +18,13 @@ module Spec.Marlowe.Plutus.Value (
 import Data.List (union)
 import PlutusLedgerApi.V1.Value (geq, leq, valueOf)
 import PlutusLedgerApi.V2 (CurrencySymbol, TokenName, Value (..), singleton)
-import PlutusTx.Numeric (zero)
-import Spec.Marlowe.Plutus.Arbitrary ()
-import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.QuickCheck (Arbitrary (..), Property, forAll, property, testProperty, (===))
-
 import qualified PlutusTx.AssocMap as AM (empty, fromList, toList)
 import qualified PlutusTx.Eq as P ((==))
+import PlutusTx.Numeric (zero)
+import Spec.Marlowe.Plutus.Arbitrary ()
 import Test.QuickCheck (shuffle)
+import Test.Tasty (TestTree, testGroup)
+import Test.Tasty.QuickCheck (Arbitrary (..), Property, forAll, property, testProperty, (===))
 
 -- | Run tests.
 tests :: TestTree
@@ -83,7 +82,7 @@ checkEq =
              in (x P.== y) == (all check . foldl1 union $ tokens <$> [x, y])
 
 -- | Check that `leq` is a partial ordering requiring that quantity of each token in the first
---   operand is less than or equal to quanity of the corresponding token in the second operand,
+--   operand is less than or equal to quantity of the corresponding token in the second operand,
 --   where a missing token in one operand represents a zero quantity.
 checkLeq :: Property
 checkLeq =

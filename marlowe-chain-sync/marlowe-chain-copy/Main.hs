@@ -43,9 +43,19 @@ import Database.PostgreSQL.Simple (Connection, Query, close, connectPostgreSQL, 
 import Database.PostgreSQL.Simple.Copy (copy_, putCopyData, putCopyEnd, putCopyError)
 import Database.PostgreSQL.Simple.SqlQQ (sql)
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Cardano (blockToRows)
-import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types
+import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types (
+  AssetMintRow,
+  AssetOutRow,
+  BlockRow,
+  TxInRow,
+  TxOutRow,
+  TxRow,
+ )
 import Numeric.Natural (Natural)
-import Options
+import Options (
+  Options (Options, databaseUri, networkId, nodeSocket),
+  getOptions,
+ )
 import Paths_marlowe_chain_sync (version)
 import UnliftIO (
   Concurrently (Concurrently, runConcurrently),
@@ -174,7 +184,12 @@ runChainSync blockQueue connect = do
       }
   where
     idle :: ClientStIdle BlockInMode ChainPoint ChainTip IO ()
-    idle = SendMsgRequestNext next end
+    idle = SendMsgRequestNext afterMsgAwaitReplyReceived next
+
+    -- N.B : 'MsgAwaitReply' indicates that the server itself has to block for a
+    -- state change before it can send us the reply.
+    afterMsgAwaitReplyReceived :: IO ()
+    afterMsgAwaitReplyReceived = atomically $ writeTBQueue blockQueue Nothing
 
     next :: ClientStNext BlockInMode ChainPoint ChainTip IO ()
     next =
@@ -201,15 +216,6 @@ runChainSync blockQueue connect = do
             ChainPointAtGenesis -> idle
             _ -> SendMsgDone ()
         }
-
-    end :: IO (ClientStNext BlockInMode ChainPoint ChainTip IO ())
-    end = do
-      atomically $ writeTBQueue blockQueue Nothing
-      pure
-        ClientStNext
-          { recvMsgRollForward = \_ _ -> ChainSyncClient $ pure $ SendMsgDone ()
-          , recvMsgRollBackward = \_ _ -> ChainSyncClient $ pure $ SendMsgDone ()
-          }
 
 truncateTablesAndDisableIndexes :: String -> IO Connection
 truncateTablesAndDisableIndexes dbUri = do

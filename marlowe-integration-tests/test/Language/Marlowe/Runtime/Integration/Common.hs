@@ -114,6 +114,7 @@ import Language.Marlowe.Runtime.Transaction.Api (
   WithdrawTx (..),
  )
 import Network.Protocol.Job.Client (liftCommandWait)
+import Ouroboros.Network.Protocol.LocalStateQuery.Type (Target (VolatileTip))
 import qualified PlutusLedgerApi.V2 as PV2
 import Servant.Client (ClientError)
 import Servant.Client.Streaming (ClientM)
@@ -227,7 +228,7 @@ queryShelley nodeNum = either (fail . show) pure <=< queryNode nodeNum . C.Query
 queryNode :: Int -> C.QueryInMode a -> Integration a
 queryNode nodeNum query = do
   connectInfo <- nodeConnectInfo nodeNum
-  liftIO $ either (fail . show) pure =<< C.queryNodeLocalState connectInfo Nothing query
+  liftIO $ either (fail . show) pure =<< C.queryNodeLocalState connectInfo VolatileTip query
 
 nodeConnectInfo :: Int -> Integration C.LocalNodeConnectInfo
 nodeConnectInfo nodeNum = do

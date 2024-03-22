@@ -1,8 +1,8 @@
-{ inputs, pkgs, lib, ... }:
+{ system, inputs, pkgs, lib, ... }:
 
 let
   inherit (pkgs) z3 sqitchPg postgresql runCommand writeShellScriptBin writeText glibcLocales;
-  network = inputs.self.networks.preview;
+  network = inputs.self.networks.sanchonet;
   inherit (inputs) marlowe-plutus;
 
   mkSqitchRunner = name: path: writeShellScriptBin name ''
@@ -22,7 +22,7 @@ let
     cd /src
     # Hard-coding linux because this won't work on Mac anyway.
     # TODO find a setup that works on MacOS
-    BIN=./dist-newstyle/build/x86_64-linux/ghc-9.2.8/$PKG/x/$PROG/build/$PROG/$PROG
+    BIN=./dist-newstyle/build/${system}/ghc-9.2.8/$PKG/x/$PROG/build/$PROG/$PROG
     export PATH="$PATH:${lib.makeBinPath [ sqitchPg postgresql ]}"
     export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
     cd marlowe-chain-sync
@@ -38,7 +38,7 @@ let
     cd /src
     # Hard-coding linux because this won't work on Mac anyway.
     # TODO find a setup that works on MacOS
-    BIN=./dist-newstyle/build/x86_64-linux/ghc-9.2.8/$PKG/x/$PROG/build/$PROG/$PROG
+    BIN=./dist-newstyle/build/${system}/ghc-9.2.8/$PKG/x/$PROG/build/$PROG/$PROG
     export PATH="$PATH:${lib.makeBinPath [ sqitchPg postgresql ]}"
     export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
     cd marlowe-runtime/marlowe-indexer
@@ -55,7 +55,7 @@ let
     cd /src
     # Hard-coding linux because this won't work on Mac anyway.
     # TODO find a setup that works on MacOS
-    BIN=./dist-newstyle/build/x86_64-linux/ghc-9.2.8/$PKG/x/$PROG/build/$PROG/$PROG
+    BIN=./dist-newstyle/build/${system}/ghc-9.2.8/$PKG/x/$PROG/build/$PROG/$PROG
     export PATH="$PATH:${lib.makeBinPath [ sqitchPg postgresql ]}"
     export LOCALE_ARCHIVE="${glibcLocales}/lib/locale/locale-archive"
     cd marlowe-chain-sync
@@ -75,7 +75,7 @@ let
     cd /src
     # Hard-coding linux because this won't work on Mac anyway.
     # TODO find a setup that works on MacOS
-    BIN=./dist-newstyle/build/x86_64-linux/ghc-9.2.8/$PKG/x/$PROG/build/$PROG/$PROG
+    BIN=./dist-newstyle/build/${system}/ghc-9.2.8/$PKG/x/$PROG/build/$PROG/$PROG
     exec -a $PROG $BIN "$@"
   '';
 
@@ -98,7 +98,7 @@ let
   '';
 
   node-service = {
-    image = "ghcr.io/input-output-hk/cardano-node:8.7.3";
+    image = "ghcr.io/intersectmbo/cardano-node:8.9.0";
 
     environment = [
       "NETWORK=${network.name}"
