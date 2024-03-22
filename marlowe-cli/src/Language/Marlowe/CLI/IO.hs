@@ -128,6 +128,7 @@ import Language.Marlowe.CLI.Types (
   somePaymentSigningKeyToTxWitness,
   toAddressAny',
  )
+import Ouroboros.Network.Protocol.LocalStateQuery.Type
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult (..))
 import PlutusCore.Evaluation.Machine.ExBudgetingDefaults (defaultCostModelParams)
 import PlutusLedgerApi.Common (MajorProtocolVersion)
@@ -324,7 +325,7 @@ queryInEra connection q = do
   era <- askEra
   res <-
     liftCliIO $
-      queryNodeLocalState connection Nothing $
+      queryNodeLocalState connection VolatileTip $
         QueryInEra $
           QueryInShelleyBasedEra (babbageEraOnwardsToShelleyBasedEra era) q
   liftCli res
@@ -377,7 +378,7 @@ getProtocolParams (QueryNode connection) = do
 getProtocolParams (PureQueryContext _ NodeStateInfo{nsiProtocolParameters}) = pure nsiProtocolParameters
 
 queryAny :: (MonadError CliError m, MonadIO m) => LocalNodeConnectInfo -> QueryInMode a -> m a
-queryAny connection = liftCliIO . queryNodeLocalState connection Nothing
+queryAny connection = liftCliIO . queryNodeLocalState connection VolatileTip
 
 getSystemStart
   :: (MonadError CliError m)

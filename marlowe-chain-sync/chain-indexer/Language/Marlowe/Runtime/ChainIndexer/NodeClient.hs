@@ -15,7 +15,6 @@ module Language.Marlowe.Runtime.ChainIndexer.NodeClient (
 ) where
 
 import Cardano.Api (
-  Block (..),
   BlockHeader (..),
   BlockInMode (..),
   BlockNo (..),
@@ -30,6 +29,7 @@ import Cardano.Api (
   getBlockHeader,
   serialiseToRawBytes,
  )
+import Cardano.Api.Block (Block (..))
 import Cardano.Api.ChainSync.ClientPipelined (
   ClientPipelinedStIdle (..),
   ClientPipelinedStIntersect (..),
@@ -50,7 +50,7 @@ import qualified Cardano.Ledger.Block as C
 import Cardano.Ledger.Shelley.BlockChain (txSeqTxns)
 import Colog (Message, WithLog, logInfo)
 import Control.Arrow ((&&&))
-import Control.Concurrent.Component
+import Control.Concurrent.Component (Component, component)
 import Control.Concurrent.STM (STM, TVar, modifyTVar, newTVar, readTVar, writeTVar)
 import Control.Monad (guard, when)
 import Control.Monad.IO.Class (liftIO)
@@ -190,8 +190,8 @@ hoistClient f (ChainSyncClientPipelined m) = ChainSyncClientPipelined $ f $ hois
   where
     hoistIdle :: ClientPipelinedStIdle i block point tip m a -> ClientPipelinedStIdle i block point tip n a
     hoistIdle = \case
-      SendMsgRequestNext next mNext -> SendMsgRequestNext (hoistNext next) (f $ hoistNext <$> mNext)
-      SendMsgRequestNextPipelined idle -> SendMsgRequestNextPipelined $ hoistIdle idle
+      SendMsgRequestNext stAwait stNext -> SendMsgRequestNext (f stAwait) (hoistNext stNext)
+      SendMsgRequestNextPipelined await idle -> SendMsgRequestNextPipelined (f await) (hoistIdle idle)
       SendMsgFindIntersect points intersect -> SendMsgFindIntersect points $ hoistIntersect intersect
       SendMsgDone a -> SendMsgDone a
       CollectResponse mIdle next -> CollectResponse (fmap (f . fmap hoistIdle) mIdle) (hoistNext next)
@@ -298,7 +298,7 @@ mkClientStIdle
 mkClientStIdle lastLog costModel maxCost changesVar slotNoToBlockNo pipelineDecision n clientTip nodeTip =
   case (n, runPipelineDecision pipelineDecision n clientTip (fst nodeTip)) of
     (_, (Request, pipelineDecision')) ->
-      SendMsgRequestNext (collect pipelineDecision' n) $ pure (collect pipelineDecision' n)
+      SendMsgRequestNext (pure ()) (collect pipelineDecision' n)
     (_, (Pipeline, pipelineDecision')) ->
       nextPipelineRequest pipelineDecision'
     (Succ n', (CollectOrPipeline, pipelineDecision')) ->
@@ -312,7 +312,7 @@ mkClientStIdle lastLog costModel maxCost changesVar slotNoToBlockNo pipelineDeci
       :: MkPipelineDecision
       -> ClientPipelinedStIdle n NumberedCardanoBlock ChainPoint NumberedChainTip m ()
     nextPipelineRequest pipelineDecision' =
-      SendMsgRequestNextPipelined $
+      SendMsgRequestNextPipelined (pure ()) $
         mkClientStIdle lastLog costModel maxCost changesVar slotNoToBlockNo pipelineDecision' (Succ n) clientTip nodeTip
 
     collect
