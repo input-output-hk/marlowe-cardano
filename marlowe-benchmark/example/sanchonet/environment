@@ -11,3 +11,4 @@ export SYNC_RESULT_FILE=sync-results.tsv
 export BENCHMARK_PODSTAT_FILE=benchmark-podstats.json
 export BENCHMARK_RESULT_FILE=benchmark-results.json
 export DISK_FILE=disk.tsv
+export ERA=conway # babbage or conway

@@ -24,6 +24,8 @@ Available options:
   --version                Show version
   --host HOST              Host for Marlowe proxy service.
   --port PORT              Port for Marlowe proxy service.
+  --babbage-era            Read and write Babbage transactions
+  --conway-era             Read and write Conway transactions
   --config FILE            Path to the benchmark configuration file.
   --node-socket-path FILE  Path to the Cardano node socket.
   --network-magic INTEGER  The Cardano network magic number.
@@ -82,6 +84,7 @@ The output is lines of JSON, with one report per benchmarking client.
 marlowe-benchmark \
   --node-socket-path node.socket \
   --network-magic 1 \
+  --babbage-era
   --address addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j \
   --signing-key-file faucet.skey \
 ```
@@ -130,6 +133,7 @@ Tools like `jq` and `dasel` can convert the output to CSV files.
 marlowe-benchmark \
   --node-socket-path node.socket \
   --network-magic 1 \
+  --babbage-era
   --address addr_test1vq9prvx8ufwutkwxx9cmmuuajaqmjqwujqlp9d8pvg6gupczgtm9j \
   --signing-key-file faucet.skey \
   --out-file results.json

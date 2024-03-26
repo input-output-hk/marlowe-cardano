@@ -723,18 +723,27 @@ in
       export MARLOWE_RT_PORT="''${MARLOWE_RT_PORT:-3700}"
 
       export PATH="${lib.makeBinPath [ coreutils ]}"
-
+      
+      # When Testnet is sanchonet benchmark on conway otherwise on babbage
+      if [ "$CARDANO_TESTNET_MAGIC" == 4 ]
+      then
+        export ERA=conway
+      else 
+        export ERA=babagge
+      fi
       if [ -z "$FAUCET_SKEY" ]
       then
         ${marlowe-benchmark}/bin/marlowe-benchmark \
           --host "$MARLOWE_RT_HOST" \
           --port "$MARLOWE_RT_PORT" \
+          "--$ERA-era" \
           --config "$MARLOWE_BENCHMARK_CONFIG" \
           --out-file "$MARLOWE_BENCHMARK_OUTPUT"
       else
         ${marlowe-benchmark}/bin/marlowe-benchmark \
           --host "$MARLOWE_RT_HOST" \
           --port "$MARLOWE_RT_PORT" \
+          "--$ERA-era" \
           --config "$MARLOWE_BENCHMARK_CONFIG" \
           --node-socket-path "$CARDANO_NODE_SOCKET_PATH" \
           --testnet-magic "$CARDANO_TESTNET_MAGIC" \

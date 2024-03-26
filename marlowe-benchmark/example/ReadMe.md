@@ -23,7 +23,7 @@ The following tools must be on the `PATH`:
 To begin, select the network you want to benchmark (`sanchonet`, `preview`, `preprod`) and fetch the network configuration files.
 
 ```bash
-NETWORK_NAME=sanchonet ## Select the one you want to benchmark {sanchonet, preview, preprod, mainnet}
+NETWORK_NAME=preprod ## Select the one you want to benchmark {sanchonet, preview, preprod, mainnet}
 cd $NETWORK_NAME
 rm -rf config
 mkdir -p config

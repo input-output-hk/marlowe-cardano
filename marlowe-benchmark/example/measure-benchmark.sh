@@ -4,6 +4,7 @@ set -eo pipefail
 
 echo "PODNAME=$PODNAME"
 echo "NETWORK=$NETWORK"
+echo "ERA=$ERA"
 echo "BENCHMARK_CONFIG=$BENCHMARK_CONFIG"
 echo "MARLOWE_RT_HOST=$MARLOWE_RT_HOST"
 echo "MARLOWE_RT_PORT=$MARLOWE_RT_PORT"
@@ -46,6 +47,7 @@ trap 'kill $STATS_PID' EXIT
 marlowe-benchmark \
   --host "$MARLOWE_RT_HOST" \
   --port "$MARLOWE_RT_PORT" \
+  "--$ERA-era" \
   --config "$BENCHMARK_CONFIG" \
   --node-socket-path "$CARDANO_NODE_SOCKET_PATH" \
   "${MAGIC[@]}" \
