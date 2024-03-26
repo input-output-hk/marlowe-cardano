@@ -9,10 +9,8 @@ let
 
 
   static =
-    staticPkgs.marlowe-apps.components.exes
-    //
-    staticPkgs.marlowe-cli.components.exes
-  ;
+    staticPkgs.marlowe-apps.components.exes //
+    staticPkgs.marlowe-cli.components.exes;
 
 
   allStatic = pkgs.runCommand "all-statics" { } ''
