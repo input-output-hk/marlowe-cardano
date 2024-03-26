@@ -4,6 +4,8 @@
 module Language.Marlowe.Runtime.Benchmark (
   -- * Benchmarking
   BenchmarkConfig (..),
+  LifecycleBenchmarkContext (..),
+  Faucet (..),
   measure,
 ) where
 
@@ -30,6 +32,19 @@ import qualified Language.Marlowe.Runtime.Benchmark.HeaderSync as HeaderSync (me
 import qualified Language.Marlowe.Runtime.Benchmark.Lifecycle as Lifecycle (measure)
 import qualified Language.Marlowe.Runtime.Benchmark.Query as Query (measure)
 import qualified Language.Marlowe.Runtime.Benchmark.Sync as Sync (measure)
+
+data Faucet = Faucet
+  { address :: Address
+  , privateKey :: C.SigningKey C.PaymentExtendedKey
+  }
+  deriving (Show)
+
+data LifecycleBenchmarkContext = LifecycleBenchmarkContext
+  { nodeSocketPath :: C.SocketPath
+  , networkId :: C.NetworkId
+  , faucet :: Faucet
+  }
+  deriving (Show)
 
 -- | Benchmark configuration.
 data BenchmarkConfig = BenchmarkConfig
@@ -84,10 +99,11 @@ instance Default BenchmarkConfig where
 measure
   :: (C.IsShelleyBasedEra era)
   => BenchmarkConfig
-  -> Maybe (C.SocketPath, C.BabbageEraOnwards era, C.NetworkId, Address, C.SigningKey C.PaymentExtendedKey)
+  -> C.BabbageEraOnwards era
+  -> Maybe LifecycleBenchmarkContext
   -> Maybe FilePath
   -> MarloweT IO ()
-measure BenchmarkConfig{..} faucet out =
+measure BenchmarkConfig{..} eraOnwards lifecycleBenchmarkContextMaybe out =
   do
     liftIO $
       maybe
@@ -130,10 +146,18 @@ measure BenchmarkConfig{..} faucet out =
               [ Query.measure 1 1 queryPageSize label [query] >>= report
               | (label, query) <- M.toList complexQueries
               ]
-    when (isJust faucet && lifecycleParallelism > 0) $
+    when (isJust lifecycleBenchmarkContextMaybe && lifecycleParallelism > 0) $
       do
-        Just (node, era, network, faucetAddress, faucetKey) <- pure faucet
+        Just (LifecycleBenchmarkContext{..}) <- pure lifecycleBenchmarkContextMaybe
         liftIO $ hPutStrLn stderr . ("Lifecycle: " <>) . show =<< getCurrentTime
-        lifecycleResults <- Lifecycle.measure node era network lifecycleParallelism faucetAddress faucetKey lifecycleContracts
+        lifecycleResults <-
+          Lifecycle.measure
+            nodeSocketPath
+            eraOnwards
+            networkId
+            lifecycleParallelism
+            (address faucet)
+            (privateKey faucet)
+            lifecycleContracts
         report lifecycleResults
     liftIO $ hPutStrLn stderr . ("Done: " <>) . show =<< getCurrentTime
