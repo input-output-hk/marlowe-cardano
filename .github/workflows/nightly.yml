@@ -83,4 +83,3 @@ jobs:
             --testnet-magic 2 \
             --address "$(cat test-wallets/test.0.addr)" \
             --signing-key-file test-wallets/test.0.skey
-          kill %1
