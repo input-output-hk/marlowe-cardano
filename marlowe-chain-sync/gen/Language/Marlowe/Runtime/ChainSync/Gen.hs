@@ -1,5 +1,9 @@
 {-# LANGUAGE EmptyCase #-}
+{-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE QuantifiedConstraints #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Marlowe.Runtime.ChainSync.Gen where
@@ -7,13 +11,18 @@ module Language.Marlowe.Runtime.ChainSync.Gen where
 import Cardano.Api (
   AddressAny (..),
   AlonzoEraOnwards (..),
+  AnyShelleyBasedEra (..),
   AsType (..),
+  BabbageEra,
+  BabbageEraOnwards (..),
   CardanoEra (..),
+  ConwayEra,
   EraHistory (..),
   Key (verificationKeyHash),
   NetworkId (..),
   NetworkMagic (..),
   PlutusScriptVersion (..),
+  ScriptInEra,
   SerialiseAsRawBytes (..),
   ShelleyBasedEra (..),
   SystemStart (..),
@@ -60,6 +69,7 @@ import Test.Gen.Cardano.Api.Typed (
   genPlutusScript,
   genProtocolParameters,
   genScriptHash,
+  genScriptInEra,
   genTx,
   genVerificationKey,
  )
@@ -393,6 +403,17 @@ instance Arbitrary AnyCardanoEra where
       , AnyCardanoEra ConwayEra
       ]
 
+instance Arbitrary AnyShelleyBasedEra where
+  arbitrary =
+    elements
+      [ AnyShelleyBasedEra ShelleyBasedEraShelley
+      , AnyShelleyBasedEra ShelleyBasedEraAllegra
+      , AnyShelleyBasedEra ShelleyBasedEraMary
+      , AnyShelleyBasedEra ShelleyBasedEraAlonzo
+      , AnyShelleyBasedEra ShelleyBasedEraBabbage
+      , AnyShelleyBasedEra ShelleyBasedEraConway
+      ]
+
 instance Query.ArbitraryRequest ChainSyncQuery where
   arbitraryTag =
     elements
@@ -414,6 +435,8 @@ instance Query.ArbitraryRequest ChainSyncQuery where
     TagGetNodeTip -> pure GetNodeTip
     TagGetTip -> pure GetTip
     TagGetEra -> pure GetEra
+    TagGetScripts BabbageEraOnwardsBabbage -> GetScripts BabbageEraOnwardsBabbage <$> arbitrary
+    TagGetScripts BabbageEraOnwardsConway -> GetScripts BabbageEraOnwardsConway <$> arbitrary
 
   arbitraryResult = \case
     TagGetSecurityParameter -> arbitrary
@@ -427,6 +450,8 @@ instance Query.ArbitraryRequest ChainSyncQuery where
     TagGetNodeTip -> arbitrary
     TagGetTip -> arbitrary
     TagGetEra -> arbitrary
+    TagGetScripts BabbageEraOnwardsBabbage -> arbitrary
+    TagGetScripts BabbageEraOnwardsConway -> arbitrary
 
   shrinkReq = \case
     GetSecurityParameter -> []
@@ -438,6 +463,7 @@ instance Query.ArbitraryRequest ChainSyncQuery where
     GetNodeTip -> []
     GetTip -> []
     GetEra -> []
+    GetScripts era scripts -> GetScripts era <$> shrink scripts
 
   shrinkResult = \case
     TagGetSecurityParameter -> shrink
@@ -451,6 +477,14 @@ instance Query.ArbitraryRequest ChainSyncQuery where
     TagGetNodeTip -> shrink
     TagGetTip -> shrink
     TagGetEra -> shrink
+    TagGetScripts BabbageEraOnwardsBabbage -> shrink
+    TagGetScripts BabbageEraOnwardsConway -> shrink
+
+instance Arbitrary (ScriptInEra BabbageEra) where
+  arbitrary = hedgehog $ genScriptInEra ShelleyBasedEraBabbage
+
+instance Arbitrary (ScriptInEra ConwayEra) where
+  arbitrary = hedgehog $ genScriptInEra ShelleyBasedEraConway
 
 genEraHistory :: Gen EraHistory
 genEraHistory =
@@ -525,6 +559,8 @@ instance Query.RequestEq ChainSyncQuery where
     TagGetNodeTip -> (==)
     TagGetTip -> (==)
     TagGetEra -> (==)
+    TagGetScripts BabbageEraOnwardsBabbage -> (==)
+    TagGetScripts BabbageEraOnwardsConway -> (==)
 
 instance Command.ArbitraryCommand ChainSyncCommand where
   arbitraryTag =

@@ -3,8 +3,11 @@
 
 module Language.Marlowe.Runtime.ChainSync.Database where
 
+import Cardano.Api (BabbageEraOnwards, ScriptInEra)
 import Data.List.NonEmpty (NonEmpty)
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, GetUTxOsQuery, Move, UTxOs)
+import Data.Map (Map)
+import Data.Set (Set)
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, ChainPoint, GetUTxOsQuery, Move, ScriptHash, UTxOs)
 import Numeric.Natural (Natural)
 
 -- Queries
@@ -14,6 +17,9 @@ newtype GetTip m = GetTip
 
 newtype GetUTxOs m = GetUTxOs
   {runGetUTxOs :: GetUTxOsQuery -> m UTxOs}
+
+newtype GetScripts m = GetScripts
+  {runGetScripts :: forall era. BabbageEraOnwards era -> Set ScriptHash -> m (Map ScriptHash (ScriptInEra era))}
 
 data MoveResult err result
   = RollForward result BlockHeader ChainPoint
@@ -38,6 +44,9 @@ newtype Collect err result m = Collect
 
 hoistGetUTxOs :: (forall a. m a -> n a) -> GetUTxOs m -> GetUTxOs n
 hoistGetUTxOs transformation = GetUTxOs . fmap transformation . runGetUTxOs
+
+hoistGetScripts :: (forall a. m a -> n a) -> GetScripts m -> GetScripts n
+hoistGetScripts transformation GetScripts{..} = GetScripts \era -> transformation . runGetScripts era
 
 hoistGetTip :: (forall a. m a -> n a) -> GetTip m -> GetTip n
 hoistGetTip transformation = GetTip . transformation . runGetTip
@@ -65,6 +74,7 @@ hoistCollectResult transformation = \case
 
 data DatabaseQueries m = DatabaseQueries
   { getUTxOs :: GetUTxOs m
+  , getScripts :: GetScripts m
   , getTip :: GetTip m
   , moveClient :: MoveClient m
   , scan :: Scan m
@@ -74,6 +84,7 @@ hoistDatabaseQueries :: (Functor m) => (forall a. m a -> n a) -> DatabaseQueries
 hoistDatabaseQueries transformation DatabaseQueries{..} =
   DatabaseQueries
     { getUTxOs = hoistGetUTxOs transformation getUTxOs
+    , getScripts = hoistGetScripts transformation getScripts
     , getTip = hoistGetTip transformation getTip
     , moveClient = hoistMoveClient transformation moveClient
     , scan = hoistScan transformation scan

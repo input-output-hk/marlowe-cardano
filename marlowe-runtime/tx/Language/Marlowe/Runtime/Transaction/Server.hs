@@ -51,7 +51,7 @@ import Control.Concurrent.STM (STM, modifyTVar, newEmptyTMVar, newTVar, putTMVar
 import Control.Error (MaybeT (..))
 import Control.Error.Util (hush, note, noteT)
 import Control.Exception (Exception (..), SomeException)
-import Control.Monad (guard, unless, (<=<))
+import Control.Monad (guard, unless, when, (<=<))
 import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Trans.Class (lift)
@@ -69,6 +69,7 @@ import Data.Time (NominalDiffTime, UTCTime, nominalDiffTimeToSeconds)
 import Data.Void (Void)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError (SafetyAnalysisTimeout))
 import qualified Language.Marlowe.Core.V1.Semantics as V1
+import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient, getRoleCurrencies)
 import Language.Marlowe.Runtime.Cardano.Api (
   fromCardanoAddressInEra,
   fromCardanoLovelace,
@@ -108,6 +109,8 @@ import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript (..), MarloweS
 import Language.Marlowe.Runtime.Transaction.Api (
   Account,
   ApplyInputsError (..),
+  BurnError (..),
+  BurnTx (BurnTx),
   ContractCreated (..),
   ContractCreatedInEra (..),
   CreateError (..),
@@ -118,6 +121,8 @@ import Language.Marlowe.Runtime.Transaction.Api (
   MarloweTxCommand (..),
   Mint (unMint),
   MintRole (roleTokenRecipients),
+  RoleTokenFilter,
+  RoleTokenFilter' (..),
   RoleTokensConfig (..),
   SubmitError (..),
   SubmitStatus (..),
@@ -125,6 +130,8 @@ import Language.Marlowe.Runtime.Transaction.Api (
   WithdrawError (..),
   WithdrawTx (..),
   WithdrawTxInEra (..),
+  optimizeRoleTokenFilter,
+  roleTokenFilterToRoleCurrencyFilter,
  )
 import Language.Marlowe.Runtime.Transaction.BuildConstraints (
   MkRoleTokenMintingPolicy,
@@ -133,7 +140,12 @@ import Language.Marlowe.Runtime.Transaction.BuildConstraints (
   buildWithdrawConstraints,
   initialMarloweState,
  )
-import Language.Marlowe.Runtime.Transaction.Constraints (MarloweContext (..), SolveConstraints, TxConstraints)
+import Language.Marlowe.Runtime.Transaction.Burn (burnRoleTokens)
+import Language.Marlowe.Runtime.Transaction.Constraints (
+  MarloweContext (..),
+  SolveConstraints,
+  TxConstraints,
+ )
 import qualified Language.Marlowe.Runtime.Transaction.Constraints as Constraints
 import Language.Marlowe.Runtime.Transaction.Query (
   LoadMarloweContext,
@@ -190,6 +202,7 @@ data TransactionServerDependencies m = TransactionServerDependencies
   , loadMarloweContext :: LoadMarloweContext m
   , loadPayoutContext :: LoadPayoutContext m
   , loadHelpersContext :: LoadHelpersContext m
+  , marloweQueryConnector :: Connector MarloweQueryClient m
   , chainSyncQueryConnector :: Connector (QueryClient ChainSyncQuery) m
   , contractQueryConnector :: Connector (QueryClient ContractRequest) m
   , getTip :: STM Chain.ChainPoint
@@ -294,6 +307,18 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                       version
                       addresses
                       payouts
+                Burn addresses tokenFilter ->
+                  withEvent ExecWithdraw \_ ->
+                    execBurn
+                      systemStart
+                      eraHistory
+                      chainSyncQueryConnector
+                      marloweQueryConnector
+                      era
+                      ledgerProtocolParameters
+                      loadWalletContext
+                      addresses
+                      tokenFilter
                 Submit BabbageEraOnwardsBabbage tx ->
                   execSubmit (mkSubmitJob AlonzoEraOnwardsBabbage) trackSubmitJob tx
                 Submit BabbageEraOnwardsConway tx ->
@@ -335,7 +360,7 @@ execCreate
   -> NominalDiffTime
   -> m (ServerStCmd MarloweTxCommand Void CreateError (ContractCreated v) m ())
 execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts solveConstraints protocolParameters loadWalletContext loadHelpersContext networkId mStakeCredential version addresses threadRole roleTokens metadata optMinAda accounts contract analysisTimeout = execExceptT do
-  eon <- referenceInputsSupportedInEra (CreateEraUnsupported $ AnyCardanoEra era) era
+  eon <- toBabbageEraOnwards (CreateEraUnsupported $ AnyCardanoEra era) era
   let adjustMinUtxo = mkAdjustMinimumUtxo eon protocolParameters version
   let threadRole' = fromMaybe "" threadRole
   walletContext <- lift $ loadWalletContext addresses
@@ -468,9 +493,9 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
         , safetyErrors
         }
 
-referenceInputsSupportedInEra
+toBabbageEraOnwards
   :: (Monad m) => e -> CardanoEra era -> ExceptT e m (BabbageEraOnwards era)
-referenceInputsSupportedInEra e = inEonForEra (throwE e) pure
+toBabbageEraOnwards e = inEonForEra (throwE e) pure
 
 singletonContinuations :: Contract.ContractWithAdjacency -> Continuations 'V1
 singletonContinuations Contract.ContractWithAdjacency{..} = Map.singleton contractHash contract
@@ -538,7 +563,7 @@ execApplyInputs
   invalidBefore'
   invalidHereafter'
   inputs = execExceptT do
-    eon <- referenceInputsSupportedInEra (ApplyInputsEraUnsupported $ AnyCardanoEra era) era
+    eon <- toBabbageEraOnwards (ApplyInputsEraUnsupported $ AnyCardanoEra era) era
     marloweContext@MarloweContext{..} <-
       withExceptT ApplyInputsLoadMarloweContextFailed $
         ExceptT $
@@ -607,7 +632,7 @@ execWithdraw
   -> m (ServerStCmd MarloweTxCommand Void WithdrawError (WithdrawTx v) m ())
 execWithdraw era protocolParameters solveConstraints loadWalletContext loadPayoutContext loadHelpersContext version addresses payouts = execExceptT $ case version of
   MarloweV1 -> do
-    eon <- referenceInputsSupportedInEra (WithdrawEraUnsupported $ AnyCardanoEra era) era
+    eon <- toBabbageEraOnwards (WithdrawEraUnsupported $ AnyCardanoEra era) era
     payoutContext <- lift $ loadPayoutContext version payouts
     (inputs, constraints) <- buildWithdrawConstraints payoutContext version payouts
     walletContext <- lift $ loadWalletContext addresses
@@ -680,3 +705,25 @@ execExceptT
   => ExceptT e m a
   -> m (ServerStCmd cmd status e a n ())
 execExceptT = fmap (either (flip SendMsgFail ()) (flip SendMsgSucceed ())) . runExceptT
+
+execBurn
+  :: (MonadUnliftIO m, IsCardanoEra era)
+  => SystemStart
+  -> EraHistory
+  -> Connector (QueryClient ChainSyncQuery) m
+  -> Connector MarloweQueryClient m
+  -> CardanoEra era
+  -> LedgerProtocolParameters era
+  -> LoadWalletContext m
+  -> WalletAddresses
+  -> RoleTokenFilter
+  -> m (ServerStCmd MarloweTxCommand Void BurnError BurnTx m ())
+execBurn start history chainQueryConnector marloweQueryConnector era protocol loadWalletContext addresses tokenFilter = execExceptT do
+  eon <- toBabbageEraOnwards (BurnEraUnsupported $ AnyCardanoEra era) era
+  let tokenFilter' = optimizeRoleTokenFilter tokenFilter
+  when (tokenFilter' == RoleTokenFilterNone) $ throwE BurnNoTokens
+  walletContext <- lift $ loadWalletContext addresses
+  currencies <-
+    lift $ runConnector marloweQueryConnector $ getRoleCurrencies $ roleTokenFilterToRoleCurrencyFilter tokenFilter'
+  burnTx <- burnRoleTokens start history chainQueryConnector eon protocol walletContext currencies tokenFilter'
+  pure $ BurnTx eon burnTx

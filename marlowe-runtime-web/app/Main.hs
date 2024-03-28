@@ -18,18 +18,67 @@ import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
 import Data.Version (showVersion)
 import Language.Marlowe.Runtime.Client (connectToMarloweRuntimeTraced)
-import Language.Marlowe.Runtime.Web.Server
-import Network.HTTP.Types
+import Language.Marlowe.Runtime.Web.RuntimeServer (
+  ServeRequest (..),
+  ServeRequestField (ReqField, ResField),
+  ServerDependencies (
+    ServerDependencies,
+    accessControlAllowOriginAll,
+    connector,
+    openAPIEnabled,
+    runApplication
+  ),
+  ServerSelector (..),
+  runtimeServer,
+ )
+import Network.HTTP.Types (
+  HeaderName,
+  HttpVersion (HttpVersion, httpMajor, httpMinor),
+  Status (statusCode),
+  hContentLength,
+  hUserAgent,
+ )
 import Network.Protocol.Driver.Trace (TcpClientSelector, renderTcpClientSelectorOTel, sockAddrToAttributes)
 import Network.Socket (PortNumber)
-import Network.Wai
+import Network.Wai (
+  Request (
+    httpVersion,
+    rawPathInfo,
+    remoteHost,
+    requestBodyLength,
+    requestHeaders,
+    requestMethod
+  ),
+  RequestBodyLength (ChunkedBody, KnownLength),
+  responseHeaders,
+  responseStatus,
+ )
 import Network.Wai.Handler.Warp (
   run,
  )
 import Observe.Event (injectSelector)
 import Observe.Event.Render.OpenTelemetry (OTelRendered (..), RenderSelectorOTel)
-import OpenTelemetry.Trace
-import Options
+import OpenTelemetry.Trace (
+  InstrumentationLibrary (
+    InstrumentationLibrary,
+    libraryName,
+    libraryVersion
+  ),
+  PrimitiveAttribute (IntAttribute, TextAttribute),
+  SpanKind (Server),
+  ToAttribute (toAttribute),
+ )
+import Options (
+  Options (
+    Options,
+    accessControlAllowOriginAll,
+    openAPIEnabled,
+    port,
+    runtimeHost,
+    runtimePort
+  ),
+  getOptions,
+ )
 import Paths_marlowe_runtime_web (version)
 import System.IO (BufferMode (..), hSetBuffering, stderr, stdout)
 import Text.Read (readMaybe)
@@ -50,7 +99,7 @@ main = do
           , runApplication = run $ fromIntegral port
           , connector
           }
-    runComponent_ server dependencies
+    runComponent_ runtimeServer dependencies
   where
     instrumentationLibrary =
       InstrumentationLibrary

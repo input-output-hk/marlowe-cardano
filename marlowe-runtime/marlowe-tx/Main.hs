@@ -14,6 +14,7 @@ import Control.Concurrent.Component.Run (AppM, runAppMTraced)
 import qualified Data.Text as T
 import Data.Time (NominalDiffTime)
 import Data.Version (showVersion)
+import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient)
 import Language.Marlowe.Runtime.ChainSync.Api (
   BlockNo (..),
   ChainSyncQuery (..),
@@ -114,6 +115,9 @@ run Options{..} = flip runComponent_ () proc _ -> do
       contractQueryConnector :: Connector (QueryClient ContractRequest) (AppM Span RootSelector)
       contractQueryConnector = tcpClientTraced (injectSelector ContractQueryClient) contractHost contractQueryPort queryClientPeer
 
+      marloweQueryConnector :: Connector MarloweQueryClient (AppM Span RootSelector)
+      marloweQueryConnector = tcpClientTraced (injectSelector MarloweQueryClient) syncHost marloweQueryPort queryClientPeer
+
   MarloweTx{..} <-
     transaction
       -<
@@ -170,6 +174,8 @@ data Options = Options
   , chainSeekHost :: HostName
   , contractQueryPort :: PortNumber
   , contractHost :: HostName
+  , marloweQueryPort :: PortNumber
+  , syncHost :: HostName
   , port :: PortNumber
   , host :: HostName
   , submitConfirmationBlocks :: BlockNo
@@ -189,6 +195,8 @@ getOptions = execParser $ info (helper <*> versionOption <*> parser) infoMod
         <*> chainSeekHostParser
         <*> contractQueryPortParser
         <*> contractHostParser
+        <*> marloweQueryPortParser
+        <*> syncHostParser
         <*> portParser
         <*> hostParser
         <*> submitConfirmationBlocksParser
@@ -241,6 +249,16 @@ getOptions = execParser $ info (helper <*> versionOption <*> parser) infoMod
           , showDefault
           ]
 
+    marloweQueryPortParser =
+      option auto $
+        mconcat
+          [ long "marlowe-query-port"
+          , value 3726
+          , metavar "PORT_NUMBER"
+          , help "The port number of the marlowe query server."
+          , showDefault
+          ]
+
     portParser =
       option auto $
         mconcat
@@ -268,6 +286,16 @@ getOptions = execParser $ info (helper <*> versionOption <*> parser) infoMod
           , value "127.0.0.1"
           , metavar "HOST_NAME"
           , help "The host name of the contract server."
+          , showDefault
+          ]
+
+    syncHostParser =
+      strOption $
+        mconcat
+          [ long "sync-host"
+          , value "127.0.0.1"
+          , metavar "HOST_NAME"
+          , help "The host name of the marlowe sync server."
           , showDefault
           ]
 

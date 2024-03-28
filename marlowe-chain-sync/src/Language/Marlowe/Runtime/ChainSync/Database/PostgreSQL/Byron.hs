@@ -57,6 +57,7 @@ byronTxRow slotNo blockHash txId UnsafeTx{..} =
   , NE.toList $ byronTxInRow slotNo txId <$> txInputs
   , zipWith (byronTxOutRow slotNo txId) [0 ..] $ NE.toList txOutputs
   , []
+  , []
   )
 
 byronTxInRow :: Int64 -> Bytea -> TxIn -> TxInRow

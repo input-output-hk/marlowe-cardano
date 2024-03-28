@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 
-module Language.Marlowe.Runtime.Integration.Withdraw where
+module Language.Marlowe.Runtime.Integration.Withdraw (spec) where
 
 import Cardano.Api (BabbageEraOnwards (..), getTxId)
 import Control.Arrow ((&&&))
@@ -28,7 +28,23 @@ import Language.Marlowe.Runtime.Integration.Common (
   getGenesisWallet,
   runIntegrationTest,
  )
-import Language.Marlowe.Runtime.Integration.StandardContract
+import Language.Marlowe.Runtime.Integration.StandardContract (
+  StandardContractChoiceMade (sendNotify),
+  StandardContractClosed (
+    StandardContractClosed,
+    returnDeposited,
+    withdrawPartyAFunds
+  ),
+  StandardContractFundsDeposited (chooseGimmeTheMoney),
+  StandardContractInit (
+    StandardContractInit,
+    contractCreated,
+    createdBlock,
+    makeInitialDeposit
+  ),
+  StandardContractNotified (makeReturnDeposit),
+  createStandardContract,
+ )
 import Language.Marlowe.Runtime.Transaction.Api (
   ConstraintError (..),
   ContractCreated (..),
@@ -40,7 +56,14 @@ import Language.Marlowe.Runtime.Transaction.Api (
   WithdrawTx (WithdrawTx),
   WithdrawTxInEra (..),
  )
-import Test.Hspec
+import Test.Hspec (
+  ActionWith,
+  Spec,
+  aroundAll,
+  describe,
+  it,
+  shouldBe,
+ )
 import Test.Integration.Marlowe.Local (MarloweRuntime, withLocalMarloweRuntime)
 
 spec :: Spec

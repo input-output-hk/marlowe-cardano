@@ -4,15 +4,42 @@ import Control.Monad.IO.Class (MonadIO (liftIO))
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Data.Time (getCurrentTime, secondsToNominalDiffTime)
-import Language.Marlowe.Runtime.Integration.Common
+import Language.Marlowe.Runtime.Integration.Common (
+  Wallet (Wallet, addresses, signingKeys),
+  expectJust,
+  getGenesisWallet,
+  runIntegrationTest,
+  runWebClient,
+ )
 import Language.Marlowe.Runtime.Integration.StandardContract (standardContract)
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses (..))
-import Language.Marlowe.Runtime.Web (ContractOrSourceId (..), RoleTokenConfig (..), RoleTokenRecipient (ClosedRole))
-import qualified Language.Marlowe.Runtime.Web as Web
+import Language.Marlowe.Runtime.Web.Adapter.Server.DTO (ToDTO (toDTO))
 import Language.Marlowe.Runtime.Web.Client (postContract, putContract)
 import Language.Marlowe.Runtime.Web.Common (signShelleyTransaction')
-import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO (toDTO))
+import qualified Language.Marlowe.Runtime.Web.Core.MarloweVersion as Web
+
+import Language.Marlowe.Runtime.Web.Contract.API (
+  ContractOrSourceId (ContractOrSourceId),
+  PostContractsRequest (
+    accounts,
+    contract,
+    metadata,
+    minUTxODeposit,
+    roles,
+    tags,
+    threadTokenName,
+    version
+  ),
+ )
+import qualified Language.Marlowe.Runtime.Web.Contract.API as Web
+import Language.Marlowe.Runtime.Web.Core.Roles (
+  RoleTokenConfig (RoleTokenConfig),
+  RoleTokenRecipient (ClosedRole),
+ )
+import qualified Language.Marlowe.Runtime.Web.Core.Roles as Web
+
+import qualified Language.Marlowe.Runtime.Web.Tx.API as Web
 import Test.Hspec (Spec, describe, it)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 

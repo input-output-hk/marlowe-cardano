@@ -6,25 +6,47 @@
 module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Babbage where
 
 import Cardano.Binary (serialize')
-import Cardano.Ledger.Alonzo.Tx (AlonzoTx (..), txdats')
+import Cardano.Ledger.Alonzo.Tx (AlonzoTx (..))
 import Cardano.Ledger.Alonzo.TxAuxData (AlonzoTxAuxData (..))
-import Cardano.Ledger.Alonzo.TxWits (TxDats, unTxDats)
-import Cardano.Ledger.Babbage (BabbageEra, BabbageTxOut)
+import Cardano.Ledger.Alonzo.TxWits (AlonzoTxWits (..), TxDats, unTxDats)
+import Cardano.Ledger.Babbage (AlonzoScript, BabbageEra, BabbageTxOut)
+import Cardano.Ledger.Babbage.Core (EraScript (..))
 import Cardano.Ledger.Babbage.Tx (IsValid (..))
 import Cardano.Ledger.Babbage.TxBody (BabbageTxBody (..), BabbageTxOut (..))
 import Cardano.Ledger.Binary (Sized (..), shelleyProtVer)
 import qualified Cardano.Ledger.Binary as L
-import Cardano.Ledger.Crypto
+import Cardano.Ledger.Crypto (StandardCrypto)
 import Cardano.Ledger.Plutus.Data (Datum (..), binaryDataToData, hashBinaryData)
-import Cardano.Ledger.Shelley.API (ShelleyTxOut (..), StrictMaybe (..))
+import Cardano.Ledger.Shelley.API (ScriptHash (..), ShelleyTxOut (..), StrictMaybe (..))
+import Control.Arrow (Arrow (..))
 import Data.ByteString (ByteString)
 import Data.Foldable (Foldable (..))
-import Data.Int
+import Data.Int (Int16, Int64)
 import qualified Data.Map as Map
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Alonzo (alonzoTxInRows, alonzoTxRow)
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Mary (maryAssetMintRows, maryTxOutRow)
-import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Shelley (originalBytea)
-import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types
+import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Shelley (hashToBytea, originalBytea, serializeBytea)
+import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types (
+  Bytea (..),
+  ScriptRow (..),
+  SqlBool (SqlBool),
+  TxOutRow (
+    TxOutRow,
+    address,
+    addressHeader,
+    addressPaymentCredential,
+    addressStakeAddressReference,
+    datumBytes,
+    datumHash,
+    isCollateral,
+    lovelace,
+    slotNo,
+    txId,
+    txIx
+  ),
+  TxOutRowGroup,
+  TxRowGroup,
+ )
 
 babbageTxToRows :: Int64 -> Bytea -> Bytea -> AlonzoTx (BabbageEra StandardCrypto) -> TxRowGroup
 babbageTxToRows slotNo blockHash txId tx@AlonzoTx{..} =
@@ -32,10 +54,31 @@ babbageTxToRows slotNo blockHash txId tx@AlonzoTx{..} =
   , alonzoTxInRows slotNo txId isValid tx (btbInputs body) (btbCollateral body)
   , babbageTxOutRows slotNo txId isValid (txdats' wits) (btbCollateralReturn body) $ toList $ btbOutputs body
   , maryAssetMintRows slotNo txId $ btbMint body
+  , babbageTxScripts wits $ toList $ btbOutputs body
   )
 
 encodeBabbageMetadata :: AlonzoTxAuxData (BabbageEra StandardCrypto) -> ByteString
 encodeBabbageMetadata (AlonzoTxAuxData md _ _) = L.serialize' shelleyProtVer md
+
+babbageTxScripts
+  :: AlonzoTxWits (BabbageEra StandardCrypto)
+  -> [Sized (BabbageTxOut (BabbageEra StandardCrypto))]
+  -> [ScriptRow]
+babbageTxScripts AlonzoTxWits{..} outputs =
+  uncurry babbageScriptRow <$> (Map.toList txscripts <> foldMap babbageReferenceScript outputs)
+
+babbageReferenceScript
+  :: Sized (BabbageTxOut (BabbageEra StandardCrypto))
+  -> [(Cardano.Ledger.Shelley.API.ScriptHash StandardCrypto, AlonzoScript (BabbageEra StandardCrypto))]
+babbageReferenceScript (Sized (BabbageTxOut _ _ _ ref) _) = foldMap (pure . (hashScript &&& id)) ref
+
+babbageScriptRow
+  :: Cardano.Ledger.Shelley.API.ScriptHash StandardCrypto -> AlonzoScript (BabbageEra StandardCrypto) -> ScriptRow
+babbageScriptRow (Cardano.Ledger.Shelley.API.ScriptHash hash) script =
+  ScriptRow
+    { scriptHash = hashToBytea hash
+    , scriptBytes = serializeBytea shelleyProtVer script
+    }
 
 babbageTxOutRows
   :: Int64

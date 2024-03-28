@@ -33,6 +33,7 @@ data ChainSyncQueryServerDependencies m = ChainSyncQueryServerDependencies
       -> QueryInMode result
       -> m (Either AcquiringFailure result)
   , getUTxOs :: Database.GetUTxOs m
+  , getScripts :: Database.GetScripts m
   , getTip :: Database.GetTip m
   , nodeTip :: STM ChainPoint
   }
@@ -62,6 +63,7 @@ chainSyncQueryServer ChainSyncQueryServerDependencies{..} = ServerSource $ pure 
               GetNodeTip -> atomically nodeTip
               GetTip -> runGetTip getTip
               GetEra -> either (fail . show) pure =<< queryLocalNodeState Nothing QueryCurrentEra
+              GetScripts era scripts -> Database.runGetScripts getScripts era scripts
         }
 
     queryGenesisParameters :: (forall era. GenesisParameters era -> a) -> m a

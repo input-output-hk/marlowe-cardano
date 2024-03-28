@@ -3,7 +3,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs #-}
 
-module Language.Marlowe.Runtime.Integration.ApplyInputs where
+module Language.Marlowe.Runtime.Integration.ApplyInputs (spec, utcTimeToPOSIXTime) where
 
 import Cardano.Api (
   BabbageEraOnwards (BabbageEraOnwardsBabbage),
@@ -25,7 +25,19 @@ import Data.Time (UTCTime, addUTCTime, getCurrentTime, secondsToNominalDiffTime)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Language.Marlowe.Core.V1.Semantics (MarloweData (..))
 import qualified Language.Marlowe.Core.V1.Semantics as Semantics
-import Language.Marlowe.Core.V1.Semantics.Types hiding (TokenName)
+import Language.Marlowe.Core.V1.Semantics.Types (
+  Action (Choice, Deposit, Notify),
+  Bound (Bound),
+  Case (Case, MerkleizedCase),
+  ChoiceId (ChoiceId),
+  Contract (Close, If, Pay, When),
+  Input (MerkleizedInput, NormalInput),
+  InputContent (IChoice, IDeposit, INotify),
+  Observation (FalseObs, TrueObs),
+  Party (Address, Role),
+  Payee (Account, Party),
+  Value (Constant),
+ )
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Types
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as Address
 import Language.Marlowe.Extended.V1 (ada)
@@ -36,7 +48,21 @@ import Language.Marlowe.Runtime.Cardano.Api (
  )
 import Language.Marlowe.Runtime.ChainSync.Api (AssetId (AssetId), Assets (Assets), TokenName, TxOutRef (..))
 import Language.Marlowe.Runtime.Client (applyInputs, createContract)
-import Language.Marlowe.Runtime.Core.Api hiding (Contract)
+import Language.Marlowe.Runtime.Core.Api (
+  ContractId,
+  MarloweVersion (MarloweV1),
+  MarloweVersionTag (V1),
+  Payout (Payout),
+  TransactionOutput (payouts, scriptOutput),
+  TransactionScriptOutput (
+    TransactionScriptOutput,
+    address,
+    assets,
+    datum,
+    utxo
+  ),
+  emptyMarloweTransactionMetadata,
+ )
 import Language.Marlowe.Runtime.Integration.Common (
   Integration,
   Wallet (..),

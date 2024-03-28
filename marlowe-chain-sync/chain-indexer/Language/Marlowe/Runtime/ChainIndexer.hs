@@ -152,6 +152,16 @@ renderDatabaseSelectorOTel dbName dbUser host port = \case
   CopyTxIns -> renderCopy "txIn"
   CopyAssetOuts -> renderCopy "assetOut"
   CopyAssetMints -> renderCopy "assetMint"
+  CopyScripts ->
+    OTelRendered
+      { eventName = "INSERT INTO chain.script"
+      , eventKind = Internal
+      , renderField = \rows ->
+          standardAttributes
+            <> [ ("db.statement", "INSERT INTO chain.script VALUES (?,?,?) ON CONFLICT (id) DO NOTHING")
+               , ("db.rowsAffected", toAttribute rows)
+               ]
+      }
   where
     standardAttributes =
       catMaybes

@@ -10,6 +10,7 @@ module Language.Marlowe.Runtime.Sync.Database where
 
 import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
 import Data.Aeson (ToJSON)
+import Data.Set (Set)
 import Data.Word (Word8)
 import GHC.Generics (Generic)
 import Language.Marlowe.Protocol.Query.Types (
@@ -18,6 +19,8 @@ import Language.Marlowe.Protocol.Query.Types (
   PayoutFilter,
   PayoutHeader,
   Range,
+  RoleCurrency,
+  RoleCurrencyFilter,
   SomeContractState,
   SomePayoutState,
   SomeTransaction,
@@ -49,6 +52,7 @@ data DatabaseSelector f where
   GetWithdrawals :: DatabaseSelector (QueryField GetWithdrawalsArguments (Maybe (Page TxId Withdrawal)))
   GetPayouts :: DatabaseSelector (QueryField GetPayoutsArguments (Maybe (Page TxOutRef PayoutHeader)))
   GetPayout :: DatabaseSelector (QueryField TxOutRef (Maybe SomePayoutState))
+  GetRoleCurrencies :: DatabaseSelector (QueryField RoleCurrencyFilter (Set RoleCurrency))
 
 data GetPayoutsArguments = GetPayoutsArguments
   { filter :: PayoutFilter
@@ -187,6 +191,11 @@ logDatabaseQueries DatabaseQueries{..} =
         result <- getPayout payoutId
         addField ev $ Result result
         pure result
+    , getRoleCurrencies = \cFilter -> withEvent GetRoleCurrencies \ev -> do
+        addField ev $ Arguments cFilter
+        result <- getRoleCurrencies cFilter
+        addField ev $ Result result
+        pure result
     }
 
 hoistDatabaseQueries :: (forall x. m x -> n x) -> DatabaseQueries m -> DatabaseQueries n
@@ -208,6 +217,7 @@ hoistDatabaseQueries f DatabaseQueries{..} =
     , getWithdrawals = fmap f . getWithdrawals
     , getPayouts = fmap f . getPayouts
     , getPayout = f . getPayout
+    , getRoleCurrencies = f . getRoleCurrencies
     }
 
 data DatabaseQueries m = DatabaseQueries
@@ -227,6 +237,7 @@ data DatabaseQueries m = DatabaseQueries
   , getWithdrawals :: WithdrawalFilter -> Range TxId -> m (Maybe (Page TxId Withdrawal))
   , getPayouts :: PayoutFilter -> Range TxOutRef -> m (Maybe (Page TxOutRef PayoutHeader))
   , getPayout :: TxOutRef -> m (Maybe SomePayoutState)
+  , getRoleCurrencies :: RoleCurrencyFilter -> m (Set RoleCurrency)
   }
 
 data Next a

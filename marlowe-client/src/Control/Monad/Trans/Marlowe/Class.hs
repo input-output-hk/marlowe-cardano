@@ -48,11 +48,14 @@ import Language.Marlowe.Runtime.Core.Api (
 import Language.Marlowe.Runtime.Transaction.Api (
   Account,
   ApplyInputsError,
+  BurnError,
+  BurnTx,
   ContractCreated,
   CreateError,
   InputsApplied,
   JobId (..),
   MarloweTxCommand (..),
+  RoleTokenFilter,
   RoleTokensConfig,
   SubmitError,
   SubmitStatus,
@@ -306,6 +309,17 @@ withdraw
   -> m (Either WithdrawError (WithdrawTx v))
 withdraw version wallet payouts =
   runMarloweTxClient $ liftCommand $ Withdraw version wallet payouts
+
+-- | Withdraw funds that have been paid out to a role in a contract.
+burn
+  :: (MonadMarlowe m)
+  => WalletAddresses
+  -- ^ The wallet addresses to use when constructing the transaction.
+  -> RoleTokenFilter
+  -- ^ A filter that identifies which role tokens to burn.
+  -> m (Either BurnError BurnTx)
+burn wallet tFilter =
+  runMarloweTxClient $ liftCommand $ Burn wallet tFilter
 
 -- | Submit a signed transaction via the Marlowe Runtime. Waits for completion
 -- with exponential back-off in the polling.

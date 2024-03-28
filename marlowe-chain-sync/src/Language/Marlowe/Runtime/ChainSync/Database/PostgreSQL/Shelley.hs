@@ -6,18 +6,20 @@ module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Shelley where
 
 import qualified Cardano.Crypto.Hash as Hash
 import Cardano.Ledger.Address (BootstrapAddress (..), putPtr, serialiseAddr)
-import Cardano.Ledger.BaseTypes (TxIx (..), shelleyProtVer)
-import Cardano.Ledger.Binary (serialize')
+import Cardano.Ledger.BaseTypes (TxIx (..), Version, shelleyProtVer)
+import Cardano.Ledger.Binary (EncCBOR, serialize')
 import Cardano.Ledger.Crypto
 import Cardano.Ledger.SafeHash (SafeToHash (..))
 import Cardano.Ledger.Shelley
 import Cardano.Ledger.Shelley.API
+import Cardano.Ledger.Shelley.TxWits (ShelleyTxWits (..))
 import Data.Binary.Put (runPut)
 import Data.Bits ((.|.))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.Foldable (Foldable (..))
 import Data.Int
+import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Byron (AddressFields (..), byronAddressFields)
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types
@@ -43,7 +45,21 @@ shelleyTxRow slotNo blockHash txId ShelleyTx{..} =
   , shelleyTxInRow slotNo txId <$> Set.toAscList (stbInputs body)
   , zipWith (shelleyTxOutRow slotNo txId) [0 ..] $ toList $ stbOutputs body
   , []
+  , shelleyTxScripts wits
   )
+
+shelleyTxScripts :: ShelleyTxWits (ShelleyEra StandardCrypto) -> [ScriptRow]
+shelleyTxScripts ShelleyTxWits{..} = uncurry shelleyScriptRow <$> Map.toList scriptWits
+
+shelleyScriptRow :: ScriptHash StandardCrypto -> MultiSig (ShelleyEra StandardCrypto) -> ScriptRow
+shelleyScriptRow (ScriptHash hash) script =
+  ScriptRow
+    { scriptHash = hashToBytea hash
+    , scriptBytes = serializeBytea shelleyProtVer script
+    }
+
+serializeBytea :: (EncCBOR a) => Version -> a -> Bytea
+serializeBytea v = Bytea . serialize' v
 
 mapStrictMaybe :: (a -> b) -> StrictMaybe a -> Maybe b
 mapStrictMaybe f = \case

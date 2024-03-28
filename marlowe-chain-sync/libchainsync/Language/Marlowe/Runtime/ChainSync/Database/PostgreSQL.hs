@@ -31,8 +31,11 @@ module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL (
   databaseQueries,
 ) where
 
+import Cardano.Api (BabbageEraOnwards (..), ShelleyBasedEra (..))
+import Cardano.Api.Shelley (fromShelleyBasedScript)
 import qualified Cardano.Api.Shelley as C
 import Cardano.Binary (unsafeDeserialize')
+import Cardano.Ledger.Binary (DecCBOR (decCBOR), decodeFullAnnotator)
 import Control.Applicative ((<|>))
 import Control.Arrow (Arrow (..), (***))
 import Control.Foldl (Fold (Fold))
@@ -44,6 +47,7 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as LBS
 import Data.Foldable (fold)
 import Data.Functor ((<&>))
 import Data.Int (Int16, Int64)
@@ -81,6 +85,7 @@ import Language.Marlowe.Runtime.ChainSync.Database (
   MoveResult (..),
   Scan (..),
   hoistCollect,
+  hoistGetScripts,
   hoistGetTip,
   hoistGetUTxOs,
   hoistMoveClient,
@@ -106,6 +111,7 @@ databaseQueries
 databaseQueries pool networkId =
   DatabaseQueries
     (hoistGetUTxOs (transact "getUTxOs") getUTxOs)
+    (hoistGetScripts (transact "getScripts") getScripts)
     (hoistGetTip (transact "getTip") getTip)
     (hoistMoveClient (transact "moveClient") $ moveClient networkId)
     (Scan $ fmap (pure . hoistCollect (transact "collect")) . mkCollect networkId)
@@ -122,6 +128,44 @@ databaseQueries pool networkId =
             _ -> pure ()
           throwIO ex
         Right a -> pure a
+
+-- GetScripts
+
+getScripts :: Database.GetScripts HT.Transaction
+getScripts = Database.GetScripts go
+  where
+    go :: forall era. C.BabbageEraOnwards era -> Set ScriptHash -> HT.Transaction (Map ScriptHash (C.ScriptInEra era))
+    go era scripts
+      | Set.null scripts = pure mempty
+      | otherwise =
+          Map.fromDistinctAscList . fmap mapRow . V.toList
+            <$> HT.statement
+              (params scripts)
+              [vectorStatement|
+                  SELECT id :: bytea, bytes :: bytea
+                  FROM chain.script
+                  WHERE id = ANY($1 :: bytea[])
+                  ORDER BY id
+                |]
+      where
+        params = V.fromList . fmap unScriptHash . Set.toList
+
+        mapRow :: (ByteString, ByteString) -> (ScriptHash, C.ScriptInEra era)
+        mapRow = case era of
+          BabbageEraOnwardsBabbage -> \(scriptHash, scriptBytes) ->
+            ( ScriptHash scriptHash
+            , fromShelleyBasedScript ShelleyBasedEraBabbage $
+                either (error . show) id $
+                  decodeFullAnnotator maxBound "Script" decCBOR $
+                    LBS.fromStrict scriptBytes
+            )
+          BabbageEraOnwardsConway -> \(scriptHash, scriptBytes) ->
+            ( ScriptHash scriptHash
+            , fromShelleyBasedScript ShelleyBasedEraConway $
+                either (error . show) id $
+                  decodeFullAnnotator maxBound "Script" decCBOR $
+                    LBS.fromStrict scriptBytes
+            )
 
 -- Scan
 

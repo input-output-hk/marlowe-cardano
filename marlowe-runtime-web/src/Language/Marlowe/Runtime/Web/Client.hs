@@ -59,23 +59,70 @@ import Data.Proxy (Proxy (..))
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Text (Text)
-import Data.Time (UTCTime)
 import Data.Version (Version)
 import GHC.TypeLits (KnownSymbol, symbolVal)
-import Language.Marlowe.Core.V1.Next
 import Language.Marlowe.Core.V1.Semantics.Types (Contract)
 import Language.Marlowe.Object.Types (Label, ObjectBundle)
-import Language.Marlowe.Runtime.Web (GetPayoutsResponse)
-import Language.Marlowe.Runtime.Web.API (
-  API,
-  GetContractsResponse,
-  GetTransactionsResponse,
-  GetWithdrawalsResponse,
-  ListObject (..),
-  api,
-  retractLink,
+
+import Language.Marlowe.Runtime.Web.API (RuntimeAPI, runtimeApi)
+import Language.Marlowe.Runtime.Web.Adapter.CommaList (
+  CommaList (CommaList),
  )
-import Language.Marlowe.Runtime.Web.Types
+import Language.Marlowe.Runtime.Web.Adapter.Links (retractLink)
+import Language.Marlowe.Runtime.Web.Adapter.Servant (ListObject (..))
+import Language.Marlowe.Runtime.Web.Contract.API (
+  ContractHeader,
+  ContractSourceId,
+  ContractState,
+  GetContractsResponse,
+  PostContractSourceResponse,
+  PostContractsRequest,
+ )
+import Language.Marlowe.Runtime.Web.Contract.Transaction.API (
+  GetTransactionsResponse,
+ )
+import Language.Marlowe.Runtime.Web.Core.Address (
+  Address,
+  StakeAddress,
+ )
+import Language.Marlowe.Runtime.Web.Core.Asset (
+  AssetId,
+  PolicyId,
+ )
+
+import Language.Marlowe.Runtime.Web.Contract.Next.Client (getContractNext)
+import Language.Marlowe.Runtime.Web.Core.NetworkId (NetworkId)
+import Language.Marlowe.Runtime.Web.Core.Tip (ChainTip)
+import Language.Marlowe.Runtime.Web.Core.Tx (
+  TextEnvelope,
+  TxId,
+  TxOutRef,
+ )
+import Language.Marlowe.Runtime.Web.Payout.API (
+  GetPayoutsResponse,
+  PayoutHeader,
+  PayoutState,
+  PayoutStatus,
+ )
+import Language.Marlowe.Runtime.Web.Status (
+  RuntimeStatus (RuntimeStatus),
+ )
+import Language.Marlowe.Runtime.Web.Tx.API (
+  ApplyInputsTxEnvelope,
+  CardanoTx,
+  CardanoTxBody,
+  CreateTxEnvelope,
+  Tx,
+  TxHeader,
+  WithdrawTxEnvelope,
+ )
+import Language.Marlowe.Runtime.Web.Withdrawal.API (
+  GetWithdrawalsResponse,
+  PostTransactionsRequest,
+  PostWithdrawalsRequest,
+  Withdrawal,
+  WithdrawalHeader,
+ )
 import Pipes (Producer)
 import Servant (HasResponseHeader, ResponseHeader (..), getResponse, lookupResponseHeader, type (:<|>) ((:<|>)))
 import Servant.API (Headers)
@@ -85,8 +132,10 @@ import qualified Servant.Client.Streaming as ServantStreaming
 import Servant.Pagination (ExtractRange (extractRange), HasPagination (..), PutRange (..), Range, Ranges)
 import Servant.Pipes ()
 
-client :: Client ClientM API
-client = ServantStreaming.client api
+import Language.Marlowe.Runtime.Web.Core.Object.Schema ()
+
+client :: Client ClientM RuntimeAPI
+client = ServantStreaming.client runtimeApi
 
 data Page field resource = Page
   { totalCount :: Int
@@ -136,6 +185,7 @@ getContractsStatus roleCurrencies tags partyAddresses partyRoles range = do
       (putRange <$> range)
   totalCount <- reqHeaderValue $ lookupResponseHeader @"Total-Count" response
   nextRanges <- headerValue $ lookupResponseHeader @"Next-Range" response
+
   let ListObject items = getResponse response
   status <- extractStatus response
   pure
@@ -280,18 +330,6 @@ getContractStatus contractId = do
 
 getContract :: TxOutRef -> ClientM ContractState
 getContract = fmap snd . getContractStatus
-
-getContractNextStatus :: TxOutRef -> UTCTime -> UTCTime -> [Party] -> ClientM (RuntimeStatus, Next)
-getContractNextStatus contractId validityStart validityEnd parties = do
-  let contractsClient :<|> _ = client
-  let _ :<|> _ :<|> contractApi :<|> _ = contractsClient
-  let _ :<|> _ :<|> next' :<|> _ = contractApi contractId
-  response <- next' validityStart validityEnd parties
-  status <- extractStatus response
-  pure (status, getResponse response)
-
-getContractNext :: TxOutRef -> UTCTime -> UTCTime -> [Party] -> ClientM Next
-getContractNext = (fmap . fmap . fmap . fmap) snd . getContractNextStatus
 
 putContractStatus :: TxOutRef -> TextEnvelope -> ClientM RuntimeStatus
 putContractStatus contractId tx = do

@@ -25,14 +25,34 @@ import Data.Text (Text)
 import Data.Time (addUTCTime, getCurrentTime, secondsToNominalDiffTime)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.Integration.ApplyInputs (utcTimeToPOSIXTime)
-import Language.Marlowe.Runtime.Integration.Common
+import Language.Marlowe.Runtime.Integration.Common (
+  Wallet (addresses),
+  expectJust,
+  expectRight,
+  getGenesisWallet,
+  runIntegrationTest,
+  runWebClient,
+ )
 import Language.Marlowe.Runtime.Integration.StandardContract (standardContract)
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses (..))
-import Language.Marlowe.Runtime.Web (ContractOrSourceId (..), CreateTxEnvelope (..))
-import qualified Language.Marlowe.Runtime.Web as Web
+import Language.Marlowe.Runtime.Web.Adapter.Server.DTO (FromDTO (..), ToDTO (toDTO))
 import Language.Marlowe.Runtime.Web.Client (postContract)
-import Language.Marlowe.Runtime.Web.Server.DTO (FromDTO (..), ToDTO (toDTO))
+import qualified Language.Marlowe.Runtime.Web.Core.Address as Web
+import qualified Language.Marlowe.Runtime.Web.Core.MarloweVersion as Web
+
+import Language.Marlowe.Runtime.Web.Contract.API (ContractOrSourceId (..))
+import qualified Language.Marlowe.Runtime.Web.Contract.API as Web
+import qualified Language.Marlowe.Runtime.Web.Core.Roles as Web
+
+import Language.Marlowe.Runtime.Web.Tx.API (
+  CreateTxEnvelope (
+    CreateTxEnvelope,
+    contractId,
+    safetyErrors,
+    txEnvelope
+  ),
+ )
 import Network.URI (parseURI)
 import Test.Hspec (Spec, describe, it, shouldBe)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)

@@ -2,6 +2,18 @@ Show: MsgDone Nothing
 Binary: 0000
 Show: MsgRequest Nothing (ReqBin (ReqLeaf GetSecurityParameter) (ReqLeaf GetSecurityParameter))
 Binary: 01000100010001
+Show: MsgRequest Nothing (ReqLeaf (GetScripts BabbageEraOnwardsBabbage (fromList [""])))
+Binary: 0100000a0000000000000000010000000000000000
+Show: MsgRequest Nothing (ReqLeaf (GetScripts BabbageEraOnwardsBabbage (fromList ["61"])))
+Binary: 0100000a000000000000000001000000000000000161
+Show: MsgRequest Nothing (ReqLeaf (GetScripts BabbageEraOnwardsBabbage (fromList [])))
+Binary: 0100000a000000000000000000
+Show: MsgRequest Nothing (ReqLeaf (GetScripts BabbageEraOnwardsConway (fromList [""])))
+Binary: 0100000a0100000000000000010000000000000000
+Show: MsgRequest Nothing (ReqLeaf (GetScripts BabbageEraOnwardsConway (fromList ["61"])))
+Binary: 0100000a010000000000000001000000000000000161
+Show: MsgRequest Nothing (ReqLeaf (GetScripts BabbageEraOnwardsConway (fromList [])))
+Binary: 0100000a010000000000000000
 Show: MsgRequest Nothing (ReqLeaf (GetUTxOs (GetUTxOsAtAddresses (fromList [""]))))
 Binary: 010000060100000000000000010000000000000000
 Show: MsgRequest Nothing (ReqLeaf (GetUTxOs (GetUTxOsAtAddresses (fromList ["61"]))))
@@ -127,6 +139,18 @@ Binary: 000000000000000100000000000000000001000000000000000161000000000000000100
 Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "61", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}, datumHash = Nothing, datum = Nothing})]})
 Binary: 000000000000000100000000000000016100010000000000000000000000000000000100000000000000000000
 Show: MsgRespond (UTxOs {unUTxOs = fromList []})
+Binary: 0000000000000000
+Show: MsgRespond (fromList [("",ScriptInEra PlutusScriptV1InBabbage (PlutusScript PlutusScriptV1 (PlutusScriptSerialised "G\SOH\NUL\NUL\"\"\NUL\DC1")))])
+Binary: 0000000000000001000000000000000000000000000000084701000022220011
+Show: MsgRespond (fromList [("",ScriptInEra PlutusScriptV1InConway (PlutusScript PlutusScriptV1 (PlutusScriptSerialised "G\SOH\NUL\NUL\"\"\NUL\DC1")))])
+Binary: 0000000000000001000000000000000000000000000000084701000022220011
+Show: MsgRespond (fromList [("61",ScriptInEra PlutusScriptV1InBabbage (PlutusScript PlutusScriptV1 (PlutusScriptSerialised "G\SOH\NUL\NUL\"\"\NUL\DC1")))])
+Binary: 000000000000000100000000000000016100000000000000084701000022220011
+Show: MsgRespond (fromList [("61",ScriptInEra PlutusScriptV1InConway (PlutusScript PlutusScriptV1 (PlutusScriptSerialised "G\SOH\NUL\NUL\"\"\NUL\DC1")))])
+Binary: 000000000000000100000000000000016100000000000000084701000022220011
+Show: MsgRespond (fromList [])
+Binary: 0000000000000000
+Show: MsgRespond (fromList [])
 Binary: 0000000000000000
 Show: MsgRespond 1
 Binary: 0000000000000001

@@ -19,19 +19,8 @@ import Language.Marlowe.Runtime.Integration.Common (Wallet (..), expectJust)
 import Language.Marlowe.Runtime.Integration.StandardContract (standardContract)
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses (..))
-import Language.Marlowe.Runtime.Web (
-  ApplyInputsTxEnvelope,
-  BlockHeader,
-  CardanoTxBody,
-  ContractOrSourceId (..),
-  CreateTxEnvelope,
-  PayoutHeader (..),
-  PayoutStatus (..),
-  RoleTokenConfig (..),
-  RoleTokenRecipient (ClosedRole),
-  WithdrawTxEnvelope,
- )
-import qualified Language.Marlowe.Runtime.Web as Web
+
+import Language.Marlowe.Runtime.Web.Adapter.Server.DTO (ToDTO (toDTO))
 import Language.Marlowe.Runtime.Web.Client (Page (..), getPayouts, postContract, postContractSource)
 import Language.Marlowe.Runtime.Web.Common (
   choose,
@@ -42,8 +31,25 @@ import Language.Marlowe.Runtime.Web.Common (
   submitWithdrawal,
   withdraw,
  )
-import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO (toDTO))
-import Language.Marlowe.Runtime.Web.Types (PostContractSourceResponse (..))
+import qualified Language.Marlowe.Runtime.Web.Core.MarloweVersion as Web
+import qualified Language.Marlowe.Runtime.Web.Core.Tx as Web
+import Language.Marlowe.Runtime.Web.Payout.API (PayoutHeader (payoutId), PayoutStatus (..))
+
+import Language.Marlowe.Runtime.Web.Contract.API (ContractOrSourceId (..), PostContractSourceResponse (..))
+import qualified Language.Marlowe.Runtime.Web.Contract.API as Web
+import Language.Marlowe.Runtime.Web.Core.BlockHeader (
+  BlockHeader,
+ )
+import qualified Language.Marlowe.Runtime.Web.Core.Metadata as Web
+import Language.Marlowe.Runtime.Web.Core.Roles (RoleTokenConfig (..), RoleTokenRecipient (..))
+import qualified Language.Marlowe.Runtime.Web.Core.Roles as Web
+import Language.Marlowe.Runtime.Web.Tx.API (
+  ApplyInputsTxEnvelope (transactionId),
+  CardanoTxBody,
+  CreateTxEnvelope (contractId),
+  WithdrawTxEnvelope,
+ )
+import qualified Language.Marlowe.Runtime.Web.Tx.API as Web
 import Pipes (yield)
 import Servant.Client.Streaming (ClientM)
 

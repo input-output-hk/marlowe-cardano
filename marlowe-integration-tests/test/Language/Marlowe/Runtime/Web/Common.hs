@@ -35,10 +35,13 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   Input (NormalInput),
   InputContent (IChoice, IDeposit, INotify),
  )
-import Language.Marlowe.Runtime.Integration.Common hiding (choose, deposit, notify, withdraw)
+import Language.Marlowe.Runtime.Integration.Common (
+  Wallet (..),
+  expectJust,
+ )
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses (..))
-import Language.Marlowe.Runtime.Web (ContractOrSourceId (..))
-import qualified Language.Marlowe.Runtime.Web as Web
+
+import Language.Marlowe.Runtime.Web.Adapter.Server.DTO (ToDTO (toDTO))
 import Language.Marlowe.Runtime.Web.Client (
   getContract,
   getTransaction,
@@ -50,7 +53,14 @@ import Language.Marlowe.Runtime.Web.Client (
   putTransaction,
   putWithdrawal,
  )
-import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO (toDTO))
+import Language.Marlowe.Runtime.Web.Contract.API (ContractOrSourceId (..))
+import qualified Language.Marlowe.Runtime.Web.Contract.API as Web
+import qualified Language.Marlowe.Runtime.Web.Core.Base16 as Web
+import qualified Language.Marlowe.Runtime.Web.Core.BlockHeader as Web
+import qualified Language.Marlowe.Runtime.Web.Core.MarloweVersion as Web
+import qualified Language.Marlowe.Runtime.Web.Core.Tx as Web
+import qualified Language.Marlowe.Runtime.Web.Tx.API as Web
+import qualified Language.Marlowe.Runtime.Web.Withdrawal.API as Web
 import qualified PlutusLedgerApi.V2 as PV2
 import Servant.Client.Streaming (ClientM)
 

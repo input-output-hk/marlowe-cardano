@@ -4,13 +4,13 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Language.Marlowe.Runtime.Integration.Contract where
+module Language.Marlowe.Runtime.Integration.Contract (spec) where
 
 import Cardano.Api (ScriptData (ScriptDataBytes), hashScriptDataBytes, unsafeHashableScriptData)
 import Colog (HasLog (..), LogAction, Message)
 import Control.Applicative (Applicative (..))
 import Control.Arrow (Arrow (..), returnA)
-import Control.Concurrent.Component
+import Control.Concurrent.Component (Component (unComponent))
 import Control.Monad (foldM, unless)
 import Control.Monad.Event.Class (Inject (..), NoopEventT (runNoopEventT))
 import Control.Monad.Reader (ReaderT, ask, runReaderT)
@@ -25,7 +25,16 @@ import qualified Data.Set as Set
 import Language.Marlowe.Core.V1.Merkle (deepMerkleize)
 import Language.Marlowe.Core.V1.Plate (extractAll)
 import Language.Marlowe.Core.V1.Semantics (TransactionInput (..), TransactionOutput (..), computeTransaction)
-import Language.Marlowe.Core.V1.Semantics.Types
+import Language.Marlowe.Core.V1.Semantics.Types (
+  Action (Notify),
+  Case (..),
+  Contract (Close, When),
+  Environment (Environment),
+  Input (NormalInput),
+  Observation (FalseObs),
+  State (..),
+  TimeInterval,
+ )
 import Language.Marlowe.Object.Gen ()
 import Language.Marlowe.Object.Link (LinkedObject (LinkedContract), linkBundle', unlink)
 import Language.Marlowe.Object.Types (
@@ -36,7 +45,18 @@ import Language.Marlowe.Object.Types (
   fromCoreContract,
  )
 import Language.Marlowe.Protocol.BulkSync.Client (serveMarloweBulkSyncClient)
-import Language.Marlowe.Protocol.BulkSync.Server
+import Language.Marlowe.Protocol.BulkSync.Server (
+  MarloweBulkSyncServer (MarloweBulkSyncServer),
+  ServerStIdle (
+    ServerStIdle,
+    recvMsgDone,
+    recvMsgIntersect,
+    recvMsgRequestNext
+  ),
+  ServerStIntersect (SendMsgIntersectNotFound),
+  ServerStNext (SendMsgWait),
+  ServerStPoll (ServerStPoll, recvMsgCancel, recvMsgPoll),
+ )
 import Language.Marlowe.Protocol.Load.Client (MarloweLoadClient, pushContract, serveMarloweLoadClient)
 import Language.Marlowe.Protocol.Transfer.Client (
   MarloweTransferClient (..),
@@ -62,7 +82,12 @@ import qualified Language.Marlowe.Runtime.Contract as Contract
 import Language.Marlowe.Runtime.Contract.Api (ContractWithAdjacency (adjacency), merkleizeInputs)
 import qualified Language.Marlowe.Runtime.Contract.Api as Api
 import Language.Marlowe.Runtime.Contract.Store.File (ContractStoreOptions (..), createContractStore)
-import Network.Protocol.Connection
+import Network.Protocol.Connection (
+  Connector,
+  ServerSource (ServerSource),
+  directConnector,
+  runConnector,
+ )
 import Network.Protocol.Driver.Trace (HasSpanContext (..))
 import Network.Protocol.Peer.Trace (defaultSpanContext)
 import Network.Protocol.Query.Client (QueryClient, serveQueryClient)
@@ -74,7 +99,7 @@ import qualified Pipes.Prelude as P
 import qualified PlutusLedgerApi.V2 as PV2
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryNonnegativeInteger)
 import Spec.Marlowe.Semantics.Path (genContractPath, getContract, getInputs)
-import Test.Hspec
+import Test.Hspec (Spec, describe, it, parallel, shouldBe)
 import Test.Hspec.QuickCheck (prop)
 import Test.Integration.Marlowe (createWorkspace, resolveWorkspacePath)
 import Test.QuickCheck (Gen, chooseInt, counterexample, forAll)

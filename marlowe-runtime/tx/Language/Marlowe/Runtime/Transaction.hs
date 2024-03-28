@@ -23,6 +23,7 @@ import Data.Maybe (catMaybes, mapMaybe, maybeToList)
 import qualified Data.Set as Set
 import Data.String (fromString)
 import Data.Time (NominalDiffTime)
+import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient)
 import Language.Marlowe.Runtime.ChainSync.Api (
   ChainSyncQuery,
   PlutusScript (..),
@@ -75,6 +76,7 @@ data TransactionDependencies m = TransactionDependencies
   , getCurrentScripts :: forall v. MarloweVersion v -> MarloweScripts
   , analysisTimeout :: NominalDiffTime
   , mkRoleTokenMintingPolicy :: MkRoleTokenMintingPolicy m
+  , marloweQueryConnector :: Connector MarloweQueryClient m
   }
 
 data MarloweTx m = MarloweTx
