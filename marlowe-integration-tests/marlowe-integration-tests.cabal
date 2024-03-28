@@ -62,16 +62,16 @@ executable marlowe-integration-tests
   main-is:            Spec.hs
   other-modules:
     Language.Marlowe.Runtime.Integration.ApplyInputs
-    Language.Marlowe.Runtime.Integration.Basic
     Language.Marlowe.Runtime.Integration.Common
     Language.Marlowe.Runtime.Integration.Contract
     Language.Marlowe.Runtime.Integration.Create
+    Language.Marlowe.Runtime.Integration.IntegrationSpec
     Language.Marlowe.Runtime.Integration.Intersections
     Language.Marlowe.Runtime.Integration.MarloweQuery
     Language.Marlowe.Runtime.Integration.OpenRoles
+    Language.Marlowe.Runtime.Integration.Scenario
     Language.Marlowe.Runtime.Integration.StandardContract
     Language.Marlowe.Runtime.Integration.Withdraw
-    Language.Marlowe.Runtime.IntegrationSpec
     Language.Marlowe.Runtime.Web.Common
     Language.Marlowe.Runtime.Web.Contracts.Contract.Get
     Language.Marlowe.Runtime.Web.Contracts.Contract.Next.Get
@@ -83,9 +83,9 @@ executable marlowe-integration-tests
     Language.Marlowe.Runtime.Web.Contracts.Transactions.Transaction.Post
     Language.Marlowe.Runtime.Web.Contracts.Transactions.Transaction.Put
     Language.Marlowe.Runtime.Web.StandardContract
+    Language.Marlowe.Runtime.Web.WebSpec
     Language.Marlowe.Runtime.Web.Withdrawal.Post
     Language.Marlowe.Runtime.Web.Withdrawal.Put
-    Language.Marlowe.Runtime.WebSpec
 
   build-depends:
     , aeson

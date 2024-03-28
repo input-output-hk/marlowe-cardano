@@ -1,4 +1,4 @@
-module Language.Marlowe.Runtime.WebSpec where
+module Language.Marlowe.Runtime.Web.WebSpec where
 
 import qualified Language.Marlowe.Runtime.Web.Contracts.Get as Contracts.Get
 

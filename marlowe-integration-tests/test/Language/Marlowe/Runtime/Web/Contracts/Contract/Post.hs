@@ -45,7 +45,14 @@ import Language.Marlowe.Runtime.Web.Contract.API (ContractOrSourceId (..))
 import qualified Language.Marlowe.Runtime.Web.Contract.API as Web
 import qualified Language.Marlowe.Runtime.Web.Core.Roles as Web
 
-import Language.Marlowe.Runtime.Web.Tx.API
+import Language.Marlowe.Runtime.Web.Tx.API (
+  CreateTxEnvelope (
+    CreateTxEnvelope,
+    contractId,
+    safetyErrors,
+    txEnvelope
+  ),
+ )
 import Network.URI (parseURI)
 import Test.Hspec (Spec, describe, it, shouldBe)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)

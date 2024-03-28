@@ -4,11 +4,19 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Runtime.Integration.Basic where
+module Language.Marlowe.Runtime.Integration.Scenario (
+  spec,
+  basicScenarioWithCreator,
+  contractCreatedToMarloweCreateTransaction,
+  contractCreatedToUnspentContractOutput,
+  inputsAppliedToMarloweApplyInputsTransaction,
+  inputsAppliedToUnspentContractOutput,
+) where
 
 import Cardano.Api (getTxId)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Functor (void)
+import Data.Map (keys)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
 import Data.Time (addUTCTime, getCurrentTime, secondsToNominalDiffTime)
@@ -55,8 +63,49 @@ import Language.Marlowe.Runtime.History.Api (
   UnspentContractOutput (..),
  )
 import Language.Marlowe.Runtime.Integration.ApplyInputs (utcTimeToPOSIXTime)
-import Language.Marlowe.Runtime.Integration.Common
-import Language.Marlowe.Runtime.Integration.StandardContract
+import Language.Marlowe.Runtime.Integration.Common (
+  Integration,
+  Wallet (addresses),
+  bulkSyncPollExpectRollForward,
+  bulkSyncPollExpectWait,
+  bulkSyncRequestNextExpectWait,
+  bulkSyncRequestNextNExpectRollForward,
+  choose,
+  contractCreatedToContractHeader,
+  contractCreatedToCreateStep,
+  expectJust,
+  expectRight,
+  getGenesisWallet,
+  headerSyncExpectWait,
+  headerSyncPollExpectNewHeaders,
+  headerSyncRequestNextExpectWait,
+  inputsAppliedToTransaction,
+  marloweSyncExpectContractFound,
+  marloweSyncPollExpectRollForward,
+  marloweSyncPollExpectWait,
+  marloweSyncRequestNextExpectRollForward,
+  marloweSyncRequestNextExpectWait,
+  runIntegrationTest,
+  submit,
+ )
+import Language.Marlowe.Runtime.Integration.StandardContract (
+  StandardContractChoiceMade (
+    StandardContractChoiceMade,
+    choiceBlock,
+    gimmeTheMoneyChosen,
+    sendNotify
+  ),
+  StandardContractClosed (..),
+  StandardContractFundsDeposited (..),
+  StandardContractInit (..),
+  StandardContractNotified (
+    StandardContractNotified,
+    makeReturnDeposit,
+    notified,
+    notifiedBlock
+  ),
+  createStandardContract,
+ )
 import Language.Marlowe.Runtime.Transaction.Api (
   BurnTx (..),
   BurnTxInEra (..),
@@ -72,7 +121,7 @@ import Test.Hspec (Spec, describe, it, shouldBe)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
 spec :: Spec
-spec = describe "Basic scenarios" do
+spec = describe "Scenarios" do
   basicScenarioWithCreator createStandardContract
   it "Basic e2e scenario - bulk sync" $ withLocalMarloweRuntime $ runIntegrationTest do
     partyAWallet <- getGenesisWallet 0
@@ -131,6 +180,27 @@ spec = describe "Basic scenarios" do
           -- 9. Poll
           -- 10. Expect roll forward
           bulkSyncPollExpectRollForward [expectedBlock] $
+            -- i1. Request next
+            -- 12. Expect wait, poll, expect wait
+
+            -- i1. Request next
+            -- 12. Expect wait, poll, expect wait
+
+            -- i1. Request next
+            -- 12. Expect wait, poll, expect wait
+
+            -- i1. Request next
+            -- 12. Expect wait, poll, expect wait
+
+            -- i1. Request next
+            -- 12. Expect wait, poll, expect wait
+
+            -- i1. Request next
+            -- 12. Expect wait, poll, expect wait
+
+            -- i1. Request next
+            -- 12. Expect wait, poll, expect wait
+
             -- i1. Request next
             -- 12. Expect wait, poll, expect wait
             pure $
@@ -257,7 +327,7 @@ spec = describe "Basic scenarios" do
       applied.inputs `shouldBe` [NormalInput $ IChoice (ChoiceId "Option A" $ Role "") 1]
 
 basicScenarioWithCreator :: (Wallet -> Wallet -> Integration (StandardContractInit 'V1)) -> Spec
-basicScenarioWithCreator createStandardContractArg = do
+basicScenarioWithCreator createStandardContractArg =
   it "Basic e2e scenario" $ withLocalMarloweRuntime $ runIntegrationTest do
     partyAWallet <- getGenesisWallet 0
     partyBWallet <- getGenesisWallet 1
@@ -355,15 +425,12 @@ basicScenarioWithCreator createStandardContractArg = do
                                     pure $ marloweSyncRequestNextExpectWait $ pure $ MarloweSync.SendMsgCancel $ MarloweSync.SendMsgDone closed
 
     StandardContractClosed{..} <- startDiscoveryClient
-    -- 37. Burn role tokens
-    BurnTx era BurnTxInEra{burnedTokens = burnedByToken, txBody} <- burnPartyARoleTokenByToken
-    BurnTx _ BurnTxInEra{burnedTokens = burnedByContractId} <- burnPartyARoleTokenByContractId
-    BurnTx _ BurnTxInEra{burnedTokens = burnedByPolicyId} <- burnPartyARoleTokenByPolicyId
-    BurnTx _ BurnTxInEra{burnedTokens = burnedByAny} <- burnPartyARoleTokenByAny
-    liftIO $ burnedByToken `shouldBe` Tokens (Map.singleton (AssetId rolesCurrency "Party A") 1)
-    liftIO $ burnedByToken `shouldBe` burnedByContractId
-    liftIO $ burnedByContractId `shouldBe` burnedByPolicyId
-    liftIO $ burnedByPolicyId `shouldBe` burnedByAny
+    -- 37. Burn only role token Party A (Could have a Thread token as well)
+    BurnTx era BurnTxInEra{burnedTokens = Tokens burnedByAssetIdPartyA, txBody} <- burnPartyARoleTokenByAssetIdPartyA
+
+    let onlyPartyARoleToken = [AssetId rolesCurrency "Party A"]
+    liftIO $ keys burnedByAssetIdPartyA `shouldBe` onlyPartyARoleToken
+
     void $ submit partyAWallet era txBody
 
 inputsAppliedToUnspentContractOutput :: ContractCreated 'V1 -> InputsApplied 'V1 -> UnspentContractOutput

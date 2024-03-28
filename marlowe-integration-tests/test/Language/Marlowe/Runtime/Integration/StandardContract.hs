@@ -11,7 +11,17 @@ import qualified Data.Set as Set
 import Data.Time (NominalDiffTime, UTCTime, addUTCTime, getCurrentTime, secondsToNominalDiffTime)
 import Data.Time.Clock (nominalDiffTimeToSeconds)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
-import Language.Marlowe.Core.V1.Semantics.Types
+import Language.Marlowe.Core.V1.Semantics.Types (
+  Action (Choice, Deposit, Notify),
+  Bound (Bound),
+  Case (Case),
+  ChoiceId (ChoiceId),
+  Contract (Close, Pay, When),
+  Observation (TrueObs),
+  Party (..),
+  Payee (Party),
+  Value (AvailableMoney, Constant),
+ )
 import Language.Marlowe.Extended.V1 (ada)
 import Language.Marlowe.Protocol.Load.Client (pushContract)
 import Language.Marlowe.Protocol.Query.Types (PayoutHeader (..))
@@ -112,7 +122,7 @@ data StandardContractNotified v = StandardContractNotified
 data StandardContractClosed v = StandardContractClosed
   { withdrawPartyAFunds :: Integration (WithdrawTx v, BlockHeader)
   , rolesCurrency :: PolicyId
-  , burnPartyARoleTokenByToken :: Integration BurnTx
+  , burnPartyARoleTokenByAssetIdPartyA :: Integration BurnTx
   , burnPartyARoleTokenByContractId :: Integration BurnTx
   , burnPartyARoleTokenByPolicyId :: Integration BurnTx
   , burnPartyARoleTokenByAny :: Integration BurnTx
@@ -140,7 +150,8 @@ createStandardContractWithRolesConfig
   -> Wallet
   -> Wallet
   -> Integration (StandardContractInit 'V1)
-createStandardContractWithRolesConfig threadName rolesConfig = createStandardContractWithTagsAndRolesConfig threadName rolesConfig mempty
+createStandardContractWithRolesConfig threadName rolesConfig =
+  createStandardContractWithTagsAndRolesConfig threadName rolesConfig mempty
 
 createStandardContractWithTagsAndRolesConfig
   :: Maybe Chain.TokenName
@@ -243,7 +254,7 @@ createStandardContractWithTagsAndRolesConfig threadName rolesConfig tags partyAW
                                           withdrawTx@(WithdrawTx era5 WithdrawTxInEra{txBody = withdrawTxBody}) <-
                                             withdraw partyAWallet $ Map.keysSet $ payouts output
                                           (withdrawTx,) <$> submit partyAWallet era5 withdrawTxBody
-                                      , burnPartyARoleTokenByToken =
+                                      , burnPartyARoleTokenByAssetIdPartyA =
                                           mkBurn $ RoleTokenFilterByTokens $ Set.singleton $ AssetId rolesCurrency "Party A"
                                       , burnPartyARoleTokenByContractId =
                                           mkBurn $ RoleTokenFilterByContracts $ Set.singleton contractId

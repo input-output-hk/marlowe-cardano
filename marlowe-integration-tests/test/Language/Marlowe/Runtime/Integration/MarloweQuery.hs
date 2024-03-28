@@ -55,13 +55,13 @@ import Language.Marlowe.Runtime.Core.Api (
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Language.Marlowe.Runtime.History.Api (MarloweBlock (..), MarloweWithdrawTransaction (..))
-import Language.Marlowe.Runtime.Integration.Basic (
+import Language.Marlowe.Runtime.Integration.Common
+import Language.Marlowe.Runtime.Integration.Scenario (
   contractCreatedToMarloweCreateTransaction,
   contractCreatedToUnspentContractOutput,
   inputsAppliedToMarloweApplyInputsTransaction,
   inputsAppliedToUnspentContractOutput,
  )
-import Language.Marlowe.Runtime.Integration.Common
 import Language.Marlowe.Runtime.Integration.StandardContract
 import Language.Marlowe.Runtime.Transaction.Api (
   ContractCreated (..),

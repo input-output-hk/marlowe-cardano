@@ -1,12 +1,12 @@
-module Language.Marlowe.Runtime.IntegrationSpec where
+module Language.Marlowe.Runtime.Integration.IntegrationSpec (spec) where
 
 import qualified Language.Marlowe.Runtime.Integration.ApplyInputs as Apply
-import qualified Language.Marlowe.Runtime.Integration.Basic as Basic
 import qualified Language.Marlowe.Runtime.Integration.Contract as Contract
 import qualified Language.Marlowe.Runtime.Integration.Create as Create
 import qualified Language.Marlowe.Runtime.Integration.Intersections as Integrations
 import qualified Language.Marlowe.Runtime.Integration.MarloweQuery as MarloweQuery
 import qualified Language.Marlowe.Runtime.Integration.OpenRoles as OpenRoles
+import qualified Language.Marlowe.Runtime.Integration.Scenario as Basic
 import qualified Language.Marlowe.Runtime.Integration.Withdraw as Withdraw
 import Test.Hspec (Spec, describe)
 

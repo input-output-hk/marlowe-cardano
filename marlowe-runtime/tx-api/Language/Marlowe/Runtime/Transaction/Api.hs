@@ -854,15 +854,24 @@ data BurnError
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary, ToJSON, Variations)
 
-data RoleTokenFilter' c p t
-  = RoleTokensOr (RoleTokenFilter' c p t) (RoleTokenFilter' c p t)
-  | RoleTokensAnd (RoleTokenFilter' c p t) (RoleTokenFilter' c p t)
-  | RoleTokensNot (RoleTokenFilter' c p t)
-  | RoleTokenFilterAny
-  | RoleTokenFilterNone
-  | RoleTokenFilterByContracts (Set c)
-  | RoleTokenFilterByPolicyIds (Set p)
-  | RoleTokenFilterByTokens (Set t)
+-- | Represents different filters for role tokens.
+data RoleTokenFilter' contract policyId token
+  = -- | Represents a filter that matches if either of the two sub-filters match.
+    RoleTokensOr (RoleTokenFilter' contract policyId token) (RoleTokenFilter' contract policyId token)
+  | -- | Represents a filter that matches if both of the two sub-filters match.
+    RoleTokensAnd (RoleTokenFilter' contract policyId token) (RoleTokenFilter' contract policyId token)
+  | -- | Represents a filter that matches if the sub-filter does not match.
+    RoleTokensNot (RoleTokenFilter' contract policyId token)
+  | -- | Represents a filter that matches any role token.
+    RoleTokenFilterAny
+  | -- | Represents a filter that matches no role tokens.
+    RoleTokenFilterNone
+  | -- | Represents a filter that matches role tokens based on a set of contracts.
+    RoleTokenFilterByContracts (Set contract)
+  | -- | Represents a filter that matches role tokens based on a set of policy IDs.
+    RoleTokenFilterByPolicyIds (Set policyId)
+  | -- | Represents a filter that matches role tokens based on a set of tokens.
+    RoleTokenFilterByTokens (Set token)
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary)
 
