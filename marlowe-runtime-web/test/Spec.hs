@@ -70,6 +70,8 @@ import Language.Marlowe.Runtime.Web.OpenAPIServer (
  )
 import qualified Language.Marlowe.Runtime.Web.Payout.API as Web
 
+import qualified Language.Marlowe.Runtime.Web.Role.API as Web
+import qualified Language.Marlowe.Runtime.Web.Role.TokenFilter as Web
 import qualified Language.Marlowe.Runtime.Web.Tx.API as Web
 import qualified Language.Marlowe.Runtime.Web.Withdrawal.API as Web
 import Servant.API (
@@ -517,6 +519,21 @@ instance Arbitrary Web.Withdrawal where
       <*> arbitrary
   shrink = genericShrink
 
+instance Arbitrary Web.RoleTokenFilter where
+  arbitrary =
+    oneof
+      [ Web.RoleTokensAnd <$> arbitrary <*> arbitrary
+      , Web.RoleTokensOr <$> arbitrary <*> arbitrary
+      , Web.RoleTokenNot <$> arbitrary
+      , Web.RoleTokenNot <$> arbitrary
+      , pure Web.RoleTokenFilterNone
+      , Web.RoleTokenFilterByContracts <$> arbitrary
+      , Web.RoleTokenFilterByPolicyIds <$> arbitrary
+      , Web.RoleTokenFilterByTokens <$> arbitrary
+      , pure Web.RoleTokenFilterAny
+      ]
+  shrink = genericShrink
+
 instance Arbitrary Web.Tx where
   arbitrary = do
     -- size of 6 will result in a 1-layer deep contract being generated (this is
@@ -591,6 +608,10 @@ instance Arbitrary (Web.WithdrawTxEnvelope tx) where
 
 instance Arbitrary (Web.ApplyInputsTxEnvelope tx) where
   arbitrary = Web.ApplyInputsTxEnvelope <$> arbitrary <*> arbitrary <*> arbitrary
+  shrink = genericShrink
+
+instance Arbitrary (Web.BurnRoleTokensTxEnvelope tx) where
+  arbitrary = Web.BurnRoleTokensTxEnvelope <$> arbitrary <*> arbitrary
   shrink = genericShrink
 
 instance Arbitrary Web.MarloweVersion where

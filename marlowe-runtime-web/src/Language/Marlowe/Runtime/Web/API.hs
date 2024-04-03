@@ -72,11 +72,27 @@ import Language.Marlowe.Runtime.Web.Contract.Transaction.API (
 
 import Language.Marlowe.Runtime.Web.Payout.API (GetPayoutAPI, PayoutHeader (..), PayoutState (..), PayoutsAPI)
 
-import Language.Marlowe.Runtime.Web.Core.NetworkId
-import Language.Marlowe.Runtime.Web.Core.Tip
-import Language.Marlowe.Runtime.Web.Core.Tx
-import Language.Marlowe.Runtime.Web.Status
-import Language.Marlowe.Runtime.Web.Tx.API
+import Language.Marlowe.Runtime.Web.Core.NetworkId (NetworkId)
+import Language.Marlowe.Runtime.Web.Core.Tip (ChainTip)
+import Language.Marlowe.Runtime.Web.Core.Tx (
+  TxId (TxId),
+  TxOutRef (TxOutRef, txId),
+  TxStatus (Confirmed),
+ )
+import Language.Marlowe.Runtime.Web.Role.API (RoleAPI)
+import Language.Marlowe.Runtime.Web.Status (RuntimeStatus (..))
+import Language.Marlowe.Runtime.Web.Tx.API (
+  ApplyInputsTx,
+  ApplyInputsTxEnvelope (..),
+  CardanoTx,
+  ContractTx,
+  CreateTxEnvelope (..),
+  Tx (..),
+  TxHeader (..),
+  TxJSON,
+  WithdrawTx,
+  WithdrawTxEnvelope (..),
+ )
 import Language.Marlowe.Runtime.Web.Withdrawal.API (
   GetWithdrawalAPI,
   PostWithdrawalsResponse,
@@ -135,7 +151,7 @@ type RuntimeAPI =
     ( "contracts" :> ContractsAPI
         :<|> "withdrawals" :> WithdrawalsAPI
         :<|> "payouts" :> PayoutsAPI
-        -- :<|> "role-tokens" :> "burn" :> BurnsAPI
+        :<|> RoleAPI
         :<|> "healthcheck"
           :> ( Summary "Test server status"
                 :> Description "Check if the server is running and ready to respond to requests."

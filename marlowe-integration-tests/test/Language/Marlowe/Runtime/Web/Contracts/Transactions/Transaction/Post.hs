@@ -18,7 +18,7 @@ import Language.Marlowe.Runtime.Integration.StandardContract (standardContract)
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses (..))
 import Language.Marlowe.Runtime.Web.Adapter.Server.DTO (ToDTO (toDTO))
-import Language.Marlowe.Runtime.Web.Client (postContract, postTransaction)
+import Language.Marlowe.Runtime.Web.Client (postContract)
 import Language.Marlowe.Runtime.Web.Common (submitContract)
 import qualified Language.Marlowe.Runtime.Web.Core.MarloweVersion as Web
 
@@ -30,6 +30,7 @@ import Language.Marlowe.Runtime.Web.Core.Roles (
  )
 import qualified Language.Marlowe.Runtime.Web.Core.Roles as Web
 
+import Language.Marlowe.Runtime.Web.Contract.Transaction.Client
 import qualified Language.Marlowe.Runtime.Web.Tx.API as Web
 import qualified Language.Marlowe.Runtime.Web.Withdrawal.API as Web
 import Test.Hspec (Spec, describe, it)

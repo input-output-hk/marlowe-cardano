@@ -18,7 +18,7 @@ import Language.Marlowe.Runtime.Web.StandardContract (
   StandardContractChoiceMade (..),
   StandardContractClosed (..),
   StandardContractFundsDeposited (..),
-  StandardContractInit (..),
+  StandardContractLifecycleInit (..),
   StandardContractNotified (..),
   createStandardContract,
  )
@@ -40,7 +40,7 @@ spec = describe "POST /contracts/{contractId}/withdrawal" do
       let webExtraAddresses = Set.map toDTO extraAddresses
       let webCollateralUtxos = Set.map toDTO collateralUtxos
 
-      StandardContractInit{contractCreated, makeInitialDeposit} <- createStandardContract partyAWallet partyBWallet
+      StandardContractLifecycleInit{contractCreated, makeInitialDeposit} <- createStandardContract partyAWallet partyBWallet
       StandardContractFundsDeposited{chooseGimmeTheMoney} <- makeInitialDeposit
       StandardContractChoiceMade{sendNotify} <- chooseGimmeTheMoney
       StandardContractNotified{makeReturnDeposit} <- sendNotify

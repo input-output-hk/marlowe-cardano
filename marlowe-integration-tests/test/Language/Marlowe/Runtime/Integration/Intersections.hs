@@ -42,7 +42,7 @@ import Language.Marlowe.Runtime.Integration.StandardContract (
     initialDepositBlock,
     initialFundsDeposited
   ),
-  StandardContractInit (..),
+  StandardContractLifecycleInit (..),
   StandardContractNotified (
     StandardContractNotified,
     makeReturnDeposit,
@@ -112,8 +112,8 @@ spec = it "Intersections" $ withLocalMarloweRuntime $ runIntegrationTest do
   marloweSyncIntersectExpectNotFound (ContractId $ TxOutRef txIdA1 1) [pA1, pA2, pA3, pA4, pA5]
 
 completeContract
-  :: StandardContractInit v -> Integration (BlockHeader, TxId, BlockHeader, BlockHeader, BlockHeader, BlockHeader)
-completeContract StandardContractInit{..} = do
+  :: StandardContractLifecycleInit v -> Integration (BlockHeader, TxId, BlockHeader, BlockHeader, BlockHeader, BlockHeader)
+completeContract StandardContractLifecycleInit{..} = do
   StandardContractFundsDeposited{..} <- makeInitialDeposit
   StandardContractChoiceMade{..} <- chooseGimmeTheMoney
   StandardContractNotified{..} <- sendNotify

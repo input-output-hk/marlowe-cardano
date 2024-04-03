@@ -123,7 +123,15 @@ import qualified Data.OpenApi as OpenApi
 import qualified Data.Text as T
 import Language.Marlowe.Runtime.Web.Adapter.ByteString (hasLength)
 import Language.Marlowe.Runtime.Web.Core.Base16 (Base16 (..))
-import Language.Marlowe.Runtime.Web.Tx.API
+import Language.Marlowe.Runtime.Web.Tx.API (
+  CardanoTx,
+  CardanoTxBody,
+  ContractTx,
+  CreateTxEnvelope,
+  PostTxAPI,
+  PutSignedTxAPI,
+  TxJSON,
+ )
 
 type ContractsAPI =
   GetContractsAPI

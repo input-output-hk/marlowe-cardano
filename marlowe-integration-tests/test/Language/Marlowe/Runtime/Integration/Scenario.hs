@@ -97,7 +97,7 @@ import Language.Marlowe.Runtime.Integration.StandardContract (
   ),
   StandardContractClosed (..),
   StandardContractFundsDeposited (..),
-  StandardContractInit (..),
+  StandardContractLifecycleInit (..),
   StandardContractNotified (
     StandardContractNotified,
     makeReturnDeposit,
@@ -107,8 +107,8 @@ import Language.Marlowe.Runtime.Integration.StandardContract (
   createStandardContract,
  )
 import Language.Marlowe.Runtime.Transaction.Api (
-  BurnTx (..),
-  BurnTxInEra (..),
+  BurnRoleTokensTx (..),
+  BurnRoleTokensTxInEra (..),
   ContractCreated (..),
   ContractCreatedInEra (..),
   InputsApplied (..),
@@ -135,7 +135,7 @@ spec = describe "Scenarios" do
             $
               bulkSyncRequestNextExpectWait do
                 -- 3. Create standard contract
-                contract@StandardContractInit{..} <- createStandardContract partyAWallet partyBWallet
+                contract@StandardContractLifecycleInit{..} <- createStandardContract partyAWallet partyBWallet
                 let expectedBlock =
                       MarloweBlock
                         { blockHeader = createdBlock
@@ -160,10 +160,10 @@ spec = describe "Scenarios" do
         -- pure $ HeaderSync.SendMsgPoll $ headerSyncExpectWait $ pure $ HeaderSync.SendMsgCancel $ HeaderSync.SendMsgDone txOutRef
 
         afterDeposit
-          :: StandardContractInit 'V1
+          :: StandardContractLifecycleInit 'V1
           -> StandardContractFundsDeposited 'V1
           -> Integration (BulkSync.ClientStPoll Integration ())
-        afterDeposit StandardContractInit{..} StandardContractFundsDeposited{..} = do
+        afterDeposit StandardContractLifecycleInit{..} StandardContractFundsDeposited{..} = do
           ContractCreated _ ContractCreatedInEra{contractId} <- pure contractCreated
           let expectedBlock =
                 MarloweBlock
@@ -326,7 +326,7 @@ spec = describe "Scenarios" do
       applied.output.scriptOutput `shouldBe` Nothing
       applied.inputs `shouldBe` [NormalInput $ IChoice (ChoiceId "Option A" $ Role "") 1]
 
-basicScenarioWithCreator :: (Wallet -> Wallet -> Integration (StandardContractInit 'V1)) -> Spec
+basicScenarioWithCreator :: (Wallet -> Wallet -> Integration (StandardContractLifecycleInit 'V1)) -> Spec
 basicScenarioWithCreator createStandardContractArg =
   it "Basic e2e scenario" $ withLocalMarloweRuntime $ runIntegrationTest do
     partyAWallet <- getGenesisWallet 0
@@ -340,7 +340,7 @@ basicScenarioWithCreator createStandardContractArg =
             $
               headerSyncRequestNextExpectWait do
                 -- 3. Create standard contract
-                contract@StandardContractInit{..} <- createStandardContractArg partyAWallet partyBWallet
+                contract@StandardContractLifecycleInit{..} <- createStandardContractArg partyAWallet partyBWallet
                 -- 4. Poll
                 -- 5. Expect new headers
                 headerSyncPollExpectNewHeaders createdBlock [contractCreatedToContractHeader createdBlock contractCreated] $
@@ -360,10 +360,10 @@ basicScenarioWithCreator createStandardContractArg =
 
         -- 9. Start MarloweSyncClient (follow contract)
         marloweSyncClient
-          :: StandardContractInit 'V1
+          :: StandardContractLifecycleInit 'V1
           -> StandardContractFundsDeposited 'V1
           -> MarloweSync.MarloweSyncClient Integration (StandardContractClosed 'V1)
-        marloweSyncClient StandardContractInit{..} StandardContractFundsDeposited{..} = MarloweSync.MarloweSyncClient do
+        marloweSyncClient StandardContractLifecycleInit{..} StandardContractFundsDeposited{..} = MarloweSync.MarloweSyncClient do
           let ContractCreated _ ContractCreatedInEra{contractId} = contractCreated
           pure $
             MarloweSync.SendMsgFollowContract contractId
@@ -426,7 +426,8 @@ basicScenarioWithCreator createStandardContractArg =
 
     StandardContractClosed{..} <- startDiscoveryClient
     -- 37. Burn only role token Party A (Could have a Thread token as well)
-    BurnTx era BurnTxInEra{burnedTokens = Tokens burnedByAssetIdPartyA, txBody} <- burnPartyARoleTokenByAssetIdPartyA
+    BurnRoleTokensTx era BurnRoleTokensTxInEra{burnedTokens = Tokens burnedByAssetIdPartyA, txBody} <-
+      burnPartyARoleTokenByAssetIdPartyA
 
     let onlyPartyARoleToken = [AssetId rolesCurrency "Party A"]
     liftIO $ keys burnedByAssetIdPartyA `shouldBe` onlyPartyARoleToken

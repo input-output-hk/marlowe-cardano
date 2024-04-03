@@ -57,14 +57,15 @@ import Language.Marlowe.Runtime.Web.Adapter.Server.TxClient (TempTx (TempTx), Te
 import Language.Marlowe.Runtime.Web.Adapter.Server.Util (makeSignedTxWithWitnessKeys)
 import Language.Marlowe.Runtime.Web.Contract.Transaction.API (
   GetTransactionResponse,
+  GetTransactionsAPI,
   GetTransactionsResponse,
+  PostTransactionsAPI,
   PostTransactionsResponse,
   TransactionAPI,
   TransactionsAPI,
  )
 import Language.Marlowe.Runtime.Web.Core.Address (Address)
-import Language.Marlowe.Runtime.Web.Core.Tx (TextEnvelope (..), TxId, TxOutRef)
-import Language.Marlowe.Runtime.Web.Withdrawal.Server (TxBodyInAnyEra (..))
+import Language.Marlowe.Runtime.Web.Core.Tx (TextEnvelope (..), TxBodyInAnyEra (..), TxId, TxOutRef)
 
 import Language.Marlowe.Runtime.Web.Tx.API (
   ApplyInputsTxEnvelope (ApplyInputsTxEnvelope),
@@ -93,15 +94,24 @@ import Servant.Pagination (
 
 server :: TxOutRef -> ServerT TransactionsAPI ServerM
 server contractId =
-  get contractId
-    :<|> (postCreateTxBodyResponse contractId :<|> postCreateTxResponse contractId)
-    :<|> transactionServer contractId
+  getTransactionsAPI contractId
+    :<|> postTransactionsAPI
+    :<|> transactionAPI contractId
+  where
+    getTransactionsAPI :: TxOutRef -> ServerT GetTransactionsAPI ServerM
+    getTransactionsAPI = getTransactionsByContractId
 
-get
+    postTransactionsAPI :: ServerT PostTransactionsAPI ServerM
+    postTransactionsAPI = buildCreateContractTxBody contractId :<|> buildCreateContractTx contractId
+
+    transactionAPI :: TxOutRef -> TxId -> ServerT TransactionAPI ServerM
+    transactionAPI contractId' txId = getTransaction contractId' txId :<|> submitCreateContractTx contractId txId
+
+getTransactionsByContractId
   :: TxOutRef
   -> Maybe (Ranges '["transactionId"] GetTransactionsResponse)
   -> ServerM (PaginatedResponse '["transactionId"] GetTransactionsResponse)
-get contractId ranges = do
+getTransactionsByContractId contractId ranges = do
   let range :: Range "transactionId" TxId
       range = fromMaybe (getDefaultRange (Proxy @TxHeader)) $ extractRange =<< ranges
   contractId' <- fromDTOThrow (badRequest' "Invalid contract id value") contractId
@@ -113,14 +123,46 @@ get contractId ranges = do
       let headers' = toDTO items
       addHeader totalCount . fmap ListObject <$> returnRange range (IncludeLink (Proxy @"transaction") <$> headers')
 
-postCreateTxBody
+buildCreateContractTxBody
+  :: TxOutRef
+  -> PostTransactionsRequest
+  -> Address
+  -> Maybe (CommaList Address)
+  -> Maybe (CommaList TxOutRef)
+  -> ServerM (PostTransactionsResponse CardanoTxBody)
+buildCreateContractTxBody contractId req changeAddressDTO mAddresses mCollateralUtxos = do
+  TxBodyInAnyEra txBody <- buildCreateContractTxBody' contractId req changeAddressDTO mAddresses mCollateralUtxos
+  pure $
+    IncludeLink (Proxy @"transaction") $
+      ApplyInputsTxEnvelope
+        contractId
+        (toDTO $ fromCardanoTxId $ getTxId txBody)
+        (toDTO txBody)
+
+buildCreateContractTx
+  :: TxOutRef
+  -> PostTransactionsRequest
+  -> Address
+  -> Maybe (CommaList Address)
+  -> Maybe (CommaList TxOutRef)
+  -> ServerM (PostTransactionsResponse CardanoTx)
+buildCreateContractTx contractId req changeAddressDTO mAddresses mCollateralUtxos = do
+  TxBodyInAnyEra txBody <- buildCreateContractTxBody' contractId req changeAddressDTO mAddresses mCollateralUtxos
+  pure $
+    IncludeLink (Proxy @"transaction") $
+      ApplyInputsTxEnvelope
+        contractId
+        (toDTO $ fromCardanoTxId $ getTxId txBody)
+        (toDTO $ makeSignedTransaction [] txBody)
+
+buildCreateContractTxBody'
   :: TxOutRef
   -> PostTransactionsRequest
   -> Address
   -> Maybe (CommaList Address)
   -> Maybe (CommaList TxOutRef)
   -> ServerM TxBodyInAnyEra
-postCreateTxBody contractId PostTransactionsRequest{..} changeAddressDTO mAddresses mCollateralUtxos = do
+buildCreateContractTxBody' contractId PostTransactionsRequest{..} changeAddressDTO mAddresses mCollateralUtxos = do
   SomeMarloweVersion v@MarloweV1 <- fromDTOThrow (badRequest' "Invalid Marlowe version") version
   changeAddress <- fromDTOThrow (badRequest' "Invalid change address") changeAddressDTO
   extraAddresses <-
@@ -139,42 +181,8 @@ postCreateTxBody contractId PostTransactionsRequest{..} changeAddressDTO mAddres
     Right (InputsApplied BabbageEraOnwardsBabbage InputsAppliedInEra{txBody}) -> pure $ TxBodyInAnyEra txBody
     Right (InputsApplied BabbageEraOnwardsConway InputsAppliedInEra{txBody}) -> pure $ TxBodyInAnyEra txBody
 
-postCreateTxBodyResponse
-  :: TxOutRef
-  -> PostTransactionsRequest
-  -> Address
-  -> Maybe (CommaList Address)
-  -> Maybe (CommaList TxOutRef)
-  -> ServerM (PostTransactionsResponse CardanoTxBody)
-postCreateTxBodyResponse contractId req changeAddressDTO mAddresses mCollateralUtxos = do
-  TxBodyInAnyEra txBody <- postCreateTxBody contractId req changeAddressDTO mAddresses mCollateralUtxos
-  let txBody' = toDTO txBody
-  let txId = toDTO $ fromCardanoTxId $ getTxId txBody
-  let body = ApplyInputsTxEnvelope contractId txId txBody'
-  pure $ IncludeLink (Proxy @"transaction") body
-
-postCreateTxResponse
-  :: TxOutRef
-  -> PostTransactionsRequest
-  -> Address
-  -> Maybe (CommaList Address)
-  -> Maybe (CommaList TxOutRef)
-  -> ServerM (PostTransactionsResponse CardanoTx)
-postCreateTxResponse contractId req changeAddressDTO mAddresses mCollateralUtxos = do
-  TxBodyInAnyEra txBody <- postCreateTxBody contractId req changeAddressDTO mAddresses mCollateralUtxos
-  let txId = toDTO $ fromCardanoTxId $ getTxId txBody
-  let tx = makeSignedTransaction [] txBody
-  let tx' = toDTO tx
-  let body = ApplyInputsTxEnvelope contractId txId tx'
-  pure $ IncludeLink (Proxy @"transaction") body
-
-transactionServer :: TxOutRef -> TxId -> ServerT TransactionAPI ServerM
-transactionServer contractId txId =
-  getOne contractId txId
-    :<|> put contractId txId
-
-getOne :: TxOutRef -> TxId -> ServerM GetTransactionResponse
-getOne contractId txId = do
+getTransaction :: TxOutRef -> TxId -> ServerM GetTransactionResponse
+getTransaction contractId txId = do
   contractId' <- fromDTOThrow (badRequest' "Invalid contract id value") contractId
   txId' <- fromDTOThrow (badRequest' "Invalid transaction id value") txId
   loadTransaction contractId' txId' >>= \case
@@ -185,8 +193,8 @@ getOne contractId txId = do
         IncludeLink (Proxy @"previous") $
           IncludeLink (Proxy @"next") contractState
 
-put :: TxOutRef -> TxId -> TextEnvelope -> ServerM NoContent
-put contractId txId body = do
+submitCreateContractTx :: TxOutRef -> TxId -> TextEnvelope -> ServerM NoContent
+submitCreateContractTx contractId txId body = do
   contractId' <- fromDTOThrow (badRequest' "Invalid contract id value") contractId
   txId' <- fromDTOThrow (badRequest' "Invalid transaction id value") txId
   loadTransaction contractId' txId' >>= \case

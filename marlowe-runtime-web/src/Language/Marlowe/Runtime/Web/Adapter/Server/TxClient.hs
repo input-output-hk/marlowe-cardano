@@ -55,12 +55,16 @@ import Language.Marlowe.Runtime.Core.Api (
 import Language.Marlowe.Runtime.Transaction.Api (
   Account,
   ApplyInputsError,
+  BurnRoleTokensError,
+  BurnRoleTokensTx (..),
+  BurnRoleTokensTxInEra (BurnRoleTokensTxInEra),
   ContractCreated (..),
   ContractCreatedInEra (..),
   CreateError,
   InputsApplied (..),
   InputsAppliedInEra (..),
   MarloweTxCommand (..),
+  RoleTokenFilter,
   RoleTokensConfig,
   SubmitError,
   SubmitStatus (..),
@@ -150,6 +154,13 @@ type Withdraw m =
   -> Set TxOutRef
   -> m (Either WithdrawError (WithdrawTx v))
 
+type BurnRoleTokens m =
+  forall v
+   . MarloweVersion v
+  -> WalletAddresses
+  -> RoleTokenFilter
+  -> m (Either BurnRoleTokensError (BurnRoleTokensTx v))
+
 data TempTxStatus = Unsigned | Submitted
 
 type Submit r m = r -> Submit' m
@@ -163,17 +174,25 @@ data TempTx (tx :: Type -> MarloweVersionTag -> Type) where
 -- | Public API of the TxClient
 data TxClient r m = TxClient
   { createContract :: CreateContract m
-  , applyInputs :: ApplyInputs m
-  , withdraw :: Withdraw m
+  -- ^ Create a contract
   , submitContract :: ContractId -> Submit r m
-  , submitTransaction :: ContractId -> TxId -> Submit r m
-  , submitWithdrawal :: TxId -> Submit r m
   , lookupTempContract :: ContractId -> STM (Maybe (TempTx ContractCreatedInEra))
   , getTempContracts :: STM [TempTx ContractCreatedInEra]
-  , lookupTempTransaction :: ContractId -> TxId -> STM (Maybe (TempTx InputsAppliedInEra))
+  , applyInputs :: ApplyInputs m
+  -- ^ Apply inputs to a contract
+  , submitTransaction :: ContractId -> TxId -> Submit r m
   , getTempTransactions :: ContractId -> STM [TempTx InputsAppliedInEra]
+  , lookupTempTransaction :: ContractId -> TxId -> STM (Maybe (TempTx InputsAppliedInEra))
+  , withdraw :: Withdraw m
+  -- ^ Withdraw
+  , submitWithdrawal :: TxId -> Submit r m
   , lookupTempWithdrawal :: TxId -> STM (Maybe (TempTx WithdrawTxInEra))
   , getTempWithdrawals :: STM [TempTx WithdrawTxInEra]
+  , burnRoleTokens :: BurnRoleTokens m
+  -- ^ Burn Role Tokens
+  , submitBurnRoleTokens :: TxId -> Submit r m
+  , lookupTempBurnRoleTokensTx :: TxId -> STM (Maybe (TempTx BurnRoleTokensTxInEra))
+  , getTempBurnRoleTokens :: STM [TempTx BurnRoleTokensTxInEra]
   }
 
 -- Basically a lens to the actual map of temp txs to modify within a structure.
@@ -204,6 +223,7 @@ txClient = component "web-tx-client" \TxClientDependencies{..} -> do
   tempContracts <- newTVar mempty
   tempTransactions <- newTVar mempty
   tempWithdrawals <- newTVar mempty
+  tempRoleTokensBurn <- newTVar mempty
   submitQueue <- newTQueue
 
   let runSubmitGeneric
@@ -265,11 +285,8 @@ txClient = component "web-tx-client" \TxClientDependencies{..} -> do
     ( runTxClient
     , TxClient
         { createContract = \stakeCredential version addresses threadName roles metadata minUTxODeposit accounts contract -> do
-            response <-
-              runConnector connector $
-                RunTxClient $
-                  liftCommand $
-                    Create stakeCredential version addresses threadName roles metadata minUTxODeposit accounts contract
+            let command = Create stakeCredential version addresses threadName roles metadata minUTxODeposit accounts contract
+            response <- runConnector connector $ RunTxClient $ liftCommand command
             liftIO $ for_ response \(ContractCreated era creation@ContractCreatedInEra{contractId}) ->
               atomically $
                 modifyTVar tempContracts $
@@ -277,11 +294,8 @@ txClient = component "web-tx-client" \TxClientDependencies{..} -> do
                     TempTx era version Unsigned creation
             pure response
         , applyInputs = \version addresses contractId metadata invalidBefore invalidHereafter inputs -> do
-            response <-
-              runConnector connector $
-                RunTxClient $
-                  liftCommand $
-                    ApplyInputs version addresses contractId metadata invalidBefore invalidHereafter inputs
+            let command = ApplyInputs version addresses contractId metadata invalidBefore invalidHereafter inputs
+            response <- runConnector connector $ RunTxClient $ liftCommand command
             liftIO $ for_ response \(InputsApplied era application@InputsAppliedInEra{txBody}) -> do
               let txId = fromCardanoTxId $ getTxId txBody
               let tempTx = TempTx era version Unsigned application
@@ -290,22 +304,35 @@ txClient = component "web-tx-client" \TxClientDependencies{..} -> do
                   Map.alter (Just . maybe (Map.singleton txId tempTx) (Map.insert txId tempTx)) contractId
             pure response
         , withdraw = \version addresses payouts -> do
-            response <- runConnector connector $ RunTxClient $ liftCommand $ Withdraw version addresses payouts
+            let command = Withdraw version addresses payouts
+            response <- runConnector connector $ RunTxClient $ liftCommand command
             liftIO $ for_ response \(WithdrawTx era withdrawal@WithdrawTxInEra{txBody}) ->
               atomically $
                 modifyTVar tempWithdrawals $
                   Map.insert (fromCardanoTxId $ getTxId txBody) $
                     TempTx era version Unsigned withdrawal
             pure response
+        , burnRoleTokens = \version addresses roleTokenFilter -> do
+            let command = BurnRoleTokens version addresses roleTokenFilter
+            response <- runConnector connector $ RunTxClient $ liftCommand command
+            liftIO $ for_ response \(BurnRoleTokensTx era burnedTokensTx@BurnRoleTokensTxInEra{txBody}) ->
+              atomically $
+                modifyTVar tempRoleTokensBurn $
+                  Map.insert (fromCardanoTxId $ getTxId txBody) $
+                    TempTx era version Unsigned burnedTokensTx
+            pure response
         , submitContract = \contractId -> genericSubmit $ SomeTVarWithMapUpdate tempContracts ($ contractId)
         , submitTransaction = \contractId txId -> genericSubmit $ SomeTVarWithMapUpdate tempTransactions \update -> Map.update (Just . update txId) contractId
         , submitWithdrawal = \txId -> genericSubmit $ SomeTVarWithMapUpdate tempWithdrawals ($ txId)
+        , submitBurnRoleTokens = \txId -> genericSubmit $ SomeTVarWithMapUpdate tempRoleTokensBurn ($ txId)
         , lookupTempContract = \contractId -> Map.lookup contractId <$> readTVar tempContracts
         , getTempContracts = fmap snd . Map.toAscList <$> readTVar tempContracts
         , lookupTempTransaction = \contractId txId -> (Map.lookup txId <=< Map.lookup contractId) <$> readTVar tempTransactions
         , getTempTransactions = \contractId -> fmap snd . foldMap Map.toList . Map.lookup contractId <$> readTVar tempTransactions
         , lookupTempWithdrawal = \txId -> Map.lookup txId <$> readTVar tempWithdrawals
         , getTempWithdrawals = fmap snd . Map.toAscList <$> readTVar tempWithdrawals
+        , lookupTempBurnRoleTokensTx = \txId -> Map.lookup txId <$> readTVar tempRoleTokensBurn
+        , getTempBurnRoleTokens = fmap snd . Map.toAscList <$> readTVar tempRoleTokensBurn
         }
     )
 

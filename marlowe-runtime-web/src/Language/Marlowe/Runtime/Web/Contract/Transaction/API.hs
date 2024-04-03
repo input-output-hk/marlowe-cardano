@@ -15,6 +15,7 @@
 module Language.Marlowe.Runtime.Web.Contract.Transaction.API (
   TransactionsAPI,
   GetTransactionsAPI,
+  PostTransactionsAPI,
   GetTransactionsResponse,
   TransactionAPI,
   GetTransactionAPI,
@@ -31,7 +32,7 @@ import Language.Marlowe.Runtime.Web.Adapter.Servant (
   RenameResponseSchema,
  )
 import Language.Marlowe.Runtime.Web.Core.Semantics.Schema ()
-import Language.Marlowe.Runtime.Web.Core.Tx
+import Language.Marlowe.Runtime.Web.Core.Tx (TxId)
 import Language.Marlowe.Runtime.Web.Tx.API (
   ApplyInputsTx,
   ApplyInputsTxEnvelope,

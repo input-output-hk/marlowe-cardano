@@ -16,7 +16,6 @@ import qualified Language.Marlowe.Runtime.Web.Contracts.Transactions.Transaction
 
 import qualified Language.Marlowe.Runtime.Web.Withdrawal.Post as Withdrawal.Post
 import qualified Language.Marlowe.Runtime.Web.Withdrawal.Put as Withdrawal.Put
-
 import Test.Hspec (Spec, describe)
 
 spec :: Spec

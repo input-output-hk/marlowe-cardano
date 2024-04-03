@@ -2,13 +2,37 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Control.Monad.Trans.Marlowe.Class where
+module Control.Monad.Trans.Marlowe.Class (
+  MonadMarlowe (..),
+  runClientStreaming,
+  runMarloweSyncClient,
+  runMarloweHeaderSyncClient,
+  runMarloweBulkSyncClient,
+  runMarloweQueryClient,
+  runContractQueryClient,
+  runMarloweLoadClient,
+  runMarloweTransferClient,
+  runMarloweTxClient,
+  loadContract,
+  createContract,
+  applyInputs,
+  applyInputs',
+  withdraw,
+  buildBurnRoleTokensTx,
+  submitAndWait,
+  submitAndDetach,
+  submit,
+  attachSubmit,
+) where
 
 import Cardano.Api (BabbageEraOnwards, Tx)
 import Control.Concurrent (threadDelay)
 import Control.Monad (join)
 import Control.Monad.Identity (IdentityT (..))
-import Control.Monad.Trans.Marlowe
+import Control.Monad.Trans.Marlowe (
+  MarloweT (MarloweT),
+  runMarloweT,
+ )
 import Control.Monad.Trans.Reader (ReaderT (..))
 import Control.Monad.Trans.Resource.Internal (ResourceT (..))
 import Data.Coerce (coerce)
@@ -48,8 +72,8 @@ import Language.Marlowe.Runtime.Core.Api (
 import Language.Marlowe.Runtime.Transaction.Api (
   Account,
   ApplyInputsError,
-  BurnError,
-  BurnTx,
+  BurnRoleTokensError,
+  BurnRoleTokensTx,
   ContractCreated,
   CreateError,
   InputsApplied,
@@ -310,16 +334,18 @@ withdraw
 withdraw version wallet payouts =
   runMarloweTxClient $ liftCommand $ Withdraw version wallet payouts
 
--- | Withdraw funds that have been paid out to a role in a contract.
-burn
+-- | Burn role tokens.
+buildBurnRoleTokensTx
   :: (MonadMarlowe m)
-  => WalletAddresses
+  => MarloweVersion v
+  -- ^ The Marlowe version to use
+  -> WalletAddresses
   -- ^ The wallet addresses to use when constructing the transaction.
   -> RoleTokenFilter
   -- ^ A filter that identifies which role tokens to burn.
-  -> m (Either BurnError BurnTx)
-burn wallet tFilter =
-  runMarloweTxClient $ liftCommand $ Burn wallet tFilter
+  -> m (Either BurnRoleTokensError (BurnRoleTokensTx v))
+buildBurnRoleTokensTx version wallet tFilter =
+  runMarloweTxClient $ liftCommand $ BurnRoleTokens version wallet tFilter
 
 -- | Submit a signed transaction via the Marlowe Runtime. Waits for completion
 -- with exponential back-off in the polling.

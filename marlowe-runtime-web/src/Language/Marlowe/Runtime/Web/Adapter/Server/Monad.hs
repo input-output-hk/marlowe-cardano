@@ -7,7 +7,30 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 -- | Defines a custom Monad for the web server's handler functions to run in.
-module Language.Marlowe.Runtime.Web.Adapter.Server.Monad where
+module Language.Marlowe.Runtime.Web.Adapter.Server.Monad (
+  AppEnv (..),
+  ServerM (..),
+  importBundle,
+  loadContractHeaders,
+  loadContract,
+  loadWithdrawals,
+  loadWithdrawal,
+  loadPayouts,
+  loadPayout,
+  loadTransactions,
+  loadTransaction,
+  createContract,
+  applyInputs,
+  burnRoleTokens,
+  withdraw,
+  getContract,
+  submitContract,
+  submitTransaction,
+  submitBurnRoleTokensTx,
+  submitWithdrawal,
+  loadTmpBurnRoleTokensTx,
+  liftBackendM,
+) where
 
 import Colog (LogAction, Message, hoistLogAction)
 import Control.Concurrent.Component.Run (AppM, unAppM)
@@ -26,15 +49,24 @@ import Language.Marlowe.Runtime.Web.Adapter.Server.SyncClient (
   LoadContractHeaders,
   LoadPayout,
   LoadPayouts,
+  LoadTempBurnRoleTokensTx,
   LoadTransaction,
   LoadTransactions,
   LoadWithdrawal,
   LoadWithdrawals,
  )
-import Language.Marlowe.Runtime.Web.Adapter.Server.TxClient (ApplyInputs, CreateContract, Submit, Submit', Withdraw)
+
+import Language.Marlowe.Runtime.Web.Adapter.Server.TxClient (
+  ApplyInputs,
+  BurnRoleTokens,
+  CreateContract,
+  Submit,
+  Submit',
+  Withdraw,
+ )
 import Observe.Event (EventBackend)
 import Pipes (MFunctor (..))
-import Servant
+import Servant (Handler, ServerError)
 
 newtype ServerM a = ServerM {runServerM :: ReaderT AppEnv Handler a}
   deriving newtype
@@ -54,23 +86,35 @@ newtype ServerM a = ServerM {runServerM :: ReaderT AppEnv Handler a}
 
 data AppEnv = forall r s.
   AppEnv
-  { _loadContractHeaders :: LoadContractHeaders (AppM r s)
+  { _createContract :: CreateContract (AppM r s)
+  -- ^ contract creation
+  , _submitContract :: ContractId -> Submit r (AppM r s)
+  , _getContract :: GetContract (AppM r s)
+  , _loadContractHeaders :: LoadContractHeaders (AppM r s)
   , _loadContract :: LoadContract (AppM r s)
-  , _loadWithdrawals :: LoadWithdrawals (AppM r s)
-  , _loadWithdrawal :: LoadWithdrawal (AppM r s)
-  , _loadPayouts :: LoadPayouts (AppM r s)
-  , _loadPayout :: LoadPayout (AppM r s)
+  , _applyInputs :: ApplyInputs (AppM r s)
+  -- ^ Apply inputs to a contract
+  , _submitTransaction :: ContractId -> TxId -> Submit r (AppM r s)
   , _loadTransactions :: LoadTransactions (AppM r s)
   , _loadTransaction :: LoadTransaction (AppM r s)
-  , _importBundle :: ImportBundle (AppM r s)
-  , _createContract :: CreateContract (AppM r s)
-  , _getContract :: GetContract (AppM r s)
+  , _loadPayouts :: LoadPayouts (AppM r s)
+  , _loadPayout :: LoadPayout (AppM r s)
   , _withdraw :: Withdraw (AppM r s)
-  , _applyInputs :: ApplyInputs (AppM r s)
-  , _submitContract :: ContractId -> Submit r (AppM r s)
-  , _submitTransaction :: ContractId -> TxId -> Submit r (AppM r s)
+  -- ^ Withdrawals
   , _submitWithdrawal :: TxId -> Submit r (AppM r s)
+  , _loadWithdrawal :: LoadWithdrawal (AppM r s)
+  , _loadWithdrawals :: LoadWithdrawals (AppM r s)
+  , _burnRoleTokens :: BurnRoleTokens (AppM r s)
+  -- ^ Burn role tokens
+  , _submitBurnRoleTokens :: TxId -> Submit r (AppM r s)
+  , _loadTempBurnRoleTokensTx :: LoadTempBurnRoleTokensTx (AppM r s)
+  -- ^ Look up a burn role tokens temporary transaction (Either Unsigned or Submitted)
+  --   N.B : Confirmation Status is not available for this transaction, Please use a
+  --         waitConfirmation TxId on your wallet.
+  -- | Merkleization and Marlowe Object
+  , _importBundle :: ImportBundle (AppM r s)
   , _eventBackend :: EventBackend (AppM r s) r s
+  -- ^ Infrastructure
   , _requestParent :: r
   , _logAction :: LogAction IO Message
   }
@@ -135,6 +179,12 @@ loadTransaction contractId txId = do
   AppEnv{_eventBackend = backend, _loadTransaction = load} <- ask
   liftBackendM backend $ load contractId txId
 
+-- | Look up a burn role tokens transaction.
+loadTmpBurnRoleTokensTx :: LoadTempBurnRoleTokensTx ServerM
+loadTmpBurnRoleTokensTx txId = do
+  AppEnv{_eventBackend = backend, _loadTempBurnRoleTokensTx = load} <- ask
+  liftBackendM backend $ load txId
+
 -- | Create a contract.
 createContract :: CreateContract ServerM
 createContract stakeCredential version addresses threadName roles metadata minUTxODeposit state contract = do
@@ -146,6 +196,17 @@ applyInputs :: ApplyInputs ServerM
 applyInputs version addresses contractId metadata invalidBefore invalidHereafter inputs = do
   AppEnv{_eventBackend = backend, _applyInputs = apply} <- ask
   liftBackendM backend $ apply version addresses contractId metadata invalidBefore invalidHereafter inputs
+
+-- | Burn role tokens.
+burnRoleTokens :: BurnRoleTokens ServerM
+burnRoleTokens version addresses roleTokenFilter = do
+  AppEnv{_eventBackend = backend, _burnRoleTokens = burn} <- ask
+  liftBackendM backend $ burn version addresses roleTokenFilter
+
+submitBurnRoleTokensTx :: TxId -> Submit' ServerM
+submitBurnRoleTokensTx txId era tx = do
+  AppEnv{_eventBackend = backend, _requestParent, _submitBurnRoleTokens = submit} <- ask
+  liftBackendM backend $ submit txId _requestParent era tx
 
 -- | Withdraw funds from a role.
 withdraw :: Withdraw ServerM

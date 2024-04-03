@@ -2,7 +2,7 @@
 
 let
   inherit (pkgs) z3 sqitchPg postgresql runCommand writeShellScriptBin writeText glibcLocales;
-  network = inputs.self.networks.sanchonet;
+  network = inputs.self.networks.preview;
   inherit (inputs) marlowe-plutus;
 
   mkSqitchRunner = name: path: writeShellScriptBin name ''

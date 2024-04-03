@@ -330,8 +330,8 @@ payoutContract = \case
   Payout2 -> Contract2
   Payout3 -> Contract3
 
-standardContractRoleCurrency :: StandardContractInit 'V1 -> PolicyId
-standardContractRoleCurrency StandardContractInit{..} = case contractCreated of
+standardContractRoleCurrency :: StandardContractLifecycleInit 'V1 -> PolicyId
+standardContractRoleCurrency StandardContractLifecycleInit{..} = case contractCreated of
   ContractCreated _ ContractCreatedInEra{..} -> rolesCurrency
 
 data PartyAddress = Wallet1 | Wallet2
@@ -498,7 +498,7 @@ evalTestRoleCurrencyFilter MarloweQueryTestData{..} = go
         , (Known Contract4, standardContractRoleCurrency' contract4 True)
         ]
 
-standardContractRoleCurrency' :: StandardContractInit 'V1 -> Bool -> RoleCurrency
+standardContractRoleCurrency' :: StandardContractLifecycleInit 'V1 -> Bool -> RoleCurrency
 standardContractRoleCurrency' contract active =
   RoleCurrency
     { rolePolicyId = standardContractRoleCurrency contract
@@ -560,24 +560,24 @@ data MarloweQueryTestData = MarloweQueryTestData
   { runtime :: MarloweRuntime
   , wallet1 :: Wallet
   , wallet2 :: Wallet
-  , contract1 :: StandardContractInit 'V1
+  , contract1 :: StandardContractLifecycleInit 'V1
   , contract1Step1 :: StandardContractFundsDeposited 'V1
   , contract1Step2 :: StandardContractChoiceMade 'V1
   , contract1Step3 :: StandardContractNotified 'V1
   , contract1Step4 :: StandardContractClosed 'V1
   , contract1Step5 :: (WithdrawTx 'V1, BlockHeader)
-  , contract2 :: StandardContractInit 'V1
+  , contract2 :: StandardContractLifecycleInit 'V1
   , contract2Step1 :: StandardContractFundsDeposited 'V1
   , contract2Step2 :: StandardContractChoiceMade 'V1
   , contract2Step3 :: StandardContractNotified 'V1
   , contract2Step4 :: StandardContractClosed 'V1
   , contract2Step5 :: (WithdrawTx 'V1, BlockHeader)
-  , contract3 :: StandardContractInit 'V1
+  , contract3 :: StandardContractLifecycleInit 'V1
   , contract3Step1 :: StandardContractFundsDeposited 'V1
   , contract3Step2 :: StandardContractChoiceMade 'V1
   , contract3Step3 :: StandardContractNotified 'V1
   , contract3Step4 :: StandardContractClosed 'V1
-  , contract4 :: StandardContractInit 'V1
+  , contract4 :: StandardContractLifecycleInit 'V1
   }
 
 data TxNo
@@ -856,7 +856,7 @@ txNoToTxId testData = inputsAppliedTxId . txNoToInputsApplied testData
 inputsAppliedTxId :: InputsApplied v -> TxId
 inputsAppliedTxId (InputsApplied _ InputsAppliedInEra{..}) = fromCardanoTxId $ getTxId txBody
 
-contractNoToStandardContract :: MarloweQueryTestData -> RefSym GetHeaders -> StandardContractInit 'V1
+contractNoToStandardContract :: MarloweQueryTestData -> RefSym GetHeaders -> StandardContractLifecycleInit 'V1
 contractNoToStandardContract MarloweQueryTestData{..} = \case
   Contract1 -> contract1
   Contract2 -> contract2

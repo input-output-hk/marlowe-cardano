@@ -60,6 +60,7 @@ import Language.Marlowe.Runtime.Web.Adapter.Server.SyncClient (
   LoadContractHeaders,
   LoadPayout,
   LoadPayouts,
+  LoadTempBurnRoleTokensTx,
   LoadTransaction,
   LoadTransactions,
   LoadWithdrawal,
@@ -70,6 +71,7 @@ import Language.Marlowe.Runtime.Web.Adapter.Server.SyncClient (
  )
 import Language.Marlowe.Runtime.Web.Adapter.Server.TxClient (
   ApplyInputs,
+  BurnRoleTokens,
   CreateContract,
   Submit,
   TxClient (..),
@@ -221,6 +223,7 @@ runtimeServer = proc deps@ServerDependencies{connector} -> do
           , lookupTempContract
           , lookupTempTransaction
           , lookupTempWithdrawal
+          , lookupTempBurnRoleTokensTx
           }
   ContractClient{..} <-
     contractClient
@@ -232,46 +235,64 @@ runtimeServer = proc deps@ServerDependencies{connector} -> do
     -< case deps of
       ServerDependencies{connector = _, ..} ->
         WebServerDependencies
-          { _loadContractHeaders = loadContractHeaders
+          { -- \| contract creation.
+            _createContract = createContract
+          , _loadContractHeaders = loadContractHeaders
           , _loadContract = loadContract
+          , _getContract = getContract
+          , _submitContract = submitContract
+          , -- \| Apply Inputs
+            _applyInputs = applyInputs
+          , _submitTransaction = submitTransaction
           , _loadTransactions = loadTransactions
-          , _importBundle = importBundle
           , _loadTransaction = loadTransaction
           , _loadWithdrawals = loadWithdrawals
           , _loadWithdrawal = loadWithdrawal
           , _loadPayouts = loadPayouts
           , _loadPayout = loadPayout
-          , _createContract = createContract
-          , _getContract = getContract
-          , _applyInputs = applyInputs
-          , _withdraw = withdraw
-          , _submitContract = submitContract
-          , _submitTransaction = submitTransaction
+          , -- \| Withdrawals
+            _withdraw = withdraw
           , _submitWithdrawal = submitWithdrawal
-          , openAPIEnabled
+          , -- \| Burn Role Tokens
+            _burnRoleTokens = burnRoleTokens
+          , _submitBurnRoleTokens = submitBurnRoleTokens
+          , _loadTempBurnRoleTokensTx = loadTempBurnRoleTokensTx
+          , -- \| Merkleization and Marlowe Object
+            _importBundle = importBundle
+          , -- \| Infrastructure
+            openAPIEnabled
           , accessControlAllowOriginAll
           , runApplication
           , connector
           }
 
 data WebServerDependencies r s = WebServerDependencies
-  { _loadContractHeaders :: LoadContractHeaders (AppM r s)
+  { _createContract :: CreateContract (AppM r s)
+  -- ^ contract creation.
+  , _loadContractHeaders :: LoadContractHeaders (AppM r s)
   , _loadContract :: LoadContract (AppM r s)
-  , _importBundle :: ImportBundle (AppM r s)
-  , _loadWithdrawals :: LoadWithdrawals (AppM r s)
-  , _loadWithdrawal :: LoadWithdrawal (AppM r s)
-  , _loadPayouts :: LoadPayouts (AppM r s)
-  , _loadPayout :: LoadPayout (AppM r s)
+  , _getContract :: GetContract (AppM r s)
+  , _submitContract :: ContractId -> Submit r (AppM r s)
+  , _applyInputs :: ApplyInputs (AppM r s)
+  -- ^ Apply Inputs
+  , _submitTransaction :: ContractId -> TxId -> Submit r (AppM r s)
   , _loadTransactions :: LoadTransactions (AppM r s)
   , _loadTransaction :: LoadTransaction (AppM r s)
-  , _createContract :: CreateContract (AppM r s)
-  , _getContract :: GetContract (AppM r s)
+  , _loadPayouts :: LoadPayouts (AppM r s)
+  , _loadPayout :: LoadPayout (AppM r s)
   , _withdraw :: Withdraw (AppM r s)
-  , _applyInputs :: ApplyInputs (AppM r s)
-  , _submitContract :: ContractId -> Submit r (AppM r s)
-  , _submitTransaction :: ContractId -> TxId -> Submit r (AppM r s)
+  -- ^ Withdrawals
   , _submitWithdrawal :: TxId -> Submit r (AppM r s)
+  , _loadWithdrawal :: LoadWithdrawal (AppM r s)
+  , _loadWithdrawals :: LoadWithdrawals (AppM r s)
+  , _burnRoleTokens :: BurnRoleTokens (AppM r s)
+  -- ^ Burn Role Tokens
+  , _submitBurnRoleTokens :: TxId -> Submit r (AppM r s)
+  , _loadTempBurnRoleTokensTx :: LoadTempBurnRoleTokensTx (AppM r s)
+  , _importBundle :: ImportBundle (AppM r s)
+  -- ^ Merkleization and Marlowe Object
   , openAPIEnabled :: Bool
+  -- ^ Infrastructure
   , accessControlAllowOriginAll :: Bool
   , runApplication :: Application -> IO ()
   , connector :: Connector MarloweRuntimeClient (AppM r s)

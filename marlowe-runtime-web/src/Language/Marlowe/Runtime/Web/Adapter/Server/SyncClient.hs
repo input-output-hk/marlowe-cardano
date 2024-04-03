@@ -2,10 +2,24 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Language.Marlowe.Runtime.Web.Adapter.Server.SyncClient where
+module Language.Marlowe.Runtime.Web.Adapter.Server.SyncClient (
+  SyncClientDependencies (..),
+  SyncClient (..),
+  syncClient,
+  LoadContractHeaders,
+  LoadWithdrawals,
+  LoadPayouts,
+  LoadPayout,
+  LoadContract,
+  LoadWithdrawal,
+  LoadTransactions,
+  LoadTransaction,
+  LoadTempBurnRoleTokensTx,
+  LoadTxError (..),
+) where
 
 import Control.Arrow (arr)
-import Control.Concurrent.Component
+import Control.Concurrent.Component (Component)
 import Control.Concurrent.STM (STM, atomically)
 import Control.Error (note)
 import Control.Monad (guard, mfilter)
@@ -43,17 +57,23 @@ import Language.Marlowe.Runtime.Core.Api (
   Transaction (..),
  )
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
-import Language.Marlowe.Runtime.Transaction.Api (ContractCreatedInEra, InputsAppliedInEra (..), WithdrawTxInEra (..))
+import Language.Marlowe.Runtime.Transaction.Api (
+  BurnRoleTokensTxInEra,
+  ContractCreatedInEra,
+  InputsAppliedInEra (..),
+  WithdrawTxInEra (..),
+ )
 import Language.Marlowe.Runtime.Web.Adapter.Server.TxClient (TempTx (..))
 import Language.Marlowe.Runtime.Web.Adapter.Server.Util (applyRangeToAscList)
 import Network.Protocol.Connection (Connector, runConnector)
-import Servant.Pagination
+import Servant.Pagination (RangeOrder (RangeAsc, RangeDesc))
 
 data SyncClientDependencies m = SyncClientDependencies
   { connector :: Connector MarloweRuntimeClient m
   , lookupTempContract :: ContractId -> STM (Maybe (TempTx ContractCreatedInEra))
   , lookupTempTransaction :: ContractId -> TxId -> STM (Maybe (TempTx InputsAppliedInEra))
   , lookupTempWithdrawal :: TxId -> STM (Maybe (TempTx WithdrawTxInEra))
+  , lookupTempBurnRoleTokensTx :: TxId -> STM (Maybe (TempTx BurnRoleTokensTxInEra))
   }
 
 -- | Signature for a delegate that loads a list of contract headers.
@@ -89,11 +109,18 @@ type LoadContract m =
   -> m (Maybe (Either (TempTx ContractCreatedInEra) SomeContractState))
   -- ^ Nothing if the ID is not found
 
--- | Signature for a delegate that loads the state of a single contract.
+-- | Signature for a delegate that loads the state of a single withdrawal.
 type LoadWithdrawal m =
   TxId
   -- ^ ID of the contract to load
   -> m (Maybe (Either (TempTx WithdrawTxInEra) Withdrawal))
+  -- ^ Nothing if the ID is not found
+
+-- | Signature for a delegate that looks a burn role token transaction up.
+type LoadTempBurnRoleTokensTx m =
+  TxId
+  -- ^ ID of the burn role token Tx to load
+  -> m (Maybe (TempTx BurnRoleTokensTxInEra))
   -- ^ Nothing if the ID is not found
 
 data LoadTxError
@@ -126,6 +153,7 @@ data SyncClient m = SyncClient
   , loadWithdrawal :: LoadWithdrawal m
   , loadPayouts :: LoadPayouts m
   , loadPayout :: LoadPayout m
+  , loadTempBurnRoleTokensTx :: LoadTempBurnRoleTokensTx m
   }
 
 syncClient :: (MonadUnliftIO m) => Component m (SyncClientDependencies m) (SyncClient m)
@@ -173,4 +201,5 @@ syncClient = arr \SyncClientDependencies{..} ->
           Just contract -> pure $ Just $ Right contract
     , loadPayouts = fmap (runConnector connector . RunMarloweQueryClient) . getPayouts
     , loadPayout = runConnector connector . RunMarloweQueryClient . getPayout
+    , loadTempBurnRoleTokensTx = liftIO . atomically . lookupTempBurnRoleTokensTx
     }

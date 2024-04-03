@@ -45,7 +45,7 @@ import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Language.Marlowe.Runtime.Integration.Common (
   Integration,
   Wallet (..),
-  burn,
+  buildBurnRoleTokensTx,
   choose,
   contractCreatedToContractHeader,
   deposit,
@@ -57,7 +57,7 @@ import Language.Marlowe.Runtime.Integration.Common (
  )
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
 import Language.Marlowe.Runtime.Transaction.Api (
-  BurnTx,
+  BurnRoleTokensTx,
   ContractCreated (..),
   ContractCreatedInEra (..),
   Destination (ToAddress),
@@ -72,20 +72,20 @@ import Language.Marlowe.Runtime.Transaction.Api (
  )
 import qualified PlutusLedgerApi.V2 as PV2
 
-data StandardContractInit v = StandardContractInit
+data StandardContractLifecycleInit v = StandardContractLifecycleInit
   { makeInitialDeposit :: Integration (StandardContractFundsDeposited v)
   , contractCreated :: ContractCreated v
   , createdBlock :: BlockHeader
   }
 
-standardContractHeader :: StandardContractInit v -> ContractHeader
-standardContractHeader StandardContractInit{..} = contractCreatedToContractHeader createdBlock contractCreated
+standardContractHeader :: StandardContractLifecycleInit v -> ContractHeader
+standardContractHeader StandardContractLifecycleInit{..} = contractCreatedToContractHeader createdBlock contractCreated
 
-standardContractId :: StandardContractInit v -> ContractId
-standardContractId StandardContractInit{contractCreated = ContractCreated _ ContractCreatedInEra{..}} = contractId
+standardContractId :: StandardContractLifecycleInit v -> ContractId
+standardContractId StandardContractLifecycleInit{contractCreated = ContractCreated _ ContractCreatedInEra{..}} = contractId
 
-standardContractDatum :: StandardContractInit v -> Datum v
-standardContractDatum StandardContractInit{contractCreated = ContractCreated _ ContractCreatedInEra{..}} = datum
+standardContractDatum :: StandardContractLifecycleInit v -> Datum v
+standardContractDatum StandardContractLifecycleInit{contractCreated = ContractCreated _ ContractCreatedInEra{..}} = datum
 
 standardContractPayout :: StandardContractClosed 'V1 -> Maybe (WithdrawTx 'V1) -> PayoutHeader
 standardContractPayout StandardContractClosed{returnDeposited = InputsApplied _ InputsAppliedInEra{..}} mWithdraw =
@@ -122,18 +122,19 @@ data StandardContractNotified v = StandardContractNotified
 data StandardContractClosed v = StandardContractClosed
   { withdrawPartyAFunds :: Integration (WithdrawTx v, BlockHeader)
   , rolesCurrency :: PolicyId
-  , burnPartyARoleTokenByAssetIdPartyA :: Integration BurnTx
-  , burnPartyARoleTokenByContractId :: Integration BurnTx
-  , burnPartyARoleTokenByPolicyId :: Integration BurnTx
-  , burnPartyARoleTokenByAny :: Integration BurnTx
+  , burnPartyARoleTokenByAssetIdPartyA :: Integration (BurnRoleTokensTx v)
+  , burnPartyARoleTokenByContractId :: Integration (BurnRoleTokensTx v)
+  , burnPartyARoleTokenByPolicyId :: Integration (BurnRoleTokensTx v)
+  , burnPartyARoleTokenByAny :: Integration (BurnRoleTokensTx v)
   , returnDeposited :: InputsApplied v
   , returnDepositBlock :: BlockHeader
   }
 
-createStandardContract :: Wallet -> Wallet -> Integration (StandardContractInit 'V1)
+createStandardContract :: Wallet -> Wallet -> Integration (StandardContractLifecycleInit 'V1)
 createStandardContract = createStandardContractWithTags mempty
 
-createStandardContractWithTags :: Set MarloweMetadataTag -> Wallet -> Wallet -> Integration (StandardContractInit 'V1)
+createStandardContractWithTags
+  :: Set MarloweMetadataTag -> Wallet -> Wallet -> Integration (StandardContractLifecycleInit 'V1)
 createStandardContractWithTags tags partyAWallet =
   createStandardContractWithTagsAndRolesConfig
     Nothing
@@ -149,7 +150,7 @@ createStandardContractWithRolesConfig
   -> RoleTokensConfig
   -> Wallet
   -> Wallet
-  -> Integration (StandardContractInit 'V1)
+  -> Integration (StandardContractLifecycleInit 'V1)
 createStandardContractWithRolesConfig threadName rolesConfig =
   createStandardContractWithTagsAndRolesConfig threadName rolesConfig mempty
 
@@ -159,7 +160,7 @@ createStandardContractWithTagsAndRolesConfig
   -> Set MarloweMetadataTag
   -> Wallet
   -> Wallet
-  -> Integration (StandardContractInit 'V1)
+  -> Integration (StandardContractLifecycleInit 'V1)
 createStandardContractWithTagsAndRolesConfig threadName rolesConfig tags partyAWallet partyBWallet = do
   partyBAddress <-
     expectJust "Failed to convert party B address" $ toPlutusAddress $ changeAddress $ addresses partyBWallet
@@ -193,7 +194,7 @@ createStandardContractWithTagsAndRolesConfig threadName rolesConfig tags partyAW
   createdBlock <- submit partyAWallet era0 createTxBody
 
   pure
-    StandardContractInit
+    StandardContractLifecycleInit
       { createdBlock
       , contractCreated
       , makeInitialDeposit = do
@@ -244,7 +245,7 @@ createStandardContractWithTagsAndRolesConfig threadName rolesConfig tags partyAW
                                       100_000_000
                                   returnDepositBlock <- submit partyBWallet era4 returnTxBody
 
-                                  let mkBurn = burn partyAWallet
+                                  let buildBurnRoleTokensByPartyATx = buildBurnRoleTokensTx partyAWallet
                                   pure
                                     StandardContractClosed
                                       { rolesCurrency
@@ -255,18 +256,27 @@ createStandardContractWithTagsAndRolesConfig threadName rolesConfig tags partyAW
                                             withdraw partyAWallet $ Map.keysSet $ payouts output
                                           (withdrawTx,) <$> submit partyAWallet era5 withdrawTxBody
                                       , burnPartyARoleTokenByAssetIdPartyA =
-                                          mkBurn $ RoleTokenFilterByTokens $ Set.singleton $ AssetId rolesCurrency "Party A"
+                                          buildBurnRoleTokensByPartyATx $ RoleTokenFilterByTokens $ Set.singleton $ AssetId rolesCurrency "Party A"
                                       , burnPartyARoleTokenByContractId =
-                                          mkBurn $ RoleTokenFilterByContracts $ Set.singleton contractId
+                                          buildBurnRoleTokensByPartyATx $ RoleTokenFilterByContracts $ Set.singleton contractId
                                       , burnPartyARoleTokenByPolicyId =
-                                          mkBurn $ RoleTokenFilterByPolicyIds $ Set.singleton rolesCurrency
-                                      , burnPartyARoleTokenByAny = mkBurn RoleTokenFilterAny
+                                          buildBurnRoleTokensByPartyATx $ RoleTokenFilterByPolicyIds $ Set.singleton rolesCurrency
+                                      , burnPartyARoleTokenByAny = buildBurnRoleTokensByPartyATx RoleTokenFilterAny
                                       }
                               }
                       }
               }
       }
 
+-- | A standard contract that can be used for testing.
+-- | The contract is a simple escrow contract where Party A deposits 100 ADA and Party B can claim the funds by choosing a choice.
+-- | The contract is parameterized by the address of Party B, the start time, and the timeout length.
+-- | The contract is structured as follows:
+-- | 1. Party A deposits 100 ADA.
+-- | 2. Party B can choose to claim the funds by choosing the choice "Gimme the money".
+-- | 3. If Party B chooses the choice, Party A must deposit 100 ADA to Party B within the timeout length.
+-- | 4. If Party B does not choose the choice within the timeout length, the contract closes.
+-- | 5. A Payout is only available for Party B when the contract closes.
 standardContract
   :: PV2.Address
   -> UTCTime

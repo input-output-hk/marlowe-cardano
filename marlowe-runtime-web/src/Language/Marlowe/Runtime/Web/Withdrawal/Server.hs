@@ -4,14 +4,12 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedLists #-}
 
--- | This module defines a server for the /withdrawals REST API.
-module Language.Marlowe.Runtime.Web.Withdrawal.Server where
+module Language.Marlowe.Runtime.Web.Withdrawal.Server (server) where
 
 import Cardano.Api (
   BabbageEra,
   BabbageEraOnwards (..),
   ConwayEra,
-  IsShelleyBasedEra,
   TxBody,
   getTxId,
   makeSignedTransaction,
@@ -62,7 +60,7 @@ import Language.Marlowe.Runtime.Web.Adapter.CommaList (CommaList (..))
 import Language.Marlowe.Runtime.Web.Core.Address (Address)
 import Language.Marlowe.Runtime.Web.Core.Asset (PolicyId)
 
-import Language.Marlowe.Runtime.Web.Core.Tx (TextEnvelope (..), TxId, TxOutRef)
+import Language.Marlowe.Runtime.Web.Core.Tx (TextEnvelope (..), TxBodyInAnyEra (..), TxId, TxOutRef)
 import Language.Marlowe.Runtime.Web.Tx.API (CardanoTx, CardanoTxBody, WithdrawTxEnvelope (..))
 import Language.Marlowe.Runtime.Web.Withdrawal.API (
   GetWithdrawalsResponse,
@@ -94,9 +92,6 @@ server =
   get
     :<|> (postCreateTxBodyResponse :<|> postCreateTxResponse)
     :<|> withdrawalServer
-
-data TxBodyInAnyEra where
-  TxBodyInAnyEra :: (IsShelleyBasedEra era) => TxBody era -> TxBodyInAnyEra
 
 postCreateTxBody
   :: PostWithdrawalsRequest
@@ -166,7 +161,7 @@ toWithdrawalHeader :: Withdrawal -> WithdrawalHeader
 toWithdrawalHeader Withdrawal{..} = WithdrawalHeader{..}
 
 withdrawalServer :: TxId -> ServerT WithdrawalAPI ServerM
-withdrawalServer withdrawalId = getOne withdrawalId :<|> put withdrawalId
+withdrawalServer withdrawalId = getOne withdrawalId :<|> submitWithdrawalTx withdrawalId
 
 getOne :: TxId -> ServerM Withdrawal
 getOne withdrawalId = do
@@ -175,8 +170,8 @@ getOne withdrawalId = do
     Nothing -> throwError $ notFound' "Withdrawal not found"
     Just result -> pure $ either toDTO toDTO result
 
-put :: TxId -> TextEnvelope -> ServerM NoContent
-put withdrawalId body = do
+submitWithdrawalTx :: TxId -> TextEnvelope -> ServerM NoContent
+submitWithdrawalTx withdrawalId body = do
   withdrawalId' <- fromDTOThrow (badRequest' "Invalid withdrawal id value") withdrawalId
   loadWithdrawal withdrawalId' >>= \case
     Nothing -> throwError $ notFound' "Withdrawal not found"

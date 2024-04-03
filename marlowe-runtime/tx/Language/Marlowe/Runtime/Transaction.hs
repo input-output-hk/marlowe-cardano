@@ -40,7 +40,13 @@ import Language.Marlowe.Runtime.Core.Api (MarloweVersion (..), renderContractId)
 import Language.Marlowe.Runtime.Core.ScriptRegistry (MarloweScripts, ReferenceScriptUtxo (..))
 import Language.Marlowe.Runtime.Transaction.Api (MarloweTxCommand)
 import Language.Marlowe.Runtime.Transaction.BuildConstraints (MkRoleTokenMintingPolicy)
-import Language.Marlowe.Runtime.Transaction.Chain
+import Language.Marlowe.Runtime.Transaction.Chain (
+  TransactionChainClientDependencies (
+    TransactionChainClientDependencies,
+    chainSyncConnector
+  ),
+  transactionChainClient,
+ )
 import Language.Marlowe.Runtime.Transaction.Constraints (MarloweContext (..), PayoutContext (..), WalletContext (..))
 import Language.Marlowe.Runtime.Transaction.Query (
   LoadMarloweContext,
@@ -50,7 +56,33 @@ import Language.Marlowe.Runtime.Transaction.Query (
 import qualified Language.Marlowe.Runtime.Transaction.Query as Q
 import Language.Marlowe.Runtime.Transaction.Query.Helper (LoadHelpersContext)
 import qualified Language.Marlowe.Runtime.Transaction.Query.Helper as QH
-import Language.Marlowe.Runtime.Transaction.Server
+import Language.Marlowe.Runtime.Transaction.Server (
+  BuildTxField (Constraints, ResultingTxBody),
+  ExecField (
+    Era,
+    EraHistory,
+    NetworkId,
+    ProtocolParameters,
+    SystemStart
+  ),
+  TransactionServerDependencies (
+    TransactionServerDependencies,
+    analysisTimeout,
+    chainSyncQueryConnector,
+    contractQueryConnector,
+    getCurrentScripts,
+    getTip,
+    loadHelpersContext,
+    loadMarloweContext,
+    loadPayoutContext,
+    loadWalletContext,
+    marloweQueryConnector,
+    mkRoleTokenMintingPolicy,
+    mkSubmitJob
+  ),
+  TransactionServerSelector (..),
+  transactionServer,
+ )
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob)
 import Network.Protocol.Connection (Connector, ServerSource)
 import Network.Protocol.Job.Server (JobServer)
@@ -135,6 +167,14 @@ renderTransactionServerSelectorOTel = \case
   ExecWithdraw ->
     OTelRendered
       { eventName = "marlowe_tx/exec/withdraw"
+      , eventKind = OTel.Server
+      , renderField = \case
+          Constraints MarloweV1 constraints -> [("marlowe.tx.constraints", fromString $ show constraints)]
+          ResultingTxBody txBody -> [("cardano.tx_body.babbage", fromString $ show txBody)]
+      }
+  ExecBurnRoleTokens ->
+    OTelRendered
+      { eventName = "marlowe_tx/exec/burn_role_tokens"
       , eventKind = OTel.Server
       , renderField = \case
           Constraints MarloweV1 constraints -> [("marlowe.tx.constraints", fromString $ show constraints)]

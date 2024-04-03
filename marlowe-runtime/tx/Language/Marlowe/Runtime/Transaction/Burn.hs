@@ -51,8 +51,8 @@ import Language.Marlowe.Runtime.ChainSync.Api (
  )
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion (..))
 import Language.Marlowe.Runtime.Transaction.Api (
-  BurnError (..),
-  BurnTxInEra (..),
+  BurnRoleTokensError (..),
+  BurnRoleTokensTxInEra (..),
   RoleTokenFilter,
   evalRoleTokenFilter,
  )
@@ -75,11 +75,12 @@ burnRoleTokens
   -> Connector (QueryClient ChainSyncQuery) m
   -> BabbageEraOnwards era
   -> LedgerProtocolParameters era
+  -> MarloweVersion v
   -> WalletContext
   -> Set RoleCurrency
   -> RoleTokenFilter
-  -> ExceptT BurnError m (BurnTxInEra era)
-burnRoleTokens start history chainQueryConnector era protocol walletCtx@WalletContext{..} currencies tokenFilter = do
+  -> ExceptT BurnRoleTokensError m (BurnRoleTokensTxInEra era v)
+burnRoleTokens start history chainQueryConnector era protocol version walletCtx@WalletContext{..} currencies tokenFilter = do
   -- convert role currency info into a list
   let currenciesList = Set.toList currencies
   -- collect the policy IDs which are used by active contracts
@@ -140,7 +141,8 @@ burnRoleTokens start history chainQueryConnector era protocol walletCtx@WalletCo
           >>= selectCoins era protocol MarloweV1 scriptCtx walletCtx helpersCtx
           >>= balanceTx era start (C.toLedgerEpochInfo history) protocol MarloweV1 scriptCtx walletCtx helpersCtx
   let burnedTokens = foldMap fst inputs
-  pure BurnTxInEra{..}
+
+  pure BurnRoleTokensTxInEra{..}
 
 scriptHashesFromTokens :: Tokens -> Set ScriptHash
 scriptHashesFromTokens = Set.map (ScriptHash . unPolicyId . policyId) . Map.keysSet . unTokens

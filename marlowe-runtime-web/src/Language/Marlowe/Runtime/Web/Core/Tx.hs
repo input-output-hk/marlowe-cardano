@@ -14,6 +14,7 @@
 {-# LANGUAGE UndecidableSuperClasses #-}
 
 module Language.Marlowe.Runtime.Web.Core.Tx (
+  TxBodyInAnyEra (..),
   TxOutRef (..),
   TxId (..),
   TextEnvelope (..),
@@ -44,6 +45,7 @@ import Servant (
   ToHttpApiData (toUrlPiece),
  )
 
+import Cardano.Api (IsShelleyBasedEra, TxBody)
 import Data.OpenApi (
   HasEnum (enum_),
   HasType (..),
@@ -66,6 +68,9 @@ import qualified Data.Text as T
 import Data.Word (Word16)
 import Language.Marlowe.Runtime.Web.Adapter.ByteString (hasLength)
 import Language.Marlowe.Runtime.Web.Core.Semantics.Schema ()
+
+data TxBodyInAnyEra where
+  TxBodyInAnyEra :: (IsShelleyBasedEra era) => TxBody era -> TxBodyInAnyEra
 
 newtype TxId = TxId {unTxId :: ByteString}
   deriving (Eq, Ord, Generic)

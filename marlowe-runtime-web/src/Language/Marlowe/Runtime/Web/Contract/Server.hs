@@ -81,9 +81,9 @@ import Language.Marlowe.Runtime.Web.Core.Asset (
  )
 import Language.Marlowe.Runtime.Web.Core.Tx (
   TextEnvelope (..),
+  TxBodyInAnyEra (..),
   TxOutRef,
  )
-import Language.Marlowe.Runtime.Web.Withdrawal.Server (TxBodyInAnyEra (..))
 
 import Language.Marlowe.Runtime.Web.Tx.API (
   CardanoTx,

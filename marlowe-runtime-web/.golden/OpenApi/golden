@@ -273,6 +273,22 @@
                 ],
                 "type": "object"
             },
+            "BurnRoleTokensResponse": {
+                "description": "The \"type\" property of \"tx\" must be \"Tx BabbageEra\" or \"Tx ConwayEra\"",
+                "properties": {
+                    "tx": {
+                        "$ref": "#/components/schemas/TextEnvelope"
+                    },
+                    "txId": {
+                        "$ref": "#/components/schemas/TxId"
+                    }
+                },
+                "required": [
+                    "txId",
+                    "tx"
+                ],
+                "type": "object"
+            },
             "CanChoose": {
                 "description": "Choice Inputs that can be applied for a given contract",
                 "properties": {
@@ -2274,6 +2290,150 @@
                         },
                         "required": [
                             "script"
+                        ],
+                        "type": "object"
+                    }
+                ]
+            },
+            "RoleTokenFilter": {
+                "description": "A filter that selects role tokens for burning.",
+                "oneOf": [
+                    {
+                        "description": "Matches any role tokens matched by both sub-filters.",
+                        "properties": {
+                            "and": {
+                                "items": [
+                                    {
+                                        "$ref": "#/components/schemas/RoleTokenFilter"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/RoleTokenFilter"
+                                    }
+                                ],
+                                "maxItems": 2,
+                                "minItems": 2,
+                                "type": "array"
+                            }
+                        },
+                        "required": [
+                            "and"
+                        ],
+                        "type": "object"
+                    },
+                    {
+                        "description": "Matches any role tokens matched by either sub-filter.",
+                        "properties": {
+                            "or": {
+                                "items": [
+                                    {
+                                        "$ref": "#/components/schemas/RoleTokenFilter"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/RoleTokenFilter"
+                                    }
+                                ],
+                                "maxItems": 2,
+                                "minItems": 2,
+                                "type": "array"
+                            }
+                        },
+                        "required": [
+                            "or"
+                        ],
+                        "type": "object"
+                    },
+                    {
+                        "description": "Matches any role tokens not matched by the sub-filter.",
+                        "properties": {
+                            "not": {
+                                "$ref": "#/components/schemas/RoleTokenFilter"
+                            }
+                        },
+                        "required": [
+                            "not"
+                        ],
+                        "type": "object"
+                    },
+                    {
+                        "description": "Matches any role token.",
+                        "enum": [
+                            true
+                        ],
+                        "type": "boolean"
+                    },
+                    {
+                        "description": "Matches no role token.",
+                        "enum": [
+                            false
+                        ],
+                        "type": "boolean"
+                    },
+                    {
+                        "description": "Matches any role tokens used by the given contract(s).",
+                        "properties": {
+                            "contract_id": {
+                                "oneOf": [
+                                    {
+                                        "$ref": "#/components/schemas/TxOutRef"
+                                    },
+                                    {
+                                        "items": {
+                                            "$ref": "#/components/schemas/TxOutRef"
+                                        },
+                                        "type": "array",
+                                        "uniqueItems": true
+                                    }
+                                ]
+                            }
+                        },
+                        "required": [
+                            "contract_id"
+                        ],
+                        "type": "object"
+                    },
+                    {
+                        "description": "Matches any role tokens with the given currency symbol(s).",
+                        "properties": {
+                            "roles_currency": {
+                                "oneOf": [
+                                    {
+                                        "$ref": "#/components/schemas/PolicyId"
+                                    },
+                                    {
+                                        "items": {
+                                            "$ref": "#/components/schemas/PolicyId"
+                                        },
+                                        "type": "array",
+                                        "uniqueItems": true
+                                    }
+                                ]
+                            }
+                        },
+                        "required": [
+                            "roles_currency"
+                        ],
+                        "type": "object"
+                    },
+                    {
+                        "description": "Matches only the given role token(s).",
+                        "properties": {
+                            "role_tokens": {
+                                "oneOf": [
+                                    {
+                                        "$ref": "#/components/schemas/AssetId"
+                                    },
+                                    {
+                                        "items": {
+                                            "$ref": "#/components/schemas/AssetId"
+                                        },
+                                        "type": "array",
+                                        "uniqueItems": true
+                                    }
+                                ]
+                            }
+                        },
+                        "required": [
+                            "role_tokens"
                         ],
                         "type": "object"
                     }
@@ -6193,6 +6353,363 @@
                 },
                 "security": [],
                 "summary": "Get payout by ID"
+            }
+        },
+        "/role-tokens/burnTxs": {
+            "post": {
+                "description": "Build an unsigned (Cardano) transaction body which burns role tokens matching a filter. Role tokens used by active contracts will not be burned and the request will fail if active role tokens are included. To submit the signed transaction, use the PUT /roles/burnTokensTxs/submit endpoint.",
+                "operationId": "buildBurnRoleTokensTx",
+                "parameters": [
+                    {
+                        "in": "header",
+                        "name": "X-Change-Address",
+                        "required": true,
+                        "schema": {
+                            "description": "A cardano address, in Bech32 format",
+                            "example": "addr1w94f8ywk4fg672xasahtk4t9k6w3aql943uxz5rt62d4dvq8evxaf",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "header",
+                        "name": "X-Address",
+                        "required": false,
+                        "schema": {
+                            "description": "A comma-separated list of values",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "header",
+                        "name": "X-Collateral-UTxO",
+                        "required": false,
+                        "schema": {
+                            "description": "A comma-separated list of values",
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json;charset=utf-8": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RoleTokenFilter"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/vendor.iog.marlowe-runtime.burn-role-tokens-tx-json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BurnRoleTokensResponse"
+                                }
+                            }
+                        },
+                        "description": "",
+                        "headers": {
+                            "X-Network-Id": {
+                                "schema": {
+                                    "description": "The latest known point in the chain on a peer.",
+                                    "oneOf": [
+                                        {
+                                            "type": "string"
+                                        },
+                                        {
+                                            "type": "integer"
+                                        }
+                                    ]
+                                }
+                            },
+                            "X-Node-Tip": {
+                                "schema": {
+                                    "description": "The latest known point in the chain on a peer.",
+                                    "oneOf": [
+                                        {
+                                            "properties": {
+                                                "genesisTimeUTC": {
+                                                    "format": "yyyy-mm-ddThh:MM:ssZ",
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "genesisTimeUTC"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        {
+                                            "properties": {
+                                                "blockHeader": {
+                                                    "$ref": "#/components/schemas/BlockHeader"
+                                                },
+                                                "slotTimeUTC": {
+                                                    "format": "yyyy-mm-ddThh:MM:ssZ",
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "blockHeader",
+                                                "slotTimeUTC"
+                                            ],
+                                            "type": "object"
+                                        }
+                                    ]
+                                }
+                            },
+                            "X-Runtime-Chain-Tip": {
+                                "schema": {
+                                    "description": "The latest known point in the chain on a peer.",
+                                    "oneOf": [
+                                        {
+                                            "properties": {
+                                                "genesisTimeUTC": {
+                                                    "format": "yyyy-mm-ddThh:MM:ssZ",
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "genesisTimeUTC"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        {
+                                            "properties": {
+                                                "blockHeader": {
+                                                    "$ref": "#/components/schemas/BlockHeader"
+                                                },
+                                                "slotTimeUTC": {
+                                                    "format": "yyyy-mm-ddThh:MM:ssZ",
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "blockHeader",
+                                                "slotTimeUTC"
+                                            ],
+                                            "type": "object"
+                                        }
+                                    ]
+                                }
+                            },
+                            "X-Runtime-Tip": {
+                                "schema": {
+                                    "description": "The latest known point in the chain on a peer.",
+                                    "oneOf": [
+                                        {
+                                            "properties": {
+                                                "genesisTimeUTC": {
+                                                    "format": "yyyy-mm-ddThh:MM:ssZ",
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "genesisTimeUTC"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        {
+                                            "properties": {
+                                                "blockHeader": {
+                                                    "$ref": "#/components/schemas/BlockHeader"
+                                                },
+                                                "slotTimeUTC": {
+                                                    "format": "yyyy-mm-ddThh:MM:ssZ",
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "blockHeader",
+                                                "slotTimeUTC"
+                                            ],
+                                            "type": "object"
+                                        }
+                                    ]
+                                }
+                            },
+                            "X-Runtime-Version": {
+                                "schema": {
+                                    "pattern": "^\\d+(\\.\\d+)*$",
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid `X-Collateral-UTxO` or `X-Address` or `X-Change-Address` or `body`"
+                    }
+                },
+                "security": [],
+                "summary": "Build a Burn role tokens Transation"
+            }
+        },
+        "/role-tokens/burnTxs/{TxId}": {
+            "put": {
+                "description": "Submit a signed (Cardano) transaction that burns role tokens. The transaction must have originally been created by the POST /roles/burnTokensTxs/build endpoint. This endpoint will respond when the transaction is submitted successfully to the local node, which means it will not wait for the transaction to be published in a block. Use the GET /roles/burn/{burnId} endpoint to poll the on-chain status.",
+                "operationId": "submitBurnRoleTokensTx",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "TxId",
+                        "required": true,
+                        "schema": {
+                            "description": "The hex-encoded identifier of a Cardano transaction",
+                            "pattern": "^[a-fA-F0-9]{64}$",
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json;charset=utf-8": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TextEnvelope"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "202": {
+                        "content": {
+                            "application/json;charset=utf-8": {}
+                        },
+                        "description": "",
+                        "headers": {
+                            "X-Network-Id": {
+                                "schema": {
+                                    "description": "The latest known point in the chain on a peer.",
+                                    "oneOf": [
+                                        {
+                                            "type": "string"
+                                        },
+                                        {
+                                            "type": "integer"
+                                        }
+                                    ]
+                                }
+                            },
+                            "X-Node-Tip": {
+                                "schema": {
+                                    "description": "The latest known point in the chain on a peer.",
+                                    "oneOf": [
+                                        {
+                                            "properties": {
+                                                "genesisTimeUTC": {
+                                                    "format": "yyyy-mm-ddThh:MM:ssZ",
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "genesisTimeUTC"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        {
+                                            "properties": {
+                                                "blockHeader": {
+                                                    "$ref": "#/components/schemas/BlockHeader"
+                                                },
+                                                "slotTimeUTC": {
+                                                    "format": "yyyy-mm-ddThh:MM:ssZ",
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "blockHeader",
+                                                "slotTimeUTC"
+                                            ],
+                                            "type": "object"
+                                        }
+                                    ]
+                                }
+                            },
+                            "X-Runtime-Chain-Tip": {
+                                "schema": {
+                                    "description": "The latest known point in the chain on a peer.",
+                                    "oneOf": [
+                                        {
+                                            "properties": {
+                                                "genesisTimeUTC": {
+                                                    "format": "yyyy-mm-ddThh:MM:ssZ",
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "genesisTimeUTC"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        {
+                                            "properties": {
+                                                "blockHeader": {
+                                                    "$ref": "#/components/schemas/BlockHeader"
+                                                },
+                                                "slotTimeUTC": {
+                                                    "format": "yyyy-mm-ddThh:MM:ssZ",
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "blockHeader",
+                                                "slotTimeUTC"
+                                            ],
+                                            "type": "object"
+                                        }
+                                    ]
+                                }
+                            },
+                            "X-Runtime-Tip": {
+                                "schema": {
+                                    "description": "The latest known point in the chain on a peer.",
+                                    "oneOf": [
+                                        {
+                                            "properties": {
+                                                "genesisTimeUTC": {
+                                                    "format": "yyyy-mm-ddThh:MM:ssZ",
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "genesisTimeUTC"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        {
+                                            "properties": {
+                                                "blockHeader": {
+                                                    "$ref": "#/components/schemas/BlockHeader"
+                                                },
+                                                "slotTimeUTC": {
+                                                    "format": "yyyy-mm-ddThh:MM:ssZ",
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "blockHeader",
+                                                "slotTimeUTC"
+                                            ],
+                                            "type": "object"
+                                        }
+                                    ]
+                                }
+                            },
+                            "X-Runtime-Version": {
+                                "schema": {
+                                    "pattern": "^\\d+(\\.\\d+)*$",
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid `body`"
+                    },
+                    "404": {
+                        "description": "`TxId` not found"
+                    }
+                },
+                "security": [],
+                "summary": "Submit a Burn Role Token Transaction"
             }
         },
         "/withdrawals": {

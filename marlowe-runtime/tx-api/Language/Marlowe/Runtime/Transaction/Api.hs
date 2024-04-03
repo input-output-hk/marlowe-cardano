@@ -12,49 +12,55 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Marlowe.Runtime.Transaction.Api (
-  Account (..),
-  ApplyInputsConstraintsBuildupError (..),
-  ApplyInputsError (..),
-  BurnError (..),
-  BurnTx (..),
-  BurnTxInEra (..),
-  CoinSelectionError (..),
-  ConstraintError (..),
+  -- | Contract Creation API
   ContractCreated (..),
   ContractCreatedInEra (..),
   CreateBuildupError (..),
   CreateError (..),
-  Destination (..),
+  Mint (..),
+  MintRole (..),
+  NFTMetadataFile (..),
+  decodeRoleTokenMetadata,
+  encodeRoleTokenMetadata,
+  RoleTokenMetadata (..),
+  RoleTokensConfig (RoleTokensNone, RoleTokensUsePolicy, RoleTokensMint),
+  -- | Apply Inputs API
+  ApplyInputsConstraintsBuildupError (..),
+  ApplyInputsError (..),
   InputsApplied (..),
   InputsAppliedInEra (..),
+  -- | Withdraw API
+  WithdrawError (..),
+  WithdrawTx (..),
+  WithdrawTxInEra (..),
+  -- | Burn Role Tokens API
+  BurnRoleTokensError (..),
+  BurnRoleTokensTx (..),
+  BurnRoleTokensTxInEra (..),
+  RoleTokenFilter' (..),
+  RoleTokenFilter,
+  roleTokenFilterToRoleCurrencyFilter,
+  evalRoleTokenFilter,
+  optimizeRoleTokenFilter,
+  rewriteRoleTokenFilter,
+  -- | Submit API
+  SubmitError (..),
+  SubmitStatus (..),
+  -- | Remaining To Classify API
+  Account (..),
+  CoinSelectionError (..),
+  ConstraintError (..),
+  Destination (..),
   IsToken (..),
   JobId (..),
   LoadHelpersContextError (..),
   LoadMarloweContextError (..),
   MarloweTxCommand (..),
-  Mint (..),
-  MintRole (..),
-  NFTMetadataFile (..),
-  RoleTokenFilter' (..),
-  RoleTokenFilter,
-  RoleTokenMetadata (..),
-  RoleTokensConfig (RoleTokensNone, RoleTokensUsePolicy, RoleTokensMint),
-  SubmitError (..),
-  SubmitStatus (..),
-  Tag (..),
   WalletAddresses (..),
-  WithdrawError (..),
-  WithdrawTx (..),
-  WithdrawTxInEra (..),
-  decodeRoleTokenMetadata,
-  encodeRoleTokenMetadata,
-  evalRoleTokenFilter,
-  getTokenQuantities,
+  Tag (..),
   hasRecipient,
+  getTokenQuantities,
   mkMint,
-  optimizeRoleTokenFilter,
-  rewriteRoleTokenFilter,
-  roleTokenFilterToRoleCurrencyFilter,
 ) where
 
 import Cardano.Api (
@@ -135,7 +141,21 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   parseMetadataText,
  )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Language.Marlowe.Runtime.Core.Api
+import Language.Marlowe.Runtime.Core.Api (
+  ContractId,
+  IsMarloweVersion (Contract, Datum, Inputs),
+  MarloweTransactionMetadata,
+  MarloweVersion (..),
+  MarloweVersionTag (V1),
+  Payout,
+  SomeMarloweVersion (..),
+  TransactionOutput,
+  TransactionScriptOutput,
+  getDatum,
+  getInputs,
+  putDatum,
+  putInputs,
+ )
 import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript)
 import Language.Marlowe.Runtime.History.Api (ExtractCreationError, ExtractMarloweTransactionError)
 import Network.HTTP.Media (MediaType)
@@ -157,7 +177,13 @@ import qualified Data.Set as Set
 import Language.Marlowe.Protocol.Query.Types (RoleCurrencyFilter (..))
 import Network.Protocol.Codec.Spec (Variations (..), varyAp)
 import Network.Protocol.Handshake.Types (HasSignature (..))
-import Network.Protocol.Job.Types
+import Network.Protocol.Job.Types (
+  Command (..),
+  CommandEq (..),
+  OTelCommand (..),
+  ShowCommand (..),
+  SomeTag (SomeTag),
+ )
 import qualified Network.URI as Network
 import PlutusCore.Evaluation.Machine.ExBudget (ExBudget)
 import PlutusCore.Evaluation.Machine.ExMemory (ExCPU, ExMemory)
@@ -770,70 +796,72 @@ instance (IsShelleyBasedEra era) => ToJSON (InputsAppliedInEra era 'V1) where
       , "tx-body" .= serialiseToTextEnvelope Nothing txBody
       ]
 
-data BurnTx where
-  BurnTx
-    :: BabbageEraOnwards era -> BurnTxInEra era -> BurnTx
+data BurnRoleTokensTx v where
+  BurnRoleTokensTx
+    :: BabbageEraOnwards era -> BurnRoleTokensTxInEra era v -> BurnRoleTokensTx v
 
-instance Variations BurnTx where
-  variations = BurnTx BabbageEraOnwardsBabbage <$> variations
+instance Variations (BurnRoleTokensTx 'V1) where
+  variations = BurnRoleTokensTx BabbageEraOnwardsBabbage <$> variations
 
-instance Show BurnTx where
-  showsPrec p (BurnTx BabbageEraOnwardsBabbage created) =
+instance Show (BurnRoleTokensTx 'V1) where
+  showsPrec p (BurnRoleTokensTx BabbageEraOnwardsBabbage created) =
     showParen (p > 10) $
-      showString "BurnTx"
+      showString "BurnRoleTokensTx"
         . showSpace
         . showString "BabbageEraOnwardsBabbage"
         . showsPrec 11 created
-  showsPrec p (BurnTx BabbageEraOnwardsConway created) =
+  showsPrec p (BurnRoleTokensTx BabbageEraOnwardsConway created) =
     showParen (p > 10) $
-      showString "BurnTx"
+      showString "BurnRoleTokensTx"
         . showSpace
         . showString "BabbageEraOnwardsConway"
         . showsPrec 11 created
 
-instance Eq BurnTx where
-  BurnTx BabbageEraOnwardsBabbage a == BurnTx BabbageEraOnwardsBabbage b =
+instance Eq (BurnRoleTokensTx 'V1) where
+  BurnRoleTokensTx BabbageEraOnwardsBabbage a == BurnRoleTokensTx BabbageEraOnwardsBabbage b =
     a == b
-  BurnTx BabbageEraOnwardsBabbage _ == _ = False
-  BurnTx BabbageEraOnwardsConway a == BurnTx BabbageEraOnwardsConway b =
+  BurnRoleTokensTx BabbageEraOnwardsBabbage _ == _ = False
+  BurnRoleTokensTx BabbageEraOnwardsConway a == BurnRoleTokensTx BabbageEraOnwardsConway b =
     a == b
-  BurnTx BabbageEraOnwardsConway _ == _ = False
+  BurnRoleTokensTx BabbageEraOnwardsConway _ == _ = False
 
-instance Binary BurnTx where
-  put (BurnTx BabbageEraOnwardsBabbage created) = do
+instance Binary (BurnRoleTokensTx 'V1) where
+  put (BurnRoleTokensTx BabbageEraOnwardsBabbage created) = do
     putWord8 0
     put created
-  put (BurnTx BabbageEraOnwardsConway created) = do
+  put (BurnRoleTokensTx BabbageEraOnwardsConway created) = do
     putWord8 1
     put created
   get = do
     eraTag <- getWord8
     case eraTag of
-      0 -> BurnTx BabbageEraOnwardsBabbage <$> get
-      1 -> BurnTx BabbageEraOnwardsConway <$> get
+      0 -> BurnRoleTokensTx BabbageEraOnwardsBabbage <$> get
+      1 -> BurnRoleTokensTx BabbageEraOnwardsConway <$> get
       _ -> fail $ "Invalid era tag value: " <> show eraTag
 
-data BurnTxInEra era = BurnTxInEra
-  { burnedTokens :: Chain.Tokens
+data BurnRoleTokensTxInEra era v = BurnRoleTokensTxInEra
+  { version :: MarloweVersion v
+  , burnedTokens :: Chain.Tokens
   , txBody :: TxBody era
   }
 
-deriving instance Show (BurnTxInEra BabbageEra)
-deriving instance Eq (BurnTxInEra BabbageEra)
-deriving instance Show (BurnTxInEra ConwayEra)
-deriving instance Eq (BurnTxInEra ConwayEra)
+deriving instance Show (BurnRoleTokensTxInEra BabbageEra 'V1)
+deriving instance Eq (BurnRoleTokensTxInEra BabbageEra 'V1)
+deriving instance Show (BurnRoleTokensTxInEra ConwayEra 'V1)
+deriving instance Eq (BurnRoleTokensTxInEra ConwayEra 'V1)
 
-instance (IsShelleyBasedEra era) => Variations (BurnTxInEra era) where
-  variations = BurnTxInEra <$> variations `varyAp` variations
+instance (IsShelleyBasedEra era) => Variations (BurnRoleTokensTxInEra era 'V1) where
+  variations = BurnRoleTokensTxInEra MarloweV1 <$> variations `varyAp` variations
 
-instance (IsShelleyBasedEra era) => Binary (BurnTxInEra era) where
-  put BurnTxInEra{..} = do
+instance (IsShelleyBasedEra era) => Binary (BurnRoleTokensTxInEra era 'V1) where
+  put BurnRoleTokensTxInEra{..} = do
     put burnedTokens
     putTxBody txBody
   get = do
+    let version = MarloweV1
     burnedTokens <- get
     txBody <- getTxBody
-    pure BurnTxInEra{..}
+    pure BurnRoleTokensTxInEra{..}
 
 data Account
   = RoleAccount TokenName
@@ -841,7 +869,7 @@ data Account
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary, ToJSON, Variations)
 
-data BurnError
+data BurnRoleTokensError
   = BurnEraUnsupported AnyCardanoEra
   | BurnRolesActive (Set PolicyId)
   | BurnInvalidPolicyId (Set PolicyId)
@@ -1110,12 +1138,14 @@ data MarloweTxCommand status err result where
         )
   -- | Construct a transaction that burns all role tokens in a wallet which match
   -- the given filter.
-  Burn
-    :: WalletAddresses
+  BurnRoleTokens
+    :: MarloweVersion v
+    -- ^ The Marlowe version to use
+    -> WalletAddresses
     -- ^ The wallet addresses to use when constructing the transaction
     -> RoleTokenFilter
     -- ^ Which role tokens to burn
-    -> MarloweTxCommand Void BurnError BurnTx
+    -> MarloweTxCommand Void BurnRoleTokensError (BurnRoleTokensTx v)
   -- | Submits a signed transaction to the attached Cardano node.
   Submit
     :: BabbageEraOnwards era
@@ -1135,7 +1165,7 @@ instance OTelCommand MarloweTxCommand where
     TagCreate _ -> "create"
     TagApplyInputs _ -> "apply_inputs"
     TagWithdraw _ -> "withdraw"
-    TagBurn -> "burn"
+    TagBurnRoleTokens _ -> "burn_role_tokens"
     TagSubmit -> "submit"
 
 instance Command MarloweTxCommand where
@@ -1143,7 +1173,7 @@ instance Command MarloweTxCommand where
     TagCreate :: MarloweVersion v -> Tag MarloweTxCommand Void CreateError (ContractCreated v)
     TagApplyInputs :: MarloweVersion v -> Tag MarloweTxCommand Void ApplyInputsError (InputsApplied v)
     TagWithdraw :: MarloweVersion v -> Tag MarloweTxCommand Void WithdrawError (WithdrawTx v)
-    TagBurn :: Tag MarloweTxCommand Void BurnError BurnTx
+    TagBurnRoleTokens :: MarloweVersion v -> Tag MarloweTxCommand Void BurnRoleTokensError (BurnRoleTokensTx v)
     TagSubmit :: Tag MarloweTxCommand SubmitStatus SubmitError BlockHeader
 
   data JobId MarloweTxCommand stats err result where
@@ -1153,7 +1183,7 @@ instance Command MarloweTxCommand where
     Create _ version _ _ _ _ _ _ _ -> TagCreate version
     ApplyInputs version _ _ _ _ _ _ -> TagApplyInputs version
     Withdraw version _ _ -> TagWithdraw version
-    Burn _ _ -> TagBurn
+    BurnRoleTokens version _ _ -> TagBurnRoleTokens version
     Submit _ _ -> TagSubmit
 
   tagFromJobId = \case
@@ -1166,8 +1196,8 @@ instance Command MarloweTxCommand where
     (TagApplyInputs _, _) -> Nothing
     (TagWithdraw MarloweV1, TagWithdraw MarloweV1) -> pure (Refl, Refl, Refl)
     (TagWithdraw _, _) -> Nothing
-    (TagBurn, TagBurn) -> pure (Refl, Refl, Refl)
-    (TagBurn, _) -> Nothing
+    (TagBurnRoleTokens MarloweV1, TagBurnRoleTokens MarloweV1) -> pure (Refl, Refl, Refl)
+    (TagBurnRoleTokens MarloweV1, _) -> Nothing
     (TagSubmit, TagSubmit) -> pure (Refl, Refl, Refl)
     (TagSubmit, _) -> Nothing
 
@@ -1176,7 +1206,7 @@ instance Command MarloweTxCommand where
     TagApplyInputs version -> putWord8 0x02 *> put (SomeMarloweVersion version)
     TagWithdraw version -> putWord8 0x03 *> put (SomeMarloweVersion version)
     TagSubmit -> putWord8 0x04
-    TagBurn -> putWord8 0x05
+    TagBurnRoleTokens version -> putWord8 0x05 *> put (SomeMarloweVersion version)
 
   getTag = do
     tag <- getWord8
@@ -1191,7 +1221,9 @@ instance Command MarloweTxCommand where
         SomeMarloweVersion version <- get
         pure $ SomeTag $ TagWithdraw version
       0x04 -> pure $ SomeTag TagSubmit
-      0x05 -> pure $ SomeTag TagBurn
+      0x05 -> do
+        SomeMarloweVersion version <- get
+        pure $ SomeTag $ TagBurnRoleTokens version
       _ -> fail $ "Invalid command tag: " <> show tag
 
   putJobId = \case
@@ -1201,7 +1233,7 @@ instance Command MarloweTxCommand where
     TagCreate _ -> fail "create has no job ID"
     TagApplyInputs _ -> fail "apply inputs has no job ID"
     TagWithdraw _ -> fail "withdraw has no job ID"
-    TagBurn -> fail "burn has no job ID"
+    TagBurnRoleTokens _ -> fail "burn role tokens has no job ID"
     TagSubmit -> JobIdSubmit <$> get
 
   putCommand = \case
@@ -1224,7 +1256,7 @@ instance Command MarloweTxCommand where
     Withdraw _ walletAddresses payoutIds -> do
       put walletAddresses
       put payoutIds
-    Burn walletAddresses tokenFilter -> do
+    BurnRoleTokens _ walletAddresses tokenFilter -> do
       put walletAddresses
       put tokenFilter
     Submit era tx -> case era of
@@ -1257,7 +1289,7 @@ instance Command MarloweTxCommand where
     TagWithdraw version -> do
       walletAddresses <- get
       Withdraw version walletAddresses <$> get
-    TagBurn -> Burn <$> get <*> get
+    TagBurnRoleTokens version -> BurnRoleTokens version <$> get <*> get
     TagSubmit -> do
       eraTag <- getWord8
       case eraTag of
@@ -1277,42 +1309,42 @@ instance Command MarloweTxCommand where
     TagCreate _ -> absurd
     TagApplyInputs _ -> absurd
     TagWithdraw _ -> absurd
-    TagBurn -> absurd
+    TagBurnRoleTokens _ -> absurd
     TagSubmit -> put
 
   getStatus = \case
     TagCreate _ -> fail "create has no status"
     TagApplyInputs _ -> fail "apply inputs has no status"
     TagWithdraw _ -> fail "withdraw has no status"
-    TagBurn -> fail "burn has no status"
+    TagBurnRoleTokens _ -> fail "burn role tokens has no status"
     TagSubmit -> get
 
   putErr = \case
     TagCreate MarloweV1 -> put
     TagApplyInputs MarloweV1 -> put
     TagWithdraw MarloweV1 -> put
-    TagBurn -> put
+    TagBurnRoleTokens _ -> put
     TagSubmit -> put
 
   getErr = \case
     TagCreate MarloweV1 -> get
     TagApplyInputs MarloweV1 -> get
     TagWithdraw MarloweV1 -> get
-    TagBurn -> get
+    TagBurnRoleTokens _ -> get
     TagSubmit -> get
 
   putResult = \case
     TagCreate MarloweV1 -> put
     TagApplyInputs MarloweV1 -> put
     TagWithdraw MarloweV1 -> put
-    TagBurn -> put
+    TagBurnRoleTokens MarloweV1 -> put
     TagSubmit -> put
 
   getResult = \case
     TagCreate MarloweV1 -> get
     TagApplyInputs MarloweV1 -> get
     TagWithdraw MarloweV1 -> get
-    TagBurn -> get
+    TagBurnRoleTokens MarloweV1 -> get
     TagSubmit -> get
 
 putTxBody :: (IsShelleyBasedEra era) => TxBody era -> Put
@@ -1491,8 +1523,8 @@ instance CommandEq MarloweTxCommand where
       Withdraw MarloweV1 wallet' payoutIds' ->
         wallet == wallet'
           && payoutIds == payoutIds'
-    Burn wallet tokenFilter -> \case
-      Burn wallet' tokenFilter' ->
+    BurnRoleTokens MarloweV1 wallet tokenFilter -> \case
+      BurnRoleTokens MarloweV1 wallet' tokenFilter' ->
         wallet == wallet'
           && tokenFilter == tokenFilter'
     Submit BabbageEraOnwardsBabbage tx -> \case
@@ -1510,21 +1542,21 @@ instance CommandEq MarloweTxCommand where
     TagCreate MarloweV1 -> (==)
     TagApplyInputs MarloweV1 -> (==)
     TagWithdraw MarloweV1 -> (==)
-    TagBurn -> (==)
+    TagBurnRoleTokens MarloweV1 -> (==)
     TagSubmit -> (==)
 
   errEq = \case
     TagCreate MarloweV1 -> (==)
     TagApplyInputs MarloweV1 -> (==)
     TagWithdraw MarloweV1 -> (==)
-    TagBurn -> (==)
+    TagBurnRoleTokens MarloweV1 -> (==)
     TagSubmit -> (==)
 
   resultEq = \case
     TagCreate MarloweV1 -> (==)
     TagApplyInputs MarloweV1 -> (==)
     TagWithdraw MarloweV1 -> (==)
-    TagBurn -> (==)
+    TagBurnRoleTokens MarloweV1 -> (==)
     TagSubmit -> (==)
 
 instance ShowCommand MarloweTxCommand where
@@ -1550,7 +1582,7 @@ instance ShowCommand MarloweTxCommand where
             . showSpace
             . showString "MarloweV1"
         )
-    TagBurn -> showString "TagBurn"
+    TagBurnRoleTokens MarloweV1 -> showString "TagBurnRoleTokens"
     TagSubmit -> showString "TagSubmit"
 
   showsPrecCommand p =
@@ -1602,8 +1634,8 @@ instance ShowCommand MarloweTxCommand where
             . showSpace
             . showsPrec 11 payoutIds
         )
-      Burn wallet tokenFilter ->
-        ( showString "Burn"
+      BurnRoleTokens MarloweV1 wallet tokenFilter ->
+        ( showString "BurnRoleTokens"
             . showSpace
             . showsPrec 11 wallet
             . showSpace
@@ -1637,21 +1669,21 @@ instance ShowCommand MarloweTxCommand where
     TagCreate MarloweV1 -> showsPrec p
     TagApplyInputs MarloweV1 -> showsPrec p
     TagWithdraw MarloweV1 -> showsPrec p
-    TagBurn -> showsPrec p
+    TagBurnRoleTokens MarloweV1 -> showsPrec p
     TagSubmit -> showsPrec p
 
   showsPrecErr p = \case
     TagCreate MarloweV1 -> showsPrec p
     TagApplyInputs MarloweV1 -> showsPrec p
     TagWithdraw MarloweV1 -> showsPrec p
-    TagBurn -> showsPrec p
+    TagBurnRoleTokens MarloweV1 -> showsPrec p
     TagSubmit -> showsPrec p
 
   showsPrecResult p = \case
     TagCreate MarloweV1 -> showsPrec p
     TagApplyInputs MarloweV1 -> showsPrec p
     TagWithdraw MarloweV1 -> showsPrec p
-    TagBurn -> showsPrec p
+    TagBurnRoleTokens MarloweV1 -> showsPrec p
     TagSubmit -> showsPrec p
 
 instance Variations V1.TransactionError

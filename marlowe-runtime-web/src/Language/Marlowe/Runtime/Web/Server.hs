@@ -10,6 +10,7 @@ import Language.Marlowe.Runtime.Web.API (RuntimeAPI)
 import Language.Marlowe.Runtime.Web.Adapter.Server.Monad (ServerM)
 import qualified Language.Marlowe.Runtime.Web.Contract.Server as Contracts
 import qualified Language.Marlowe.Runtime.Web.Payout.Server as Payouts
+import qualified Language.Marlowe.Runtime.Web.Role.Server as Roles
 import qualified Language.Marlowe.Runtime.Web.Withdrawal.Server as Withdrawals
 import Servant (
   HasServer (ServerT),
@@ -18,7 +19,12 @@ import Servant (
  )
 
 server :: ServerT RuntimeAPI ServerM
-server = Contracts.server :<|> Withdrawals.server :<|> Payouts.server :<|> healthcheckServer
+server =
+  Contracts.server
+    :<|> Withdrawals.server
+    :<|> Payouts.server
+    :<|> Roles.server
+    :<|> healthcheckServer
 
 healthcheckServer :: ServerM NoContent
 healthcheckServer = pure NoContent

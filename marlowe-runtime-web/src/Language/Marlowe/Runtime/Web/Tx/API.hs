@@ -25,7 +25,6 @@ module Language.Marlowe.Runtime.Web.Tx.API (
   ApplyInputsTxEnvelope (..),
   WithdrawTx,
   WithdrawTxEnvelope (..),
-  BurnTx,
   PostTxAPI,
   PutSignedTxAPI,
   TxJSON,
@@ -139,7 +138,6 @@ data CardanoTxBody
 data ContractTx
 data ApplyInputsTx
 data WithdrawTx
-data BurnTx
 
 type PutSignedTxAPI = ReqBody '[JSON] TextEnvelope :> PutAccepted '[JSON] NoContent
 

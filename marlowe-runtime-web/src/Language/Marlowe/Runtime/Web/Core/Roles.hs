@@ -16,7 +16,6 @@ module Language.Marlowe.Runtime.Web.Core.Roles (
   RoleTokenRecipient (..),
   TokenMetadata (..),
   TokenMetadataFile (..),
-  RoleTokenFilter (..),
 ) where
 
 import Control.Applicative ((<|>))
@@ -29,29 +28,25 @@ import Data.Aeson (
   KeyValue ((.=)),
   ToJSON (toJSON),
   ToJSONKey (toJSONKey),
-  Value (Array, Bool, Object, String),
+  Value (String),
   object,
   withObject,
   withText,
   (.:),
   (.:?),
-  (<?>),
  )
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as AMap
-import qualified Data.Aeson.KeyMap as KeyMap
-import Data.Aeson.Types (JSONPathElement (..), Parser, prependFailure, toJSONKeyText, typeMismatch)
+import Data.Aeson.Types (toJSONKeyText)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.OpenApi (
   AdditionalProperties (..),
-  Definitions,
   HasAdditionalProperties (..),
   HasType (..),
   NamedSchema (..),
   OpenApiType (..),
   Referenced (..),
-  Schema,
   ToSchema,
   declareSchemaRef,
   enum_,
@@ -60,10 +55,7 @@ import Data.OpenApi (
   required,
  )
 import qualified Data.OpenApi as OpenApi
-import Data.OpenApi.Declare (Declare)
 import Data.OpenApi.Schema (ToSchema (..))
-import Data.Set (Set)
-import qualified Data.Set as Set
 import Data.Text (Text)
 import Data.Traversable (for)
 import Data.Word (Word64)
@@ -74,12 +66,10 @@ import Language.Marlowe.Runtime.Web.Adapter.URI (
  )
 import Language.Marlowe.Runtime.Web.Core.Address (Address (..))
 import Language.Marlowe.Runtime.Web.Core.Asset (
-  AssetId,
   PolicyId,
  )
 import Language.Marlowe.Runtime.Web.Core.Metadata (Metadata)
 import Language.Marlowe.Runtime.Web.Core.Semantics.Schema ()
-import Language.Marlowe.Runtime.Web.Core.Tx (TxOutRef)
 import Servant (
   Proxy (..),
   URI,
@@ -367,126 +357,3 @@ instance ToSchema TokenMetadataFile where
                , ("mediaType", stringSchema)
                ]
           & additionalProperties ?~ AdditionalPropertiesSchema metadataSchema
-
-data RoleTokenFilter
-  = RoleTokenAnd RoleTokenFilter RoleTokenFilter
-  | RoleTokenOr RoleTokenFilter RoleTokenFilter
-  | RoleTokenNot RoleTokenFilter
-  | RoleTokenFilterNone
-  | RoleTokenFilterByContracts (Set TxOutRef)
-  | RoleTokenFilterByPolicies (Set PolicyId)
-  | RoleTokenFilterByTokens (Set AssetId)
-  | RoleTokenFilterAny
-  deriving stock (Show, Eq, Ord, Generic)
-
-instance ToJSON RoleTokenFilter where
-  toJSON = \case
-    RoleTokenAnd a b -> object ["and" .= (a, b)]
-    RoleTokenOr a b -> object ["or" .= (a, b)]
-    RoleTokenNot a -> object ["not" .= a]
-    RoleTokenFilterNone -> toJSON False
-    RoleTokenFilterByContracts contracts -> object ["contract_id" .= contracts]
-    RoleTokenFilterByPolicies policies -> object ["roles_currency" .= policies]
-    RoleTokenFilterByTokens tokens -> object ["role_tokens" .= tokens]
-    RoleTokenFilterAny -> toJSON True
-
-instance FromJSON RoleTokenFilter where
-  parseJSON =
-    prependFailure "Parsing RoleTokenFilter failed" . \case
-      Object o -> case KeyMap.toList o of
-        [(k, v)] -> case k of
-          "and" -> uncurry RoleTokenAnd <$> parseJSON v <?> Key "and"
-          "or" -> uncurry RoleTokenOr <$> parseJSON v <?> Key "or"
-          "not" -> RoleTokenNot <$> parseJSON v <?> Key "not"
-          "contract_id" -> RoleTokenFilterByContracts <$> parseSetOrSingle v <?> Key "contract_id"
-          "roles_currency" -> RoleTokenFilterByPolicies <$> parseSetOrSingle v <?> Key "roles_currency"
-          "role_tokens" -> RoleTokenFilterByTokens <$> parseSetOrSingle v <?> Key "role_tokens"
-          _ -> fail $ "Unexpected key: " <> show k
-        _ -> fail "Unexpected number of keys, expected exactly 1."
-      Bool True -> pure RoleTokenFilterAny
-      Bool False -> pure RoleTokenFilterNone
-      v -> typeMismatch "object|boolean" v
-
-parseSetOrSingle :: (FromJSON a, Ord a) => Value -> Parser (Set a)
-parseSetOrSingle = \case
-  Array arr -> parseJSON $ Array arr
-  v -> Set.singleton <$> parseJSON v
-
-instance ToSchema RoleTokenFilter where
-  declareNamedSchema _ = do
-    roleTokenFilterSchema <- declareSchemaRef $ Proxy @RoleTokenFilter
-    roleTokenFilterPairSchema <- declareSchemaRef $ Proxy @(RoleTokenFilter, RoleTokenFilter)
-    let setOrSingleSchema
-          :: forall a
-           . (ToSchema a)
-          => Proxy a
-          -> Declare (Definitions Schema) (Referenced Schema)
-        setOrSingleSchema p = do
-          singleSchema <- declareSchemaRef p
-          setSchema <- declareSchemaRef $ Proxy @(Set a)
-          pure $ Inline $ mempty & oneOf ?~ [singleSchema, setSchema]
-    txOutRefSchema <- setOrSingleSchema $ Proxy @TxOutRef
-    policyIdSchema <- setOrSingleSchema $ Proxy @PolicyId
-    assetIdSchema <- setOrSingleSchema $ Proxy @AssetId
-    let andSchema =
-          mempty
-            & type_ ?~ OpenApiObject
-            & OpenApi.description ?~ "Matches any role tokens matched by both sub-filters."
-            & required .~ ["and"]
-            & properties .~ [("and", roleTokenFilterPairSchema)]
-        orSchema =
-          mempty
-            & type_ ?~ OpenApiObject
-            & OpenApi.description ?~ "Matches any role tokens matched by either sub-filter."
-            & required .~ ["or"]
-            & properties .~ [("or", roleTokenFilterPairSchema)]
-        notSchema =
-          mempty
-            & type_ ?~ OpenApiObject
-            & OpenApi.description ?~ "Matches any role tokens not matched by the sub-filter."
-            & required .~ ["not"]
-            & properties .~ [("not", roleTokenFilterSchema)]
-        anySchema =
-          mempty
-            & type_ ?~ OpenApiBoolean
-            & OpenApi.description ?~ "Matches any role token."
-            & enum_ ?~ [Bool True]
-        noneSchema =
-          mempty
-            & type_ ?~ OpenApiBoolean
-            & OpenApi.description ?~ "Matches no role token."
-            & enum_ ?~ [Bool False]
-        contractsSchema =
-          mempty
-            & type_ ?~ OpenApiObject
-            & OpenApi.description ?~ "Matches any role tokens used by the given contract(s)."
-            & required .~ ["contract_id"]
-            & properties .~ [("contract_id", txOutRefSchema)]
-        policiesSchema =
-          mempty
-            & type_ ?~ OpenApiObject
-            & OpenApi.description ?~ "Matches any role tokens with the given currency symbol(s)."
-            & required .~ ["roles_currency"]
-            & properties .~ [("roles_currency", policyIdSchema)]
-        tokensSchema =
-          mempty
-            & type_ ?~ OpenApiObject
-            & OpenApi.description ?~ "Matches only the given role token(s)."
-            & required .~ ["role_tokens"]
-            & properties .~ [("role_tokens", assetIdSchema)]
-    pure $
-      NamedSchema (Just "RoleTokenFilter") $
-        mempty
-          & OpenApi.description ?~ "A filter that selects role tokens for burning."
-          & oneOf
-            ?~ fmap
-              Inline
-              [ andSchema
-              , orSchema
-              , notSchema
-              , anySchema
-              , noneSchema
-              , contractsSchema
-              , policiesSchema
-              , tokensSchema
-              ]

@@ -36,8 +36,8 @@ import Language.Marlowe.Runtime.Integration.StandardContract (
     withdrawPartyAFunds
   ),
   StandardContractFundsDeposited (chooseGimmeTheMoney),
-  StandardContractInit (
-    StandardContractInit,
+  StandardContractLifecycleInit (
+    StandardContractLifecycleInit,
     contractCreated,
     createdBlock,
     makeInitialDeposit
@@ -183,7 +183,7 @@ setup runTests = withLocalMarloweRuntime $ runIntegrationTest do
   wallet2 <- getGenesisWallet 2
   (wallet1AvailablePayout1, wallet1AvailablePayout2, wallet1WithdrawnPayout) <- setupPayments wallet1 wallet2
   wallet2AvailablePayout <- createAndExecuteStandardContractWithoutWithdrawing wallet2 wallet1
-  StandardContractInit{contractCreated = randomCreation} <- createStandardContract wallet1 wallet2
+  StandardContractLifecycleInit{contractCreated = randomCreation} <- createStandardContract wallet1 wallet2
   liftIO $ runTests TestData{..}
 
 setupPayments :: Wallet -> Wallet -> Integration (PayoutState 'V1, PayoutState 'V1, PayoutState 'V1)
@@ -195,7 +195,7 @@ setupPayments partyA partyB = do
 
 createAndExecuteStandardContractWithoutWithdrawing :: Wallet -> Wallet -> Integration (PayoutState 'V1)
 createAndExecuteStandardContractWithoutWithdrawing partyA partyB = do
-  StandardContractInit{..} <- createStandardContract partyA partyB
+  StandardContractLifecycleInit{..} <- createStandardContract partyA partyB
   ContractCreated _ ContractCreatedInEra{..} <- pure contractCreated
   step2 <- makeInitialDeposit
   step3 <- chooseGimmeTheMoney step2
@@ -214,7 +214,7 @@ createAndExecuteStandardContractWithoutWithdrawing partyA partyB = do
 
 createAndExecuteStandardContract :: Wallet -> Wallet -> Integration (PayoutState 'V1)
 createAndExecuteStandardContract partyA partyB = do
-  StandardContractInit{..} <- createStandardContract partyA partyB
+  StandardContractLifecycleInit{..} <- createStandardContract partyA partyB
   ContractCreated _ ContractCreatedInEra{contractId} <- pure contractCreated
   step2 <- makeInitialDeposit
   step3 <- chooseGimmeTheMoney step2

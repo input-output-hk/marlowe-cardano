@@ -68,7 +68,6 @@ library
     Language.Marlowe.Runtime.Web.Adapter.Server.Util
     Language.Marlowe.Runtime.Web.Adapter.URI
     Language.Marlowe.Runtime.Web.API
-    Language.Marlowe.Runtime.Web.Burn.API
     Language.Marlowe.Runtime.Web.Client
     Language.Marlowe.Runtime.Web.Contract.API
     Language.Marlowe.Runtime.Web.Contract.Next.API
@@ -78,6 +77,7 @@ library
     Language.Marlowe.Runtime.Web.Contract.Server
     Language.Marlowe.Runtime.Web.Contract.Source.Server
     Language.Marlowe.Runtime.Web.Contract.Transaction.API
+    Language.Marlowe.Runtime.Web.Contract.Transaction.Client
     Language.Marlowe.Runtime.Web.Contract.Transaction.Server
     Language.Marlowe.Runtime.Web.Core.Address
     Language.Marlowe.Runtime.Web.Core.Asset
@@ -95,6 +95,10 @@ library
     Language.Marlowe.Runtime.Web.Core.Tx
     Language.Marlowe.Runtime.Web.Payout.API
     Language.Marlowe.Runtime.Web.Payout.Server
+    Language.Marlowe.Runtime.Web.Role.API
+    Language.Marlowe.Runtime.Web.Role.Client
+    Language.Marlowe.Runtime.Web.Role.Server
+    Language.Marlowe.Runtime.Web.Role.TokenFilter
     Language.Marlowe.Runtime.Web.Server
     Language.Marlowe.Runtime.Web.Status
     Language.Marlowe.Runtime.Web.Tx.API
