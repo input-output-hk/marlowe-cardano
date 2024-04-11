@@ -4,7 +4,59 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecursiveDo #-}
 
-module Language.Marlowe.Runtime.Integration.Common where
+module Language.Marlowe.Runtime.Integration.Common (
+  allocateWallet,
+  contractCreatedToContractHeader,
+  marloweSyncRequestNextExpectWait,
+  contractCreatedToCreateStep,
+  expectLeft,
+  expectJust,
+  expectRight,
+  getGenesisWallet,
+  getStakeCredential,
+  getTip,
+  getUTxO,
+  inputsAppliedToTransaction,
+  retryDelayMicroSeconds,
+  runIntegrationTest,
+  submitBuilder,
+  submit',
+  testnet,
+  timeout,
+  Wallet (..),
+  withCurrentEra,
+  withdraw,
+  notify,
+  buildBurnRoleTokensTx,
+  choose,
+  deposit,
+  submit,
+  bulkSyncRequestNextNExpectRollForward,
+  bulkSyncRequestNextExpectRollForward,
+  bulkSyncPollExpectWait,
+  bulkSyncRequestNextExpectWait,
+  headerSyncRequestNextExpectWait,
+  headerSyncPollExpectNewHeaders,
+  headerSyncRequestNextExpectNewHeaders,
+  headerSyncPollExpectWait,
+  headerSyncExpectWait,
+  Integration,
+  bulkSyncPollExpectRollForward,
+  marloweSyncExpectContractFound,
+  marloweSyncExpectRollForward,
+  headerSyncIntersectExpectNotFound,
+  headerSyncIntersectExpectFound,
+  marloweSyncIntersectExpectNotFound,
+  marloweSyncIntersectExpectFound,
+  marloweSyncPollExpectRollForward,
+  marloweSyncPollExpectWait,
+  marloweSyncRequestNextExpectRollForward,
+  prepareCliArgs,
+  execMarlowe,
+  execMarlowe_,
+  execMarlowe',
+  runWebClient,
+) where
 
 import Cardano.Api (
   AddressAny (AddressShelley),
@@ -40,6 +92,13 @@ import qualified Control.Monad.Reader as Reader
 import Control.Monad.Reader.Class (asks)
 import Control.Monad.State (StateT, runStateT, state)
 import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Marlowe (MarloweT, runMarloweT)
+import Control.Monad.Trans.Marlowe.Class (
+  applyInputs,
+  runMarloweHeaderSyncClient,
+  runMarloweSyncClient,
+  runMarloweTxClient,
+ )
 import Data.Aeson (FromJSON (..), Value (..), decodeFileStrict, eitherDecodeStrict)
 import Data.Aeson.Types (parseFail)
 import Data.ByteString (ByteString)
@@ -83,14 +142,6 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   fromBech32,
  )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Language.Marlowe.Runtime.Client (
-  MarloweT,
-  applyInputs,
-  runMarloweHeaderSyncClient,
-  runMarloweSyncClient,
-  runMarloweT,
-  runMarloweTxClient,
- )
 import qualified Language.Marlowe.Runtime.Client as Client
 import Language.Marlowe.Runtime.Core.Api (
   ContractId (..),
@@ -104,11 +155,13 @@ import Language.Marlowe.Runtime.Core.Api (
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader (..))
 import Language.Marlowe.Runtime.History.Api (ContractStep, CreateStep (..), MarloweBlock)
 import Language.Marlowe.Runtime.Transaction.Api (
+  BurnRoleTokensTx,
   ContractCreated (..),
   ContractCreatedInEra (..),
   InputsApplied (..),
   InputsAppliedInEra (..),
   MarloweTxCommand (..),
+  RoleTokenFilter,
   SubmitError,
   WalletAddresses (..),
   WithdrawTx (..),
@@ -421,6 +474,14 @@ withdraw
 withdraw Wallet{..} payouts = do
   result <- Client.withdraw MarloweV1 addresses payouts
   expectRight "Failed to create withdraw transaction" result
+
+buildBurnRoleTokensTx
+  :: Wallet
+  -> RoleTokenFilter
+  -> Integration (BurnRoleTokensTx 'V1)
+buildBurnRoleTokensTx Wallet{..} tokenFilter = do
+  result <- Client.buildBurnRoleTokensTx MarloweV1 addresses tokenFilter
+  expectRight "Failed to create burn Role Tokens transaction" result
 
 timeout :: NominalDiffTime
 timeout = secondsToNominalDiffTime 2

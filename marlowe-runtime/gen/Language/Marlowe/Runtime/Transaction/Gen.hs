@@ -342,11 +342,61 @@ instance (ArbitraryMarloweVersion v, IsShelleyBasedEra era) => Arbitrary (Withdr
       <*> hedgehog (genTxBody shelleyBasedEra)
   shrink WithdrawTxInEra{..} = [WithdrawTxInEra{..}{WithdrawTxInEra.inputs = inputs'} | inputs' <- shrink inputs]
 
+instance (ArbitraryMarloweVersion v) => Arbitrary (BurnRoleTokensTx v) where
+  arbitrary =
+    oneof
+      [ BurnRoleTokensTx BabbageEraOnwardsBabbage <$> arbitrary
+      , BurnRoleTokensTx BabbageEraOnwardsConway <$> arbitrary
+      ]
+  shrink (BurnRoleTokensTx BabbageEraOnwardsBabbage created) =
+    BurnRoleTokensTx BabbageEraOnwardsBabbage <$> shrink created
+  shrink (BurnRoleTokensTx BabbageEraOnwardsConway created) =
+    BurnRoleTokensTx BabbageEraOnwardsConway <$> shrink created
+
+instance (ArbitraryMarloweVersion v, IsShelleyBasedEra era) => Arbitrary (BurnRoleTokensTxInEra era v) where
+  arbitrary =
+    BurnRoleTokensTxInEra Core.marloweVersion
+      <$> arbitrary
+      <*> hedgehog (genTxBody shelleyBasedEra)
+  shrink BurnRoleTokensTxInEra{..} =
+    [BurnRoleTokensTxInEra{..}{burnedTokens = burnedTokens'} | burnedTokens' <- shrink burnedTokens]
+
 instance Arbitrary Account where
   arbitrary =
     oneof
       [ RoleAccount <$> arbitrary
       , AddressAccount <$> arbitrary
+      ]
+  shrink = genericShrink
+
+instance (Arbitrary c, Ord c, Arbitrary p, Ord p, Arbitrary t, Ord t) => Arbitrary (RoleTokenFilter' c p t) where
+  arbitrary = sized \case
+    0 -> frequency leaves
+    size -> frequency $ leaves <> nodes size
+    where
+      leaves =
+        [ (1, pure RoleTokenFilterAny)
+        , (1, pure RoleTokenFilterNone)
+        , (5, RoleTokenFilterByContracts <$> arbitrary)
+        , (5, RoleTokenFilterByPolicyIds <$> arbitrary)
+        , (5, RoleTokenFilterByTokens <$> arbitrary)
+        ]
+      nodes size =
+        [ (5, resize (size `div` 2) $ RoleTokensOr <$> arbitrary <*> arbitrary)
+        , (5, resize (size `div` 2) $ RoleTokensAnd <$> arbitrary <*> arbitrary)
+        , (5, resize (size - 1) $ RoleTokensNot <$> arbitrary)
+        ]
+  shrink = genericShrink
+
+instance Arbitrary BurnRoleTokensError where
+  arbitrary =
+    frequency
+      [ (5, BurnRolesActive <$> arbitrary)
+      , (1, pure BurnNoTokens)
+      , (1, pure BurnFromCardanoError)
+      , (3, BurnConstraintError <$> arbitrary)
+      , (3, BurnEraUnsupported <$> arbitrary)
+      , (3, BurnInvalidPolicyId <$> arbitrary)
       ]
   shrink = genericShrink
 
@@ -356,6 +406,7 @@ instance ArbitraryCommand MarloweTxCommand where
       [ SomeTag $ TagCreate Core.MarloweV1
       , SomeTag $ TagApplyInputs Core.MarloweV1
       , SomeTag $ TagWithdraw Core.MarloweV1
+      , SomeTag $ TagBurnRoleTokens Core.MarloweV1
       , SomeTag TagSubmit
       ]
   arbitraryCmd = \case
@@ -382,6 +433,7 @@ instance ArbitraryCommand MarloweTxCommand where
       Withdraw Core.MarloweV1
         <$> arbitrary
         <*> arbitrary
+    TagBurnRoleTokens Core.MarloweV1 -> BurnRoleTokens Core.MarloweV1 <$> arbitrary <*> arbitrary
     TagSubmit ->
       oneof
         [ Submit BabbageEraOnwardsBabbage <$> hedgehog (genTx ShelleyBasedEraBabbage)
@@ -391,21 +443,25 @@ instance ArbitraryCommand MarloweTxCommand where
     TagCreate Core.MarloweV1 -> Nothing
     TagApplyInputs Core.MarloweV1 -> Nothing
     TagWithdraw Core.MarloweV1 -> Nothing
+    TagBurnRoleTokens Core.MarloweV1 -> Nothing
     TagSubmit -> Just $ JobIdSubmit <$> arbitrary
   arbitraryStatus = \case
     TagCreate Core.MarloweV1 -> Nothing
     TagApplyInputs Core.MarloweV1 -> Nothing
     TagWithdraw Core.MarloweV1 -> Nothing
+    TagBurnRoleTokens Core.MarloweV1 -> Nothing
     TagSubmit -> Just arbitrary
   arbitraryErr = \case
     TagCreate Core.MarloweV1 -> Just arbitrary
     TagApplyInputs Core.MarloweV1 -> Just arbitrary
     TagWithdraw Core.MarloweV1 -> Just arbitrary
+    TagBurnRoleTokens Core.MarloweV1 -> Just arbitrary
     TagSubmit -> Just arbitrary
   arbitraryResult = \case
     TagCreate Core.MarloweV1 -> arbitrary
     TagApplyInputs Core.MarloweV1 -> arbitrary
     TagWithdraw Core.MarloweV1 -> arbitrary
+    TagBurnRoleTokens Core.MarloweV1 -> arbitrary
     TagSubmit -> arbitrary
   shrinkCommand = \case
     Create staking Core.MarloweV1 wallet thread roleConfig meta minAda state contract ->
@@ -489,6 +545,9 @@ instance ArbitraryCommand MarloweTxCommand where
     Withdraw Core.MarloweV1 wallet payouts ->
       (Withdraw Core.MarloweV1 <$> shrink wallet <*> pure payouts)
         <> (Withdraw Core.MarloweV1 wallet <$> shrink payouts)
+    BurnRoleTokens Core.MarloweV1 wallet tokenFilter ->
+      (BurnRoleTokens Core.MarloweV1 <$> shrink wallet <*> pure tokenFilter)
+        <> (BurnRoleTokens Core.MarloweV1 wallet <$> shrink tokenFilter)
     Submit _ _ -> []
   shrinkJobId = \case
     JobIdSubmit txId -> JobIdSubmit <$> shrink txId
@@ -496,16 +555,19 @@ instance ArbitraryCommand MarloweTxCommand where
     TagCreate Core.MarloweV1 -> shrink
     TagApplyInputs Core.MarloweV1 -> shrink
     TagWithdraw Core.MarloweV1 -> shrink
+    TagBurnRoleTokens Core.MarloweV1 -> shrink
     TagSubmit -> shrink
   shrinkResult = \case
     TagCreate Core.MarloweV1 -> shrink
     TagApplyInputs Core.MarloweV1 -> shrink
     TagWithdraw Core.MarloweV1 -> shrink
+    TagBurnRoleTokens Core.MarloweV1 -> shrink
     TagSubmit -> shrink
   shrinkStatus = \case
     TagCreate Core.MarloweV1 -> \case {}
     TagApplyInputs Core.MarloweV1 -> \case {}
     TagWithdraw Core.MarloweV1 -> \case {}
+    TagBurnRoleTokens Core.MarloweV1 -> \case {}
     TagSubmit -> shrink
 
 instance CommandVariations MarloweTxCommand where
@@ -515,6 +577,7 @@ instance CommandVariations MarloweTxCommand where
       , SomeTag $ TagApplyInputs Core.MarloweV1
       , SomeTag $ TagWithdraw Core.MarloweV1
       , SomeTag TagSubmit
+      , SomeTag $ TagBurnRoleTokens Core.MarloweV1
       ]
   cmdVariations = \case
     TagCreate Core.MarloweV1 ->
@@ -538,6 +601,8 @@ instance CommandVariations MarloweTxCommand where
           `varyAp` variations
     TagWithdraw Core.MarloweV1 ->
       Withdraw Core.MarloweV1 <$> variations `varyAp` variations
+    TagBurnRoleTokens Core.MarloweV1 ->
+      BurnRoleTokens Core.MarloweV1 <$> variations `varyAp` variations
     TagSubmit ->
       sconcat $
         NE.fromList
@@ -548,19 +613,23 @@ instance CommandVariations MarloweTxCommand where
     TagCreate Core.MarloweV1 -> []
     TagApplyInputs Core.MarloweV1 -> []
     TagWithdraw Core.MarloweV1 -> []
+    TagBurnRoleTokens Core.MarloweV1 -> []
     TagSubmit -> NE.toList $ JobIdSubmit <$> variations
   statusVariations = \case
     TagCreate Core.MarloweV1 -> []
     TagApplyInputs Core.MarloweV1 -> []
     TagWithdraw Core.MarloweV1 -> []
+    TagBurnRoleTokens Core.MarloweV1 -> []
     TagSubmit -> NE.toList variations
   errVariations = \case
     TagCreate Core.MarloweV1 -> NE.toList variations
     TagApplyInputs Core.MarloweV1 -> NE.toList variations
     TagWithdraw Core.MarloweV1 -> NE.toList variations
+    TagBurnRoleTokens Core.MarloweV1 -> NE.toList variations
     TagSubmit -> NE.toList variations
   resultVariations = \case
     TagCreate Core.MarloweV1 -> variations
     TagApplyInputs Core.MarloweV1 -> variations
     TagWithdraw Core.MarloweV1 -> variations
+    TagBurnRoleTokens Core.MarloweV1 -> variations
     TagSubmit -> variations

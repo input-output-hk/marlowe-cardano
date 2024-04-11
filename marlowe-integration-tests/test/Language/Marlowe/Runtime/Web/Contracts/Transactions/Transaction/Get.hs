@@ -7,10 +7,15 @@ import Control.Exception (throw)
 import Data.Functor (void)
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Integration.Common (getGenesisWallet, runIntegrationTest, runWebClient)
-import qualified Language.Marlowe.Runtime.Web as Web
-import Language.Marlowe.Runtime.Web.Client (getTransaction)
-import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO (toDTO))
-import Language.Marlowe.Runtime.Web.StandardContract (createFullyExecutedStandardContract)
+import Language.Marlowe.Runtime.Web.Adapter.Server.DTO (ToDTO (toDTO))
+
+import qualified Language.Marlowe.Runtime.Web.Core.Asset as Web
+import qualified Language.Marlowe.Runtime.Web.Core.Tx as Web
+import qualified Language.Marlowe.Runtime.Web.Payout.API as Web
+import Language.Marlowe.Runtime.Web.StandardContract (executeCompleteStandardContractLifecycle)
+
+import Language.Marlowe.Runtime.Web.Contract.Transaction.Client (getTransaction)
+import qualified Language.Marlowe.Runtime.Web.Tx.API as Web
 import Network.HTTP.Types (Status (..))
 import Servant.Client (ClientError (FailureResponse))
 import Servant.Client.Streaming (ResponseF (Response, responseStatusCode))
@@ -106,7 +111,7 @@ setup runSpec = withLocalMarloweRuntime $ runIntegrationTest do
   wallet1 <- getGenesisWallet 0
   wallet2 <- getGenesisWallet 1
   either throw pure =<< runWebClient do
-    (contractId, transactionIds) <- createFullyExecutedStandardContract wallet1 wallet2
+    (contractId, transactionIds) <- executeCompleteStandardContractLifecycle wallet1 wallet2
     liftIO $ runSpec MarloweWebTestData{..}
 
 data MarloweWebTestData = MarloweWebTestData

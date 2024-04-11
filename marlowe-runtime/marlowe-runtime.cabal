@@ -430,6 +430,7 @@ library sync
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetNextSteps
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetPayout
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetPayouts
+    Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetRoleCurrencies
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTip
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTipForContract
     Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTransaction
@@ -485,6 +486,7 @@ library tx-api
     , containers ^>=0.6.5
     , http-media ^>=0.8
     , keys
+    , lens >=5.2 && <6
     , marlowe-cardano ==0.2.1.0
     , marlowe-chain-sync ==0.0.6
     , marlowe-protocols ==0.3.0.0
@@ -504,6 +506,7 @@ library tx
   exposed-modules:
     Language.Marlowe.Runtime.Transaction
     Language.Marlowe.Runtime.Transaction.BuildConstraints
+    Language.Marlowe.Runtime.Transaction.Burn
     Language.Marlowe.Runtime.Transaction.Chain
     Language.Marlowe.Runtime.Transaction.Constraints
     Language.Marlowe.Runtime.Transaction.Query
@@ -697,7 +700,7 @@ executable marlowe-tx
     , hs-opentelemetry-sdk ^>=0.0.3
     , marlowe-chain-sync ==0.0.6
     , marlowe-protocols ==0.3.0.0
-    , marlowe-runtime:{marlowe-runtime, contract-api, tx, tx-api} ==0.0.6
+    , marlowe-runtime:{marlowe-runtime, contract-api, sync-api, tx, tx-api} ==0.0.6
     , network >=3.1 && <4
     , optparse-applicative ^>=0.16.1
     , text ^>=2.0
@@ -815,6 +818,7 @@ test-suite marlowe-runtime-test
     Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec
     Language.Marlowe.Runtime.Transaction.CommandSpec
     Language.Marlowe.Runtime.Transaction.ConstraintsSpec
+    Language.Marlowe.Runtime.Transaction.RoleTokenFilterSpec
     Language.Marlowe.Runtime.Transaction.SafetySpec
     Paths_marlowe_runtime
 

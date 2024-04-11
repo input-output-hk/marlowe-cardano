@@ -8,9 +8,36 @@ module Language.Marlowe.Runtime.Client.Transfer (
 ) where
 
 import Data.Map (Map)
-import Language.Marlowe.Object.Types
-import Language.Marlowe.Protocol.Transfer.Client
-import Language.Marlowe.Protocol.Transfer.Types
+import Language.Marlowe.Object.Types (
+  Label,
+  ObjectBundle (ObjectBundle),
+ )
+import Language.Marlowe.Protocol.Transfer.Client (
+  ClientStCanDownload (SendMsgDownload),
+  ClientStCanUpload (SendMsgImported, SendMsgUpload),
+  ClientStDownload (
+    ClientStDownload,
+    recvMsgDownloaded,
+    recvMsgExported
+  ),
+  ClientStExport (
+    ClientStExport,
+    recvMsgContractNotFound,
+    recvMsgStartExport
+  ),
+  ClientStIdle (
+    SendMsgDone,
+    SendMsgRequestExport,
+    SendMsgStartImport
+  ),
+  ClientStUpload (
+    ClientStUpload,
+    recvMsgUploadFailed,
+    recvMsgUploaded
+  ),
+  MarloweTransferClient (MarloweTransferClient),
+ )
+import Language.Marlowe.Protocol.Transfer.Types (ImportError)
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash)
 import Numeric.Natural (Natural)
 import Pipes (Pipe, Producer, await, yield)

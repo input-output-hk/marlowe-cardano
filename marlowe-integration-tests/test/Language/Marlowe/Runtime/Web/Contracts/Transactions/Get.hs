@@ -8,11 +8,13 @@ import Data.Functor (void)
 import Data.Proxy (Proxy (Proxy))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Integration.Common (Wallet, getGenesisWallet, runIntegrationTest, runWebClient)
-import qualified Language.Marlowe.Runtime.Web as Web
-import Language.Marlowe.Runtime.Web.Client (Page (..), getTransactions)
+import Language.Marlowe.Runtime.Web.Adapter.Server.DTO (ToDTO (toDTO))
+import Language.Marlowe.Runtime.Web.Client (Page (..))
 import Language.Marlowe.Runtime.Web.Common (applyCloseTransaction, createCloseContract)
-import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO (toDTO))
-import Language.Marlowe.Runtime.Web.StandardContract (createFullyExecutedStandardContract)
+import Language.Marlowe.Runtime.Web.Contract.Transaction.Client
+import qualified Language.Marlowe.Runtime.Web.Core.Tx as Web
+import Language.Marlowe.Runtime.Web.StandardContract (executeCompleteStandardContractLifecycle)
+import qualified Language.Marlowe.Runtime.Web.Tx.API as Web
 import Network.HTTP.Types (Status (..))
 import Servant.Client (ClientError (FailureResponse))
 import Servant.Client.Streaming (ResponseF (Response, responseStatusCode))
@@ -156,7 +158,7 @@ singleContractMultipleTransactionsValidSpec = it "returns a list with multiple t
 multipleContractsMultipleTransactionsValidSpec :: SpecWith MarloweWebTestData
 multipleContractsMultipleTransactionsValidSpec = it "returns a list with multiple transaction when multiple contracts are on chain" \MarloweWebTestData{..} -> flip runIntegrationTest runtime do
   either throw pure =<< runWebClient do
-    (createContractId, testTransactionIds) <- createFullyExecutedStandardContract wallet1 wallet2
+    (createContractId, testTransactionIds) <- executeCompleteStandardContractLifecycle wallet1 wallet2
 
     Page{..} <- getTransactions createContractId Nothing
 
@@ -203,7 +205,7 @@ setup runSpec = withLocalMarloweRuntime $ runIntegrationTest do
   wallet1 <- getGenesisWallet 0
   wallet2 <- getGenesisWallet 1
   either throw pure =<< runWebClient do
-    (expectedContractId, expectedTransactionIds) <- createFullyExecutedStandardContract wallet1 wallet2
+    (expectedContractId, expectedTransactionIds) <- executeCompleteStandardContractLifecycle wallet1 wallet2
     liftIO $ runSpec MarloweWebTestData{..}
 
 data MarloweWebTestData = MarloweWebTestData

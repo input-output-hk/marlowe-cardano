@@ -9,7 +9,7 @@ module Language.Marlowe.Runtime.Client (
   connectToMarloweRuntimeTraced,
 ) where
 
-import Control.Monad.Event.Class
+import Control.Monad.Event.Class (MonadEvent)
 import Control.Monad.Trans.Marlowe
 import Control.Monad.Trans.Marlowe.Class
 import Language.Marlowe.Protocol.Client (marloweRuntimeClientPeer)

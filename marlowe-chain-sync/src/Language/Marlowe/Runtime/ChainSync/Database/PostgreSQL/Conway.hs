@@ -6,14 +6,14 @@
 module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Conway where
 
 import Cardano.Ledger.Allegra.TxBody (StrictMaybe (..))
+import Cardano.Ledger.Alonzo.Tx (AlonzoTx (..))
+
 import Cardano.Ledger.Alonzo.TxAuxData (AlonzoTxAuxData (..))
 import Cardano.Ledger.Alonzo.TxWits (TxDats (..))
 import Cardano.Ledger.Babbage (BabbageEra, BabbageTxOut)
 import Cardano.Ledger.Babbage.Tx (
-  AlonzoTx (..),
   IsValid (..),
   indexRedeemers,
-  txdats',
  )
 import Cardano.Ledger.Babbage.TxBody (BabbageTxOut (..))
 import Cardano.Ledger.Binary (Sized (..), shelleyProtVer)
@@ -27,21 +27,34 @@ import Cardano.Ledger.Conway.Core (
   Era (EraCrypto),
   EraTx (Tx),
  )
-import Cardano.Ledger.Conway.Scripts (ConwayPlutusPurpose (ConwaySpending))
+import Cardano.Ledger.Conway.Scripts (
+  AlonzoScript (..),
+  ConwayPlutusPurpose (ConwaySpending),
+ )
 import Cardano.Ledger.Conway.TxBody (ConwayTxBody (..))
+import Cardano.Ledger.Conway.TxWits (AlonzoTxWits (..))
+import Cardano.Ledger.Core (EraScript (..), ScriptHash (..))
 import Cardano.Ledger.Crypto (StandardCrypto)
 import Cardano.Ledger.Plutus.Data (dataToBinaryData)
 import Cardano.Ledger.Shelley.API (TxIn)
+import Control.Arrow (Arrow (..))
 import Data.ByteString (ByteString)
 import Data.Foldable (Foldable (..))
 import Data.Int (Int64)
+import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Alonzo (alonzoTxRow)
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Babbage (babbageTxOutRows)
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Mary (maryAssetMintRows)
-import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Shelley (originalBytea, shelleyTxInRow)
+import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Shelley (
+  hashToBytea,
+  originalBytea,
+  serializeBytea,
+  shelleyTxInRow,
+ )
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types (
   Bytea,
+  ScriptRow (..),
   SqlBool (SqlBool),
   TxInRow (..),
   TxRowGroup,
@@ -60,10 +73,30 @@ conwayTxToRows slotNo blockHash txId tx@AlonzoTx{..} =
       (coerceTxOut <$> ctbCollateralReturn body)
       (coerceTxOut <$> toList (ctbOutputs body))
   , maryAssetMintRows slotNo txId $ ctbMint body
+  , conwayTxScripts wits $ toList $ ctbOutputs body
   )
 
 encodeConwayMetadata :: AlonzoTxAuxData (ConwayEra StandardCrypto) -> ByteString
 encodeConwayMetadata (AlonzoTxAuxData md _ _) = L.serialize' shelleyProtVer md
+
+conwayTxScripts
+  :: AlonzoTxWits (ConwayEra StandardCrypto)
+  -> [Sized (BabbageTxOut (ConwayEra StandardCrypto))]
+  -> [ScriptRow]
+conwayTxScripts AlonzoTxWits{..} outputs =
+  uncurry conwayScriptRow <$> (Map.toList txscripts <> foldMap conwayReferenceScript outputs)
+
+conwayReferenceScript
+  :: Sized (BabbageTxOut (ConwayEra StandardCrypto))
+  -> [(ScriptHash StandardCrypto, AlonzoScript (ConwayEra StandardCrypto))]
+conwayReferenceScript (Sized (BabbageTxOut _ _ _ ref) _) = foldMap (pure . (hashScript &&& id)) ref
+
+conwayScriptRow :: ScriptHash StandardCrypto -> AlonzoScript (ConwayEra StandardCrypto) -> ScriptRow
+conwayScriptRow (ScriptHash hash) script =
+  ScriptRow
+    { scriptHash = hashToBytea hash
+    , scriptBytes = serializeBytea shelleyProtVer script
+    }
 
 coerceTxOut
   :: Sized (BabbageTxOut (ConwayEra StandardCrypto))
@@ -84,12 +117,12 @@ conwayTxInRows
      )
   => Int64
   -> Bytea
-  -> IsValid
+  -> Cardano.Ledger.Babbage.Tx.IsValid
   -> Tx era
   -> Set.Set (TxIn StandardCrypto)
   -> Set.Set (TxIn StandardCrypto)
   -> [TxInRow]
-conwayTxInRows slot txId (IsValid isValid) tx inputs collateralInputs
+conwayTxInRows slot txId (Cardano.Ledger.Babbage.Tx.IsValid isValid) tx inputs collateralInputs
   | isValid = conwayTxInRow slot txId tx <$> Set.toAscList inputs
   | otherwise = do
       TxInRow{..} <- shelleyTxInRow slot txId <$> Set.toAscList collateralInputs
@@ -111,6 +144,6 @@ conwayTxInRow
 conwayTxInRow slotNo txInId tx txIn =
   (shelleyTxInRow slotNo txInId txIn)
     { redeemerDatumBytes = do
-        (datum, _) <- indexRedeemers tx $ ConwaySpending (AsItem txIn)
+        (datum, _) <- Cardano.Ledger.Babbage.Tx.indexRedeemers tx $ ConwaySpending (AsItem txIn)
         pure $ originalBytea $ dataToBinaryData datum
     }

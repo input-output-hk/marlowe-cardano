@@ -54,7 +54,13 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   stakeReference,
  )
 import Language.Marlowe.Runtime.Client (runMarloweTxClient)
-import Language.Marlowe.Runtime.Core.Api
+import Language.Marlowe.Runtime.Core.Api (
+  MarloweMetadata (..),
+  MarloweTransactionMetadata (..),
+  MarloweVersion (MarloweV1),
+  MarloweVersionTag (V1),
+  encodeMarloweMetadata,
+ )
 import Language.Marlowe.Runtime.Integration.Common (
   Wallet (..),
   allocateWallet,
@@ -63,11 +69,35 @@ import Language.Marlowe.Runtime.Integration.Common (
   runIntegrationTest,
   submitBuilder,
  )
-import Language.Marlowe.Runtime.Transaction.Api
+import Language.Marlowe.Runtime.Transaction.Api (
+  ContractCreated (..),
+  ContractCreatedInEra (..),
+  CreateError,
+  Destination (ToAddress),
+  MarloweTxCommand (Create),
+  RoleTokenMetadata (..),
+  RoleTokensConfig (..),
+  WalletAddresses (changeAddress, collateralUtxos),
+  encodeRoleTokenMetadata,
+  mkMint,
+ )
 import Network.Protocol.Codec.Spec (varyAp)
 import Network.Protocol.Job.Client (liftCommand)
 import Network.URI (parseURI)
-import Test.Hspec
+import Test.Hspec (
+  ActionWith,
+  Spec,
+  SpecWith,
+  aroundAll,
+  aroundAllWith,
+  describe,
+  expectationFailure,
+  it,
+  parallel,
+  pending,
+  shouldBe,
+  shouldContain,
+ )
 import Test.Integration.Marlowe (MarloweRuntime (..), withLocalMarloweRuntime)
 
 spec :: Spec

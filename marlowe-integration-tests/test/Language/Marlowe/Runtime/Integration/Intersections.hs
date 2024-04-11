@@ -9,8 +9,48 @@ import Cardano.Api (getTxId)
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader, TxId, TxOutRef (..))
 import Language.Marlowe.Runtime.Core.Api (ContractId (..))
-import Language.Marlowe.Runtime.Integration.Common
-import Language.Marlowe.Runtime.Integration.StandardContract
+import Language.Marlowe.Runtime.Integration.Common (
+  Integration,
+  getGenesisWallet,
+  getTip,
+  headerSyncIntersectExpectFound,
+  headerSyncIntersectExpectNotFound,
+  marloweSyncIntersectExpectFound,
+  marloweSyncIntersectExpectNotFound,
+  runIntegrationTest,
+ )
+import Language.Marlowe.Runtime.Integration.StandardContract (
+  StandardContractChoiceMade (
+    StandardContractChoiceMade,
+    choiceBlock,
+    gimmeTheMoneyChosen,
+    sendNotify
+  ),
+  StandardContractClosed (
+    StandardContractClosed,
+    burnPartyARoleTokenByAny,
+    burnPartyARoleTokenByContractId,
+    burnPartyARoleTokenByPolicyId,
+    returnDepositBlock,
+    returnDeposited,
+    rolesCurrency,
+    withdrawPartyAFunds
+  ),
+  StandardContractFundsDeposited (
+    StandardContractFundsDeposited,
+    chooseGimmeTheMoney,
+    initialDepositBlock,
+    initialFundsDeposited
+  ),
+  StandardContractLifecycleInit (..),
+  StandardContractNotified (
+    StandardContractNotified,
+    makeReturnDeposit,
+    notified,
+    notifiedBlock
+  ),
+  createStandardContract,
+ )
 import Language.Marlowe.Runtime.Transaction.Api (
   ContractCreated (..),
   ContractCreatedInEra (..),
@@ -72,8 +112,8 @@ spec = it "Intersections" $ withLocalMarloweRuntime $ runIntegrationTest do
   marloweSyncIntersectExpectNotFound (ContractId $ TxOutRef txIdA1 1) [pA1, pA2, pA3, pA4, pA5]
 
 completeContract
-  :: StandardContractInit v -> Integration (BlockHeader, TxId, BlockHeader, BlockHeader, BlockHeader, BlockHeader)
-completeContract StandardContractInit{..} = do
+  :: StandardContractLifecycleInit v -> Integration (BlockHeader, TxId, BlockHeader, BlockHeader, BlockHeader, BlockHeader)
+completeContract StandardContractLifecycleInit{..} = do
   StandardContractFundsDeposited{..} <- makeInitialDeposit
   StandardContractChoiceMade{..} <- chooseGimmeTheMoney
   StandardContractNotified{..} <- sendNotify

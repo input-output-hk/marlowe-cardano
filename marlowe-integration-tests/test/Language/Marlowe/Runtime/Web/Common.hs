@@ -1,3 +1,6 @@
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+{-# HLINT ignore "Eta reduce" #-}
 module Language.Marlowe.Runtime.Web.Common (
   applyCloseTransaction,
   applyInputs,
@@ -11,6 +14,8 @@ module Language.Marlowe.Runtime.Web.Common (
   submitWithdrawal,
   waitUntilConfirmed,
   withdraw,
+  buildBurnRoleTokenTx,
+  submitBurnRoleTokensTx,
 ) where
 
 import Cardano.Api (
@@ -35,22 +40,38 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   Input (NormalInput),
   InputContent (IChoice, IDeposit, INotify),
  )
-import Language.Marlowe.Runtime.Integration.Common hiding (choose, deposit, notify, withdraw)
+import Language.Marlowe.Runtime.Integration.Common (
+  Wallet (..),
+  expectJust,
+ )
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses (..))
-import Language.Marlowe.Runtime.Web (ContractOrSourceId (..))
-import qualified Language.Marlowe.Runtime.Web as Web
+
+import Language.Marlowe.Runtime.Web.Adapter.Server.DTO (ToDTO (toDTO))
 import Language.Marlowe.Runtime.Web.Client (
   getContract,
-  getTransaction,
   getWithdrawal,
   postContract,
-  postTransaction,
   postWithdrawal,
   putContract,
-  putTransaction,
   putWithdrawal,
  )
-import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO (toDTO))
+import Language.Marlowe.Runtime.Web.Contract.API (ContractOrSourceId (..))
+import qualified Language.Marlowe.Runtime.Web.Contract.API as Web
+import Language.Marlowe.Runtime.Web.Contract.Transaction.Client (
+  getTransaction,
+  postTransaction,
+  putTransaction,
+ )
+import qualified Language.Marlowe.Runtime.Web.Core.Base16 as Web
+import qualified Language.Marlowe.Runtime.Web.Core.BlockHeader as Web
+import qualified Language.Marlowe.Runtime.Web.Core.MarloweVersion as Web
+import qualified Language.Marlowe.Runtime.Web.Core.Tx as Web
+import qualified Language.Marlowe.Runtime.Web.Role.API as Web
+import Language.Marlowe.Runtime.Web.Role.Client (toWalletHeader)
+import qualified Language.Marlowe.Runtime.Web.Role.Client as Web
+import qualified Language.Marlowe.Runtime.Web.Role.TokenFilter as Web
+import qualified Language.Marlowe.Runtime.Web.Tx.API as Web
+import qualified Language.Marlowe.Runtime.Web.Withdrawal.API as Web
 import qualified PlutusLedgerApi.V2 as PV2
 import Servant.Client.Streaming (ClientM)
 
@@ -141,6 +162,14 @@ submitWithdrawal Wallet{..} Web.WithdrawTxEnvelope{withdrawalId, txEnvelope} = d
   Web.Withdrawal{block} <- waitUntilConfirmed (\Web.Withdrawal{status} -> status) $ getWithdrawal withdrawalId
   liftIO $ expectJust "Expected a block header" block
 
+submitBurnRoleTokensTx
+  :: Wallet
+  -> Web.BurnRoleTokensTxEnvelope Web.CardanoTxBody
+  -> ClientM ()
+submitBurnRoleTokensTx Wallet{..} Web.BurnRoleTokensTxEnvelope{txId, txEnvelope} = do
+  signedBurnTx <- liftIO $ signShelleyTransaction' txEnvelope signingKeys
+  Web.submitBurnTokenTx txId signedBurnTx
+
 deposit
   :: Wallet
   -> Web.TxOutRef
@@ -209,6 +238,12 @@ applyInputs Wallet{..} contractId inputs = do
       , inputs
       , tags = mempty
       }
+
+buildBurnRoleTokenTx
+  :: Wallet
+  -> Web.RoleTokenFilter
+  -> ClientM (Web.BurnRoleTokensTxEnvelope Web.CardanoTxBody)
+buildBurnRoleTokenTx Wallet{..} roleFilter = Web.buildBurnTokenTxBody (toWalletHeader addresses) roleFilter
 
 signShelleyTransaction' :: Web.TextEnvelope -> [ShelleyWitnessSigningKey] -> IO Web.TextEnvelope
 signShelleyTransaction' Web.TextEnvelope{..} wits = do

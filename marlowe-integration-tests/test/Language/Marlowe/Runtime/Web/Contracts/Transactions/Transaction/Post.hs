@@ -7,15 +7,32 @@ import qualified Data.Set as Set
 import Data.Time (getCurrentTime, secondsToNominalDiffTime)
 import Language.Marlowe.Core.V1.Semantics.Types (Input (NormalInput), InputContent (IDeposit))
 import Language.Marlowe.Extended.V1 (ada)
-import Language.Marlowe.Runtime.Integration.Common
+import Language.Marlowe.Runtime.Integration.Common (
+  Wallet (addresses),
+  expectJust,
+  getGenesisWallet,
+  runIntegrationTest,
+  runWebClient,
+ )
 import Language.Marlowe.Runtime.Integration.StandardContract (standardContract)
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses (..))
-import Language.Marlowe.Runtime.Web (ContractOrSourceId (..), RoleTokenConfig (..), RoleTokenRecipient (ClosedRole))
-import qualified Language.Marlowe.Runtime.Web as Web
-import Language.Marlowe.Runtime.Web.Client (postContract, postTransaction)
+import Language.Marlowe.Runtime.Web.Adapter.Server.DTO (ToDTO (toDTO))
+import Language.Marlowe.Runtime.Web.Client (postContract)
 import Language.Marlowe.Runtime.Web.Common (submitContract)
-import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO (toDTO))
+import qualified Language.Marlowe.Runtime.Web.Core.MarloweVersion as Web
+
+import Language.Marlowe.Runtime.Web.Contract.API (ContractOrSourceId (..))
+import qualified Language.Marlowe.Runtime.Web.Contract.API as Web
+import Language.Marlowe.Runtime.Web.Core.Roles (
+  RoleTokenConfig (RoleTokenConfig),
+  RoleTokenRecipient (ClosedRole),
+ )
+import qualified Language.Marlowe.Runtime.Web.Core.Roles as Web
+
+import Language.Marlowe.Runtime.Web.Contract.Transaction.Client
+import qualified Language.Marlowe.Runtime.Web.Tx.API as Web
+import qualified Language.Marlowe.Runtime.Web.Withdrawal.API as Web
 import Test.Hspec (Spec, describe, it)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 

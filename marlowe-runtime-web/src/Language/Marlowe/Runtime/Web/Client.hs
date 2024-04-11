@@ -20,10 +20,6 @@ module Language.Marlowe.Runtime.Web.Client (
   getPayoutStatus,
   getPayouts,
   getPayoutsStatus,
-  getTransaction,
-  getTransactionStatus,
-  getTransactions,
-  getTransactionsStatus,
   getWithdrawal,
   getWithdrawalStatus,
   getWithdrawals,
@@ -35,18 +31,12 @@ module Language.Marlowe.Runtime.Web.Client (
   postContractSource,
   postContractSourceStatus,
   postContractStatus,
-  postTransaction,
-  postTransactionCreateTx,
-  postTransactionCreateTxStatus,
-  postTransactionStatus,
   postWithdrawal,
   postWithdrawalCreateTx,
   postWithdrawalCreateTxStatus,
   postWithdrawalStatus,
   putContract,
   putContractStatus,
-  putTransaction,
-  putTransactionStatus,
   putWithdrawal,
   putWithdrawalStatus,
 ) where
@@ -59,23 +49,63 @@ import Data.Proxy (Proxy (..))
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Text (Text)
-import Data.Time (UTCTime)
 import Data.Version (Version)
 import GHC.TypeLits (KnownSymbol, symbolVal)
-import Language.Marlowe.Core.V1.Next
 import Language.Marlowe.Core.V1.Semantics.Types (Contract)
 import Language.Marlowe.Object.Types (Label, ObjectBundle)
-import Language.Marlowe.Runtime.Web (GetPayoutsResponse)
-import Language.Marlowe.Runtime.Web.API (
-  API,
-  GetContractsResponse,
-  GetTransactionsResponse,
-  GetWithdrawalsResponse,
-  ListObject (..),
-  api,
-  retractLink,
+
+import Language.Marlowe.Runtime.Web.API (RuntimeAPI, runtimeApi)
+import Language.Marlowe.Runtime.Web.Adapter.CommaList (
+  CommaList (CommaList),
  )
-import Language.Marlowe.Runtime.Web.Types
+import Language.Marlowe.Runtime.Web.Adapter.Links (retractLink)
+import Language.Marlowe.Runtime.Web.Adapter.Servant (ListObject (..))
+import Language.Marlowe.Runtime.Web.Contract.API (
+  ContractHeader,
+  ContractSourceId,
+  ContractState,
+  GetContractsResponse,
+  PostContractSourceResponse,
+  PostContractsRequest,
+ )
+import Language.Marlowe.Runtime.Web.Core.Address (
+  Address,
+  StakeAddress,
+ )
+import Language.Marlowe.Runtime.Web.Core.Asset (
+  AssetId,
+  PolicyId,
+ )
+
+import Language.Marlowe.Runtime.Web.Contract.Next.Client (getContractNext)
+import Language.Marlowe.Runtime.Web.Core.NetworkId (NetworkId)
+import Language.Marlowe.Runtime.Web.Core.Tip (ChainTip)
+import Language.Marlowe.Runtime.Web.Core.Tx (
+  TextEnvelope,
+  TxId,
+  TxOutRef,
+ )
+import Language.Marlowe.Runtime.Web.Payout.API (
+  GetPayoutsResponse,
+  PayoutHeader,
+  PayoutState,
+  PayoutStatus,
+ )
+import Language.Marlowe.Runtime.Web.Status (
+  RuntimeStatus (RuntimeStatus),
+ )
+import Language.Marlowe.Runtime.Web.Tx.API (
+  CardanoTx,
+  CardanoTxBody,
+  CreateTxEnvelope,
+  WithdrawTxEnvelope,
+ )
+import Language.Marlowe.Runtime.Web.Withdrawal.API (
+  GetWithdrawalsResponse,
+  PostWithdrawalsRequest,
+  Withdrawal,
+  WithdrawalHeader,
+ )
 import Pipes (Producer)
 import Servant (HasResponseHeader, ResponseHeader (..), getResponse, lookupResponseHeader, type (:<|>) ((:<|>)))
 import Servant.API (Headers)
@@ -85,8 +115,10 @@ import qualified Servant.Client.Streaming as ServantStreaming
 import Servant.Pagination (ExtractRange (extractRange), HasPagination (..), PutRange (..), Range, Ranges)
 import Servant.Pipes ()
 
-client :: Client ClientM API
-client = ServantStreaming.client api
+import Language.Marlowe.Runtime.Web.Core.Object.Schema ()
+
+runtimeClient :: Client ClientM RuntimeAPI
+runtimeClient = ServantStreaming.client runtimeApi
 
 data Page field resource = Page
   { totalCount :: Int
@@ -97,7 +129,7 @@ data Page field resource = Page
 
 healthcheck :: ClientM Bool
 healthcheck = do
-  let _ :<|> _ :<|> _ :<|> healthcheck' = client
+  let _ :<|> _ :<|> _ :<|> _ :<|> healthcheck' = runtimeClient
   (True <$ healthcheck') `catchError` const (pure False)
 
 extractStatus
@@ -125,7 +157,7 @@ getContractsStatus
   -> Maybe (Range "contractId" TxOutRef)
   -> ClientM (RuntimeStatus, Page "contractId" ContractHeader)
 getContractsStatus roleCurrencies tags partyAddresses partyRoles range = do
-  let contractsClient :<|> _ = client
+  let contractsClient :<|> _ = runtimeClient
   let getContracts' :<|> _ = contractsClient
   response <-
     getContracts'
@@ -136,6 +168,7 @@ getContractsStatus roleCurrencies tags partyAddresses partyRoles range = do
       (putRange <$> range)
   totalCount <- reqHeaderValue $ lookupResponseHeader @"Total-Count" response
   nextRanges <- headerValue $ lookupResponseHeader @"Next-Range" response
+
   let ListObject items = getResponse response
   status <- extractStatus response
   pure
@@ -164,7 +197,7 @@ postContractStatus
   -> PostContractsRequest
   -> ClientM (RuntimeStatus, CreateTxEnvelope CardanoTxBody)
 postContractStatus stakeAddress changeAddress otherAddresses collateralUtxos request = do
-  let (_ :<|> getPost :<|> _) :<|> _ = client
+  let (_ :<|> getPost :<|> _) :<|> _ = runtimeClient
   let (postContractCreateTxBody' :<|> _) = getPost stakeAddress
   response <-
     postContractCreateTxBody'
@@ -192,7 +225,7 @@ postContractCreateTxStatus
   -> PostContractsRequest
   -> ClientM (RuntimeStatus, CreateTxEnvelope CardanoTx)
 postContractCreateTxStatus stakeAddress changeAddress otherAddresses collateralUtxos request = do
-  let (_ :<|> getPost :<|> _) :<|> _ = client
+  let (_ :<|> getPost :<|> _) :<|> _ = runtimeClient
   let (_ :<|> postContractCreateTx') = getPost stakeAddress
   response <-
     postContractCreateTx'
@@ -217,7 +250,7 @@ postContractSourceStatus
   -> Producer ObjectBundle IO ()
   -> ClientM (RuntimeStatus, PostContractSourceResponse)
 postContractSourceStatus main bundles = do
-  let contractsClient :<|> _ = client
+  let contractsClient :<|> _ = runtimeClient
   let _ :<|> _ :<|> _ :<|> contractSourcesClient = contractsClient
   let postContractSource' :<|> _ = contractSourcesClient
   response <- postContractSource' main bundles
@@ -232,7 +265,7 @@ postContractSource = (fmap . fmap) snd . postContractSourceStatus
 
 getContractSourceStatus :: ContractSourceId -> Bool -> ClientM (RuntimeStatus, Contract)
 getContractSourceStatus contractSourceId expand = do
-  let contractsClient :<|> _ = client
+  let contractsClient :<|> _ = runtimeClient
   let _ :<|> _ :<|> _ :<|> contractSourcesClient = contractsClient
   let _ :<|> contractSourceClient = contractSourcesClient
   let getContractSource' :<|> _ = contractSourceClient contractSourceId
@@ -245,7 +278,7 @@ getContractSource = (fmap . fmap) snd . getContractSourceStatus
 
 getContractSourceAdjacencyStatus :: ContractSourceId -> ClientM (RuntimeStatus, Set ContractSourceId)
 getContractSourceAdjacencyStatus contractSourceId = do
-  let contractsClient :<|> _ = client
+  let contractsClient :<|> _ = runtimeClient
   let _ :<|> _ :<|> _ :<|> contractSourcesClient = contractsClient
   let _ :<|> contractSourceClient = contractSourcesClient
   let _ :<|> getContractSourceAdjacency' :<|> _ = contractSourceClient contractSourceId
@@ -258,7 +291,7 @@ getContractSourceAdjacency = fmap snd . getContractSourceAdjacencyStatus
 
 getContractSourceClosureStatus :: ContractSourceId -> ClientM (RuntimeStatus, Set ContractSourceId)
 getContractSourceClosureStatus contractSourceId = do
-  let contractsClient :<|> _ = client
+  let contractsClient :<|> _ = runtimeClient
   let _ :<|> _ :<|> _ :<|> contractSourcesClient = contractsClient
   let _ :<|> contractSourceClient = contractSourcesClient
   let _ :<|> _ :<|> getContractSourceClosure' = contractSourceClient contractSourceId
@@ -271,7 +304,7 @@ getContractSourceClosure = fmap snd . getContractSourceClosureStatus
 
 getContractStatus :: TxOutRef -> ClientM (RuntimeStatus, ContractState)
 getContractStatus contractId = do
-  let contractsClient :<|> _ = client
+  let contractsClient :<|> _ = runtimeClient
   let _ :<|> _ :<|> contractApi :<|> _ = contractsClient
   let getContract' :<|> _ = contractApi contractId
   response <- getContract'
@@ -281,21 +314,9 @@ getContractStatus contractId = do
 getContract :: TxOutRef -> ClientM ContractState
 getContract = fmap snd . getContractStatus
 
-getContractNextStatus :: TxOutRef -> UTCTime -> UTCTime -> [Party] -> ClientM (RuntimeStatus, Next)
-getContractNextStatus contractId validityStart validityEnd parties = do
-  let contractsClient :<|> _ = client
-  let _ :<|> _ :<|> contractApi :<|> _ = contractsClient
-  let _ :<|> _ :<|> next' :<|> _ = contractApi contractId
-  response <- next' validityStart validityEnd parties
-  status <- extractStatus response
-  pure (status, getResponse response)
-
-getContractNext :: TxOutRef -> UTCTime -> UTCTime -> [Party] -> ClientM Next
-getContractNext = (fmap . fmap . fmap . fmap) snd . getContractNextStatus
-
 putContractStatus :: TxOutRef -> TextEnvelope -> ClientM RuntimeStatus
 putContractStatus contractId tx = do
-  let contractsClient :<|> _ = client
+  let contractsClient :<|> _ = runtimeClient
   let _ :<|> _ :<|> contractApi :<|> _ = contractsClient
   let _ :<|> putContract' :<|> _ = contractApi contractId
   response <- putContract' tx
@@ -309,7 +330,7 @@ getWithdrawalsStatus
   -> Maybe (Range "withdrawalId" TxId)
   -> ClientM (RuntimeStatus, Page "withdrawalId" WithdrawalHeader)
 getWithdrawalsStatus roleCurrencies range = do
-  let _ :<|> withdrawalsClient :<|> _ = client
+  let _ :<|> withdrawalsClient :<|> _ = runtimeClient
   let getWithdrawals' :<|> _ = withdrawalsClient
   response <- getWithdrawals' (foldMap Set.toList roleCurrencies) $ putRange <$> range
   totalCount <- reqHeaderValue $ lookupResponseHeader @"Total-Count" response
@@ -338,7 +359,7 @@ postWithdrawalStatus
   -> PostWithdrawalsRequest
   -> ClientM (RuntimeStatus, WithdrawTxEnvelope CardanoTxBody)
 postWithdrawalStatus changeAddress otherAddresses collateralUtxos request = do
-  let _ :<|> withdrawalsClient :<|> _ = client
+  let _ :<|> withdrawalsClient :<|> _ = runtimeClient
   let _ :<|> (postWithdrawal' :<|> _) :<|> _ = withdrawalsClient
   response <-
     postWithdrawal'
@@ -364,7 +385,7 @@ postWithdrawalCreateTxStatus
   -> PostWithdrawalsRequest
   -> ClientM (RuntimeStatus, WithdrawTxEnvelope CardanoTx)
 postWithdrawalCreateTxStatus changeAddress otherAddresses collateralUtxos request = do
-  let _ :<|> withdrawalsClient :<|> _ = client
+  let _ :<|> withdrawalsClient :<|> _ = runtimeClient
   let _ :<|> (_ :<|> postWithdrawalCreateTx') :<|> _ = withdrawalsClient
   response <-
     postWithdrawalCreateTx'
@@ -385,7 +406,7 @@ postWithdrawalCreateTx = (fmap . fmap . fmap . fmap) snd . postWithdrawalCreateT
 
 getWithdrawalStatus :: TxId -> ClientM (RuntimeStatus, Withdrawal)
 getWithdrawalStatus withdrawalId = do
-  let _ :<|> withdrawalsClient :<|> _ = client
+  let _ :<|> withdrawalsClient :<|> _ = runtimeClient
   let _ :<|> _ :<|> contractApi = withdrawalsClient
   let getWithdrawal' :<|> _ = contractApi withdrawalId
   response <- getWithdrawal'
@@ -397,7 +418,7 @@ getWithdrawal = fmap snd . getWithdrawalStatus
 
 putWithdrawalStatus :: TxId -> TextEnvelope -> ClientM RuntimeStatus
 putWithdrawalStatus withdrawalId tx = do
-  let _ :<|> withdrawalsClient :<|> _ = client
+  let _ :<|> withdrawalsClient :<|> _ = runtimeClient
   let _ :<|> _ :<|> contractApi = withdrawalsClient
   let _ :<|> putWithdrawal' = contractApi withdrawalId
   response <- putWithdrawal' tx
@@ -413,7 +434,7 @@ getPayoutsStatus
   -> Maybe (Range "payoutId" TxOutRef)
   -> ClientM (RuntimeStatus, Page "payoutId" PayoutHeader)
 getPayoutsStatus contractIds roleTokens unclaimed range = do
-  let _ :<|> _ :<|> payoutsClient :<|> _ = client
+  let _ :<|> _ :<|> payoutsClient :<|> _ = runtimeClient
   let getPayouts' :<|> _ = payoutsClient
   response <-
     getPayouts' (foldMap Set.toList contractIds) (foldMap Set.toList roleTokens) unclaimed $
@@ -443,7 +464,7 @@ getPayoutStatus
   :: TxOutRef
   -> ClientM (RuntimeStatus, PayoutState)
 getPayoutStatus payoutId = do
-  let _ :<|> _ :<|> payoutsClient :<|> _ = client
+  let _ :<|> _ :<|> payoutsClient :<|> _ = runtimeClient
   let _ :<|> getPayout' = payoutsClient
   response <- getPayout' payoutId
   status <- extractStatus response
@@ -456,116 +477,6 @@ getPayout
   :: TxOutRef
   -> ClientM PayoutState
 getPayout = fmap snd . getPayoutStatus
-
-getTransactionsStatus
-  :: TxOutRef
-  -> Maybe (Range "transactionId" TxId)
-  -> ClientM (RuntimeStatus, Page "transactionId" TxHeader)
-getTransactionsStatus contractId range = do
-  let contractsClient :<|> _ = client
-  let _ :<|> _ :<|> contractApi :<|> _ = contractsClient
-  let _ :<|> _ :<|> _ :<|> getTransactions' :<|> _ = contractApi contractId
-  response <- getTransactions' $ putRange <$> range
-  totalCount <- reqHeaderValue $ lookupResponseHeader @"Total-Count" response
-  nextRanges <- headerValue $ lookupResponseHeader @"Next-Range" response
-  let ListObject items = getResponse response
-  status <- extractStatus response
-  pure
-    ( status
-    , Page
-        { totalCount
-        , nextRange = extractRangeSingleton @GetTransactionsResponse <$> nextRanges
-        , items = retractLink <$> items
-        }
-    )
-
-getTransactions
-  :: TxOutRef
-  -> Maybe (Range "transactionId" TxId)
-  -> ClientM (Page "transactionId" TxHeader)
-getTransactions = (fmap . fmap) snd . getTransactionsStatus
-
-postTransactionStatus
-  :: Address
-  -> Maybe (Set Address)
-  -> Maybe (Set TxOutRef)
-  -> TxOutRef
-  -> PostTransactionsRequest
-  -> ClientM (RuntimeStatus, ApplyInputsTxEnvelope CardanoTxBody)
-postTransactionStatus changeAddress otherAddresses collateralUtxos contractId request = do
-  let contractsClient :<|> _ = client
-  let _ :<|> _ :<|> contractApi :<|> _ = contractsClient
-  let _ :<|> _ :<|> _ :<|> _ :<|> (postTransaction' :<|> _) :<|> _ = contractApi contractId
-  response <-
-    postTransaction'
-      request
-      changeAddress
-      (setToCommaList <$> otherAddresses)
-      (setToCommaList <$> collateralUtxos)
-  status <- extractStatus response
-  pure (status, retractLink $ getResponse response)
-
-postTransaction
-  :: Address
-  -> Maybe (Set Address)
-  -> Maybe (Set TxOutRef)
-  -> TxOutRef
-  -> PostTransactionsRequest
-  -> ClientM (ApplyInputsTxEnvelope CardanoTxBody)
-postTransaction = (fmap . fmap . fmap . fmap . fmap) snd . postTransactionStatus
-
-postTransactionCreateTxStatus
-  :: Address
-  -> Maybe (Set Address)
-  -> Maybe (Set TxOutRef)
-  -> TxOutRef
-  -> PostTransactionsRequest
-  -> ClientM (RuntimeStatus, ApplyInputsTxEnvelope CardanoTx)
-postTransactionCreateTxStatus changeAddress otherAddresses collateralUtxos contractId request = do
-  let (_ :<|> _ :<|> contractApi :<|> _) :<|> _ = client
-  let _ :<|> _ :<|> _ :<|> _ :<|> (_ :<|> postTransactionCreateTx') :<|> _ = contractApi contractId
-  response <-
-    postTransactionCreateTx'
-      request
-      changeAddress
-      (setToCommaList <$> otherAddresses)
-      (setToCommaList <$> collateralUtxos)
-  status <- extractStatus response
-  pure (status, retractLink $ getResponse response)
-
-postTransactionCreateTx
-  :: Address
-  -> Maybe (Set Address)
-  -> Maybe (Set TxOutRef)
-  -> TxOutRef
-  -> PostTransactionsRequest
-  -> ClientM (ApplyInputsTxEnvelope CardanoTx)
-postTransactionCreateTx = (fmap . fmap . fmap . fmap . fmap) snd . postTransactionCreateTxStatus
-
-getTransactionStatus :: TxOutRef -> TxId -> ClientM (RuntimeStatus, Tx)
-getTransactionStatus contractId transactionId = do
-  let contractsClient :<|> _ = client
-  let _ :<|> _ :<|> contractApi :<|> _ = contractsClient
-  let _ :<|> _ :<|> _ :<|> _ :<|> _ :<|> transactionApi = contractApi contractId
-  let getTransaction' :<|> _ = transactionApi transactionId
-  response <- getTransaction'
-  status <- extractStatus response
-  pure (status, retractLink $ retractLink $ getResponse response)
-
-getTransaction :: TxOutRef -> TxId -> ClientM Tx
-getTransaction = (fmap . fmap) snd . getTransactionStatus
-
-putTransactionStatus :: TxOutRef -> TxId -> TextEnvelope -> ClientM RuntimeStatus
-putTransactionStatus contractId transactionId tx = do
-  let contractsClient :<|> _ = client
-  let _ :<|> _ :<|> contractApi :<|> _ = contractsClient
-  let _ :<|> _ :<|> _ :<|> _ :<|> _ :<|> transactionApi = contractApi contractId
-  let _ :<|> putTransaction' = transactionApi transactionId
-  response <- putTransaction' tx
-  extractStatus response
-
-putTransaction :: TxOutRef -> TxId -> TextEnvelope -> ClientM ()
-putTransaction = (fmap . fmap) void . putTransactionStatus
 
 setToCommaList :: Set a -> CommaList a
 setToCommaList = CommaList . Set.toList

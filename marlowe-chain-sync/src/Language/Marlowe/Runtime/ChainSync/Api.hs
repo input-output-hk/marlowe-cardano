@@ -6,6 +6,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
@@ -19,10 +20,14 @@ import Cardano.Api (
   AlonzoEraOnwards (..),
   AnyCardanoEra (..),
   AsType (..),
+  BabbageEra,
+  BabbageEraOnwards (..),
   CardanoEra (..),
+  ConwayEra,
   EraHistory (..),
   NetworkId (..),
   NetworkMagic (..),
+  ScriptInEra (..),
   SerialiseAsRawBytes (..),
   Tx,
   deserialiseFromBech32,
@@ -33,11 +38,13 @@ import Cardano.Api (
  )
 import qualified Cardano.Api as C
 import qualified Cardano.Api as Cardano
-import Cardano.Api.Shelley (ProtocolParameters)
+import Cardano.Api.Shelley (ProtocolParameters, fromShelleyBasedScript, toShelleyScript)
 import qualified Cardano.Api.Shelley as Cardano
 import qualified Cardano.Ledger.BaseTypes as Base
 import qualified Cardano.Ledger.BaseTypes as C
+import Cardano.Ledger.Binary (Annotator, DecCBOR (..), decodeFullAnnotator)
 import Cardano.Ledger.Credential (ptrCertIx, ptrSlotNo, ptrTxIx)
+import Cardano.Ledger.SafeHash (SafeToHash (..))
 import Cardano.Ledger.Slot (EpochSize)
 import Codec.Serialise (deserialiseOrFail, serialise)
 import Control.Applicative ((<|>))
@@ -59,11 +66,12 @@ import Data.Aeson.Text (encodeToLazyText)
 import Data.Aeson.Types (Parser, parseFail, toJSONKeyText)
 import qualified Data.Attoparsec.ByteString.Char8 as Atto
 import Data.Bifunctor (Bifunctor (..), bimap)
-import Data.Binary (Binary (..), get, getWord8, put, putWord8)
+import Data.Binary (Binary (..), Get, get, getWord8, put, putWord8)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
 import qualified Data.ByteString.Char8 as BSC
+import qualified Data.ByteString.Lazy as LBS
 import Data.Foldable (Foldable (..))
 import Data.Function (on)
 import Data.Functor (($>))
@@ -377,9 +385,9 @@ fromJSONEncodedTransactionMetadata :: A.Value -> Maybe TransactionMetadata
 fromJSONEncodedTransactionMetadata = \case
   A.Object (Map.toList . KeyMap.toMapText -> props) ->
     TransactionMetadata . Map.fromList <$> for props \(key, value) -> do
-      label <- fmap fromInteger $ readMaybe . T.unpack $ key
+      lbl <- fmap fromInteger $ readMaybe . T.unpack $ key
       value' <- fromJSONEncodedMetadata value
-      pure (label, value')
+      pure (lbl, value')
   _ -> Nothing
 
 toCardanoTxMetadata :: TransactionMetadata -> C.TxMetadata
@@ -1084,6 +1092,7 @@ data ChainSyncQuery a where
   GetNodeTip :: ChainSyncQuery ChainPoint
   GetTip :: ChainSyncQuery ChainPoint
   GetEra :: ChainSyncQuery AnyCardanoEra
+  GetScripts :: BabbageEraOnwards era -> Set ScriptHash -> ChainSyncQuery (Map ScriptHash (ScriptInEra era))
 
 type ChainSyncQueryClientSelector = QueryClientSelector ChainSyncQuery
 
@@ -1193,6 +1202,20 @@ renderChainSyncQueryOTel = \case
             )
           ]
       }
+  GetScripts era scripts ->
+    RequestRenderedOTel
+      { requestName = "get-scripts"
+      , requestAttributes =
+          [
+            ( "era"
+            , case era of
+                BabbageEraOnwardsBabbage -> "babbage"
+                BabbageEraOnwardsConway -> "conway"
+            )
+          , ("scripts", toAttribute $ fmap (T.pack . show) $ Set.toList scripts)
+          ]
+      , responseAttributes = \result -> [("scripts", toAttribute $ fmap (T.pack . show) $ Map.keys result)]
+      }
 
 summaryAttributes :: NonEmpty xs EraSummary -> Counting.Exactly xs Text -> [(Text, Attribute)]
 summaryAttributes (NonEmptyOne summary) (Counting.Exactly (K era :* _)) =
@@ -1272,6 +1295,8 @@ instance Query.RequestVariations ChainSyncQuery where
       , Query.SomeTag TagGetNodeTip
       , Query.SomeTag TagGetTip
       , Query.SomeTag TagGetEra
+      , Query.SomeTag $ TagGetScripts BabbageEraOnwardsBabbage
+      , Query.SomeTag $ TagGetScripts BabbageEraOnwardsConway
       ]
   requestVariations = \case
     TagGetSecurityParameter -> pure GetSecurityParameter
@@ -1283,6 +1308,7 @@ instance Query.RequestVariations ChainSyncQuery where
     TagGetNodeTip -> pure GetNodeTip
     TagGetTip -> pure GetTip
     TagGetEra -> pure GetEra
+    TagGetScripts era -> GetScripts era <$> variations
   resultVariations = \case
     TagGetSecurityParameter -> variations
     TagGetNetworkId -> Mainnet NE.:| [Testnet $ NetworkMagic 0]
@@ -1293,6 +1319,37 @@ instance Query.RequestVariations ChainSyncQuery where
     TagGetNodeTip -> variations
     TagGetTip -> variations
     TagGetEra -> variations
+    TagGetScripts BabbageEraOnwardsBabbage -> variations
+    TagGetScripts BabbageEraOnwardsConway -> variations
+
+instance Variations (ScriptInEra BabbageEra) where
+  variations =
+    pure $
+      ScriptInEra C.PlutusScriptV1InBabbage $
+        C.PlutusScript C.PlutusScriptV1 $
+          C.examplePlutusScriptAlwaysSucceeds C.WitCtxTxIn
+
+instance Variations (ScriptInEra ConwayEra) where
+  variations =
+    pure $
+      ScriptInEra C.PlutusScriptV1InConway $
+        C.PlutusScript C.PlutusScriptV1 $
+          C.examplePlutusScriptAlwaysSucceeds C.WitCtxTxIn
+
+instance Binary (ScriptInEra BabbageEra) where
+  put = put . originalBytes . toShelleyScript
+  get = do
+    bytes <- get
+    fromShelleyBasedScript C.ShelleyBasedEraBabbage <$> getDecodeFull bytes
+
+instance Binary (ScriptInEra ConwayEra) where
+  put = put . originalBytes . toShelleyScript
+  get = do
+    bytes <- get
+    fromShelleyBasedScript C.ShelleyBasedEraConway <$> getDecodeFull bytes
+
+getDecodeFull :: (DecCBOR (Annotator a)) => LBS.ByteString -> Get a
+getDecodeFull = either (fail . show) pure . decodeFullAnnotator Base.shelleyProtVer "getDecodeFull" decCBOR
 
 instance Query.Request ChainSyncQuery where
   data Tag ChainSyncQuery result where
@@ -1305,6 +1362,7 @@ instance Query.Request ChainSyncQuery where
     TagGetNodeTip :: Query.Tag ChainSyncQuery ChainPoint
     TagGetTip :: Query.Tag ChainSyncQuery ChainPoint
     TagGetEra :: Query.Tag ChainSyncQuery AnyCardanoEra
+    TagGetScripts :: BabbageEraOnwards era -> Query.Tag ChainSyncQuery (Map ScriptHash (ScriptInEra era))
   tagEq TagGetSecurityParameter TagGetSecurityParameter = Just Refl
   tagEq TagGetSecurityParameter _ = Nothing
   tagEq TagGetNetworkId TagGetNetworkId = Just Refl
@@ -1323,6 +1381,10 @@ instance Query.Request ChainSyncQuery where
   tagEq TagGetTip _ = Nothing
   tagEq TagGetEra TagGetEra = Just Refl
   tagEq TagGetEra _ = Nothing
+  tagEq (TagGetScripts BabbageEraOnwardsBabbage) (TagGetScripts BabbageEraOnwardsBabbage) = Just Refl
+  tagEq (TagGetScripts BabbageEraOnwardsBabbage) _ = Nothing
+  tagEq (TagGetScripts BabbageEraOnwardsConway) (TagGetScripts BabbageEraOnwardsConway) = Just Refl
+  tagEq (TagGetScripts BabbageEraOnwardsConway) _ = Nothing
   tagFromReq = \case
     GetSecurityParameter -> TagGetSecurityParameter
     GetNetworkId -> TagGetNetworkId
@@ -1333,6 +1395,7 @@ instance Query.Request ChainSyncQuery where
     GetNodeTip -> TagGetNodeTip
     GetTip -> TagGetTip
     GetEra -> TagGetEra
+    GetScripts era _ -> TagGetScripts era
 
 deriving instance Show (Query.Tag ChainSyncQuery a)
 deriving instance Eq (Query.Tag ChainSyncQuery a)
@@ -1356,6 +1419,12 @@ instance Query.BinaryRequest ChainSyncQuery where
     GetNodeTip -> putWord8 0x07
     GetTip -> putWord8 0x08
     GetEra -> putWord8 0x09
+    GetScripts era scripts -> do
+      putWord8 0x0a
+      putWord8 case era of
+        BabbageEraOnwardsBabbage -> 0x00
+        BabbageEraOnwardsConway -> 0x01
+      put scripts
   getReq = do
     tag <- getWord8
     case tag of
@@ -1375,6 +1444,12 @@ instance Query.BinaryRequest ChainSyncQuery where
       0x07 -> pure $ Query.SomeRequest GetNodeTip
       0x08 -> pure $ Query.SomeRequest GetTip
       0x09 -> pure $ Query.SomeRequest GetEra
+      0x10 -> do
+        tag' <- getWord8
+        case tag' of
+          0x00 -> Query.SomeRequest . GetScripts BabbageEraOnwardsBabbage <$> get
+          0x01 -> Query.SomeRequest . GetScripts BabbageEraOnwardsConway <$> get
+          _ -> fail "Invalid BabbageEraOnwards tag"
       _ -> fail "Invalid ChainSyncQuery tag"
   putResult = \case
     TagGetSecurityParameter -> put
@@ -1391,6 +1466,8 @@ instance Query.BinaryRequest ChainSyncQuery where
     TagGetNodeTip -> put
     TagGetTip -> put
     TagGetEra -> put
+    TagGetScripts BabbageEraOnwardsBabbage -> put
+    TagGetScripts BabbageEraOnwardsConway -> put
   getResult = \case
     TagGetSecurityParameter -> get
     TagGetNetworkId -> maybe Mainnet (Testnet . NetworkMagic) <$> get
@@ -1409,6 +1486,8 @@ instance Query.BinaryRequest ChainSyncQuery where
     TagGetNodeTip -> get
     TagGetTip -> get
     TagGetEra -> get
+    TagGetScripts BabbageEraOnwardsBabbage -> get
+    TagGetScripts BabbageEraOnwardsConway -> get
 
 instance Query.ShowRequest ChainSyncQuery where
   showsPrecResult p = \case
@@ -1434,6 +1513,7 @@ instance Query.ShowRequest ChainSyncQuery where
     TagGetNodeTip -> showsPrec p
     TagGetTip -> showsPrec p
     TagGetEra -> showsPrec p
+    TagGetScripts _ -> showsPrec p
 
 instance Query.OTelRequest ChainSyncQuery where
   reqTypeName _ = "chain_sync"
@@ -1447,6 +1527,7 @@ instance Query.OTelRequest ChainSyncQuery where
     TagGetNodeTip -> "node_tip"
     TagGetTip -> "tip"
     TagGetEra -> "era"
+    TagGetScripts _ -> "scripts"
 
 unInterpreter :: Interpreter xs -> Summary xs
 unInterpreter = unsafeCoerce

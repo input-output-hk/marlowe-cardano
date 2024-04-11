@@ -3,6 +3,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE EmptyDataDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE PatternSynonyms #-}
@@ -11,38 +12,54 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Marlowe.Runtime.Transaction.Api (
-  Account (..),
-  ApplyInputsConstraintsBuildupError (..),
-  ApplyInputsError (..),
-  CoinSelectionError (..),
-  ConstraintError (..),
+  -- | Contract Creation API
   ContractCreated (..),
   ContractCreatedInEra (..),
   CreateBuildupError (..),
   CreateError (..),
-  Destination (..),
+  Mint (..),
+  MintRole (..),
+  NFTMetadataFile (..),
+  decodeRoleTokenMetadata,
+  encodeRoleTokenMetadata,
+  RoleTokenMetadata (..),
+  RoleTokensConfig (RoleTokensNone, RoleTokensUsePolicy, RoleTokensMint),
+  -- | Apply Inputs API
+  ApplyInputsConstraintsBuildupError (..),
+  ApplyInputsError (..),
   InputsApplied (..),
   InputsAppliedInEra (..),
+  -- | Withdraw API
+  WithdrawError (..),
+  WithdrawTx (..),
+  WithdrawTxInEra (..),
+  -- | Burn Role Tokens API
+  BurnRoleTokensError (..),
+  BurnRoleTokensTx (..),
+  BurnRoleTokensTxInEra (..),
+  RoleTokenFilter' (..),
+  RoleTokenFilter,
+  roleTokenFilterToRoleCurrencyFilter,
+  evalRoleTokenFilter,
+  optimizeRoleTokenFilter,
+  rewriteRoleTokenFilter,
+  -- | Submit API
+  SubmitError (..),
+  SubmitStatus (..),
+  -- | Remaining To Classify API
+  Account (..),
+  CoinSelectionError (..),
+  ConstraintError (..),
+  Destination (..),
+  IsToken (..),
   JobId (..),
   LoadHelpersContextError (..),
   LoadMarloweContextError (..),
   MarloweTxCommand (..),
-  Mint (..),
-  MintRole (..),
-  NFTMetadataFile (..),
-  RoleTokenMetadata (..),
-  RoleTokensConfig (RoleTokensNone, RoleTokensUsePolicy, RoleTokensMint),
-  SubmitError (..),
-  SubmitStatus (..),
-  Tag (..),
   WalletAddresses (..),
-  WithdrawError (..),
-  WithdrawTx (..),
-  WithdrawTxInEra (..),
-  decodeRoleTokenMetadata,
-  encodeRoleTokenMetadata,
-  getTokenQuantities,
+  Tag (..),
   hasRecipient,
+  getTokenQuantities,
   mkMint,
 ) where
 
@@ -104,7 +121,7 @@ import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType)
 import Language.Marlowe.Runtime.Cardano.Feature (hush)
 import Language.Marlowe.Runtime.ChainSync.Api (
   Address,
-  AssetId,
+  AssetId (..),
   Assets,
   BlockHeader,
   DatumHash,
@@ -124,11 +141,26 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   parseMetadataText,
  )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
-import Language.Marlowe.Runtime.Core.Api
+import Language.Marlowe.Runtime.Core.Api (
+  ContractId,
+  IsMarloweVersion (Contract, Datum, Inputs),
+  MarloweTransactionMetadata,
+  MarloweVersion (..),
+  MarloweVersionTag (V1),
+  Payout,
+  SomeMarloweVersion (..),
+  TransactionOutput,
+  TransactionScriptOutput,
+  getDatum,
+  getInputs,
+  putDatum,
+  putInputs,
+ )
 import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript)
 import Language.Marlowe.Runtime.History.Api (ExtractCreationError, ExtractMarloweTransactionError)
 import Network.HTTP.Media (MediaType)
 
+import Control.Lens (Plated (..), rewrite)
 import Control.Monad (join)
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as Aeson
@@ -142,9 +174,16 @@ import Data.Map.NonEmpty (NEMap)
 import qualified Data.Map.NonEmpty as NEMap
 import Data.Semigroup.Foldable (Foldable1 (foldMap1))
 import qualified Data.Set as Set
+import Language.Marlowe.Protocol.Query.Types (RoleCurrencyFilter (..))
 import Network.Protocol.Codec.Spec (Variations (..), varyAp)
 import Network.Protocol.Handshake.Types (HasSignature (..))
-import Network.Protocol.Job.Types
+import Network.Protocol.Job.Types (
+  Command (..),
+  CommandEq (..),
+  OTelCommand (..),
+  ShowCommand (..),
+  SomeTag (SomeTag),
+ )
 import qualified Network.URI as Network
 import PlutusCore.Evaluation.Machine.ExBudget (ExBudget)
 import PlutusCore.Evaluation.Machine.ExMemory (ExCPU, ExMemory)
@@ -757,11 +796,281 @@ instance (IsShelleyBasedEra era) => ToJSON (InputsAppliedInEra era 'V1) where
       , "tx-body" .= serialiseToTextEnvelope Nothing txBody
       ]
 
+data BurnRoleTokensTx v where
+  BurnRoleTokensTx
+    :: BabbageEraOnwards era -> BurnRoleTokensTxInEra era v -> BurnRoleTokensTx v
+
+instance Variations (BurnRoleTokensTx 'V1) where
+  variations = BurnRoleTokensTx BabbageEraOnwardsBabbage <$> variations
+
+instance Show (BurnRoleTokensTx 'V1) where
+  showsPrec p (BurnRoleTokensTx BabbageEraOnwardsBabbage created) =
+    showParen (p > 10) $
+      showString "BurnRoleTokensTx"
+        . showSpace
+        . showString "BabbageEraOnwardsBabbage"
+        . showsPrec 11 created
+  showsPrec p (BurnRoleTokensTx BabbageEraOnwardsConway created) =
+    showParen (p > 10) $
+      showString "BurnRoleTokensTx"
+        . showSpace
+        . showString "BabbageEraOnwardsConway"
+        . showsPrec 11 created
+
+instance Eq (BurnRoleTokensTx 'V1) where
+  BurnRoleTokensTx BabbageEraOnwardsBabbage a == BurnRoleTokensTx BabbageEraOnwardsBabbage b =
+    a == b
+  BurnRoleTokensTx BabbageEraOnwardsBabbage _ == _ = False
+  BurnRoleTokensTx BabbageEraOnwardsConway a == BurnRoleTokensTx BabbageEraOnwardsConway b =
+    a == b
+  BurnRoleTokensTx BabbageEraOnwardsConway _ == _ = False
+
+instance Binary (BurnRoleTokensTx 'V1) where
+  put (BurnRoleTokensTx BabbageEraOnwardsBabbage created) = do
+    putWord8 0
+    put created
+  put (BurnRoleTokensTx BabbageEraOnwardsConway created) = do
+    putWord8 1
+    put created
+  get = do
+    eraTag <- getWord8
+    case eraTag of
+      0 -> BurnRoleTokensTx BabbageEraOnwardsBabbage <$> get
+      1 -> BurnRoleTokensTx BabbageEraOnwardsConway <$> get
+      _ -> fail $ "Invalid era tag value: " <> show eraTag
+
+data BurnRoleTokensTxInEra era v = BurnRoleTokensTxInEra
+  { version :: MarloweVersion v
+  , burnedTokens :: Chain.Tokens
+  , txBody :: TxBody era
+  }
+
+deriving instance Show (BurnRoleTokensTxInEra BabbageEra 'V1)
+deriving instance Eq (BurnRoleTokensTxInEra BabbageEra 'V1)
+deriving instance Show (BurnRoleTokensTxInEra ConwayEra 'V1)
+deriving instance Eq (BurnRoleTokensTxInEra ConwayEra 'V1)
+
+instance (IsShelleyBasedEra era) => Variations (BurnRoleTokensTxInEra era 'V1) where
+  variations = BurnRoleTokensTxInEra MarloweV1 <$> variations `varyAp` variations
+
+instance (IsShelleyBasedEra era) => Binary (BurnRoleTokensTxInEra era 'V1) where
+  put BurnRoleTokensTxInEra{..} = do
+    put burnedTokens
+    putTxBody txBody
+  get = do
+    let version = MarloweV1
+    burnedTokens <- get
+    txBody <- getTxBody
+    pure BurnRoleTokensTxInEra{..}
+
 data Account
   = RoleAccount TokenName
   | AddressAccount Address
   deriving stock (Show, Eq, Ord, Generic)
   deriving anyclass (Binary, ToJSON, Variations)
+
+data BurnRoleTokensError
+  = BurnEraUnsupported AnyCardanoEra
+  | BurnRolesActive (Set PolicyId)
+  | BurnInvalidPolicyId (Set PolicyId)
+  | BurnNoTokens
+  | BurnFromCardanoError
+  | -- FIXME most of this error is not relevant to burning, but due to the current
+    -- constraint solving being too marlowe-specific, and because we use the
+    -- final balancing pipeline for burning, we sadly need to use this type here.
+    BurnConstraintError ConstraintError
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving anyclass (Binary, ToJSON, Variations)
+
+-- | Represents different filters for role tokens.
+data RoleTokenFilter' contract policyId token
+  = -- | Represents a filter that matches if either of the two sub-filters match.
+    RoleTokensOr (RoleTokenFilter' contract policyId token) (RoleTokenFilter' contract policyId token)
+  | -- | Represents a filter that matches if both of the two sub-filters match.
+    RoleTokensAnd (RoleTokenFilter' contract policyId token) (RoleTokenFilter' contract policyId token)
+  | -- | Represents a filter that matches if the sub-filter does not match.
+    RoleTokensNot (RoleTokenFilter' contract policyId token)
+  | -- | Represents a filter that matches any role token.
+    RoleTokenFilterAny
+  | -- | Represents a filter that matches no role tokens.
+    RoleTokenFilterNone
+  | -- | Represents a filter that matches role tokens based on a set of contracts.
+    RoleTokenFilterByContracts (Set contract)
+  | -- | Represents a filter that matches role tokens based on a set of policy IDs.
+    RoleTokenFilterByPolicyIds (Set policyId)
+  | -- | Represents a filter that matches role tokens based on a set of tokens.
+    RoleTokenFilterByTokens (Set token)
+  deriving stock (Show, Eq, Ord, Generic)
+  deriving anyclass (Binary)
+
+instance (Variations c, Variations p, Variations t) => Variations (RoleTokenFilter' c p t) where
+  variations =
+    join
+      [ pure (RoleTokensOr RoleTokenFilterNone RoleTokenFilterNone)
+      , pure (RoleTokensAnd RoleTokenFilterNone RoleTokenFilterNone)
+      , pure (RoleTokensNot RoleTokenFilterNone)
+      , pure RoleTokenFilterNone
+      , pure RoleTokenFilterAny
+      , RoleTokenFilterByContracts <$> variations
+      , RoleTokenFilterByPolicyIds <$> variations
+      , RoleTokenFilterByTokens <$> variations
+      ]
+
+instance Plated (RoleTokenFilter' c p t) where
+  plate f = \case
+    RoleTokensOr f1 f2 -> RoleTokensOr <$> f f1 <*> f f2
+    RoleTokensAnd f1 f2 -> RoleTokensAnd <$> f f1 <*> f f2
+    RoleTokensNot f' -> RoleTokensNot <$> f f'
+    rf -> pure rf
+
+type RoleTokenFilter = RoleTokenFilter' ContractId PolicyId AssetId
+
+class IsToken t p | t -> p where
+  tokenPolicyId :: t -> p
+
+instance IsToken AssetId PolicyId where
+  tokenPolicyId = policyId
+
+evalRoleTokenFilter :: (Ord c, Ord p, Ord t, IsToken t p) => RoleTokenFilter' c p t -> c -> t -> Bool
+evalRoleTokenFilter f roleTokenContract roleToken = go f
+  where
+    go = \case
+      RoleTokensOr f1 f2 -> go f1 || go f2
+      RoleTokensAnd f1 f2 -> go f1 && go f2
+      RoleTokensNot f' -> not $ go f'
+      RoleTokenFilterAny -> True
+      RoleTokenFilterNone -> False
+      RoleTokenFilterByContracts contracts -> Set.member roleTokenContract contracts
+      RoleTokenFilterByPolicyIds policies -> Set.member (tokenPolicyId roleToken) policies
+      RoleTokenFilterByTokens tokens -> Set.member roleToken tokens
+
+optimizeRoleTokenFilter :: (Ord c, Ord p, Ord t, IsToken t p) => RoleTokenFilter' c p t -> RoleTokenFilter' c p t
+optimizeRoleTokenFilter = rewrite rewriteRoleTokenFilter
+
+roleTokenFilterToRoleCurrencyFilter :: RoleTokenFilter -> RoleCurrencyFilter
+roleTokenFilterToRoleCurrencyFilter = go
+  where
+    go :: RoleTokenFilter -> RoleCurrencyFilter
+    go = \case
+      RoleTokensOr f1 f2 -> go f1 `RoleCurrencyOr` go f2
+      RoleTokensAnd f1 f2 -> go f1 `RoleCurrencyAnd` go f2
+      RoleTokensNot f' -> RoleCurrencyNot $ go f'
+      RoleTokenFilterAny -> RoleCurrencyFilterAny
+      RoleTokenFilterNone -> RoleCurrencyFilterNone
+      RoleTokenFilterByContracts contracts -> RoleCurrencyFilterByContract contracts
+      RoleTokenFilterByPolicyIds policies -> RoleCurrencyFilterByPolicy policies
+      RoleTokenFilterByTokens tokens -> RoleCurrencyFilterByPolicy (Set.map policyId tokens)
+
+rewriteRoleTokenFilter :: (Ord c, Ord p, Ord t, IsToken t p) => RoleTokenFilter' c p t -> Maybe (RoleTokenFilter' c p t)
+rewriteRoleTokenFilter = \case
+  RoleTokenFilterAny -> Nothing
+  RoleTokenFilterNone -> Nothing
+  -- rule double-negation
+  RoleTokensNot (RoleTokensNot a) -> Just a
+  -- rule not-any
+  RoleTokensNot RoleTokenFilterAny -> Just RoleTokenFilterNone
+  -- rule not-none
+  RoleTokensNot RoleTokenFilterNone -> Just RoleTokenFilterAny
+  RoleTokenFilterByContracts contracts
+    -- rule null-contracts
+    | Set.null contracts -> Just RoleTokenFilterNone
+    | otherwise -> Nothing
+  RoleTokenFilterByPolicyIds policies
+    -- rule null-policy-ids
+    | Set.null policies -> Just RoleTokenFilterNone
+    | otherwise -> Nothing
+  RoleTokenFilterByTokens tokens
+    -- rule null-tokens
+    | Set.null tokens -> Just RoleTokenFilterNone
+    | otherwise -> Nothing
+  RoleTokensAnd a b -> rewriteRoleTokensAnd a b <|> rewriteRoleTokensAnd b a
+  RoleTokensOr a b -> rewriteRoleTokensOr a b <|> rewriteRoleTokensOr b a
+  _ -> Nothing
+
+rewriteRoleTokensAnd
+  :: (Ord c, Ord p, Ord t, IsToken t p)
+  => RoleTokenFilter' c p t
+  -> RoleTokenFilter' c p t
+  -> Maybe (RoleTokenFilter' c p t)
+rewriteRoleTokensAnd = curry \case
+  -- rule and-annulment
+  (_, RoleTokenFilterNone) -> Just RoleTokenFilterNone
+  -- rule and-identity
+  (a, RoleTokenFilterAny) -> Just a
+  -- rule de-morgan
+  (RoleTokensNot a, RoleTokensNot b) -> Just $ RoleTokensNot $ a `RoleTokensOr` b
+  -- and-distribute
+  (RoleTokensOr a b, RoleTokensOr c d)
+    | a == c -> Just $ a `RoleTokensAnd` (b `RoleTokensOr` d)
+    | a == d -> Just $ a `RoleTokensAnd` (b `RoleTokensOr` c)
+    | b == c -> Just $ b `RoleTokensAnd` (a `RoleTokensOr` d)
+    | b == d -> Just $ b `RoleTokensAnd` (a `RoleTokensOr` c)
+  -- rule and-contracts
+  (RoleTokenFilterByContracts a, RoleTokenFilterByContracts b) ->
+    Just $ RoleTokenFilterByContracts $ Set.intersection a b
+  -- rule and-policies
+  (RoleTokenFilterByPolicyIds a, RoleTokenFilterByPolicyIds b) ->
+    Just $ RoleTokenFilterByPolicyIds $ Set.intersection a b
+  -- rule and-tokens
+  (RoleTokenFilterByTokens a, RoleTokenFilterByTokens b) ->
+    Just $ RoleTokenFilterByTokens $ Set.intersection a b
+  -- rule and-policies-tokens
+  (RoleTokenFilterByPolicyIds p, RoleTokenFilterByTokens t) ->
+    Just $ RoleTokenFilterByTokens $ Set.filter (flip Set.member p . tokenPolicyId) t
+  -- rule and-complement
+  (a, RoleTokensNot a') | a == a' -> Just RoleTokenFilterNone
+  -- rule and-absorption
+  (a, RoleTokensOr b c)
+    | a == b || a == c -> Just a
+    | b == RoleTokensNot a -> Just $ a `RoleTokensAnd` c
+    | c == RoleTokensNot a -> Just $ a `RoleTokensAnd` b
+  -- rule and-idempotent
+  (a, a') | a == a' -> Just a
+  _ -> Nothing
+
+rewriteRoleTokensOr
+  :: (Ord c, Ord p, Ord t, IsToken t p)
+  => RoleTokenFilter' c p t
+  -> RoleTokenFilter' c p t
+  -> Maybe (RoleTokenFilter' c p t)
+rewriteRoleTokensOr = curry \case
+  -- rule or-annulment
+  (_, RoleTokenFilterAny) -> Just RoleTokenFilterAny
+  -- rule or-identity
+  (a, RoleTokenFilterNone) -> Just a
+  -- rule de-morgan
+  (RoleTokensNot a, RoleTokensNot b) -> Just $ RoleTokensNot $ a `RoleTokensAnd` b
+  -- or-distribute
+  (RoleTokensOr a b, RoleTokensOr c d)
+    | a == c -> Just $ a `RoleTokensOr` (b `RoleTokensOr` d)
+    | a == d -> Just $ a `RoleTokensOr` (b `RoleTokensOr` c)
+    | b == c -> Just $ b `RoleTokensOr` (a `RoleTokensOr` d)
+    | b == d -> Just $ b `RoleTokensOr` (a `RoleTokensOr` c)
+  -- rule or-contracts
+  (RoleTokenFilterByContracts a, RoleTokenFilterByContracts b) ->
+    Just $ RoleTokenFilterByContracts $ Set.union a b
+  -- rule or-policies
+  (RoleTokenFilterByPolicyIds a, RoleTokenFilterByPolicyIds b) ->
+    Just $ RoleTokenFilterByPolicyIds $ Set.union a b
+  -- rule or-tokens
+  (RoleTokenFilterByTokens a, RoleTokenFilterByTokens b) ->
+    Just $ RoleTokenFilterByTokens $ Set.union a b
+  -- rule or-policies-tokens
+  (RoleTokenFilterByPolicyIds p, RoleTokenFilterByTokens t) ->
+    let t' = Set.filter (not . flip Set.member p . tokenPolicyId) t
+     in if t == t'
+          then Nothing
+          else Just $ RoleTokensOr (RoleTokenFilterByPolicyIds p) (RoleTokenFilterByTokens t')
+  -- rule or-complement
+  (a, RoleTokensNot a') | a == a' -> Just RoleTokenFilterAny
+  -- rule or-absorption
+  (a, RoleTokensAnd b c)
+    | a == b || a == c -> Just a
+    | b == RoleTokensNot a -> Just $ a `RoleTokensOr` c
+    | c == RoleTokensNot a -> Just $ a `RoleTokensOr` b
+  -- rule or-idempotent
+  (a, a') | a == a' -> Just a
+  _ -> Nothing
 
 -- | The low-level runtime API for building and submitting transactions.
 data MarloweTxCommand status err result where
@@ -827,6 +1136,16 @@ data MarloweTxCommand status err result where
         WithdrawError
         ( WithdrawTx v -- The unsigned tx body, to be signed by a wallet.
         )
+  -- | Construct a transaction that burns all role tokens in a wallet which match
+  -- the given filter.
+  BurnRoleTokens
+    :: MarloweVersion v
+    -- ^ The Marlowe version to use
+    -> WalletAddresses
+    -- ^ The wallet addresses to use when constructing the transaction
+    -> RoleTokenFilter
+    -- ^ Which role tokens to burn
+    -> MarloweTxCommand Void BurnRoleTokensError (BurnRoleTokensTx v)
   -- | Submits a signed transaction to the attached Cardano node.
   Submit
     :: BabbageEraOnwards era
@@ -846,6 +1165,7 @@ instance OTelCommand MarloweTxCommand where
     TagCreate _ -> "create"
     TagApplyInputs _ -> "apply_inputs"
     TagWithdraw _ -> "withdraw"
+    TagBurnRoleTokens _ -> "burn_role_tokens"
     TagSubmit -> "submit"
 
 instance Command MarloweTxCommand where
@@ -853,6 +1173,7 @@ instance Command MarloweTxCommand where
     TagCreate :: MarloweVersion v -> Tag MarloweTxCommand Void CreateError (ContractCreated v)
     TagApplyInputs :: MarloweVersion v -> Tag MarloweTxCommand Void ApplyInputsError (InputsApplied v)
     TagWithdraw :: MarloweVersion v -> Tag MarloweTxCommand Void WithdrawError (WithdrawTx v)
+    TagBurnRoleTokens :: MarloweVersion v -> Tag MarloweTxCommand Void BurnRoleTokensError (BurnRoleTokensTx v)
     TagSubmit :: Tag MarloweTxCommand SubmitStatus SubmitError BlockHeader
 
   data JobId MarloweTxCommand stats err result where
@@ -862,6 +1183,7 @@ instance Command MarloweTxCommand where
     Create _ version _ _ _ _ _ _ _ -> TagCreate version
     ApplyInputs version _ _ _ _ _ _ -> TagApplyInputs version
     Withdraw version _ _ -> TagWithdraw version
+    BurnRoleTokens version _ _ -> TagBurnRoleTokens version
     Submit _ _ -> TagSubmit
 
   tagFromJobId = \case
@@ -874,6 +1196,8 @@ instance Command MarloweTxCommand where
     (TagApplyInputs _, _) -> Nothing
     (TagWithdraw MarloweV1, TagWithdraw MarloweV1) -> pure (Refl, Refl, Refl)
     (TagWithdraw _, _) -> Nothing
+    (TagBurnRoleTokens MarloweV1, TagBurnRoleTokens MarloweV1) -> pure (Refl, Refl, Refl)
+    (TagBurnRoleTokens MarloweV1, _) -> Nothing
     (TagSubmit, TagSubmit) -> pure (Refl, Refl, Refl)
     (TagSubmit, _) -> Nothing
 
@@ -882,6 +1206,7 @@ instance Command MarloweTxCommand where
     TagApplyInputs version -> putWord8 0x02 *> put (SomeMarloweVersion version)
     TagWithdraw version -> putWord8 0x03 *> put (SomeMarloweVersion version)
     TagSubmit -> putWord8 0x04
+    TagBurnRoleTokens version -> putWord8 0x05 *> put (SomeMarloweVersion version)
 
   getTag = do
     tag <- getWord8
@@ -896,6 +1221,9 @@ instance Command MarloweTxCommand where
         SomeMarloweVersion version <- get
         pure $ SomeTag $ TagWithdraw version
       0x04 -> pure $ SomeTag TagSubmit
+      0x05 -> do
+        SomeMarloweVersion version <- get
+        pure $ SomeTag $ TagBurnRoleTokens version
       _ -> fail $ "Invalid command tag: " <> show tag
 
   putJobId = \case
@@ -905,6 +1233,7 @@ instance Command MarloweTxCommand where
     TagCreate _ -> fail "create has no job ID"
     TagApplyInputs _ -> fail "apply inputs has no job ID"
     TagWithdraw _ -> fail "withdraw has no job ID"
+    TagBurnRoleTokens _ -> fail "burn role tokens has no job ID"
     TagSubmit -> JobIdSubmit <$> get
 
   putCommand = \case
@@ -927,6 +1256,9 @@ instance Command MarloweTxCommand where
     Withdraw _ walletAddresses payoutIds -> do
       put walletAddresses
       put payoutIds
+    BurnRoleTokens _ walletAddresses tokenFilter -> do
+      put walletAddresses
+      put tokenFilter
     Submit era tx -> case era of
       BabbageEraOnwardsBabbage -> do
         putWord8 0
@@ -957,6 +1289,7 @@ instance Command MarloweTxCommand where
     TagWithdraw version -> do
       walletAddresses <- get
       Withdraw version walletAddresses <$> get
+    TagBurnRoleTokens version -> BurnRoleTokens version <$> get <*> get
     TagSubmit -> do
       eraTag <- getWord8
       case eraTag of
@@ -976,36 +1309,42 @@ instance Command MarloweTxCommand where
     TagCreate _ -> absurd
     TagApplyInputs _ -> absurd
     TagWithdraw _ -> absurd
+    TagBurnRoleTokens _ -> absurd
     TagSubmit -> put
 
   getStatus = \case
     TagCreate _ -> fail "create has no status"
     TagApplyInputs _ -> fail "apply inputs has no status"
     TagWithdraw _ -> fail "withdraw has no status"
+    TagBurnRoleTokens _ -> fail "burn role tokens has no status"
     TagSubmit -> get
 
   putErr = \case
     TagCreate MarloweV1 -> put
     TagApplyInputs MarloweV1 -> put
     TagWithdraw MarloweV1 -> put
+    TagBurnRoleTokens _ -> put
     TagSubmit -> put
 
   getErr = \case
     TagCreate MarloweV1 -> get
     TagApplyInputs MarloweV1 -> get
     TagWithdraw MarloweV1 -> get
+    TagBurnRoleTokens _ -> get
     TagSubmit -> get
 
   putResult = \case
     TagCreate MarloweV1 -> put
     TagApplyInputs MarloweV1 -> put
     TagWithdraw MarloweV1 -> put
+    TagBurnRoleTokens MarloweV1 -> put
     TagSubmit -> put
 
   getResult = \case
     TagCreate MarloweV1 -> get
     TagApplyInputs MarloweV1 -> get
     TagWithdraw MarloweV1 -> get
+    TagBurnRoleTokens MarloweV1 -> get
     TagSubmit -> get
 
 putTxBody :: (IsShelleyBasedEra era) => TxBody era -> Put
@@ -1184,6 +1523,10 @@ instance CommandEq MarloweTxCommand where
       Withdraw MarloweV1 wallet' payoutIds' ->
         wallet == wallet'
           && payoutIds == payoutIds'
+    BurnRoleTokens MarloweV1 wallet tokenFilter -> \case
+      BurnRoleTokens MarloweV1 wallet' tokenFilter' ->
+        wallet == wallet'
+          && tokenFilter == tokenFilter'
     Submit BabbageEraOnwardsBabbage tx -> \case
       Submit BabbageEraOnwardsBabbage tx' -> tx == tx'
       _ -> False
@@ -1199,18 +1542,21 @@ instance CommandEq MarloweTxCommand where
     TagCreate MarloweV1 -> (==)
     TagApplyInputs MarloweV1 -> (==)
     TagWithdraw MarloweV1 -> (==)
+    TagBurnRoleTokens MarloweV1 -> (==)
     TagSubmit -> (==)
 
   errEq = \case
     TagCreate MarloweV1 -> (==)
     TagApplyInputs MarloweV1 -> (==)
     TagWithdraw MarloweV1 -> (==)
+    TagBurnRoleTokens MarloweV1 -> (==)
     TagSubmit -> (==)
 
   resultEq = \case
     TagCreate MarloweV1 -> (==)
     TagApplyInputs MarloweV1 -> (==)
     TagWithdraw MarloweV1 -> (==)
+    TagBurnRoleTokens MarloweV1 -> (==)
     TagSubmit -> (==)
 
 instance ShowCommand MarloweTxCommand where
@@ -1236,6 +1582,7 @@ instance ShowCommand MarloweTxCommand where
             . showSpace
             . showString "MarloweV1"
         )
+    TagBurnRoleTokens MarloweV1 -> showString "TagBurnRoleTokens"
     TagSubmit -> showString "TagSubmit"
 
   showsPrecCommand p =
@@ -1287,6 +1634,13 @@ instance ShowCommand MarloweTxCommand where
             . showSpace
             . showsPrec 11 payoutIds
         )
+      BurnRoleTokens MarloweV1 wallet tokenFilter ->
+        ( showString "BurnRoleTokens"
+            . showSpace
+            . showsPrec 11 wallet
+            . showSpace
+            . showsPrec 11 tokenFilter
+        )
       Submit BabbageEraOnwardsBabbage tx ->
         ( showString "Submit"
             . showSpace
@@ -1315,18 +1669,21 @@ instance ShowCommand MarloweTxCommand where
     TagCreate MarloweV1 -> showsPrec p
     TagApplyInputs MarloweV1 -> showsPrec p
     TagWithdraw MarloweV1 -> showsPrec p
+    TagBurnRoleTokens MarloweV1 -> showsPrec p
     TagSubmit -> showsPrec p
 
   showsPrecErr p = \case
     TagCreate MarloweV1 -> showsPrec p
     TagApplyInputs MarloweV1 -> showsPrec p
     TagWithdraw MarloweV1 -> showsPrec p
+    TagBurnRoleTokens MarloweV1 -> showsPrec p
     TagSubmit -> showsPrec p
 
   showsPrecResult p = \case
     TagCreate MarloweV1 -> showsPrec p
     TagApplyInputs MarloweV1 -> showsPrec p
     TagWithdraw MarloweV1 -> showsPrec p
+    TagBurnRoleTokens MarloweV1 -> showsPrec p
     TagSubmit -> showsPrec p
 
 instance Variations V1.TransactionError

@@ -6,6 +6,7 @@
 module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Allegra where
 
 import Cardano.Ledger.Allegra
+import Cardano.Ledger.Allegra.Scripts (Timelock)
 import Cardano.Ledger.Allegra.TxAuxData (AllegraTxAuxData (..))
 import Cardano.Ledger.Allegra.TxBody (AllegraTxBody (..), ValidityInterval (..))
 import Cardano.Ledger.BaseTypes (shelleyProtVer)
@@ -13,12 +14,16 @@ import Cardano.Ledger.Binary (serialize')
 import Cardano.Ledger.Core (TxAuxData)
 import Cardano.Ledger.Crypto
 import Cardano.Ledger.Shelley.API
+import Cardano.Ledger.Shelley.TxWits (ShelleyTxWits (..))
 import Data.ByteString (ByteString)
 import Data.Foldable (Foldable (..))
 import Data.Int
+import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Shelley (
+  hashToBytea,
   mapStrictMaybe,
+  serializeBytea,
   shelleyTxInRow,
   shelleyTxOutRow,
  )
@@ -30,10 +35,21 @@ allegraTxToRows slotNo blockHash txId ShelleyTx{..} =
   , shelleyTxInRow slotNo txId <$> Set.toAscList (atbInputs body)
   , zipWith (allegraTxOutRow slotNo txId) [0 ..] $ toList $ atbOutputs body
   , []
+  , allegraTxScripts wits
   )
 
 encodeAllegraMetadata :: AllegraTxAuxData (AllegraEra StandardCrypto) -> ByteString
 encodeAllegraMetadata (AllegraTxAuxData md _) = serialize' shelleyProtVer md
+
+allegraTxScripts :: ShelleyTxWits (AllegraEra StandardCrypto) -> [ScriptRow]
+allegraTxScripts ShelleyTxWits{..} = uncurry allegraScriptRow <$> Map.toList scriptWits
+
+allegraScriptRow :: ScriptHash StandardCrypto -> Timelock (AllegraEra StandardCrypto) -> ScriptRow
+allegraScriptRow (ScriptHash hash) script =
+  ScriptRow
+    { scriptHash = hashToBytea hash
+    , scriptBytes = serializeBytea shelleyProtVer script
+    }
 
 allegraTxRow
   :: (TxAuxData era -> ByteString)

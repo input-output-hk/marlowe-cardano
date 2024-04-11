@@ -13,6 +13,7 @@ import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetNextHeaders (getNext
 import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetNextSteps (getNextSteps)
 import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetPayout (getPayout)
 import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetPayouts (getPayouts)
+import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetRoleCurrencies (getRoleCurrencies)
 import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTip (getTip)
 import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTipForContract (getTipForContract)
 import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetTransaction (getTransaction)
@@ -39,3 +40,4 @@ databaseQueries =
     (fmap (T.transaction T.Serializable T.Read) . getWithdrawals)
     (fmap (T.transaction T.Serializable T.Read) . getPayouts)
     (T.transaction T.Serializable T.Read . getPayout)
+    (T.transaction T.Serializable T.Read . getRoleCurrencies)

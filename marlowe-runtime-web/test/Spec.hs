@@ -18,8 +18,20 @@ import Data.Coerce (coerce)
 import Data.Data (Typeable)
 import qualified Data.HashMap.Strict.InsOrd as IOHM
 import Data.Kind (Type)
-import Data.OpenApi hiding (version)
-import Data.Proxy
+import Data.OpenApi (
+  HasDescription (description),
+  HasOneOf (oneOf),
+  HasProperties (properties),
+  HasRequired (required),
+  HasType (type_),
+  OpenApiType (OpenApiBoolean, OpenApiInteger, OpenApiString),
+  Pattern,
+  Reference (Reference),
+  Referenced (Inline, Ref),
+  Schema,
+  ToSchema,
+ )
+import Data.Proxy (Proxy (Proxy))
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Internal.Builder as TB
@@ -29,9 +41,24 @@ import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics (Input (.
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Object.Gen ()
 import Language.Marlowe.Runtime.Transaction.Gen ()
-import Language.Marlowe.Runtime.Web (ContractOrSourceId (..), WithRuntimeStatus)
-import qualified Language.Marlowe.Runtime.Web as Web
-import Language.Marlowe.Runtime.Web.Server.OpenAPI (
+import qualified Language.Marlowe.Runtime.Web.API as Web (
+  RuntimeAPI,
+ )
+import qualified Language.Marlowe.Runtime.Web.Adapter.Links as Web
+import Language.Marlowe.Runtime.Web.Adapter.Servant (WithRuntimeStatus)
+import qualified Language.Marlowe.Runtime.Web.Adapter.Servant as Web
+import Language.Marlowe.Runtime.Web.Contract.API (ContractOrSourceId (..))
+import qualified Language.Marlowe.Runtime.Web.Contract.API as Web
+import qualified Language.Marlowe.Runtime.Web.Core.Address as Web
+import qualified Language.Marlowe.Runtime.Web.Core.Asset as Web
+import qualified Language.Marlowe.Runtime.Web.Core.Base16 as Web
+import qualified Language.Marlowe.Runtime.Web.Core.BlockHeader as Web
+import qualified Language.Marlowe.Runtime.Web.Core.MarloweVersion as Web
+import qualified Language.Marlowe.Runtime.Web.Core.Metadata as Web
+import qualified Language.Marlowe.Runtime.Web.Core.Party as Web
+import qualified Language.Marlowe.Runtime.Web.Core.Roles as Web
+import qualified Language.Marlowe.Runtime.Web.Core.Tx as Web
+import Language.Marlowe.Runtime.Web.OpenAPIServer (
   OpenApiLintEnvironment (..),
   OpenApiLintIssue (..),
   OpenApiWithEmptySecurity (..),
@@ -41,8 +68,20 @@ import Language.Marlowe.Runtime.Web.Server.OpenAPI (
   openApi,
   schemaRule1Check,
  )
-import Servant.API
-import Servant.OpenApi
+import qualified Language.Marlowe.Runtime.Web.Payout.API as Web
+
+import qualified Language.Marlowe.Runtime.Web.Role.API as Web
+import qualified Language.Marlowe.Runtime.Web.Role.TokenFilter as Web
+import qualified Language.Marlowe.Runtime.Web.Tx.API as Web
+import qualified Language.Marlowe.Runtime.Web.Withdrawal.API as Web
+import Servant.API (
+  Headers,
+  ReqBody',
+  Verb,
+  type (:<|>),
+  type (:>),
+ )
+import Servant.OpenApi (validateEveryToJSONWithPatternChecker)
 import Spec.Marlowe.Semantics.Arbitrary ()
 import Spec.Marlowe.Semantics.Next.Arbitrary ()
 import Test.Hspec (Spec, describe, hspec, it, shouldBe)
@@ -342,7 +381,7 @@ openAPISpec = do
               ]
         actual `shouldBe` expected
 
-  validateEveryToJSONWithPatternChecker patternChecker (Proxy @(WrapContractBodies (RetractRuntimeStatus Web.API)))
+  validateEveryToJSONWithPatternChecker patternChecker (Proxy @(WrapContractBodies (RetractRuntimeStatus Web.RuntimeAPI)))
   it "Should match the golden test" do
     defaultGolden "OpenApi" $
       TL.unpack $
@@ -480,6 +519,21 @@ instance Arbitrary Web.Withdrawal where
       <*> arbitrary
   shrink = genericShrink
 
+instance Arbitrary Web.RoleTokenFilter where
+  arbitrary =
+    oneof
+      [ Web.RoleTokensAnd <$> arbitrary <*> arbitrary
+      , Web.RoleTokensOr <$> arbitrary <*> arbitrary
+      , Web.RoleTokenNot <$> arbitrary
+      , Web.RoleTokenNot <$> arbitrary
+      , pure Web.RoleTokenFilterNone
+      , Web.RoleTokenFilterByContracts <$> arbitrary
+      , Web.RoleTokenFilterByPolicyIds <$> arbitrary
+      , Web.RoleTokenFilterByTokens <$> arbitrary
+      , pure Web.RoleTokenFilterAny
+      ]
+  shrink = genericShrink
+
 instance Arbitrary Web.Tx where
   arbitrary = do
     -- size of 6 will result in a 1-layer deep contract being generated (this is
@@ -554,6 +608,10 @@ instance Arbitrary (Web.WithdrawTxEnvelope tx) where
 
 instance Arbitrary (Web.ApplyInputsTxEnvelope tx) where
   arbitrary = Web.ApplyInputsTxEnvelope <$> arbitrary <*> arbitrary <*> arbitrary
+  shrink = genericShrink
+
+instance Arbitrary (Web.BurnRoleTokensTxEnvelope tx) where
+  arbitrary = Web.BurnRoleTokensTxEnvelope <$> arbitrary <*> arbitrary
   shrink = genericShrink
 
 instance Arbitrary Web.MarloweVersion where

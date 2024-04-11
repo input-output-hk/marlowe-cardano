@@ -1,6 +1,19 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE GADTs #-}
 
-module Language.Marlowe.Runtime.Web.StandardContract where
+module Language.Marlowe.Runtime.Web.StandardContract (
+  createStandardContract,
+  createStandardContractWithTags,
+  executeCompleteStandardContractLifecycle,
+  StandardContractLifecycleInit (..),
+  StandardContractFundsDeposited (..),
+  StandardContractChoiceMade (..),
+  StandardContractNotified (..),
+  StandardContractClosed (..),
+  StandardContractPayoutsPartyAWithdrawn (..),
+  StandardContractLifecycleEnded (..),
+) where
 
 import Control.Monad.RWS.Strict (MonadIO (liftIO))
 import Data.Map (Map)
@@ -19,35 +32,48 @@ import Language.Marlowe.Runtime.Integration.Common (Wallet (..), expectJust)
 import Language.Marlowe.Runtime.Integration.StandardContract (standardContract)
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses (..))
-import Language.Marlowe.Runtime.Web (
-  ApplyInputsTxEnvelope,
-  BlockHeader,
-  CardanoTxBody,
-  ContractOrSourceId (..),
-  CreateTxEnvelope,
-  PayoutHeader (..),
-  PayoutStatus (..),
-  RoleTokenConfig (..),
-  RoleTokenRecipient (ClosedRole),
-  WithdrawTxEnvelope,
- )
-import qualified Language.Marlowe.Runtime.Web as Web
+
+import Language.Marlowe.Runtime.Web.Adapter.Server.DTO (ToDTO (toDTO))
 import Language.Marlowe.Runtime.Web.Client (Page (..), getPayouts, postContract, postContractSource)
 import Language.Marlowe.Runtime.Web.Common (
+  buildBurnRoleTokenTx,
   choose,
   deposit,
   notify,
+  submitBurnRoleTokensTx,
   submitContract,
   submitTransaction,
   submitWithdrawal,
   withdraw,
  )
-import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO (toDTO))
-import Language.Marlowe.Runtime.Web.Types (PostContractSourceResponse (..))
+import qualified Language.Marlowe.Runtime.Web.Core.MarloweVersion as Web
+import qualified Language.Marlowe.Runtime.Web.Core.Tx as Web
+import Language.Marlowe.Runtime.Web.Payout.API (PayoutHeader (payoutId), PayoutStatus (..))
+
+import Language.Marlowe.Runtime.Web.Contract.API (ContractOrSourceId (..), PostContractSourceResponse (..))
+import qualified Language.Marlowe.Runtime.Web.Contract.API as Web
+import Language.Marlowe.Runtime.Web.Core.BlockHeader (
+  BlockHeader,
+ )
+import qualified Language.Marlowe.Runtime.Web.Core.Metadata as Web
+import Language.Marlowe.Runtime.Web.Core.Roles (RoleTokenConfig (..), RoleTokenRecipient (..))
+import qualified Language.Marlowe.Runtime.Web.Core.Roles as Web
+import Language.Marlowe.Runtime.Web.Role.API (
+  BurnRoleTokensTxEnvelope,
+ )
+
+import qualified Language.Marlowe.Runtime.Web.Role.TokenFilter as Web
+import Language.Marlowe.Runtime.Web.Tx.API (
+  ApplyInputsTxEnvelope (transactionId),
+  CardanoTxBody,
+  CreateTxEnvelope (contractId),
+  WithdrawTxEnvelope,
+ )
+import qualified Language.Marlowe.Runtime.Web.Tx.API as Web
 import Pipes (yield)
 import Servant.Client.Streaming (ClientM)
 
-data StandardContractInit = StandardContractInit
+data StandardContractLifecycleInit = StandardContractLifecycleInit
   { makeInitialDeposit :: ClientM StandardContractFundsDeposited
   , contractCreated :: CreateTxEnvelope CardanoTxBody
   , createdBlock :: BlockHeader
@@ -72,15 +98,28 @@ data StandardContractNotified = StandardContractNotified
   }
 
 data StandardContractClosed = StandardContractClosed
-  { withdrawPartyAFunds :: ClientM (WithdrawTxEnvelope CardanoTxBody, BlockHeader)
+  { withdrawPartyAPayout :: ClientM StandardContractPayoutsPartyAWithdrawn
   , returnDeposited :: ApplyInputsTxEnvelope CardanoTxBody
   , returnDepositBlock :: BlockHeader
   }
 
-createStandardContract :: Wallet -> Wallet -> ClientM StandardContractInit
+data StandardContractPayoutsPartyAWithdrawn = StandardContractPayoutsPartyAWithdrawn
+  { burnRoleTokens :: ClientM StandardContractLifecycleEnded
+  , tx :: WithdrawTxEnvelope CardanoTxBody
+  , block :: BlockHeader
+  }
+
+data StandardContractLifecycleEnded where
+  StandardContractLifecycleEnded
+    :: { tx
+          :: BurnRoleTokensTxEnvelope CardanoTxBody
+       }
+    -> StandardContractLifecycleEnded
+
+createStandardContract :: Wallet -> Wallet -> ClientM StandardContractLifecycleInit
 createStandardContract = createStandardContractWithTags mempty
 
-createStandardContractWithTags :: Map Text Web.Metadata -> Wallet -> Wallet -> ClientM StandardContractInit
+createStandardContractWithTags :: Map Text Web.Metadata -> Wallet -> Wallet -> ClientM StandardContractLifecycleInit
 createStandardContractWithTags tags partyAWallet partyBWallet = do
   let partyAWalletAddresses = addresses partyAWallet
   let partyAWebChangeAddress = toDTO $ changeAddress partyAWalletAddresses
@@ -121,7 +160,7 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
   createdBlock <- submitContract partyAWallet contractCreated
 
   pure
-    StandardContractInit
+    StandardContractLifecycleInit
       { createdBlock
       , contractCreated
       , makeInitialDeposit = do
@@ -176,34 +215,60 @@ createStandardContractWithTags tags partyAWallet partyBWallet = do
                                     StandardContractClosed
                                       { returnDepositBlock
                                       , returnDeposited
-                                      , withdrawPartyAFunds = do
+                                      , withdrawPartyAPayout = do
                                           Page{..} <- getPayouts (Just $ Set.singleton contractId) Nothing (Just Available) Nothing
                                           let payouts = Set.fromList $ payoutId <$> items
-                                          withdrawTxBody <- withdraw partyAWallet payouts
-                                          (withdrawTxBody,) <$> submitWithdrawal partyAWallet withdrawTxBody
+                                          withdrawPartyATxBody <- withdraw partyAWallet payouts
+                                          blockPartyA <- submitWithdrawal partyAWallet withdrawPartyATxBody
+                                          pure
+                                            StandardContractPayoutsPartyAWithdrawn
+                                              { tx = withdrawPartyATxBody
+                                              , block = blockPartyA
+                                              , burnRoleTokens = do
+                                                  let roleFilter = Web.RoleTokenFilterByContracts $ Set.singleton contractId
+                                                  txSubmittedPartyA <- buildBurnRoleTokenTx partyAWallet roleFilter
+                                                  submitBurnRoleTokensTx partyAWallet txSubmittedPartyA
+                                                  pure
+                                                    StandardContractLifecycleEnded
+                                                      { tx = txSubmittedPartyA
+                                                      }
+                                              }
                                       }
                               }
                       }
               }
       }
 
-createFullyExecutedStandardContract :: Wallet -> Wallet -> ClientM (Web.TxOutRef, [Web.TxId])
-createFullyExecutedStandardContract partyAWallet partyBWallet = do
-  StandardContractInit{contractCreated, makeInitialDeposit} <- createStandardContract partyAWallet partyBWallet
-  StandardContractFundsDeposited{initialFundsDeposited, chooseGimmeTheMoney} <- makeInitialDeposit
-  StandardContractChoiceMade{gimmeTheMoneyChosen, sendNotify} <- chooseGimmeTheMoney
-  StandardContractNotified{notified, makeReturnDeposit} <- sendNotify
-  StandardContractClosed{returnDeposited, withdrawPartyAFunds} <- makeReturnDeposit
-  (_, _) <- withdrawPartyAFunds
-  createContractId <- case contractCreated of
-    Web.CreateTxEnvelope{contractId} -> pure contractId
-  transactionId1 <- case initialFundsDeposited of
-    Web.ApplyInputsTxEnvelope{transactionId} -> pure transactionId
-  transactionId2 <- case gimmeTheMoneyChosen of
-    Web.ApplyInputsTxEnvelope{transactionId} -> pure transactionId
-  transactionId3 <- case notified of
-    Web.ApplyInputsTxEnvelope{transactionId} -> pure transactionId
-  transactionId4 <- case returnDeposited of
-    Web.ApplyInputsTxEnvelope{transactionId} -> pure transactionId
-  let transactionIds = [transactionId1, transactionId2, transactionId3, transactionId4]
-  pure (createContractId, transactionIds)
+executeCompleteStandardContractLifecycle :: Wallet -> Wallet -> ClientM (Web.TxOutRef, [Web.TxId])
+executeCompleteStandardContractLifecycle partyAWallet partyBWallet = do
+  StandardContractLifecycleInit{contractCreated = Web.CreateTxEnvelope{contractId}, makeInitialDeposit} <-
+    createStandardContract partyAWallet partyBWallet
+  StandardContractFundsDeposited
+    { initialFundsDeposited = Web.ApplyInputsTxEnvelope{transactionId = initialFundsDepositedTxId}
+    , chooseGimmeTheMoney
+    } <-
+    makeInitialDeposit
+  StandardContractChoiceMade
+    { gimmeTheMoneyChosen = Web.ApplyInputsTxEnvelope{transactionId = gimmeTheMoneyChosenTxId}
+    , sendNotify
+    } <-
+    chooseGimmeTheMoney
+  StandardContractNotified{notified = Web.ApplyInputsTxEnvelope{transactionId = notifiedTx}, makeReturnDeposit} <-
+    sendNotify
+  StandardContractClosed
+    { returnDeposited = Web.ApplyInputsTxEnvelope{transactionId = returnDepositedTx}
+    , withdrawPartyAPayout
+    } <-
+    makeReturnDeposit
+  StandardContractPayoutsPartyAWithdrawn{burnRoleTokens} <- withdrawPartyAPayout
+  _ <- burnRoleTokens
+
+  pure
+    ( contractId
+    ,
+      [ initialFundsDepositedTxId
+      , gimmeTheMoneyChosenTxId
+      , notifiedTx
+      , returnDepositedTx
+      ]
+    )

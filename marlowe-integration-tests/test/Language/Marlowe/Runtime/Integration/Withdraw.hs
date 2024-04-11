@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 
-module Language.Marlowe.Runtime.Integration.Withdraw where
+module Language.Marlowe.Runtime.Integration.Withdraw (spec) where
 
 import Cardano.Api (BabbageEraOnwards (..), getTxId)
 import Control.Arrow ((&&&))
@@ -28,7 +28,23 @@ import Language.Marlowe.Runtime.Integration.Common (
   getGenesisWallet,
   runIntegrationTest,
  )
-import Language.Marlowe.Runtime.Integration.StandardContract
+import Language.Marlowe.Runtime.Integration.StandardContract (
+  StandardContractChoiceMade (sendNotify),
+  StandardContractClosed (
+    StandardContractClosed,
+    returnDeposited,
+    withdrawPartyAFunds
+  ),
+  StandardContractFundsDeposited (chooseGimmeTheMoney),
+  StandardContractLifecycleInit (
+    StandardContractLifecycleInit,
+    contractCreated,
+    createdBlock,
+    makeInitialDeposit
+  ),
+  StandardContractNotified (makeReturnDeposit),
+  createStandardContract,
+ )
 import Language.Marlowe.Runtime.Transaction.Api (
   ConstraintError (..),
   ContractCreated (..),
@@ -40,7 +56,14 @@ import Language.Marlowe.Runtime.Transaction.Api (
   WithdrawTx (WithdrawTx),
   WithdrawTxInEra (..),
  )
-import Test.Hspec
+import Test.Hspec (
+  ActionWith,
+  Spec,
+  aroundAll,
+  describe,
+  it,
+  shouldBe,
+ )
 import Test.Integration.Marlowe.Local (MarloweRuntime, withLocalMarloweRuntime)
 
 spec :: Spec
@@ -160,7 +183,7 @@ setup runTests = withLocalMarloweRuntime $ runIntegrationTest do
   wallet2 <- getGenesisWallet 2
   (wallet1AvailablePayout1, wallet1AvailablePayout2, wallet1WithdrawnPayout) <- setupPayments wallet1 wallet2
   wallet2AvailablePayout <- createAndExecuteStandardContractWithoutWithdrawing wallet2 wallet1
-  StandardContractInit{contractCreated = randomCreation} <- createStandardContract wallet1 wallet2
+  StandardContractLifecycleInit{contractCreated = randomCreation} <- createStandardContract wallet1 wallet2
   liftIO $ runTests TestData{..}
 
 setupPayments :: Wallet -> Wallet -> Integration (PayoutState 'V1, PayoutState 'V1, PayoutState 'V1)
@@ -172,7 +195,7 @@ setupPayments partyA partyB = do
 
 createAndExecuteStandardContractWithoutWithdrawing :: Wallet -> Wallet -> Integration (PayoutState 'V1)
 createAndExecuteStandardContractWithoutWithdrawing partyA partyB = do
-  StandardContractInit{..} <- createStandardContract partyA partyB
+  StandardContractLifecycleInit{..} <- createStandardContract partyA partyB
   ContractCreated _ ContractCreatedInEra{..} <- pure contractCreated
   step2 <- makeInitialDeposit
   step3 <- chooseGimmeTheMoney step2
@@ -191,7 +214,7 @@ createAndExecuteStandardContractWithoutWithdrawing partyA partyB = do
 
 createAndExecuteStandardContract :: Wallet -> Wallet -> Integration (PayoutState 'V1)
 createAndExecuteStandardContract partyA partyB = do
-  StandardContractInit{..} <- createStandardContract partyA partyB
+  StandardContractLifecycleInit{..} <- createStandardContract partyA partyB
   ContractCreated _ ContractCreatedInEra{contractId} <- pure contractCreated
   step2 <- makeInitialDeposit
   step3 <- chooseGimmeTheMoney step2

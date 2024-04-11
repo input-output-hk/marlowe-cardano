@@ -54,72 +54,63 @@ library
   hs-source-dirs:  src
   visibility:      public
   exposed-modules:
-    Language.Marlowe.Runtime.Web
-    Language.Marlowe.Runtime.Web.Client
-    Language.Marlowe.Runtime.Web.Types
-
-  other-modules:
+    Language.Marlowe.Runtime.Web.Adapter.ByteString
+    Language.Marlowe.Runtime.Web.Adapter.CommaList
+    Language.Marlowe.Runtime.Web.Adapter.Links
+    Language.Marlowe.Runtime.Web.Adapter.Pagination
+    Language.Marlowe.Runtime.Web.Adapter.Servant
+    Language.Marlowe.Runtime.Web.Adapter.Server.ApiError
+    Language.Marlowe.Runtime.Web.Adapter.Server.ContractClient
+    Language.Marlowe.Runtime.Web.Adapter.Server.DTO
+    Language.Marlowe.Runtime.Web.Adapter.Server.Monad
+    Language.Marlowe.Runtime.Web.Adapter.Server.SyncClient
+    Language.Marlowe.Runtime.Web.Adapter.Server.TxClient
+    Language.Marlowe.Runtime.Web.Adapter.Server.Util
+    Language.Marlowe.Runtime.Web.Adapter.URI
     Language.Marlowe.Runtime.Web.API
-    Language.Marlowe.Runtime.Web.Next.Schema
-    Language.Marlowe.Runtime.Web.Orphans
-
-  build-depends:
-    , aeson ^>=2.2
-    , base >=4.9 && <5
-    , base16 ^>=0.3.2
-    , bytestring >=0.10.12 && <0.12
-    , containers ^>=0.6.5
-    , http-media ^>=0.8
-    , lens >=5.2 && <6
-    , marlowe-cardano ==0.2.1.0
-    , marlowe-object ==0.2.0.1
-    , mtl >=2.2 && <3
-    , network-uri >=2.6 && <3
-    , openapi3 >=3.2 && <4
-    , parsec ^>=3.1.14
-    , pipes ^>=4.3.16
-    , plutus-ledger-api ^>=1.21
-    , servant ^>=0.20
-    , servant-client ^>=0.20
-    , servant-client-core ^>=0.20
-    , servant-openapi3 ^>=2.0
-    , servant-pagination >=2.5 && <3
-    , servant-pipes ^>=0.16
-    , servant-server ^>=0.20
-    , text ^>=2.0
-    , time >=1.9 && <2
-    , wai >=3.2 && <4
-
-library server
-  import:          lang
-  hs-source-dirs:  server
-  visibility:      public
-  exposed-modules:
+    Language.Marlowe.Runtime.Web.Client
+    Language.Marlowe.Runtime.Web.Contract.API
+    Language.Marlowe.Runtime.Web.Contract.Next.API
+    Language.Marlowe.Runtime.Web.Contract.Next.Client
+    Language.Marlowe.Runtime.Web.Contract.Next.Schema
+    Language.Marlowe.Runtime.Web.Contract.Next.Server
+    Language.Marlowe.Runtime.Web.Contract.Server
+    Language.Marlowe.Runtime.Web.Contract.Source.Server
+    Language.Marlowe.Runtime.Web.Contract.Transaction.API
+    Language.Marlowe.Runtime.Web.Contract.Transaction.Client
+    Language.Marlowe.Runtime.Web.Contract.Transaction.Server
+    Language.Marlowe.Runtime.Web.Core.Address
+    Language.Marlowe.Runtime.Web.Core.Asset
+    Language.Marlowe.Runtime.Web.Core.Base16
+    Language.Marlowe.Runtime.Web.Core.BlockHeader
+    Language.Marlowe.Runtime.Web.Core.MarloweVersion
+    Language.Marlowe.Runtime.Web.Core.Metadata
+    Language.Marlowe.Runtime.Web.Core.NetworkId
+    Language.Marlowe.Runtime.Web.Core.Object.Schema
+    Language.Marlowe.Runtime.Web.Core.Party
+    Language.Marlowe.Runtime.Web.Core.Roles
+    Language.Marlowe.Runtime.Web.Core.Script
+    Language.Marlowe.Runtime.Web.Core.Semantics.Schema
+    Language.Marlowe.Runtime.Web.Core.Tip
+    Language.Marlowe.Runtime.Web.Core.Tx
+    Language.Marlowe.Runtime.Web.Payout.API
+    Language.Marlowe.Runtime.Web.Payout.Server
+    Language.Marlowe.Runtime.Web.Role.API
+    Language.Marlowe.Runtime.Web.Role.Client
+    Language.Marlowe.Runtime.Web.Role.Server
+    Language.Marlowe.Runtime.Web.Role.TokenFilter
     Language.Marlowe.Runtime.Web.Server
-    Language.Marlowe.Runtime.Web.Server.DTO
-    Language.Marlowe.Runtime.Web.Server.Monad
-    Language.Marlowe.Runtime.Web.Server.OpenAPI
-    Language.Marlowe.Runtime.Web.Server.Util
-
-  other-modules:
-    Language.Marlowe.Runtime.Web.Server.ContractClient
-    Language.Marlowe.Runtime.Web.Server.REST
-    Language.Marlowe.Runtime.Web.Server.REST.ApiError
-    Language.Marlowe.Runtime.Web.Server.REST.Contracts
-    Language.Marlowe.Runtime.Web.Server.REST.Contracts.Next
-    Language.Marlowe.Runtime.Web.Server.REST.ContractSources
-    Language.Marlowe.Runtime.Web.Server.REST.Payouts
-    Language.Marlowe.Runtime.Web.Server.REST.Transactions
-    Language.Marlowe.Runtime.Web.Server.REST.Withdrawals
-    Language.Marlowe.Runtime.Web.Server.SyncClient
-    Language.Marlowe.Runtime.Web.Server.TxClient
-    Paths_marlowe_runtime_web
+    Language.Marlowe.Runtime.Web.Status
+    Language.Marlowe.Runtime.Web.Tx.API
+    Language.Marlowe.Runtime.Web.Withdrawal.API
+    Language.Marlowe.Runtime.Web.Withdrawal.Server
 
   build-depends:
     , aeson ^>=2.2
     , async >=2.2 && <3
     , async-components ==0.1.1.0
     , base >=4.9 && <5
+    , base16 ^>=0.3.2
     , bytestring >=0.10.12 && <0.12
     , cardano-api ^>=8.39.2.0
     , cardano-ledger-alonzo ^>=1.6
@@ -132,34 +123,69 @@ library server
     , eventuo11y-extras ==0.1.1.0
     , exceptions >=0.10 && <0.12
     , http-media ^>=0.8
-    , http-types
-    , insert-ordered-containers >=0.2.5 && <0.3
     , lens >=5.2 && <6
-    , lens-aeson ^>=1.2
     , marlowe-cardano ==0.2.1.0
     , marlowe-chain-sync ==0.0.6
     , marlowe-client ==0.0.6
     , marlowe-object ==0.2.0.1
     , marlowe-protocols ==0.3.0.0
-    , marlowe-runtime-web ==0.0.6
     , marlowe-runtime:{marlowe-runtime, contract-api, proxy-api, sync-api, tx-api} ==0.0.6
     , monad-control ^>=1
     , mtl >=2.2 && <3
+    , network-uri >=2.6 && <3
     , nonempty-containers ^>=0.3.4
     , openapi3 >=3.2 && <4
+    , parsec ^>=3.1.14
     , pipes ^>=4.3.16
     , plutus-ledger-api ^>=1.21
     , servant ^>=0.20
+    , servant-client ^>=0.20
+    , servant-client-core ^>=0.20
     , servant-openapi3 ^>=2.0
     , servant-pagination >=2.5 && <3
     , servant-pipes ^>=0.16
     , servant-server ^>=0.20
     , stm ^>=2.5
     , stm-delay ^>=0.1.1
-    , string-conversions ^>=0.4
     , text ^>=2.0
     , time >=1.9 && <2
     , transformers-base ^>=0.4
+    , unliftio-core ^>=0.2
+    , wai >=3.2 && <4
+
+library server
+  import:          lang
+  hs-source-dirs:  server
+  visibility:      public
+  exposed-modules:
+    Language.Marlowe.Runtime.Web.OpenAPIServer
+    Language.Marlowe.Runtime.Web.RuntimeServer
+
+  other-modules:   Paths_marlowe_runtime_web
+  build-depends:
+    , aeson ^>=2.2
+    , async-components ==0.1.1.0
+    , base >=4.9 && <5
+    , co-log ^>=0.6
+    , eventuo11y >=0.9 && <0.11
+    , eventuo11y-extras ==0.1.1.0
+    , http-types
+    , insert-ordered-containers >=0.2.5 && <0.3
+    , lens >=5.2 && <6
+    , lens-aeson ^>=1.2
+    , marlowe-chain-sync ==0.0.6
+    , marlowe-protocols ==0.3.0.0
+    , marlowe-runtime-web ==0.0.6
+    , marlowe-runtime:{marlowe-runtime, proxy-api, sync-api} ==0.0.6
+    , mtl >=2.2 && <3
+    , openapi3 >=3.2 && <4
+    , servant ^>=0.20
+    , servant-openapi3 ^>=2.0
+    , servant-pagination >=2.5 && <3
+    , servant-pipes ^>=0.16
+    , servant-server ^>=0.20
+    , string-conversions ^>=0.4
+    , text ^>=2.0
     , unliftio-core ^>=0.2
     , wai >=3.2 && <4
     , wai-cors ^>=0.2

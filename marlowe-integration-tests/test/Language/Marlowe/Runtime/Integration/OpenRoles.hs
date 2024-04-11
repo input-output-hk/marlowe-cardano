@@ -1,7 +1,7 @@
 module Language.Marlowe.Runtime.Integration.OpenRoles where
 
 import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript (OpenRoleScript))
-import Language.Marlowe.Runtime.Integration.Basic (basicScenarioWithCreator)
+import Language.Marlowe.Runtime.Integration.Scenario (basicScenarioWithCreator)
 import Language.Marlowe.Runtime.Integration.StandardContract (createStandardContractWithRolesConfig)
 import Language.Marlowe.Runtime.Transaction.Api (
   Destination (..),

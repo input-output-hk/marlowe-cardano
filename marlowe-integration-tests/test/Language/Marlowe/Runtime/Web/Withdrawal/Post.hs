@@ -2,20 +2,29 @@ module Language.Marlowe.Runtime.Web.Withdrawal.Post where
 
 import Data.Functor (void)
 import qualified Data.Set as Set
-import Language.Marlowe.Runtime.Integration.Common
+import Language.Marlowe.Runtime.Integration.Common (
+  Wallet (addresses),
+  getGenesisWallet,
+  runIntegrationTest,
+  runWebClient,
+ )
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses (..))
-import Language.Marlowe.Runtime.Web (PayoutHeader (..), PayoutStatus (..))
-import qualified Language.Marlowe.Runtime.Web as Web
+
 import Language.Marlowe.Runtime.Web.Client (Page (..), getPayouts, postWithdrawal)
-import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO (toDTO))
+
+import Language.Marlowe.Runtime.Web.Adapter.Server.DTO (ToDTO (toDTO))
+import Language.Marlowe.Runtime.Web.Payout.API (PayoutHeader (..), PayoutStatus (..))
 import Language.Marlowe.Runtime.Web.StandardContract (
   StandardContractChoiceMade (..),
   StandardContractClosed (..),
   StandardContractFundsDeposited (..),
-  StandardContractInit (..),
+  StandardContractLifecycleInit (..),
   StandardContractNotified (..),
   createStandardContract,
  )
+
+import qualified Language.Marlowe.Runtime.Web.Tx.API as Web
+import qualified Language.Marlowe.Runtime.Web.Withdrawal.API as Web
 import Test.Hspec (Spec, describe, it)
 import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
 
@@ -31,7 +40,7 @@ spec = describe "POST /contracts/{contractId}/withdrawal" do
       let webExtraAddresses = Set.map toDTO extraAddresses
       let webCollateralUtxos = Set.map toDTO collateralUtxos
 
-      StandardContractInit{contractCreated, makeInitialDeposit} <- createStandardContract partyAWallet partyBWallet
+      StandardContractLifecycleInit{contractCreated, makeInitialDeposit} <- createStandardContract partyAWallet partyBWallet
       StandardContractFundsDeposited{chooseGimmeTheMoney} <- makeInitialDeposit
       StandardContractChoiceMade{sendNotify} <- chooseGimmeTheMoney
       StandardContractNotified{makeReturnDeposit} <- sendNotify
