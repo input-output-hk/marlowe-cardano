@@ -131,7 +131,7 @@ caseAsDataV1Scripts = do
                       { address =
                           fromJust $
                             fromBech32 "addr_test1vrcmu4u3quhxgansnxvfuzn5a9u6khvff4kggy35f5xl2qggkt5p7"
-                      , assets = Assets 48_655_590 mempty
+                      , assets = unsafeLovelaceAssets 48_655_590
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -194,7 +194,7 @@ caseAsDataV1Scripts = do
                       { address =
                           fromJust $
                             fromBech32 "addr_test1vq0ph6lw0n2xdqgcy8qct5xpkhyy3cqkn8hjmctkq8zszucser4wx"
-                      , assets = Assets 11_537_870 mempty
+                      , assets = unsafeLovelaceAssets 11_537_870
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -257,7 +257,7 @@ caseAsDataV1Scripts = do
                       { address =
                           fromJust $
                             fromBech32 "addr_test1vpheun9n9qjlgtkv7ldvl56wagju53ykr5ps49h80enx7gq6yq5en"
-                      , assets = Assets 17_645_140 mempty
+                      , assets = unsafeLovelaceAssets 17_645_140
                       , datum = Nothing
                       , datumHash = Nothing
                       }

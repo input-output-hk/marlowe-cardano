@@ -64,8 +64,11 @@ import Language.Marlowe.Runtime.Web.Tx.API (
     txEnvelope
   ),
  )
-import Language.Marlowe.Runtime.Web.Server.DTO (FromDTO (..), ToDTO (toDTO))
-import Language.Marlowe.Runtime.Web.Types (ApiError (..))
+
+import Language.Marlowe.Runtime.Web.Adapter.Server.ApiError
+import qualified Language.Marlowe.Runtime.Web.Core.Asset as Web
+import qualified Language.Marlowe.Runtime.Web.Core.Party as Web
+import qualified Language.Marlowe.Runtime.Web.Tx.API as Web
 import Network.URI (parseURI)
 import qualified PlutusLedgerApi.V2 as PV2
 import qualified Servant.Client as Servant

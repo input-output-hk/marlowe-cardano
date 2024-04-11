@@ -16,6 +16,7 @@ module Language.Marlowe.Runtime.Web.Core.BlockHeader (
   BlockHeader (..),
 ) where
 
+import Control.DeepSeq (NFData)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.OpenApi (ToSchema)
 import Data.Word (Word64)
@@ -28,3 +29,5 @@ data BlockHeader = BlockHeader
   , blockHeaderHash :: Base16
   }
   deriving (Show, Eq, Ord, Generic, ToJSON, FromJSON, ToSchema)
+
+instance NFData BlockHeader

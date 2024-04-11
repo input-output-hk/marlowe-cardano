@@ -13,8 +13,6 @@ import Data.String (IsString (fromString))
 import Data.Version (showVersion)
 import Language.Marlowe.Runtime.Client (connectToMarloweRuntimeTraced)
 import Language.Marlowe.Runtime.Web.RuntimeServer (
-  ServeRequest (..),
-  ServeRequestField (ReqField, ResField),
   ServerDependencies (
     ServerDependencies,
     accessControlAllowOriginAll,
@@ -25,44 +23,17 @@ import Language.Marlowe.Runtime.Web.RuntimeServer (
   ServerSelector (..),
   runtimeServer,
  )
-import Network.HTTP.Types (
-  HeaderName,
-  HttpVersion (HttpVersion, httpMajor, httpMinor),
-  Status (statusCode),
-  hContentLength,
-  hUserAgent,
- )
-import Network.Protocol.Driver.Trace (TcpClientSelector, renderTcpClientSelectorOTel, sockAddrToAttributes)
-import Network.Socket (PortNumber)
-import Network.Wai (
-  Request (
-    httpVersion,
-    rawPathInfo,
-    remoteHost,
-    requestBodyLength,
-    requestHeaders,
-    requestMethod
-  ),
-  RequestBodyLength (ChunkedBody, KnownLength),
-  responseHeaders,
-  responseStatus,
- )
-import Language.Marlowe.Runtime.Web.Server
 import Language.Marlowe.Runtime.Web.Server.Logging (renderServerSelectorOTel)
 import Network.Wai.Handler.Warp (
   run,
  )
 import Observe.Event (injectSelector)
-import Observe.Event.Render.OpenTelemetry (OTelRendered (..), RenderSelectorOTel)
 import OpenTelemetry.Trace (
   InstrumentationLibrary (
     InstrumentationLibrary,
     libraryName,
     libraryVersion
   ),
-  PrimitiveAttribute (IntAttribute, TextAttribute),
-  SpanKind (Server),
-  ToAttribute (toAttribute),
  )
 import Options (
   Options (
@@ -75,8 +46,6 @@ import Options (
   ),
   getOptions,
  )
-import OpenTelemetry.Trace
-import Options
 import Paths_marlowe_runtime_web (version)
 import System.IO (BufferMode (..), hSetBuffering, stderr, stdout)
 import UnliftIO (MonadUnliftIO, newMVar, withMVar)

@@ -104,7 +104,7 @@ import Language.Marlowe.Runtime.Plutus.V2.Api (
  )
 import Language.Marlowe.Runtime.Transaction.Api (
   Account (..),
-  Accounts (AccountsContent),
+  Accounts (..),
   ApplyInputsConstraintsBuildupError (..),
   ApplyInputsError (..),
   CreateBuildupError (
@@ -389,7 +389,7 @@ toMarloweParty (RoleAccount role) =
 type MarloweAccounts = AM.Map (V1.Party, V1.Token) Integer
 
 toMarloweAccounts :: Accounts -> Either InvalidAddresses MarloweAccounts
-toMarloweAccounts (AccountsContent accounts) = do
+toMarloweAccounts (Accounts accounts) = do
   let adaToken = V1.Token PV2.adaSymbol PV2.adaToken
   AM.fromList . join <$> for (Map.toAscList accounts) \(account, CS.TxOutAssetsContent (Assets{..})) ->
     toMarloweParty account <&> \accountId ->
@@ -446,7 +446,7 @@ initialMarloweStateV1
   -> Lovelace
   -> MinAdaProvider
   -> Either InvalidAddresses V1.State
-initialMarloweStateV1 (AdjustMinUTxO adjustMinUtxo) accounts@(AccountsContent accountsMap) threadToken minAda (MinAdaProvider creatorAddress) = do
+initialMarloweStateV1 (AdjustMinUTxO adjustMinUtxo) accounts@(Accounts accountsMap) threadToken minAda (MinAdaProvider creatorAddress) = do
   let CS.TxOutAssetsContent accountAssets = fold accountsMap
       -- The thread token as a tokens collection
       threadTokenTokens = Tokens $ foldMap (flip Map.singleton (Quantity 1) . unThreadTokenAssetId) threadToken

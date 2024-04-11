@@ -95,10 +95,15 @@ import Language.Marlowe.Protocol.Query.Types (
   Withdrawal (..),
  )
 import qualified Language.Marlowe.Protocol.Query.Types as Query
-import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType)
-import Language.Marlowe.Runtime.ChainSync.Api (AssetId (..), fromBech32, toBech32)
-import Language.Marlowe.Runtime.Cardano.Api (cardanoEraToAsType, fromCardanoTxId)
-import Language.Marlowe.Runtime.ChainSync.Api (AssetId (..), fromBech32, mkTxOutAssets, toBech32)
+import Language.Marlowe.Runtime.Cardano.Api (
+  cardanoEraToAsType,
+ )
+import Language.Marlowe.Runtime.ChainSync.Api (
+  AssetId (..),
+  fromBech32,
+  mkTxOutAssets,
+  toBech32,
+ )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (
   ContractId (..),

@@ -53,12 +53,9 @@ import Control.Concurrent.STM (STM, modifyTVar, newEmptyTMVar, newTVar, putTMVar
 import qualified Control.DeepSeq as DeepSeq
 import Control.Error (MaybeT (..))
 import Control.Error.Util (hush, note, noteT)
-import Control.Exception (Exception (..), SomeException)
-import Control.Monad (guard, unless, when, (<=<))
-import Control.Exception (ErrorCall, Exception (..), SomeException, catch)
 import Control.Exception (Exception (..), SomeException, catch)
 import qualified Control.Exception as Exception
-import Control.Monad (guard, unless, (<=<))
+import Control.Monad (guard, unless, when, (<=<))
 import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Trans.Class (lift)
@@ -81,8 +78,8 @@ import Data.Traversable (for)
 import Data.Void (Void)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError (SafetyAnalysisTimeout))
 import qualified Language.Marlowe.Core.V1.Semantics as V1
-import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient, getRoleCurrencies)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
+import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient, getRoleCurrencies)
 import Language.Marlowe.Runtime.Cardano.Api (
   fromCardanoAddressInEra,
   fromCardanoTxId,
@@ -157,18 +154,14 @@ import Language.Marlowe.Runtime.Transaction.BuildConstraints (
   initialMarloweState,
   invalidAddressesError,
  )
+import Language.Marlowe.Runtime.Transaction.Burn (burnRoleTokens)
 import Language.Marlowe.Runtime.Transaction.Constraints (
   MarloweContext (..),
   SolveConstraints,
   TxConstraints,
   WalletContext (WalletContext),
  )
-import Language.Marlowe.Runtime.Transaction.Burn (burnRoleTokens)
-import Language.Marlowe.Runtime.Transaction.Constraints (
-  MarloweContext (..),
-  SolveConstraints,
-  TxConstraints,
- )
+
 import qualified Language.Marlowe.Runtime.Transaction.Constraints as Constraints
 import Language.Marlowe.Runtime.Transaction.Query (
   LoadMarloweContext,
@@ -278,6 +271,7 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                   Create{} -> "Create"
                   ApplyInputs{} -> "ApplyInputs"
                   Withdraw{} -> "Withdraw"
+                  BurnRoleTokens{} -> "BurnRoleTokens"
                   Submit{} -> "Submit"
 
               let solveConstraints :: Constraints.SolveConstraints era v
@@ -494,7 +488,7 @@ execCreate
   -> NominalDiffTime
   -> m (ServerStCmd MarloweTxCommand Void CreateError (ContractCreated v) m ())
 execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts solveConstraints protocolParameters loadWalletContext loadHelpersContext networkId mStakeCredential version addresses threadRole roleTokens metadata optMinAda accounts contract analysisTimeout = execExceptT do
-  eon <- referenceInputsSupportedInEra (CreateEraUnsupported $ AnyCardanoEra era) era
+  eon <- toBabbageEraOnwards (CreateEraUnsupported $ AnyCardanoEra era) era
   let threadRole' = fromMaybe "" threadRole
   let adjustMinUtxo = mkAdjustMinUTxO eon protocolParameters version
   walletContext <- lift $ loadWalletContext addresses
@@ -675,7 +669,7 @@ execApplyInputs
   invalidHereafter'
   inputs
   analysisTimeout = execExceptT do
-    eon <- referenceInputsSupportedInEra (ApplyInputsEraUnsupported $ AnyCardanoEra era) era
+    eon <- toBabbageEraOnwards (ApplyInputsEraUnsupported $ AnyCardanoEra era) era
     marloweContext@MarloweContext{..} <-
       withExceptT ApplyInputsLoadMarloweContextFailed $
         ExceptT $

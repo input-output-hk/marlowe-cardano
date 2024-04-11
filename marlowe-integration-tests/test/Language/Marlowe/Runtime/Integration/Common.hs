@@ -17,7 +17,6 @@ module Language.Marlowe.Runtime.Integration.Common (
   getGenesisWallet,
   getStakeCredential,
   getTip,
-  getUTxO,
   inputsAppliedToTransaction,
   retryDelayMicroSeconds,
   runIntegrationTest,
@@ -58,6 +57,11 @@ module Language.Marlowe.Runtime.Integration.Common (
   execMarlowe_,
   execMarlowe',
   runWebClient,
+  runWebClient',
+  expectJustM,
+  waitTillWalletHasFunds,
+  mkEmptyWallet,
+  prettyJSON,
 ) where
 
 import Cardano.Api (
@@ -149,14 +153,6 @@ import Language.Marlowe.Runtime.ChainSync.Api (
  )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import qualified Language.Marlowe.Runtime.ChainSync.Api as ChainSync
-import Language.Marlowe.Runtime.Client (
-  MarloweT,
-  applyInputs,
-  runMarloweHeaderSyncClient,
-  runMarloweSyncClient,
-  runMarloweT,
-  runMarloweTxClient,
- )
 import qualified Language.Marlowe.Runtime.Client as Client
 import Language.Marlowe.Runtime.Core.Api (
   ContractId (..),
@@ -186,16 +182,17 @@ import qualified Language.Marlowe.Runtime.Transaction.Query as Transaction
 import Network.Protocol.Connection (runConnector)
 import Network.Protocol.Driver.Trace (HasSpanContext (context, wrapContext))
 import Network.Protocol.Job.Client (liftCommandWait)
-import Ouroboros.Network.Protocol.LocalStateQuery.Type (Target (VolatileTip))
 import Network.Protocol.Peer.Trace (defaultSpanContext)
 import Network.Protocol.Query.Client (request)
 import Observe.Event.Explicit (injectSelector)
+import Ouroboros.Network.Protocol.LocalStateQuery.Type (Target (VolatileTip))
 import qualified PlutusLedgerApi.V2 as PV2
 import Servant.Client (ClientError)
 import Servant.Client.Streaming (ClientM)
 import System.Exit (ExitCode (..))
 import Test.Hspec (shouldBe)
-import Test.Integration.Marlowe (
+import Test.Integration.Marlowe.Local (
+  Attempts (..),
   LocalTestnet (..),
   MarloweRuntime (MarloweRuntime),
   PaymentKeyPair (..),
@@ -205,7 +202,6 @@ import Test.Integration.Marlowe (
   execCli,
   retryTillTrue,
  )
-import Test.Integration.Marlowe.Local (Attempts (..))
 import qualified Test.Integration.Marlowe.Local as MarloweRuntime
 import UnliftIO (bracket_)
 import UnliftIO.Environment (setEnv, unsetEnv)

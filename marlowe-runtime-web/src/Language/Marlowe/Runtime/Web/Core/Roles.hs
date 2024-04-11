@@ -58,7 +58,7 @@ import qualified Data.OpenApi as OpenApi
 import Data.OpenApi.Schema (ToSchema (..))
 import Data.Text (Text)
 import Data.Traversable (for)
-import Data.Word (Word64)
+
 import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.Web.Adapter.URI (
   uriFromJSON,
@@ -122,7 +122,7 @@ data RoleTokenConfig = RoleTokenConfig
   }
   deriving (Show, Eq, Ord, Generic)
 
-type RoleTokenRecipients = Map RoleTokenRecipient Word64
+type RoleTokenRecipients = Map RoleTokenRecipient Integer
 
 data RoleTokenRecipient
   = ClosedRole Address
@@ -197,7 +197,7 @@ instance ToSchema RoleTokenConfig where
   declareNamedSchema _ = do
     simpleSchema <- declareSchemaRef (Proxy @Address)
     metadataSchema <- declareSchemaRef (Proxy @TokenMetadata)
-    quantitySchema <- declareSchemaRef (Proxy @Word64)
+    quantitySchema <- declareSchemaRef (Proxy @Integer)
     let multiSchema =
           mempty
             & type_ ?~ OpenApiObject

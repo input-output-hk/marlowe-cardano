@@ -313,8 +313,9 @@ data ApplyInputsTxEnvelope tx = ApplyInputsTxEnvelope
   { contractId :: TxOutRef
   , transactionId :: TxId
   , txEnvelope :: TextEnvelope
+  , safetyErrors :: [SafetyError]
   }
-  deriving (Show, Eq, Ord, Generic)
+  deriving (Show, Eq, Generic)
 
 instance ToJSON (ApplyInputsTxEnvelope CardanoTx) where
   toJSON ApplyInputsTxEnvelope{..} =
@@ -322,6 +323,7 @@ instance ToJSON (ApplyInputsTxEnvelope CardanoTx) where
       [ ("contractId", toJSON contractId)
       , ("transactionId", toJSON transactionId)
       , ("tx", toJSON txEnvelope)
+      , ("safetyErrors", toJSON safetyErrors)
       ]
 instance ToJSON (ApplyInputsTxEnvelope CardanoTxBody) where
   toJSON ApplyInputsTxEnvelope{..} =
@@ -329,6 +331,7 @@ instance ToJSON (ApplyInputsTxEnvelope CardanoTxBody) where
       [ ("contractId", toJSON contractId)
       , ("transactionId", toJSON transactionId)
       , ("txBody", toJSON txEnvelope)
+      , ("safetyErrors", toJSON safetyErrors)
       ]
 
 instance FromJSON (ApplyInputsTxEnvelope CardanoTx) where
@@ -339,6 +342,7 @@ instance FromJSON (ApplyInputsTxEnvelope CardanoTx) where
           contractId <- obj .: "contractId"
           transactionId <- obj .: "transactionId"
           txEnvelope <- obj .: "tx"
+          safetyErrors <- obj .: "safetyErrors"
           pure ApplyInputsTxEnvelope{..}
       )
 
@@ -350,6 +354,7 @@ instance FromJSON (ApplyInputsTxEnvelope CardanoTxBody) where
           contractId <- obj .: "contractId"
           transactionId <- obj .: "transactionId"
           txEnvelope <- obj .: "txBody"
+          safetyErrors <- obj .: "safetyErrors"
           pure ApplyInputsTxEnvelope{..}
       )
 
@@ -358,6 +363,7 @@ instance ToSchema (ApplyInputsTxEnvelope CardanoTx) where
     contractIdSchema <- declareSchemaRef (Proxy :: Proxy TxOutRef)
     transactionIdSchema <- declareSchemaRef (Proxy :: Proxy TxId)
     txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
+    safetyErrorsSchema <- declareSchemaRef (Proxy :: Proxy [SafetyError])
     return $
       NamedSchema (Just "ApplyInputsTxEnvelope") $
         mempty
@@ -367,6 +373,7 @@ instance ToSchema (ApplyInputsTxEnvelope CardanoTx) where
             .~ [ ("contractId", contractIdSchema)
                , ("transactionId", transactionIdSchema)
                , ("tx", txEnvelopeSchema)
+               , ("safetyErrors", safetyErrorsSchema)
                ]
           & required .~ ["contractId", "transactionId", "tx"]
 
@@ -375,6 +382,7 @@ instance ToSchema (ApplyInputsTxEnvelope CardanoTxBody) where
     contractIdSchema <- declareSchemaRef (Proxy :: Proxy TxOutRef)
     transactionIdSchema <- declareSchemaRef (Proxy :: Proxy TxId)
     txEnvelopeSchema <- declareSchemaRef (Proxy :: Proxy TextEnvelope)
+    safetyErrorsSchema <- declareSchemaRef (Proxy :: Proxy [SafetyError])
     return $
       NamedSchema (Just "ApplyInputsTxEnvelope") $
         mempty
@@ -384,5 +392,6 @@ instance ToSchema (ApplyInputsTxEnvelope CardanoTxBody) where
             .~ [ ("contractId", contractIdSchema)
                , ("transactionId", transactionIdSchema)
                , ("txBody", txEnvelopeSchema)
+               , ("safetyErrors", safetyErrorsSchema)
                ]
           & required .~ ["contractId", "transactionId", "txBody"]

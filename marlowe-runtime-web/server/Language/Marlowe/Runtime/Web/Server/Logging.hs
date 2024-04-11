@@ -10,13 +10,40 @@ import Data.Maybe (catMaybes)
 import Data.String (IsString (fromString))
 import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
-import Language.Marlowe.Runtime.Web.Server
-import Network.HTTP.Types
+
+import Language.Marlowe.Runtime.Web.RuntimeServer (
+  ServeRequest (..),
+  ServeRequestField (ReqField, ResField),
+  ServerSelector (..),
+ )
+import Network.HTTP.Types (
+  HeaderName,
+  HttpVersion (HttpVersion, httpMajor, httpMinor),
+  Status (statusCode),
+  hContentLength,
+  hUserAgent,
+ )
 import Network.Protocol.Driver.Trace (TcpClientSelector, renderTcpClientSelectorOTel, sockAddrToAttributes)
 import Network.Socket (PortNumber)
-import Network.Wai
+import Network.Wai (
+  Request (
+    httpVersion,
+    rawPathInfo,
+    remoteHost,
+    requestBodyLength,
+    requestHeaders,
+    requestMethod
+  ),
+  RequestBodyLength (ChunkedBody, KnownLength),
+  responseHeaders,
+  responseStatus,
+ )
 import Observe.Event.Render.OpenTelemetry (OTelRendered (..), RenderSelectorOTel)
-import OpenTelemetry.Trace
+import OpenTelemetry.Trace (
+  PrimitiveAttribute (IntAttribute, TextAttribute),
+  SpanKind (Server),
+  ToAttribute (toAttribute),
+ )
 import Text.Read (readMaybe)
 
 renderServerSelectorOTel :: PortNumber -> RenderSelectorOTel (ServerSelector TcpClientSelector)

@@ -1,5 +1,6 @@
 module Language.Marlowe.Runtime.Web.Core.MarloweVersion (MarloweVersion (..)) where
 
+import Control.DeepSeq (NFData)
 import Control.Lens ((&), (?~))
 import Data.Aeson (
   FromJSON (parseJSON),
@@ -20,6 +21,7 @@ import qualified Data.OpenApi as OpenApi
 import Data.OpenApi.Schema (ToSchema (..))
 import Data.Text (intercalate)
 import qualified Data.Text as T
+import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.Web.Core.Semantics.Schema ()
 import Servant (
   FromHttpApiData (parseUrlPiece),
@@ -27,7 +29,9 @@ import Servant (
  )
 
 data MarloweVersion = V1
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Generic)
+
+instance NFData MarloweVersion
 
 instance ToJSON MarloweVersion where
   toJSON V1 = String "v1"

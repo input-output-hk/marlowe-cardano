@@ -35,21 +35,14 @@ import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1
 import Language.Marlowe.Extended.V1 (ada)
-import Language.Marlowe.Runtime.Integration.Common (
-  Wallet (addresses),
-  expectJust,
-  getGenesisWallet,
-  runIntegrationTest,
-  runWebClient,
+
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (ContractId)
 import Language.Marlowe.Runtime.Integration.Common (
   Integration,
   Wallet (addresses, signingKeys),
   expectJust,
-  expectJustM,
   getGenesisWallet,
-  mkEmptyWallet,
   runIntegrationTest,
   runWebClient,
   runWebClient',
@@ -58,8 +51,18 @@ import Language.Marlowe.Runtime.Integration.StandardContract (standardContract)
 import Language.Marlowe.Runtime.Plutus.V2.Api (toPlutusAddress)
 import Language.Marlowe.Runtime.Transaction.Api (WalletAddresses (..))
 import Language.Marlowe.Runtime.Web.Adapter.Server.DTO (ToDTO (toDTO))
-import Language.Marlowe.Runtime.Web.Client (postContract)
-import Language.Marlowe.Runtime.Web.Common (submitContract)
+import Language.Marlowe.Runtime.Web.Client (
+  Page (..),
+  getContract,
+  getContracts,
+  postContract,
+ )
+import Language.Marlowe.Runtime.Web.Common (
+  signShelleyTransaction',
+  submitContract,
+  submitTransaction,
+  waitUntilConfirmed,
+ )
 import qualified Language.Marlowe.Runtime.Web.Core.MarloweVersion as Web
 
 import Language.Marlowe.Runtime.Web.Contract.API (ContractOrSourceId (..))
@@ -73,35 +76,25 @@ import qualified Language.Marlowe.Runtime.Web.Core.Roles as Web
 import Language.Marlowe.Runtime.Web.Contract.Transaction.Client
 import qualified Language.Marlowe.Runtime.Web.Tx.API as Web
 import qualified Language.Marlowe.Runtime.Web.Withdrawal.API as Web
-import Test.Hspec (Spec, describe, it)
-import Test.Integration.Marlowe.Local (withLocalMarloweRuntime)
-import Language.Marlowe.Runtime.Web (
-  ApplyInputsTxEnvelope (ApplyInputsTxEnvelope),
-  ContractOrSourceId (..),
-  RoleTokenConfig (..),
-  RoleTokenRecipient (ClosedRole),
+import Test.Hspec (
+  Spec,
+  describe,
+  it,
+  shouldBe,
+  shouldSatisfy,
  )
-import qualified Language.Marlowe.Runtime.Web as Web
-import Language.Marlowe.Runtime.Web.Client (
-  Page (..),
-  getContract,
-  getContracts,
-  postContract,
-  postTransaction,
-  putTransaction,
+import Test.Integration.Marlowe.Local (
+  localTestnetToLocalNodeConnectInfo,
+  testnet,
+  withLocalMarloweRuntime,
  )
-import Language.Marlowe.Runtime.Web.Common (
-  signShelleyTransaction',
-  submitContract,
-  submitTransaction,
-  waitUntilConfirmed,
- )
-import Language.Marlowe.Runtime.Web.Server.DTO (ToDTO (toDTO))
+
+import qualified Language.Marlowe.Runtime.Web.Core.Address as Web
+import qualified Language.Marlowe.Runtime.Web.Core.Tx as Web
+import Language.Marlowe.Runtime.Web.Tx.API
 import qualified PlutusLedgerApi.V1.Value as PLA
 import qualified PlutusLedgerApi.V2 as PV2
 import qualified PlutusTx.AssocMap as AM
-import Test.Hspec (Spec, describe, it, shouldBe, shouldSatisfy)
-import Test.Integration.Marlowe.Local (localTestnetToLocalNodeConnectInfo, testnet, withLocalMarloweRuntime)
 
 spec :: Spec
 spec = do

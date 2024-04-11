@@ -8,7 +8,7 @@ module Language.Marlowe.Runtime.Integration.MarloweQuery where
 import Cardano.Api (getTxId)
 import Control.Monad (guard)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Reader.Class
+import Control.Monad.Reader.Class (MonadReader (ask))
 import Control.Monad.Trans.Class (lift)
 import Data.Bifunctor (bimap)
 import Data.Foldable (Foldable (fold), foldl', for_)
@@ -39,7 +39,32 @@ import Language.Marlowe.Protocol.Query.Client (
   getWithdrawal,
   getWithdrawals,
  )
-import Language.Marlowe.Protocol.Query.Types
+import Language.Marlowe.Protocol.Query.Types (
+  ContractFilter (..),
+  ContractState (
+    ContractState,
+    contractId,
+    initialBlock,
+    initialOutput,
+    latestBlock,
+    latestOutput,
+    metadata,
+    roleTokenMintingPolicyId,
+    unclaimedPayouts
+  ),
+  Order (Ascending, Descending),
+  Page (..),
+  PayoutFilter (..),
+  PayoutHeader (..),
+  Range (..),
+  RoleCurrency (..),
+  RoleCurrencyFilter (..),
+  SomeContractState (SomeContractState),
+  SomeTransaction (SomeTransaction),
+  SomeTransactions (SomeTransactions),
+  Withdrawal (..),
+  WithdrawalFilter (..),
+ )
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
 import Language.Marlowe.Runtime.ChainSync.Api (
   Address,
@@ -63,14 +88,47 @@ import Language.Marlowe.Runtime.Core.Api (
 import qualified Language.Marlowe.Runtime.Core.Api as Core
 import Language.Marlowe.Runtime.Discovery.Api (ContractHeader)
 import Language.Marlowe.Runtime.History.Api (MarloweBlock (..), MarloweWithdrawTransaction (..))
-import Language.Marlowe.Runtime.Integration.Common
+import Language.Marlowe.Runtime.Integration.Common (
+  Integration,
+  Wallet (addresses),
+  getGenesisWallet,
+  inputsAppliedToTransaction,
+  runIntegrationTest,
+ )
 import Language.Marlowe.Runtime.Integration.Scenario (
   contractCreatedToMarloweCreateTransaction,
   contractCreatedToUnspentContractOutput,
   inputsAppliedToMarloweApplyInputsTransaction,
   inputsAppliedToUnspentContractOutput,
  )
-import Language.Marlowe.Runtime.Integration.StandardContract
+import Language.Marlowe.Runtime.Integration.StandardContract (
+  StandardContractChoiceMade (
+    choiceBlock,
+    gimmeTheMoneyChosen,
+    sendNotify
+  ),
+  StandardContractClosed (
+    returnDepositBlock,
+    returnDeposited,
+    withdrawPartyAFunds
+  ),
+  StandardContractFundsDeposited (
+    chooseGimmeTheMoney,
+    initialDepositBlock,
+    initialFundsDeposited
+  ),
+  StandardContractLifecycleInit (..),
+  StandardContractNotified (
+    makeReturnDeposit,
+    notified,
+    notifiedBlock
+  ),
+  createStandardContractWithTags,
+  standardContractDatum,
+  standardContractHeader,
+  standardContractId,
+  standardContractPayout,
+ )
 import Language.Marlowe.Runtime.Transaction.Api (
   ContractCreated (..),
   ContractCreatedInEra (..),
@@ -80,8 +138,19 @@ import Language.Marlowe.Runtime.Transaction.Api (
   WithdrawTx (..),
   WithdrawTxInEra (..),
  )
-import Test.Hspec
-import Test.Integration.Marlowe (MarloweRuntime, withLocalMarloweRuntime)
+import Test.Hspec (
+  ActionWith,
+  Spec,
+  SpecWith,
+  aroundAll,
+  describe,
+  it,
+  shouldBe,
+ )
+import Test.Integration.Marlowe.Local (
+  MarloweRuntime,
+  withLocalMarloweRuntime,
+ )
 
 spec :: Spec
 spec = describe "MarloweQuery" $ aroundAll setup do
@@ -527,7 +596,7 @@ convertRoleCurrencyFilter MarloweQueryTestData{..} = go
       TestByPolicy policies -> RoleCurrencyFilterByPolicy $ Set.map convertPolicyId policies
 
     convertContractId Unknown =
-      ContractId $ TxOutRef "0000000000000000000000000000000000000000000000000000000000000000" 1
+      ContractId $ TxOutRef "0000000000000000000000000000000000000000000000000000000000000000" (TxIx 1)
     convertContractId (Known Contract1) = standardContractId contract1
     convertContractId (Known Contract2) = standardContractId contract2
     convertContractId (Known Contract3) = standardContractId contract3

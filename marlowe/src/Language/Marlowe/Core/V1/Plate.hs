@@ -12,14 +12,48 @@ module Language.Marlowe.Core.V1.Plate (
   extractNetworks,
   extractParties,
   extractRoleNames,
-  extractParties,
   extractTokens,
 ) where
 
 import Data.Generics.Multiplate (Multiplate (..), foldFor, mChildren, preorderFold, purePlate)
 import Data.Maybe (mapMaybe)
 import Language.Marlowe.Core.V1.Merkle (Continuations)
-import Language.Marlowe.Core.V1.Semantics.Types
+import Language.Marlowe.Core.V1.Semantics.Types (
+  AccountId,
+  Action (..),
+  Case (..),
+  ChoiceId (..),
+  Contract (..),
+  Observation (
+    AndObs,
+    ChoseSomething,
+    NotObs,
+    OrObs,
+    ValueEQ,
+    ValueGE,
+    ValueGT,
+    ValueLE,
+    ValueLT
+  ),
+  Party (..),
+  Payee (Account, Party),
+  State (..),
+  Token,
+  TokenName,
+  Value (
+    AddValue,
+    AvailableMoney,
+    ChoiceValue,
+    Cond,
+    DivValue,
+    MulValue,
+    NegValue,
+    SubValue,
+    UseValue
+  ),
+  ValueId,
+  getAction,
+ )
 import Language.Marlowe.Core.V1.Semantics.Types.Address (Network)
 import PlutusLedgerApi.V1 (BuiltinByteString)
 

@@ -112,14 +112,14 @@ executable marlowe-integration-tests
     , marlowe-object:{marlowe-object, gen}
     , marlowe-protocols
     , marlowe-runtime-web
-    , marlowe-runtime:{marlowe-runtime, contract, contract-api, sync-api, tx-api}
+    , marlowe-runtime:{marlowe-runtime, contract, contract-api, sync-api, tx, tx-api}
     , marlowe-test
     , mtl
     , network-uri
     , ouroboros-network-protocols ^>=0.8
     , pipes ^>=4.3.16
     , plutus-ledger-api
-    , plutus-tx ^>=1.15
+    , plutus-tx ^>=1.21
     , QuickCheck
     , resourcet
     , servant-client

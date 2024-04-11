@@ -14,9 +14,7 @@
 module Language.Marlowe.Runtime.Transaction.Api (
   -- | Contract Creation API
   Account (..),
-  Accounts (AccountsContent),
-  ApplyInputsConstraintsBuildupError (..),
-  ApplyInputsError (..),
+  Accounts (..),
   CoinSelectionError (..),
   ConstraintError (..),
   ContractCreated (..),
@@ -53,9 +51,6 @@ module Language.Marlowe.Runtime.Transaction.Api (
   SubmitError (..),
   SubmitStatus (..),
   -- | Remaining To Classify API
-  Account (..),
-  CoinSelectionError (..),
-  ConstraintError (..),
   Destination (..),
   IsToken (..),
   JobId (..),
@@ -69,6 +64,7 @@ module Language.Marlowe.Runtime.Transaction.Api (
   mkAccounts,
   mkMint,
   unAccounts,
+  pattern AccountsContent,
 ) where
 
 import Cardano.Api (
@@ -131,7 +127,6 @@ import Language.Marlowe.Runtime.Cardano.Feature (hush)
 import Language.Marlowe.Runtime.ChainSync.Api (
   Address,
   AssetId (..),
-  Assets,
   BlockHeader,
   DatumHash,
   Lovelace,
@@ -976,7 +971,7 @@ roleTokenFilterToRoleCurrencyFilter = go
       RoleTokensNot f' -> RoleCurrencyNot $ go f'
       RoleTokenFilterAny -> RoleCurrencyFilterAny
       RoleTokenFilterNone -> RoleCurrencyFilterNone
-      RoleTokenFilterByContracts contracts -> RoleCurrencyFilterByContract contracts
+      RoleTokenFilterByContracts contractIds -> RoleCurrencyFilterByContract contractIds
       RoleTokenFilterByPolicyIds policies -> RoleCurrencyFilterByPolicy policies
       RoleTokenFilterByTokens tokens -> RoleCurrencyFilterByPolicy (Set.map policyId tokens)
 
@@ -1090,6 +1085,7 @@ rewriteRoleTokensOr = curry \case
   -- rule or-idempotent
   (a, a') | a == a' -> Just a
   _ -> Nothing
+
 -- | User-defined initial account balances which should hold only positive values.
 -- | TODO: We introduce TxOutAssets which can be now used instead of this wrapper.
 newtype Accounts = Accounts (Map Account TxOutAssets)
@@ -1100,9 +1096,11 @@ pattern AccountsContent a <- Accounts a
 
 deriving newtype instance Eq Accounts
 deriving instance Show Accounts
+
 instance Semigroup Accounts where
   Accounts a <> Accounts b = Accounts $ Map.unionWith (<>) a b
 deriving newtype instance Monoid Accounts
+
 instance Variations Accounts where
   variations = Accounts <$> variations
 
@@ -1117,7 +1115,7 @@ deriving newtype instance Monoid NonPositiveBalances
 mkAccounts :: Map Account TxOutAssets -> Either NonPositiveBalances Accounts
 mkAccounts accounts = Accounts <$> Map.traverseWithKey checkPositive accounts
   where
-    checkPositive account assets@(Chain.TxOutAssetsContent (Assets lovelace tokens)) = do
+    checkPositive account assets@(Chain.TxOutAssetsContent (Chain.Assets lovelace tokens)) = do
       let tokensMap = unTokens tokens
       if lovelace >= mempty && all (> mempty) tokensMap && assets /= mempty
         then Right assets

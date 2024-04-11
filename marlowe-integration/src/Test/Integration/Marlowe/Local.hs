@@ -48,20 +48,27 @@ import Colog (LogAction (LogAction), Message, cmap, fmtMessage, logTextHandle, l
 import Control.Arrow (returnA)
 import Control.Concurrent (newMVar, threadDelay, withMVar)
 import Control.Concurrent.Async (race_)
-import Control.Concurrent.Component (Component (unComponent))
-import Control.Concurrent.Component.Run (AppM, runAppM)
-import Control.DeepSeq (NFData)
-import Control.Exception (bracketOnError, catch, onException, throw, try)
-import Control.Monad (when, (<=<))
-import Control.Monad.Catch (SomeException (..))
-import Control.Monad.Event.Class (Inject (..), NoopEventT (..))
-import Control.Monad.IO.Class (liftIO)
 import Control.Concurrent.Component
-import Control.Concurrent.Component.Run (AppM, TracingConfig (UseHandleDebugTracerProvider), mkEventBackend, runAppM)
+import Control.Concurrent.Component.Run (
+  AppM,
+  TracingConfig (UseHandleDebugTracerProvider),
+  mkEventBackend,
+  runAppM,
+ )
 import Control.DeepSeq (NFData)
-import Control.Exception (bracketOnError, catch, onException, throw, try)
+import Control.Exception (
+  bracketOnError,
+  catch,
+  onException,
+  throw,
+  try,
+ )
 import Control.Monad (when, (<=<))
 import Control.Monad.Catch hiding (bracketOnError, catch, onException, try)
+import Control.Monad.Event.Class (
+  Inject (..),
+  composeInjectSelector,
+ )
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Reader (ReaderT (..), runReaderT)
@@ -132,18 +139,23 @@ import qualified Language.Marlowe.Runtime.Sync.Database.PostgreSQL as Sync
 import Language.Marlowe.Runtime.Transaction (mkCommandLineRoleTokenMintingPolicy)
 import Language.Marlowe.Runtime.Web.Client (healthcheck)
 import Language.Marlowe.Runtime.Web.RuntimeServer (ServerDependencies (..), runtimeServer)
-import Language.Marlowe.Runtime.Web.Server (ServerDependencies (..), server)
+
+import qualified Language.Marlowe.Runtime.ChainSync.Api as ChainSync
+import qualified Language.Marlowe.Runtime.Logging as Runtime.Logging
+import qualified Language.Marlowe.Runtime.Web.RuntimeServer as Web.Server
 import Language.Marlowe.Runtime.Web.Server.Logging (renderServeRequestOTel)
 import Network.HTTP.Client (defaultManagerSettings, newManager)
 import Network.Protocol.Connection (
   Connector,
   directConnector,
   ihoistConnector,
+  runConnector,
  )
 import Network.Protocol.Driver (TcpServerDependencies (TcpServerDependencies), tcpServer)
 import Network.Protocol.Driver.Trace (HasSpanContext (..))
 import Network.Protocol.Peer.Trace (defaultSpanContext)
 import Network.Protocol.Query.Client (QueryClient, hoistQueryClient, serveQueryClient)
+import qualified Network.Protocol.Query.Client as Query.Client
 import Network.Socket (
   AddrInfo (..),
   PortNumber,
@@ -161,6 +173,8 @@ import Network.Socket (
 import Network.TypedProtocol.Pipelined (unsafeIntToNat)
 import Network.Wai.Handler.Warp (run)
 import Observe.Event.Explicit (idInjectSelector, injectSelector)
+import Observe.Event.Render.OpenTelemetry (OTelRendered (..))
+import OpenTelemetry.Trace.Core (InstrumentationLibrary (InstrumentationLibrary, libraryName, libraryVersion), Span)
 import Servant.Client (BaseUrl (..), ClientError, Scheme (..), mkClientEnv)
 import Servant.Client.Internal.HttpClient.Streaming (ClientM)
 import Servant.Client.Streaming (runClientM)
@@ -175,14 +189,6 @@ import qualified Test.Integration.Cardano (exec)
 import Text.Read (readMaybe)
 import UnliftIO (Concurrently (..), MonadUnliftIO, atomically, throwIO, withRunInIO)
 import UnliftIO.Retry (constantDelay, limitRetries, retrying)
-
-import Control.Monad.Event.Class (Inject (inject), composeInjectSelector)
-import qualified Language.Marlowe.Runtime.ChainSync.Api as ChainSync
-import qualified Language.Marlowe.Runtime.Logging as Runtime.Logging
-import qualified Language.Marlowe.Runtime.Web.Server as Web.Server
-import qualified Network.Protocol.Query.Client as Query.Client
-import Observe.Event.Render.OpenTelemetry (OTelRendered (..))
-import OpenTelemetry.Trace.Core (InstrumentationLibrary (InstrumentationLibrary, libraryName, libraryVersion), Span)
 
 data RuntimeRef = RuntimeRef
 

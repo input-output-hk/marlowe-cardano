@@ -1,5 +1,6 @@
 module Language.Marlowe.Runtime.Web.Core.Base16 (Base16 (..)) where
 
+import Control.DeepSeq (NFData)
 import Data.Aeson (
   FromJSON (parseJSON),
   FromJSONKey (fromJSONKey),
@@ -27,10 +28,13 @@ import Servant (
   Proxy (..),
   ToHttpApiData (toUrlPiece),
  )
+import Servant.API.Generic (Generic)
 
 -- | A newtype for Base16 decoding and encoding ByteStrings
 newtype Base16 = Base16 {unBase16 :: ByteString}
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Generic)
+
+instance NFData Base16
 
 instance Show Base16 where
   show = T.unpack . encodeBase16 . unBase16

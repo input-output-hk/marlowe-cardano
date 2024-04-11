@@ -118,12 +118,11 @@ library
     , cardano-ledger-core ^>=1.10
     , co-log ^>=0.6
     , containers ^>=0.6.5
+    , deepseq ^>=1.4
     , errors >=2.3 && <3
     , eventuo11y >=0.9 && <0.11
     , eventuo11y-extras ==0.1.1.0
-    , eventuo11y-otel ^>=0.1
     , exceptions >=0.10 && <0.12
-    , hs-opentelemetry-sdk ^>=0.0.3
     , http-media ^>=0.8
     , lens >=5.2 && <6
     , marlowe-cardano ==0.2.1.0
@@ -162,6 +161,7 @@ library server
   exposed-modules:
     Language.Marlowe.Runtime.Web.OpenAPIServer
     Language.Marlowe.Runtime.Web.RuntimeServer
+    Language.Marlowe.Runtime.Web.Server.Logging
 
   other-modules:   Paths_marlowe_runtime_web
   build-depends:
@@ -171,6 +171,8 @@ library server
     , co-log ^>=0.6
     , eventuo11y >=0.9 && <0.11
     , eventuo11y-extras ==0.1.1.0
+    , eventuo11y-otel
+    , hs-opentelemetry-sdk
     , http-types
     , insert-ordered-containers >=0.2.5 && <0.3
     , lens >=5.2 && <6
@@ -180,6 +182,7 @@ library server
     , marlowe-runtime-web ==0.0.6
     , marlowe-runtime:{marlowe-runtime, proxy-api, sync-api} ==0.0.6
     , mtl >=2.2 && <3
+    , network
     , openapi3 >=3.2 && <4
     , servant ^>=0.20
     , servant-openapi3 ^>=2.0
@@ -205,7 +208,7 @@ executable marlowe-web-server
     , base >=4.9 && <5
     , co-log ^>=0.6
     , eventuo11y >=0.9 && <0.11
-    , hs-opentelemetry-sdk ^>=0.0.3
+    , hs-opentelemetry-sdk
     , marlowe-client
     , marlowe-runtime-web:server
     , marlowe-runtime:config
@@ -246,3 +249,5 @@ test-suite marlowe-runtime-web-test
     , text ^>=2.0
 
   ghc-options:    -threaded
+
+f

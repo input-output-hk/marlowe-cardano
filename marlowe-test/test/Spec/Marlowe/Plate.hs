@@ -17,8 +17,8 @@ module Spec.Marlowe.Plate (
 
 import Test.Tasty (TestTree, testGroup)
 
-import Data.Map.Strict as M
-import Data.Set as S
+import Data.Map.Strict as M (fromList)
+import Data.Set as S (fromList)
 import qualified Language.Marlowe.Core.V1.Plate as P
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import qualified PlutusLedgerApi.V2 as PV2
@@ -56,7 +56,7 @@ extractPartiesTest = do
       accounts = AM.fromList [((eve, ada), 1)]
       state = (V1.emptyState (PV2.POSIXTime 0)){V1.accounts = accounts}
 
-      actual = P.extractParties (Just state) contract continuations
+      actual = P.extractParties state contract continuations
   assertEqual "extracted parties" (S.fromList [alice, bob, charlie, eve]) actual
 
 extractPayContractPartiesTest :: IO ()
