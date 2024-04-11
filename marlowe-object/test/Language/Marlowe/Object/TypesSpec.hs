@@ -8,6 +8,7 @@ import Data.Foldable (traverse_)
 import Data.Proxy (Proxy (..))
 import Language.Marlowe.Object.Gen ()
 import Language.Marlowe.Object.Types
+import Spec.Marlowe.Semantics.Arbitrary (ValidContractStructure (..))
 import Test.Hspec
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck hiding (Success, label)
@@ -28,7 +29,7 @@ spec = do
     checkLaws $ showReadLaws $ Proxy @LabelledObject
 
   describe "Contract" do
-    prop "Can decode JSON generated from core contracts" \contract ->
+    prop "Can decode JSON generated from core contracts" \(ValidContractStructure contract) ->
       fromJSON (toJSON contract) === Success (fromCoreContract contract)
 
 binaryLaws :: forall a. (Binary a, Show a, Arbitrary a, Eq a) => Proxy a -> Laws

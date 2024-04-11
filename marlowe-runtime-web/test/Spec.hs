@@ -16,6 +16,7 @@ import Data.Aeson.Encode.Pretty (encodePrettyToTextBuilder)
 import qualified Data.ByteString as BS
 import Data.Coerce (coerce)
 import Data.Data (Typeable)
+import Data.Functor ((<&>))
 import qualified Data.HashMap.Strict.InsOrd as IOHM
 import Data.Kind (Type)
 import Data.OpenApi hiding (version)
@@ -42,7 +43,7 @@ import Language.Marlowe.Runtime.Web.Server.OpenAPI (
  )
 import Servant.API
 import Servant.OpenApi
-import Spec.Marlowe.Semantics.Arbitrary ()
+import Spec.Marlowe.Semantics.Arbitrary (ValidContractStructure (unValidContractStructure))
 import Spec.Marlowe.Semantics.Next.Arbitrary ()
 import Test.Hspec (Spec, describe, hspec, it, shouldBe)
 import Test.Hspec.Golden (defaultGolden)
@@ -528,7 +529,12 @@ instance Arbitrary Web.Party where
   shrink = genericShrink
 
 instance Arbitrary Web.ContractOrSourceId where
-  arbitrary = ContractOrSourceId <$> oneof [Right <$> arbitrary, Left <$> resize 6 arbitrary]
+  arbitrary =
+    ContractOrSourceId
+      <$> oneof
+        [ Right <$> arbitrary
+        , Left <$> resize 6 (arbitrary <&> unValidContractStructure)
+        ]
   shrink = genericShrink
 
 instance Arbitrary Web.PostTransactionsRequest where

@@ -114,6 +114,7 @@ test-suite marlowe-object-test
     , binary ^>=0.8.8
     , hspec
     , marlowe-object:{marlowe-object, gen}
+    , marlowe-test
     , QuickCheck >=2.14 && <3
     , quickcheck-classes
     , unordered-containers ^>=0.2.19

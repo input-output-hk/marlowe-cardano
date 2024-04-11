@@ -156,7 +156,7 @@ library
   if flag(trace-plutus)
     cpp-options: -DTRACE_PLUTUS
 
-test-suite marlowe-test
+executable test-suite
   import:         lang
   hs-source-dirs: test
   type:           exitcode-stdio-1.0
