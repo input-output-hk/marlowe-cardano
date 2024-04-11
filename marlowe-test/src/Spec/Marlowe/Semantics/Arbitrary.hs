@@ -1341,7 +1341,7 @@ instance (Arbitrary a) => Arbitrary (Transaction a) where
       <> [transaction{txInput = input} | input <- shrink txInput]
       <> [transaction{txOutput = output} | output <- shrink txOutput]
 
-newtype ValidContractStructure = ValidContractStructure Contract
+newtype ValidContractStructure = ValidContractStructure {unValidContractStructure :: Contract}
   deriving (Eq, Show)
 
 instance Arbitrary ValidContractStructure where
