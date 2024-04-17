@@ -135,6 +135,7 @@ data-files:
   .golden/MarloweQuery/golden
   .golden/MarloweSync/golden
   .golden/MarloweTransfer/golden
+  test/configuration/babbage-preprod-protocol-params.json
 
 license-files:
   LICENSE

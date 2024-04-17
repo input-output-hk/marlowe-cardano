@@ -249,5 +249,3 @@ test-suite marlowe-runtime-web-test
     , text ^>=2.0
 
   ghc-options:    -threaded
-
-f
