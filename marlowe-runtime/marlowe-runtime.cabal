@@ -5,7 +5,7 @@ synopsis:
   Runtime system for running Marlowe financial contracts on the Cardano Computation Layer
 
 description:
-  Runtime system for running and monitoring Marlowe financial contracts on
+  Runtime system for running and monitoring Marlowe contracts on
   Cardano. It provides query access to search for and inspect contracts,
   command access for creating and interacting with contracts, and streaming
   access for real-time updates to contracts.
