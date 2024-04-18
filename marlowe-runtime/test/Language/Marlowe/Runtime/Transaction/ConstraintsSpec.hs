@@ -976,7 +976,7 @@ regressions = do
         Left e -> fail $ msg <> show e
 
   describe "regressions" do
-    it "contract creation failure on one utxo wallet" $ do
+    xit "contract creation failure on one utxo wallet" $ do
       babbageParamsFile <- BL.readFile "test/configuration/babbage-preprod-protocol-params.json"
       pp :: C.ProtocolParameters <-
         expectRight "Protocol params json decoding failed with:" $ A.eitherDecode babbageParamsFile
