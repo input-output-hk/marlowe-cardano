@@ -1,3 +1,4 @@
+{-# LANGUAGE DerivingStrategies #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  $Headers
@@ -23,6 +24,7 @@ module Language.Marlowe.Analysis.Safety.Types (
 ) where
 
 import Control.Applicative ((<|>))
+import Control.DeepSeq (NFData)
 import Data.Aeson (FromJSON (..), ToJSON (..), Value (String), object, withObject, (.:), (.=))
 import Data.Aeson.Types (Parser)
 import Data.ByteString.Base16.Aeson (EncodeBase16 (EncodeBase16))
@@ -60,7 +62,9 @@ data SafetyReport = SafetyReport
   , networks :: [Network]
   -- ^ Which network the contract must use.
   }
-  deriving (Show)
+  deriving (Show, Generic)
+
+instance NFData SafetyError
 
 -- | An unsafe aspect of a Marlowe contract.
 data SafetyError
@@ -362,6 +366,8 @@ data Transaction a = Transaction
   , txAnnotation :: a
   }
   deriving (Eq, Generic, Show)
+
+instance (NFData a) => NFData (Transaction a)
 
 instance {-# OVERLAPPING #-} ToJSON (Transaction ()) where
   toJSON Transaction{..} =

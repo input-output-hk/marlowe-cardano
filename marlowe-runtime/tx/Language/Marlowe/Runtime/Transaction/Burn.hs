@@ -46,8 +46,10 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   ScriptHash (..),
   Tokens (..),
   TransactionOutput (..),
+  TxOutAssets (..),
   TxOutRef,
   UTxOs (..),
+  unsafeTxOutAssets,
  )
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion (..))
 import Language.Marlowe.Runtime.Transaction.Api (
@@ -99,15 +101,15 @@ burnRoleTokens start history chainQueryConnector era protocol version walletCtx@
   let processInput
         :: TxOutRef
         -> TransactionOutput
-        -> ( Map TxOutRef (Tokens, (Address, Assets))
+        -> ( Map TxOutRef (Tokens, (Address, TxOutAssets))
            , Set PolicyId
            )
-      processInput txIn TransactionOutput{address, assets = assets@(Assets lovelace (Tokens tokens))} =
+      processInput txIn TransactionOutput{address, assets = assets@(TxOutAssets (Assets lovelace (Tokens tokens)))} =
         case partitionAssets tokens of
           (toBurn, toKeep)
             | Map.null toBurn -> mempty
             | otherwise ->
-                ( Map.singleton txIn (Tokens toBurn, (address, Assets lovelace $ Tokens toKeep))
+                ( Map.singleton txIn (Tokens toBurn, (address, unsafeTxOutAssets $ Assets lovelace $ Tokens toKeep))
                 , Set.intersection activeCurrencies $ Set.map policyId $ Map.keysSet toBurn
                 )
   -- Fold over the wallet's UTxO, selecting outputs to use as transaction inputs and looking for any
@@ -147,7 +149,7 @@ burnRoleTokens start history chainQueryConnector era protocol version walletCtx@
 scriptHashesFromTokens :: Tokens -> Set ScriptHash
 scriptHashesFromTokens = Set.map (ScriptHash . unPolicyId . policyId) . Map.keysSet . unTokens
 
-assetsFromUtxos :: UTxOs -> Assets
+assetsFromUtxos :: UTxOs -> TxOutAssets
 assetsFromUtxos = foldMap assets . unUTxOs
 
 activeCurrency :: RoleCurrency -> Maybe PolicyId
@@ -159,7 +161,7 @@ buildBurn
   :: forall era
    . BabbageEraOnwards era
   -> LedgerProtocolParameters era
-  -> Map TxOutRef (Tokens, (Address, Assets))
+  -> Map TxOutRef (Tokens, (Address, TxOutAssets))
   -> Map ScriptHash (ScriptInEra era)
   -> Maybe (TxBodyContent BuildTx era)
 buildBurn era protocol inputs scripts = do
@@ -178,8 +180,8 @@ buildBurn era protocol inputs scripts = do
     buildInput :: TxOutRef -> Maybe (C.TxIn, C.BuildTxWith BuildTx (C.Witness C.WitCtxTxIn era))
     buildInput = fmap (,C.BuildTxWith $ C.KeyWitness C.KeyWitnessForSpending) . toCardanoTxIn
 
-    buildOutput :: Address -> Assets -> Maybe ([C.TxOut C.CtxTx era], [(C.AddressInEra era, C.Lovelace)])
-    buildOutput address assets@(Assets lovelace (Tokens tokens)) = do
+    buildOutput :: Address -> TxOutAssets -> Maybe ([C.TxOut C.CtxTx era], [(C.AddressInEra era, C.Lovelace)])
+    buildOutput address assets@(TxOutAssets (Assets lovelace (Tokens tokens))) = do
       address' <- toCardanoAddressInEra (C.babbageEraOnwardsToCardanoEra era) address
       let lovelace' = toCardanoLovelace lovelace
       if Map.null tokens

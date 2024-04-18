@@ -244,7 +244,7 @@ assetsToTxOutAssetRows BlockHeader{..} txId txIx Assets{..} =
     , unBlockHeaderHash headerHash
     , unPolicyId $ policyId assetId
     , unTokenName $ tokenName assetId
-    , fromIntegral quantity
+    , fromIntegral . unQuantity $ quantity
     )
 
 type ContractTxOutRow =
@@ -266,7 +266,7 @@ transactionScriptOutputToRows
   -> Core.MarloweVersion v
   -> Core.TransactionScriptOutput v
   -> (ByteString, Int16, TxOutRow, ContractTxOutRow, [TxOutAssetRow])
-transactionScriptOutputToRows contractId blockHeader@BlockHeader{..} payoutValidatorHash TxOutRef{..} MarloweV1 TransactionScriptOutput{..} =
+transactionScriptOutputToRows contractId blockHeader@BlockHeader{..} payoutValidatorHash TxOutRef{..} MarloweV1 TransactionScriptOutput{assets = TxOutAssetsContent assets, ..} =
   ( txId'
   , txIx'
   ,
@@ -274,7 +274,7 @@ transactionScriptOutputToRows contractId blockHeader@BlockHeader{..} payoutValid
     , txIx'
     , unBlockHeaderHash headerHash
     , unAddress address
-    , fromIntegral $ ada assets
+    , fromIntegral . unLovelace $ ada assets
     )
   ,
     ( txId'
@@ -293,7 +293,7 @@ transactionScriptOutputToRows contractId blockHeader@BlockHeader{..} payoutValid
     roleTokenMintingPolicyId = fromBuiltin $ unCurrencySymbol $ rolesCurrency marloweParams
     MarloweData{..} = datum
     txId' = unTxId txId
-    txIx' = fromIntegral txIx
+    txIx' = fromIntegral . unTxIx $ txIx
 
 stateParties :: State -> Set.Set Party
 stateParties State{..} =
@@ -382,9 +382,9 @@ applyTxToRows (MarloweApplyInputsTransaction MarloweV1 UnspentContractOutput{..}
   let BlockHeader{..} = blockHeader
       txId' = unTxId transactionId
       (createTxId', createTxIx') = case unContractId contractId of
-        TxOutRef{..} -> (unTxId txId, fromIntegral txIx)
+        TxOutRef{..} -> (unTxId txId, fromIntegral . unTxIx $ txIx)
       (inputTxId', inputTxIx') = case txOutRef of
-        TxOutRef{..} -> (unTxId txId, fromIntegral txIx)
+        TxOutRef{..} -> (unTxId txId, fromIntegral . unTxIx $ txIx)
       mOutputRows =
         Core.scriptOutput output <&> \scriptOutput ->
           transactionScriptOutputToRows contractId blockHeader payoutValidatorHash (utxo scriptOutput) MarloweV1 scriptOutput
@@ -407,14 +407,14 @@ applyTxToRows (MarloweApplyInputsTransaction MarloweV1 UnspentContractOutput{..}
         )
       , mOutputRows <&> \(_, _, txOutRow, contractTxOutRow, txOutAssetRows) ->
           (txOutRow, contractTxOutRow, txOutAssetRows)
-      , Map.toList (Core.payouts output) <&> \(TxOutRef{..}, Core.Payout{..}) ->
-          let txIx' = fromIntegral txIx
+      , Map.toList (Core.payouts output) <&> \(TxOutRef{..}, Core.Payout{assets = TxOutAssetsContent assets, ..}) ->
+          let txIx' = fromIntegral . unTxIx $ txIx
            in (
                 ( txId'
                 , txIx'
                 , unBlockHeaderHash headerHash
                 , unAddress address
-                , fromIntegral $ ada assets
+                , fromIntegral . unLovelace $ ada assets
                 )
               ,
                 ( txId'
@@ -465,9 +465,9 @@ withdrawTxToWithdrawalTxInRows BlockHeader{..} MarloweWithdrawTransaction{..} =
       , unBlockHeaderHash headerHash
       , fromIntegral blockNo
       , unTxId txId
-      , fromIntegral txIx
+      , fromIntegral . unTxIx $ txIx
       , unTxId createTxId
-      , fromIntegral createTxIx
+      , fromIntegral . unTxIx $ createTxIx
       )
 
 prepareParams :: [MarloweBlock] -> ([ContractTxOutParty], QueryParams)
@@ -668,7 +668,12 @@ marloweBlockToTxRows MarloweBlock{..} = flip foldMap9 transactions \case
     , []
     , []
     , Set.toList txOutRefs <&> \(TxOutRef inputTxId inputTxIx) ->
-        (unTxId txId, unTxId inputTxId, fromIntegral inputTxIx, unBlockHeaderHash $ headerHash blockHeader, T.pack $ show err)
+        ( unTxId txId
+        , unTxId inputTxId
+        , fromIntegral . unTxIx $ inputTxIx
+        , unBlockHeaderHash $ headerHash blockHeader
+        , T.pack $ show err
+        )
     , []
     )
   _ -> ([], [], [], [], [], [], [], [], [])

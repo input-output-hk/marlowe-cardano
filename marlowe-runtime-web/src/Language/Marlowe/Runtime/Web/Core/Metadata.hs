@@ -17,6 +17,7 @@ module Language.Marlowe.Runtime.Web.Core.Metadata (
   Metadata (..),
 ) where
 
+import Control.DeepSeq (NFData)
 import Control.Lens ((&), (?~))
 import Data.Aeson (FromJSON, ToJSON, Value)
 import Data.OpenApi (
@@ -32,14 +33,17 @@ import Data.OpenApi (
  )
 import qualified Data.OpenApi as OpenApi
 import Data.OpenApi.Schema (ToSchema (..))
+import GHC.Generics (Generic)
 import Language.Marlowe.Runtime.Web.Core.Semantics.Schema ()
 import Servant (
   Proxy (..),
  )
 
 newtype Metadata = Metadata {unMetadata :: Value}
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Generic)
   deriving newtype (ToJSON, FromJSON)
+
+instance NFData Metadata
 
 instance ToSchema Metadata where
   declareNamedSchema _ = do

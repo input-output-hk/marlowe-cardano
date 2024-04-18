@@ -7,6 +7,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
@@ -23,6 +24,8 @@ import Cardano.Api (
   Lovelace,
  )
 import Cardano.Api qualified as C
+import Control.Category ((<<<))
+import Control.Error.Util (hush)
 import Control.Lens (Lens', makeLenses)
 import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO)
@@ -38,10 +41,10 @@ import Data.Map.Strict qualified as Map
 import Data.Maybe (mapMaybe)
 import GHC.Base (Alternative ((<|>)))
 import GHC.Generics (Generic)
-import Language.Marlowe.CLI.Test.Contract (ContractNickname)
+import Language.Marlowe.CLI.Test.Contract (ContractNickname, Source (..))
 import Language.Marlowe.CLI.Test.Contract qualified as Contract
 import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (
-  ParametrizedMarloweJSON,
+  ParametrizedMarloweJSON (..),
  )
 import Language.Marlowe.CLI.Test.InterpreterError (InterpreterError)
 import Language.Marlowe.CLI.Test.Operation.Aeson (
@@ -182,7 +185,7 @@ data CLIOperation
   = -- | We use "private" currency minting policy which
     -- | checks for a signature of a particular issuer.
     Initialize
-      { coMinLovelace :: Lovelace
+      { coMinLovelace :: Maybe Lovelace
       -- ^ Minimum lovelace to be sent to the contract.
       , coContractNickname :: Maybe ContractNickname
       -- ^ The name of the wallet's owner.
@@ -190,6 +193,8 @@ data CLIOperation
       -- ^ If contract uses roles then currency is required.
       , coContractSource :: Contract.Source
       -- ^ The Marlowe contract to be created.
+      , coInitialState :: Maybe ParametrizedMarloweJSON
+      -- ^ The initial Marlowe state.
       , coSubmitter :: Maybe WalletNickname
       -- ^ A wallet which gonna submit the initial transaction.
       , coMarloweValidators :: Maybe MarloweValidators
@@ -204,7 +209,8 @@ data CLIOperation
       , coMinimumTime :: SomeTimeout
       , coMaximumTime :: SomeTimeout
       , coOverrideMarloweState :: Maybe M.State
-      -- ^ Useful for testing scenarios with non standard initial state.
+      -- ^ Useful for testing failing scenarios where we want to override the output state.
+      -- TODO: It should be parametrized value like contract or inputs.
       , coAnalyze :: Maybe AnalysisStrategy
       }
   | -- | Publishing can be a part of `Initialize` operation but we can also test it separately.
@@ -226,6 +232,56 @@ data CLIOperation
       , coWalletNickname :: WalletNickname
       }
   deriving (Eq, Generic, Show)
+
+initialize :: Contract.Source -> Maybe CurrencyNickname -> Either Lovelace M.State -> CLIOperation
+initialize source roleCurrency minLovelaceOrInitialState = do
+  let coMinLovelace = case minLovelaceOrInitialState of
+        Left lovelace -> Just lovelace
+        Right _ -> Nothing
+      coInitialState = ParametrizedMarloweJSON . toJSON <$> hush minLovelaceOrInitialState
+  Initialize
+    { coMinLovelace
+    , coContractNickname = Nothing
+    , coRoleCurrency = roleCurrency
+    , coContractSource = source
+    , coInitialState
+    , coSubmitter = Nothing
+    , coMarloweValidators = Nothing
+    , coMerkleize = Nothing
+    , coFullyAnalyze = Nothing
+    }
+
+initialize' :: M.Contract -> Maybe CurrencyNickname -> Either Lovelace M.State -> CLIOperation
+initialize' contract roleCurrency minLovelaceOrInitialState = do
+  let contractSource = InlineContract $ ParametrizedMarloweJSON (toJSON contract)
+  initialize contractSource roleCurrency minLovelaceOrInitialState
+
+newtype ParametrizedInputs = ParametrizedInputs [ParametrizedMarloweJSON]
+
+prepare :: ParametrizedInputs -> SomeTimeout -> SomeTimeout -> CLIOperation
+prepare (ParametrizedInputs inputs) minTime maxTime =
+  Prepare
+    { coContractNickname = Nothing
+    , coInputs = inputs
+    , coMinimumTime = minTime
+    , coMaximumTime = maxTime
+    , coOverrideMarloweState = Nothing
+    , coAnalyze = Nothing
+    }
+
+prepare' :: [M.Input] -> SomeTimeout -> SomeTimeout -> CLIOperation
+prepare' =
+  prepare
+    <<< ParametrizedInputs
+    <<< map (ParametrizedMarloweJSON <<< toJSON)
+
+autoRun :: CLIOperation
+autoRun =
+  AutoRun
+    { coContractNickname = Nothing
+    , coInvalid = Nothing
+    , coSubmitter = Nothing
+    }
 
 instance FromJSON CLIOperation where
   parseJSON = do
@@ -280,10 +336,13 @@ data CLIContractInfo lang era = CLIContractInfo
   { _ciContract :: M.Contract
   , _ciCurrency :: Maybe CurrencyNickname
   , _ciPlan :: NE.NonEmpty (MarloweTransaction lang era)
+  -- ^ Whole Marlowe execution plan for the contract.
   , _ciThread :: Maybe (AnyCLIMarloweThread lang era)
+  -- ^ Parts of the plan which are already on the chain.
   , _ciWithdrawalsCheckPoints :: Map TokenName C.TxId
-  -- ^ TODO: Currently we track a point of the last withdrawal on the chain.
-  -- We should use new marlowe thread data type support for withdrawals tracking instead.
+  -- ^ TODO: Currently we track a point of the last withdrawal on the chain
+  -- but marlowe thread has type constructor which actually tracks this now so
+  -- we should use it instead and drop this check point.
   , _ciSubmitter :: WalletNickname
   }
 

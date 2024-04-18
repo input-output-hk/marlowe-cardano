@@ -3,7 +3,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Logging (
+module Language.Marlowe.Runtime.Logging (
   RootSelector (..),
   renderRootSelectorOTel,
 ) where

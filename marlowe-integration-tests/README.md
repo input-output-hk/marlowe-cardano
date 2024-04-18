@@ -21,6 +21,8 @@ This command runs only the test that matches the specified pattern.
 
 ## Troubleshooting
 
+### Database
+
 If you encounter issues with the PostgreSQL database or the Marlowe integration tests, here are some tips to help you troubleshoot:
 
 - Make sure the PostgreSQL service is running and listening on the correct port (`5432` by default).
@@ -28,3 +30,11 @@ If you encounter issues with the PostgreSQL database or the Marlowe integration 
 - Make sure the template database exists, by default it is `template1`.
 - Make sure you are running the integration tests from the `marlowe-cardano` directory, not `marlowe-cardano/marlowe-integration-tests`.
 - If you see error messages about the PostgreSQL database rejecting connections, check the PostgreSQL logs for clues.
+
+
+## Debugging
+
+Please check the [Debugging section of the README.md of the marlowe-integration framework](../marlowe-integration/README.md) for more information about debugging the integration tests.
+```
+
+[]: # (../marlowe-integration-tests/README.md)

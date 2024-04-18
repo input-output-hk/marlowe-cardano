@@ -36,13 +36,12 @@ import Control.Monad.Event.Class (MonadEvent (localBackend))
 import Control.Monad.IO.Unlift (MonadUnliftIO, liftIO, withRunInIO)
 import Data.Foldable (for_)
 import Data.Kind (Type)
-import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import Data.Time (UTCTime)
 import Language.Marlowe.Protocol.Client (MarloweRuntimeClient (..))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
-import Language.Marlowe.Runtime.ChainSync.Api (Assets, DatumHash, Lovelace, StakeCredential, TokenName, TxId, TxOutRef)
+import Language.Marlowe.Runtime.ChainSync.Api (DatumHash, Lovelace, StakeCredential, TokenName, TxId, TxOutRef)
 import Language.Marlowe.Runtime.Core.Api (
   Contract,
   ContractId,
@@ -53,7 +52,7 @@ import Language.Marlowe.Runtime.Core.Api (
   MarloweVersionTag,
  )
 import Language.Marlowe.Runtime.Transaction.Api (
-  Account,
+  Accounts,
   ApplyInputsError,
   BurnRoleTokensError,
   BurnRoleTokensTx (..),
@@ -132,7 +131,7 @@ type CreateContract m =
   -> RoleTokensConfig
   -> MarloweTransactionMetadata
   -> Maybe Lovelace
-  -> Map Account Assets
+  -> Accounts
   -> Either (Contract v) DatumHash
   -> m (Either CreateError (ContractCreated v))
 

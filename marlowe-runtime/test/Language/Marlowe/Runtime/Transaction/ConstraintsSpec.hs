@@ -7,7 +7,85 @@
 
 module Language.Marlowe.Runtime.Transaction.ConstraintsSpec where
 
-import Cardano.Api
+import Cardano.Api (
+  AddressAny (AddressShelley),
+  AddressInEra (..),
+  AddressTypeInEra (ShelleyAddressInEra),
+  AllegraEraOnwards (AllegraEraOnwardsBabbage),
+  AlonzoEraOnwards (AlonzoEraOnwardsBabbage),
+  AnyPlutusScriptVersion (AnyPlutusScriptVersion),
+  AssetId (..),
+  AssetName (AssetName),
+  BabbageEra,
+  BabbageEraOnwards (BabbageEraOnwardsBabbage),
+  BuildTx,
+  BuildTxWith (BuildTxWith),
+  CardanoEra (BabbageEra),
+  CostModel (CostModel),
+  CtxTx,
+  EraHistory (..),
+  ExecutionUnitPrices (
+    ExecutionUnitPrices,
+    priceExecutionMemory,
+    priceExecutionSteps
+  ),
+  ExecutionUnits (ExecutionUnits, executionMemory, executionSteps),
+  KeyWitnessInCtx (KeyWitnessForSpending),
+  Lovelace (..),
+  MaryEraOnwards (MaryEraOnwardsBabbage),
+  NetworkId (Mainnet, Testnet),
+  NetworkMagic (NetworkMagic),
+  PaymentCredential (PaymentCredentialByScript),
+  PlutusScriptVersion (PlutusScriptV1, PlutusScriptV2),
+  PolicyId (PolicyId),
+  Quantity (..),
+  ScriptDatum (NoScriptDatumForMint, ScriptDatumForTxIn),
+  ScriptLanguageInEra (
+    PlutusScriptV1InBabbage,
+    PlutusScriptV2InBabbage,
+    SimpleScriptInBabbage
+  ),
+  ScriptWitness (..),
+  ScriptWitnessInCtx (ScriptWitnessForSpending),
+  ShelleyBasedEra (ShelleyBasedEraBabbage),
+  SlotNo (SlotNo),
+  StakeAddressReference (NoStakeAddress),
+  SystemStart (SystemStart),
+  TxBodyContent (..),
+  TxExtraKeyWitnesses (TxExtraKeyWitnesses, TxExtraKeyWitnessesNone),
+  TxIn (..),
+  TxInsCollateral (..),
+  TxMetadata (TxMetadata),
+  TxMetadataInEra (TxMetadataInEra, TxMetadataNone),
+  TxMintValue (TxMintNone, TxMintValue),
+  TxOut (..),
+  TxOutDatum (TxOutDatumInTx, TxOutDatumNone),
+  TxOutValue (TxOutValueShelleyBased),
+  TxValidityLowerBound (TxValidityLowerBound),
+  TxValidityUpperBound (TxValidityUpperBound),
+  Value,
+  WitCtxMint,
+  WitCtxTxIn,
+  Witness (..),
+  anyAddressInShelleyBasedEra,
+  calculateMinimumUTxO,
+  defaultTxBodyContent,
+  filterValue,
+  fromLedgerPParams,
+  fromLedgerValue,
+  getScriptData,
+  lovelaceToTxOutValue,
+  lovelaceToValue,
+  makeShelleyAddress,
+  negateValue,
+  selectAsset,
+  selectLovelace,
+  toLedgerEpochInfo,
+  txOutValueToValue,
+  valueFromList,
+  valueToList,
+  valueToLovelace,
+ )
 import Cardano.Api.Shelley (
   LedgerProtocolParameters (..),
   PlutusScriptOrReferenceInput (..),
@@ -16,23 +94,29 @@ import Cardano.Api.Shelley (
   SimpleScriptOrReferenceInput (..),
   convertToLedgerProtocolParameters,
  )
+import qualified Cardano.Api.Shelley as C
 import Cardano.Ledger.BaseTypes (EpochInterval (..))
 import Control.Applicative (Alternative)
 import Control.Arrow (Arrow ((&&&), (***)))
-import Control.Error (catMaybes, note)
+import Control.Error (MaybeT (runMaybeT), catMaybes, hoistMaybe, hush, hushT, note)
 import Control.Monad (guard)
+import Control.Monad.Trans.Except (ExceptT (..))
+import qualified Data.Aeson as A
 import Data.Bifunctor (Bifunctor (..))
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BL
 import Data.Either (fromLeft, isRight)
 import Data.Foldable (fold)
 import Data.Function (on)
 import Data.Functor (($>), (<&>))
+import Data.Group (Group (invert))
 import Data.List (find, isPrefixOf)
+import qualified Data.List.NonEmpty as NonEmptyList
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Map.Strict as SMap (filterWithKey, toList)
-import Data.Maybe (fromJust, isJust, mapMaybe)
+import Data.Maybe (fromJust, fromMaybe, isJust, mapMaybe)
 import Data.Monoid (First (..), getFirst)
 import Data.Ratio ((%))
 import Data.SOP.BasicFunctors (K (..))
@@ -41,18 +125,20 @@ import Data.SOP.Strict (NP (Nil, (:*)))
 import qualified Data.Set as Set
 import qualified Data.Text as T
 import Data.Time (UTCTime)
+import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Data.Traversable (for)
 import Data.Word (Word32)
-import GHC.Word (Word64)
 import Language.Marlowe (MarloweData (..), MarloweParams (..), txInputs)
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.Cardano.Api
 import Language.Marlowe.Runtime.ChainSync.Api (
   fromCardanoPaymentKeyHash,
   fromCardanoScriptHash,
+  mkTxOutAssets,
   paymentCredential,
   renderTxOutRef,
   unTransactionMetadata,
+  unsafeTxOutAssets,
  )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import qualified Language.Marlowe.Runtime.ChainSync.Gen ()
@@ -66,11 +152,18 @@ import Language.Marlowe.Runtime.Core.Api (
   toChainDatum,
   toChainPayoutDatum,
  )
+import qualified Language.Marlowe.Runtime.Core.Api as Runtime
 import qualified Language.Marlowe.Runtime.Core.Gen ()
 import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript (OpenRoleScript), ReferenceScriptUtxo (..))
+import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
+import Language.Marlowe.Runtime.Transaction (mkCommandLineRoleTokenMintingPolicy)
 import Language.Marlowe.Runtime.Transaction.Api (CoinSelectionError (NoCollateralFound), Destination (..))
+import qualified Language.Marlowe.Runtime.Transaction.Api as Transaction
+import qualified Language.Marlowe.Runtime.Transaction.BuildConstraints as Transaction
 import Language.Marlowe.Runtime.Transaction.Constraints
 import qualified Language.Marlowe.Runtime.Transaction.Gen ()
+import Language.Marlowe.Runtime.Transaction.Safety (mkAdjustMinUTxO)
+import qualified Language.Marlowe.Runtime.Transaction.Server as Transaction
 import qualified Language.Marlowe.Scripts.Types as V1
 import Ouroboros.Consensus.BlockchainTime (RelativeTime (..), mkSlotLength)
 import Ouroboros.Consensus.HardFork.History (
@@ -119,8 +212,43 @@ maryEraOnwardsTest = MaryEraOnwardsBabbage
 allegraEraOnwardsTest :: AllegraEraOnwards TestEra
 allegraEraOnwardsTest = AllegraEraOnwardsBabbage
 
+unboundedEraSummary :: Integer -> EraSummary
+unboundedEraSummary i =
+  EraSummary
+    { eraStart = oneMillisecondBound i
+    , eraEnd = EraUnbounded
+    , eraParams =
+        EraParams
+          { eraEpochSize = 1
+          , eraSlotLength = mkSlotLength 0.001
+          , eraSafeZone = UnsafeIndefiniteSafeZone
+          }
+    }
+
+oneMillisecondEraSummary :: Integer -> EraSummary
+oneMillisecondEraSummary i =
+  EraSummary
+    { eraStart = oneMillisecondBound i
+    , eraEnd = EraEnd $ oneMillisecondBound $ i + 1
+    , eraParams =
+        EraParams
+          { eraEpochSize = 1
+          , eraSlotLength = mkSlotLength 0.001
+          , eraSafeZone = UnsafeIndefiniteSafeZone
+          }
+    }
+
+oneMillisecondBound :: Integer -> Bound
+oneMillisecondBound i =
+  Bound
+    { boundTime = RelativeTime $ fromInteger i / 1000
+    , boundSlot = fromInteger i
+    , boundEpoch = fromInteger i
+    }
+
 spec :: Spec
 spec = do
+  regressions
   describe "solveInitialTxBodyContent" do
     prop "satisfies the constraints" \(SomeTxConstraints marloweVersion constraints) -> do
       protocol <-
@@ -385,7 +513,7 @@ spec = do
       walletContext <- genWalletWithAsset marloweVersion constraints maxLovelace
       let helpersContext = HelpersContext mempty "" mempty
 
-      let extractCollat :: TxBodyContent BuildTx TestEra -> [Chain.Assets]
+      let extractCollat :: TxBodyContent BuildTx TestEra -> [Chain.TxOutAssets]
           extractCollat txBC = map Chain.assets selectedCollat
             where
               -- Extract the [(TxOutRef, TransactionOutput)] from the walletContext
@@ -453,7 +581,7 @@ spec = do
               allAdaOnly = not . null $ onlyAdas
               fee' = maxFee protocolTestnet
               targetLovelace = fromCardanoLovelace $ fee' <> minUtxo
-              anyCoversFee = any ((>= targetLovelace) . Chain.ada) onlyAdas
+              anyCoversFee = any ((>= targetLovelace) . Chain.ada . Chain.unTxOutAssets) onlyAdas
 
           eligibleUtxos txBodyContent' =
             case txInsCollateral txBodyContent' of
@@ -463,12 +591,12 @@ spec = do
                   then Right txBodyContent'
                   else Left "Collateral contains ineligible UTxO"
 
-          singleUtxo :: [Chain.Assets] -> Either String Chain.Assets
+          singleUtxo :: forall utxo. (Show utxo) => [utxo] -> Either String utxo
           singleUtxo [as] = Right as
           singleUtxo l = Left $ "Collateral is not exactly one utxo" <> show l
 
-          assetsAdaOnly :: Chain.Assets -> Either String Chain.Lovelace
-          assetsAdaOnly as@(Chain.Assets lovelace tokens)
+          assetsAdaOnly :: Chain.TxOutAssets -> Either String Chain.Lovelace
+          assetsAdaOnly as@(Chain.TxOutAssetsContent (Chain.Assets lovelace tokens))
             | Map.null . Chain.unTokens $ tokens = Right lovelace
             | otherwise = Left $ "Collateral contains non-ADA token(s)" <> show as
 
@@ -532,7 +660,7 @@ spec = do
           nonAdaCountWalletCtx =
             length
               . filter (not . Map.null)
-              . map (Chain.unTokens . Chain.tokens . Chain.assets . Chain.transactionOutput)
+              . map (Chain.unTokens . Chain.tokens . Chain.unTxOutAssets . Chain.assets . Chain.transactionOutput)
               . Chain.toUTxOsList
               . availableUtxos
 
@@ -573,7 +701,7 @@ spec = do
             (False, True) -> WalletHasOnlyNonAda
             (True, True) -> WalletHasBoth
             where
-              allAssets = map (Chain.assets . snd) . Map.toList . Chain.unUTxOs . availableUtxos $ wc
+              allAssets = map (Chain.unTxOutAssets . Chain.assets . snd) . Map.toList . Chain.unUTxOs . availableUtxos $ wc
               hasAda = any ((/= 0) . Chain.unLovelace . Chain.ada) allAssets
               hasNonAda = not (all (Map.null . Chain.unTokens . Chain.tokens) allAssets)
 
@@ -591,7 +719,7 @@ spec = do
           --   TxInsCollateral _ txIns -> txIns
 
           txInsToValue :: [TxIn] -> Value
-          txInsToValue txIns = mconcat . map (assetsToValue . Chain.assets) $ selectedOutputs
+          txInsToValue txIns = mconcat . map (assetsToValue . Chain.unTxOutAssets . Chain.assets) $ selectedOutputs
             where
               -- Extract the [(TxOutRef, TransactionOutput)] from the walletContext
               utT = map Chain.toUTxOTuple . Chain.toUTxOsList . availableUtxos $ walletContext
@@ -620,13 +748,13 @@ spec = do
                 AssetId (fromJust $ toCardanoPolicyId chPolId) (AssetName tokNameBS)
 
               fromChainQuantity :: Chain.Quantity -> Quantity
-              fromChainQuantity (Chain.Quantity i) = Quantity (fromIntegral i)
+              fromChainQuantity (Chain.Quantity i) = Quantity i
 
           assetsToValue :: Chain.Assets -> Value
           assetsToValue (Chain.Assets (Chain.Lovelace 0) chTokens) =
             valueFromList $ fromChainTokens chTokens
           assetsToValue (Chain.Assets (Chain.Lovelace l) chTokens) =
-            valueFromList $ (AdaAssetId, Quantity (fromIntegral l)) : fromChainTokens chTokens
+            valueFromList $ (AdaAssetId, Quantity l) : fromChainTokens chTokens
 
           txOutsToValue :: TxBodyContent BuildTx TestEra -> Value
           txOutsToValue = mconcat . map txOutToValue . txOuts
@@ -778,40 +906,6 @@ spec = do
                               :* K (unboundedEraSummary 6) -- Conway never ends
                               :* Nil
 
-                  unboundedEraSummary :: Integer -> EraSummary
-                  unboundedEraSummary i =
-                    EraSummary
-                      { eraStart = oneMillisecondBound i
-                      , eraEnd = EraUnbounded
-                      , eraParams =
-                          EraParams
-                            { eraEpochSize = 1
-                            , eraSlotLength = mkSlotLength 0.001
-                            , eraSafeZone = UnsafeIndefiniteSafeZone
-                            }
-                      }
-
-                  oneMillisecondEraSummary :: Integer -> EraSummary
-                  oneMillisecondEraSummary i =
-                    EraSummary
-                      { eraStart = oneMillisecondBound i
-                      , eraEnd = EraEnd $ oneMillisecondBound $ i + 1
-                      , eraParams =
-                          EraParams
-                            { eraEpochSize = 1
-                            , eraSlotLength = mkSlotLength 0.001
-                            , eraSafeZone = UnsafeIndefiniteSafeZone
-                            }
-                      }
-
-                  oneMillisecondBound :: Integer -> Bound
-                  oneMillisecondBound i =
-                    Bound
-                      { boundTime = RelativeTime $ fromInteger i / 1000
-                      , boundSlot = fromInteger i
-                      , boundEpoch = fromInteger i
-                      }
-
                   -- We need to make a TxBodyContent that would have come from executing
                   -- selectCoins, containing the tx information in the WalletContext we
                   -- will also be passing to balanceTx. To do so, we'll use the
@@ -875,6 +969,115 @@ spec = do
                         else label "non-balanceable test cases" True
                     Left _ -> label "non-balanceable test cases" True
 
+regressions :: Spec
+regressions = do
+  let expectRight msg = \case
+        Right a -> pure a
+        Left e -> fail $ msg <> show e
+
+  describe "regressions" do
+    xit "contract creation failure on one utxo wallet" $ do
+      babbageParamsFile <- BL.readFile "test/configuration/babbage-preprod-protocol-params.json"
+      pp :: C.ProtocolParameters <-
+        expectRight "Protocol params json decoding failed with:" $ A.eitherDecode babbageParamsFile
+      pp' <- expectRight "PP conversion failed" $ C.LedgerProtocolParameters <$> C.toLedgerPParams C.ShelleyBasedEraBabbage pp
+      let eon = C.BabbageEraOnwardsBabbage
+          walletCtx =
+            WalletContext
+              { availableUtxos =
+                  Chain.UTxOs $
+                    Map.fromList
+                      [
+                        ( Chain.TxOutRef "df96f8c4265bdb1f9865a2f904b4e4dd02aee9319d96e5dfd48f0647f11aa19f" (Chain.TxIx 0)
+                        , Chain.TransactionOutput
+                            "60145148f28c2cbf969f6714ca343187a523b3847f83db1beb68b7f010"
+                            (unsafeTxOutAssets $ Chain.Assets (Chain.Lovelace 300000000000) mempty)
+                            Nothing
+                            Nothing
+                        )
+                      ]
+              , collateralUtxos = mempty
+              , changeAddress = "60145148f28c2cbf969f6714ca343187a523b3847f83db1beb68b7f010"
+              }
+          threadTokenName = ""
+          roleTokens =
+            Transaction.RoleTokensMint $
+              Transaction.mkMint $
+                NonEmptyList.singleton
+                  ( "Party A"
+                  , Nothing
+                  , ToAddress "60145148f28c2cbf969f6714ca343187a523b3847f83db1beb68b7f010"
+                  , Chain.Quantity 1
+                  )
+          metadata = Runtime.MarloweTransactionMetadata Nothing mempty
+          minAda = Chain.Lovelace 1116290
+          -- accounts :: Chain.Accounts
+          accounts = mempty
+          contract =
+            V1.When
+              [ V1.MerkleizedCase
+                  (V1.Deposit "Party A" "Party A" (V1.Token "" "") (V1.Constant 100000000))
+                  "\245E\192\249\166\177\186%\176@I\143#\135\153R\154\159E\169\186\ETBP.&\166\226\255\&5\174R\218"
+              ]
+              1709639332286
+              V1.Close
+          adjustMinUtxo = mkAdjustMinUTxO eon pp' MarloweV1
+          mkRoleTokenMintingPolicy = mkCommandLineRoleTokenMintingPolicy "marlowe-minting-validator"
+
+      possibleTxBody <- runMaybeT do
+        (_, constraints) <-
+          hushT $
+            ExceptT $
+              Transaction.buildCreateConstraints
+                mkRoleTokenMintingPolicy
+                eon
+                MarloweV1
+                walletCtx
+                threadTokenName
+                roleTokens
+                metadata
+                minAda
+                accounts
+                adjustMinUtxo
+                contract
+        let getCurrentScripts = const ScriptRegistry.caseAsDataV1Scripts
+
+        marloweContext <- hushT $ Transaction.mkMarloweContext (Testnet (NetworkMagic 1)) MarloweV1 getCurrentScripts Nothing
+
+        let helpersContext = HelpersContext mempty "" mempty
+            start = posixSecondsToUTCTime 1709639332286
+            systemStart = SystemStart start
+            eraHistory :: EraHistory
+            eraHistory =
+              EraHistory $
+                mkInterpreter $
+                  summaryWithExactly $
+                    Exactly $
+                      K (oneMillisecondEraSummary 0) -- Byron lasted 1 ms
+                        :* K (oneMillisecondEraSummary 1) -- Shelley lasted 1 ms
+                        :* K (oneMillisecondEraSummary 2) -- Allegra lasted 1 ms
+                        :* K (oneMillisecondEraSummary 3) -- Mary lasted 1 ms
+                        :* K (oneMillisecondEraSummary 4) -- Alonzo lasted 1 ms
+                        :* K (unboundedEraSummary 5) -- Babbage never ends
+                        :* K (unboundedEraSummary 6) -- Conway never ends
+                        :* Nil
+        hoistMaybe $
+          hush $
+            solveConstraints
+              systemStart
+              (toLedgerEpochInfo eraHistory)
+              eon
+              pp'
+              MarloweV1
+              (Left marloweContext)
+              walletCtx
+              helpersContext
+              constraints
+
+      case possibleTxBody of
+        Nothing -> fail "Failed to build tx body"
+        Just _ -> pure ()
+
 genHelperContext :: TxConstraints TestEra v -> Gen HelpersContext
 genHelperContext TxConstraints{..} = do
   scriptHash <- hedgehog genScriptHash
@@ -902,15 +1105,15 @@ genHelperContext TxConstraints{..} = do
 
 -- Generate a wallet that always has a pure ADA value of 7 and a value
 -- with a minimum ADA plus zero or more "nuisance" tokens
-genWalletWithNuisance :: MarloweVersion v -> TxConstraints TestEra v -> Word64 -> Gen WalletContext
+genWalletWithNuisance :: MarloweVersion v -> TxConstraints TestEra v -> Integer -> Gen WalletContext
 genWalletWithNuisance marloweVersion' constraints' minLovelace = do
   wc <- genWalletContext marloweVersion' constraints'
   (adaTxOutRef, nuisanceTxOutRef) <- suchThat ((,) <$> arbitrary <*> arbitrary) (uncurry (/=))
   someAddress <- arbitrary
-  let lovelaceToAdd = Chain.Assets (Chain.Lovelace minLovelace) (Chain.Tokens Map.empty)
+  let lovelaceToAdd = fold $ mkTxOutAssets $ Chain.Assets (Chain.Lovelace minLovelace) (Chain.Tokens Map.empty)
   nuisanceAssets <- (lovelaceToAdd <>) <$> arbitrary
   collateral <- Set.fromList <$> sublistOf [adaTxOutRef]
-  let adaAssets = Chain.Assets (Chain.Lovelace 7_000_000) (Chain.Tokens Map.empty)
+  let adaAssets = fold $ mkTxOutAssets $ Chain.Assets (Chain.Lovelace 7_000_000) (Chain.Tokens Map.empty)
       adaTxOut = Chain.TransactionOutput someAddress adaAssets Nothing Nothing
       nuisanceTxOut = Chain.TransactionOutput someAddress nuisanceAssets Nothing Nothing
       utxos = Chain.UTxOs $ Map.fromList [(adaTxOutRef, adaTxOut), (nuisanceTxOutRef, nuisanceTxOut)]
@@ -1077,10 +1280,12 @@ mkAdaOnlyAssets lovelace =
     (Chain.Tokens Map.empty)
 
 -- Generate a random amount and add the specified amount of Lovelace to it
-genAtLeastThisMuchAda :: Integer -> Gen Chain.Assets
+genAtLeastThisMuchAda :: Integer -> Gen Chain.TxOutAssets
 genAtLeastThisMuchAda minLovelace = do
   additionalLovelaceValue <- suchThat arbitrary (>= 0)
-  pure . mkAdaOnlyAssets $ minLovelace + additionalLovelaceValue
+  case mkTxOutAssets $ mkAdaOnlyAssets $ minLovelace + additionalLovelaceValue of
+    Nothing -> genAtLeastThisMuchAda minLovelace
+    Just a -> pure a
 
 -- The simplest wallet context:
 --   availableUtxos = A single ADA-only Utxo
@@ -1165,7 +1370,7 @@ mustMintRoleTokenViolations MarloweV1 HelpersContext{..} TxConstraints{..} TxBod
       let tally = \case
             TxOut address (TxOutValueShelleyBased _ (fromLedgerValue shelleyBasedEraTest -> value)) datum _ ->
               case fromCardanoQuantity $ selectAsset value (toCardanoAssetId assetId) of
-                0 -> id
+                q | q == mempty -> id
                 q -> Map.insert (fromCardanoAddressInEra testEra address) (q, snd $ fromCardanoTxOutDatum datum)
             _ -> id
       let actualDistribution = foldr tally mempty txOuts
@@ -1200,8 +1405,8 @@ mustMintRoleTokenViolations MarloweV1 HelpersContext{..} TxConstraints{..} TxBod
     mintsTheCorrectNumberOfTokens = case roleTokenConstraints of
       MintRoleTokens _ _ dist -> do
         let mintedQuantities = case dist of
-              SendToAddresses dist' -> sum <$> dist'
-              SendToScripts _ dist' -> sum <$> dist'
+              SendToAddresses dist' -> fold <$> dist'
+              SendToScripts _ dist' -> fold <$> dist'
         case txMintValue of
           TxMintNone
             | Map.null mintedQuantities -> []
@@ -1226,7 +1431,7 @@ mustSpendRoleTokenViolations MarloweV1 utxos TxConstraints{..} TxBodyContent{..}
         roleToken <- Set.toList roleTokens
         guard $ roleToken /= Chain.AssetId "" ""
         (("roleToken: " <> show roleToken <> ": ") <>) <$> do
-          let isMatch (_, Chain.TransactionOutput{assets = Chain.Assets{tokens = Chain.Tokens tokens}}) =
+          let isMatch (_, Chain.TransactionOutput{assets = Chain.TxOutAssetsContent (Chain.Assets{tokens = Chain.Tokens tokens})}) =
                 Map.member roleToken tokens
               mUtxo = find (isMatch . Chain.toUTxOTuple) $ Chain.toUTxOsList utxos
           case mUtxo of
@@ -1238,7 +1443,7 @@ mustSpendRoleTokenViolations MarloweV1 utxos TxConstraints{..} TxBodyContent{..}
                         (any ((== txOutRef) . fromCardanoTxIn . fst) txIns)
                         ("Expected to consume UTxO " <> show txOutRef)
                     , check
-                        (any ((== transactionOutput) . fromCardanoTxOut testEra) txOuts)
+                        (any ((== Just transactionOutput) . fromCardanoTxOut testEra) txOuts)
                         ("Matching output not found for input " <> show transactionOutput)
                     ]
       _ -> []
@@ -1252,7 +1457,7 @@ mustPayToAddressViolations MarloweV1 TxConstraints{..} TxBodyContent{..} = do
           foldMap extractValue $
             filter ((== address) . extractAddress) txOuts
     check
-      (totalToAddress == assets)
+      (totalToAddress == Chain.unTxOutAssets assets)
       ("Address paid the wrong amount. Expected " <> show assets <> " got " <> show totalToAddress)
 
 mustSendMarloweOutputViolations
@@ -1269,7 +1474,7 @@ mustSendMarloweOutputViolations MarloweV1 MarloweContext{..} TxConstraints{..} T
         Nothing -> ["No output found to Marlowe address"]
         Just txOut ->
           fold
-            [ check (extractValue txOut == assets) "Wrong assets sent to Marlowe Address."
+            [ check (extractValue txOut == Chain.unTxOutAssets assets) "Wrong assets sent to Marlowe Address."
             , check (extractDatum txOut == Just (toChainDatum MarloweV1 datum)) $
                 (if isJust $ extractDatum txOut then "Wrong" else "No") <> " datum sent to Marlowe Address."
             ]
@@ -1292,7 +1497,7 @@ mustPayToRoleViolations MarloweV1 MarloweContext{..} TxConstraints{..} TxBodyCon
       Just txOut ->
         let totalToRole = extractValue txOut
          in check
-              (totalToRole == assets)
+              (totalToRole == Chain.unTxOutAssets assets)
               ("Role paid the wrong amount. Expected " <> show assets <> " got " <> show totalToRole)
 
 mustConsumeMarloweOutputViolations
@@ -1671,19 +1876,19 @@ shrinkWalletUtxos TxConstraints{..} collateralUtxos = filter (isValid . Chain.un
       RoleTokenConstraintsNone -> const True
       MintRoleTokens txOutRef _ _ -> Map.member txOutRef
       DistributeRoleTokens distribution -> \availableUtxos -> case toTokens distribution of
-        requiredTotals -> case foldMap Chain.assets availableUtxos of
+        requiredTotals -> case foldMap (Chain.unTxOutAssets . Chain.assets) availableUtxos of
           walletAssets -> walletAssets `sufficient` assetsFromTokens requiredTotals
       SpendRoleTokens roleTokens ->
         Set.null
           . Set.difference roleTokens
-          . foldMap (Map.keysSet . Chain.unTokens . (.assets.tokens))
+          . foldMap (Map.keysSet . Chain.unTokens . Chain.tokens . Chain.unTxOutAssets . Chain.assets)
     hasCollateralUtxos = Set.null . Set.difference collateralUtxos . Map.keysSet
 
 toTokens :: Distribution -> Chain.Tokens
 toTokens =
   Chain.Tokens . \case
-    SendToAddresses dist -> sum <$> dist
-    SendToScripts thread dist -> Map.insert thread 1 $ sum <$> dist
+    SendToAddresses dist -> fold <$> dist
+    SendToScripts thread dist -> Map.insert thread (Chain.Quantity 1) $ fold <$> dist
 
 sufficient :: Chain.Assets -> Chain.Assets -> Bool
 sufficient available required =
@@ -1697,12 +1902,12 @@ sufficientTokens (Chain.unTokens -> available) (Chain.unTokens -> required) =
 sufficientQuantity :: Chain.Quantity -> Chain.Quantity -> Maybe Chain.Quantity
 sufficientQuantity required available
   | available >= required = Nothing
-  | otherwise = Just $ required - available
+  | otherwise = Just $ required <> invert available
 
 assetsFromTokens :: Chain.Tokens -> Chain.Assets
 assetsFromTokens (Chain.Tokens tokens) =
   Chain.Assets
-    { ada = maybe 0 (Chain.Lovelace . Chain.unQuantity) $ Map.lookup (Chain.AssetId "" "") tokens
+    { ada = maybe mempty (Chain.Lovelace . Chain.unQuantity) $ Map.lookup (Chain.AssetId "" "") tokens
     , tokens = Chain.Tokens $ Map.delete (Chain.AssetId "" "") tokens
     }
 
@@ -1716,6 +1921,7 @@ genWalletContext MarloweV1 constraints =
 genWalletUtxos :: TxConstraints TestEra 'V1 -> Gen Chain.UTxOs
 genWalletUtxos TxConstraints{..} = (<>) <$> required <*> extra
   where
+    mkTxOutAssets' = fromMaybe mempty . mkTxOutAssets
     required = case roleTokenConstraints of
       RoleTokenConstraintsNone -> pure mempty
       MintRoleTokens txOutRef _ _ -> Chain.UTxOs . Map.singleton txOutRef <$> genTransactionOutput arbitrary (pure Nothing)
@@ -1723,13 +1929,13 @@ genWalletUtxos TxConstraints{..} = (<>) <$> required <*> extra
         fold <$> for (Map.toList $ Chain.unTokens $ toTokens distribution) \(roleToken, q) -> do
           txOutRef <- arbitrary
           txOut <- genTransactionOutput arbitrary (pure Nothing)
-          let roleTokenAssets = Chain.Assets 0 $ Chain.Tokens $ Map.singleton roleToken q
+          let roleTokenAssets = mkTxOutAssets' $ Chain.Assets mempty $ Chain.Tokens $ Map.singleton roleToken q
           pure $ Chain.UTxOs $ Map.singleton txOutRef $ txOut{Chain.assets = Chain.assets txOut <> roleTokenAssets}
       SpendRoleTokens roleTokens ->
         fold <$> for (Set.toList roleTokens) \roleToken -> do
           txOutRef <- arbitrary
           txOut <- genTransactionOutput arbitrary (pure Nothing)
-          let roleTokenAssets = Chain.Assets 0 $ Chain.Tokens $ Map.singleton roleToken 1
+          let roleTokenAssets = mkTxOutAssets' $ Chain.Assets mempty $ Chain.Tokens $ Map.singleton roleToken (Chain.Quantity 1)
           pure $ Chain.UTxOs $ Map.singleton txOutRef $ txOut{Chain.assets = Chain.assets txOut <> roleTokenAssets}
     extra =
       fold <$> listOf do

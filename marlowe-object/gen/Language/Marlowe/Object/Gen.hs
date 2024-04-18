@@ -9,10 +9,11 @@ import Control.Monad (replicateM)
 import qualified Data.ByteString as BS
 import Data.Foldable (Foldable (fold))
 import Data.Function ((&))
+import Data.Functor ((<&>))
 import Language.Marlowe.Object.Bundler (BundlerT (..))
 import Language.Marlowe.Object.Link
 import Language.Marlowe.Object.Types
-import Spec.Marlowe.Semantics.Arbitrary ()
+import Spec.Marlowe.Semantics.Arbitrary (unValidContractStructure)
 import Test.Gen.Cardano.Api.Typed (genAddressShelley)
 import Test.QuickCheck hiding (label)
 import Test.QuickCheck.Hedgehog (hedgehog)
@@ -35,7 +36,7 @@ instance Arbitrary LinkedObject where
   arbitrary =
     oneof
       [ LinkedAction <$> arbitrary
-      , LinkedContract <$> arbitrary
+      , LinkedContract <$> (arbitrary <&> unValidContractStructure)
       , LinkedObservation <$> arbitrary
       , LinkedParty <$> arbitrary
       , LinkedToken <$> arbitrary

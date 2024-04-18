@@ -29,13 +29,7 @@ import Language.Marlowe.Runtime.Web.Adapter.Pagination (
   PaginatedResponse,
  )
 import Language.Marlowe.Runtime.Web.Adapter.Servant (ListObject (..))
-import Language.Marlowe.Runtime.Web.Adapter.Server.ApiError (
-  ApiError (ApiError),
-  badRequest',
-  notFound',
-  rangeNotSatisfiable',
-  throwDTOError,
- )
+
 import qualified Language.Marlowe.Runtime.Web.Adapter.Server.ApiError as ApiError
 import Language.Marlowe.Runtime.Web.Adapter.Server.DTO (
   FromDTO (fromDTO),
@@ -60,6 +54,13 @@ import Language.Marlowe.Runtime.Web.Adapter.CommaList (CommaList (..))
 import Language.Marlowe.Runtime.Web.Core.Address (Address)
 import Language.Marlowe.Runtime.Web.Core.Asset (PolicyId)
 
+import Language.Marlowe.Runtime.Web.Adapter.Server.ApiError (
+  ApiError (ApiError),
+  badRequest',
+  notFound',
+  rangeNotSatisfiable',
+  throwDTOError,
+ )
 import Language.Marlowe.Runtime.Web.Core.Tx (TextEnvelope (..), TxBodyInAnyEra (..), TxId, TxOutRef)
 import Language.Marlowe.Runtime.Web.Tx.API (CardanoTx, CardanoTxBody, WithdrawTxEnvelope (..))
 import Language.Marlowe.Runtime.Web.Withdrawal.API (

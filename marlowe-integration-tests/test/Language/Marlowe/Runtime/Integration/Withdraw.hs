@@ -12,7 +12,7 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Language.Marlowe.Protocol.Query.Types (PayoutState (..))
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoTxId)
-import Language.Marlowe.Runtime.ChainSync.Api (TxOutRef (..))
+import Language.Marlowe.Runtime.ChainSync.Api (TxIx (..), TxOutRef (..))
 import Language.Marlowe.Runtime.Core.Api (
   ContractId (unContractId),
   MarloweVersion (..),
@@ -95,7 +95,7 @@ nonPayoutTest TestData{..} = flip runIntegrationTest runtime do
 nonScriptPayoutTest :: ActionWith TestData
 nonScriptPayoutTest TestData{..} = flip runIntegrationTest runtime do
   ContractCreated _ ContractCreatedInEra{..} <- pure randomCreation
-  let fakePayout = (unContractId contractId){txIx = 0}
+  let fakePayout = (unContractId contractId){txIx = TxIx 0}
   let realPayout = payoutId wallet1AvailablePayout1
   result <- withdraw MarloweV1 (addresses wallet1) $ Set.fromList [fakePayout, realPayout]
   liftIO $
@@ -103,7 +103,7 @@ nonScriptPayoutTest TestData{..} = flip runIntegrationTest runtime do
 
 nonExistentPayoutTest :: ActionWith TestData
 nonExistentPayoutTest TestData{..} = flip runIntegrationTest runtime do
-  let fakePayout = TxOutRef "0000000000000000000000000000000000000000000000000000000000000000" 0
+  let fakePayout = TxOutRef "0000000000000000000000000000000000000000000000000000000000000000" (TxIx 0)
   let realPayout = payoutId wallet1AvailablePayout1
   result <- withdraw MarloweV1 (addresses wallet1) $ Set.fromList [fakePayout, realPayout]
   liftIO $ result `shouldBe` Left (WithdrawConstraintError $ PayoutNotFound fakePayout)

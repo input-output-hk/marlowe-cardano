@@ -25,13 +25,19 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   BlockHeader (..),
   BlockHeaderHash (..),
   ChainPoint,
+  Lovelace (Lovelace),
   PolicyId (PolicyId),
+  Quantity (Quantity),
   TokenName (TokenName),
   Tokens (Tokens),
   TxId (..),
+  TxIx (TxIx),
   TxOutRef (..),
   WithGenesis (..),
   fromDatum,
+  mkTxOutAssets,
+  unTxIx,
+  unsafeTxOutAssets,
  )
 import Language.Marlowe.Runtime.Core.Api (
   ContractId (..),
@@ -158,7 +164,7 @@ getNextTxIds (ContractId TxOutRef{..}) point =
     LIMIT 1
   |]
   where
-    params = (unTxId txId, fromIntegral txIx, pointSlot)
+    params = (unTxId txId, fromIntegral . unTxIx $ txIx, pointSlot)
     pointSlot = case point of
       Genesis -> -1
       At BlockHeader{..} -> fromIntegral slotNo
@@ -318,18 +324,19 @@ getApplySteps blockHeader contractId txIds =
                       TransactionScriptOutput
                         { address = Address address
                         , assets =
-                            Assets
-                              { ada = fromIntegral lovelace
-                              , tokens =
-                                  Tokens $
-                                    Map.fromList $
-                                      zipWith3
-                                        (\p t q -> (AssetId (PolicyId p) (TokenName t), fromIntegral q))
-                                        policyIds
-                                        tokenNames
-                                        quantities
-                              }
-                        , utxo = TxOutRef (TxId txId) (fromIntegral txIx)
+                            unsafeTxOutAssets $
+                              Assets
+                                { ada = Lovelace $ fromIntegral lovelace
+                                , tokens =
+                                    Tokens $
+                                      Map.fromList $
+                                        zipWith3
+                                          (\p t q -> (AssetId (PolicyId p) (TokenName t), Quantity $ fromIntegral q))
+                                          policyIds
+                                          tokenNames
+                                          quantities
+                                }
+                        , utxo = TxOutRef (TxId txId) (TxIx $ fromIntegral txIx)
                         , datum =
                             MarloweData
                               { marloweParams = MarloweParams $ PV2.CurrencySymbol $ PV2.toBuiltin rolesCurrency
@@ -366,7 +373,7 @@ getApplySteps blockHeader contractId txIds =
         , _
         , _
         , _
-        ) = TxOutRef (TxId txId) . fromIntegral <$> txIx
+        ) = TxOutRef (TxId txId) . TxIx . fromIntegral <$> txIx
 
     extractPayout
       ( _
@@ -394,16 +401,18 @@ getApplySteps blockHeader contractId txIds =
         ) =
         Payout @'V1
           <$> (Address <$> address)
-          <*> ( Assets
-                  <$> (fromIntegral <$> lovelace)
-                  <*> ( Tokens . Map.fromList
-                          <$> ( zipWith3 (\p t q -> (AssetId (PolicyId p) (TokenName t), fromIntegral q))
-                                  <$> (V.toList <$> policyIds)
-                                  <*> (V.toList <$> tokenNames)
-                                  <*> (V.toList <$> quantities)
-                              )
-                      )
-              )
+          <*> do
+            assets <-
+              Assets
+                <$> (Lovelace . fromIntegral <$> lovelace)
+                <*> ( Tokens . Map.fromList
+                        <$> ( zipWith3 (\p t q -> (AssetId (PolicyId p) (TokenName t), Quantity $ fromIntegral q))
+                                <$> (V.toList <$> policyIds)
+                                <*> (V.toList <$> tokenNames)
+                                <*> (V.toList <$> quantities)
+                            )
+                    )
+            mkTxOutAssets assets
           <*> ( AssetId
                   <$> (PolicyId <$> rolesCurrency)
                   <*> (TokenName <$> role)
@@ -444,7 +453,7 @@ getRedeemSteps txIds =
     params = V.fromList $ unTxId <$> txIds
     decodeRow (payoutTxId, payoutTxIx, txId, rolesCurrency, role) =
       RedeemStep
-        { utxo = TxOutRef (TxId payoutTxId) (fromIntegral payoutTxIx)
+        { utxo = TxOutRef (TxId payoutTxId) (TxIx $ fromIntegral payoutTxIx)
         , redeemingTx = TxId txId
         , datum = AssetId (PolicyId rolesCurrency) (TokenName role)
         }

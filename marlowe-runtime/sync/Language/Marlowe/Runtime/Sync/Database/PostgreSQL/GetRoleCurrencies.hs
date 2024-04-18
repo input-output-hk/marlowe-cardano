@@ -1,6 +1,9 @@
 {-# LANGUAGE DataKinds #-}
 
-module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetRoleCurrencies where
+module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetRoleCurrencies (
+  getRoleCurrencies,
+)
+where
 
 import Control.Arrow (Arrow (..))
 import Control.Monad.Trans.Class (MonadTrans (..))
@@ -14,12 +17,37 @@ import qualified Data.Set as Set
 import Data.String (IsString (..))
 import qualified Data.Vector as V
 import qualified Hasql.Decoders as Decoders
-import Hasql.DynamicSyntax.Ast
+import Hasql.DynamicSyntax.Ast (
+  AExpr (AndAExpr, IsnullAExpr, NotAExpr, OrAExpr),
+  CExpr (ExistsCExpr),
+  CommonTableExpr,
+  IsAExpr (toAExpr),
+  IsTableRef (..),
+  NotNull,
+  PreparableStmt (SelectPreparableStmt),
+  SelectNoParens (SelectNoParens),
+  SelectWithParens (NoParensSelectWithParens),
+  SimpleSelect (NormalSimpleSelect),
+  SortBy (AscDescSortBy),
+  SqlBytea,
+  SqlInt2,
+  TableRef,
+  TargetList (TargetListNil, (:.)),
+  Targeting (NormalTargeting),
+  simpleSelectPreparableStmt,
+ )
 import Hasql.DynamicSyntax.Schema (allNull, cte, tableColumn, wildcard)
-import Hasql.DynamicSyntax.Statement
+import Hasql.DynamicSyntax.Statement (
+  StatementBuilder,
+  buildStatement,
+  param,
+ )
 import qualified Hasql.Transaction as HT
-import Language.Marlowe.Protocol.Query.Types
-import Language.Marlowe.Runtime.ChainSync.Api (PolicyId (PolicyId, unPolicyId), TxId (..), TxOutRef (..))
+import Language.Marlowe.Protocol.Query.Types (
+  RoleCurrency (..),
+  RoleCurrencyFilter (..),
+ )
+import Language.Marlowe.Runtime.ChainSync.Api (PolicyId (PolicyId, unPolicyId), TxId (..), TxIx (..), TxOutRef (..))
 import Language.Marlowe.Runtime.Core.Api (ContractId (..))
 import Language.Marlowe.Runtime.Schema (equals, leftJoinOn, naturalJoin, unnestParams, withCTEs)
 import qualified Language.Marlowe.Runtime.Schema as Schema
@@ -97,7 +125,7 @@ compileFilter = \case
     contractTableNumber <- state \(c, p) -> (c, (succ c, p))
     let contracts' = V.fromList $ Set.toList $ Set.map ((txId &&& txIx) . unContractId) contracts
     contractTxIdsParam <- lift $ param $ unTxId . fst <$> contracts'
-    contractTxIxsParam <- lift $ param $ fromIntegral @_ @Int16 . snd <$> contracts'
+    contractTxIxsParam <- lift $ param $ (\(TxIx a) -> fromIntegral @_ @Int16 a) . snd <$> contracts'
     let contractsTable = Schema.tempTable @ContractsColumns $ fromString $ "contracts" <> show contractTableNumber
     let contractsCte =
           cte contractsTable . simpleSelectPreparableStmt $

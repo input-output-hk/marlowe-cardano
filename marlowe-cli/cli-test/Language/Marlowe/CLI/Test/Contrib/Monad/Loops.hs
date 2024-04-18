@@ -1,6 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 
-module Contrib.Monad.Loops where
+module Language.Marlowe.CLI.Test.Contrib.Monad.Loops where
 
 import Control.Monad.Loops (whileM)
 import Data.List.NonEmpty (NonEmpty ((:|)))

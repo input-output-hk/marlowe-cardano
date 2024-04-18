@@ -66,7 +66,6 @@ import Cardano.Api (BabbageEraOnwards, LocalNodeConnectInfo)
 import Cardano.Api qualified as C
 import Contrib.Data.Time.Units.Aeson qualified as A
 import Control.Concurrent.STM (TChan, TVar)
-import Control.Error (lastMay)
 import Control.Lens (Lens', Traversal', makeLenses)
 import Control.Monad.Except (MonadError)
 import Control.Monad.IO.Class (MonadIO)
@@ -78,11 +77,11 @@ import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Aeson.Types (ToJSON)
 import Data.List qualified as List
+import Data.List.NonEmpty qualified as NE
 import Data.Map (Map)
 import Data.Map.Strict qualified as Map
 import Data.Time.Units
 import Data.Traversable (for)
-import Data.Word (Word64)
 import GHC.Generics (Generic)
 import Language.Marlowe.CLI.Test.Contract (ContractNickname)
 import Language.Marlowe.CLI.Test.Contract qualified as Contract
@@ -149,7 +148,7 @@ type AnyRuntimeInterpreterMarloweThread = AnyMarloweThread RuntimeTxInfo
 
 currentMarloweData :: AnyRuntimeInterpreterMarloweThread -> Maybe M.MarloweData
 currentMarloweData th = do
-  RuntimeTxInfo _ md <- lastMay $ overAnyMarloweThread marloweThreadTxInfos th
+  let RuntimeTxInfo _ md = NE.last $ overAnyMarloweThread marloweThreadTxInfos th
   md
 
 anyRuntimeInterpreterMarloweThreadInputsApplied
@@ -209,7 +208,7 @@ data RuntimeOperation
       { roContractNickname :: Maybe ContractNickname
       , roSubmitter :: Maybe WalletNickname
       -- ^ A wallet which gonna submit the initial transaction.
-      , roMinLovelace :: Maybe Word64
+      , roMinLovelace :: Maybe Integer
       , roRoleCurrency :: Maybe CurrencyNickname
       -- ^ If contract uses roles then currency is required.
       , roContractSource :: Contract.Source

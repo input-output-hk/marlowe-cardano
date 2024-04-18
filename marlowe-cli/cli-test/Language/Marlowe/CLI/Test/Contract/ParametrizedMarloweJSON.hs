@@ -23,13 +23,14 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Identity (runIdentity)
 import Control.Monad.Reader.Class (MonadReader, asks)
 import Control.Monad.State.Class (MonadState, gets)
-import Data.Aeson (FromJSON, ToJSON)
+import Data.Aeson (FromJSON (parseJSON), ToJSON, toJSON)
 import Data.Aeson qualified as A
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Aeson.Text qualified as A
 import Data.Bifunctor (Bifunctor (first))
 import Data.Function ((&))
 import Data.Functor ((<&>))
+import Data.Functor.Alt ((<!>))
 import Data.Has (Has (getter))
 import Data.Map.Strict qualified as M
 import Data.Map.Strict qualified as Map
@@ -39,7 +40,6 @@ import Data.Text.Lazy qualified as TL
 import Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
 import Data.Time.Units (Microsecond, TimeUnit (..))
 import Data.Vector qualified as Vector
-import Debug.Trace (traceM)
 import GHC.Generics (Generic)
 import Language.Marlowe qualified as Marlowe
 import Language.Marlowe.CLI.Run (toPlutusAddress)
@@ -54,6 +54,7 @@ import Language.Marlowe.CLI.Test.Wallet.Types (
  )
 import Language.Marlowe.CLI.Types (CliError (CliError), SomeTimeout (..))
 import Language.Marlowe.Cardano (marloweNetworkFromLocalNodeConnectInfo)
+import Language.Marlowe.Core.V1.Semantics.Types.Address (deserialiseAddressBech32)
 import Language.Marlowe.Core.V1.Semantics.Types.Address qualified as Marlowe
 import PlutusLedgerApi.V1.Value qualified as PV
 
@@ -87,9 +88,9 @@ rewriteCurrencyProps (Currencies currencies) json = rewrite json
       Just currency -> pure currency
 
     rewrite = \case
-      A.Object (KeyMap.toList -> [("currency_symbol", A.String ""), ("token_name", A.String "")]) -> do
+      A.Object (KeyMap.toAscList -> [("currency_symbol", A.String ""), ("token_name", A.String "")]) -> do
         pure $ A.object [("currency_symbol", A.String ""), ("token_name", A.String "")]
-      A.Object (KeyMap.toList -> [("currency_symbol", A.String currencyNickname), ("token_name", tokenName)]) -> do
+      A.Object (KeyMap.toAscList -> [("currency_symbol", A.String currencyNickname), ("token_name", tokenName)]) -> do
         Currency{ccCurrencySymbol = PV.CurrencySymbol cs} <- getCurrency (Text.unpack currencyNickname)
         pure $
           A.object
@@ -134,10 +135,15 @@ rewritePartyRefs network wallets (ParametrizedMarloweJSON json) = ParametrizedMa
       Nothing -> Left $ WalletNotFound nickname
       Just wallet -> pure wallet
     rewrite = \case
-      A.Object (KeyMap.toList -> [("address", A.String walletNickname)]) -> do
-        wallet <- getWallet (WalletNickname $ Text.unpack walletNickname)
-        let address = toPlutusAddress . _waAddress $ wallet
-        pure $ A.toJSON (Marlowe.Address network address)
+      v@(A.Object (KeyMap.toList -> [("address", A.String walletNickname)])) -> do
+        let performAddressRewrite = do
+              wallet <- getWallet (WalletNickname $ Text.unpack walletNickname)
+              let address = toPlutusAddress . _waAddress $ wallet
+              pure $ A.toJSON (Marlowe.Address network address)
+            carryOverAddressValue = case deserialiseAddressBech32 walletNickname of
+              Just _ -> pure v
+              Nothing -> Left $ WalletNotFound (WalletNickname $ Text.unpack walletNickname)
+        performAddressRewrite <!> carryOverAddressValue
       v -> do
         pure v
 
@@ -157,7 +163,6 @@ rewriteTimeouts (Now n) (ParametrizedMarloweJSON json) = ParametrizedMarloweJSON
                   A.fromJSON str & \case
                     A.Success (RelativeTimeout diff) -> A.toJSON $ nominalDiffTimeToMilliseconds (n + diff)
                     _ -> obj
-            traceM $ show (A.fromJSON str :: A.Result SomeTimeout)
             pure $ A.object $ Map.toList $ Map.insert "timeout" v props
           _ -> pure obj
       v -> pure v
@@ -248,6 +253,52 @@ decodeParametrizedInputJSON network wallets currencies n json = do
     case A.fromJSON contractJSON of
       A.Error err -> Left $ InvalidMarloweJSON err (TL.unpack $ A.encodeToLazyText contractJSON)
       A.Success input -> pure input
+
+data ParametrizedStateJSONDecodeError era
+  = StatePartyRefError (RewritePartyError era)
+  | StateCurrencyRefError A.Value
+  | MissingAccoutValue
+  | InvalidAccoutValue A.Value
+  | InvalidStateJSON A.Value
+  deriving stock (Eq, Generic, Show)
+
+decodeParametrizedStateJSON
+  :: Marlowe.Network
+  -> Wallets era
+  -> Currencies
+  -> ParametrizedMarloweJSON
+  -> Either (ParametrizedStateJSONDecodeError era) Marlowe.State
+decodeParametrizedStateJSON network wallets currencies (ParametrizedMarloweJSON json) = case json of
+  A.Object
+    ( KeyMap.toAscList ->
+        [("accounts", A.Array accounts), ("boundValues", boundValues), ("choices", choices), ("minTime", minTime)]
+      ) -> do
+      accounts' <-
+        accounts & traverse \case
+          A.Array (Vector.toList -> [A.Array (Vector.toList -> [party, currency]), amount]) -> do
+            ParametrizedMarloweJSON party' <-
+              first StatePartyRefError $
+                rewritePartyRefs network wallets (ParametrizedMarloweJSON party)
+            currency' <-
+              first StateCurrencyRefError $
+                rewriteCurrencyProps currencies currency
+            pure $ toJSON [toJSON [party', currency'], amount]
+          value -> Left $ InvalidAccoutValue value
+      choices' <-
+        first StatePartyRefError $
+          rewritePartyRefs network wallets (ParametrizedMarloweJSON choices)
+      let -- \| Let's put together the new state json
+          stateJson =
+            A.object
+              [ ("accounts", toJSON accounts')
+              , ("boundValues", boundValues)
+              , ("choices", toJSON choices')
+              , ("minTime", minTime)
+              ]
+      case A.fromJSON stateJson of
+        A.Error _ -> Left $ InvalidStateJSON stateJson
+        A.Success state -> pure state
+  _ -> Left $ InvalidStateJSON json
 
 doRewriteParametrizedMarloweJSON
   :: forall env era st m

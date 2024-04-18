@@ -17,6 +17,7 @@ import Language.Marlowe.Protocol.Query.Types (
 import Language.Marlowe.Runtime.ChainSync.Api (
   TxId (..),
   TxOutRef (..),
+  unTxIx,
  )
 import Language.Marlowe.Runtime.Core.Api (MarloweVersion (..))
 import Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetContractState (
@@ -34,7 +35,7 @@ getPayout
 getPayout TxOutRef{..} =
   fmap decodeSomePayoutState
     <$> T.statement
-      (unTxId txId, fromIntegral txIx)
+      (unTxId txId, fromIntegral $ unTxIx txIx)
       [maybeStatement|
           SELECT
             (ARRAY_AGG(applyTx.createTxId))[1] :: bytea,

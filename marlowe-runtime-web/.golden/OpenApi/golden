@@ -182,6 +182,12 @@
                     "contractId": {
                         "$ref": "#/components/schemas/TxOutRef"
                     },
+                    "safetyErrors": {
+                        "items": {
+                            "$ref": "#/components/schemas/SafetyError"
+                        },
+                        "type": "array"
+                    },
                     "transactionId": {
                         "$ref": "#/components/schemas/TxId"
                     },
@@ -2153,9 +2159,6 @@
                         "type": "object"
                     },
                     "minUTxODeposit": {
-                        "format": "int64",
-                        "maximum": 1.8446744073709551615e19,
-                        "minimum": 0,
                         "type": "integer"
                     },
                     "roles": {
@@ -2245,9 +2248,6 @@
                             },
                             "recipients": {
                                 "additionalProperties": {
-                                    "format": "int64",
-                                    "maximum": 1.8446744073709551615e19,
-                                    "minimum": 0,
                                     "type": "integer"
                                 },
                                 "type": "object"

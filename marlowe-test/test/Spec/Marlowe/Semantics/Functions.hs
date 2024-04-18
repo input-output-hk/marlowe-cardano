@@ -91,6 +91,7 @@ import Test.Tasty.QuickCheck (
   testProperty,
  )
 
+import Language.Marlowe.Analysis.FSSemantics (SlotLength (SlotLength))
 import Language.Marlowe.Util (dataHash)
 import qualified PlutusTx.AssocMap as AM (delete, empty, filter, fromList, insert, keys, lookup, member, null, toList)
 
@@ -941,8 +942,9 @@ checkComputeTransaction =
           case playTrace time contract inputs of
             TransactionOutput{} -> True
             e -> error $ show (time, contract, inputs, e)
+        slotLength = SlotLength 1000
     either (error . ("`getAllInputs` failed with " <>) . show) (all play)
-      <$> run (getAllInputs contract Nothing)
+      <$> run (getAllInputs slotLength contract Nothing)
 
 -- | Test `Language.Marlowe.Core.V1.Semantics.playTrace` somewhat tautologically ☹️.
 checkPlayTrace :: Property

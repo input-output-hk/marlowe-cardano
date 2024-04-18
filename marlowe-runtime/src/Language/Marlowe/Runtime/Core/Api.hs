@@ -351,7 +351,7 @@ instance Binary (TransactionOutput 'V1) where
 
 data Payout v = Payout
   { address :: Chain.Address
-  , assets :: Chain.Assets
+  , assets :: Chain.TxOutAssets
   , datum :: PayoutDatum v
   }
   deriving (Generic)
@@ -370,7 +370,7 @@ instance Binary (Payout 'V1) where
 
 data TransactionScriptOutput v = TransactionScriptOutput
   { address :: Chain.Address
-  , assets :: Chain.Assets
+  , assets :: Chain.TxOutAssets
   , utxo :: TxOutRef
   , datum :: Datum v
   }

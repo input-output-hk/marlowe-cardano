@@ -33,6 +33,13 @@ import Language.Marlowe (POSIXTime (POSIXTime))
 import qualified Language.Marlowe.Core.V1.Semantics as V1
 import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoDatumHash, toCardanoScriptData)
+import Language.Marlowe.Runtime.ChainSync.Api (
+  Lovelace (Lovelace),
+  Quantity (Quantity),
+  TxIx (TxIx),
+  unTxIx,
+  unsafeTxOutAssets,
+ )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import qualified Language.Marlowe.Runtime.ChainSync.Api as TransactionOutput (TransactionOutput (..))
 import qualified Language.Marlowe.Runtime.ChainSync.Api as TxOutRef (TxOutRef (..))
@@ -353,7 +360,7 @@ genCreateBug = elements [NoCreateDatum, InvalidCreateDatum]
 createTxToChainTx :: Maybe ExtractCreationError -> MarloweCreateTransaction -> Gen Chain.Transaction
 createTxToChainTx bug MarloweCreateTransaction{..} = do
   inputs <- Set.fromList <$> listOf1 arbitrary
-  outputs' <- for [0 .. maximum (Map.keys newContracts)] \txIx -> case Map.lookup txIx newContracts of
+  outputs' <- for [0 .. maximum (map unTxIx $ Map.keys newContracts)] \txIx -> case Map.lookup (TxIx txIx) newContracts of
     Nothing -> arbitrary
     Just (SomeCreateStep Core.MarloweV1 CreateStep{createOutput = Core.TransactionScriptOutput{..}}) ->
       pure $
@@ -365,8 +372,8 @@ createTxToChainTx bug MarloweCreateTransaction{..} = do
   outputs <- case bug of
     Nothing -> pure outputs'
     Just err -> do
-      affectedContract <- fromIntegral @_ @Int <$> elements (Map.keys newContracts)
-      let modifyOutput f = zipWithM (\i -> if i == affectedContract then f else pure) [0 ..] outputs'
+      affectedContract <- elements (Map.keys newContracts)
+      let modifyOutput f = zipWithM (\i -> if TxIx i == affectedContract then f else pure) [0 ..] outputs'
       modifyOutput \txOut -> case err of
         TxIxNotFound -> error "Cannot inject TxIxNotFound"
         ByronAddress -> error "Cannot inject ByronAddress"
@@ -482,7 +489,7 @@ genApplyTx blockHeader = do
       payoutAddress = scriptHashToAddress payoutValidatorHash
       payouts =
         Map.fromList $
-          zip (Chain.TxOutRef txId <$> [if isClose then 0 else 1 ..]) $
+          zip (Chain.TxOutRef txId . TxIx <$> [if isClose then 0 else 1 ..]) $
             mapMaybe (paymentToPayout rolesCurrency payoutAddress) outPayments
       marloweTransaction =
         Core.Transaction
@@ -500,7 +507,7 @@ genApplyTx blockHeader = do
                   $> Core.TransactionScriptOutput
                     { address = marloweAddress
                     , assets = assetsFromAccounts $ V1.accounts outState
-                    , utxo = Chain.TxOutRef txId 0
+                    , utxo = Chain.TxOutRef txId minBound
                     , datum = V1.MarloweData marloweParams outState outContract
                     }
             }
@@ -515,16 +522,17 @@ genApplyTx blockHeader = do
 
 paymentToPayout :: Chain.PolicyId -> Chain.Address -> V1.Payment -> Maybe (Core.Payout 'Core.V1)
 paymentToPayout rolesCurrency payoutAddress (V1.Payment _ payee token@(V1.Token cs tn) quantity) = case payee of
-  V1.Party (V1.Role tokenName) -> Just $ Core.Payout payoutAddress assets $ Chain.AssetId rolesCurrency $ fromPlutusTokenName tokenName
+  V1.Party (V1.Role tokenName) -> Just $ Core.Payout payoutAddress txOutAssets $ Chain.AssetId rolesCurrency $ fromPlutusTokenName tokenName
   _ -> Nothing
   where
     assets
-      | token == ada = Chain.Assets (fromIntegral quantity) mempty
+      | token == ada = Chain.Assets (Lovelace quantity) mempty
       | otherwise =
-          Chain.Assets 0 $
+          Chain.Assets mempty $
             Chain.Tokens $
               Map.singleton (Chain.AssetId (fromPlutusCurrencySymbol cs) (fromPlutusTokenName tn)) $
-                fromIntegral quantity
+                Quantity quantity
+    txOutAssets = unsafeTxOutAssets assets
 
 genSomeCreateStep :: Set ScriptRegistry.MarloweScripts -> Chain.TxOutRef -> Gen SomeCreateStep
 genSomeCreateStep scripts txOut =
@@ -535,7 +543,7 @@ genCreateStep
   :: Set ScriptRegistry.MarloweScripts
   -> Chain.TxOutRef
   -> Gen (Core.Datum v)
-  -> (Core.Datum v -> Chain.Assets)
+  -> (Core.Datum v -> Chain.TxOutAssets)
   -> Gen (CreateStep v)
 genCreateStep scripts txOut genMarloweDatum assetsFromDatum = do
   ScriptRegistry.MarloweScripts{..} <- elements $ Set.toList scripts
@@ -548,22 +556,22 @@ genTransactionScriptOutput
   :: Chain.Address
   -> Chain.TxOutRef
   -> Gen (Core.Datum v)
-  -> (Core.Datum v -> Chain.Assets)
+  -> (Core.Datum v -> Chain.TxOutAssets)
   -> Gen (Core.TransactionScriptOutput v)
 genTransactionScriptOutput address txOut genMarloweDatum assetsFromDatum = do
   datum <- genMarloweDatum
   pure $ Core.TransactionScriptOutput address (assetsFromDatum datum) txOut datum
 
-assetsFromAccounts :: V1.Accounts -> Chain.Assets
-assetsFromAccounts = foldMap assetsFromAccount . AM.toList
+assetsFromAccounts :: V1.Accounts -> Chain.TxOutAssets
+assetsFromAccounts = unsafeTxOutAssets . foldMap assetsFromAccount . AM.toList
   where
     assetsFromAccount ((_, token@(V1.Token cs tn)), quantity)
-      | token == ada = Chain.Assets (fromIntegral quantity) mempty
+      | token == ada = Chain.Assets (Lovelace quantity) mempty
       | otherwise =
-          Chain.Assets 0 $
+          Chain.Assets mempty $
             Chain.Tokens $
               Map.singleton (Chain.AssetId (fromPlutusCurrencySymbol cs) (fromPlutusTokenName tn)) $
-                fromIntegral quantity
+                Quantity quantity
 
 instance Arbitrary MarloweUTxO where
   arbitrary = MarloweUTxO <$> arbitrary <*> (Map.filter (not . Set.null) <$> arbitrary)

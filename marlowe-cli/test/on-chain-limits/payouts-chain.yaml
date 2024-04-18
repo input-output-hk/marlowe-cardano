@@ -249,22 +249,32 @@ operations:
                         account:
                           role_token: Role07
                       then:
-                        pay: 1
-                        token:
-                          currency_symbol: ''
-                          token_name: ''
-                        from_account:
-                          address: Faucet
-                        to:
-                          account:
-                            role_token: Role08
-                        then:
-                          timeout:
-                            relative: +3600
-                          timeout_continuation: close
-                          unless:
-                            notify_if: true
-                          then: close
+                          pay: 1
+                          token:
+                            currency_symbol: ''
+                            token_name: ''
+                          from_account:
+                            address: Faucet
+                          to:
+                            account:
+                              role_token: Role08
+                          then:
+                            pay: 1
+                            token:
+                              currency_symbol: ''
+                              token_name: ''
+                            from_account:
+                              address: Faucet
+                            to:
+                              account:
+                                role_token: Role09
+                            then:
+                              timeout:
+                                relative: +3600
+                              timeout_continuation: close
+                              unless:
+                                notify_if: true
+                              then: close
 
 - Prepare:
     contractNickname: "Failing 'close'"

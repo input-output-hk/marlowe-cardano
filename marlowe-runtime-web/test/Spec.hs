@@ -16,6 +16,7 @@ import Data.Aeson.Encode.Pretty (encodePrettyToTextBuilder)
 import qualified Data.ByteString as BS
 import Data.Coerce (coerce)
 import Data.Data (Typeable)
+import Data.Functor ((<&>))
 import qualified Data.HashMap.Strict.InsOrd as IOHM
 import Data.Kind (Type)
 import Data.OpenApi (
@@ -70,6 +71,11 @@ import Language.Marlowe.Runtime.Web.OpenAPIServer (
  )
 import qualified Language.Marlowe.Runtime.Web.Payout.API as Web
 
+import GHC.Generics (Generic)
+import Language.Marlowe.Analysis.Safety.Types (
+  SafetyError (MissingRolesCurrency),
+ )
+import qualified Language.Marlowe.Analysis.Safety.Types as Web
 import qualified Language.Marlowe.Runtime.Web.Role.API as Web
 import qualified Language.Marlowe.Runtime.Web.Role.TokenFilter as Web
 import qualified Language.Marlowe.Runtime.Web.Tx.API as Web
@@ -82,7 +88,9 @@ import Servant.API (
   type (:>),
  )
 import Servant.OpenApi (validateEveryToJSONWithPatternChecker)
-import Spec.Marlowe.Semantics.Arbitrary ()
+import Spec.Marlowe.Semantics.Arbitrary (
+  ValidContractStructure (unValidContractStructure),
+ )
 import Spec.Marlowe.Semantics.Next.Arbitrary ()
 import Test.Hspec (Spec, describe, hspec, it, shouldBe)
 import Test.Hspec.Golden (defaultGolden)
@@ -584,7 +592,12 @@ instance Arbitrary Web.Party where
   shrink = genericShrink
 
 instance Arbitrary Web.ContractOrSourceId where
-  arbitrary = ContractOrSourceId <$> oneof [Right <$> arbitrary, Left <$> resize 6 arbitrary]
+  arbitrary =
+    ContractOrSourceId
+      <$> oneof
+        [ Right <$> arbitrary
+        , Left <$> resize 6 (arbitrary <&> unValidContractStructure)
+        ]
   shrink = genericShrink
 
 instance Arbitrary Web.PostTransactionsRequest where
@@ -607,7 +620,19 @@ instance Arbitrary (Web.WithdrawTxEnvelope tx) where
   shrink = genericShrink
 
 instance Arbitrary (Web.ApplyInputsTxEnvelope tx) where
-  arbitrary = Web.ApplyInputsTxEnvelope <$> arbitrary <*> arbitrary <*> arbitrary
+  arbitrary =
+    Web.ApplyInputsTxEnvelope
+      <$> arbitrary
+      <*> arbitrary
+      <*> arbitrary
+      <*> (fmap . fmap) unWebSafetyError arbitrary
+  shrink = genericShrink
+
+newtype WebSafetyError = WebSafetyError {unWebSafetyError :: Web.SafetyError}
+  deriving (Show, Generic)
+
+instance Arbitrary WebSafetyError where
+  arbitrary = pure . WebSafetyError $ MissingRolesCurrency
   shrink = genericShrink
 
 instance Arbitrary (Web.BurnRoleTokensTxEnvelope tx) where

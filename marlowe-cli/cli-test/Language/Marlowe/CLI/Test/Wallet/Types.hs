@@ -493,6 +493,10 @@ data WalletOperation
   | ReturnFunds
   deriving stock (Eq, Generic, Show)
 
+mint :: CurrencyNickname -> NonEmpty TokenAssignment -> Lovelace -> WalletOperation
+mint currencyNickname tokenDistribution minLovelace =
+  Mint currencyNickname Nothing Nothing tokenDistribution minLovelace Nothing
+
 rewriteWalletProp :: (Ord k, IsString k) => Map k A.Value -> Bool -> Maybe (Map k A.Value)
 rewriteWalletProp props toPlural = case Map.lookup "wallet" props of
   Just (A.String walletNickname) -> do

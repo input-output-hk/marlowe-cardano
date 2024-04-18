@@ -5,7 +5,7 @@ synopsis:
   Runtime system for running Marlowe financial contracts on the Cardano Computation Layer
 
 description:
-  Runtime system for running and monitoring Marlowe financial contracts on
+  Runtime system for running and monitoring Marlowe contracts on
   Cardano. It provides query access to search for and inspect contracts,
   command access for creating and interacting with contracts, and streaming
   access for real-time updates to contracts.
@@ -135,6 +135,7 @@ data-files:
   .golden/MarloweQuery/golden
   .golden/MarloweSync/golden
   .golden/MarloweTransfer/golden
+  test/configuration/babbage-preprod-protocol-params.json
 
 license-files:
   LICENSE
@@ -233,6 +234,7 @@ library gen
     , bytestring >=0.10.12 && <0.12
     , cardano-api ^>=8.39.2.0
     , cardano-api-gen ^>=8.1
+    , errors
     , hedgehog-quickcheck ^>=0.1
     , http-media ^>=0.8
     , marlowe-cardano ==0.2.1.0
@@ -526,6 +528,7 @@ library tx
     , cardano-ledger-core ^>=1.10
     , co-log ^>=0.6
     , containers ^>=0.6.5
+    , deepseq
     , errors >=2.3 && <3
     , eventuo11y >=0.9 && <0.11
     , eventuo11y-extras ==0.1.1.0
@@ -546,6 +549,7 @@ library tx
     , sop-extras
     , stm ^>=2.5
     , strict-sop-core
+    , text
     , time >=1.9 && <2
     , transformers ^>=0.5.6
     , unliftio ^>=0.2.1
@@ -588,14 +592,21 @@ library runtime
   import:          lang
   hs-source-dirs:  runtime
   visibility:      public
-  exposed-modules: Language.Marlowe.Runtime
+  exposed-modules:
+    Language.Marlowe.Runtime
+    Language.Marlowe.Runtime.Logging
+
   build-depends:
     , async-components ==0.1.1.0
     , base >=4.9 && <5
+    , bytestring >=0.10.12 && <0.12
     , cardano-api ^>=8.39.2.0
     , co-log ^>=0.6
     , containers ^>=0.6.5
+    , eventuo11y >=0.9 && <0.11
     , eventuo11y-extras ==0.1.1.0
+    , eventuo11y-otel ^>=0.1
+    , hs-opentelemetry-sdk ^>=0.0.3
     , marlowe-chain-sync:{marlowe-chain-sync, chain-indexer, libchainsync} ==0.0.6
     , marlowe-protocols ==0.3.0.0
     , marlowe-runtime:{marlowe-runtime, contract, indexer, proxy, proxy-api, sync, sync-api, tx} ==0.0.6
@@ -763,22 +774,17 @@ executable marlowe-runtime
   import:          lang
   hs-source-dirs:  marlowe-runtime
   main-is:         Main.hs
-  other-modules:
-    Logging
-    Paths_marlowe_runtime
-
+  other-modules:   Paths_marlowe_runtime
   autogen-modules: Paths_marlowe_runtime
   build-depends:
     , aeson ^>=2.2
     , async-components ==0.1.1.0
     , base >=4.9 && <5
-    , bytestring >=0.10.12 && <0.12
     , cardano-api ^>=8.39.2.0
     , cardano-crypto-wrapper ^>=1.5
     , cardano-ledger-byron ^>=1.0
     , eventuo11y >=0.9 && <0.11
     , eventuo11y-extras ==0.1.1.0
-    , eventuo11y-otel ^>=0.1
     , hasql >=1.6 && <2
     , hasql-pool ^>=0.8
     , hs-opentelemetry-sdk ^>=0.0.3
@@ -831,6 +837,7 @@ test-suite marlowe-runtime-test
     , cardano-ledger-core ^>=1.10
     , containers ^>=0.6.5
     , errors >=2.3 && <3
+    , groups
     , hasql >=1.6 && <2
     , hedgehog-quickcheck ^>=0.1
     , hspec

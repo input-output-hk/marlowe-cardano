@@ -50,7 +50,7 @@ import Language.Haskell.Interpreter (
   setImports,
  )
 import qualified Language.Marlowe as M
-import Language.Marlowe.Analysis.FSSemantics (warningsTrace)
+import Language.Marlowe.Analysis.FSSemantics (SlotLength (SlotLength), warningsTrace)
 import Language.Marlowe.Core.V1.Semantics (
   TransactionInput (TransactionInput, txInputs, txInterval),
   TransactionOutput (TransactionOutput, txOutState),
@@ -249,23 +249,25 @@ valueSerialization = property $
 -- | Test a complicated sequence of multiplications.
 mulAnalysisTest :: IO ()
 mulAnalysisTest = do
-  let multiply = foldl (\a _ -> MulValue (UseValue $ ValueId "a") a) (Constant 1) ([1 .. 100] :: [Int])
+  let slotLength = SlotLength 1_000
+      multiply = foldl (\a _ -> MulValue (UseValue $ ValueId "a") a) (Constant 1) ([1 .. 100] :: [Int])
       contract = If (multiply `M.ValueGE` Constant 10_000) Close (Pay alicePk (Party alicePk) ada (Constant (-100)) Close)
-  result <- warningsTrace contract
+  result <- warningsTrace slotLength contract
   --  print result
   assertBool "Analysis ok" $ isRight result
 
 -- | Test a complicated division.
 divAnalysisTest :: IO ()
 divAnalysisTest = do
-  let contract n d =
+  let slotLength = SlotLength 1_000
+      contract n d =
         If
           (DivValue (Constant n) (Constant d) `ValueGE` Constant 5)
           Close
           (Pay alicePk (Party alicePk) ada (Constant (-100)) Close)
-  result <- warningsTrace (contract 11 2)
+  result <- warningsTrace slotLength (contract 11 2)
   assertBool "Analysis ok" $ isRight result && either (const False) isNothing result
-  result' <- warningsTrace (contract 9 2)
+  result' <- warningsTrace slotLength (contract 9 2)
   assertBool "Analysis ok" $ isRight result' && either (const False) isJust result'
 
   let eval = evalValue (Environment (POSIXTime 10, POSIXTime 1_000)) (emptyState (POSIXTime 10))
@@ -386,9 +388,10 @@ noFalsePositivesForContract :: Maybe Int -> Contract -> Property
 noFalsePositivesForContract timeLimit cont =
   unsafePerformIO
     ( do
+        let slotLength = SlotLength 1_000
         res <-
           catch
-            (limitTime $ first Right <$> warningsTrace cont)
+            (limitTime $ first Right <$> warningsTrace slotLength cont)
             (\exc -> return . Just . Left $ Left (exc :: SomeException))
         return
           ( case res of

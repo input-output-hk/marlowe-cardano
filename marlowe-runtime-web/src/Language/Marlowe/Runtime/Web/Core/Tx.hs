@@ -46,6 +46,7 @@ import Servant (
  )
 
 import Cardano.Api (IsShelleyBasedEra, TxBody)
+import Control.DeepSeq (NFData)
 import Data.OpenApi (
   HasEnum (enum_),
   HasType (..),
@@ -75,12 +76,15 @@ data TxBodyInAnyEra where
 newtype TxId = TxId {unTxId :: ByteString}
   deriving (Eq, Ord, Generic)
   deriving (Show, ToHttpApiData, ToJSON) via Base16
+instance NFData TxId
 
 data TxOutRef = TxOutRef
   { txId :: TxId
   , txIx :: Word16
   }
   deriving (Show, Eq, Ord, Generic)
+
+instance NFData TxOutRef
 
 data TextEnvelope = TextEnvelope
   { teType :: Text
@@ -93,7 +97,9 @@ data TxStatus
   = Unsigned
   | Submitted
   | Confirmed
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Generic)
+
+instance NFData TxStatus
 
 instance FromHttpApiData TxOutRef where
   parseUrlPiece t = case splitOn "#" t of

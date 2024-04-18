@@ -18,10 +18,10 @@
 module Language.Marlowe.Cardano.Thread where
 
 import Cardano.Api qualified as C
-import Cardano.Api.Byron (TxIn)
 import Data.Aeson qualified as A
-import Data.List.NonEmpty (NonEmpty ((:|)))
+import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
 import Data.List.NonEmpty qualified as List
+import Data.List.NonEmpty qualified as NE
 import Language.Marlowe qualified as M
 import PlutusLedgerApi.V2 qualified as P
 
@@ -37,7 +37,7 @@ data Finished
 data MarloweThread txInfo status where
   Created
     :: txInfo
-    -> TxIn
+    -> C.TxIn
     -> MarloweThread txInfo Running
   InputsApplied
     :: txInfo
@@ -77,13 +77,16 @@ marloweThreadToJSON = A.toJSON . foldrMarloweThread step []
     step (Closed _ inputs _) acc = A.object [("inputs", A.toJSON inputs)] : acc
 
 -- In the `marlowe-runtime` we use this txIn to identify the contract.
-marloweThreadInitialTxIn :: MarloweThread txInfo status -> TxIn
+marloweThreadInitialTxIn :: MarloweThread txInfo status -> C.TxIn
 marloweThreadInitialTxIn (Closed _ _ th) = marloweThreadInitialTxIn th
 marloweThreadInitialTxIn (InputsApplied _ _ _ th) = marloweThreadInitialTxIn th
 marloweThreadInitialTxIn (Redemption _ _ th) = marloweThreadInitialTxIn th
 marloweThreadInitialTxIn (Created _ txIn) = txIn
 
-marloweThreadTxIn :: MarloweThread txInfo status -> Maybe TxIn
+marloweThreadInitialTxInfo :: MarloweThread txInfo status -> txInfo
+marloweThreadInitialTxInfo th = NE.last $ marloweThreadTxInfos th
+
+marloweThreadTxIn :: MarloweThread txInfo status -> Maybe C.TxIn
 marloweThreadTxIn (Created _ txIn) = Just txIn
 marloweThreadTxIn (InputsApplied _ txIn _ _) = Just txIn
 marloweThreadTxIn Closed{} = Nothing
@@ -98,21 +101,19 @@ marloweThreadInputs = foldlMarloweThread step []
     step acc Created{} = acc
     step acc Redemption{} = acc
 
-marloweThreadTxInfos :: MarloweThread txInfo status -> [txInfo]
-marloweThreadTxInfos = foldlMarloweThread step []
-  where
-    step :: [txInfo] -> MarloweThread txInfo status' -> [txInfo]
-    step acc (Created txInfo _) = txInfo : acc
-    step acc (InputsApplied txInfo _ _ _) = txInfo : acc
-    step acc (Closed txInfo _ _) = txInfo : acc
-    step acc (Redemption txInfo _ _) = txInfo : acc
+marloweThreadTxInfos :: MarloweThread txInfo status -> List.NonEmpty txInfo
+marloweThreadTxInfos = \case
+  (Created txInfo _) -> NE.singleton txInfo
+  (InputsApplied txInfo _ _ th) -> txInfo <| marloweThreadTxInfos th
+  (Closed txInfo _ th) -> txInfo <| marloweThreadTxInfos th
+  (Redemption txInfo _ th) -> txInfo <| marloweThreadTxInfos th
 
 -- | Hides the `status` type parameter.
 data AnyMarloweThread txInfo where
   AnyMarloweThread :: MarloweThread txInfo status -> AnyMarloweThread txInfo
 
 -- | Safe constructors for `AnyMarloweThread`.
-anyMarloweThreadCreated :: txInfo -> TxIn -> AnyMarloweThread txInfo
+anyMarloweThreadCreated :: txInfo -> C.TxIn -> AnyMarloweThread txInfo
 anyMarloweThreadCreated txInfo txIn = AnyMarloweThread (Created txInfo txIn)
 
 anyMarloweThreadRedeemed :: txInfo -> P.TokenName -> AnyMarloweThread txInfo -> AnyMarloweThread txInfo

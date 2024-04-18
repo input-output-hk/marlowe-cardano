@@ -22,6 +22,7 @@ operations:
         - [Role04, 1]
         - [Role05, 1]
         - [Role06, 1]
+        - [Role07, 1]
         - ['', 1]
 
 - Mint:
@@ -37,6 +38,7 @@ operations:
           - [Token04, 1]
           - [Token05, 1]
           - [Token06, 1]
+          - [Token07, 1]
 
 - Initialize:
     minLovelace: 2000000
@@ -115,7 +117,17 @@ operations:
                     of_token: [NFTs, Token06]
                     into_account:
                       address: Faucet
-                  then: close
+                  then:
+                    timeout: +1h
+                    timeout_continuation: close
+                    unless:
+                      party:
+                        role_token: Role07
+                      deposits: 1
+                      of_token: [NFTs, Token07]
+                      into_account:
+                        address: Faucet
+                    then: close
 
 - Comment: Manually deposit thread token to the script.
 
@@ -179,6 +191,45 @@ operations:
           role_token: Role04
         that_deposits: 1
         of_token: [NFTs, Token04]
+        into_account:
+          address: Faucet
+    minimumTime: -15s
+    maximumTime: +2m
+
+- AutoRun
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: Role05
+        that_deposits: 1
+        of_token: [NFTs, Token05]
+        into_account:
+          address: Faucet
+    minimumTime: -15s
+    maximumTime: +2m
+
+- AutoRun
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: Role06
+        that_deposits: 1
+        of_token: [NFTs, Token06]
+        into_account:
+          address: Faucet
+    minimumTime: -15s
+    maximumTime: +2m
+
+- AutoRun
+
+- Prepare:
+    inputs:
+      - input_from_party:
+          role_token: Role07
+        that_deposits: 1
+        of_token: [NFTs, Token07]
         into_account:
           address: Faucet
     minimumTime: -15s

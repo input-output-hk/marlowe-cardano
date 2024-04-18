@@ -1,22 +1,25 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE ViewPatterns #-}
 
 module Language.Marlowe.Runtime.Transaction.Safety (
   Continuations,
+  ThreadTokenAssetId (..),
   checkContract,
   checkTransactions,
   makeSystemHistory,
+  mkLockedRolesContext,
+  mockLockedRolesContext,
   minAdaUpperBound,
-  mkAdjustMinimumUtxo,
+  mkAdjustMinUTxO,
   noContinuations,
 ) where
 
-import Control.Monad (forM)
-import Control.Monad.Trans.Except (runExceptT, throwE)
+import Control.Monad (foldM, when)
+import Control.Monad.Trans.Except (except, runExceptT)
 import Data.Bifunctor (bimap, first)
-import Data.Maybe (fromJust)
+import Data.Maybe (catMaybes, fromMaybe, isJust)
+import Data.SOP.BasicFunctors (K (..))
 import Data.SOP.Strict (NP (..))
 import Data.String (fromString)
 import Data.Time (UTCTime, addUTCTime, secondsToNominalDiffTime)
@@ -31,19 +34,27 @@ import Language.Marlowe.Analysis.Safety.Ledger (
   worstValue,
  )
 import Language.Marlowe.Analysis.Safety.Transaction (
-  CurrentState (NotInitialized),
+  CurrentState (AlreadyInitialized),
   findTransactions,
-  firstRoleAuthorizationAnnotator,
+  roleAuthorizations,
+  unitAnnotator,
  )
 import Language.Marlowe.Analysis.Safety.Types (SafetyError (..), Transaction (..), stripAnnotation)
 import Language.Marlowe.Runtime.Core.Api (
   Contract,
+  Datum,
   MarloweTransactionMetadata (..),
   MarloweVersion (MarloweV1),
   TransactionScriptOutput (..),
  )
 import Language.Marlowe.Runtime.Transaction.Api (Mint (..), RoleTokensConfig (..))
-import Language.Marlowe.Runtime.Transaction.BuildConstraints (buildApplyInputsConstraints, safeLovelace)
+import Language.Marlowe.Runtime.Transaction.BuildConstraints (
+  AdjustMinUTxO (..),
+  ThreadTokenAssetId (..),
+  buildApplyInputsConstraints,
+  marloweAccountsAssets,
+  safeLovelace,
+ )
 import Language.Marlowe.Runtime.Transaction.Constraints (
   HelperScriptInfo (helperAddress),
   HelperScriptState (..),
@@ -63,62 +74,64 @@ import qualified Cardano.Api.Shelley as Shelley (
   EraHistory (..),
   SystemStart (..),
  )
-import Control.Monad.IO.Class (MonadIO)
+import Control.Error (note)
+import Control.Monad.Trans.State.Strict (evalState, get, put)
 import Data.Functor.Identity (runIdentity)
+import Data.List (nub)
+import qualified Data.Map as Map
 import qualified Data.Map.NonEmpty as NEMap
 import qualified Data.Map.Strict as M (
   Map,
   elems,
   empty,
   fromList,
-  fromSet,
-  intersection,
   keysSet,
-  map,
   mapKeys,
   singleton,
   size,
-  toList,
+  traverseWithKey,
  )
-import Data.SOP.BasicFunctors (K (..))
 import qualified Data.SOP.Counting as Ouroboros
-import qualified Data.Set as S (Set, intersection, map, singleton)
 import qualified Data.Set as Set
 import qualified Data.Set.NonEmpty as NESet
 import qualified Language.Marlowe.Core.V1.Merkle as V1 (MerkleizedContract (..))
-import qualified Language.Marlowe.Core.V1.Plate as V1 (extractAllWithContinuations)
+import qualified Language.Marlowe.Core.V1.Plate as V1 (extractRoleNames)
 import qualified Language.Marlowe.Core.V1.Semantics as V1 (
   MarloweData (..),
   MarloweParams (..),
   TransactionInput (..),
   TransactionOutput (..),
  )
-import qualified Language.Marlowe.Core.V1.Semantics.Types as V1 (Party (Address), State (..), Token (..))
-import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as V1 (deserialiseAddress)
+import qualified Language.Marlowe.Core.V1.Semantics.Types as V1 (State (..))
+import Language.Marlowe.Runtime.Cardano.Api (fromCardanoLovelace)
 import qualified Language.Marlowe.Runtime.Cardano.Api as Chain (
   assetsToCardanoValue,
   fromCardanoDatumHash,
   toCardanoScriptData,
  )
+import Language.Marlowe.Runtime.ChainSync.Api (mkTxOutAssets, subtractTxOutAssetsRounding, unsafeTxOutAssets)
+import qualified Language.Marlowe.Runtime.ChainSync.Api as CS
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain (
   Address (..),
   AssetId (..),
   Assets (..),
   Datum (B),
   DatumHash (..),
+  Lovelace,
   PolicyId (..),
   SlotNo (..),
   TokenName (..),
   Tokens (..),
   TransactionMetadata (..),
   TransactionOutput (..),
+  TxOutAssets,
   TxOutRef,
   UTxOs (..),
  )
 import qualified Language.Marlowe.Runtime.Plutus.V2.Api as Chain (
+  fromPlutusCurrencySymbol,
   fromPlutusTokenName,
   fromPlutusValue,
-  toPlutusCurrencySymbol,
   toPlutusTokenName,
  )
 import qualified Ouroboros.Consensus.BlockchainTime as Ouroboros (RelativeTime (..), mkSlotLength, toRelativeTime)
@@ -138,14 +151,58 @@ import qualified PlutusLedgerApi.V2 as Plutus (
   CurrencySymbol (..),
   DatumHash (..),
   POSIXTime (..),
-  TokenName (..),
-  fromBuiltin,
   toBuiltin,
  )
-import qualified PlutusTx.AssocMap as AM (fromList, toList)
 
 -- FIXME: Relocate this definition when full support for Merkleization is added to Runtime.
 type Continuations v = M.Map Chain.DatumHash (Contract v)
+
+-- Roles still locked in the script on the chain. All the `helperUTxO` are non empty.
+-- We could use parameter to enforce th in the original `HelpersContext` but it would overcomplicate the code all over the place.
+newtype LockedRolesContext = LockedRolesContext HelpersContext
+
+-- We check if script states have non empty helperUTxO.
+mkLockedRolesContext :: HelpersContext -> LockedRolesContext
+mkLockedRolesContext (HelpersContext helperScripts policyId helperScriptStates) = do
+  let helperScriptStates' = Map.filter (\HelperScriptState{helperUTxO} -> isJust helperUTxO) helperScriptStates
+  LockedRolesContext $ HelpersContext helperScripts policyId helperScriptStates'
+
+-- For every empty `helperUTxO` provide mock txOut info.
+mockLockedRolesContext
+  :: ThreadTokenAssetId
+  -> AdjustMinUTxO
+  -> HelpersContext
+  -> LockedRolesContext
+mockLockedRolesContext (ThreadTokenAssetId threadTokenAssetId) (AdjustMinUTxO adjustMinUtxo) hc@(HelpersContext _ _ helperScriptStates) = do
+  let Chain.AssetId threadTokenPolicyId threadTokenName = threadTokenAssetId
+      helperScriptStates' :: M.Map Chain.TokenName HelperScriptState
+      helperScriptStates' = flip evalState (1 :: Integer) $ flip M.traverseWithKey helperScriptStates \roleName v -> case v of
+        s@(HelperScriptState _ (Just _)) -> pure s
+        HelperScriptState helperScriptInfo _ -> do
+          let -- We assume that roles have the same policy id as the thread token which can change in the future.
+              roleTokenAssetId = Chain.AssetId threadTokenPolicyId roleName
+          ix <- get
+          put (ix + 1)
+          let txOutRef = fromString ("EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE#" <> show ix)
+              address = helperAddress helperScriptInfo
+              assets =
+                adjustMinUtxo . unsafeTxOutAssets . Chain.Assets safeLovelace . Chain.Tokens $
+                  M.fromList [(roleTokenAssetId, CS.Quantity 1)]
+              datum = Just $ Chain.B $ Chain.unTokenName threadTokenName
+              datumHash =
+                Chain.fromCardanoDatumHash
+                  . C.hashScriptDataBytes
+                  . C.unsafeHashableScriptData
+                  . Chain.toCardanoScriptData
+                  <$> datum
+              helperTransactionOutput = Chain.TransactionOutput{..}
+          pure $ HelperScriptState helperScriptInfo $ Just (txOutRef, helperTransactionOutput)
+  LockedRolesContext $ hc{helperScriptStates = helperScriptStates'}
+
+unlockRoles :: Set.Set Chain.TokenName -> LockedRolesContext -> LockedRolesContext
+unlockRoles rolesToUnlock (LockedRolesContext (HelpersContext helperScripts policyId helperScriptStates)) = do
+  let helperScriptStates' = Map.filterWithKey (\k _ -> k `Set.notMember` rolesToUnlock) helperScriptStates
+  LockedRolesContext $ HelpersContext helperScripts policyId helperScriptStates'
 
 -- | No continuations for a contract.
 noContinuations
@@ -170,29 +227,32 @@ minAdaUpperBound
   -> V1.State
   -> Contract v
   -> Continuations v
-  -> Maybe Cardano.Lovelace
-minAdaUpperBound era pps MarloweV1 state contract continuations =
-  minAdaBound era pps MarloweV1
-    . Chain.fromPlutusValue
-    . worstValue (Just state) contract
-    $ remapContinuations continuations
+  -> Maybe Chain.Lovelace
+minAdaUpperBound era pps MarloweV1 state contract continuations = do
+  assets <-
+    mkTxOutAssets
+      . Chain.fromPlutusValue
+      . worstValue (Just state) contract
+      $ remapContinuations continuations
+  minAdaBound era pps MarloweV1 assets
 
 -- | Adjust the ada in a TxOut upwards, if needed to satisfy the minimum UTxO ledger rule. Assume that a datum hash is
 -- present in the TxOut and that the address contains a stake credential.
-mkAdjustMinimumUtxo
+mkAdjustMinUTxO
   :: forall era v
    . C.BabbageEraOnwards era
   -> C.LedgerProtocolParameters era
   -> MarloweVersion v
-  -> Chain.Assets
-  -> Chain.Assets
-mkAdjustMinimumUtxo era pps MarloweV1 assets@Chain.Assets{ada, tokens} =
-  let minLovelace =
-        maybe 30_000_000 toInteger $ -- Safe for all UTxOs.
-          minAdaBound era pps MarloweV1 assets
-   in if minLovelace > toInteger ada
-        then Chain.Assets (fromInteger minLovelace) tokens
-        else assets
+  -> AdjustMinUTxO
+mkAdjustMinUTxO era pps MarloweV1 =
+  AdjustMinUTxO \assets@(CS.TxOutAssetsContent (Chain.Assets{ada, tokens})) -> do
+    let minLovelace =
+          maybe (CS.Lovelace 30_000_000) id $ -- Safe for all UTxOs.
+            minAdaBound era pps MarloweV1 assets
+    fromMaybe assets $
+      if minLovelace > ada
+        then mkTxOutAssets $ Chain.Assets minLovelace tokens
+        else Nothing
 
 -- | Compute a worst-case bound on the minimum TxOut value for assets. Assume that a datum hash is present in the
 --   TxOut and that the address contains a stake credential.
@@ -201,13 +261,13 @@ minAdaBound
    . C.BabbageEraOnwards era
   -> C.LedgerProtocolParameters era
   -> MarloweVersion v
-  -> Chain.Assets
-  -> Maybe Cardano.Lovelace
+  -> Chain.TxOutAssets
+  -> Maybe Chain.Lovelace
 minAdaBound era pps MarloweV1 assets =
   do
-    let -- Ugh, the era handling can be done much better, but this is how it's done elsewhere in the codebase.
-        maryEraOnwards :: C.MaryEraOnwards era
+    let maryEraOnwards :: C.MaryEraOnwards era
         maryEraOnwards = C.babbageEraOnwardsToMaryEraOnwards era
+
         alonzoEraOnwards :: C.AlonzoEraOnwards era
         alonzoEraOnwards = C.babbageEraOnwardsToAlonzoEraOnwards era
         shelleyBasedEra = C.babbageEraOnwardsToShelleyBasedEra era
@@ -221,95 +281,136 @@ minAdaBound era pps MarloweV1 assets =
           C.deserialiseAddress
             (C.AsAddressInEra C.AsConwayEra)
             "addr1x8ur42seq20ytdzm33fhjf3c2pxskxf3gzxq706qk7p5muhc824pjq57gk69hrzn0ynrs5zdpvvnzsyvpul5pdurfheq28w2dx"
-    value <- Chain.assetsToCardanoValue assets
-    let txOut =
-          Cardano.TxOut
-            address
-            (mkTxOutValue maryEraOnwards value)
-            (Cardano.TxOutDatumHash alonzoEraOnwards "45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0")
-            C.ReferenceScriptNone
-    pure $ Cardano.calculateMinimumUTxO shelleyBasedEra txOut $ C.unLedgerProtocolParameters pps
+    let -- Let's just check if cardano-node fixed the issue
+        CS.TxOutAssetsContent (Chain.Assets origLovelace tokens) = assets
+        minAdaLoop counter totalLovelace = do
+          when (counter == (0 :: Int)) do
+            Nothing
+          let assets' = unsafeTxOutAssets (Chain.Assets totalLovelace tokens)
+          value <- Chain.assetsToCardanoValue assets'
+          let txOut =
+                Cardano.TxOut
+                  address
+                  (mkTxOutValue maryEraOnwards value)
+                  (C.TxOutDatumInTx alonzoEraOnwards . C.unsafeHashableScriptData . Chain.toCardanoScriptData $ Chain.B "")
+                  C.ReferenceScriptNone
+              minUTxOLovelace = fromCardanoLovelace $ Cardano.calculateMinimumUTxO shelleyBasedEra txOut $ C.unLedgerProtocolParameters pps
+          if minUTxOLovelace > totalLovelace
+            then minAdaLoop (counter - 1) minUTxOLovelace
+            else pure minUTxOLovelace
+    minAdaLoop 5 origLovelace
 
 -- | Check a contract for design errors and ledger violations.
 checkContract
   :: Cardano.NetworkId
-  -> RoleTokensConfig
+  -> Maybe RoleTokensConfig
+  -- FIXME: This should depend on the context:
+  --  * it could be the config used to perform minting
+  --  * it could be minting information gathered from the chain
+  --
+  --  Currently we handle only the first case.
   -> MarloweVersion v
-  -> Contract v
+  -> Datum v
   -> Continuations v
   -> [SafetyError]
-checkContract network config MarloweV1 contract continuations =
+checkContract network roleTokensConfig MarloweV1 marloweData continuations =
   let continuations' = remapContinuations continuations
-      roles = V1.extractAllWithContinuations contract continuations'
-      mintCheck =
-        case (config, Set.null roles) of
-          (RoleTokensNone, False) -> pure MissingRolesCurrency
-          (RoleTokensNone, True) -> mempty
-          (_, True) -> pure ContractHasNoRoles
-          (RoleTokensMint mint, False) ->
-            let minted = Set.map Chain.toPlutusTokenName $ NESet.toSet $ NEMap.keysSet $ unMint mint
-                missing = MissingRoleToken <$> Set.toList (Set.difference roles minted)
-                extra = ExtraRoleToken <$> Set.toList (Set.difference minted roles)
-             in missing <> extra
-          (RoleTokensUsePolicy _ distribution, False) -> do
-            let distributedRoles = Set.map Chain.toPlutusTokenName $ M.keysSet distribution
-            extraRole <- Set.toList $ Set.difference distributedRoles roles
-            pure $ ExtraRoleToken extraRole
-      avoidDuplicateReport = True
-      nameCheck = checkRoleNames avoidDuplicateReport Nothing contract continuations'
-      tokenCheck = checkTokens Nothing contract continuations'
+      V1.MarloweData{marloweState = state, marloweParams = V1.MarloweParams{rolesCurrency}, marloweContract = contract} = marloweData
+      mintCheck = flip foldMap roleTokensConfig \roleTokensConfig' ->
+        checkMinting roleTokensConfig' MarloweV1 contract state continuations
+      rolesCheck = checkRoleNames rolesCurrency state contract continuations'
+      tokenCheck = checkTokens state contract continuations'
       continuationCheck = checkContinuations contract continuations'
       networksCheck =
-        checkNetwork (network == Cardano.Mainnet) Nothing contract continuations'
-          <> snd (checkNetworks Nothing contract continuations')
-      addressCheck = checkAddresses Nothing contract continuations'
-   in mintCheck <> nameCheck <> tokenCheck <> continuationCheck <> networksCheck <> addressCheck
+        checkNetwork (network == Cardano.Mainnet) state contract continuations'
+          <> snd (checkNetworks state contract continuations')
+      addressCheck = checkAddresses state contract continuations'
+   in nub $ mintCheck <> rolesCheck <> tokenCheck <> continuationCheck <> networksCheck <> addressCheck
+
+checkMinting
+  :: RoleTokensConfig
+  -> MarloweVersion v
+  -> Contract v
+  -> V1.State
+  -> Continuations v
+  -> [SafetyError]
+checkMinting config MarloweV1 contract state continuations = do
+  let continuations' = remapContinuations continuations
+      roles = V1.extractRoleNames state contract continuations'
+  case (config, Set.null roles) of
+    (RoleTokensNone, False) -> pure MissingRolesCurrency
+    (RoleTokensNone, True) -> mempty
+    (_, True) -> pure ContractHasNoRoles
+    (RoleTokensMint mint, False) ->
+      let minted = Set.map Chain.toPlutusTokenName $ NESet.toSet $ NEMap.keysSet $ unMint mint
+          missing = MissingRoleToken <$> Set.toList (Set.difference roles minted)
+          extra = ExtraRoleToken <$> Set.toList (Set.difference minted roles)
+       in missing <> extra
+    (RoleTokensUsePolicy _ distribution, False) -> do
+      let distributedRoles = Set.map Chain.toPlutusTokenName $ M.keysSet distribution
+      extraRole <- Set.toList $ Set.difference distributedRoles roles
+      pure $ ExtraRoleToken extraRole
 
 -- | Mock-execute all possible transactions for a contract.
 checkTransactions
-  :: (MonadIO m)
-  => C.LedgerProtocolParameters era
+  :: C.LedgerProtocolParameters era
   -> C.BabbageEraOnwards era
   -> MarloweVersion v
   -> MarloweContext v
-  -> HelpersContext
-  -> Chain.PolicyId
-  -> Chain.TokenName
+  -> LockedRolesContext
   -> Chain.Address
-  -> Chain.Assets
-  -> (Chain.Assets -> Chain.Assets)
-  -> Contract v
+  -> Datum v
   -> Continuations v
-  -> m (Either String [SafetyError])
-checkTransactions protocolParameters era version@MarloweV1 marloweContext helpersContext rolesCurrency threadRole changeAddress (Chain.Assets initialAda initialTokens) adjustMinUtxo contract continuations =
+  -> IO (Either String [SafetyError])
+checkTransactions protocolParameters era version@MarloweV1 marloweContext lockedRolesContext changeAddress datum continuations =
   runExceptT $
     do
-      let changeAddress' = uncurry V1.Address . fromJust . V1.deserialiseAddress $ Chain.unAddress changeAddress
-          initialValue =
-            AM.fromList $
-              (V1.Token "" "", fromIntegral initialAda)
-                : [ (V1.Token (Chain.toPlutusCurrencySymbol p) (Chain.toPlutusTokenName n), fromIntegral quantity)
-                  | (Chain.AssetId p n, quantity) <- M.toList $ Chain.unTokens initialTokens
-                  ]
-          helperRoles = M.keysSet $ helperScriptStates helpersContext
-          intersectHelperRoles transaction@Transaction{txAnnotation} =
-            transaction{txAnnotation = S.intersection txAnnotation $ S.map Chain.toPlutusTokenName helperRoles}
+      let V1.MarloweData{marloweState = state, marloweParams = params, marloweContract = contract} = datum
+          V1.MarloweParams{rolesCurrency} = params
+          rolesCurrency' = Chain.fromPlutusCurrencySymbol rolesCurrency
       transactions <- do
-        let state = NotInitialized changeAddress' initialValue
+        let state' = AlreadyInitialized state
             contract' = V1.MerkleizedContract contract $ remapContinuations continuations
-        findTransactions firstRoleAuthorizationAnnotator False contract' state
-      either throwE (pure . mconcat)
-        . forM (filter (not . null . txAnnotation) $ intersectHelperRoles <$> transactions)
-        $ checkTransaction
-          protocolParameters
-          era
-          version
-          marloweContext
-          helpersContext
-          rolesCurrency
-          threadRole
-          changeAddress
-          adjustMinUtxo
+        findTransactions unitAnnotator False contract' state'
+      let foldMFlipped :: (Foldable t, Monad m) => b -> t a -> (b -> a -> m b) -> m b
+          foldMFlipped b ta f = foldM f b ta
+
+      (_, res) <- except $ foldMFlipped (lockedRolesContext, []) transactions \(lockedRolesCtx, acc) tx@(Transaction{txInput}) -> do
+        let usedRoles = roleAuthorizations txInput
+            lockedRolesCtx' = unlockRoles (Set.map Chain.fromPlutusTokenName usedRoles) lockedRolesCtx
+
+        (txRes :: [SafetyError]) <-
+          checkTransaction
+            protocolParameters
+            era
+            version
+            marloweContext
+            lockedRolesCtx
+            rolesCurrency'
+            changeAddress
+            tx
+        pure (lockedRolesCtx', txRes : acc)
+
+      pure $ concat res
+
+plainInterval
+  :: Plutus.POSIXTime
+  -> (Plutus.POSIXTime, Plutus.POSIXTime)
+  -> (UTCTime, UTCTime, UTCTime)
+plainInterval minTime marloweInterval = do
+  let beginPOSIX = fst marloweInterval
+      begin = posixTimeToUTCTime beginPOSIX
+      -- We have to revert back from the `MarloweTimeInterval` to the TxInterval:
+      --
+      -- \* on the Plutus side we do this millisecond subtraction to compute
+      --  the end of Marlowe level interval based on tx level interval:
+      -- https://github.com/input-output-hk/marlowe-plutus/blob/d9c3093270e7af8b335ee2ddce9c0a18be2bd9a3/marlowe-plutus/src/Language/Marlowe/Plutus/Script.hs#L190
+      --
+      -- \* we have to do the opposite here:
+      endPOSIX = snd marloweInterval + 1
+      end = posixTimeToUTCTime endPOSIX
+      minTime' = posixTimeToUTCTime $ max minTime beginPOSIX
+  (minTime', begin, end)
 
 -- | Check a transaction for safety issues.
 checkTransaction
@@ -317,40 +418,22 @@ checkTransaction
   -> C.BabbageEraOnwards era
   -> MarloweVersion v
   -> MarloweContext v
-  -> HelpersContext
+  -> LockedRolesContext
   -> Chain.PolicyId
-  -> Chain.TokenName
   -> Chain.Address
-  -> (Chain.Assets -> Chain.Assets)
-  -> Transaction (S.Set Plutus.TokenName)
+  -> Transaction a
   -> Either String [SafetyError]
-checkTransaction protocolParameters era version@MarloweV1 marloweContext@MarloweContext{..} helpersContext policyId@(Chain.PolicyId rolesCurrency) threadRole changeAddress adjustMinUtxo transaction@Transaction{..} =
+checkTransaction protocolParameters era version@MarloweV1 marloweContext@MarloweContext{..} lockedRolesContext (Chain.PolicyId rolesCurrency) changeAddress transaction@Transaction{..} =
   do
     let V1.TransactionInput{..} = txInput
         rolesCurrency' = V1.MarloweParams . Plutus.CurrencySymbol $ Plutus.toBuiltin rolesCurrency
-        -- Truncate updward to slot number.
-        earliest = posixTimeToUTCTime . (* 1000) . (`div` 1000) . (+ 999) . V1.minTime $ V1.marloweState marloweData
-        -- Truncate inward to the slot number (inclusive).
-        begin = posixTimeToUTCTime . (* 1000) . (`div` 1000) . (+ 999) $ fst txInterval
-        -- Truncate inward to the slot number (exclusive).
-        end = posixTimeToUTCTime . (* 1000) . (+ 2) . (`div` 1000) . (+ (-999)) $ snd txInterval
-        -- Find the current time and slot-compatible interval.
-        (now, intervalBegin, intervalEnd)
-          -- For a timeout, the current time must not be before the timeout.
-          | null txInputs =
-              ( begin
-              , Just begin
-              , Just $ max (addUTCTime 1 begin) end
-              )
-          -- For application of input, the current time must not be before the minimum time.
-          | otherwise =
-              ( max begin earliest
-              , Just $ min begin (addUTCTime (-1) end)
-              , Just $ max end (addUTCTime 1 earliest)
-              )
         marloweData = V1.MarloweData rolesCurrency' txState txContract
-        scriptIncoming = foldMap (uncurry makeValue . first snd) . AM.toList . V1.accounts $ V1.marloweState marloweData
-        marloweOutput = TransactionScriptOutput marloweAddress scriptIncoming scriptTxOutRef marloweData
+        minTime = V1.minTime txState
+        (now, intervalBegin, intervalEnd) = plainInterval minTime txInterval
+
+    scriptIncoming <-
+      note "Invalid initial accounts state" $ marloweAccountsAssets . V1.accounts $ V1.marloweState marloweData
+    let marloweOutput = TransactionScriptOutput marloweAddress scriptIncoming scriptTxOutRef marloweData
         marloweContext' = marloweContext{scriptOutput = Just marloweOutput}
         metadata = MarloweTransactionMetadata Nothing $ Chain.TransactionMetadata mempty
         (start, history) =
@@ -360,7 +443,7 @@ checkTransaction protocolParameters era version@MarloweV1 marloweContext@Marlowe
       utcTimeToSlotNo start history now
     constraints <-
       bimap show snd $
-        runIdentity $
+        runIdentity $ do
           runExceptT $
             buildApplyInputsConstraints
               (const $ pure Nothing)
@@ -370,47 +453,17 @@ checkTransaction protocolParameters era version@MarloweV1 marloweContext@Marlowe
               marloweOutput
               tipSlot
               metadata
-              intervalBegin
-              intervalEnd
+              (Just intervalBegin)
+              (Just intervalEnd)
               txInputs
+
     let walletContext = walletForConstraints version marloweContext changeAddress constraints
-        helpersContext' = helpersForRoles policyId threadRole txAnnotation adjustMinUtxo helpersContext
+        LockedRolesContext helpersContext = lockedRolesContext
     pure
       . either
         (pure . TransactionValidationError (stripAnnotation transaction) . show)
         (const $ TransactionWarning (stripAnnotation transaction) <$> V1.txOutWarnings txOutput)
-      $ solveConstraints' era protocolParameters version (Left marloweContext') walletContext helpersContext' constraints
-
--- | Create a helpers context for the specified helper roles.
-helpersForRoles
-  :: Chain.PolicyId
-  -> Chain.TokenName
-  -> S.Set Plutus.TokenName
-  -> (Chain.Assets -> Chain.Assets)
-  -> HelpersContext
-  -> HelpersContext
-helpersForRoles policyId threadRole helperRoles adjustMinUtxo helpersContext =
-  let activeHelperScripts =
-        M.toList
-          . M.intersection (helperScriptStates helpersContext)
-          . M.fromSet (const ())
-          $ S.map Chain.fromPlutusTokenName helperRoles
-      buildHelperState ix (role, helperScriptInfo -> helperScriptInfo) =
-        ( role
-        , let helperTxOutRef = helperTxOutRef' ix
-              address = helperAddress helperScriptInfo
-              assets = adjustMinUtxo . Chain.Assets safeLovelace . Chain.Tokens $ M.fromList [(Chain.AssetId policyId role, 1)]
-              datumHash =
-                Chain.fromCardanoDatumHash
-                  . C.hashScriptDataBytes
-                  . C.unsafeHashableScriptData
-                  . Chain.toCardanoScriptData
-                  <$> datum
-              datum = Just $ Chain.B $ Chain.unTokenName threadRole
-              helperTransactionOutput = Chain.TransactionOutput{..}
-           in HelperScriptState helperScriptInfo $ Just (helperTxOutRef, helperTransactionOutput)
-        )
-   in helpersContext{helperScriptStates = M.fromList $ uncurry buildHelperState <$> zip [0 ..] activeHelperScripts}
+      $ solveConstraints' era protocolParameters version (Left marloweContext') walletContext helpersContext constraints
 
 -- | Create a wallet context that will satisfy the given constraints.
 walletForConstraints
@@ -420,67 +473,55 @@ walletForConstraints
   -> TxConstraints era v
   -> WalletContext
 walletForConstraints MarloweV1 MarloweContext{scriptOutput} changeAddress TxConstraints{..} =
-  let padValue assets@(Chain.Assets _ (Chain.Tokens tokens)) = assets <> makeLovelace (toInteger $ 2_000_000 * M.size tokens)
-      scriptIncoming = maybe (makeLovelace 0) (\(TransactionScriptOutput _ assets _ _) -> assets) scriptOutput
+  let mkTxOutAssets' = fromMaybe mempty . mkTxOutAssets
+      lovelaceAssets
+        :: Integer
+        -> Chain.TxOutAssets
+      lovelaceAssets quantity = mkTxOutAssets' $ Chain.Assets (CS.Lovelace quantity) $ Chain.Tokens M.empty
+
+      padValue assets@(CS.TxOutAssetsContent (Chain.Assets _ (Chain.Tokens tokens))) =
+        assets <> lovelaceAssets (toInteger $ 2_000_000 * M.size tokens)
+
+      mkTransactionOutput addr value = do
+        let padded = padValue value
+        if padded == mempty
+          then Nothing
+          else Just $ Chain.TransactionOutput addr padded Nothing Nothing
+      mkUtxo txOutRef addr value = (txOutRef,) <$> mkTransactionOutput addr value
+
+      scriptIncoming = maybe mempty (\(TransactionScriptOutput _ assets _ _) -> assets) scriptOutput
       scriptOutgoing =
         case marloweOutputConstraints of
           MarloweOutput assets _ -> assets
           _ -> mempty
       roles =
         case roleTokenConstraints of
-          SpendRoleTokens assets -> foldMap (Chain.Assets 0 . Chain.Tokens . flip M.singleton 1) assets
+          SpendRoleTokens assets -> mkTxOutAssets' $ foldMap (Chain.Assets mempty . Chain.Tokens . flip M.singleton (CS.Quantity 1)) assets
           _ -> mempty
       payments = mconcat $ M.elems payToAddresses <> M.elems payToRoles
-      requiredValue = roles <> payments <> scriptOutgoing <> negateAssets scriptIncoming
-      bufferValue = makeLovelace 50_000_000 -- Generously cover min-UTxO and fee.
+      bufferValue = lovelaceAssets 50_000_000 -- Generously cover min-UTxO and fee.
       workaround = True
-      collateralUtxos = S.singleton collateralTxOutRef
+      collateralUtxos = Set.singleton collateralTxOutRef
       availableUtxos =
         Chain.UTxOs $
           M.fromList $
-            if workaround -- FIXME: Workaround for coin-selection bug.
-              then
-                [ (collateralTxOutRef, Chain.TransactionOutput changeAddress bufferValue Nothing Nothing)
-                , (fundingTxOutRef 0, Chain.TransactionOutput changeAddress (padValue roles) Nothing Nothing)
-                , (fundingTxOutRef 1, Chain.TransactionOutput changeAddress (padValue payments) Nothing Nothing)
-                ,
-                  ( fundingTxOutRef 2
-                  , Chain.TransactionOutput changeAddress (padValue $ scriptOutgoing <> negateAssets scriptIncoming) Nothing Nothing
-                  )
-                ]
-              else
-                [ (collateralTxOutRef, Chain.TransactionOutput changeAddress bufferValue Nothing Nothing)
-                , (fundingTxOutRef 0, Chain.TransactionOutput changeAddress (padValue requiredValue) Nothing Nothing)
-                ]
+            if workaround
+              then do
+                -- FIXME: Workaround for coin-selection bug.
+                let requiredScriptAssets = scriptOutgoing `subtractTxOutAssetsRounding` scriptIncoming
+                catMaybes
+                  [ mkUtxo collateralTxOutRef changeAddress bufferValue
+                  , mkUtxo (fundingTxOutRef 0) changeAddress roles
+                  , mkUtxo (fundingTxOutRef 1) changeAddress payments
+                  , mkUtxo (fundingTxOutRef 2) changeAddress requiredScriptAssets
+                  ]
+              else do
+                let requiredValue = (roles <> payments <> scriptOutgoing) `subtractTxOutAssetsRounding` scriptIncoming
+                catMaybes
+                  [ mkUtxo collateralTxOutRef changeAddress bufferValue
+                  , mkUtxo (fundingTxOutRef 0) changeAddress requiredValue
+                  ]
    in WalletContext{..}
-
--- | Negate asset values.
-negateAssets
-  :: Chain.Assets
-  -> Chain.Assets
-negateAssets Chain.Assets{..} =
-  Chain.Assets
-    { ada = negate ada
-    , tokens = Chain.Tokens . M.map negate $ Chain.unTokens tokens
-    }
-
--- | Convert an integer to lovelace.
-makeLovelace
-  :: Integer
-  -> Chain.Assets
-makeLovelace quantity = Chain.Assets (fromInteger quantity) $ Chain.Tokens M.empty
-
--- | Make a given quantity of token.
-makeValue
-  :: V1.Token
-  -> Integer
-  -> Chain.Assets
-makeValue (V1.Token "" "") quantity = makeLovelace quantity
-makeValue (V1.Token (Plutus.CurrencySymbol p) (Plutus.TokenName n)) quantity =
-  Chain.Assets 0 . Chain.Tokens $
-    M.singleton
-      (Chain.AssetId (Chain.PolicyId $ Plutus.fromBuiltin p) (Chain.TokenName $ Plutus.fromBuiltin n))
-      (fromInteger quantity)
 
 -- | Convert UTC time to a slot number.
 utcTimeToSlotNo
@@ -559,7 +600,3 @@ scriptTxOutRef = "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
 -- | A dummy TxOut reference.
 fundingTxOutRef :: Int -> Chain.TxOutRef
 fundingTxOutRef = fromString . ("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF#" <>) . show . (2 +)
-
--- | A dummy TxOut reference.
-helperTxOutRef' :: Int -> Chain.TxOutRef
-helperTxOutRef' = fromString . ("EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE#" <>) . show

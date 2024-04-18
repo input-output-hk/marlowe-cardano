@@ -5,10 +5,12 @@ module Language.Marlowe.Runtime.Web.Core.Asset (
   PolicyId (..),
 ) where
 
+import Control.DeepSeq (NFData)
 import Control.Lens ((&), (?~))
 import Data.Aeson (FromJSON, FromJSONKey, ToJSON, ToJSONKey)
 import Data.ByteString (ByteString)
 import Data.Map (Map)
+import qualified Data.Map as Map
 import Data.OpenApi (
   HasType (..),
   NamedSchema (..),
@@ -41,9 +43,17 @@ newtype Tokens = Tokens {unTokens :: Map PolicyId (Map Text Integer)}
   deriving (Eq, Show, Ord, Generic)
   deriving newtype (ToJSON, FromJSON, ToSchema)
 
+instance Semigroup Tokens where
+  Tokens a <> Tokens b = Tokens $ Map.unionWith (Map.unionWith (+)) a b
+
+instance Monoid Tokens where
+  mempty = Tokens mempty
+
 newtype PolicyId = PolicyId {unPolicyId :: ByteString}
   deriving (Eq, Ord, Generic)
   deriving (Show, ToHttpApiData, FromHttpApiData, ToJSON, ToJSONKey, FromJSON, FromJSONKey) via Base16
+
+instance NFData PolicyId
 
 instance ToSchema PolicyId where
   declareNamedSchema proxy = pure $ NamedSchema (Just "PolicyId") $ toParamSchema proxy

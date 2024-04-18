@@ -13,6 +13,10 @@
 
 module Language.Marlowe.Runtime.Transaction.Api (
   -- | Contract Creation API
+  Account (..),
+  Accounts (..),
+  CoinSelectionError (..),
+  ConstraintError (..),
   ContractCreated (..),
   ContractCreatedInEra (..),
   CreateBuildupError (..),
@@ -47,9 +51,6 @@ module Language.Marlowe.Runtime.Transaction.Api (
   SubmitError (..),
   SubmitStatus (..),
   -- | Remaining To Classify API
-  Account (..),
-  CoinSelectionError (..),
-  ConstraintError (..),
   Destination (..),
   IsToken (..),
   JobId (..),
@@ -60,7 +61,10 @@ module Language.Marlowe.Runtime.Transaction.Api (
   Tag (..),
   hasRecipient,
   getTokenQuantities,
+  mkAccounts,
   mkMint,
+  unAccounts,
+  pattern AccountsContent,
 ) where
 
 import Cardano.Api (
@@ -84,6 +88,7 @@ import qualified Cardano.Api.Shelley as CS
 import Control.Applicative ((<|>))
 import Data.Aeson (
   ToJSON (..),
+  ToJSONKey,
   Value (..),
   object,
   (.!=),
@@ -122,7 +127,6 @@ import Language.Marlowe.Runtime.Cardano.Feature (hush)
 import Language.Marlowe.Runtime.ChainSync.Api (
   Address,
   AssetId (..),
-  Assets,
   BlockHeader,
   DatumHash,
   Lovelace,
@@ -135,10 +139,12 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   TokenName (..),
   Tokens,
   TxId,
+  TxOutAssets,
   TxOutRef,
   parseMetadataList,
   parseMetadataMap,
   parseMetadataText,
+  unTokens,
  )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (
@@ -166,6 +172,7 @@ import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as Aeson
 import Data.Bifunctor (Bifunctor (..))
 import Data.Binary.Get (label)
+import Data.Foldable (Foldable (fold))
 import Data.Function (on)
 import Data.Key (forWithKey)
 import Data.List (nub)
@@ -369,7 +376,7 @@ data Destination
   = ToAddress Address
   | ToScript HelperScript
   deriving stock (Show, Eq, Ord, Generic)
-  deriving anyclass (Binary, ToJSON, Variations)
+  deriving anyclass (Binary, ToJSON, Variations, ToJSONKey)
 
 data MintRole = MintRole
   { roleMetadata :: Maybe RoleTokenMetadata
@@ -389,11 +396,11 @@ instance Semigroup MintRole where
   a <> b =
     MintRole
       { roleMetadata = on (<|>) roleMetadata a b
-      , roleTokenRecipients = on (NEMap.unionWith (+)) roleTokenRecipients a b
+      , roleTokenRecipients = on (NEMap.unionWith (<>)) roleTokenRecipients a b
       }
 
 getTokenQuantities :: Mint -> NEMap TokenName Chain.Quantity
-getTokenQuantities = fmap (sum . roleTokenRecipients) . unMint
+getTokenQuantities = fmap (fold . roleTokenRecipients) . unMint
 
 hasRecipient :: Destination -> Mint -> Bool
 hasRecipient destination = any (NEMap.member destination . roleTokenRecipients) . unMint
@@ -413,6 +420,7 @@ mkMint :: NonEmpty (TokenName, Maybe RoleTokenMetadata, Destination, Chain.Quant
 mkMint = foldMap1 \(token, metadata, dest, quantity) ->
   Mint $ NEMap.singleton token $ MintRole metadata $ NEMap.singleton dest quantity
 
+-- Please use safe pattern synonyms which are defined below and exported.
 data RoleTokensConfig
   = RoleTokensNone
   | UnsafeRoleTokensUsePolicy PolicyId (Map TokenName (Map Destination Chain.Quantity))
@@ -454,10 +462,11 @@ pattern RoleTokensUsePolicy
   -> RoleTokensConfig
 pattern RoleTokensUsePolicy policy dist <- UnsafeRoleTokensUsePolicy policy dist
   where
+    RoleTokensUsePolicy "" _ = RoleTokensNone
     RoleTokensUsePolicy policy dist =
       UnsafeRoleTokensUsePolicy policy $
         Map.filter (not . Map.null) $
-          Map.filter (> 0) <$> dist
+          Map.filter (> mempty) <$> dist
 
 pattern RoleTokensMint :: Mint -> RoleTokensConfig
 pattern RoleTokensMint mint <- UnsafeRoleTokensMint mint
@@ -467,7 +476,7 @@ pattern RoleTokensMint mint <- UnsafeRoleTokensMint mint
         . NEMap.nonEmptyMap
         . NEMap.mapMaybe
           ( \MintRole{..} -> do
-              recipients <- NEMap.nonEmptyMap $ NEMap.filter (> 0) roleTokenRecipients
+              recipients <- NEMap.nonEmptyMap $ NEMap.filter (> mempty) roleTokenRecipients
               pure MintRole{roleTokenRecipients = recipients, ..}
           )
         $ mint
@@ -541,9 +550,9 @@ data ContractCreatedInEra era v = ContractCreatedInEra
   , payoutScriptAddress :: Address
   , version :: MarloweVersion v
   , datum :: Datum v
-  , assets :: Assets
+  , assets :: TxOutAssets
   , txBody :: TxBody era
-  , safetyErrors :: [SafetyError]
+  , safetyErrors :: ![SafetyError]
   }
 
 deriving instance Show (ContractCreatedInEra BabbageEra 'V1)
@@ -676,6 +685,7 @@ data InputsAppliedInEra era v = InputsAppliedInEra
   , invalidHereafter :: UTCTime
   , inputs :: Inputs v
   , txBody :: TxBody era
+  , safetyErrors :: [SafetyError]
   }
 
 deriving instance Show (InputsAppliedInEra BabbageEra 'V1)
@@ -694,6 +704,7 @@ instance (IsShelleyBasedEra era) => Variations (InputsAppliedInEra era 'V1) wher
         `varyAp` variations
         `varyAp` variations
         `varyAp` variations
+        `varyAp` variations
 
 instance (IsShelleyBasedEra era) => Binary (InputsAppliedInEra era 'V1) where
   put InputsAppliedInEra{..} = do
@@ -705,6 +716,7 @@ instance (IsShelleyBasedEra era) => Binary (InputsAppliedInEra era 'V1) where
     put invalidHereafter
     putInputs MarloweV1 inputs
     putTxBody txBody
+    put safetyErrors
   get = do
     let version = MarloweV1
     contractId <- get
@@ -715,6 +727,7 @@ instance (IsShelleyBasedEra era) => Binary (InputsAppliedInEra era 'V1) where
     invalidHereafter <- get
     inputs <- getInputs MarloweV1
     txBody <- getTxBody
+    safetyErrors <- get
     pure InputsAppliedInEra{..}
 
 data WithdrawTx v where
@@ -794,6 +807,7 @@ instance (IsShelleyBasedEra era) => ToJSON (InputsAppliedInEra era 'V1) where
       , "invalid-hereafter" .= invalidHereafter
       , "inputs" .= inputs
       , "tx-body" .= serialiseToTextEnvelope Nothing txBody
+      , "safety-errors" .= safetyErrors
       ]
 
 data BurnRoleTokensTx v where
@@ -957,7 +971,7 @@ roleTokenFilterToRoleCurrencyFilter = go
       RoleTokensNot f' -> RoleCurrencyNot $ go f'
       RoleTokenFilterAny -> RoleCurrencyFilterAny
       RoleTokenFilterNone -> RoleCurrencyFilterNone
-      RoleTokenFilterByContracts contracts -> RoleCurrencyFilterByContract contracts
+      RoleTokenFilterByContracts contractIds -> RoleCurrencyFilterByContract contractIds
       RoleTokenFilterByPolicyIds policies -> RoleCurrencyFilterByPolicy policies
       RoleTokenFilterByTokens tokens -> RoleCurrencyFilterByPolicy (Set.map policyId tokens)
 
@@ -1072,6 +1086,41 @@ rewriteRoleTokensOr = curry \case
   (a, a') | a == a' -> Just a
   _ -> Nothing
 
+-- | User-defined initial account balances which should hold only positive values.
+-- | TODO: We introduce TxOutAssets which can be now used instead of this wrapper.
+newtype Accounts = Accounts (Map Account TxOutAssets)
+
+{-# COMPLETE AccountsContent #-}
+pattern AccountsContent :: Map Account TxOutAssets -> Accounts
+pattern AccountsContent a <- Accounts a
+
+deriving newtype instance Eq Accounts
+deriving instance Show Accounts
+
+instance Semigroup Accounts where
+  Accounts a <> Accounts b = Accounts $ Map.unionWith (<>) a b
+deriving newtype instance Monoid Accounts
+
+instance Variations Accounts where
+  variations = Accounts <$> variations
+
+unAccounts :: Accounts -> Map Account TxOutAssets
+unAccounts (Accounts accounts) = accounts
+
+newtype NonPositiveBalances = NonPositiveBalances [Account]
+deriving instance Show NonPositiveBalances
+deriving newtype instance Semigroup NonPositiveBalances
+deriving newtype instance Monoid NonPositiveBalances
+
+mkAccounts :: Map Account TxOutAssets -> Either NonPositiveBalances Accounts
+mkAccounts accounts = Accounts <$> Map.traverseWithKey checkPositive accounts
+  where
+    checkPositive account assets@(Chain.TxOutAssetsContent (Chain.Assets lovelace tokens)) = do
+      let tokensMap = unTokens tokens
+      if lovelace >= mempty && all (> mempty) tokensMap && assets /= mempty
+        then Right assets
+        else Left $ NonPositiveBalances [account]
+
 -- | The low-level runtime API for building and submitting transactions.
 data MarloweTxCommand status err result where
   -- | Construct a transaction that starts a new Marlowe contract. The
@@ -1093,7 +1142,7 @@ data MarloweTxCommand status err result where
     -- ^ Optional metadata to attach to the transaction
     -> Maybe Lovelace
     -- ^ Optional min Lovelace deposit which should be used for the contract output.
-    -> Map Account Assets
+    -> Accounts
     -- ^ Initial account balances. The min ADA deposit will be added to this.
     -> Either (Contract v) DatumHash
     -- ^ The contract to run, or the hash of the contract to load from the store.
@@ -1237,7 +1286,7 @@ instance Command MarloweTxCommand where
     TagSubmit -> JobIdSubmit <$> get
 
   putCommand = \case
-    Create mStakeCredential MarloweV1 walletAddresses threadName roles metadata minAda accounts contract -> do
+    Create mStakeCredential MarloweV1 walletAddresses threadName roles metadata minAda (Accounts accounts) contract -> do
       put mStakeCredential
       put walletAddresses
       put threadName
@@ -1268,8 +1317,13 @@ instance Command MarloweTxCommand where
         put $ serialiseToCBOR tx
 
   getCommand = \case
-    TagCreate MarloweV1 ->
-      Create <$> get <*> pure MarloweV1 <*> get <*> get <*> get <*> get <*> get <*> get <*> get
+    TagCreate MarloweV1 -> do
+      let getAccounts = do
+            accounts <- get
+            case mkAccounts accounts of
+              Left err -> fail $ "Invalid accounts: " <> show err
+              Right accounts' -> pure accounts'
+      Create <$> get <*> pure MarloweV1 <*> get <*> get <*> get <*> get <*> get <*> getAccounts <*> get
     TagApplyInputs version -> do
       walletAddresses <- get
       contractId <- get
@@ -1383,6 +1437,7 @@ data ConstraintError
   | InvalidPayoutDatum TxOutRef (Maybe Chain.Datum)
   | InvalidHelperDatum TxOutRef (Maybe Chain.Datum)
   | InvalidPayoutScriptAddress TxOutRef Address
+  | InvalidTokenQuantity Chain.AssetId Chain.Quantity
   | CalculateMinUtxoFailed String
   | CoinSelectionFailed CoinSelectionError
   | BalancingError String
@@ -1409,7 +1464,7 @@ data CreateError
   | CreateBuildupFailed CreateBuildupError
   | CreateToCardanoError
   | CreateSafetyAnalysisFailed [SafetyError]
-  | -- | This error is thrown when the safety analysis process itself fails itself
+  | -- | This error is thrown when the safety analysis process fails itself
     -- due to a timeout or other reasons, such as missing merkleization data.
     CreateSafetyAnalysisError String
   | CreateContractNotFound
@@ -1425,7 +1480,8 @@ instance ToJSON CreateError
 
 data CreateBuildupError
   = MintingUtxoSelectionFailed
-  | AddressDecodingFailed Address
+  | AddressesDecodingFailed [Address]
+  | InvalidInitialState
   | MintingScriptDecodingFailed PlutusScript
   deriving (Eq, Ord, Show, Generic)
   deriving anyclass (Binary, ToJSON, Variations)
@@ -1433,10 +1489,14 @@ data CreateBuildupError
 data ApplyInputsError
   = ApplyInputsEraUnsupported AnyCardanoEra
   | ApplyInputsConstraintError ConstraintError
+  | ApplyInputsContractContinuationNotFound
   | ScriptOutputNotFound
   | ApplyInputsLoadMarloweContextFailed LoadMarloweContextError
   | ApplyInputsLoadHelpersContextFailed LoadHelpersContextError
   | ApplyInputsConstraintsBuildupFailed ApplyInputsConstraintsBuildupError
+  | -- | This error is thrown when the safety analysis process fails itself
+    -- due to a timeout or any other reasons, such as missing merkleization data.
+    ApplyInputsSafetyAnalysisError String
   | SlotConversionFailed String
   | TipAtGenesis
   | ValidityLowerBoundTooHigh SlotNo SlotNo
@@ -1450,6 +1510,7 @@ instance ToJSON ApplyInputsError
 
 data ApplyInputsConstraintsBuildupError
   = MarloweComputeTransactionFailed V1.TransactionError
+  | InvalidMarloweState
   | UnableToDetermineTransactionTimeout
   deriving (Eq, Show, Generic)
   deriving anyclass (Binary, Variations, ToJSON)

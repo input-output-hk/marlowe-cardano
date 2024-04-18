@@ -1,3 +1,4 @@
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QuasiQuotes #-}
 
 module Language.Marlowe.Runtime.Sync.Database.PostgreSQL.GetCreateStep where
@@ -18,14 +19,19 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   Assets (..),
   BlockHeader (..),
   BlockHeaderHash (..),
+  Lovelace (Lovelace),
   PolicyId (..),
+  Quantity (Quantity),
   ScriptHash (..),
   TokenName (..),
   Tokens (..),
   TxId (..),
   TxOutRef (..),
   fromDatum,
+  unTxIx,
+  unsafeTxOutAssets,
  )
+import qualified Language.Marlowe.Runtime.ChainSync.Api as Api
 import Language.Marlowe.Runtime.Core.Api (
   ContractId (..),
   MarloweVersion (..),
@@ -65,7 +71,7 @@ getCreateStep (ContractId TxOutRef{..}) =
   |]
       foldResults
   where
-    params = (unTxId txId, fromIntegral txIx)
+    params = (unTxId txId, fromIntegral $ unTxIx txIx)
     foldResults = Fold (fmap Just . foldRow) Nothing id
     foldRow Nothing row = foldRowAssets row <$> extractBlockAndStep row
     foldRow (Just (block, step)) row = (block, foldRowAssets row step)
@@ -96,15 +102,16 @@ getCreateStep (ContractId TxOutRef{..}) =
                   TransactionScriptOutput
                     { address = Address address
                     , assets =
-                        Assets
-                          { ada = fromIntegral lovelace
-                          , tokens = Tokens case (mPolicyId, mName, mQuantity) of
-                              (Just policyId, Just name, Just quantity) ->
-                                Map.singleton
-                                  (AssetId (PolicyId policyId) (TokenName name))
-                                  (fromIntegral quantity)
-                              _ -> mempty
-                          }
+                        unsafeTxOutAssets $
+                          Assets
+                            { ada = Lovelace $ fromIntegral lovelace
+                            , tokens = Tokens case (mPolicyId, mName, mQuantity) of
+                                (Just policyId, Just name, Just quantity) ->
+                                  Map.singleton
+                                    (AssetId (PolicyId policyId) (TokenName name))
+                                    (Quantity $ fromIntegral quantity)
+                                _ -> mempty
+                            }
                     , utxo = TxOutRef{..}
                     , datum =
                         V1.MarloweData
@@ -141,16 +148,17 @@ getCreateStep (ContractId TxOutRef{..}) =
                 let output = createOutput createStep
                  in output
                       { assets =
-                          let oldAssets = assets output
-                           in oldAssets
-                                { tokens =
-                                    Tokens
-                                      let Tokens oldTokens = tokens oldAssets
-                                       in Map.insert
-                                            (AssetId (PolicyId policyId) (TokenName name))
-                                            (fromIntegral quantity)
-                                            oldTokens
-                                }
+                          let Api.TxOutAssetsContent oldAssets = assets output
+                           in unsafeTxOutAssets $
+                                oldAssets
+                                  { tokens =
+                                      Tokens
+                                        let Tokens oldTokens = tokens oldAssets
+                                         in Map.insert
+                                              (AssetId (PolicyId policyId) (TokenName name))
+                                              (Quantity $ fromIntegral quantity)
+                                              oldTokens
+                                  }
                       }
             }
     foldRowAssets _ step = step

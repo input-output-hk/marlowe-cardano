@@ -67,7 +67,9 @@ library
     , bytestring >=0.10.12 && <0.12
     , cardano-api ^>=8.39.2.0
     , containers ^>=0.6.5
-    , deriving-aeson ^>=0.2.2
+    , deepseq
+    , deriving-aeson ^>=0.2.9
+    , either ^>=5.0.2
     , ilist ==0.4.0.1
     , mtl >=2.2 && <3
     , multiplate ==0.0.3
@@ -75,6 +77,7 @@ library
     , ordered-containers ^>=0.2
     , plutus-ledger-api ^>=1.21
     , plutus-tx ^>=1.21
+    , profunctors >=5.6 && <6
     , range ==0.3.0.2
     , sbv ^>=9.2
     , scientific ^>=0.3.7
@@ -88,8 +91,10 @@ library
     Language.Marlowe
     Language.Marlowe.Analysis.FSSemantics
     Language.Marlowe.Analysis.Safety.Ledger
+    Language.Marlowe.Analysis.Safety.Ledger.Validators
     Language.Marlowe.Analysis.Safety.Transaction
     Language.Marlowe.Analysis.Safety.Types
+    Language.Marlowe.Analysis.Safety.Types.Validator
     Language.Marlowe.Client
     Language.Marlowe.Core.V1.Merkle
     Language.Marlowe.Core.V1.Next

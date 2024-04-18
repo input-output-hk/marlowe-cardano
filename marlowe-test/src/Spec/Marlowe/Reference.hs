@@ -46,6 +46,7 @@ import System.Directory (listDirectory)
 import System.FilePath ((</>))
 import Test.Tasty.QuickCheck (Gen, elements)
 
+import Language.Marlowe.Analysis.FSSemantics (SlotLength (..))
 import qualified PlutusTx.AssocMap as AM (empty, singleton)
 
 referenceFolder :: FilePath
@@ -116,8 +117,9 @@ processContract
   -> ExceptT String IO ()
 processContract contractFile pathsFile =
   do
+    let slotLength = SlotLength 1_000
     contract <- ExceptT $ first show <$> eitherDecodeFileStrict contractFile
-    traces <- ExceptT $ first show <$> getAllInputs contract Nothing
+    traces <- ExceptT $ first show <$> getAllInputs slotLength contract Nothing
     paths <- runTransactions contract `mapM` traces
     lift $ encodeFile pathsFile paths
 

@@ -27,6 +27,7 @@ module Language.Marlowe.Analysis.Safety.Transaction (
   findTransactions',
   foldTransactionsM,
   inputsRequiredRoles,
+  roleAuthorizations,
   CurrentState (..),
   LockedRoles (..),
   MarloweExBudget (..),
@@ -87,6 +88,7 @@ import Data.Maybe (catMaybes)
 import qualified Data.Set as S
 import Data.Traversable (for)
 import Language.Marlowe (Input (..))
+import Language.Marlowe.Analysis.FSSemantics (SlotLength (..))
 import qualified PlutusLedgerApi.Common as P
 import qualified PlutusLedgerApi.Common.Versions as P
 import qualified PlutusLedgerApi.V2 as P hiding (evaluateScriptCounting)
@@ -684,9 +686,12 @@ findPaths
   -- ^ The state of the contract.
   -> m [(P.POSIXTime, [TransactionInput])]
   -- ^ The paths through the Marlowe contract.
-findPaths requireContinuations MerkleizedContract{..} state =
+findPaths requireContinuations MerkleizedContract{..} state = do
+  let -- Slot length in milliseconds
+      slotLength = SlotLength 1_000
+
   liftEither . first (fromString . show)
-    =<< liftIO . flip getAllInputs (Just state)
+    =<< liftIO . flip (getAllInputs slotLength) (Just state)
     =<< demerkleizeContract mcContinuations (deepDemerkleize requireContinuations mcContract)
 
 -- | Do not annotate.
@@ -707,13 +712,17 @@ firstRoleAuthorizationAnnotator =
     \input ->
       do
         usedRoles <- get
-        let roleAuthorization (IDeposit _ (Role role) _ _) = S.singleton role
-            roleAuthorization (IChoice (ChoiceId _ (Role role)) _) = S.singleton role
-            roleAuthorization _ = mempty
-            roleAuthorizations = foldMap (roleAuthorization . getInputContent) $ txInputs input
-            newUses = roleAuthorizations S.\\ usedRoles
-        put $ roleAuthorizations `S.union` usedRoles
+        let newUses = roleAuthorizations input S.\\ usedRoles
+        put $ roleAuthorizations input `S.union` usedRoles
         pure (input, newUses)
+
+roleAuthorizations :: TransactionInput -> S.Set P.TokenName
+roleAuthorizations = foldMap (roleAuthorization . getInputContent) . txInputs
+  where
+    roleAuthorization :: InputContent -> S.Set P.TokenName
+    roleAuthorization (IDeposit _ (Role role) _ _) = S.singleton role
+    roleAuthorization (IChoice (ChoiceId _ (Role role)) _) = S.singleton role
+    roleAuthorization _ = mempty
 
 -- | Run the Plutus evaluator on the Marlowe semantics validator.
 evaluateSemantics

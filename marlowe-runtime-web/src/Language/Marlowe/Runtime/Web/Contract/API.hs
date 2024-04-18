@@ -105,6 +105,7 @@ import Servant.Pagination (
   HasPagination (RangeType, getFieldValue),
  )
 
+import Control.DeepSeq (NFData)
 import Control.Lens ((&), (?~))
 import Control.Monad ((<=<))
 import Data.Aeson.Types (parseFail)
@@ -266,6 +267,8 @@ data ContractHeader = ContractHeader
   }
   deriving (Show, Eq, Ord, Generic, ToJSON, FromJSON, ToSchema)
 
+instance NFData ContractHeader
+
 data PostContractSourceResponse = PostContractSourceResponse
   { contractSourceId :: ContractSourceId
   , intermediateIds :: Map Label ContractSourceId
@@ -280,7 +283,7 @@ data PostContractsRequest = PostContractsRequest
   , threadTokenName :: Maybe Text
   , contract :: ContractOrSourceId
   , accounts :: Map Party Assets
-  , minUTxODeposit :: Maybe Word64
+  , minUTxODeposit :: Maybe Integer
   }
   deriving (Show, Eq, Generic, ToJSON, FromJSON, ToSchema)
 

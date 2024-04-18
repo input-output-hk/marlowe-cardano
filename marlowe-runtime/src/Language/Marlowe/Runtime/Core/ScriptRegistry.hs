@@ -16,7 +16,14 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Text as T
 import GHC.Generics (Generic)
-import Language.Marlowe.Runtime.ChainSync.Api (Assets (..), ScriptHash, TxOutRef, fromBech32)
+import Language.Marlowe.Runtime.ChainSync.Api (
+  Assets (..),
+  Lovelace (Lovelace),
+  ScriptHash,
+  TxOutRef,
+  fromBech32,
+  mkTxOutAssets,
+ )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (
   MarloweVersion (..),
@@ -68,6 +75,10 @@ previewNetworkId = Testnet $ NetworkMagic 2
 sanchonetNetworkId :: NetworkId
 sanchonetNetworkId = Testnet $ NetworkMagic 4
 
+-- Throws a runtime exception if a given integer amount is not positive.
+unsafeLovelaceAssets :: Integer -> Chain.TxOutAssets
+unsafeLovelaceAssets = fromJust . mkTxOutAssets . flip Assets mempty . Lovelace
+
 -- | The current pair of static script hashes for Marlowe V1 as of the current git
 -- commit. Enforced in the test suite for the Marlowe Runtime.
 --
@@ -82,7 +93,7 @@ sanchonetNetworkId = Testnet $ NetworkMagic 4
 --
 -- The scripts resulting from using `PlutusTx.asData` for `Case`.
 caseAsDataV1Scripts :: MarloweScripts
-caseAsDataV1Scripts =
+caseAsDataV1Scripts = do
   MarloweScripts
     { marloweScript = "377325ad84a55ba0282d844dff2d5f0f18c33fd4a28a0a9d73c6f60d"
     , payoutScript = "fcb8885eb5e4f9a5cfca3c75e8c7280e482af32dcdf2d13e47d05d27"
@@ -104,7 +115,7 @@ caseAsDataV1Scripts =
                       { address =
                           fromJust $
                             fromBech32 "addr1q8cmu4u3quhxgansnxvfuzn5a9u6khvff4kggy35f5xl2qtsluv29uarg9hhghehhf7r7kmyrh6wsvtgg2caanrf94uscc58wh"
-                      , assets = Assets 48_776_270 mempty
+                      , assets = unsafeLovelaceAssets 48_776_270
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -120,7 +131,7 @@ caseAsDataV1Scripts =
                       { address =
                           fromJust $
                             fromBech32 "addr_test1vrcmu4u3quhxgansnxvfuzn5a9u6khvff4kggy35f5xl2qggkt5p7"
-                      , assets = Assets 48_655_590 mempty
+                      , assets = unsafeLovelaceAssets 48_655_590
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -134,7 +145,7 @@ caseAsDataV1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vrcmu4u3quhxgansnxvfuzn5a9u6khvff4kggy35f5xl2qggkt5p7"
-                      , assets = Assets 48_655_590 mempty
+                      , assets = unsafeLovelaceAssets 48_655_590
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -148,7 +159,7 @@ caseAsDataV1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vrcmu4u3quhxgansnxvfuzn5a9u6khvff4kggy35f5xl2qggkt5p7"
-                      , assets = Assets 48_655_590 mempty
+                      , assets = unsafeLovelaceAssets 48_655_590
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -167,7 +178,7 @@ caseAsDataV1Scripts =
                       { address =
                           fromJust $
                             fromBech32 "addr1qy0ph6lw0n2xdqgcy8qct5xpkhyy3cqkn8hjmctkq8zszumsluv29uarg9hhghehhf7r7kmyrh6wsvtgg2caanrf94usea72r0"
-                      , assets = Assets 11_658_550 mempty
+                      , assets = unsafeLovelaceAssets 11_658_550
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -183,7 +194,7 @@ caseAsDataV1Scripts =
                       { address =
                           fromJust $
                             fromBech32 "addr_test1vq0ph6lw0n2xdqgcy8qct5xpkhyy3cqkn8hjmctkq8zszucser4wx"
-                      , assets = Assets 11_537_870 mempty
+                      , assets = unsafeLovelaceAssets 11_537_870
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -197,7 +208,7 @@ caseAsDataV1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vq0ph6lw0n2xdqgcy8qct5xpkhyy3cqkn8hjmctkq8zszucser4wx"
-                      , assets = Assets 11_537_870 mempty
+                      , assets = unsafeLovelaceAssets 11_537_870
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -211,7 +222,7 @@ caseAsDataV1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vq0ph6lw0n2xdqgcy8qct5xpkhyy3cqkn8hjmctkq8zszucser4wx"
-                      , assets = Assets 11_537_870 mempty
+                      , assets = unsafeLovelaceAssets 11_537_870
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -230,7 +241,7 @@ caseAsDataV1Scripts =
                       { address =
                           fromJust $
                             fromBech32 "addr1q9heun9n9qjlgtkv7ldvl56wagju53ykr5ps49h80enx7grsluv29uarg9hhghehhf7r7kmyrh6wsvtgg2caanrf94usf2tt99"
-                      , assets = Assets 17_765_820 mempty
+                      , assets = unsafeLovelaceAssets 17_765_820
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -246,7 +257,7 @@ caseAsDataV1Scripts =
                       { address =
                           fromJust $
                             fromBech32 "addr_test1vpheun9n9qjlgtkv7ldvl56wagju53ykr5ps49h80enx7gq6yq5en"
-                      , assets = Assets 17_645_140 mempty
+                      , assets = unsafeLovelaceAssets 17_645_140
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -260,7 +271,7 @@ caseAsDataV1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vpheun9n9qjlgtkv7ldvl56wagju53ykr5ps49h80enx7gq6yq5en"
-                      , assets = Assets 17_645_140 mempty
+                      , assets = unsafeLovelaceAssets 17_645_140
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -274,7 +285,7 @@ caseAsDataV1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vpheun9n9qjlgtkv7ldvl56wagju53ykr5ps49h80enx7gq6yq5en"
-                      , assets = Assets 17_645_140 mempty
+                      , assets = unsafeLovelaceAssets 17_645_140
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -323,7 +334,7 @@ plutus11500V1Scripts =
                       { address =
                           fromJust $
                             fromBech32 "addr1z9l4w7djneh0kss4drg2php6ynflsvmal7x3w5nrc95uvhz7e4q926apsvcd6kn33cpx95k8jsmrj7v0k62rczvz8urqrl2z0l"
-                      , assets = Assets 47_483_270 mempty
+                      , assets = unsafeLovelaceAssets 47_483_270
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -337,7 +348,7 @@ plutus11500V1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vrdw72k9ejttl6ng4gzl0t0vq68z2mzx4wdnr6v3554585q5dlfp8"
-                      , assets = Assets 47_362_590 mempty
+                      , assets = unsafeLovelaceAssets 47_362_590
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -351,7 +362,7 @@ plutus11500V1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vrdw72k9ejttl6ng4gzl0t0vq68z2mzx4wdnr6v3554585q5dlfp8"
-                      , assets = Assets 47_362_590 mempty
+                      , assets = unsafeLovelaceAssets 47_362_590
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -370,7 +381,7 @@ plutus11500V1Scripts =
                       { address =
                           fromJust $
                             fromBech32 "addr1z9l4w7djneh0kss4drg2php6ynflsvmal7x3w5nrc95uvhz7e4q926apsvcd6kn33cpx95k8jsmrj7v0k62rczvz8urqrl2z0l"
-                      , assets = Assets 11_029_290 mempty
+                      , assets = unsafeLovelaceAssets 11_029_290
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -384,7 +395,7 @@ plutus11500V1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vznzngme83923qgm66a2lnl7ln03t2qx4r4ay4s4w80ghpgf9q5yf"
-                      , assets = Assets 10_908_610 mempty
+                      , assets = unsafeLovelaceAssets 10_908_610
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -398,7 +409,7 @@ plutus11500V1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vznzngme83923qgm66a2lnl7ln03t2qx4r4ay4s4w80ghpgf9q5yf"
-                      , assets = Assets 10_908_610 mempty
+                      , assets = unsafeLovelaceAssets 10_908_610
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -417,7 +428,7 @@ plutus11500V1Scripts =
                       { address =
                           fromJust $
                             fromBech32 "addr1z9l4w7djneh0kss4drg2php6ynflsvmal7x3w5nrc95uvhz7e4q926apsvcd6kn33cpx95k8jsmrj7v0k62rczvz8urqrl2z0l"
-                      , assets = Assets 16_925_370 mempty
+                      , assets = unsafeLovelaceAssets 16_925_370
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -431,7 +442,7 @@ plutus11500V1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vqc4sgdyl29e54qplz268sg96xxj82jfnl70xtc52narplgppcf09"
-                      , assets = Assets 16_804_690 mempty
+                      , assets = unsafeLovelaceAssets 16_804_690
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -445,7 +456,7 @@ plutus11500V1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vqc4sgdyl29e54qplz268sg96xxj82jfnl70xtc52narplgppcf09"
-                      , assets = Assets 16_804_690 mempty
+                      , assets = unsafeLovelaceAssets 16_804_690
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -494,7 +505,7 @@ node812V1Scripts =
                       { address =
                           fromJust $
                             fromBech32 "addr1z9l4w7djneh0kss4drg2php6ynflsvmal7x3w5nrc95uvhz7e4q926apsvcd6kn33cpx95k8jsmrj7v0k62rczvz8urqrl2z0l"
-                      , assets = Assets 53_581_920 mempty
+                      , assets = unsafeLovelaceAssets 53_581_920
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -508,7 +519,7 @@ node812V1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vz53mawjqyzly4zdd7yr97s4wkef0y3jtzfzvtc2xr4rv4skmmd6n"
-                      , assets = Assets 53_461_240 mempty
+                      , assets = unsafeLovelaceAssets 53_461_240
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -522,7 +533,7 @@ node812V1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vz53mawjqyzly4zdd7yr97s4wkef0y3jtzfzvtc2xr4rv4skmmd6n"
-                      , assets = Assets 53_461_240 mempty
+                      , assets = unsafeLovelaceAssets 53_461_240
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -541,7 +552,7 @@ node812V1Scripts =
                       { address =
                           fromJust $
                             fromBech32 "addr1z9l4w7djneh0kss4drg2php6ynflsvmal7x3w5nrc95uvhz7e4q926apsvcd6kn33cpx95k8jsmrj7v0k62rczvz8urqrl2z0l"
-                      , assets = Assets 12_369_700 mempty
+                      , assets = unsafeLovelaceAssets 12_369_700
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -555,7 +566,7 @@ node812V1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vrkl3n9lfzzrkh7xsvg3apja297f5hsvdl8kawa8a5868mqecyjgc"
-                      , assets = Assets 12_249_020 mempty
+                      , assets = unsafeLovelaceAssets 12_249_020
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -569,7 +580,7 @@ node812V1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vrkl3n9lfzzrkh7xsvg3apja297f5hsvdl8kawa8a5868mqecyjgc"
-                      , assets = Assets 12_249_020 mempty
+                      , assets = unsafeLovelaceAssets 12_249_020
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -588,7 +599,7 @@ node812V1Scripts =
                       { address =
                           fromJust $
                             fromBech32 "addr1z9l4w7djneh0kss4drg2php6ynflsvmal7x3w5nrc95uvhz7e4q926apsvcd6kn33cpx95k8jsmrj7v0k62rczvz8urqrl2z0l"
-                      , assets = Assets 20_032_880 mempty
+                      , assets = unsafeLovelaceAssets 20_032_880
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -602,7 +613,7 @@ node812V1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vqxdw4rlu6krp9fwgwcnld6y84wdahg585vrdy67n5urp9qyts0y7"
-                      , assets = Assets 20_000_000 mempty
+                      , assets = unsafeLovelaceAssets 20_000_000
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -645,7 +656,7 @@ postAuditV1Scripts =
                       { address =
                           fromJust $
                             fromBech32 "addr1z9l4w7djneh0kss4drg2php6ynflsvmal7x3w5nrc95uvhz7e4q926apsvcd6kn33cpx95k8jsmrj7v0k62rczvz8urqrl2z0l"
-                      , assets = Assets 54_021_540 mempty
+                      , assets = unsafeLovelaceAssets 54_021_540
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -659,7 +670,7 @@ postAuditV1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vpyr8478g2lkhte6v240adhumqn0e5dfqa6nt0txp3gc0mgd5h2fl"
-                      , assets = Assets 53_900_860 mempty
+                      , assets = unsafeLovelaceAssets 53_900_860
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -673,7 +684,7 @@ postAuditV1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vpyr8478g2lkhte6v240adhumqn0e5dfqa6nt0txp3gc0mgd5h2fl"
-                      , assets = Assets 53_900_860 mempty
+                      , assets = unsafeLovelaceAssets 53_900_860
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -692,7 +703,7 @@ postAuditV1Scripts =
                       { address =
                           fromJust $
                             fromBech32 "addr1z9l4w7djneh0kss4drg2php6ynflsvmal7x3w5nrc95uvhz7e4q926apsvcd6kn33cpx95k8jsmrj7v0k62rczvz8urqrl2z0l"
-                      , assets = Assets 13_020_510 mempty
+                      , assets = unsafeLovelaceAssets 13_020_510
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -706,7 +717,7 @@ postAuditV1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vrmgtjj95nyvqlw4j2apvztfpdt0mv9crnhegsp5th550ug9l7tlx"
-                      , assets = Assets 12_899_830 mempty
+                      , assets = unsafeLovelaceAssets 12_899_830
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -720,7 +731,7 @@ postAuditV1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vrmgtjj95nyvqlw4j2apvztfpdt0mv9crnhegsp5th550ug9l7tlx"
-                      , assets = Assets 12_899_830 mempty
+                      , assets = unsafeLovelaceAssets 12_899_830
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -761,7 +772,7 @@ auditV1Scripts =
                       { address =
                           fromJust $
                             fromBech32 "addr1z9l4w7djneh0kss4drg2php6ynflsvmal7x3w5nrc95uvhz7e4q926apsvcd6kn33cpx95k8jsmrj7v0k62rczvz8urqrl2z0l"
-                      , assets = Assets 54_922_330 mempty
+                      , assets = unsafeLovelaceAssets 54_922_330
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -775,7 +786,7 @@ auditV1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vrw0tuh8l95thdqr65dmpcfqnmcw0en7v7vhgegck7gzqgswa07sw"
-                      , assets = Assets 54_801_650 mempty
+                      , assets = unsafeLovelaceAssets 54_801_650
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -789,7 +800,7 @@ auditV1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vrw0tuh8l95thdqr65dmpcfqnmcw0en7v7vhgegck7gzqgswa07sw"
-                      , assets = Assets 54_801_650 mempty
+                      , assets = unsafeLovelaceAssets 54_801_650
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -808,7 +819,7 @@ auditV1Scripts =
                       { address =
                           fromJust $
                             fromBech32 "addr1z9l4w7djneh0kss4drg2php6ynflsvmal7x3w5nrc95uvhz7e4q926apsvcd6kn33cpx95k8jsmrj7v0k62rczvz8urqrl2z0l"
-                      , assets = Assets 12_555_030 mempty
+                      , assets = unsafeLovelaceAssets 12_555_030
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -822,7 +833,7 @@ auditV1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vpa36uuyf95kxpcleldsncedlhjru6vdmh2vnpkdrsz4u6cll9zas"
-                      , assets = Assets 12_434_350 mempty
+                      , assets = unsafeLovelaceAssets 12_434_350
                       , datum = Nothing
                       , datumHash = Nothing
                       }
@@ -836,7 +847,7 @@ auditV1Scripts =
                 , txOut =
                     Chain.TransactionOutput
                       { address = fromJust $ fromBech32 "addr_test1vpa36uuyf95kxpcleldsncedlhjru6vdmh2vnpkdrsz4u6cll9zas"
-                      , assets = Assets 12_434_350 mempty
+                      , assets = unsafeLovelaceAssets 12_434_350
                       , datum = Nothing
                       , datumHash = Nothing
                       }

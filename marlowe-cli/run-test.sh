@@ -41,6 +41,7 @@ cabal run exe:marlowe-cli -- \
   ./test/inline/role-based/cli/zero-coupon-bond-too-late.yaml \
   ./test/inline/role-based/cli/zero-coupon-bond.yaml \
   ./test/on-chain-limits/accounts-map-size.yaml \
+  ./test/on-chain-limits/closure-payouts-chain.yaml \
   ./test/on-chain-limits/deposits-chain-with-open-roles-and-merkleization.yaml \
   ./test/on-chain-limits/deposits-chain-with-open-roles.yaml \
   ./test/on-chain-limits/deposits-chain-with-roles.yaml \
@@ -49,6 +50,7 @@ cabal run exe:marlowe-cli -- \
   ./test/operations/burn-distributed.yaml \
   ./test/operations/burn-multi-asset.yaml \
   ./test/operations/burn.yaml \
+  ./test/operations/initialize-with-state.yaml \
   ./test/operations/mint-distributed.yaml \
   ./test/operations/mint-multiple.yaml \
   ./test/operations/mint-to-open-role-script.yaml \

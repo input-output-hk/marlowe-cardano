@@ -16,7 +16,7 @@ import Data.Functor.Identity (Identity (..))
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Map.NonEmpty as NEMap
-import Data.Maybe (fromJust, maybeToList)
+import Data.Maybe (fromJust, fromMaybe, maybeToList)
 import Data.SOP.BasicFunctors (K (..))
 import Data.SOP.Counting (Exactly (..))
 import Data.SOP.Strict (NP (..))
@@ -29,7 +29,14 @@ import qualified Language.Marlowe.Core.V1.Semantics as Semantics
 import qualified Language.Marlowe.Core.V1.Semantics.Types as Semantics
 import qualified Language.Marlowe.Core.V1.Semantics.Types.Address as Semantics
 import Language.Marlowe.Runtime.Cardano.Api (fromCardanoPolicyId, toCardanoPlutusScript)
-import Language.Marlowe.Runtime.ChainSync.Api (Lovelace, PlutusScript (..), toUTxOsList)
+import Language.Marlowe.Runtime.ChainSync.Api (
+  Lovelace,
+  PlutusScript (..),
+  Quantity (Quantity),
+  TxOutAssets (unTxOutAssets),
+  mkTxOutAssets,
+  toUTxOsList,
+ )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Core.Api (
   Contract,
@@ -54,6 +61,7 @@ import Language.Marlowe.Runtime.Transaction.Api (
  )
 import qualified Language.Marlowe.Runtime.Transaction.Api as Transaction.Api
 import Language.Marlowe.Runtime.Transaction.BuildConstraints (
+  AdjustMinUTxO (..),
   buildApplyInputsConstraints,
   buildCreateConstraints,
   safeLovelace,
@@ -126,9 +134,9 @@ createSpec = Hspec.describe "buildCreateConstraints" do
           MarloweV1 -> (fmap Semantics.marloweContract <$> result) === (Right $ Just $ contract args)
           :: Property
   Hspec.QuickCheck.prop "sends the minAda deposit to the marlowe output" \(SomeCreateArgs args) ->
-    let result = fmap Chain.ada . extractMarloweAssets <$> runBuildCreateConstraints args
+    let result = fmap Chain.ada . extractMarloweAssets' <$> runBuildCreateConstraints args
      in case version args of
-          MarloweV1 -> result === (Right $ Just $ minAda args)
+          MarloweV1 -> result === (Right $ Just $ max (minAda args) safeLovelace)
           :: Property
   Hspec.QuickCheck.prop "sends minted role tokens to the right destinations" \(SomeCreateArgs args) ->
     let result = extractSentRoleTokens <$> runBuildCreateConstraints args
@@ -139,7 +147,7 @@ createSpec = Hspec.describe "buildCreateConstraints" do
   Hspec.QuickCheck.prop "total balance == marlowe output assets" \(SomeCreateArgs args) ->
     let result = runBuildCreateConstraints args
         mDatum = extractMarloweDatum <$> result
-        mAssets = extractMarloweAssets <$> result
+        mAssets = extractMarloweAssets' <$> result
      in case version args of
           MarloweV1 ->
             (fmap (fromPlutusValue . Semantics.totalBalance . Semantics.accounts . Semantics.marloweState) <$> mDatum) === mAssets
@@ -178,14 +186,14 @@ createSpec = Hspec.describe "buildCreateConstraints" do
     hasOpenRoles args ==>
       let threadTokenAssetId = Chain.AssetId (getPolicyId args) $ threadName args
           constraints = runBuildCreateConstraints args
-          assets = extractMarloweAssets <$> constraints
+          assets = fmap unTxOutAssets . extractMarloweAssets <$> constraints
           result = (Map.lookup threadTokenAssetId . Chain.unTokens . Chain.tokens =<<) <$> assets
        in case version args of
             MarloweV1 ->
               counterexample (show threadTokenAssetId)
                 . counterexample (show constraints)
                 . counterexample (show assets)
-                $ result === Right (Just 1)
+                $ result === Right (Just $ Quantity 1)
             :: Property
   where
     emptyStateProp :: (Eq a, Show a) => String -> (CreateArgs 'V1 -> Semantics.State -> a) -> Spec
@@ -226,7 +234,7 @@ testRoleTokensPolicyId =
 
 getRolesForAddresses :: RoleTokensConfig -> Map (Chain.TokenName, Destination) Chain.Quantity
 getRolesForAddresses =
-  Map.filter (> 0) . \case
+  Map.filter (> mempty) . \case
     RoleTokensNone -> mempty
     RoleTokensUsePolicy _ dist -> flattenMap dist
     RoleTokensMint (Mint mint) -> flattenMap $ NEMap.toMap $ NEMap.toMap . roleTokenRecipients <$> mint
@@ -261,13 +269,17 @@ extractMarloweDatum TxConstraints{..} = case marloweOutputConstraints of
   MarloweOutput _ datum -> Just datum
   _ -> Nothing
 
-extractMarloweAssets :: TxConstraints TestEra v -> Maybe Chain.Assets
+extractMarloweAssets :: TxConstraints TestEra v -> Maybe Chain.TxOutAssets
 extractMarloweAssets TxConstraints{..} = case marloweOutputConstraints of
   MarloweOutput assets _ -> Just assets
   _ -> Nothing
 
+extractMarloweAssets' :: TxConstraints TestEra v -> Maybe Chain.Assets
+extractMarloweAssets' = fmap unTxOutAssets . extractMarloweAssets
+
 runBuildCreateConstraints :: CreateArgs v -> Either CreateError (TxConstraints TestEra v)
-runBuildCreateConstraints CreateArgs{..} =
+runBuildCreateConstraints CreateArgs{..} = do
+  let adjustMinUTxO = AdjustMinUTxO id
   snd
     <$> runIdentity
       ( buildCreateConstraints
@@ -281,7 +293,7 @@ runBuildCreateConstraints CreateArgs{..} =
           metadata
           minAda
           mempty
-          (\(Chain.Assets ada tokens) -> Chain.Assets ada tokens)
+          adjustMinUTxO
           contract
       )
 
@@ -303,7 +315,7 @@ instance Arbitrary (CreateArgs 'V1) where
       <*> arbitrary
       <*> (noMetadata <$> arbitrary)
       <*> arbitrary
-      <*> ((+ safeLovelace) . Chain.Lovelace <$> arbitrary)
+      <*> arbitrary
       <*> arbitrary
   shrink args@CreateArgs{..} =
     concat
@@ -455,10 +467,14 @@ buildApplyInputsConstraintsSpec =
         fromUTC = floor . (1000 *) . nominalDiffTimeToSeconds . utcTimeToPOSIXSeconds :: UTCTime -> Integer
         toSecondFloor = (* 1000) . (`div` 1000)
         distantFuture = 1_000_000_000_000_000_000_000
+        mkTxOutAssets' = fromMaybe mempty . mkTxOutAssets
         -- Chain conversions.
         toChainAddress = (Chain.Address .) . Semantics.serialiseAddress
-        toChainAssets (Semantics.Token "" "") amount = Chain.Assets (fromInteger amount) mempty
-        toChainAssets (Semantics.Token currency name) amount = Chain.Assets 0 . Chain.Tokens $ Map.singleton (toAssetId currency name) (fromInteger amount)
+        toChainAssets (Semantics.Token "" "") amount = mkTxOutAssets' $ Chain.Assets (Chain.Lovelace $ fromInteger amount) mempty
+        toChainAssets (Semantics.Token currency name) amount =
+          mkTxOutAssets' $
+            Chain.Assets mempty . Chain.Tokens $
+              Map.singleton (toAssetId currency name) (Chain.Quantity $ fromInteger amount)
         toAction (Semantics.IDeposit account party token amount) = Semantics.Deposit account party token $ Semantics.Constant amount
         toAction (Semantics.IChoice choiceId chosenNum) = Semantics.Choice choiceId [Semantics.Bound chosenNum chosenNum]
         toAction Semantics.INotify = Semantics.Notify Semantics.TrueObs
@@ -707,7 +723,7 @@ buildApplyInputsConstraintsSpec =
                 Nothing
                 Nothing
                 mempty
-          expectedAssets = fromPlutusValue . Semantics.totalBalance $ Semantics.accounts marloweState
+          expectedAssets = mkTxOutAssets' $ fromPlutusValue . Semantics.totalBalance $ Semantics.accounts marloweState
           expectedDatum =
             datum
               { Semantics.marloweContract = expectedContract

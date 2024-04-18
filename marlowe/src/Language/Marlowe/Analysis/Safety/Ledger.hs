@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  $Headers
@@ -45,13 +46,20 @@ module Language.Marlowe.Analysis.Safety.Ledger (
   dataSize,
 ) where
 
+import Data.Either.Validation (Validation (Failure, Success))
 import Data.Foldable (maximumBy, toList)
 import Data.Function (on)
 import Data.List (nub, (\\))
 import qualified Data.Map as M (keys)
 import Data.Maybe (fromJust)
-import qualified Data.Set as S (Set, filter, foldr, map, null, size, toList)
+import qualified Data.Set as S (Set, foldr, map, null, size, toList)
+import Language.Marlowe.Analysis.Safety.Ledger.Validators (
+  SafeRolesCurrency (NoRolesCurrency, RolesCurrency),
+  roleNameValidator,
+  rolesCurrencyValidator,
+ )
 import Language.Marlowe.Analysis.Safety.Types (SafetyError (..), SafetyReport (..))
+import Language.Marlowe.Analysis.Safety.Types.Validator (runValidator, validationErrors, validatorTraverse)
 import Language.Marlowe.Core.V1.Merkle (Continuations)
 import Language.Marlowe.Core.V1.Plate (
   Extract,
@@ -113,12 +121,13 @@ checkSafety
   -> SafetyReport
   -- ^ The report on the contract's safety.
 checkSafety maxValueSize utxoCostPerByte MarloweData{..} continuations =
-  let state' = Just marloweState
-      (networks, networkCheck) = checkNetworks state' marloweContract continuations
+  let MarloweParams rolesCurrency = marloweParams
+      (networks, networkCheck) = checkNetworks marloweState marloweContract continuations
+
       safetyErrors =
-        checkRoleNames (rolesCurrency marloweParams /= adaSymbol) state' marloweContract continuations
-          <> checkTokens state' marloweContract continuations
-          <> checkMaximumValueBound maxValueSize state' marloweContract continuations
+        checkRoleNames rolesCurrency marloweState marloweContract continuations
+          <> checkTokens marloweState marloweContract continuations
+          <> checkMaximumValueBound maxValueSize marloweState marloweContract continuations
           <> checkPositiveBalance marloweState
           <> checkDuplicates marloweState
           <> checkContinuations marloweContract continuations
@@ -132,7 +141,7 @@ checkSafety maxValueSize utxoCostPerByte MarloweData{..} continuations =
 checkNetwork
   :: Bool
   -- ^ Whether the network is mainnet.
-  -> Maybe State
+  -> State
   -- ^ The contract's initial state.
   -> Contract
   -- ^ The contract.
@@ -151,7 +160,7 @@ checkNetwork isMainnet state contract continuations =
 
 -- | Check that networks are consistently used in a contract.
 checkNetworks
-  :: Maybe State
+  :: State
   -- ^ The contract's initial state.
   -> Contract
   -- ^ The contract.
@@ -180,7 +189,7 @@ checkAddress address =
 
 -- | Check that all addresses can be serialized round trip.
 checkAddresses
-  :: Maybe State
+  :: State
   -- ^ The contract's initial state.
   -> Contract
   -- ^ The contract.
@@ -230,9 +239,9 @@ checkDuplicates State{..} =
 
 -- | Check that role names are not too long, and that roles are not present if a roles currency is not specified.
 checkRoleNames
-  :: Bool
-  -- ^ Whether the contract has a roles currency.
-  -> Maybe State
+  :: CurrencySymbol
+  -- ^ The roles currency of the contract.
+  -> State
   -- ^ The initial state.
   -> Contract
   -- ^ The contract.
@@ -240,16 +249,22 @@ checkRoleNames
   -- ^ The merkleized continuations.
   -> [SafetyError]
   -- ^ The safety messages.
-checkRoleNames hasRolesCurrency state contract continuations =
-  let roles = extractRoleNames state contract continuations
-      invalidRole TokenName{..} = P.lengthOfByteString unTokenName > 32
-   in if hasRolesCurrency || S.null roles
-        then fmap RoleNameTooLong . toList $ invalidRole `S.filter` roles
-        else pure MissingRolesCurrency
+checkRoleNames rolesCurrency state contract continuations = do
+  case runValidator rolesCurrencyValidator rolesCurrency of
+    Failure err -> err
+    Success rolesCurrency' -> do
+      let roles = extractRoleNames state contract continuations
+          hasRoles = not $ S.null roles
+      case (rolesCurrency', hasRoles) of
+        (RolesCurrency _, True) ->
+          validationErrors $ runValidator (validatorTraverse roleNameValidator) $ S.toList roles
+        (NoRolesCurrency, True) -> pure MissingRolesCurrency
+        (RolesCurrency _, False) -> pure ContractHasNoRoles
+        (NoRolesCurrency, False) -> mempty
 
 -- | Check that a contract has native tokens satisfying the ledger rules.
 checkTokens
-  :: Maybe State
+  :: State
   -- ^ The initial state.
   -> Contract
   -- ^ The contract.
@@ -269,7 +284,7 @@ checkTokens =
 checkMaximumValueBound
   :: Natural
   -- ^ The `maxValueSize` protocol parameter.
-  -> Maybe State
+  -> State
   -- ^ The initial state.
   -> Contract
   -- ^ The contract.
@@ -285,7 +300,7 @@ checkMaximumValueBound maxValueSize state contract continuations =
 
 -- | Compute a bound on the value size for a contract.
 worstMaximumValue
-  :: Maybe State
+  :: State
   -- ^ The initial state.
   -> Contract
   -- ^ The contract.
@@ -359,7 +374,7 @@ worstMinimumUtxo utxoCostPerByte state@State{accounts} contract continuations =
             . toInteger
             $ fromInteger utxoCostPerByte
               * ( 27 * 8 -- Worst case for stake address and ada.
-                    + worstMaximumValue (Just state) contract continuations -- Worst case for size of value.
+                    + worstMaximumValue state contract continuations -- Worst case for size of value.
                     + 10 * 8 -- Worst case for length of datum hash.
                 ) -- This assumes that the size computed for the Alonzo era serves as an upper-bound for future eras.
 

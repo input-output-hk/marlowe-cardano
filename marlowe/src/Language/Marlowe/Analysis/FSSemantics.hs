@@ -1,3 +1,6 @@
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
@@ -36,7 +39,7 @@ data SymInput
 
 -- *** Current transaction info
 
--- lowTime, highTime -- time interval for the most recent transaction
+-- lowSlot, highSlot -- time interval for the most recent transaction
 -- symInput -- input for the most recent transaction
 -- whenPos -- position in the When for the most recent transaction (see trace and paramTrace)
 --
@@ -45,7 +48,7 @@ data SymInput
 
 -- traces -- symbolic information about previous transactions (when we reach a When we
 --           consider adding the current transaction to this list)
---           first integer is lowTime, second is highTime, last integer is the position in
+--           first integer is lowSlot, second is highSlot, last integer is the position in
 --           the When (which case of the When the input corresponds to 0 is timeout)
 
 -- *** Input parameter transaction info
@@ -58,16 +61,78 @@ data SymInput
 --               which is the maximum number of transactions that are necessary to explore
 --               the whole contract. This bound is proven in TransactionBound.thy
 --
--- The rest of the symbolic state just corresponds directly to State with symbolic values:
--- symAccounts, symChoices, and symBoundValues
+-- The rest of the symbolic state just corresponds directly to `State` with symbolic values:
+
+-- * symAccounts, symChoices, and symBoundValues
+
 --
--- minTime just corresponds to lowTime, because it is just a lower bound for the minimum
+-- The `minTime` just corresponds to `lowSlot`, because it is just a lower bound for the minimum
 -- time, and it gets updated with the minimum time.
+
+-- *** Why are we mixing slots and POSIX time? ***
+
+-- Even though on the Plutus side, the transaction time interval is expressed in POSIX time (millisecond resolution), and Marlowe
+-- uses this representation for all its time representations, we cannot use arbitrary POSIX values on the chain. The time interval
+-- values are rounded to align with slot starts (slot length resolution). Additionally, the Marlowe Plutus script subtracts one
+-- millisecond from the upper bound of the transaction time interval to obtain the Marlowe version of `TimeIntervalEnd`.
+-- This adjustment is made because the transaction interval is closed on the lower bound and open on the upper bound, whereas
+-- Marlowe operates with inclusive intervals. Given these conditions:
+--
+--   * Arbitrary POSIX time values cannot be used for transaction time intervals.
+--
+--   * Slot length resolution should be used for transaction time intervals.
+--
+--   * The upper and lower bounds of transaction time intervals cannot be equal; thus, the upper bound must be at least
+--   one slot greater than the lower bound (as we cannot express a smaller difference with 1-millisecond resolution).
+--
+--
+newtype SSlotNo = SSlotNo SInteger
+  deriving newtype (EqSymbolic, Mergeable, OrdSymbolic)
+
+newtype SPOSIXTime = SPOSIXTime SInteger
+  deriving newtype (EqSymbolic, Mergeable, OrdSymbolic)
+
+newtype SlotLength = SlotLength Integer
+
+sSlotToSPOSIX :: SSlotNo -> SlotLength -> SPOSIXTime
+sSlotToSPOSIX (SSlotNo s) (SlotLength sl) = SPOSIXTime (s * literal sl)
+
+sTxTimeIntervalStartOMarloweTimeIntervalStart :: SSlotNo -> SlotLength -> SPOSIXTime
+sTxTimeIntervalStartOMarloweTimeIntervalStart (SSlotNo s) (SlotLength sl) = SPOSIXTime (s * literal sl)
+
+sTxTimeIntervalEndToMarloweTimeIntervalEnd :: SSlotNo -> SlotLength -> SPOSIXTime
+sTxTimeIntervalEndToMarloweTimeIntervalEnd (SSlotNo s) (SlotLength sl) = SPOSIXTime (s * literal sl - literal 1)
+
+sTxTimeIntervalToMarloweTimeInterval :: (SSlotNo, SSlotNo) -> SlotLength -> (SPOSIXTime, SPOSIXTime)
+sTxTimeIntervalToMarloweTimeInterval (SSlotNo low, SSlotNo high) (SlotLength sl) =
+  ( sTxTimeIntervalStartOMarloweTimeIntervalStart (SSlotNo low) (SlotLength sl)
+  , sTxTimeIntervalEndToMarloweTimeIntervalEnd (SSlotNo high) (SlotLength sl)
+  )
+
+newtype SlotNo = SlotNo Integer
+
+posixToSlotNo :: POSIXTime -> SlotLength -> SlotNo
+posixToSlotNo (POSIXTime ms) (SlotLength sl) = SlotNo (ms `div` sl)
+
+slotNoToPOSIXTime :: SlotNo -> SlotLength -> POSIXTime
+slotNoToPOSIXTime (SlotNo ms) (SlotLength sl) = POSIXTime (ms * sl)
+
+txTimeIntervalStartOMarloweTimeIntervalStart :: SlotNo -> SlotLength -> POSIXTime
+txTimeIntervalStartOMarloweTimeIntervalStart = slotNoToPOSIXTime
+
+txTimeIntervalEndToMarloweTimeIntervalEnd :: SlotNo -> SlotLength -> POSIXTime
+txTimeIntervalEndToMarloweTimeIntervalEnd (SlotNo ms) (SlotLength sl) = POSIXTime (ms * sl - 1)
+
+txTimeIntervalToMarloweTimeInterval :: (SlotNo, SlotNo) -> SlotLength -> (POSIXTime, POSIXTime)
+txTimeIntervalToMarloweTimeInterval (low, high) sl =
+  (txTimeIntervalStartOMarloweTimeIntervalStart low sl, txTimeIntervalEndToMarloweTimeIntervalEnd high sl)
+
 data SymState = SymState
-  { lowTime :: SInteger
-  , highTime :: SInteger
-  , traces :: [(SInteger, SInteger, Maybe SymInput, Integer)]
-  , paramTrace :: [(SInteger, SInteger, SInteger, SInteger)]
+  { lowSlot :: SSlotNo
+  , highSlot :: SSlotNo
+  , slotLength :: SlotLength
+  , traces :: [(SSlotNo, SSlotNo, Maybe SymInput, Integer)]
+  , paramTrace :: [(SSlotNo, SSlotNo, SInteger, SInteger)]
   , symInput :: Maybe SymInput
   , whenPos :: Integer
   , symAccounts :: Map (AccountId, Token) SInteger
@@ -75,17 +140,27 @@ data SymState = SymState
   , symBoundValues :: Map ValueId SInteger
   }
 
+sSlotNo_ :: SymbolicT IO SSlotNo
+sSlotNo_ = do
+  s <- sInteger_
+  return (SSlotNo s)
+
+sSlotNo :: String -> SymbolicT IO SSlotNo
+sSlotNo label = do
+  s <- sInteger label
+  return (SSlotNo s)
+
 -- It generates a valid symbolic interval with lower bound ms (if provided)
-generateSymbolicInterval :: Maybe Integer -> Symbolic (SInteger, SInteger)
+generateSymbolicInterval :: Maybe SlotNo -> Symbolic (SSlotNo, SSlotNo)
 generateSymbolicInterval Nothing =
   do
-    hs <- sInteger_
-    ls <- sInteger_
-    constrain (ls .<= hs)
+    hs <- sSlotNo_
+    ls <- sSlotNo_
+    constrain (ls .< hs)
     return (ls, hs)
-generateSymbolicInterval (Just ms) =
+generateSymbolicInterval (Just (SlotNo ms)) =
   do
-    i@(ls, _) <- generateSymbolicInterval Nothing
+    i@(SSlotNo ls, _) <- generateSymbolicInterval Nothing
     constrain (ls .>= literal ms)
     return i
 
@@ -109,15 +184,17 @@ toSymMap = foldAssocMapWithKey toSymItem mempty
 -- list of symbolic integers that are matched to trace.
 -- When Nothing is passed as second parameter it acts like emptyState.
 mkInitialSymState
-  :: [(SInteger, SInteger, SInteger, SInteger)]
+  :: SlotLength
+  -> [(SSlotNo, SSlotNo, SInteger, SInteger)]
   -> Maybe State
   -> Symbolic SymState
-mkInitialSymState pt Nothing = do
+mkInitialSymState slotLength pt Nothing = do
   (ls, hs) <- generateSymbolicInterval Nothing
   return $
     SymState
-      { lowTime = ls
-      , highTime = hs
+      { lowSlot = ls
+      , highSlot = hs
+      , slotLength
       , traces = []
       , paramTrace = pt
       , symInput = Nothing
@@ -127,6 +204,7 @@ mkInitialSymState pt Nothing = do
       , symBoundValues = mempty
       }
 mkInitialSymState
+  slotLength
   pt
   ( Just
       State
@@ -137,11 +215,13 @@ mkInitialSymState
         }
     ) =
     do
-      (ls, hs) <- generateSymbolicInterval (Just (getPOSIXTime ms))
+      let slotNo = posixToSlotNo ms slotLength
+      (ls, hs) <- generateSymbolicInterval (Just slotNo)
       return $
         SymState
-          { lowTime = ls
-          , highTime = hs
+          { lowSlot = ls
+          , highSlot = hs
+          , slotLength
           , traces = []
           , paramTrace = pt
           , symInput = Nothing
@@ -167,8 +247,8 @@ mkInitialSymState
 -- the contract (which is concrete), and using the semantics after a counter example is
 -- found.
 convertRestToSymbolicTrace
-  :: [(SInteger, SInteger, Maybe SymInput, Integer)]
-  -> [(SInteger, SInteger, SInteger, SInteger)]
+  :: [(SSlotNo, SSlotNo, Maybe SymInput, Integer)]
+  -> [(SSlotNo, SSlotNo, SInteger, SInteger)]
   -> SBool
 convertRestToSymbolicTrace [] [] = sTrue
 convertRestToSymbolicTrace ((lowS, highS, inp, pos) : t) ((a, b, c, d) : t2) =
@@ -185,8 +265,8 @@ convertRestToSymbolicTrace ((lowS, highS, inp, pos) : t) ((a, b, c, d) : t2) =
     getSymValFrom (Just SymNotify) = 0
 convertRestToSymbolicTrace _ _ = error "Symbolic trace is the wrong length"
 
-isPadding :: [(SInteger, SInteger, SInteger, SInteger)] -> SBool
-isPadding ((a, b, c, d) : t) =
+isPadding :: [(SSlotNo, SSlotNo, SInteger, SInteger)] -> SBool
+isPadding ((SSlotNo a, SSlotNo b, c, d) : t) =
   (a .== -1)
     .&& (b .== -1)
     .&& (c .== -1)
@@ -195,8 +275,8 @@ isPadding ((a, b, c, d) : t) =
 isPadding [] = sTrue
 
 convertToSymbolicTrace
-  :: [(SInteger, SInteger, Maybe SymInput, Integer)]
-  -> [(SInteger, SInteger, SInteger, SInteger)]
+  :: [(SSlotNo, SSlotNo, Maybe SymInput, Integer)]
+  -> [(SSlotNo, SSlotNo, SInteger, SInteger)]
   -> SBool
 convertToSymbolicTrace refL symL =
   let lenRefL = length refL
@@ -228,8 +308,16 @@ symEvalVal (DivValue lhs rhs) symState =
    in ite (d .== 0) 0 (n `sQuot` d)
 symEvalVal (ChoiceValue choId) symState =
   M.findWithDefault (literal 0) choId (symChoices symState)
-symEvalVal TimeIntervalStart symState = lowTime symState
-symEvalVal TimeIntervalEnd symState = highTime symState
+symEvalVal TimeIntervalStart symState = do
+  let ls = lowSlot symState
+      sl = slotLength symState
+      SPOSIXTime start = sTxTimeIntervalStartOMarloweTimeIntervalStart ls sl
+  start
+symEvalVal TimeIntervalEnd symState = do
+  let hs = highSlot symState
+      sl = slotLength symState
+      SPOSIXTime end = sTxTimeIntervalEndToMarloweTimeIntervalEnd hs sl
+  end
 symEvalVal (UseValue valId) symState =
   M.findWithDefault (literal 0) valId (symBoundValues symState)
 symEvalVal (Cond cond v1 v2) symState =
@@ -302,8 +390,8 @@ updateSymInput (Just SymNotify) symState = return symState
 -- of the transactions useless, but we discard useless transactions by the end so that
 -- is fine.
 addTransaction
-  :: SInteger
-  -> SInteger
+  :: SSlotNo
+  -> SSlotNo
   -> Maybe SymInput
   -> Timeout
   -> SymState
@@ -315,27 +403,30 @@ addTransaction
   Nothing
   slotTim
   symState@SymState
-    { lowTime = oldLowSlot
-    , highTime = oldHighSlot
+    { lowSlot = oldLowSlot
+    , highSlot = oldHighSlot
+    , slotLength
     , traces = oldTraces
     , symInput = prevSymInp
     , whenPos = oldPos
     }
   pos =
     do
-      let tim = getPOSIXTime slotTim
-      constrain (newLowSlot .<= newHighSlot)
+      let tim = SPOSIXTime $ literal (getPOSIXTime slotTim)
+          oldHighSlotPOSIX = sTxTimeIntervalEndToMarloweTimeIntervalEnd oldHighSlot slotLength
+          newLowSlotPOSIX = sTxTimeIntervalStartOMarloweTimeIntervalStart newLowSlot slotLength
+      constrain (newLowSlot .< newHighSlot)
       let conditions =
-            ( (oldHighSlot .< literal tim)
+            ( (oldHighSlotPOSIX .< tim)
                 .|| ((oldLowSlot .== newLowSlot) .&& (oldHighSlot .== newHighSlot))
             )
-              .&& (newLowSlot .>= literal tim)
+              .&& (newLowSlotPOSIX .>= tim)
       uSymInput <-
         updateSymInput
           Nothing
           ( symState
-              { lowTime = newLowSlot
-              , highTime = newHighSlot
+              { lowSlot = newLowSlot
+              , highSlot = newHighSlot
               , traces =
                   ( oldLowSlot
                   , oldHighSlot
@@ -354,26 +445,29 @@ addTransaction
   newSymInput
   slotTim
   symState@SymState
-    { lowTime = oldLowSlot
-    , highTime = oldHighSlot
+    { lowSlot = oldLowSlot
+    , highSlot = oldHighSlot
     , traces = oldTraces
+    , slotLength
     , symInput = prevSymInp
     , whenPos = oldPos
     }
   pos =
     do
-      let tim = getPOSIXTime slotTim
-      constrain (newLowSlot .<= newHighSlot)
+      let tim = SPOSIXTime $ literal (getPOSIXTime slotTim)
+          (_, oldHighSlotPOSIX) = sTxTimeIntervalToMarloweTimeInterval (oldLowSlot, oldHighSlot) slotLength
+          (_, newHighSlotPOSIX) = sTxTimeIntervalToMarloweTimeInterval (newLowSlot, newHighSlot) slotLength
+      constrain (newLowSlot .< newHighSlot)
       let conditions =
-            (oldHighSlot .< literal tim)
-              .&& (newHighSlot .< literal tim)
+            (oldHighSlotPOSIX .< tim)
+              .&& (newHighSlotPOSIX .< tim)
               .&& (newLowSlot .>= oldLowSlot)
       uSymInput <-
         updateSymInput
           newSymInput
           ( symState
-              { lowTime = newLowSlot
-              , highTime = newHighSlot
+              { lowSlot = newLowSlot
+              , highSlot = newHighSlot
               , traces =
                   (oldLowSlot, oldHighSlot, prevSymInp, oldPos)
                     : oldTraces
@@ -411,8 +505,8 @@ isValidAndFailsAux oa hasErr Close sState =
   return
     ( hasErr
         .&& convertToSymbolicTrace
-          ( ( lowTime sState
-            , highTime sState
+          ( ( lowSlot sState
+            , highSlot sState
             , symInput sState
             , whenPos sState
             )
@@ -490,8 +584,8 @@ ensureBounds cho (Bound lowBnd hiBnd : t) =
 -- Just combines addTransaction and isValidAndFailsAux
 applyInputConditions
   :: Bool
-  -> SInteger
-  -> SInteger
+  -> SSlotNo
+  -> SSlotNo
   -> SBool
   -> Maybe SymInput
   -> Timeout
@@ -506,12 +600,12 @@ applyInputConditions oa ls hs hasErr maybeSymInput timeout sState pos cont =
     return (newCond, newTrace)
 
 -- Generates two new slot numbers and puts them in the symbolic state
-addFreshSlotsToState :: SymState -> Symbolic (SInteger, SInteger, SymState)
+addFreshSlotsToState :: SymState -> Symbolic (SSlotNo, SSlotNo, SymState)
 addFreshSlotsToState sState =
   do
-    newLowSlot <- sInteger_
-    newHighSlot <- sInteger_
-    return (newLowSlot, newHighSlot, sState{lowTime = newLowSlot, highTime = newHighSlot})
+    newLowSlot <- sSlotNo_
+    newHighSlot <- sSlotNo_
+    return (newLowSlot, newHighSlot, sState{lowSlot = newLowSlot, highSlot = newHighSlot})
 
 -- Analysis loop for When construct. Essentially, it iterates over all the cases and
 -- branches the static analysis. All parameters are the same as isValidAndFailsAux except
@@ -532,8 +626,8 @@ isValidAndFailsWhen
   -> Symbolic SBool
 isValidAndFailsWhen oa hasErr [] timeout cont previousMatch sState pos =
   do
-    newLowSlot <- sInteger_
-    newHighSlot <- sInteger_
+    newLowSlot <- sSlotNo_
+    newHighSlot <- sSlotNo_
     (cond, newTrace) <-
       applyInputConditions
         oa
@@ -783,12 +877,13 @@ countWhensCaseList [] = 0
 -- paramTrace, and we use the symbolic paramTrace to know which is the counterexample.
 wrapper
   :: Bool
+  -> SlotLength
   -> Contract
-  -> [(SInteger, SInteger, SInteger, SInteger)]
+  -> [(SSlotNo, SSlotNo, SInteger, SInteger)]
   -> Maybe State
   -> Symbolic SBool
-wrapper oa c st maybeState = do
-  ess <- mkInitialSymState st maybeState
+wrapper oa slotLength c st maybeState = do
+  ess <- mkInitialSymState slotLength st maybeState
   isValidAndFailsAux oa sFalse c ess
 
 -- It generates a list of variable names for the variables that conform paramTrace.
@@ -810,11 +905,11 @@ generateLabels = go 1
 
 -- Takes a list of variable names for the paramTrace and generates the list of symbolic
 -- variables. It returns the list of symbolic variables generated (list of 4-tuples).
-generateParameters :: [String] -> Symbolic [(SInteger, SInteger, SInteger, SInteger)]
+generateParameters :: [String] -> Symbolic [(SSlotNo, SSlotNo, SInteger, SInteger)]
 generateParameters (sl : sh : v : b : t) =
   do
-    isl <- sInteger sl
-    ish <- sInteger sh
+    isl <- sSlotNo sl
+    ish <- sSlotNo sh
     iv <- sInteger v
     ib <- sInteger b
     rest <- generateParameters t
@@ -825,11 +920,11 @@ generateParameters _ = error "Wrong number of labels generated"
 -- Takes the list of paramTrace variable names and the list of mappings of these
 -- names to concrete values, and reconstructs a concrete list of 4-tuples of the ordered
 -- concrete values.
-groupResult :: [String] -> Map String Integer -> [(Integer, Integer, Integer, Integer)]
+groupResult :: [String] -> Map String Integer -> [(SlotNo, SlotNo, Integer, Integer)]
 groupResult (sl : sh : v : b : t) mappings =
   if ib == -1
     then groupResult t mappings
-    else (isl, ish, iv, ib) : groupResult t mappings
+    else (SlotNo isl, SlotNo ish, iv, ib) : groupResult t mappings
   where
     (Just isl) = M.lookup sl mappings
     (Just ish) = M.lookup sh mappings
@@ -862,39 +957,42 @@ caseToInput (MerkleizedCase _ _ : t) c v
 -- input list for convenience. The list of 4-tuples is passed through because it is used
 -- to recursively call executeAndInterpret (co-recursive function).
 computeAndContinue
-  :: ([Input] -> TransactionInput)
+  :: SlotLength
+  -> ([Input] -> TransactionInput)
   -> [Input]
   -> State
   -> Contract
-  -> [(Integer, Integer, Integer, Integer)]
+  -> [(SlotNo, SlotNo, Integer, Integer)]
   -> [([TransactionInput], [TransactionWarning])]
-computeAndContinue transaction inps sta cont t =
+computeAndContinue slotLength transaction inps sta cont t =
   case computeTransaction (transaction inps) sta cont of
-    Error TEUselessTransaction -> executeAndInterpret sta t cont
+    Error TEUselessTransaction -> executeAndInterpret slotLength sta t cont
     TransactionOutput
       { txOutWarnings = war
       , txOutState = newSta
       , txOutContract = newCont
       } ->
         ([transaction inps], war)
-          : executeAndInterpret newSta t newCont
+          : executeAndInterpret slotLength newSta t newCont
 
 -- Takes a list of 4-tuples (and state and contract) and interprets it as a list of
 -- transactions and also computes the resulting list of warnings.
 executeAndInterpret
-  :: State
-  -> [(Integer, Integer, Integer, Integer)]
+  :: SlotLength
+  -> State
+  -> [(SlotNo, SlotNo, Integer, Integer)]
   -> Contract
   -> [([TransactionInput], [TransactionWarning])]
-executeAndInterpret _ [] _ = []
-executeAndInterpret sta ((l, h, v, b) : t) cont
-  | b == 0 = computeAndContinue transaction [] sta cont t
+executeAndInterpret slotLength _ [] _ = []
+executeAndInterpret slotLength sta ((l, h, v, b) : t) cont
+  | b == 0 = computeAndContinue slotLength transaction [] sta cont t
   | otherwise =
       case reduceContractUntilQuiescent env sta cont of
         ContractQuiescent _ _ _ _ tempCont ->
           case tempCont of
             When cases _ _ ->
               computeAndContinue
+                slotLength
                 transaction
                 [caseToInput cases b v]
                 sta
@@ -903,7 +1001,7 @@ executeAndInterpret sta ((l, h, v, b) : t) cont
             _ -> error "Cannot interpret result"
         _ -> error "Error reducing contract when interpreting result"
   where
-    myTimeInterval = (POSIXTime l, POSIXTime h)
+    myTimeInterval = txTimeIntervalToMarloweTimeInterval (l, h) slotLength
     env = Environment{timeInterval = myTimeInterval}
     transaction inputs =
       TransactionInput
@@ -914,12 +1012,13 @@ executeAndInterpret sta ((l, h, v, b) : t) cont
 -- It wraps executeAndInterpret so that it takes an optional State, and also
 -- combines the results of executeAndInterpret in one single tuple.
 interpretResult
-  :: [(Integer, Integer, Integer, Integer)]
+  :: SlotLength
+  -> [(SlotNo, SlotNo, Integer, Integer)]
   -> Contract
   -> Maybe State
   -> (POSIXTime, [TransactionInput], [TransactionWarning])
-interpretResult [] _ _ = error "Empty result"
-interpretResult t@((l, _, _, _) : _) c maybeState = (POSIXTime l, tin, twa)
+interpretResult _ [] _ _ = error "Empty result"
+interpretResult slotLength t@((l, _, _, _) : _) c maybeState = (slotNoToPOSIXTime l slotLength, tin, twa)
   where
     (tin, twa) =
       foldl'
@@ -927,29 +1026,31 @@ interpretResult t@((l, _, _, _) : _) c maybeState = (POSIXTime l, tin, twa)
             (accInp ++ elemInp, accWarn ++ elemWarn)
         )
         ([], [])
-        $ executeAndInterpret initialState t c
+        $ executeAndInterpret slotLength initialState t c
     initialState = case maybeState of
-      Nothing -> emptyState (POSIXTime l)
+      Nothing -> emptyState $ slotNoToPOSIXTime l slotLength
       Just x -> x
 
 -- It interprets the counter example found by SBV (SMTModel), given the contract,
 -- and initial state (optional), and the list of variables used.
 extractCounterExample
-  :: SMTModel
+  :: SlotLength
+  -> SMTModel
   -> Contract
   -> Maybe State
   -> [String]
   -> (POSIXTime, [TransactionInput], [TransactionWarning])
-extractCounterExample smtModel cont maybeState maps = interpretedResult
+extractCounterExample slotLength smtModel cont maybeState maps = interpretedResult
   where
     assocs = map (\(a, b) -> (a, fromCV b :: Integer)) $ modelAssocs smtModel
     counterExample = groupResult maps (M.fromList assocs)
-    interpretedResult = interpretResult (reverse counterExample) cont maybeState
+    interpretedResult = interpretResult slotLength (reverse counterExample) cont maybeState
 
 -- Wrapper function that carries the static analysis and interprets the result.
 -- It generates variables, runs SBV, and it interprets the result in Marlowe terms.
 warningsTraceCustom
   :: Bool
+  -> SlotLength
   -> Contract
   -> Maybe State
   -> IO
@@ -957,14 +1058,14 @@ warningsTraceCustom
           ThmResult
           (Maybe (POSIXTime, [TransactionInput], [TransactionWarning]))
       )
-warningsTraceCustom onlyAssertions con maybeState =
+warningsTraceCustom onlyAssertions slotLength con maybeState =
   do
     thmRes@(ThmResult result) <- satCommand
     return
       ( case result of
           Unsatisfiable _ _ -> Right Nothing
           Satisfiable _ smtModel ->
-            Right (Just (extractCounterExample smtModel con maybeState params))
+            Right (Just (extractCounterExample slotLength smtModel con maybeState params))
           _ -> Left thmRes
       )
   where
@@ -972,13 +1073,14 @@ warningsTraceCustom onlyAssertions con maybeState =
     params = generateLabels maxActs
     property = do
       v <- generateParameters params
-      r <- wrapper onlyAssertions con v maybeState
+      r <- wrapper onlyAssertions slotLength con v maybeState
       return (sNot r)
     satCommand = proveWith z3 property
 
 -- Like warningsTraceCustom but checks all warnings (including assertions)
 warningsTraceWithState
-  :: Contract
+  :: SlotLength
+  -> Contract
   -> Maybe State
   -> IO
       ( Either
@@ -989,7 +1091,8 @@ warningsTraceWithState = warningsTraceCustom False
 
 -- Like warningsTraceCustom but only checks assertions.
 onlyAssertionsWithState
-  :: Contract
+  :: SlotLength
+  -> Contract
   -> Maybe State
   -> IO
       ( Either
@@ -1000,10 +1103,11 @@ onlyAssertionsWithState = warningsTraceCustom True
 
 -- Like warningsTraceWithState but without initialState.
 warningsTrace
-  :: Contract
+  :: SlotLength
+  -> Contract
   -> IO
       ( Either
           ThmResult
           (Maybe (POSIXTime, [TransactionInput], [TransactionWarning]))
       )
-warningsTrace con = warningsTraceWithState con Nothing
+warningsTrace sl con = warningsTraceWithState sl con Nothing

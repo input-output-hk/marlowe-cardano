@@ -8,7 +8,7 @@ import Data.Maybe (listToMaybe)
 import qualified Data.Vector as V
 import Hasql.TH (vectorStatement)
 import qualified Hasql.Transaction as T
-import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader (..), BlockHeaderHash (..), TxId (..), TxOutRef (..))
+import Language.Marlowe.Runtime.ChainSync.Api (BlockHeader (..), BlockHeaderHash (..), TxId (..), TxOutRef (..), unTxIx)
 import Language.Marlowe.Runtime.Core.Api (ContractId (ContractId), MarloweVersion (..), SomeMarloweVersion (..))
 
 getIntersectionForContract :: ContractId -> [BlockHeader] -> T.Transaction (Maybe (BlockHeader, SomeMarloweVersion))
@@ -56,7 +56,7 @@ getIntersectionForContract (ContractId TxOutRef{..}) (b : bs) = do
             zip (b : bs) $
               dropWhile (/= b) serverBlocks
   where
-    params = (unTxId txId, fromIntegral txIx)
+    params = (unTxId txId, fromIntegral . unTxIx $ txIx)
 
 decodeBlock :: (Int64, ByteString, Int64) -> BlockHeader
 decodeBlock (slot, hash, block) =

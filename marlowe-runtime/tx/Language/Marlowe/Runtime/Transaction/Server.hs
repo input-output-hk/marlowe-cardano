@@ -37,25 +37,31 @@ import Cardano.Api (
   makeShelleyAddress,
   toLedgerEpochInfo,
  )
+import qualified Cardano.Api as C
 import Cardano.Api.Shelley (
   LedgerProtocolParameters,
   ProtocolParameters,
   convertToLedgerProtocolParameters,
  )
-import Colog (Message, WithLog)
+import qualified Cardano.Api.Shelley as C
+import Colog (Message, WithLog, logDebug)
 import Control.Applicative ((<|>))
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (race)
 import Control.Concurrent.Component
 import Control.Concurrent.STM (STM, modifyTVar, newEmptyTMVar, newTVar, putTMVar, readTMVar, readTVar, retry)
+import qualified Control.DeepSeq as DeepSeq
 import Control.Error (MaybeT (..))
 import Control.Error.Util (hush, note, noteT)
-import Control.Exception (Exception (..), SomeException)
+import Control.Exception (Exception (..), SomeException, catch)
+import qualified Control.Exception as Exception
 import Control.Monad (guard, unless, when, (<=<))
 import Control.Monad.Event.Class
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), except, runExceptT, throwE, withExceptT)
+import qualified Data.Aeson as A
+import qualified Data.Aeson.Text as A
 import Data.Bifunctor (first)
 import Data.Foldable (foldl')
 import Data.List (find)
@@ -65,14 +71,17 @@ import qualified Data.Map.NonEmpty as NEMap
 import Data.Maybe (fromJust, fromMaybe)
 import Data.Set (Set)
 import qualified Data.Set as Set
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
 import Data.Time (NominalDiffTime, UTCTime, nominalDiffTimeToSeconds)
+import Data.Traversable (for)
 import Data.Void (Void)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError (SafetyAnalysisTimeout))
 import qualified Language.Marlowe.Core.V1.Semantics as V1
+import qualified Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Protocol.Query.Client (MarloweQueryClient, getRoleCurrencies)
 import Language.Marlowe.Runtime.Cardano.Api (
   fromCardanoAddressInEra,
-  fromCardanoLovelace,
   fromCardanoTxId,
   fromCardanoTxOutDatum,
   fromCardanoTxOutValue,
@@ -83,9 +92,10 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   BlockHeader,
   ChainSyncQuery (..),
   Credential (..),
-  DatumHash,
+  DatumHash (..),
   TxId (..),
   fromCardanoTxMetadata,
+  mkTxOutAssets,
  )
 import qualified Language.Marlowe.Runtime.ChainSync.Api as Chain
 import Language.Marlowe.Runtime.Contract.Api (ContractRequest, getContract, merkleizeInputs)
@@ -107,7 +117,6 @@ import Language.Marlowe.Runtime.Core.Api (
  )
 import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript (..), MarloweScripts (..))
 import Language.Marlowe.Runtime.Transaction.Api (
-  Account,
   ApplyInputsError (..),
   BurnRoleTokensError (..),
   BurnRoleTokensTx (BurnRoleTokensTx),
@@ -132,20 +141,27 @@ import Language.Marlowe.Runtime.Transaction.Api (
   WithdrawTxInEra (..),
   optimizeRoleTokenFilter,
   roleTokenFilterToRoleCurrencyFilter,
+  unAccounts,
  )
 import Language.Marlowe.Runtime.Transaction.BuildConstraints (
+  Accounts,
+  MinAdaProvider (MinAdaProvider),
   MkRoleTokenMintingPolicy,
+  RolesPolicyId (RolesPolicyId),
   buildApplyInputsConstraints,
   buildCreateConstraints,
   buildWithdrawConstraints,
   initialMarloweState,
+  invalidAddressesError,
  )
 import Language.Marlowe.Runtime.Transaction.Burn (burnRoleTokens)
 import Language.Marlowe.Runtime.Transaction.Constraints (
   MarloweContext (..),
   SolveConstraints,
   TxConstraints,
+  WalletContext (WalletContext),
  )
+
 import qualified Language.Marlowe.Runtime.Transaction.Constraints as Constraints
 import Language.Marlowe.Runtime.Transaction.Query (
   LoadMarloweContext,
@@ -157,10 +173,13 @@ import Language.Marlowe.Runtime.Transaction.Query (
 import Language.Marlowe.Runtime.Transaction.Query.Helper (LoadHelpersContext)
 import Language.Marlowe.Runtime.Transaction.Safety (
   Continuations,
+  ThreadTokenAssetId (..),
   checkContract,
   checkTransactions,
   minAdaUpperBound,
-  mkAdjustMinimumUtxo,
+  mkAdjustMinUTxO,
+  mkLockedRolesContext,
+  mockLockedRolesContext,
   noContinuations,
  )
 import Language.Marlowe.Runtime.Transaction.Submit (SubmitJob (..), SubmitJobStatus (..))
@@ -175,6 +194,7 @@ import Network.Protocol.Job.Server (
 import Network.Protocol.Query.Client (QueryClient, request)
 import Observe.Event.Explicit (addField)
 import Ouroboros.Consensus.BlockchainTime (SystemStart)
+import qualified PlutusLedgerApi.V2 as PV2
 import UnliftIO (MonadUnliftIO, atomically, throwIO)
 import UnliftIO.Concurrent (forkFinally)
 import Witherable (mapMaybe)
@@ -239,12 +259,22 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
               shelleyEra <- case inEonForEraMaybe id era of
                 Nothing -> error "Current era not supported"
                 Just a -> pure a
+
               addField ev $ SystemStart systemStart
               addField ev $ EraHistory eraHistory
               addField ev $ ProtocolParameters protocolParameters
               addField ev $ NetworkId networkId
               addField ev $ Era $ AnyCardanoEra era
-              let solveConstraints :: Constraints.SolveConstraints
+
+              logDebug $
+                "Server received a command: " <> case command of
+                  Create{} -> "Create"
+                  ApplyInputs{} -> "ApplyInputs"
+                  Withdraw{} -> "Withdraw"
+                  BurnRoleTokens{} -> "BurnRoleTokens"
+                  Submit{} -> "Submit"
+
+              let solveConstraints :: Constraints.SolveConstraints era v
                   solveConstraints =
                     Constraints.solveConstraints
                       systemStart
@@ -289,6 +319,7 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                         loadWalletContext
                         loadMarloweContext
                         loadHelpersContext
+                        networkId
                         version
                         addresses
                         contractId
@@ -296,6 +327,7 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                         invalidBefore
                         invalidHereafter
                         inputs
+                        analysisTimeout
                 Withdraw version addresses payouts ->
                   withEvent ExecWithdraw \_ ->
                     execWithdraw
@@ -338,76 +370,40 @@ attachSubmit
   -> m (ServerStAttach MarloweTxCommand SubmitStatus SubmitError BlockHeader m ())
 attachSubmit jobId = submitJobServerAttach jobId <=< atomically
 
-execCreate
-  :: forall era m v
-   . (MonadUnliftIO m, IsCardanoEra era)
-  => MkRoleTokenMintingPolicy m
-  -> CardanoEra era
-  -> Connector (QueryClient ContractRequest) m
-  -> (MarloweVersion v -> MarloweScripts)
-  -> SolveConstraints
-  -> LedgerProtocolParameters era
-  -> LoadWalletContext m
-  -> LoadHelpersContext m
-  -> NetworkId
-  -> Maybe Chain.StakeCredential
+limitAnalysisTime :: NominalDiffTime -> IO (Either String [SafetyError]) -> IO (Either String [SafetyError])
+limitAnalysisTime timeout analysis = do
+  let analysis' = runExceptT do
+        let go = do
+              errs <- analysis >>= (Exception.evaluate . DeepSeq.force)
+              pure $ Right errs
+        res <-
+          ExceptT $
+            go `catch` \(e :: SomeException) -> do
+              pure $ Left (show e)
+        except res
+  res <-
+    race
+      (threadDelay (floor $ nominalDiffTimeToSeconds timeout * 1_000_000))
+      analysis'
+  case res of
+    -- Timeout reached
+    Left () -> pure $ Right [SafetyAnalysisTimeout]
+    -- Analysis finished with exception or internal error
+    Right (Left e) -> pure $ Left e
+    -- Analysis finished successfully
+    Right (Right res') -> pure $ Right res'
+
+type GetCurrentScripts v = MarloweVersion v -> MarloweScripts
+
+mkMarloweContext
+  :: (MonadUnliftIO m)
+  => NetworkId
   -> MarloweVersion v
-  -> WalletAddresses
-  -> Maybe Chain.TokenName
-  -> RoleTokensConfig
-  -> MarloweTransactionMetadata
-  -> Maybe Chain.Lovelace
-  -> Map Account Chain.Assets
-  -> Either (Contract v) DatumHash
-  -> NominalDiffTime
-  -> m (ServerStCmd MarloweTxCommand Void CreateError (ContractCreated v) m ())
-execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts solveConstraints protocolParameters loadWalletContext loadHelpersContext networkId mStakeCredential version addresses threadRole roleTokens metadata optMinAda accounts contract analysisTimeout = execExceptT do
-  eon <- toBabbageEraOnwards (CreateEraUnsupported $ AnyCardanoEra era) era
-  let adjustMinUtxo = mkAdjustMinimumUtxo eon protocolParameters version
-  let threadRole' = fromMaybe "" threadRole
-  walletContext <- lift $ loadWalletContext addresses
-  (_, dummyState) <-
-    except $
-      initialMarloweState
-        adjustMinUtxo
-        version
-        accounts
-        ( Chain.AssetId "00000000000000000000000000000000000000000000000000000000" threadRole' <$ guard case roleTokens of
-            RoleTokensNone -> False
-            RoleTokensMint (unMint -> mint) -> any (NEMap.member (ToScript OpenRoleScript) . roleTokenRecipients) mint
-            RoleTokensUsePolicy _ distribution -> any (Map.member (ToScript OpenRoleScript)) distribution
-        )
-        (fromMaybe 0 optMinAda)
-        walletContext
-  (contract', continuations) <- case contract of
-    Right hash -> case version of
-      MarloweV1 -> noteT CreateContractNotFound do
-        let getContract' = MaybeT . runConnector contractQueryConnector . getContract
-        Contract.ContractWithAdjacency{contract = c, ..} <- getContract' hash
-        (c :: Contract v,) <$> foldMapM (fmap singletonContinuations . getContract') (Set.delete hash closure)
-    Left c -> pure (c, noContinuations version)
+  -> GetCurrentScripts v
+  -> Maybe Chain.StakeCredential
+  -> ExceptT CreateError m (MarloweContext v)
+mkMarloweContext networkId version getCurrentScripts mStakeCredential = do
   mCardanoStakeCredential <- except $ traverse (note CreateToCardanoError . toCardanoStakeCredential) mStakeCredential
-  computedMinAdaDeposit <-
-    except $
-      note ProtocolParamNoUTxOCostPerByte $
-        fromCardanoLovelace
-          <$> minAdaUpperBound eon protocolParameters version dummyState contract' continuations
-  let minAda = fromMaybe computedMinAdaDeposit optMinAda
-  unless (minAda >= computedMinAdaDeposit) $ throwE $ InsufficientMinAdaDeposit computedMinAdaDeposit
-  ((datum, assets, rolesCurrency), constraints) <-
-    ExceptT $
-      buildCreateConstraints
-        mkRoleTokenMintingPolicy
-        eon
-        version
-        walletContext
-        threadRole'
-        roleTokens
-        metadata
-        minAda
-        accounts
-        adjustMinUtxo
-        contract'
   let scripts@MarloweScripts{..} = getCurrentScripts version
       stakeReference = maybe NoStakeAddress StakeAddressByValue mCardanoStakeCredential
       marloweAddress =
@@ -424,7 +420,7 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
               networkId
               (fromJust $ toCardanoPaymentCredential $ ScriptCredential payoutScript)
               NoStakeAddress
-  marloweContext <- except $ first CreateLoadMarloweContextFailed do
+  except $ first CreateLoadMarloweContextFailed do
     marloweScriptUTxO <- lookupMarloweScriptUtxo networkId scripts
     payoutScriptUTxO <- lookupPayoutScriptUtxo networkId scripts
     pure
@@ -437,43 +433,146 @@ execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts
         , marloweScriptHash = marloweScript
         , payoutScriptHash = payoutScript
         }
+
+logSolveConstraintsParams
+  :: (WithLog env Message m)
+  => C.BabbageEraOnwards era
+  -> C.LedgerProtocolParameters era
+  -> MarloweVersion v
+  -> Either (MarloweContext v) Constraints.PayoutContext
+  -> WalletContext
+  -> Constraints.HelpersContext
+  -> TxConstraints era v
+  -> m ()
+logSolveConstraintsParams era protocol version scriptCtx walletCtx helpersCtx constraints = case version of
+  MarloweV1 -> do
+    let shelleyBasedEra = C.babbageEraOnwardsToShelleyBasedEra era
+        protocolParams = C.fromLedgerPParams shelleyBasedEra $ C.unLedgerProtocolParameters protocol
+
+        entry =
+          A.object
+            [ ("era", A.String . T.pack . show $ era)
+            , ("protocol", A.toJSON protocolParams)
+            , ("version", A.toJSON version)
+            , case scriptCtx of
+                Left marloweCtx -> ("marloweCtx", A.toJSON marloweCtx)
+                Right payoutCtx -> ("payoutCtx", A.toJSON payoutCtx)
+            , ("walletCtx", A.toJSON walletCtx)
+            , ("helpersCtx", A.toJSON helpersCtx)
+            , ("constraints", A.toJSON constraints)
+            ]
+    logDebug . TL.toStrict . A.encodeToLazyText $ entry
+    logDebug . T.pack $ show (era, protocolParams, version, scriptCtx, walletCtx, helpersCtx, constraints)
+
+execCreate
+  :: forall env era m v
+   . (MonadUnliftIO m, IsCardanoEra era, WithLog env Message m)
+  => MkRoleTokenMintingPolicy m
+  -> CardanoEra era
+  -> Connector (QueryClient ContractRequest) m
+  -> GetCurrentScripts v
+  -> SolveConstraints era v
+  -> LedgerProtocolParameters era
+  -> LoadWalletContext m
+  -> LoadHelpersContext m
+  -> NetworkId
+  -> Maybe Chain.StakeCredential
+  -> MarloweVersion v
+  -> WalletAddresses
+  -> Maybe Chain.TokenName
+  -> RoleTokensConfig
+  -> MarloweTransactionMetadata
+  -> Maybe Chain.Lovelace
+  -> Accounts
+  -> Either (Contract v) DatumHash
+  -> NominalDiffTime
+  -> m (ServerStCmd MarloweTxCommand Void CreateError (ContractCreated v) m ())
+execCreate mkRoleTokenMintingPolicy era contractQueryConnector getCurrentScripts solveConstraints protocolParameters loadWalletContext loadHelpersContext networkId mStakeCredential version addresses threadRole roleTokens metadata optMinAda accounts contract analysisTimeout = execExceptT do
+  eon <- toBabbageEraOnwards (CreateEraUnsupported $ AnyCardanoEra era) era
+  let threadRole' = fromMaybe "" threadRole
+  let adjustMinUtxo = mkAdjustMinUTxO eon protocolParameters version
+  walletContext <- lift $ loadWalletContext addresses
+  dummyState <- do
+    let WalletContext{changeAddress} = walletContext
+    except $
+      first invalidAddressesError $
+        initialMarloweState
+          adjustMinUtxo
+          version
+          accounts
+          ( ThreadTokenAssetId (Chain.AssetId "00000000000000000000000000000000000000000000000000000000" threadRole') <$ guard case roleTokens of
+              RoleTokensNone -> False
+              RoleTokensMint (unMint -> mint) -> any (NEMap.member (ToScript OpenRoleScript) . roleTokenRecipients) mint
+              RoleTokensUsePolicy _ distribution -> any (Map.member (ToScript OpenRoleScript)) distribution
+          )
+          (fromMaybe mempty optMinAda)
+          (MinAdaProvider changeAddress)
+  (contract', continuations) <- case contract of
+    Right hash -> case version of
+      MarloweV1 -> noteT CreateContractNotFound do
+        let getContract' = MaybeT . runConnector contractQueryConnector . getContract
+        Contract.ContractWithAdjacency{contract = c, ..} <- getContract' hash
+        (c :: Contract v,) <$> foldMapM (fmap singletonContinuations . getContract') (Set.delete hash closure)
+    Left c -> pure (c, noContinuations version)
+  computedMinAdaDeposit <-
+    except $
+      note ProtocolParamNoUTxOCostPerByte $
+        minAdaUpperBound eon protocolParameters version dummyState contract' continuations
+  let minAda = fromMaybe computedMinAdaDeposit optMinAda
+  unless (minAda >= computedMinAdaDeposit) $ throwE $ InsufficientMinAdaDeposit computedMinAdaDeposit
+  ((datum, assets, RolesPolicyId rolesCurrency), constraints) <-
+    ExceptT $ do
+      buildCreateConstraints
+        mkRoleTokenMintingPolicy
+        eon
+        version
+        walletContext
+        threadRole'
+        roleTokens
+        metadata
+        minAda
+        accounts
+        adjustMinUtxo
+        contract'
+  marloweContext@MarloweContext{marloweAddress} <-
+    mkMarloweContext
+      networkId
+      version
+      getCurrentScripts
+      mStakeCredential
   helpersContext <-
     withExceptT CreateLoadHelpersContextFailed $
       ExceptT $
         loadHelpersContext version $
           Left (rolesCurrency, roleTokens)
   let -- Fast analysis of safety: examines bounds for transactions.
-      contractSafetyErrors = checkContract networkId roleTokens version contract' continuations
-      limitAnalysisTime =
-        liftIO
-          . fmap (either Right id)
-          . race ([SafetyAnalysisTimeout] <$ threadDelay (floor $ nominalDiffTimeToSeconds analysisTimeout * 1_000_000))
+      contractSafetyErrors = checkContract networkId (Just roleTokens) version datum continuations
   -- Slow analysis of safety: examines all possible transactions.
-  transactionSafetyErrors <-
+  transactionSafetyErrors <- do
+    let threadTokenAssetId = ThreadTokenAssetId (Chain.AssetId rolesCurrency threadRole')
+        lockedRolesContext = mockLockedRolesContext threadTokenAssetId adjustMinUtxo helpersContext
     ExceptT $
-      first CreateSafetyAnalysisError
-        <$> limitAnalysisTime
-          ( checkTransactions
-              protocolParameters
-              eon
-              version
-              marloweContext
-              helpersContext
-              rolesCurrency
-              threadRole'
-              (changeAddress addresses)
-              assets
-              adjustMinUtxo
-              contract'
-              continuations
-          )
+      liftIO $
+        fmap (first CreateSafetyAnalysisError) . limitAnalysisTime analysisTimeout $
+          checkTransactions
+            protocolParameters
+            eon
+            version
+            marloweContext
+            lockedRolesContext
+            (changeAddress addresses)
+            datum
+            continuations
+
   let safetyErrors = contractSafetyErrors <> transactionSafetyErrors
-  unless (Map.null accounts || null safetyErrors) do
+  unless (Map.null (unAccounts accounts) || null safetyErrors) do
     throwE $ CreateSafetyAnalysisFailed safetyErrors
+
   txBody <-
     except $
       first CreateConstraintError $
         solveConstraints eon protocolParameters version (Left marloweContext) walletContext helpersContext constraints
+
   let marloweScriptAddress = Constraints.marloweAddress marloweContext
   pure $
     ContractCreated eon $
@@ -510,7 +609,7 @@ findMarloweOutput address = \case
   body@(TxBody TxBodyContent{..}) ->
     fmap (Chain.TxOutRef (fromCardanoTxId $ getTxId body) . fst) $
       find (isToCurrentScriptAddress . snd) $
-        zip [0 ..] txOuts
+        zip [minBound ..] txOuts
   where
     isToCurrentScriptAddress (TxOut address' _ _ _) =
       address == fromCardanoAddressInEra (cardanoEra @era) address'
@@ -518,27 +617,29 @@ findMarloweOutput address = \case
 findPayouts
   :: forall era v. (IsCardanoEra era) => MarloweVersion v -> Chain.Address -> TxBody era -> Map Chain.TxOutRef (Payout v)
 findPayouts version address body@(TxBody TxBodyContent{..}) =
-  Map.fromDistinctAscList $ mapMaybe (uncurry parsePayout) $ zip [0 ..] txOuts
+  Map.fromDistinctAscList $ mapMaybe (uncurry parsePayout) $ zip [minBound ..] txOuts
   where
     txId = fromCardanoTxId $ getTxId body
     parsePayout :: Chain.TxIx -> TxOut CtxTx era -> Maybe (Chain.TxOutRef, Payout v)
     parsePayout txIx (TxOut addr value datum _) = do
       guard $ fromCardanoAddressInEra (cardanoEra @era) addr == address
       datum' <- fromChainPayoutDatum version =<< snd (fromCardanoTxOutDatum datum)
-      pure (Chain.TxOutRef txId txIx, Payout address (fromCardanoTxOutValue value) datum')
+      assets <- mkTxOutAssets $ fromCardanoTxOutValue value
+      pure (Chain.TxOutRef txId txIx, Payout address assets datum')
 
 execApplyInputs
-  :: (MonadUnliftIO m, IsCardanoEra era)
+  :: (MonadUnliftIO m, IsCardanoEra era, WithLog env Message m)
   => CardanoEra era
   -> LedgerProtocolParameters era
   -> Connector (QueryClient ContractRequest) m
   -> STM Chain.ChainPoint
   -> SystemStart
   -> EraHistory
-  -> SolveConstraints
+  -> SolveConstraints era v
   -> LoadWalletContext m
   -> LoadMarloweContext m
   -> LoadHelpersContext m
+  -> NetworkId
   -> MarloweVersion v
   -> WalletAddresses
   -> ContractId
@@ -546,6 +647,7 @@ execApplyInputs
   -> Maybe UTCTime
   -> Maybe UTCTime
   -> Inputs v
+  -> NominalDiffTime
   -> m (ServerStCmd MarloweTxCommand Void ApplyInputsError (InputsApplied v) m ())
 execApplyInputs
   era
@@ -558,13 +660,15 @@ execApplyInputs
   loadWalletContext
   loadMarloweContext
   loadHelpersContext
-  version
+  networkId
+  version@MarloweV1
   addresses
   contractId
   metadata
   invalidBefore'
   invalidHereafter'
-  inputs = execExceptT do
+  inputs
+  analysisTimeout = execExceptT do
     eon <- toBabbageEraOnwards (ApplyInputsEraUnsupported $ AnyCardanoEra era) era
     marloweContext@MarloweContext{..} <-
       withExceptT ApplyInputsLoadMarloweContextFailed $
@@ -582,7 +686,8 @@ execApplyInputs
       except $ maybe (Left ScriptOutputNotFound) Right scriptOutput
     let (contract, state) = case version of
           MarloweV1 -> case inputDatum of
-            V1.MarloweData{..} -> (marloweContract, marloweState)
+            V1.MarloweData{..} -> do
+              (marloweContract, marloweState)
         merkleizeInputs' = fmap hush . runConnector contractQueryConnector . merkleizeInputs contract state
     ((invalidBefore, invalidHereafter, mAssetsAndDatum, inputs'), constraints) <-
       buildApplyInputsConstraints
@@ -601,6 +706,7 @@ execApplyInputs
       except $
         first ApplyInputsConstraintError $
           solveConstraints eon protocolParameters version (Left marloweContext) walletContext helpersContext constraints
+
     let input = scriptOutput'
     let buildOutput (assets, datum) utxo = TransactionScriptOutput marloweAddress assets utxo datum
     let output =
@@ -608,6 +714,37 @@ execApplyInputs
             { payouts = findPayouts version payoutAddress txBody
             , scriptOutput = buildOutput <$> mAssetsAndDatum <*> findMarloweOutput marloweAddress txBody
             }
+
+    continuations <-
+      lift (getContractContinuations contractQueryConnector contract) >>= \case
+        Nothing -> throwE ApplyInputsContractContinuationNotFound
+        Just c -> pure c
+
+    let -- Fast analysis of safety: examines bounds for transactions.
+    -- FIXME: We should verify minting policy here as well:
+    --  * we should check if trusted minting policy was used
+    --  * we should check the role where minted as NFTs or they were redundant (do we check this in creation?)
+    -- Slow analysis of safety: examines all possible transactions.
+    safetyErrors <- case mAssetsAndDatum of
+      Nothing -> pure []
+      Just (_, datum) -> do
+        let lockedRolesContext = mkLockedRolesContext helpersContext
+            contractSafetyErrors = checkContract networkId Nothing version datum continuations
+        transactionSafetyErrors <-
+          ExceptT $
+            liftIO $
+              fmap (first ApplyInputsSafetyAnalysisError) . limitAnalysisTime analysisTimeout $
+                checkTransactions
+                  protocolParameters
+                  eon
+                  version
+                  marloweContext
+                  lockedRolesContext
+                  (changeAddress addresses)
+                  datum
+                  continuations
+
+        pure $ contractSafetyErrors <> transactionSafetyErrors
     pure $
       InputsApplied eon $
         InputsAppliedInEra
@@ -616,15 +753,55 @@ execApplyInputs
                 TxMetadataNone -> mempty
                 TxMetadataInEra _ m -> fromCardanoTxMetadata m
           , inputs = inputs'
+          , safetyErrors
           , ..
           }
+
+-- | Build up continuations closure map for a contract.
+-- We don't want to just compute the root hash of the contract and ask the store for the closure because
+-- we can have more granular merkleization in the future which sometimes does not merkleize every step
+-- in the contract. In other words the root hash could be missing from the store.
+getContractContinuations
+  :: (Monad m)
+  => Connector (QueryClient ContractRequest) m
+  -> V1.Contract
+  -> m (Maybe (Map DatumHash V1.Contract))
+getContractContinuations contractQueryConnector contract = runMaybeT do
+  let getCaseContinuationHashes (V1.MerkleizedCase _ h) = [h]
+      getCaseContinuationHashes (V1.Case _ continuation) = getContractContinuationHashes continuation
+
+      getContractContinuationHashes (V1.When cases _ continuation) =
+        foldMap getCaseContinuationHashes cases <> getContractContinuationHashes continuation
+      getContractContinuationHashes (V1.If _ trueContinuation falseContinuation) =
+        getContractContinuationHashes trueContinuation <> getContractContinuationHashes falseContinuation
+      getContractContinuationHashes (V1.Pay _ _ _ _ continuation) = getContractContinuationHashes continuation
+      getContractContinuationHashes (V1.Let _ _ continuation) = getContractContinuationHashes continuation
+      getContractContinuationHashes V1.Close = []
+      getContractContinuationHashes (V1.Assert _ continuation) = getContractContinuationHashes continuation
+
+      toDatumHash = DatumHash . PV2.fromBuiltin
+
+      childrenHashes :: Set DatumHash
+      childrenHashes = Set.fromList . fmap toDatumHash $ getContractContinuationHashes contract
+
+      getContract' = MaybeT . runConnector contractQueryConnector . getContract
+
+  childContracts :: [Contract.ContractWithAdjacency] <- for (Set.toList childrenHashes) getContract'
+  let childrenClosure = flip foldMap childContracts \Contract.ContractWithAdjacency{closure} -> closure
+
+  (closureContracts :: [Contract.ContractWithAdjacency]) <- do
+    let hs = Set.toList $ Set.difference childrenClosure childrenHashes
+    for hs getContract'
+  let allContracts = childContracts <> closureContracts
+      continuations = Map.fromList $ flip fmap allContracts \Contract.ContractWithAdjacency{contract = c, contractHash = ch} -> (ch, c)
+  pure continuations
 
 execWithdraw
   :: forall era v m
    . (Monad m, IsCardanoEra era)
   => CardanoEra era
   -> LedgerProtocolParameters era
-  -> SolveConstraints
+  -> SolveConstraints era v
   -> LoadWalletContext m
   -> LoadPayoutContext m
   -> LoadHelpersContext m

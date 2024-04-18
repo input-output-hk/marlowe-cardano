@@ -16,9 +16,9 @@ module Spec.Format (
 
 import Data.Text (pack)
 import Language.Marlowe.CLI.Format
-import Language.Marlowe.Core.V1.Semantics.Types
+import Language.Marlowe.Core.V1.Semantics.Types ()
 import Language.Marlowe.Pretty
-import Spec.Marlowe.Semantics.Arbitrary ()
+import Spec.Marlowe.Semantics.Arbitrary (ValidContractStructure (ValidContractStructure))
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck (Property, testProperty, (===))
 import Text.Megaparsec
@@ -38,6 +38,6 @@ testPrettyUnPretty :: TestTree
 testPrettyUnPretty =
   testProperty "Pretty print and parse contract" prop
 
-prop :: Contract -> Property
-prop c =
+prop :: ValidContractStructure -> Property
+prop (ValidContractStructure c) =
   pure c === runParser contractParser "string" (pack . show $ pretty c)

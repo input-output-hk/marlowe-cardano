@@ -68,10 +68,10 @@ import Language.Marlowe.Runtime.Core.Api (MarloweVersion (..))
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
 import qualified Language.Marlowe.Runtime.Indexer.Database.PostgreSQL as IndexerPostgreSQL
 import qualified Language.Marlowe.Runtime.Indexer.Party as Party
+import Language.Marlowe.Runtime.Logging (RootSelector (..), renderRootSelectorOTel)
 import qualified Language.Marlowe.Runtime.Sync.Database as Sync
 import qualified Language.Marlowe.Runtime.Sync.Database.PostgreSQL as SyncPostgres
 import Language.Marlowe.Runtime.Transaction (mkCommandLineRoleTokenMintingPolicy)
-import Logging (RootSelector (..), renderRootSelectorOTel)
 import Network.Protocol.Driver (TcpServerDependencies (..), tcpServer)
 import Network.Protocol.Driver.Trace (tcpServerTraced)
 import Network.Socket (HostName, PortNumber)

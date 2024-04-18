@@ -113,10 +113,10 @@ decodeContractOutputRow
   :: (ByteString, Int16, ByteString, Int16, ByteString, ByteString)
   -> (Core.ContractId, UnspentContractOutput)
 decodeContractOutputRow (createTxId, createTxIx, txId, txIx, address, payoutValidatorHash) =
-  ( Core.ContractId $ TxOutRef (TxId createTxId) (fromIntegral createTxIx)
+  ( Core.ContractId $ TxOutRef (TxId createTxId) (TxIx $ fromIntegral createTxIx)
   , UnspentContractOutput
       { marloweVersion = Core.SomeMarloweVersion Core.MarloweV1
-      , txOutRef = TxOutRef (TxId txId) (fromIntegral txIx)
+      , txOutRef = TxOutRef (TxId txId) (TxIx $ fromIntegral txIx)
       , marloweAddress = Address address
       , payoutValidatorHash = ScriptHash payoutValidatorHash
       }
@@ -126,8 +126,8 @@ decodePayoutOutputRow
   :: (ByteString, Int16, ByteString, Int16)
   -> (Core.ContractId, TxOutRef)
 decodePayoutOutputRow (createTxId, createTxIx, txId, txIx) =
-  ( Core.ContractId $ TxOutRef (TxId createTxId) (fromIntegral createTxIx)
-  , TxOutRef (TxId txId) (fromIntegral txIx)
+  ( Core.ContractId $ TxOutRef (TxId createTxId) (TxIx $ fromIntegral createTxIx)
+  , TxOutRef (TxId txId) (TxIx $ fromIntegral txIx)
   )
 
 prepareBlockQueryParams :: BlockHeader -> (ByteString, Int64, Int64)

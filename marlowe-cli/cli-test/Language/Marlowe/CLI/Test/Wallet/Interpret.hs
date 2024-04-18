@@ -67,6 +67,7 @@ import Language.Marlowe.CLI.Test.Contract.ParametrizedMarloweJSON (
   ParametrizedMarloweJSON,
   decodeParametrizedContractJSON,
   decodeParametrizedInputJSON,
+  decodeParametrizedStateJSON,
   now,
  )
 import Language.Marlowe.CLI.Test.ExecutionMode (queryByAddress, queryUTxOs)
@@ -460,6 +461,8 @@ assetIdToToken (AssetId currencyNickname currencyToken) = do
   pure $ M.Token currencySymbol currencyToken
 assetIdToToken AdaAssetId = pure adaToken
 
+-- TODO: Move these three to a separate Interpret helpers module.
+-- They have NOTHING to do with Wallet interpretation.
 decodeInputJSON
   :: (InterpretMonad env st m era)
   => ParametrizedMarloweJSON
@@ -484,6 +487,18 @@ decodeContractJSON json = do
   n <- now
   case decodeParametrizedContractJSON network wallets currencies n json of
     Left err -> throwError $ testExecutionFailed' $ "Failed to decode contract: " <> show err
+    Right c -> pure c
+
+decodeStateJSON
+  :: (InterpretMonad env st m era)
+  => ParametrizedMarloweJSON
+  -> m M.State
+decodeStateJSON json = do
+  currencies <- use currenciesL
+  wallets <- use walletsL
+  network <- getNetworkId <&> marloweNetworkFromCardanoNetworkId
+  case decodeParametrizedStateJSON network wallets currencies json of
+    Left err -> throwError $ testExecutionFailed' $ "Failed to decode state: " <> show err
     Right c -> pure c
 
 interpret

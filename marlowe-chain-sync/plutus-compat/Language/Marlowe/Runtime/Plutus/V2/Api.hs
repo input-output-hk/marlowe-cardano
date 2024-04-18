@@ -24,6 +24,7 @@ import Cardano.Chain.Common (addrToBase58)
 import Control.Monad ((<=<), (>=>))
 import Data.Bifunctor (bimap)
 import qualified Data.Map as Map
+import Data.Maybe (fromMaybe)
 import Language.Marlowe.Runtime.Cardano.Api (toCardanoAddressAny)
 import Language.Marlowe.Runtime.ChainSync.Api (
   Address,
@@ -32,6 +33,7 @@ import Language.Marlowe.Runtime.ChainSync.Api (
   Lovelace (..),
   PlutusScript (..),
   PolicyId (PolicyId),
+  Quantity (Quantity),
   ScriptHash (..),
   TokenName (TokenName),
   Tokens (..),
@@ -117,14 +119,14 @@ fromPlutusValue :: PV2.Value -> Assets
 fromPlutusValue = Assets <$> valueToLovelace <*> valueToTokens
 
 valueToLovelace :: PV2.Value -> Lovelace
-valueToLovelace = Lovelace . maybe 0 fromIntegral . (AM.lookup "" <=< AM.lookup "") . PV2.getValue
+valueToLovelace = Lovelace . fromMaybe 0 . (AM.lookup "" <=< AM.lookup "") . PV2.getValue
 
 valueToTokens :: PV2.Value -> Tokens
 valueToTokens =
   Tokens
     . Map.fromList
     . fmap
-      ( bimap (uncurry toAssetId) fromIntegral
+      ( bimap (uncurry toAssetId) Quantity
           . assocLeft
       )
     . (traverse AM.toList <=< AM.toList)

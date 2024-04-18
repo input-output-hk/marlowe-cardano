@@ -104,40 +104,40 @@ Show: MsgRespond (SystemStart 2000-01-01 00:00:01 UTC)
 Binary: 00000007d00000000000000001010100000000000000050010a5d4e8
 Show: MsgRespond (Testnet (NetworkMagic {unNetworkMagic = 0}))
 Binary: 0100000000
-Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList [(AssetId {policyId = "", tokenName = ""},Quantity {unQuantity = 1})]}}, datumHash = Nothing, datum = Nothing})]})
-Binary: 0000000000000001000000000000000000010000000000000000000000000000000100000000000000010000000000000000000000000000000000000000000000010000
-Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList [(AssetId {policyId = "", tokenName = "a"},Quantity {unQuantity = 1})]}}, datumHash = Nothing, datum = Nothing})]})
-Binary: 000000000000000100000000000000000001000000000000000000000000000000010000000000000001000000000000000000000000000000016100000000000000010000
-Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList [(AssetId {policyId = "61", tokenName = ""},Quantity {unQuantity = 1})]}}, datumHash = Nothing, datum = Nothing})]})
-Binary: 000000000000000100000000000000000001000000000000000000000000000000010000000000000001000000000000000161000000000000000000000000000000010000
-Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}, datumHash = Just "", datum = Nothing})]})
-Binary: 00000000000000010000000000000000000100000000000000000000000000000001000000000000000001000000000000000000
-Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}, datumHash = Just "61", datum = Nothing})]})
-Binary: 0000000000000001000000000000000000010000000000000000000000000000000100000000000000000100000000000000016100
-Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}, datumHash = Nothing, datum = Just (B "")})]})
-Binary: 0000000000000001000000000000000000010000000000000000000000000000000100000000000000000001040000000000000000
-Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}, datumHash = Nothing, datum = Just (B "a")})]})
-Binary: 000000000000000100000000000000000001000000000000000000000000000000010000000000000000000104000000000000000161
-Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}, datumHash = Nothing, datum = Just (Constr 1 [Constr 1 []])})]})
-Binary: 000000000000000100000000000000000001000000000000000000000000000000010000000000000000000100000000000100000000000000010000000000010000000000000000
-Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}, datumHash = Nothing, datum = Just (Constr 1 [])})]})
-Binary: 00000000000000010000000000000000000100000000000000000000000000000001000000000000000000010000000000010000000000000000
-Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}, datumHash = Nothing, datum = Just (I 1)})]})
-Binary: 0000000000000001000000000000000000010000000000000000000000000000000100000000000000000001030000000001
-Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}, datumHash = Nothing, datum = Just (List [Constr 1 []])})]})
-Binary: 00000000000000010000000000000000000100000000000000000000000000000001000000000000000000010200000000000000010000000000010000000000000000
-Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}, datumHash = Nothing, datum = Just (List [])})]})
-Binary: 0000000000000001000000000000000000010000000000000000000000000000000100000000000000000001020000000000000000
-Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}, datumHash = Nothing, datum = Just (Map [(Constr 1 [],Constr 1 [])])})]})
-Binary: 000000000000000100000000000000000001000000000000000000000000000000010000000000000000000101000000000000000100000000000100000000000000000000000000010000000000000000
-Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}, datumHash = Nothing, datum = Just (Map [])})]})
-Binary: 0000000000000001000000000000000000010000000000000000000000000000000100000000000000000001010000000000000000
-Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}, datumHash = Nothing, datum = Nothing})]})
-Binary: 0000000000000001000000000000000000010000000000000000000000000000000100000000000000000000
-Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "61", assets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}, datumHash = Nothing, datum = Nothing})]})
-Binary: 000000000000000100000000000000000001000000000000000161000000000000000100000000000000000000
-Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "61", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}, datumHash = Nothing, datum = Nothing})]})
-Binary: 000000000000000100000000000000016100010000000000000000000000000000000100000000000000000000
+Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = TxOutAssets {unTxOutAssets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList [(AssetId {policyId = "", tokenName = ""},Quantity {unQuantity = 1})]}}}, datumHash = Nothing, datum = Nothing})]})
+Binary: 0000000000000001000000000000000000010000000000000000000000000100000000000000010000000000000000000000000000000000000000010000
+Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = TxOutAssets {unTxOutAssets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList [(AssetId {policyId = "", tokenName = "a"},Quantity {unQuantity = 1})]}}}, datumHash = Nothing, datum = Nothing})]})
+Binary: 000000000000000100000000000000000001000000000000000000000000010000000000000001000000000000000000000000000000016100000000010000
+Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = TxOutAssets {unTxOutAssets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList [(AssetId {policyId = "61", tokenName = ""},Quantity {unQuantity = 1})]}}}, datumHash = Nothing, datum = Nothing})]})
+Binary: 000000000000000100000000000000000001000000000000000000000000010000000000000001000000000000000161000000000000000000000000010000
+Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = TxOutAssets {unTxOutAssets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}}, datumHash = Just "", datum = Nothing})]})
+Binary: 00000000000000010000000000000000000100000000000000000000000001000000000000000001000000000000000000
+Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = TxOutAssets {unTxOutAssets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}}, datumHash = Just "61", datum = Nothing})]})
+Binary: 0000000000000001000000000000000000010000000000000000000000000100000000000000000100000000000000016100
+Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = TxOutAssets {unTxOutAssets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}}, datumHash = Nothing, datum = Just (B "")})]})
+Binary: 0000000000000001000000000000000000010000000000000000000000000100000000000000000001040000000000000000
+Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = TxOutAssets {unTxOutAssets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}}, datumHash = Nothing, datum = Just (B "a")})]})
+Binary: 000000000000000100000000000000000001000000000000000000000000010000000000000000000104000000000000000161
+Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = TxOutAssets {unTxOutAssets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}}, datumHash = Nothing, datum = Just (Constr 1 [Constr 1 []])})]})
+Binary: 000000000000000100000000000000000001000000000000000000000000010000000000000000000100000000000100000000000000010000000000010000000000000000
+Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = TxOutAssets {unTxOutAssets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}}, datumHash = Nothing, datum = Just (Constr 1 [])})]})
+Binary: 00000000000000010000000000000000000100000000000000000000000001000000000000000000010000000000010000000000000000
+Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = TxOutAssets {unTxOutAssets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}}, datumHash = Nothing, datum = Just (I 1)})]})
+Binary: 0000000000000001000000000000000000010000000000000000000000000100000000000000000001030000000001
+Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = TxOutAssets {unTxOutAssets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}}, datumHash = Nothing, datum = Just (List [Constr 1 []])})]})
+Binary: 00000000000000010000000000000000000100000000000000000000000001000000000000000000010200000000000000010000000000010000000000000000
+Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = TxOutAssets {unTxOutAssets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}}, datumHash = Nothing, datum = Just (List [])})]})
+Binary: 0000000000000001000000000000000000010000000000000000000000000100000000000000000001020000000000000000
+Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = TxOutAssets {unTxOutAssets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}}, datumHash = Nothing, datum = Just (Map [(Constr 1 [],Constr 1 [])])})]})
+Binary: 000000000000000100000000000000000001000000000000000000000000010000000000000000000101000000000000000100000000000100000000000000000000000000010000000000000000
+Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = TxOutAssets {unTxOutAssets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}}, datumHash = Nothing, datum = Just (Map [])})]})
+Binary: 0000000000000001000000000000000000010000000000000000000000000100000000000000000001010000000000000000
+Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = TxOutAssets {unTxOutAssets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}}, datumHash = Nothing, datum = Nothing})]})
+Binary: 0000000000000001000000000000000000010000000000000000000000000100000000000000000000
+Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "61", assets = TxOutAssets {unTxOutAssets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}}, datumHash = Nothing, datum = Nothing})]})
+Binary: 000000000000000100000000000000000001000000000000000161000000000100000000000000000000
+Show: MsgRespond (UTxOs {unUTxOs = fromList [(TxOutRef {txId = "61", txIx = TxIx {unTxIx = 1}},TransactionOutput {address = "", assets = TxOutAssets {unTxOutAssets = Assets {ada = Lovelace {unLovelace = 1}, tokens = Tokens {unTokens = fromList []}}}, datumHash = Nothing, datum = Nothing})]})
+Binary: 000000000000000100000000000000016100010000000000000000000000000100000000000000000000
 Show: MsgRespond (UTxOs {unUTxOs = fromList []})
 Binary: 0000000000000000
 Show: MsgRespond (fromList [("",ScriptInEra PlutusScriptV1InBabbage (PlutusScript PlutusScriptV1 (PlutusScriptSerialised "G\SOH\NUL\NUL\"\"\NUL\DC1")))])
