@@ -24,6 +24,13 @@ instances:
     repo: ghcr.io
     org: input-output-hk
     cardanoNode: cardano-node
+  1_0_0:
+    parentDomain: 1.0.0.scdev.aws.iohkdev.io
+    webTag: 1.0.0
+    tag: 1.0.0
+    repo: ghcr.io
+    org: input-output-hk
+    cardanoNode: cardano-node  
 namespace: marlowe-staging
 releaseName: marlowe-runtime
 databaseName: marlowe-runtime-database
