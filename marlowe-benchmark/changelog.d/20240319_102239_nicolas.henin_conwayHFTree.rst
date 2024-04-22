@@ -1,3 +1,0 @@
-### Changed
-
-- Added `sanchonet` as a new network example (Conway Hard Fork Adaptation)

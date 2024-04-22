@@ -1,4 +1,36 @@
 
+<a id='changelog-1.0.0'></a>
+# 1.0.0 — 2024-04-22
+
+## Added
+
+- Enhanced error information (including CoinsSelectionError, MarloweTransactionError, etc.).
+
+- Optional Initialization of Participant's Account during contract creation
+  - Allows simultaneous deposits during the creation process
+
+- Safety Errors are available at :
+  - Contract creation (Building the Tx) : `POST /contracts`
+  - Input application (Building the Tx) : `POST /contracts/:contractId/transactions`
+
+- Additional semantics info to response from `GET /contracts/:contractId/transactions/:transactionId`
+  - `inputState` is the Marlowe state from the transaction's input datum.
+  - `inputContract` is the Marlowe contract from the transaction's input datum.
+  - `reconstructedSemanticInput` is the reconstructed `TransactionInput` that
+    was passed to `computeTransaction` during the execution of the Marlowe
+    semantics validator. This includes the correct `TimeInterval` against which
+    to evaluate the input contract and state. The upper bound of this interval
+    differs from `invalidHereafter` by -1 milliseconds.
+  - `reconstructedSemanticsOutput` is the reconstructed `TransactionOutput`
+    that calling `computeTransaction` inside the validator produces. This can
+    be used to recover any intra-state payment information, as well as anyO
+    warnings which were raised during evaluation. This information is not
+    otherwise available in the response.
+
+## Changed
+
+- Transitioned REST API error encoding from a generic format to a more explicit error structure.
+
 <a id='changelog-0.0.6'></a>
 # 0.0.6 — 2023-12-06
 

@@ -1,4 +1,24 @@
 
+<a id='changelog-1.0.0'></a>
+# 1.0.0 — 2024-04-22
+
+## Removed
+
+- Removed `marlowe-scaling` executable because `marlowe-benchmark` now serves this function.
+
+- Removed `marlowe-finder` executable because `marlowe-benchmark` now serves this function.
+
+- Removed `marlowe-streamer` executable because `marlowe-benchmark` now serves this function.
+
+- Removed `marlower-signer` executable.
+
+## Changed
+
+- Upgrade to cardano-api 8.37.1.1
+
+- Upgrade `cardano-api` `8.37.1.1` to `8.39.2.0` (Conway Hard Fork Adaptation)
+- Upgrade `plutus` from `1.15` to `1.21` (`plutus-core`, `plutus-ledger-api`, `plutus-tx`) (Conway Hard Fork Adaptation)
+
 <a id='changelog-0.4.0.0'></a>
 # 0.4.0.0 — 2023-12-06
 
