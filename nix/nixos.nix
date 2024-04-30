@@ -5,22 +5,30 @@
 
   envIdxs = listToAttrs (imap0 (idx: env: { name = env; value = idx; }) allowedEnvs);
 
-  runtimeOptions.options = {
-    network = mkOption {
-      type = types.enum allowedEnvs;
-      description = "The Cardano network to connect to";
-    };
+  runtimeOptions = { name, ... }: {
+    options = {
+      network = mkOption {
+        type = types.enum allowedEnvs;
+        description = "The Cardano network to connect to";
+      };
 
-    flake = mkOption {
-      type = types.attrs;
-      default = self;
-      description = "A Nix Flake for the runtime application to deploy";
-    };
+      domain = mkOption {
+        type = types.str;
+        default = name;
+        description = "The domain to host the runtime HTTP server on";
+      };
 
-    marlowe-plutus-flake = mkOption {
-      type = types.attrs;
-      default = marlowe-plutus;
-      description = "A Nix Flake for the marlowe-plutus project to use for scripts.";
+      flake = mkOption {
+        type = types.attrs;
+        default = self;
+        description = "A Nix Flake for the runtime application to deploy";
+      };
+
+      marlowe-plutus-flake = mkOption {
+        type = types.attrs;
+        default = marlowe-plutus;
+        description = "A Nix Flake for the marlowe-plutus project to use for scripts.";
+      };
     };
   };
 
@@ -60,6 +68,29 @@ in {
   };
 
   config = mkIf (cfg != { }) {
+    http-services.proxied-services = listToAttrs (imap0 (idx: name: let runtime = cfg.${name}; in {
+      name = "marlowe-runtime-${name}-web";
+      value = {
+        inherit (runtime) domain;
+        systemdConfig = port: {
+          description = "Marlowe Runtime Web (${name})";
+          serviceConfig = {
+            ExecSearchPath = makeBinPath [ runtime.flake.packages.${pkgs.system}.marlowe-web-server ];
+            DynamicUser = true;
+            ExecStart = concatStringsSep " " [
+              "marlowe-web-server"
+              "--http-port" (toString port)
+              "--marlowe-runtime-host" "127.0.0.1"
+              "--marlowe-runtime-port" (toString (3701 + 3 * idx))
+              "--enable-open-api"
+              "--access-control-allow-origin-all"
+            ];
+          };
+          requires = [ "marlowe-runtime-${name}.service" ];
+          after = [ "marlowe-runtime-${name}.service" ];
+        };
+      };
+    }) (attrNames cfg));
     services.postgresql = {
       enable = true;
       ensureDatabases = map (inst: "runtime-${inst}") (attrNames cfg);
@@ -124,7 +155,6 @@ in {
             "--max-store-size" "8589934592"
           ];
         };
-        wantedBy = [ "multi-user.target" ];
         requires = [ "container@cardano-node-${env}.service" "postgresql.service" ];
         after = [ "container@cardano-node-${env}.service" "postgresql.service" ];
         environment = optionalAttrs (envConfig.networkConfig.RequiresNetworkMagic == "RequiresMagic") {
