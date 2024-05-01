@@ -1,5 +1,5 @@
 { self, marlowe-plutus, cardano-node, ... }: { lib, config, pkgs, ... }: let
-  inherit (lib) mkOption types mkIf attrNames listToAttrs imap0 foldr attrValues mapAttrs' makeBinPath concatStringsSep optionalAttrs mkForce;
+  inherit (lib) mkOption types mkIf attrNames listToAttrs imap0 foldr attrValues mapAttrs' makeBinPath concatStringsSep optionalAttrs mkForce optionals versionAtLeast;
 
   allowedEnvs = [ "preprod" "preview" "mainnet" ];
 
@@ -138,15 +138,16 @@ in {
         '';
         runtimeInputs = [ sqitchPg postgresql ];
       };
+      pkg = runtimeCfg.flake.packages.${pkgs.system}.marlowe-runtime;
     in {
       name = "marlowe-runtime-${name}";
       value = {
         description = "Marlowe Runtime (${name})";
         serviceConfig = {
-          ExecSearchPath = makeBinPath [ runSqitch runtimeCfg.flake.packages.${pkgs.system}.marlowe-runtime ];
+          ExecSearchPath = makeBinPath [ runSqitch pkg ];
           # TODO: Wait for the nodes to be in babbage to start
           ExecStartPre = "run-sqitch";
-          ExecStart = concatStringsSep " " [
+          ExecStart = concatStringsSep " " ([
             "marlowe-runtime"
             "--socket-path" "/var/lib/nixos-containers/cardano-node-${env}/var/lib/cardano-node/node.socket"
             "--database-uri" db
@@ -159,9 +160,10 @@ in {
             "--port-traced" (toString (3701 + 3 * idx))
             "--http-port" (toString (3702 + 3 * idx))
             "--minting-policy-cmd" "marlowe-minting-validator"
+          ] ++ optionals (versionAtLeast pkg.version "0.6") [
             "--min-contract-age" "87400s"
             "--max-store-size" "8589934592"
-          ];
+          ]);
         };
         requires = [ "container@cardano-node-${env}.service" "postgresql.service" ];
         after = [ "container@cardano-node-${env}.service" "postgresql.service" ];
