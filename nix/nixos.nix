@@ -74,7 +74,16 @@ in {
         inherit (runtime) domain;
         systemdConfig = port: {
           description = "Marlowe Runtime Web (${name})";
+          # allow unlimited restarts
+          unitConfig.StartLimitIntervalSec = 0;
           serviceConfig = {
+            # Restart on exit, with exponential fallback up to an hour
+            # runtime-web needs to wait for runtime, which can take arbitrarily
+            # long to be ready (see comment there).
+            Restart = "always";
+            RestartSecMax= "1hour";
+            RestartSteps = 10;
+
             ExecSearchPath = makeBinPath [ runtime.flake.packages.${pkgs.system}.marlowe-web-server ];
             DynamicUser = true;
             ExecStart = concatStringsSep " " [
@@ -146,7 +155,17 @@ in {
       name = "marlowe-runtime-${name}";
       value = {
         description = "Marlowe Runtime (${name})";
+        # allow unlimited restarts
+        unitConfig.StartLimitIntervalSec = 0;
         serviceConfig = {
+          # Restart on exit, with exponential fallback up to an hour
+          # The runtime needs to wait for postgres and the node to be up (which
+          # should be relatively quick) /and/ for the node to be in Babbage (which
+          # can take an arbitrarily long time).
+          Restart = "always";
+          RestartSecMax= "1hour";
+          RestartSteps = 10;
+
           ExecSearchPath = makeBinPath [ runSqitch pkg ];
           # TODO: Wait for the nodes to be in babbage to start
           ExecStartPre = "run-sqitch";
