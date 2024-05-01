@@ -103,6 +103,14 @@ in {
       authentication = ''
         local all all peer map=superuser_map
       '';
+      settings = {
+        shared_buffers = "2GB";
+        huge_pages = "try";
+        temp_buffers = "2GB";
+        max_prepared_transactions = 256;
+        max_wal_size = "4GB";
+        max_pred_locks_per_transaction = 256;
+      };
     };
 
     systemd.services = listToAttrs (imap0 (idx: name: let
