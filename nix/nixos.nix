@@ -109,6 +109,9 @@ in {
         temp_buffers = "2GB";
         max_prepared_transactions = 256;
         max_wal_size = "4GB";
+        max_locks_per_transaction = 256;
+        work_mem = "32768";
+        maintenance_work_mem = "262144";
         max_pred_locks_per_transaction = 512;
       };
     };
