@@ -81,7 +81,7 @@ in {
             # runtime-web needs to wait for runtime, which can take arbitrarily
             # long to be ready (see comment there).
             Restart = "always";
-            RestartSecMax= "1hour";
+            RestartMaxDelaySec= "1hour";
             RestartSteps = 10;
 
             ExecSearchPath = makeBinPath [ runtime.flake.packages.${pkgs.system}.marlowe-web-server ];
@@ -121,7 +121,7 @@ in {
         max_locks_per_transaction = 256;
         work_mem = "32768";
         maintenance_work_mem = "262144";
-        max_pred_locks_per_transaction = 512;
+        max_pred_locks_per_transaction = 1024;
       };
     };
 
@@ -163,7 +163,7 @@ in {
           # should be relatively quick) /and/ for the node to be in Babbage (which
           # can take an arbitrarily long time).
           Restart = "always";
-          RestartSecMax= "1hour";
+          RestartMaxDelaySec= "1hour";
           RestartSteps = 10;
 
           ExecSearchPath = makeBinPath [ runSqitch pkg ];
