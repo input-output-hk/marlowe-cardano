@@ -12,8 +12,8 @@ instances:
     cardanoNode: cardano-node-873
   demo:
     parentDomain: demo.scdev.aws.iohkdev.io
-    webTag: 0.0.5.1
-    tag: 0.0.5
+    webTag: 1.0.0
+    tag: 1.0.0
     repo: ghcr.io
     org: input-output-hk
     cardanoNode: cardano-node
