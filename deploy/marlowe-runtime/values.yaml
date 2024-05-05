@@ -5,8 +5,8 @@ networks:
 instances:
   qa:
     parentDomain: scdev.aws.iohkdev.io
-    webTag: 94821a97
-    tag: 94821a97
+    webTag: 6921eede
+    tag: 6921eede
     repo: ghcr.io
     org: input-output-hk
     cardanoNode: cardano-node-873
@@ -30,7 +30,7 @@ instances:
     tag: 1.0.0
     repo: ghcr.io
     org: input-output-hk
-    cardanoNode: cardano-node  
+    cardanoNode: cardano-node
 namespace: marlowe-staging
 releaseName: marlowe-runtime
 databaseName: marlowe-runtime-database
