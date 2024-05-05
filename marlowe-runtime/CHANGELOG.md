@@ -1,4 +1,60 @@
 
+<a id='changelog-1.0.0'></a>
+# 1.0.0 — 2024-04-22
+
+## Removed
+
+- `marlowe-runtime-cli`
+
+## Added
+
+- Support for initial account balances when creating contracts
+
+- Upgrade to `cardano-api` 8.37.1.1
+
+- A safety analysis to the apply input step
+
+- Support for compiling/building/running the repository using new Mac CPUs (M1/M2/M3) within a linux VM (`aarch64-linux` system).
+
+## Changed
+
+- Updated Marlowe Plutus scripts to use optmized `asData` for `Case`.
+
+- Default batch size for chain-indexer decreased to 1/4 to prevent OOM errors.
+
+- Upgrade `cardano-api` `8.37.1.1` to `8.39.2.0` (Conway Hard Fork Adaptation)
+- Upgrade `plutus` from `1.15` to `1.21` (`plutus-core`, `plutus-ledger-api`, `plutus-tx`) (Conway Hard Fork Adaptation)
+- Upgrade `cardano-ledger` (Conway Hard Fork Adaptation)
+    - `cardano-ledger-conway` from `1.11` to `1.12`
+    - `cardano-ledger-core` from `1.9` to `1.10`
+    - `cardano-ledger-mary` from `1.4` to `1.5`
+    - `cardano-ledger-shelley` from `1.8` to `1.9`
+    -  `cardano-ledger-binary` from `1.2` to `1.3`
+- Upgrade `ouroboros-network` (Conway Hard Fork Adaptation)
+    - `ouroboros-network-api` from `0.6.0` to `0.7.0`
+    - `ouroboros-consensus` from `0.14` to `0.16`
+    - `ouroboros-network-protocols` from `0.6.0` to `0.8`
+
+## Fixed
+
+- Marlowe Indexer can crash when chain indexer is syncing from Genesis.
+
+- `marlowe-contract` consumes a lot of memory.
+  - The garbage collector was holding onto a rolling window of snapshots
+    spanning 2160 blocks of all live Marlowe contracts. It only ever needed to
+    hold onto the datum hashes of the merkleized continuations in the
+    contracts, so rather than keeping all the contracts around it now just
+    holds onto these.
+
+- Space leak in `marlowe-contract`
+
+- Duplicate blocks can break marlowe-chain-sync queries
+- Delete all blocks when rolling back to Genesis.
+
+- Arbitrary Marlowe instances which were not generating invalid currencies and tokens.
+
+- Safety analysis transaction filtering which was causing selective tx reporting.
+
 <a id='changelog-0.0.6'></a>
 # 0.0.6 — 2023-12-06
 
