@@ -46,38 +46,40 @@
     inherit inputs;
     repoRoot = ./.;
     systems = [ "x86_64-linux" "x86_64-darwin" "aarch64-darwin" "aarch64-linux" ];
-    flake = let
-      inherit (nixpkgs) lib;
-    in {
-      sqitch-plan-dirs = {
-        # Ensure this path only changes when sqitch.plan file is updated, or DDL
-        # files are updated.
-        chain-sync = (builtins.path {
-          path = self;
-          name = "marlowe-chain-sync-sqitch-plan";
-          filter = path: type:
-            path == "${self}/marlowe-chain-sync"
-              || path == "${self}/marlowe-chain-sync/sqitch.plan"
-              || lib.hasPrefix "${self}/marlowe-chain-sync/deploy" path
-              || lib.hasPrefix "${self}/marlowe-chain-sync/revert" path;
-        }) + "/marlowe-chain-sync";
+    flake = _:
+      let
+        inherit (nixpkgs) lib;
+      in
+      {
+        sqitch-plan-dirs = {
+          # Ensure this path only changes when sqitch.plan file is updated, or DDL
+          # files are updated.
+          chain-sync = (builtins.path {
+            path = self;
+            name = "marlowe-chain-sync-sqitch-plan";
+            filter = path: type:
+              path == "${self}/marlowe-chain-sync"
+                || path == "${self}/marlowe-chain-sync/sqitch.plan"
+                || lib.hasPrefix "${self}/marlowe-chain-sync/deploy" path
+                || lib.hasPrefix "${self}/marlowe-chain-sync/revert" path;
+          }) + "/marlowe-chain-sync";
 
-        # Ensure this path only changes when sqitch.plan file is updated, or DDL
-        # files are updated.
-        runtime = (builtins.path {
-          path = self;
-          name = "marlowe-runtime-sqitch-plan";
-          filter = path: type:
-            path == "${self}/marlowe-runtime"
-              || path == "${self}/marlowe-runtime/marlowe-indexer"
-              || path == "${self}/marlowe-runtime/marlowe-indexer/sqitch.plan"
-              || lib.hasPrefix "${self}/marlowe-runtime/marlowe-indexer/deploy" path
-              || lib.hasPrefix "${self}/marlowe-runtime/marlowe-indexer/revert" path;
-        }) + "/marlowe-runtime/marlowe-indexer";
+          # Ensure this path only changes when sqitch.plan file is updated, or DDL
+          # files are updated.
+          runtime = (builtins.path {
+            path = self;
+            name = "marlowe-runtime-sqitch-plan";
+            filter = path: type:
+              path == "${self}/marlowe-runtime"
+                || path == "${self}/marlowe-runtime/marlowe-indexer"
+                || path == "${self}/marlowe-runtime/marlowe-indexer/sqitch.plan"
+                || lib.hasPrefix "${self}/marlowe-runtime/marlowe-indexer/deploy" path
+                || lib.hasPrefix "${self}/marlowe-runtime/marlowe-indexer/revert" path;
+          }) + "/marlowe-runtime/marlowe-indexer";
+        };
+
+        nixosModules.default = import ./nix/nixos.nix inputs;
       };
-
-      nixosModules.default = import ./nix/nixos.nix inputs;
-    };
     outputs = import ./nix/outputs.nix;
   };
 
