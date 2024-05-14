@@ -5,8 +5,8 @@ networks:
 instances:
   qa:
     parentDomain: scdev.aws.iohkdev.io
-    webTag: 9c3bdb1f
-    tag: 9c3bdb1f
+    webTag: e780a902
+    tag: e780a902
     repo: ghcr.io
     org: input-output-hk
     cardanoNode: cardano-node-873
