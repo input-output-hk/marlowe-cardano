@@ -358,7 +358,7 @@ library contract-api
     , hs-opentelemetry-api ^>=0.0.3
     , marlowe-cardano ==0.2.1.0
     , marlowe-chain-sync ==1.0.0
-    , marlowe-object ==0.2.0.1
+    , marlowe-object ==1.0.0
     , marlowe-protocols ==0.3.0.0
     , marlowe-runtime ==1.0.0
     , plutus-ledger-api ^>=1.21
@@ -400,7 +400,7 @@ library contract
     , lock-file ^>=0.7
     , marlowe-cardano ==0.2.1.0
     , marlowe-chain-sync ==1.0.0
-    , marlowe-object ==0.2.0.1
+    , marlowe-object ==1.0.0
     , marlowe-protocols ==0.3.0.0
     , marlowe-runtime:{marlowe-runtime, contract-api, sync-api} ==1.0.0
     , plutus-ledger-api ^>=1.21
