@@ -1,6 +1,6 @@
 cabal-version:   3.4
 name:            marlowe-contracts
-version:         0.2.0.0
+version:         1.0.0
 license:         Apache-2.0
 license-files:
   LICENSE

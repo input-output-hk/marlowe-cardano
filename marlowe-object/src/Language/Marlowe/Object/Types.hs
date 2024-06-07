@@ -604,7 +604,7 @@ instance FromJSON ShelleyAddress where
 fromCoreAddress :: Core.Network -> PV2.Address -> ShelleyAddress
 fromCoreAddress network addr =
   ShelleyAddress $
-    fromRight (error "fromRight: Left") $
+    fromRight (error $ "core address deserialization failed: " ++ show network ++ " / " ++ show addr) $
       deserialiseFromBech32 (AsAddress AsShelleyAddr) $
         serialiseAddressBech32 network addr
 
