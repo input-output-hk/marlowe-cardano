@@ -18,6 +18,8 @@
 
 ## Changed
 
+- `history-api` has been merged within `sync-api`
+
 - Updated Marlowe Plutus scripts to use optmized `asData` for `Case`.
 
 - Default batch size for chain-indexer decreased to 1/4 to prevent OOM errors.
