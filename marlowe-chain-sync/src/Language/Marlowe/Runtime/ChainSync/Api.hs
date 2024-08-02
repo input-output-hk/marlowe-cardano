@@ -39,7 +39,9 @@ import Cardano.Api (
  )
 import qualified Cardano.Api as C
 import qualified Cardano.Api as Cardano
-import Cardano.Api.Shelley (ProtocolParameters, fromShelleyBasedScript, toShelleyScript)
+import qualified Cardano.Api.Ledger as Coin
+import Cardano.Api.ProtocolParameters
+import Cardano.Api.Shelley (fromShelleyBasedScript, toShelleyScript)
 import qualified Cardano.Api.Shelley as Cardano
 import qualified Cardano.Ledger.BaseTypes as Base
 import qualified Cardano.Ledger.BaseTypes as C
@@ -138,7 +140,7 @@ import qualified Network.Protocol.Query.Types as Query
 import Observe.Event.Render.OpenTelemetry (RenderSelectorOTel)
 import OpenTelemetry.Attributes (Attribute, PrimitiveAttribute (..))
 import OpenTelemetry.Trace.Core (toAttribute)
-import Ouroboros.Consensus.Block (EpochNo (..), EpochSize (..))
+import Ouroboros.Consensus.Block (EpochNo (..), EpochSize (..), GenesisWindow)
 import qualified Ouroboros.Consensus.Block as O
 import Ouroboros.Consensus.BlockchainTime (RelativeTime, SlotLength (..), SystemStart (..))
 import Ouroboros.Consensus.HardFork.History (
@@ -151,7 +153,7 @@ import Ouroboros.Consensus.HardFork.History (
   Summary (Summary),
   mkInterpreter,
  )
-import PlutusCore.Evaluation.Machine.ExBudgetingDefaults (defaultCostModelParams)
+import PlutusCore.Evaluation.Machine.ExBudgetingDefaults (defaultCostModelParamsForTesting)
 import qualified PlutusLedgerApi.V1 as Plutus
 import Text.Read (readMaybe)
 import Unsafe.Coerce (unsafeCoerce)
@@ -1215,7 +1217,8 @@ renderChainSyncQueryOTel = \case
       { requestName = "get-protocol-parameters"
       , requestAttributes = []
       , responseAttributes = \params ->
-          [("protocol-parameters", toAttribute $ TextAttribute $ TL.toStrict $ encodeToLazyText params)]
+          [ ("protocol-parameters", toAttribute $ TextAttribute $ TL.toStrict $ encodeToLazyText params)
+          ]
       }
   GetSystemStart ->
     RequestRenderedOTel
@@ -1745,8 +1748,8 @@ instance Variations ProtocolParameters
 instance Variations C.PraosNonce where
   variations = C.makePraosNonce <$> variations
 
-instance Variations C.Lovelace where
-  variations = C.Lovelace <$> variations
+instance Variations Coin.Coin where
+  variations = Coin.Coin <$> variations
 
 instance Variations C.EpochNo
 
@@ -1757,10 +1760,11 @@ instance Variations C.AnyPlutusScriptVersion where
     NE.fromList
       [ C.AnyPlutusScriptVersion C.PlutusScriptV1
       , C.AnyPlutusScriptVersion C.PlutusScriptV2
+      , C.AnyPlutusScriptVersion C.PlutusScriptV3
       ]
 
 instance Variations C.CostModel where
-  variations = pure $ C.CostModel $ Map.elems $ fromJust defaultCostModelParams
+  variations = pure $ C.CostModel $ Map.elems $ fromJust defaultCostModelParamsForTesting
 
 instance Variations C.ExecutionUnitPrices where
   variations = C.ExecutionUnitPrices <$> variations `varyAp` variations
@@ -1786,6 +1790,10 @@ instance {-# OVERLAPPING #-} (Variations a, Variations (NonEmpty xs a)) => Varia
 instance Variations EraSummary
 
 instance Variations EraParams
+
+instance Variations GenesisWindow
+
+deriving instance (Generic GenesisWindow)
 
 instance Variations SafeZone
 

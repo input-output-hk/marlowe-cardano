@@ -13,7 +13,7 @@
 
     marlowe-plutus.url = "github:input-output-hk/marlowe-plutus";
 
-    cardano-node.url = "github:input-output-hk/cardano-node?ref=8.9.0";
+    cardano-node.url = "github:input-output-hk/cardano-node?ref=9.1.0";
 
     iogx = {
       url = "github:input-output-hk/iogx";

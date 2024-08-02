@@ -299,7 +299,7 @@ balanceTx era (Wallet WalletAddresses{..} _) utxo txBodyContent = do
   history <- queryNode 0 C.QueryEraHistory
   protocol <- queryShelley 0 $ C.QueryInShelleyBasedEra era C.QueryProtocolParameters
   changeAddr <-
-    expectJust "Could not convert to Cardano address" $ toCardanoAddressInEra (C.shelleyBasedToCardanoEra era) changeAddress
+    expectJust "Could not convert to Cardano address" $ toCardanoAddressInEra (C.toCardanoEra era) changeAddress
   C.BalancedTxBody _ txBody _ _ <-
     withShelleyBasedEra era $
       expectRight "Failed to balance Tx" $

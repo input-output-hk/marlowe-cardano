@@ -522,8 +522,8 @@ toJSONAssocMap :: (ToJSON k) => (ToJSON v) => Map k v -> JSON.Value
 toJSONAssocMap = toJSON . Map.toList
 
 -- | Parse an association list from JSON.
-fromJSONAssocMap :: (FromJSON k) => (FromJSON v) => JSON.Value -> JSON.Parser (Map k v)
-fromJSONAssocMap v = Map.fromList <$> parseJSON v
+fromJSONAssocMap :: (Eq k) => (FromJSON k) => (FromJSON v) => JSON.Value -> JSON.Parser (Map k v)
+fromJSONAssocMap v = Map.safeFromList <$> parseJSON v
 
 instance FromJSON Party where
   parseJSON = withObject "Party" $ \v ->

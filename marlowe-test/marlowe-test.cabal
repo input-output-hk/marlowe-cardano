@@ -148,10 +148,10 @@ library
     , filepath ^>=1.4
     , marlowe-cardano ==0.2.1.0
     , mtl >=2.2 && <3
-    , plutus-ledger-api ^>=1.21
-    , plutus-tx ^>=1.21
+    , plutus-ledger-api ^>=1.30
+    , plutus-tx ^>=1.30
     , QuickCheck >=2.14 && <3
-    , tasty-quickcheck ^>=0.10
+    , tasty-quickcheck ^>=0.11
 
   if flag(trace-plutus)
     cpp-options: -DTRACE_PLUTUS
@@ -200,7 +200,7 @@ executable test-suite
     , aeson ^>=2.2
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
-    , cardano-api ^>=8.39.2.0
+    , cardano-api ^>=9.1
     , containers ^>=0.6.5
     , data-default ^>=0.7.1
     , filepath ^>=1.4
@@ -211,14 +211,14 @@ executable test-suite
     , marlowe-spec-test ==0.1.0.1
     , marlowe-test
     , mtl >=2.2 && <3
-    , plutus-ledger-api ^>=1.21
-    , plutus-tx ^>=1.21
+    , plutus-ledger-api ^>=1.30
+    , plutus-tx ^>=1.30
     , QuickCheck >=2.14 && <3
     , quickcheck-instances ^>=0.3.29
     , sbv >=8.4
-    , tasty ^>=1.4.2
+    , tasty ^>=1.5.1
     , tasty-hunit ^>=0.10
-    , tasty-quickcheck ^>=0.10
+    , tasty-quickcheck ^>=0.11
     , text ^>=2.0
     , type-iso ==1.0.1.0
 

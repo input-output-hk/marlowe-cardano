@@ -94,7 +94,7 @@ executable marlowe-integration-tests
     , base >=4.9 && <5
     , base16
     , bytestring
-    , cardano-api ^>=8.39.2.0
+    , cardano-api ^>=9.1
     , co-log ^>=0.6
     , containers
     , deepseq
@@ -105,21 +105,29 @@ executable marlowe-integration-tests
     , http-types
     , lens
     , marlowe-cardano
-    , marlowe-chain-sync:{marlowe-chain-sync, plutus-compat}
-    , marlowe-cli:{marlowe-cli, cli-test}
+    , marlowe-chain-sync
+    , marlowe-chain-sync:plutus-compat
+    , marlowe-cli
+    , marlowe-cli:cli-test
     , marlowe-client
     , marlowe-integration
-    , marlowe-object:{marlowe-object, gen}
+    , marlowe-object
+    , marlowe-object:gen
     , marlowe-protocols
+    , marlowe-runtime
     , marlowe-runtime-web
-    , marlowe-runtime:{marlowe-runtime, contract, contract-api, sync-api, tx, tx-api}
+    , marlowe-runtime:contract
+    , marlowe-runtime:contract-api
+    , marlowe-runtime:sync-api
+    , marlowe-runtime:tx
+    , marlowe-runtime:tx-api
     , marlowe-test
     , mtl
     , network-uri
-    , ouroboros-network-protocols ^>=0.8
+    , ouroboros-network-protocols ^>=0.9
     , pipes ^>=4.3.16
     , plutus-ledger-api
-    , plutus-tx ^>=1.21
+    , plutus-tx ^>=1.30
     , QuickCheck
     , resourcet
     , servant-client

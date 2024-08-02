@@ -132,7 +132,7 @@ friendlyTxBodyContent
 friendlyTxTotalCollateral :: TxTotalCollateral era -> Aeson.Value
 friendlyTxTotalCollateral = \case
   TxTotalCollateralNone -> Null
-  TxTotalCollateral _ lovelace -> friendlyLovelace lovelace
+  TxTotalCollateral _ lovelace -> friendlyCoinLovelace lovelace
 
 friendlyTxReturnCollateral :: (IsCardanoEra era) => TxReturnCollateral CtxTx era -> Aeson.Value
 friendlyTxReturnCollateral = \case
@@ -173,7 +173,7 @@ friendlyWithdrawals (TxWithdrawals _ withdrawals) =
   array
     [ object $
       "address" .= serialiseAddress addr
-        : "amount" .= friendlyLovelace amount
+        : "amount" .= friendlyCoinLovelace amount
         : friendlyStakeAddress addr
     | (addr, amount, _) <- withdrawals
     ]
@@ -205,7 +205,7 @@ friendlyTxOut (TxOut addr amount mdatum script) =
                   ]
             datum =
               [ "datum" .= renderDatum mdatum
-              | isJust $ inEonForEraMaybe @AlonzoEraOnwards id $ shelleyBasedToCardanoEra sbe
+              | isJust $ inEonForEraMaybe @AlonzoEraOnwards id $ toCardanoEra sbe
               ]
             sinceAlonzo = ["reference script" .= script]
          in preAlonzo ++ datum ++ sinceAlonzo
@@ -281,12 +281,12 @@ friendlyProtocolParametersUpdate
       , protocolUpdateMaxTxSize <&> ("max transaction size" .=)
       , protocolUpdateTxFeeFixed <&> ("transaction fee constant" .=)
       , protocolUpdateTxFeePerByte <&> ("transaction fee linear per byte" .=)
-      , protocolUpdateMinUTxOValue <&> ("min UTxO value" .=) . friendlyLovelace
+      , protocolUpdateMinUTxOValue <&> ("min UTxO value" .=) . friendlyCoinLovelace
       , protocolUpdateStakeAddressDeposit
-          <&> ("key registration deposit" .=) . friendlyLovelace
+          <&> ("key registration deposit" .=) . friendlyCoinLovelace
       , protocolUpdateStakePoolDeposit
-          <&> ("pool registration deposit" .=) . friendlyLovelace
-      , protocolUpdateMinPoolCost <&> ("min pool cost" .=) . friendlyLovelace
+          <&> ("pool registration deposit" .=) . friendlyCoinLovelace
+      , protocolUpdateMinPoolCost <&> ("min pool cost" .=) . friendlyCoinLovelace
       , protocolUpdatePoolRetireMaxEpoch <&> ("pool retirement epoch boundary" .=)
       , protocolUpdateStakePoolTargetNum <&> ("number of pools" .=)
       , protocolUpdatePoolPledgeInfluence
@@ -302,7 +302,7 @@ friendlyProtocolParametersUpdate
       , protocolUpdateMaxValueSize <&> ("max value size" .=)
       , protocolUpdatePrices <&> ("execution prices" .=) . friendlyPrices
       , protocolUpdateUTxOCostPerByte
-          <&> ("UTxO storage cost per byte" .=) . friendlyLovelace
+          <&> ("UTxO storage cost per byte" .=) . friendlyCoinLovelace
       ]
 
 friendlyPrices :: ExecutionUnitPrices -> Aeson.Value
@@ -356,11 +356,11 @@ friendlyMirTarget = \case
     "target stake addresses"
       .= [ object
           [ friendlyStakeCredential credential
-          , "amount" .= friendlyCoin (Coin.addDeltaCoin (Coin.Coin 0) lovelace)
+          , "amount" .= friendlyCoinLovelace (Coin.addDeltaCoin (Coin.Coin 0) lovelace)
           ]
          | (credential, lovelace) <- Map.toList addresses
          ]
-  SendToOppositePotMIR amount -> "send to reserves" .= friendlyCoin amount
+  SendToOppositePotMIR amount -> "send to reserves" .= friendlyCoinLovelace amount
 
 friendlyStakeCredential :: (Crypto.Crypto era) => Shelley.Credential 'Shelley.Staking era -> Aeson.Pair
 friendlyStakeCredential = \case
@@ -397,10 +397,10 @@ friendlyStakePoolParameters
     object
       [ "pool" .= stakePoolId
       , "VRF key hash" .= serialiseToRawBytesHexText stakePoolVRF
-      , "cost" .= friendlyLovelace stakePoolCost
+      , "cost" .= friendlyCoinLovelace stakePoolCost
       , "margin" .= friendlyRational stakePoolMargin
       , "reward account" .= object (friendlyStakeAddress stakePoolRewardAccount)
-      , "pledge" .= friendlyLovelace stakePoolPledge
+      , "pledge" .= friendlyCoinLovelace stakePoolPledge
       , "owners (stake key hashes)"
           .= map serialiseToRawBytesHexText stakePoolOwners
       , "relays" .= map textShow stakePoolRelays
@@ -419,13 +419,10 @@ friendlyRational r =
 
 friendlyFee :: TxFee era -> Aeson.Value
 friendlyFee = \case
-  TxFeeExplicit _ fee -> friendlyLovelace fee
+  TxFeeExplicit _ fee -> friendlyCoinLovelace fee
 
-friendlyCoin :: Coin.Coin -> Aeson.Value
-friendlyCoin (Coin.Coin value) = String $ textShow value <> " Lovelace"
-
-friendlyLovelace :: Lovelace -> Aeson.Value
-friendlyLovelace (Lovelace value) = String $ textShow value <> " Lovelace"
+friendlyCoinLovelace :: Coin.Coin -> Aeson.Value
+friendlyCoinLovelace (Coin.Coin value) = String $ textShow value <> " Lovelace"
 
 friendlyMintValue :: forall era view. TxMintValue view era -> Aeson.Value
 friendlyMintValue = \case
@@ -434,7 +431,7 @@ friendlyMintValue = \case
 
 friendlyTxOutValue :: TxOutValue era -> Aeson.Value
 friendlyTxOutValue = \case
-  TxOutValueByron lovelace -> friendlyLovelace lovelace
+  TxOutValueByron lovelace -> friendlyCoinLovelace lovelace
   TxOutValueShelleyBased era v -> friendlyValue $ fromLedgerValue era v
 
 friendlyValue :: Api.Value -> Aeson.Value

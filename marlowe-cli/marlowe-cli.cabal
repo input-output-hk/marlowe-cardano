@@ -96,11 +96,11 @@ library
     , base16-bytestring
     , bech32
     , bytestring
-    , cardano-api ^>=8.39.2.0
+    , cardano-api ^>=9.1
     , cardano-crypto-class
     , cardano-ledger-alonzo
-    , cardano-ledger-byron ^>=1.0
-    , cardano-ledger-core ^>=1.10
+    , cardano-ledger-byron ^>=1.0.1
+    , cardano-ledger-core ^>=1.13.2
     , cardano-ledger-shelley
     , cardano-slotting
     , cborg
@@ -118,7 +118,7 @@ library
     , parser-combinators
     , plutus-core
     , plutus-ledger-ada
-    , plutus-ledger-api ^>=1.21
+    , plutus-ledger-api ^>=1.30
     , plutus-ledger-slot
     , plutus-tx
     , prettyprinter
@@ -182,7 +182,7 @@ library cli-test
     , base >=4.9 && <5
     , base16-aeson ==0.1.0.0
     , bytestring
-    , cardano-api ^>=8.39.2.0
+    , cardano-api ^>=9.1
     , cardano-debug
     , containers
     , data-has
@@ -193,16 +193,20 @@ library cli-test
     , lens
     , marlowe-apps
     , marlowe-cardano
-    , marlowe-chain-sync:{marlowe-chain-sync, plutus-compat}
+    , marlowe-chain-sync
+    , marlowe-chain-sync:plutus-compat
     , marlowe-cli
     , marlowe-client
     , marlowe-contracts
     , marlowe-protocols
-    , marlowe-runtime:{marlowe-runtime, proxy-api, sync-api, tx-api}
+    , marlowe-runtime
+    , marlowe-runtime:proxy-api
+    , marlowe-runtime:sync-api
+    , marlowe-runtime:tx-api
     , monad-loops
     , mtl
     , network
-    , plutus-ledger-api ^>=1.21
+    , plutus-ledger-api ^>=1.30
     , plutus-ledger-slot
     , plutus-tx
     , random
@@ -242,13 +246,14 @@ library command
     , filepath
     , marlowe-actus
     , marlowe-cardano
-    , marlowe-cli:{marlowe-cli, cli-test}
+    , marlowe-cli
+    , marlowe-cli:cli-test
     , marlowe-contracts
     , marlowe-runtime:config
     , mtl
     , optparse-applicative
     , plutus-ledger-ada
-    , plutus-ledger-api ^>=1.21
+    , plutus-ledger-api ^>=1.30
     , plutus-ledger-slot
     , regex-posix
     , servant-client
@@ -282,15 +287,15 @@ test-suite marlowe-cli-test
     , aeson-pretty
     , base >=4.9 && <5
     , bytestring
-    , cardano-api ^>=8.39.2.0
-    , cardano-ledger-core ^>=1.10
+    , cardano-api ^>=9.1
+    , cardano-ledger-core ^>=1.13.2
     , containers
     , marlowe-cardano
     , marlowe-cli
     , marlowe-test
     , megaparsec
     , mtl
-    , plutus-ledger-api ^>=1.21
+    , plutus-ledger-api ^>=1.30
     , plutus-ledger-slot
     , plutus-tx
     , tasty
