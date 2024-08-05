@@ -130,7 +130,6 @@ library
     Spec.Marlowe.Semantics.Golden.Trivial
     Spec.Marlowe.Semantics.Golden.ZeroCouponBond
     Spec.Marlowe.Semantics.Next.Arbitrary
-    Spec.Marlowe.Semantics.Orphans
     Spec.Marlowe.Semantics.Path
     Spec.Marlowe.Semantics.Util
     Spec.Marlowe.Service

@@ -92,6 +92,7 @@ import Control.Concurrent (threadDelay)
 import Control.DeepSeq (NFData)
 import Control.Monad (guard, void, when, (<=<))
 import Control.Monad.Event.Class (Inject (inject), NoopEventT (..))
+import Control.Monad.Except (runExceptT)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (ReaderT (..), ask, runReaderT)
 import qualified Control.Monad.Reader as Reader
@@ -332,7 +333,8 @@ queryShelley nodeNum = either (fail . show) pure <=< queryNode nodeNum . C.Query
 queryNode :: Int -> C.QueryInMode a -> Integration a
 queryNode nodeNum query = do
   connectInfo <- nodeConnectInfo nodeNum
-  liftIO $ either (fail . show) pure =<< C.queryNodeLocalState connectInfo VolatileTip query
+  a <- liftIO $ runExceptT $ C.queryNodeLocalState connectInfo VolatileTip query
+  liftIO $ either (fail . show) pure a
 
 nodeConnectInfo :: Int -> Integration C.LocalNodeConnectInfo
 nodeConnectInfo nodeNum = do

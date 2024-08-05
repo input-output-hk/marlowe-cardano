@@ -63,7 +63,6 @@ import Cardano.Api (
   AsType (..),
   AssetId (..),
   AssetName (..),
-  Lovelace (..),
   NetworkId (..),
   NetworkMagic (..),
   Quantity (..),
@@ -100,6 +99,7 @@ import Text.Read (readEither)
 import Text.Regex.Posix ((=~))
 
 import Cardano.Api qualified as C
+import Cardano.Api.Ledger qualified as Ledger
 import Control.Category ((>>>))
 import Data.ByteString.Base16 qualified as Base16 (decode)
 import Data.ByteString.Char8 qualified as BS8 (pack)
@@ -441,7 +441,7 @@ parseOutputQuery =
       Nothing
         <$ O.flag' () (O.long "all" <> O.help "Report all output.")
     parseLovelaceOnly =
-      LovelaceOnly . (<=) . Lovelace
+      LovelaceOnly . (<=) . Ledger.Coin
         <$> O.option
           O.auto
           ( O.long "lovelace-only"

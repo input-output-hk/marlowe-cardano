@@ -7,6 +7,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# OPTIONS_GHC -Wno-deprecations #-}
 
 -- | Export information for Marlowe contracts and roles.
 --
@@ -68,7 +69,7 @@ import Cardano.Api (
   ScriptDataJsonSchema (..),
   SerialiseAsRawBytes (..),
   StakeAddressReference (..),
-  babbageEraOnwardsToCardanoEra,
+  ToCardanoEra (toCardanoEra),
   babbageEraOnwardsToShelleyBasedEra,
   cardanoEraConstraints,
   hashScript,
@@ -251,7 +252,7 @@ printMarlowe marloweParams era protocolVersion costModel network stake contract 
         putStrLn ""
         putStrLn $
           "Validator address: "
-            <> T.unpack (cardanoEraConstraints (babbageEraOnwardsToCardanoEra era) $ serialiseAddress viAddress)
+            <> T.unpack (cardanoEraConstraints (toCardanoEra era) $ serialiseAddress viAddress)
         putStrLn ""
         putStrLn $ "Validator hash: " <> show viHash
         putStrLn ""

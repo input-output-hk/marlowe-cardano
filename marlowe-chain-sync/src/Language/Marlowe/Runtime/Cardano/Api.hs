@@ -11,6 +11,7 @@ import Cardano.Api (getScriptData, unsafeHashableScriptData)
 import qualified Cardano.Api as C
 import qualified Cardano.Api.Shelley as C
 import qualified Cardano.Ledger.BaseTypes as L
+import qualified Cardano.Ledger.Coin as C
 import Cardano.Ledger.Credential (Ptr (Ptr))
 import Data.Bifunctor (Bifunctor (bimap))
 import Data.ByteString.Short (fromShort, toShort)
@@ -194,11 +195,11 @@ fromCardanoAddressInEra era =
   withCardanoEra era $
     Address . C.serialiseToRawBytes
 
-toCardanoLovelace :: Lovelace -> C.Lovelace
-toCardanoLovelace = C.Lovelace . unLovelace
+toCardanoLovelace :: Lovelace -> C.Coin
+toCardanoLovelace = C.Coin . unLovelace
 
-fromCardanoLovelace :: C.Lovelace -> Lovelace
-fromCardanoLovelace (C.Lovelace l) = Lovelace l
+fromCardanoLovelace :: C.Coin -> Lovelace
+fromCardanoLovelace (C.Coin l) = Lovelace l
 
 tokensToCardanoValue :: Tokens -> Maybe C.Value
 tokensToCardanoValue = fmap C.valueFromList . traverse toCardanoValue' . Map.toList . unTokens
@@ -280,9 +281,9 @@ toCardanoTxOut :: C.MaryEraOnwards era -> TransactionOutput -> Maybe (C.TxOut C.
 toCardanoTxOut era TransactionOutput{..} = do
   printIfNone $
     C.TxOut
-      <$> toCardanoAddressInEra (C.maryEraOnwardsToCardanoEra era) address
+      <$> toCardanoAddressInEra (C.toCardanoEra era) address
       <*> toCardanoTxOutValue era assets
-      <*> toCardanoTxOutDatum (C.maryEraOnwardsToCardanoEra era) datumHash datum
+      <*> toCardanoTxOutDatum (C.toCardanoEra era) datumHash datum
       <*> pure C.ReferenceScriptNone
   where
     printIfNone = \case
@@ -302,9 +303,9 @@ toCardanoTxOut' era TransactionOutput{..} mScript = do
     (Just script, C.MaryEraOnwardsBabbage) -> Just $ C.ReferenceScript C.BabbageEraOnwardsBabbage script
     (Just script, C.MaryEraOnwardsConway) -> Just $ C.ReferenceScript C.BabbageEraOnwardsConway script
   C.TxOut
-    <$> toCardanoAddressInEra (C.maryEraOnwardsToCardanoEra era) address
+    <$> toCardanoAddressInEra (C.toCardanoEra era) address
     <*> toCardanoTxOutValue era assets
-    <*> toCardanoTxOutDatum' (C.maryEraOnwardsToCardanoEra era) datumHash
+    <*> toCardanoTxOutDatum' (C.toCardanoEra era) datumHash
     <*> pure ref
 
 fromCardanoTxOut

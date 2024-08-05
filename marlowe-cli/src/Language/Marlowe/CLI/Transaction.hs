@@ -10,6 +10,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# OPTIONS_GHC -Wno-deprecations #-}
 
 -----------------------------------------------------------------------------
 
@@ -88,7 +89,6 @@ import Cardano.Api (
   Hash,
   KeyWitnessInCtx (..),
   LocalNodeConnectInfo (..),
-  Lovelace,
   MaryEraOnwards (..),
   PaymentCredential (PaymentCredentialByScript),
   PaymentKey,
@@ -166,6 +166,7 @@ import Cardano.Api (
   writeFileTextEnvelope,
  )
 import Cardano.Api qualified as C
+import Cardano.Api.Ledger qualified as Ledger
 import Cardano.Api.Shelley (
   ExecutionUnitPrices (..),
   LedgerProtocolParameters (..),
@@ -235,6 +236,7 @@ import Language.Marlowe.CLI.IO (
   getProtocolParams,
   getSystemStart,
   liftCli,
+  liftCliExceptT,
   liftCliIO,
   liftCliMaybe,
   maybeWriteJson,
@@ -349,7 +351,7 @@ buildClean
   -- ^ The connection info for the local node.
   -> [SigningKeyFile]
   -- ^ The files for required signing keys.
-  -> Lovelace
+  -> Ledger.Coin
   -- ^ The value to be sent to addresses with tokens.
   -> AddressInEra era
   -- ^ The change address.
@@ -588,7 +590,7 @@ buildFaucet' connection value addresses (TxBodyFile bodyFile) timeout =
         TxMetadataNone
         False
         False
-    C.cardanoEraConstraints (C.babbageEraOnwardsToCardanoEra era) $
+    C.cardanoEraConstraints (C.toCardanoEra era) $
       liftCliIO $
         writeFileTextEnvelope (File bodyFile) Nothing body
     let txBuildupCtx = mkNodeTxBuildup connection timeout
@@ -915,7 +917,7 @@ publisherAddress scriptHash publishingStrategy era network = case publishingStra
 
 -- | Information required to publish a script
 type ScriptPublishingInfo lang era =
-  ( Lovelace
+  ( Ledger.Coin
   , AddressInEra era
   , ValidatorInfo lang era
   )
@@ -1601,7 +1603,8 @@ buildBodyWithContent queryCtx payFromScript payToScript extraInputs inputs outpu
         missingTxIns = [txIn | txIn <- allTxIns, txIn `notElem` foundTxIns]
     when (notNull missingTxIns) do
       throwError . CliError $ "Some inputs are missing from the chain (possibly reference inputs): " <> show missingTxIns
-
+    let txCurrentTreasuryValue = Nothing
+        txTreasuryDonation = Nothing
     let mkChangeTxOut value = do
           let txOutValue = mkTxOutValue era value
           C.TxOut changeAddress txOutValue TxOutDatumNone ReferenceScriptNone
@@ -1764,7 +1767,7 @@ scriptWitness
 scriptWitness era PayFromScript{..} = do
   scriptInEra <- liftCliMaybe "Script language not supported in era" $ toScriptLanguageInEra era
   let datum' = case datum of
-        Just d -> ScriptDatumForTxIn . C.unsafeHashableScriptData . fromPlutusData $ toData d
+        Just d -> ScriptDatumForTxIn . Just . C.unsafeHashableScriptData . fromPlutusData $ toData d
         Nothing -> InlineScriptDatum
   pure $
     BuildTxWith . ScriptWitness ScriptWitnessForSpending $
@@ -1962,10 +1965,10 @@ querySlotConfig connection =
   do
     epochNo <- queryInEra connection QueryEpoch
     systemStart <-
-      liftCliIO $
+      liftCliExceptT $
         queryNodeLocalState connection VolatileTip QuerySystemStart
     EraHistory interpreter <-
-      liftCliIO
+      liftCliExceptT
         . queryNodeLocalState connection VolatileTip
         $ QueryEraHistory
     let epochInfo =
@@ -2000,9 +2003,9 @@ querySlotting connection outputFile =
 -- | Compute the maximum fee for any transaction.
 maximumFee
   :: ProtocolParameters
-  -> Lovelace
+  -> Ledger.Coin
 maximumFee ProtocolParameters{..} =
-  let txFee :: Lovelace
+  let txFee :: Ledger.Coin
       txFee = protocolParamTxFeeFixed + protocolParamTxFeePerByte * fromIntegral protocolParamMaxTxSize
       executionFee :: Rational
       executionFee =
@@ -2020,7 +2023,7 @@ findMinUtxo
   => (MonadReader (CliEnv era) m)
   => LedgerProtocolParameters era
   -> (AddressInEra era, Maybe Datum, Value)
-  -> m Lovelace
+  -> m Ledger.Coin
 findMinUtxo protocol (address, datum, value) =
   do
     era <- askEra

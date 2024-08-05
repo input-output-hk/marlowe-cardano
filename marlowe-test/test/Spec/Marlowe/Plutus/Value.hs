@@ -18,7 +18,7 @@ module Spec.Marlowe.Plutus.Value (
 import Data.List (union)
 import PlutusLedgerApi.V1.Value (geq, leq, valueOf)
 import PlutusLedgerApi.V2 (CurrencySymbol, TokenName, Value (..), singleton)
-import qualified PlutusTx.AssocMap as AM (empty, fromList, toList)
+import qualified PlutusTx.AssocMap as AM (empty, toList, unsafeFromList)
 import qualified PlutusTx.Eq as P ((==))
 import PlutusTx.Numeric (zero)
 import Spec.Marlowe.Plutus.Arbitrary ()
@@ -69,9 +69,9 @@ checkEq =
           x' <- shuffle . AM.toList $ getValue x
           x'' <-
             Value
-              . AM.fromList
+              . AM.unsafeFromList
               <$> sequence
-                [ (c,) . AM.fromList <$> shuffle (AM.toList ts)
+                [ (c,) . AM.unsafeFromList <$> shuffle (AM.toList ts)
                 | (c, ts) <- x'
                 ]
           y <- if isEqual then pure x'' else arbitrary

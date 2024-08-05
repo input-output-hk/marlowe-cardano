@@ -13,6 +13,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# OPTIONS_GHC -Wno-deprecations #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Marlowe.Runtime.ChainSync.Api where
@@ -147,6 +148,7 @@ import Ouroboros.Consensus.HardFork.History (
   Bound (..),
   EraEnd (..),
   EraParams (..),
+  EraParamsFormat (EraParamsWithGenesisWindow),
   EraSummary (..),
   Interpreter,
   SafeZone (..),
@@ -157,6 +159,8 @@ import PlutusCore.Evaluation.Machine.ExBudgetingDefaults (defaultCostModelParams
 import qualified PlutusLedgerApi.V1 as Plutus
 import Text.Read (readMaybe)
 import Unsafe.Coerce (unsafeCoerce)
+
+import Data.Reflection (give)
 
 -- | Extends a type with a "Genesis" member.
 data WithGenesis a = Genesis | At a
@@ -1549,7 +1553,7 @@ instance Query.BinaryRequest ChainSyncQuery where
         Testnet (NetworkMagic magic) -> Just magic
     TagGetProtocolParameters -> put . Aeson.encode
     TagGetEraHistory -> \case
-      EraHistory interpreter -> put $ serialise interpreter
+      EraHistory interpreter -> give EraParamsWithGenesisWindow $ put $ serialise interpreter
     TagGetSystemStart -> \case
       SystemStart start -> put start
     TagGetUTxOs -> put
@@ -1568,7 +1572,7 @@ instance Query.BinaryRequest ChainSyncQuery where
         Just params -> pure params
     TagGetEraHistory -> do
       bytes <- get
-      case deserialiseOrFail bytes of
+      case give EraParamsWithGenesisWindow $ deserialiseOrFail bytes of
         Left err -> fail $ show err
         Right interpreter -> pure $ EraHistory interpreter
     TagGetSystemStart -> SystemStart <$> get

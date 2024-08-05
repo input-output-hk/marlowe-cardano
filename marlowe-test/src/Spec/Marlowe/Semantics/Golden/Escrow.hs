@@ -39,7 +39,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (
 import Language.Marlowe.Util ()
 import PlutusLedgerApi.V2 (POSIXTime (..))
 
-import qualified PlutusTx.AssocMap as AM (Map, fromList)
+import qualified PlutusTx.AssocMap as AM (Map, unsafeFromList)
 
 seller :: Party
 seller = "Seller"
@@ -103,7 +103,7 @@ newtype Map k v = Map {unMap :: [(k, v)]}
 
 -- | A function to assist parsing of test cases.
 toAM :: Map k v -> AM.Map k v
-toAM = AM.fromList . unMap
+toAM = AM.unsafeFromList . unMap
 
 -- | A list of test cases and results that should succeed, generated from `Language.Marlowe.FindInputs.getAllInputs`.
 valids :: [(POSIXTime, [TransactionInput], TransactionOutput)]

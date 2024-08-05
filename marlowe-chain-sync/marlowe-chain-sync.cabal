@@ -103,6 +103,7 @@ library
     , plutus-core ^>=1.30
     , plutus-ledger-api ^>=1.30
     , postgresql-simple
+    , reflection
     , scientific
     , serialise ^>=0.2.6
     , sop-core

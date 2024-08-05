@@ -13,6 +13,7 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# OPTIONS_GHC -Wno-deprecations #-}
 
 -- | Marlowe test DSL main runner.
 module Language.Marlowe.CLI.Test (
@@ -39,6 +40,7 @@ import Cardano.Api (
   makeShelleyAddressInEra,
  )
 import Cardano.Api qualified as C
+import Cardano.Api.Ledger qualified as Ledger
 import Cardano.Api.Shelley qualified as CS
 import Control.Concurrent.STM (
   newTVarIO,
@@ -150,7 +152,7 @@ runTestSuite era TestSuite{..} = do
               BS8.pack "b1c9a36fff21ab3941e63e3ff15351a2f4459d8e055521a4b581044789e3a0db"
         let txIx = C.TxIx 0
             txIn = C.TxIn txId txIx
-            txOutValue = mkTxOutValue era $ C.lovelaceToValue $ C.Lovelace 1000_000 * 1000_000
+            txOutValue = mkTxOutValue era $ C.lovelaceToValue $ Ledger.Coin 1000_000 * 1000_000
             txOut = C.TxOut tsFaucetAddress txOutValue C.TxOutDatumNone CS.ReferenceScriptNone
             utxo = C.UTxO $ Map.singleton txIn txOut
             queryCtx = QueryNode connection
@@ -237,8 +239,8 @@ mkPureTxBuildupContext connection faucetAddress = do
         let txIx = C.TxIx 0
             txIn = C.TxIn txId txIx
             -- era' = toMultiAssetSupportedInEra era
-            -- txOutValue = C.TxOutValue era' $ C.lovelaceToValue $ C.Lovelace 1000_000 * 1000_000
-            txOutValue = mkTxOutValue era $ C.lovelaceToValue $ C.Lovelace 1000_000 * 1000_000
+            -- txOutValue = C.TxOutValue era' $ C.lovelaceToValue $ Ledger.Coin 1000_000 * 1000_000
+            txOutValue = mkTxOutValue era $ C.lovelaceToValue $ Ledger.Coin 1000_000 * 1000_000
             txOut = C.TxOut faucetAddress txOutValue C.TxOutDatumNone CS.ReferenceScriptNone
             utxo = C.UTxO $ Map.singleton txIn txOut
             LocalNodeConnectInfo _ networkId _ = connection

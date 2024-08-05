@@ -327,7 +327,7 @@ reportErrorOnClosureBudgetOverspendingSpec = do
         -- This should cover min ADA as a side effect: 0.5 ADA * 20 = 5 ADA
         initialAccounts :: V1.Accounts
         initialAccounts =
-          AM.fromList $
+          AM.unsafeFromList $
             [ ((accountId, ada), 500_000)
             | roleName <- roleNames
             , let accountId = rolePartyFromString roleName
@@ -398,7 +398,7 @@ reportErrorOnInvalidAddressInTheState = do
         contract = notifyTrue $ notifyTrue V1.Close
         walletWebAddress = mkWalletWebAddress wallet
         initialAccounts :: V1.Accounts
-        initialAccounts = AM.fromList [((invalidParty, ada), 2000_000), ((validParty, ada), 2000_000)]
+        initialAccounts = AM.unsafeFromList [((invalidParty, ada), 2000_000), ((validParty, ada), 2000_000)]
         initialState = (V1.emptyState (PV2.POSIXTime 0)){V1.accounts = initialAccounts}
 
     contractId <- cliSubmitContract contract (Just initialState) Nothing

@@ -263,7 +263,7 @@ data ReduceWarning
     ReduceShadowing ValueId Integer Integer
   | --                                     oldVal ^  newVal ^
     ReduceAssertionFailed
-  deriving stock (Haskell.Show)
+  deriving stock (Haskell.Show, Haskell.Eq)
 
 -- | Result of 'reduceContractStep'
 data ReduceStepResult
@@ -276,20 +276,20 @@ data ReduceStepResult
 data ReduceResult
   = ContractQuiescent Bool [ReduceWarning] [Payment] State Contract
   | RRAmbiguousTimeIntervalError
-  deriving stock (Haskell.Show)
+  deriving stock (Haskell.Show, Haskell.Eq)
 
 -- | Warning of 'applyCases'
 data ApplyWarning
   = ApplyNoWarning
   | ApplyNonPositiveDeposit Party AccountId Token Integer
-  deriving stock (Haskell.Show)
+  deriving stock (Haskell.Show, Haskell.Eq)
 
 -- | Result of 'applyCases'
 data ApplyResult
   = Applied ApplyWarning State Contract
   | ApplyNoMatchError
   | ApplyHashMismatch
-  deriving stock (Haskell.Show)
+  deriving stock (Haskell.Show, Haskell.Eq)
 
 -- | Result of 'applyAllInputs'
 data ApplyAllResult
@@ -535,8 +535,8 @@ refundOne accounts = case Map.toList accounts of
   -- invariants of order and non-duplication.
   ((accId, token), balance) : rest ->
     if balance > 0
-      then Just ((accId, token, balance), Map.fromList rest)
-      else refundOne (Map.fromList rest)
+      then Just ((accId, token, balance), Map.unsafeFromList rest)
+      else refundOne (Map.unsafeFromList rest)
 
 -- | Obtains the amount of money available an account.
 moneyInAccount :: AccountId -> Token -> Accounts -> Integer

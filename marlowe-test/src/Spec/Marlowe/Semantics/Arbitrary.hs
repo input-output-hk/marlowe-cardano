@@ -130,7 +130,7 @@ import Control.Monad.Writer (runWriter)
 import qualified Data.Aeson as A
 import Language.Marlowe.Util (dataHash)
 import qualified PlutusLedgerApi.V2 as Ledger (Address (..))
-import qualified PlutusTx.AssocMap as AM (Map, delete, empty, fromList, keys, toList)
+import qualified PlutusTx.AssocMap as AM (Map, delete, empty, keys, toList, unsafeFromList)
 import qualified PlutusTx.Eq as P (Eq)
 
 -- | Part of the Fibonacci sequence.
@@ -222,14 +222,15 @@ instance Arbitrary Context where
       times <- listOf arbitrary
       choiceIds <- listOf $ ChoiceId <$> perturb arbitraryChoiceName choiceNames <*> perturb arbitrary parties
       caccounts <-
-        AM.fromList . nubBy ((==) `on` fst)
+        AM.unsafeFromList . nubBy ((==) `on` fst)
           <$> listOf
             ((,) <$> ((,) <$> perturb arbitrary parties <*> perturb arbitrary tokens) <*> perturb arbitraryPositiveInteger amounts)
       cchoices <-
-        AM.fromList . nubBy ((==) `on` fst)
+        AM.unsafeFromList . nubBy ((==) `on` fst)
           <$> listOf ((,) <$> perturb arbitrary choiceIds <*> perturb arbitraryInteger chosenNums)
       cboundValues <-
-        AM.fromList . nubBy ((==) `on` fst) <$> listOf ((,) <$> perturb arbitrary valueIds <*> perturb arbitraryInteger values)
+        AM.unsafeFromList . nubBy ((==) `on` fst)
+          <$> listOf ((,) <$> perturb arbitrary valueIds <*> perturb arbitraryInteger values)
       pure Context{..}
   shrink context@Context{..} =
     [context{parties = parties'} | parties' <- shrink parties]
@@ -1010,7 +1011,7 @@ instance SemiArbitrary Contract where
 -- | Generate a random association map.
 arbitraryAssocMap :: (Eq k) => Gen k -> Gen v -> Gen (AM.Map k v)
 arbitraryAssocMap arbitraryKey arbitraryValue =
-  AM.fromList . nubBy ((==) `on` fst)
+  AM.unsafeFromList . nubBy ((==) `on` fst)
     <$> listOf ((,) <$> arbitraryKey <*> arbitraryValue)
 
 -- | Shrink a generated association map.

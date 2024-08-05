@@ -391,7 +391,7 @@ type MarloweAccounts = AM.Map (V1.Party, V1.Token) Integer
 toMarloweAccounts :: Accounts -> Either InvalidAddresses MarloweAccounts
 toMarloweAccounts (Accounts accounts) = do
   let adaToken = V1.Token PV2.adaSymbol PV2.adaToken
-  AM.fromList . join <$> for (Map.toAscList accounts) \(account, CS.TxOutAssetsContent (Assets{..})) ->
+  AM.unsafeFromList . join <$> for (Map.toAscList accounts) \(account, CS.TxOutAssetsContent (Assets{..})) ->
     toMarloweParty account <&> \accountId ->
       Map.toAscList
         . (if ada > mempty then Map.insert (accountId, adaToken) $ unLovelace ada else id)

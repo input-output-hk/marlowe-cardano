@@ -7,7 +7,7 @@ module Language.Marlowe.Runtime.Transaction.BuildConstraintsSpec (
   spec,
 ) where
 
-import Cardano.Api (EraHistory (EraHistory), SlotNo (SlotNo))
+import Cardano.Api (EpochNo (EpochNo), EraHistory (EraHistory), SlotNo (SlotNo))
 import qualified Cardano.Api as C
 import Control.Monad.Trans.Except (runExcept, runExceptT)
 import Data.Function (on)
@@ -78,6 +78,7 @@ import Language.Marlowe.Runtime.Transaction.Constraints (
  )
 import qualified Language.Marlowe.Runtime.Transaction.Constraints as TxConstraints
 import qualified Language.Marlowe.Runtime.Transaction.Gen ()
+import Ouroboros.Consensus.Block (EpochSize (EpochSize), GenesisWindow (GenesisWindow))
 import Ouroboros.Consensus.BlockchainTime (RelativeTime (..), SystemStart (..), mkSlotLength)
 import Ouroboros.Consensus.HardFork.History (
   Bound (..),
@@ -412,15 +413,16 @@ buildApplyInputsConstraintsSpec =
         systemStart = SystemStart $ posixSecondsToUTCTime 0 -- Without loss of generality.
         eraParams =
           EraParams
-            { eraEpochSize = 1
+            { eraEpochSize = EpochSize 1
             , eraSlotLength = mkSlotLength 1
             , eraSafeZone = UnsafeIndefiniteSafeZone
+            , eraGenesisWin = GenesisWindow 0
             }
         oneSecondBound i =
           Bound
             { boundTime = RelativeTime $ fromInteger i
-            , boundSlot = fromInteger i
-            , boundEpoch = fromInteger i
+            , boundSlot = SlotNo $ fromInteger i
+            , boundEpoch = EpochNo $ fromInteger i
             }
         oneSecondEraSummary i =
           EraSummary
@@ -625,7 +627,7 @@ buildApplyInputsConstraintsSpec =
               makeAccount (Semantics.Payment account _ token amount) = Map.singleton (account, token) amount
               makePay (Semantics.Payment account payee token amount) = Semantics.Pay account payee token $ Semantics.Constant amount
               -- Fill the accounts with sufficient funds to make the payments.
-              accounts = AM.fromList . Map.toList . Map.unionsWith (+) $ makeAccount <$> payments
+              accounts = AM.unsafeFromList . Map.toList . Map.unionsWith (+) $ makeAccount <$> payments
               marloweState = Semantics.State accounts choices values $ POSIXTime 0
               -- Add all of the payments to the contract.
               marloweContract = foldr makePay assertWhenCloseContract payments

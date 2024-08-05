@@ -16,6 +16,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# OPTIONS_GHC -Wno-deprecations #-}
 
 -- | Input/output functions for the Marlowe CLI tool.
 module Language.Marlowe.CLI.IO (
@@ -50,6 +51,7 @@ module Language.Marlowe.CLI.IO (
   -- * Lifting
   liftCli,
   liftCliIO,
+  liftCliExceptT,
   liftCliMaybe,
 ) where
 
@@ -85,6 +87,7 @@ import Cardano.Api (
   toLedgerValue,
   writeFileTextEnvelope,
  )
+import Cardano.Api.Ledger qualified as Ledger
 import Cardano.Api.Shelley (ProtocolParameters (protocolParamProtocolVersion), toPlutusData)
 import Cardano.Api.Shelley qualified as C
 import Cardano.Ledger.Alonzo.Scripts (ExUnits (..))
@@ -94,7 +97,7 @@ import Contrib.Control.Concurrent (threadDelay)
 import Control.Concurrent.STM (atomically, readTVar, readTVarIO, writeTVar)
 import Control.Error (note)
 import Control.Monad (when, (<=<))
-import Control.Monad.Except (MonadError (..), MonadIO, liftEither, liftIO)
+import Control.Monad.Except (ExceptT, MonadError (..), MonadIO, liftEither, liftIO, runExceptT)
 import Control.Monad.Reader (MonadReader)
 import Data.Aeson (FromJSON (..), ToJSON)
 import Data.Aeson.Encode.Pretty (encodePretty)
@@ -130,7 +133,7 @@ import Language.Marlowe.CLI.Types (
  )
 import Ouroboros.Network.Protocol.LocalStateQuery.Type
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult (..))
-import PlutusCore.Evaluation.Machine.ExBudgetingDefaults (defaultCostModelParams)
+import PlutusCore.Evaluation.Machine.ExBudgetingDefaults
 import PlutusLedgerApi.Common (MajorProtocolVersion)
 import PlutusLedgerApi.V1 (BuiltinData)
 import PlutusLedgerApi.V2 (CostModelParams)
@@ -171,6 +174,16 @@ liftCliIO
   -> m a
   -- ^ The lifted result.
 liftCliIO = liftCli <=< liftIO
+
+liftCliExceptT
+  :: (MonadError CliError m)
+  => (MonadIO m)
+  => (Show e)
+  => ExceptT e IO a
+  -- ^ Action for the result.
+  -> m a
+  -- ^ The lifted result.
+liftCliExceptT = liftCliIO . runExceptT
 
 -- | Decode a JSON or YAML file in an error monad.
 decodeFileStrict
@@ -306,7 +319,7 @@ getNodeSocketPath =
         else path
 
 getDefaultCostModel :: (MonadError CliError m) => m CostModelParams
-getDefaultCostModel = liftCliMaybe "Missing default cost model." defaultCostModelParams
+getDefaultCostModel = liftCliMaybe "Missing default cost model." defaultCostModelParamsForTesting
 
 -- | Query a node in an era.
 -- TODO: At the end we would like to make this private and proxy everything through
@@ -324,7 +337,7 @@ queryInEra
 queryInEra connection q = do
   era <- askEra
   res <-
-    liftCliIO $
+    liftCliExceptT $
       queryNodeLocalState connection VolatileTip $
         QueryInEra $
           QueryInShelleyBasedEra (babbageEraOnwardsToShelleyBasedEra era) q
@@ -378,7 +391,7 @@ getProtocolParams (QueryNode connection) = do
 getProtocolParams (PureQueryContext _ NodeStateInfo{nsiProtocolParameters}) = pure nsiProtocolParameters
 
 queryAny :: (MonadError CliError m, MonadIO m) => LocalNodeConnectInfo -> QueryInMode a -> m a
-queryAny connection = liftCliIO . queryNodeLocalState connection VolatileTip
+queryAny connection = liftCliExceptT . queryNodeLocalState connection VolatileTip
 
 getSystemStart
   :: (MonadError CliError m)
@@ -418,7 +431,7 @@ getPV2CostModelParams queryCtx = do
   C.CostModel costModel <- do
     let costModels = C.protocolParamCostModels protocolParams
     liftCli $ note ("Missing PV2 cost model" :: String) $ Map.lookup pv2 costModels
-  pure costModel
+  pure $ fromIntegral <$> costModel
 
 -- | Wait for transactions to be confirmed as UTxOs.
 waitForUtxos
@@ -596,7 +609,7 @@ submitTxBody' txBuildupCtx body bodyContent changeAddress signingKeys = do
   ((,body) <$> submitTxBody txBuildupCtx body signingKeys) `catchError` \err -> do
     liftIO $ hPutStrLn stderr "Adjusting the fees and resubmitting failing transaction."
     liftIO $ hPrint stderr err
-    let feeBalancingMargin = C.Lovelace 20000
+    let feeBalancingMargin = Ledger.Coin 20000
         C.TxBodyContent{..} = bodyContent
         -- Find change UTxO and subtract the fee margin.
         step (C.TxOut addr value datum refScript) (False, outs)

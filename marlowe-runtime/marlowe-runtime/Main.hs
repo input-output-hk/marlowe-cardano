@@ -164,9 +164,10 @@ run Options{..} = bracket (Pool.acquire 100 (Just 5000000) (fromString databaseU
     securityParameter <-
       liftIO $
         (either (fail . show) (either (fail . show) $ pure . protocolParamSecurity) =<<) $
-          queryNodeLocalState localNodeConnectInfo VolatileTip $
-            QueryInEra $
-              QueryInShelleyBasedEra ShelleyBasedEraBabbage QueryGenesisParameters
+          runExceptT $
+            queryNodeLocalState localNodeConnectInfo VolatileTip $
+              QueryInEra $
+                QueryInShelleyBasedEra ShelleyBasedEraBabbage QueryGenesisParameters
 
     flip runComponent_ () proc _ -> do
       MarloweRuntime{..} <-

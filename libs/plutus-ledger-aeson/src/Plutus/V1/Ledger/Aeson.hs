@@ -30,7 +30,6 @@ import PlutusLedgerApi.V1.Bytes qualified as Bytes
 import PlutusLedgerApi.V1.Scripts
 import PlutusLedgerApi.V1.Tx
 import PlutusLedgerApi.V1.Value
-import PlutusTx.Eq qualified as PlutusTx
 
 deriving anyclass instance ToJSON DatumHash
 deriving anyclass instance FromJSON DatumHash
@@ -139,8 +138,8 @@ deriving newtype instance Serialise Value
 instance (ToJSON v, ToJSON k) => ToJSON (Map.Map k v) where
   toJSON = JSON.toJSON . Map.toList
 
-instance (PlutusTx.Eq k, FromJSON v, FromJSON k) => FromJSON (Map.Map k v) where
-  parseJSON v = Map.safeFromList <$> JSON.parseJSON v
+instance (FromJSON v, FromJSON k) => FromJSON (Map.Map k v) where
+  parseJSON v = Map.unsafeFromList <$> JSON.parseJSON v
 
 deriving anyclass instance (Ord k, Hashable k, Hashable v) => Hashable (Map.Map k v)
 deriving anyclass instance (Serialise k, Serialise v) => Serialise (Map.Map k v)

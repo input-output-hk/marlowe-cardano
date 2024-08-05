@@ -7,6 +7,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# HLINT ignore "Use underscore" #-}
 {-# LANGUAGE TypeApplications #-}
+{-# OPTIONS_GHC -Wno-deprecations #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 -----------------------------------------------------------------------------
@@ -23,6 +24,7 @@ module Spec.Analysis (
 ) where
 
 import Cardano.Api qualified as C
+import Cardano.Api.Ledger qualified as Ledger
 import Cardano.Api.Shelley qualified as C
 import Cardano.Ledger.BaseTypes qualified as CI
 import Control.Monad.Except (runExceptT)
@@ -101,7 +103,9 @@ checkTransactionCost Scenario{scContract, scState, scMerkleize, scExpected} =
             (marloweParams "8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d")
             (SlotConfig 0 1000)
             (MajorProtocolVersion $ fromEnum $ fst $ C.protocolParamProtocolVersion protocolTestnet)
-            ((\(C.CostModel c) -> c) $ C.protocolParamCostModels protocolTestnet M.! C.AnyPlutusScriptVersion C.PlutusScriptV2)
+            ( (\(C.CostModel c) -> fromIntegral <$> c) $
+                C.protocolParamCostModels protocolTestnet M.! C.AnyPlutusScriptVersion C.PlutusScriptV2
+            )
             (C.Testnet $ C.NetworkMagic 1)
             C.NoStakeAddress
             scContract
@@ -294,7 +298,7 @@ scenario2 =
   where
     ada = Token adaSymbol adaToken
     accounts =
-      AM.fromList $
+      AM.unsafeFromList $
         [ ((accountId, ada), 1)
         | i <- [1 .. 10] :: [Int]
         , let accountId = Role $ tokenName . Text.encodeUtf8 . Text.pack . show $ i
@@ -343,9 +347,9 @@ protocolTestnet =
     , protocolParamTxFeeFixed = 155381
     , protocolParamTxFeePerByte = 44
     , protocolParamMinUTxOValue = Nothing
-    , protocolParamStakeAddressDeposit = C.Lovelace 2000000
-    , protocolParamStakePoolDeposit = C.Lovelace 500000000
-    , protocolParamMinPoolCost = C.Lovelace 340000000
+    , protocolParamStakeAddressDeposit = Ledger.Coin 2000000
+    , protocolParamStakePoolDeposit = Ledger.Coin 500000000
+    , protocolParamMinPoolCost = Ledger.Coin 340000000
     , protocolParamPoolRetireMaxEpoch = CI.EpochInterval 18
     , protocolParamStakePoolTargetNum = 500
     , protocolParamPoolPledgeInfluence = 3 % 10
@@ -540,5 +544,5 @@ protocolTestnet =
     , protocolParamMaxValueSize = Just 5000
     , protocolParamCollateralPercent = Just 150
     , protocolParamMaxCollateralInputs = Just 3
-    , protocolParamUTxOCostPerByte = Just (C.Lovelace 4310)
+    , protocolParamUTxOCostPerByte = Just (Ledger.Coin 4310)
     }

@@ -71,6 +71,7 @@ library
     , deriving-aeson ^>=0.2.9
     , either ^>=5.0.2
     , ilist ==0.4.0.1
+    , marlowe-adapter
     , mtl >=2.2 && <3
     , multiplate ==0.0.3
     , newtype-generics ^>=0.6.2
