@@ -2,7 +2,7 @@
 
 let
 
-  static-bzip2 = pkgs.bzip2.override { linkStatic = true; };
+  static-bzip2 = pkgs.bzip2.override { enableStatic = true; };
 
 
   cabalProject = pkgs.haskell-nix.cabalProject' ({ config, pkgs, ... }:

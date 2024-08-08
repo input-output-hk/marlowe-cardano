@@ -37,7 +37,7 @@ import Data.Binary (Binary (..), getWord8, putWord8)
 import Data.ByteString (ByteString)
 import Data.ByteString.Base16 (decodeBase16', encodeBase16)
 import qualified Data.ByteString.Char8 as BS8
-import Data.Either (fromRight)
+
 import Data.Foldable (asum)
 import Data.Function (on)
 import Data.Hashable (Hashable)
@@ -604,7 +604,7 @@ instance FromJSON ShelleyAddress where
 fromCoreAddress :: Core.Network -> PV2.Address -> ShelleyAddress
 fromCoreAddress network addr =
   ShelleyAddress $
-    fromRight (error $ "core address deserialization failed: " ++ show network ++ " / " ++ show addr) $
+    either (error . show) id $
       deserialiseFromBech32 (AsAddress AsShelleyAddr) $
         serialiseAddressBech32 network addr
 
