@@ -15,6 +15,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# OPTIONS_GHC -Wno-deprecations #-}
 
 -- | Analyze Marlowe contracts.
 module Language.Marlowe.CLI.Analyze (
@@ -51,7 +52,7 @@ import Language.Marlowe.Analysis.Safety.Transaction (
  )
 import Language.Marlowe.Analysis.Safety.Types (Transaction (..))
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (toScriptLanguageInEra)
-import Language.Marlowe.CLI.IO (decodeFileStrict, liftCli, liftCliIO, liftCliMaybe)
+import Language.Marlowe.CLI.IO (decodeFileStrict, liftCli, liftCliExceptT, liftCliMaybe)
 import Language.Marlowe.CLI.Run (marloweAddressFromCardanoAddress, toCardanoAddressInEra, toCardanoValue)
 import Language.Marlowe.CLI.Types (
   CliError (CliError),
@@ -100,6 +101,7 @@ import Language.Marlowe.Scripts.Types (marloweTxInputsFromInputs)
 import Cardano.Api (unsafeHashableScriptData)
 import Cardano.Api qualified as Api
 import Cardano.Api qualified as C
+import Cardano.Api.Ledger qualified as Ledger
 import Cardano.Api.Shelley (ProtocolParameters (protocolParamProtocolVersion))
 import Cardano.Api.Shelley qualified as Api
 import Cardano.Ledger.Credential qualified as Shelley
@@ -157,7 +159,7 @@ analyze connection marloweFile preconditions roles tokens maximumValue minimumUt
     SomeMarloweTransaction _ era marlowe <- decodeFileStrict marloweFile
     do
       protocol <-
-        (liftCli <=< liftCliIO)
+        (liftCli <=< liftCliExceptT)
           . Api.queryNodeLocalState connection VolatileTip
           . Api.QueryInEra
           $ Api.QueryInShelleyBasedEra (Api.babbageEraOnwardsToShelleyBasedEra era) Api.QueryProtocolParameters
@@ -425,7 +427,7 @@ checkMinimumUtxo era protocol info verbose =
         Right transactions ->
           let measure tx@(Transaction _ contract _ _ ()) = pure . (,Just tx) <$> compute (extractAll contract)
            in ( maximumBy (compare `on` fst)
-                  :: [(Api.Lovelace, Maybe (Transaction ()))] -> (Api.Lovelace, Maybe (Transaction ()))
+                  :: [(Ledger.Coin, Maybe (Transaction ()))] -> (Ledger.Coin, Maybe (Transaction ()))
               )
                 <$> foldTransactionsM measure transactions
         Left ContractInstance{..} -> fmap (,Nothing) . compute $ extractAllWithContinuations ciContract ciContinuations
@@ -636,7 +638,7 @@ checkTransactionSize era protocol ContractInstance{..} (Transaction marloweState
                 scriptInEra
                 C.plutusScriptVersion
                 (validatorInfoScriptOrReference ciSemanticsValidator)
-                (Api.ScriptDatumForTxIn . unsafeHashableScriptData . Api.fromPlutusData $ P.toData inDatum)
+                (Api.ScriptDatumForTxIn . Just . unsafeHashableScriptData . Api.fromPlutusData $ P.toData inDatum)
                 (unsafeHashableScriptData . Api.fromPlutusData $ P.toData redeemer)
                 (Api.ExecutionUnits 0 0)
           )
@@ -773,6 +775,8 @@ checkTransactionSize era protocol ContractInstance{..} (Transaction marloweState
         txScriptValidity = Api.TxScriptValidityNone
         txProposalProcedures = Nothing
         txVotingProcedures = Nothing
+        txCurrentTreasuryValue = Nothing
+        txTreasuryDonation = Nothing
     body <- liftCli $ Api.createAndValidateTransactionBody (C.babbageEraOnwardsToShelleyBasedEra era) Api.TxBodyContent{..}
     keys <-
       liftIO $

@@ -108,6 +108,9 @@ import Text.PrettyPrint.Leijen (parens, text)
 import Prelude (mapM, (<$>))
 import qualified Prelude as Haskell
 
+-- Provides equality for PlutusTx types.
+import Adapter.PlutusTx.AssocMap ()
+
 -- Functions that used in Plutus Core must be inlinable,
 -- so their code is available for PlutusTx compiler.
 {-# INLINEABLE getAction #-}
@@ -523,7 +526,7 @@ toJSONAssocMap = toJSON . Map.toList
 
 -- | Parse an association list from JSON.
 fromJSONAssocMap :: (FromJSON k) => (FromJSON v) => JSON.Value -> JSON.Parser (Map k v)
-fromJSONAssocMap v = Map.fromList <$> parseJSON v
+fromJSONAssocMap v = Map.unsafeFromList <$> parseJSON v
 
 instance FromJSON Party where
   parseJSON = withObject "Party" $ \v ->

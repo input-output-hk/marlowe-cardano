@@ -3,6 +3,7 @@
 module Language.Marlowe.Runtime.Transaction.SafetySpec where
 
 import qualified Cardano.Api as Cardano
+import qualified Cardano.Api.Ledger as Ledger
 import qualified Cardano.Api.Shelley as Shelley
 import Control.Category ((<<<))
 import Control.Monad (when)
@@ -159,7 +160,7 @@ spec =
                             Shelley.ReferenceScriptNone
                         )
                         $ Shelley.unLedgerProtocolParameters protocolTestnet
-                        :: Cardano.Lovelace
+                        :: Ledger.Coin
                     )
                 contract = foldr payToken V1.Close tokens -- The tokens just need to appear somewhere in the contract.
                 actual =
@@ -195,7 +196,7 @@ spec =
                     (cnt, dtm)
                   else do
                     let cnt = V1.Close
-                        accounts = AM.fromList $ roles <&> \role -> ((V1.Role role, V1.Token "" ""), 1)
+                        accounts = AM.unsafeFromList $ roles <&> \role -> ((V1.Role role, V1.Token "" ""), 1)
                         state = (V1.emptyState (PV2.POSIXTime 0)){V1.accounts = accounts}
                         dtm =
                           V1.MarloweData
@@ -221,7 +222,7 @@ spec =
                           (cnt, dtm)
                         else do
                           let cnt = V1.Close
-                              accounts = AM.fromList $ (extra <> roles) <&> \role -> ((V1.Role role, V1.Token "" ""), 1)
+                              accounts = AM.unsafeFromList $ (extra <> roles) <&> \role -> ((V1.Role role, V1.Token "" ""), 1)
                               state = (V1.emptyState (PV2.POSIXTime 0)){V1.accounts = accounts}
                               dtm =
                                 V1.MarloweData
@@ -256,7 +257,7 @@ spec =
                           (cnt, dtm)
                         else do
                           let cnt = V1.Close
-                              accounts = AM.fromList $ contractRoles <&> \role -> ((V1.Role role, V1.Token "" ""), 1)
+                              accounts = AM.unsafeFromList $ contractRoles <&> \role -> ((V1.Role role, V1.Token "" ""), 1)
                               state = (V1.emptyState (PV2.POSIXTime 0)){V1.accounts = accounts}
                               dtm =
                                 V1.MarloweData
@@ -284,7 +285,7 @@ spec =
                     (cnt, dtm)
                   else do
                     let cnt = V1.Close
-                        accounts = AM.fromList $ roles <&> \role -> ((V1.Role role, V1.Token "" ""), 1)
+                        accounts = AM.unsafeFromList $ roles <&> \role -> ((V1.Role role, V1.Token "" ""), 1)
                         state = (V1.emptyState (PV2.POSIXTime 0)){V1.accounts = accounts}
                         dtm =
                           V1.MarloweData
@@ -307,7 +308,7 @@ spec =
                 if doTestContract
                   then (foldr payToken V1.Close tokens, Nothing)
                   else do
-                    let accounts = AM.fromList $ tokens <&> \token -> ((V1.Role "x", token), 1)
+                    let accounts = AM.unsafeFromList $ tokens <&> \token -> ((V1.Role "x", token), 1)
                     (V1.Close, Just (V1.emptyState (PV2.POSIXTime 0)){V1.accounts = accounts})
 
               expected =
@@ -348,7 +349,7 @@ spec =
                 if doTestContract
                   then (V1.Pay role (V1.Account role) ada (V1.Constant 1) V1.Close, Nothing)
                   else do
-                    let accounts = AM.fromList [((role, ada), 1)]
+                    let accounts = AM.unsafeFromList [((role, ada), 1)]
                     (V1.Close, Just (V1.emptyState (PV2.POSIXTime 0)){V1.accounts = accounts})
               roleTokensConfig = RoleTokensNone
               state' = fromMaybe (V1.emptyState 0) state
@@ -569,7 +570,7 @@ spec =
         do
           let initialAccounts :: V1.Accounts
               initialAccounts =
-                AM.fromList $
+                AM.unsafeFromList $
                   [ ((accountId, ada), 1)
                   | i <- [1 .. 10 :: Int]
                   , let accountId = V1.Role $ PLA.tokenName . Text.encodeUtf8 . Text.pack . show $ i

@@ -53,7 +53,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
 import qualified Network.Protocol.ChainSeek.Types as ChainSeek
 import qualified Network.Protocol.Job.Types as Command
 import qualified Network.Protocol.Query.Types as Query
-import Ouroboros.Consensus.Block (EpochSize (..))
+import Ouroboros.Consensus.Block (EpochSize (..), GenesisWindow (..))
 import Ouroboros.Consensus.BlockchainTime (RelativeTime (..), SlotLength (..), mkSlotLength)
 import Ouroboros.Consensus.HardFork.History (
   Bound (..),
@@ -538,7 +538,13 @@ genEraEnd =
     ]
 
 genEraParams :: Gen EraParams
-genEraParams = EraParams <$> genEpochSize <*> genSlotLength <*> genSafeZone
+genEraParams = EraParams <$> genEpochSize <*> genSlotLength <*> genSafeZone <*> genGenesisWindow
+
+genGenesisWindow :: Gen GenesisWindow
+genGenesisWindow =
+  oneof
+    [ GenesisWindow <$> arbitrary
+    ]
 
 genSafeZone :: Gen SafeZone
 genSafeZone =

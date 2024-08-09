@@ -6,6 +6,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# OPTIONS_GHC -Wno-deprecations #-}
 
 module Language.Marlowe.Runtime.Transaction.Constraints (
   ConstraintError (..),
@@ -47,6 +48,7 @@ import Cardano.Api (
   unsafeHashableScriptData,
  )
 import qualified Cardano.Api as C
+import qualified Cardano.Api.Ledger as Ledger
 import qualified Cardano.Api.Shelley as C
 import Control.Applicative ((<|>))
 import Control.Error (hoistMaybe, note, noteT, runExceptT)
@@ -548,7 +550,7 @@ ensureAtLeastHalfAnAda origValue =
     else origValue
   where
     origLovelace = C.selectLovelace origValue
-    minLovelace = C.Lovelace 500_000
+    minLovelace = Ledger.Coin 500_000
 
 -- | Compute the `minAda` and adjust the lovelace in a single output to conform
 --   to the minimum ADA requirement.
@@ -589,7 +591,7 @@ adjustTxForMinUtxo era protocol mMarloweAddress txBodyContent = do
           . map
             ( First
                 . ( \(C.TxOut addressInEra txOutValue _ _) ->
-                      if fromCardanoAddressInEra (C.babbageEraOnwardsToCardanoEra era) addressInEra == marloweAddress
+                      if fromCardanoAddressInEra (C.toCardanoEra era) addressInEra == marloweAddress
                         then Just txOutValue
                         else Nothing
                   )
@@ -615,9 +617,9 @@ adjustTxForMinUtxo era protocol mMarloweAddress txBodyContent = do
             <> show (getMarloweOutputValue adjustedTxOuts)
 
 -- | Compute the maximum fee for any transaction.
-maximumFee :: C.ProtocolParameters -> C.Lovelace
+maximumFee :: C.ProtocolParameters -> Ledger.Coin
 maximumFee C.ProtocolParameters{..} =
-  let txFee :: C.Lovelace
+  let txFee :: Ledger.Coin
       txFee = protocolParamTxFeeFixed + protocolParamTxFeePerByte * fromIntegral protocolParamMaxTxSize
       executionFee :: Rational
       executionFee =
@@ -828,8 +830,8 @@ selectCoins era protocol marloweVersion scriptCtx walletCtx@WalletContext{..} he
     . Left
     . CoinSelectionFailed
     $ do
-      let C.Lovelace required = C.selectLovelace targetSelectionValue
-          C.Lovelace available = C.selectLovelace universe
+      let Ledger.Coin required = C.selectLovelace targetSelectionValue
+          Ledger.Coin available = C.selectLovelace universe
       InsufficientLovelace required available
 
   -- Satisfy the native-token requirements.
@@ -936,7 +938,7 @@ balanceTx era systemStart eraHistory protocol marloweVersion scriptCtx walletCtx
     maybe
       (Left $ BalancingError "Failed to convert change address.")
       Right
-      $ toCardanoAddressInEra (C.babbageEraOnwardsToCardanoEra era) changeAddress
+      $ toCardanoAddressInEra (C.toCardanoEra era) changeAddress
 
   let -- Extract the value of a UTxO
       txOutToValue :: C.TxOut ctx era -> C.Value
@@ -1029,7 +1031,7 @@ allUtxos era marloweVersion scriptCtx WalletContext{..} HelpersContext{..} inclu
       maryEraOnwards = C.babbageEraOnwardsToMaryEraOnwards era
 
       era' :: C.CardanoEra era
-      era' = C.babbageEraOnwardsToCardanoEra era
+      era' = C.toCardanoEra era
 
       convertUtxo :: (Chain.TxOutRef, Chain.TransactionOutput) -> Maybe (C.TxIn, C.TxOut ctx era)
       convertUtxo (txOutRef, transactionOutput) =
@@ -1169,7 +1171,7 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
                 plutusScriptV2InEra
                 C.PlutusScriptV2
                 plutusScriptOrRefInput
-                (C.ScriptDatumForTxIn $ unsafeHashableScriptData $ toCardanoScriptData $ Core.toChainDatum marloweVersion datum)
+                (C.ScriptDatumForTxIn $ Just . unsafeHashableScriptData $ toCardanoScriptData $ Core.toChainDatum marloweVersion datum)
                 ( unsafeHashableScriptData $ toCardanoScriptData case marloweVersion of
                     Core.MarloweV1 ->
                       Chain.toDatum $
@@ -1209,10 +1211,11 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
                     plutusScriptV2InEra
                     C.PlutusScriptV2
                     plutusScriptOrRefInput
-                    ( C.ScriptDatumForTxIn $
-                        C.unsafeHashableScriptData $
-                          toCardanoScriptData $
-                            Core.toChainPayoutDatum marloweVersion payoutDatum
+                    ( C.ScriptDatumForTxIn
+                        $ Just
+                          . C.unsafeHashableScriptData
+                        $ toCardanoScriptData
+                        $ Core.toChainPayoutDatum marloweVersion payoutDatum
                     )
                     (C.unsafeHashableScriptData $ C.ScriptDataConstructor 0 [])
                     (C.ExecutionUnits 0 0)
@@ -1315,7 +1318,7 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
                     plutusScriptV2InEra
                     C.PlutusScriptV2
                     plutusScriptOrRefInput
-                    (C.ScriptDatumForTxIn $ C.unsafeHashableScriptData helperDatum)
+                    (C.ScriptDatumForTxIn . Just $ C.unsafeHashableScriptData helperDatum)
                     (C.unsafeHashableScriptData $ C.ScriptDataConstructor 0 []) -- FIXME: In the future, some helpers may require a redeemer, but open roles does not.
                     (C.ExecutionUnits 0 0)
             pure $

@@ -21,9 +21,9 @@ module Language.Marlowe.CLI.Test.CLI.Types where
 import Cardano.Api (
   BabbageEraOnwards,
   LocalNodeConnectInfo,
-  Lovelace,
  )
 import Cardano.Api qualified as C
+import Cardano.Api.Ledger qualified as Ledger
 import Control.Category ((<<<))
 import Control.Error.Util (hush)
 import Control.Lens (Lens', makeLenses)
@@ -185,7 +185,7 @@ data CLIOperation
   = -- | We use "private" currency minting policy which
     -- | checks for a signature of a particular issuer.
     Initialize
-      { coMinLovelace :: Maybe Lovelace
+      { coMinLovelace :: Maybe Ledger.Coin
       -- ^ Minimum lovelace to be sent to the contract.
       , coContractNickname :: Maybe ContractNickname
       -- ^ The name of the wallet's owner.
@@ -233,7 +233,7 @@ data CLIOperation
       }
   deriving (Eq, Generic, Show)
 
-initialize :: Contract.Source -> Maybe CurrencyNickname -> Either Lovelace M.State -> CLIOperation
+initialize :: Contract.Source -> Maybe CurrencyNickname -> Either Ledger.Coin M.State -> CLIOperation
 initialize source roleCurrency minLovelaceOrInitialState = do
   let coMinLovelace = case minLovelaceOrInitialState of
         Left lovelace -> Just lovelace
@@ -251,7 +251,7 @@ initialize source roleCurrency minLovelaceOrInitialState = do
     , coFullyAnalyze = Nothing
     }
 
-initialize' :: M.Contract -> Maybe CurrencyNickname -> Either Lovelace M.State -> CLIOperation
+initialize' :: M.Contract -> Maybe CurrencyNickname -> Either Ledger.Coin M.State -> CLIOperation
 initialize' contract roleCurrency minLovelaceOrInitialState = do
   let contractSource = InlineContract $ ParametrizedMarloweJSON (toJSON contract)
   initialize contractSource roleCurrency minLovelaceOrInitialState

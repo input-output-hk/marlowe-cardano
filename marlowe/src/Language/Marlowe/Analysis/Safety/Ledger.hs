@@ -104,7 +104,7 @@ import PlutusLedgerApi.V2 (
   toBuiltinData,
  )
 import qualified PlutusLedgerApi.V2 as P (Address (..), Value)
-import qualified PlutusTx.AssocMap as AM (Map, fromList, keys, toList)
+import qualified PlutusTx.AssocMap as AM (Map, keys, toList, unsafeFromList)
 import PlutusTx.Builtins (serialiseData)
 import qualified PlutusTx.Prelude as P (lengthOfByteString)
 
@@ -419,7 +419,7 @@ worstState
   -- ^ A state with worst-case size.
 worstState contract continuations =
   let worst :: (Extract k, Ord k) => AM.Map k Integer
-      worst = AM.fromList . foldMap (pure . (,big)) $ extractAllWithContinuations contract continuations
+      worst = AM.unsafeFromList . foldMap (pure . (,big)) $ extractAllWithContinuations contract continuations
       accounts = worst
       choices = worst
       boundValues = worst

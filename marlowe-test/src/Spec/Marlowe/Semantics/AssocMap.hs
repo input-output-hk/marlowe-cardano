@@ -26,7 +26,7 @@ import Data.Bifunctor (bimap)
 import Data.Function (on)
 import Data.List (groupBy, nub, sortBy)
 
-import qualified PlutusTx.AssocMap as AM (Map, fromList, toList)
+import qualified PlutusTx.AssocMap as AM (Map, toList, unsafeFromList)
 
 -- | Fail if the map contains duplicate keys.
 assocMapValid :: (Eq k) => AM.Map k v -> AM.Map k v
@@ -38,7 +38,7 @@ assocMapValid am =
 
 -- | Sort a map by key.
 assocMapSort :: (Ord k) => AM.Map k v -> AM.Map k v
-assocMapSort = AM.fromList . sortBy (compare `on` fst) . AM.toList
+assocMapSort = AM.unsafeFromList . sortBy (compare `on` fst) . AM.toList
 
 -- | Test equality of maps.
 assocMapEq :: (Ord k) => (Eq v) => AM.Map k v -> AM.Map k v -> Bool
@@ -47,7 +47,7 @@ assocMapEq = (==) `on` assocMapSort
 -- | Insert an entry into a map.
 assocMapInsert :: (Eq k) => k -> v -> AM.Map k v -> AM.Map k v
 assocMapInsert k v =
-  AM.fromList
+  AM.unsafeFromList
     . ((k, v) :)
     . filter ((/= k) . fst)
     . AM.toList
@@ -55,7 +55,7 @@ assocMapInsert k v =
 -- | Insert an entry into a map.
 assocMapAdd :: (Ord k) => (Num v) => k -> v -> AM.Map k v -> AM.Map k v
 assocMapAdd k v =
-  AM.fromList
+  AM.unsafeFromList
     . fmap (bimap head sum . unzip)
     . groupBy ((==) `on` fst)
     . sortBy (compare `on` fst)
@@ -72,4 +72,4 @@ assocMapLookup k = lookup k . AM.toList
 
 -- | Delete a key from a map.
 assocMapDelete :: (Eq k) => k -> AM.Map k v -> AM.Map k v
-assocMapDelete k = AM.fromList . filter ((/= k) . fst) . AM.toList
+assocMapDelete k = AM.unsafeFromList . filter ((/= k) . fst) . AM.toList

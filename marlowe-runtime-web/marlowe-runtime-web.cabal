@@ -112,10 +112,10 @@ library
     , base >=4.9 && <5
     , base16 ^>=0.3.2
     , bytestring >=0.10.12 && <0.12
-    , cardano-api ^>=8.39.2.0
-    , cardano-ledger-alonzo ^>=1.6
-    , cardano-ledger-binary ^>=1.3
-    , cardano-ledger-core ^>=1.10
+    , cardano-api ^>=9.1
+    , cardano-ledger-alonzo ^>=1.10
+    , cardano-ledger-binary ^>=1.3.3
+    , cardano-ledger-core ^>=1.13.2
     , co-log ^>=0.6
     , containers ^>=0.6.5
     , deepseq ^>=1.4
@@ -130,7 +130,11 @@ library
     , marlowe-client ==1.0.0
     , marlowe-object ==1.0.0
     , marlowe-protocols ==0.3.0.0
-    , marlowe-runtime:{marlowe-runtime, contract-api, proxy-api, sync-api, tx-api} ==1.0.0
+    , marlowe-runtime ==1.0.0
+    , marlowe-runtime:contract-api
+    , marlowe-runtime:proxy-api
+    , marlowe-runtime:sync-api
+    , marlowe-runtime:tx-api
     , monad-control ^>=1
     , mtl >=2.2 && <3
     , network-uri >=2.6 && <3
@@ -138,7 +142,7 @@ library
     , openapi3 >=3.2 && <4
     , parsec ^>=3.1.14
     , pipes ^>=4.3.16
-    , plutus-ledger-api ^>=1.21
+    , plutus-ledger-api ^>=1.30
     , servant ^>=0.20
     , servant-client ^>=0.20
     , servant-client-core ^>=0.20
@@ -179,8 +183,10 @@ library server
     , lens-aeson ^>=1.2
     , marlowe-chain-sync ==1.0.0
     , marlowe-protocols ==0.3.0.0
+    , marlowe-runtime ==1.0.0
     , marlowe-runtime-web ==1.0.0
-    , marlowe-runtime:{marlowe-runtime, proxy-api, sync-api} ==1.0.0
+    , marlowe-runtime:proxy-api
+    , marlowe-runtime:sync-api
     , mtl >=2.2 && <3
     , network
     , openapi3 >=3.2 && <4
@@ -236,7 +242,8 @@ test-suite marlowe-runtime-web-test
     , lens >=5.2 && <6
     , marlowe-cardano ==0.2.1.0
     , marlowe-object:gen
-    , marlowe-runtime-web:{marlowe-runtime-web, server}
+    , marlowe-runtime-web
+    , marlowe-runtime-web:server
     , marlowe-runtime:gen
     , marlowe-test
     , mtl >=2.2 && <3

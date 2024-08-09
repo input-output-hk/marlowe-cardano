@@ -134,7 +134,10 @@ import qualified Language.Marlowe.Runtime.Plutus.V2.Api as Chain (
   fromPlutusValue,
   toPlutusTokenName,
  )
+import Ouroboros.Consensus.Block (GenesisWindow (GenesisWindow))
+import qualified Ouroboros.Consensus.Block as Ouroboros
 import qualified Ouroboros.Consensus.BlockchainTime as Ouroboros (RelativeTime (..), mkSlotLength, toRelativeTime)
+import Ouroboros.Consensus.HardFork.History (EraParams (eraGenesisWin))
 import qualified Ouroboros.Consensus.HardFork.History as Ouroboros (
   Bound (..),
   EraEnd (..),
@@ -146,7 +149,6 @@ import qualified Ouroboros.Consensus.HardFork.History as Ouroboros (
   summaryWithExactly,
   wallclockToSlot,
  )
-import qualified Ouroboros.Network.Block as Ouroboros (SlotNo (..))
 import qualified PlutusLedgerApi.V2 as Plutus (
   CurrencySymbol (..),
   DatumHash (..),
@@ -552,15 +554,16 @@ makeSystemHistory time =
   let systemStart = Shelley.SystemStart $ addUTCTime (-1000) time
       eraParams =
         Ouroboros.EraParams
-          { eraEpochSize = 1
+          { eraEpochSize = Ouroboros.EpochSize 1
           , eraSlotLength = Ouroboros.mkSlotLength 1
           , eraSafeZone = Ouroboros.UnsafeIndefiniteSafeZone
+          , eraGenesisWin = GenesisWindow 1
           }
       oneSecondBound i =
         Ouroboros.Bound
           { boundTime = Ouroboros.RelativeTime $ fromInteger i
-          , boundSlot = fromInteger i
-          , boundEpoch = fromInteger i
+          , boundSlot = Ouroboros.SlotNo $ fromInteger i
+          , boundEpoch = Ouroboros.EpochNo $ fromInteger i
           }
       oneSecondEraSummary i =
         Ouroboros.EraSummary

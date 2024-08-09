@@ -16,14 +16,14 @@ import Data.Text (Text)
 import Language.Marlowe.Analysis.Safety.Types (SafetyError)
 import Language.Marlowe.Protocol.Query.Types (ContractFilter (..), Page (..))
 import Language.Marlowe.Runtime.ChainSync.Api (DatumHash (..), Lovelace (..))
-import Language.Marlowe.Runtime.Core.Api (
+import Language.Marlowe.Runtime.Core.Api as Core (
   ContractId,
   MarloweMetadataTag (..),
   MarloweTransactionMetadata (..),
   MarloweVersion (..),
   SomeMarloweVersion (..),
  )
-import qualified Language.Marlowe.Runtime.Core.Api as Core
+import qualified Language.Marlowe.Runtime.Discovery.Api as Core
 import Language.Marlowe.Runtime.Transaction.Api (ContractCreated (..), ContractCreatedInEra (..), WalletAddresses (..))
 import Language.Marlowe.Runtime.Web.Adapter.CommaList (
   CommaList (unCommaList),
@@ -51,9 +51,10 @@ import Language.Marlowe.Runtime.Web.Adapter.Server.Monad (
  )
 import Language.Marlowe.Runtime.Web.Adapter.Server.TxClient (TempTx (TempTx), TempTxStatus (Unsigned))
 import Language.Marlowe.Runtime.Web.Adapter.Server.Util (makeSignedTxWithWitnessKeys)
-import Language.Marlowe.Runtime.Web.Contract.API (
+import Language.Marlowe.Runtime.Web.Contract.API as Web (
   ContractAPI,
   ContractHeader,
+  ContractId,
   ContractOrSourceId (..),
   ContractsAPI,
   GetContractResponse,
@@ -79,6 +80,8 @@ import Language.Marlowe.Runtime.Web.Core.Tx (
   TxOutRef,
  )
 
+import Control.Monad.Except (MonadError, join)
+import qualified Language.Marlowe.Protocol.Query.Types as Query
 import Language.Marlowe.Runtime.Web.Adapter.Server.ApiError (
   ApiError (ApiError),
   badRequest',
@@ -101,7 +104,7 @@ import Servant (
  )
 import Servant.Pagination (
   ExtractRange (extractRange),
-  HasPagination (getDefaultRange),
+  HasPagination (..),
   Range,
   Ranges,
   returnRange,
@@ -109,7 +112,7 @@ import Servant.Pagination (
 
 server :: ServerT ContractsAPI ServerM
 server =
-  get
+  getContractHeaders
     :<|> (\stakeAddress -> postCreateTxBodyResponse stakeAddress :<|> postCreateTxResponse stakeAddress)
     :<|> contractServer
     :<|> ContractSources.server
@@ -120,7 +123,7 @@ postCreateTxBody
   -> Address
   -> Maybe (CommaList Address)
   -> Maybe (CommaList TxOutRef)
-  -> ServerM (ContractId, TxBodyInAnyEra, [SafetyError])
+  -> ServerM (Core.ContractId, TxBodyInAnyEra, [SafetyError])
 postCreateTxBody PostContractsRequest{..} stakeAddressDTO changeAddressDTO mAddresses mCollateralUtxos = do
   SomeMarloweVersion v@MarloweV1 <- fromDTOThrow (badRequest' "Unsupported Marlowe version") version
   stakeAddress <- fromDTOThrow (badRequest' "Invalid stake address value") stakeAddressDTO
@@ -185,27 +188,50 @@ postCreateTxResponse stakeAddressDTO req changeAddressDTO mAddresses mCollateral
   let body = CreateTxEnvelope contractId' tx' safetyErrors
   pure $ IncludeLink (Proxy @"contract") body
 
-get
+getContractHeaders
   :: [PolicyId]
   -> [Text]
   -> [Address]
   -> [AssetId]
   -> Maybe (Ranges '["contractId"] GetContractsResponse)
   -> ServerM (PaginatedResponse '["contractId"] GetContractsResponse)
-get roleCurrencies' tags' partyAddresses' partyRoles' ranges = do
-  let range :: Range "contractId" TxOutRef
-      range = fromMaybe (getDefaultRange (Proxy @ContractHeader)) $ extractRange =<< ranges
-  range' <- maybe (throwError $ rangeNotSatisfiable' "Invalid range value") pure $ fromPaginationRange range
-  roleCurrencies <- Set.fromList <$> fromDTOThrow (badRequest' "Invalid role currency") roleCurrencies'
-  let tags = Set.fromList $ MarloweMetadataTag <$> tags'
-  partyAddresses <- Set.fromList <$> fromDTOThrow (badRequest' "Invalid address") partyAddresses'
-  partyRoles <- Set.fromList <$> fromDTOThrow (badRequest' "Invalid role token") partyRoles'
-  loadContractHeaders ContractFilter{..} range' >>= \case
-    Nothing -> throwError $ rangeNotSatisfiable' "Initial contract ID not found"
-    Just Page{..} -> do
-      let headers' = toDTO items
-      let response = IncludeLink (Proxy @"transactions") . IncludeLink (Proxy @"contract") <$> headers'
-      addHeader totalCount . fmap ListObject <$> returnRange range response
+getContractHeaders roleCurrencies tags partyAddresses partyRoles ranges = do
+  join
+    ( loadContractHeaders
+        <$> toContractFilter roleCurrencies tags partyAddresses partyRoles
+        <*> toCoreRange ranges
+    )
+    >>= whenNothingThrow (rangeNotSatisfiable' "Initial contract ID not found")
+    >>= toWebContractHeaders (servantContractHeaderRange ranges)
+
+toWebContractHeaders
+  :: Range "contractId" Web.ContractId
+  -> Query.Page Core.ContractId Core.ContractHeader
+  -> ServerM (PaginatedResponse '["contractId"] GetContractsResponse)
+toWebContractHeaders range Page{items, totalCount} = do
+  let response = IncludeLink (Proxy @"transactions") . IncludeLink (Proxy @"contract") <$> toDTO items
+  addHeader totalCount
+    . fmap ListObject
+    <$> returnRange range response
+
+servantContractHeaderRange :: Maybe (Ranges '["contractId"] GetContractsResponse) -> Range "contractId" Web.ContractId
+servantContractHeaderRange ranges = fromMaybe (getDefaultRange (Proxy @ContractHeader)) $ extractRange =<< ranges
+
+toCoreRange :: Maybe (Ranges '["contractId"] GetContractsResponse) -> ServerM (Query.Range Core.ContractId)
+toCoreRange ranges =
+  whenNothingThrow
+    (rangeNotSatisfiable' "Invalid range value")
+    (fromPaginationRange . servantContractHeaderRange $ ranges)
+
+toContractFilter :: [PolicyId] -> [Text] -> [Address] -> [AssetId] -> ServerM ContractFilter
+toContractFilter roleCurrencies tags partyAddresses partyRoles = do
+  ContractFilter (Set.fromList $ MarloweMetadataTag <$> tags)
+    <$> whenNothingThrow (badRequest' "Invalid role currency") (Set.fromList <$> fromDTO roleCurrencies)
+    <*> whenNothingThrow (badRequest' "Invalid role token") (Set.fromList <$> fromDTO partyRoles)
+    <*> whenNothingThrow (badRequest' "Invalid address") (Set.fromList <$> fromDTO partyAddresses)
+
+whenNothingThrow :: (MonadError e m) => e -> Maybe a -> m a
+whenNothingThrow err = maybe (throwError err) pure
 
 contractServer :: TxOutRef -> ServerT ContractAPI ServerM
 contractServer contractId =

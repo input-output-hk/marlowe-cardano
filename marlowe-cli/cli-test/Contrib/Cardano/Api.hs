@@ -1,9 +1,9 @@
-module Contrib.Cardano.Api where
+module Contrib.Cardano.Api (lovelaceToInt, lovelaceFromInt) where
 
-import Cardano.Api (Lovelace (Lovelace))
+import Cardano.Api.Ledger (Coin (Coin))
 
-lovelaceToInt :: Lovelace -> Int
-lovelaceToInt (Lovelace l) = fromInteger l
+lovelaceToInt :: Coin -> Int
+lovelaceToInt (Coin l) = fromInteger l
 
-lovelaceFromInt :: Int -> Lovelace
-lovelaceFromInt = Lovelace . toInteger
+lovelaceFromInt :: Int -> Coin
+lovelaceFromInt = Coin . toInteger

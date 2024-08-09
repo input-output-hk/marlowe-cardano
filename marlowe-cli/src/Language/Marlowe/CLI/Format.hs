@@ -57,8 +57,7 @@ import Language.Marlowe.Core.V1.Semantics.Types as S (
 import Language.Marlowe.Core.V1.Semantics.Types.Address
 import Language.Marlowe.Pretty
 import PlutusLedgerApi.V1.Time (POSIXTime (..))
-import PlutusTx.Builtins (BuiltinByteString)
-import PlutusTx.Builtins.Class (ToBuiltin (..))
+import PlutusTx.Builtins (BuiltinByteString, toBuiltin)
 import Text.Megaparsec
 import Text.Megaparsec.Char as P
 import Text.Megaparsec.Char.Lexer qualified as L

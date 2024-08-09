@@ -42,7 +42,7 @@ import Test.QuickCheck (generate, infiniteListOf)
 import Test.QuickCheck.Hedgehog (hedgehog)
 import UnliftIO (catchIO, forConcurrently)
 
-import Cardano.Api (TxBodyContent (..))
+import Cardano.Api (TxBodyContent (..), runExceptT)
 import qualified Cardano.Api as C
 import qualified Cardano.Api.Shelley as C
 import qualified Data.ByteString as BS
@@ -117,21 +117,22 @@ fundAddress
 fundAddress node era network srcAddress srcKey changeAddress dstAddressAmount =
   do
     let local = C.LocalNodeConnectInfo (C.CardanoModeParams $ C.EpochSlots 432_000) network node
-    Right systemStart <- liftIO $ C.queryNodeLocalState local Net.Query.VolatileTip C.QuerySystemStart
+    Right systemStart <- liftIO . runExceptT $ C.queryNodeLocalState local Net.Query.VolatileTip C.QuerySystemStart
     Right ledgerEpochInfo <-
       liftIO $
         fmap (fmap C.toLedgerEpochInfo) $
-          C.queryNodeLocalState
-            local
-            Net.Query.VolatileTip
-            C.QueryEraHistory
+          runExceptT $
+            C.queryNodeLocalState
+              local
+              Net.Query.VolatileTip
+              C.QueryEraHistory
     Right protocol <-
-      liftIO $
+      liftIO . runExceptT $
         C.executeQueryCardanoMode node network $
           C.QueryInEra $
             C.QueryInShelleyBasedEra C.shelleyBasedEra C.QueryProtocolParameters
     Right utxos <-
-      liftIO $
+      liftIO . runExceptT $
         C.executeQueryCardanoMode node network $
           C.QueryInEra $
             C.QueryInShelleyBasedEra C.shelleyBasedEra $

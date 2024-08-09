@@ -67,7 +67,6 @@ in
 
   shellHook = lib.optionalString isLinux "refresh-compose";
 
-
   preCommit = {
     cabal-fmt.enable = true;
     cabal-fmt.extraOptions = "--no-tabular";

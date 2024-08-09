@@ -1,6 +1,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
+{-# OPTIONS_GHC -Wno-deprecations #-}
 
 module Language.Marlowe.Runtime.ChainSync.QueryServer where
 

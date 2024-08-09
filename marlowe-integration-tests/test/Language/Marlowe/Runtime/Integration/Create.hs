@@ -298,7 +298,7 @@ roleTokenSpec = \case
                   Map.fromList
                     $ fmap
                       ( \(assetId, quantity) ->
-                          ((fromCardanoAddressInEra (C.babbageEraOnwardsToCardanoEra era) address, assetId), quantity)
+                          ((fromCardanoAddressInEra (C.toCardanoEra era) address, assetId), quantity)
                       )
                     $ Map.toList
                     $ unTokens

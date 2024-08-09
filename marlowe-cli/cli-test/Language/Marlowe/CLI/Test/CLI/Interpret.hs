@@ -41,10 +41,10 @@ import PlutusLedgerApi.V1.Value qualified as P
 import Cardano.Api (
   IsShelleyBasedEra,
   LocalNodeConnectInfo (LocalNodeConnectInfo),
-  Lovelace (Lovelace),
   StakeAddressReference (NoStakeAddress),
  )
 import Cardano.Api qualified as C
+import Cardano.Api.Ledger qualified as Ledger
 import Contrib.Control.Monad.Except (note)
 import Contrib.Data.Foldable (anyFlipped, foldMapFlipped, foldMapMFlipped)
 import Contrib.Data.List.Random (combinationWithRepetitions)
@@ -378,7 +378,7 @@ interpret co@Initialize{..} = do
         pure ccCurrencySymbol
 
   marloweState <- case (coMinLovelace, coInitialState) of
-    (Just (Lovelace minAda), Nothing) -> pure $ initialMarloweState submitterParty minAda
+    (Just (Ledger.Coin minAda), Nothing) -> pure $ initialMarloweState submitterParty minAda
     (Nothing, Just parametrizedStateJson) -> do
       decodeStateJSON parametrizedStateJson
     (Just _, Just _) ->

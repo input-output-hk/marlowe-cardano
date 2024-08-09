@@ -13,6 +13,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
+{-# OPTIONS_GHC -Wno-deprecations #-}
 
 module Language.Marlowe.CLI.Test.Runner where
 
@@ -21,9 +22,9 @@ import Cardano.Api (
   BabbageEraOnwards,
   IsShelleyBasedEra,
   LocalNodeConnectInfo (..),
-  Lovelace (Lovelace),
  )
 import Cardano.Api qualified as C
+import Cardano.Api.Ledger qualified as Ledger
 import Cardano.Api.Shelley (protocolParamProtocolVersion)
 import Cardano.Api.Shelley qualified as CS
 import Contrib.Cardano.Api (lovelaceFromInt, lovelaceToInt)
@@ -318,7 +319,7 @@ updateFaucet TestRunnerFaucet{..} InterpretState{_isWallets = wallets} =
     }
 
 newtype TestFaucetBudget
-  = TestFaucetBudget C.Lovelace
+  = TestFaucetBudget Ledger.Coin
 
 type CliAction era a =
   forall m
@@ -365,7 +366,7 @@ fetchAddressTotalLovelace
   :: (MonadIO m)
   => (MonadReader (Env lang era resource) m)
   => AddressInEra era
-  -> m C.Lovelace
+  -> m Ledger.Coin
 fetchAddressTotalLovelace address = do
   value <- fetchAddressTotalValue address
   pure $ C.selectLovelace value
@@ -906,7 +907,7 @@ runTests tests (MaxConcurrentRunners maxConcurrentRunners) = do
       txCosts =
         TxCostsUpperBounds
           (2 * maximumFee protocolParams)
-          (Lovelace 100_000_000)
+          (Ledger.Coin 100_000_000)
       subFaucetBudget = testsFaucetBudgetUpperBound txCosts (map snd tests)
       requiredFunds =
         lovelaceFromInt (lovelaceToInt subFaucetBudget * concurrentRunners)

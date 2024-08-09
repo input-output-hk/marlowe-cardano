@@ -13,29 +13,19 @@ import Cardano.Ledger.Alonzo.TxWits (TxDats (..))
 import Cardano.Ledger.Babbage (BabbageEra, BabbageTxOut)
 import Cardano.Ledger.Babbage.Tx (
   IsValid (..),
-  indexRedeemers,
  )
 import Cardano.Ledger.Babbage.TxBody (BabbageTxOut (..))
 import Cardano.Ledger.Binary (Sized (..), shelleyProtVer)
 import qualified Cardano.Ledger.Binary as L
 import Cardano.Ledger.Conway (ConwayEra)
-import Cardano.Ledger.Conway.Core (
-  AlonzoEraScript (PlutusPurpose),
-  AlonzoEraTxWits,
-  AsItem (AsItem),
-  ConwayEraTxBody,
-  Era (EraCrypto),
-  EraTx (Tx),
- )
+import Cardano.Ledger.Conway.Core (EraTx (Tx), hashScript)
 import Cardano.Ledger.Conway.Scripts (
   AlonzoScript (..),
-  ConwayPlutusPurpose (ConwaySpending),
  )
 import Cardano.Ledger.Conway.TxBody (ConwayTxBody (..))
 import Cardano.Ledger.Conway.TxWits (AlonzoTxWits (..))
-import Cardano.Ledger.Core (EraScript (..), ScriptHash (..))
+import Cardano.Ledger.Core (ScriptHash (..))
 import Cardano.Ledger.Crypto (StandardCrypto)
-import Cardano.Ledger.Plutus.Data (dataToBinaryData)
 import Cardano.Ledger.Shelley.API (TxIn)
 import Control.Arrow (Arrow (..))
 import Data.ByteString (ByteString)
@@ -48,7 +38,6 @@ import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Babbage (babbageTx
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Mary (maryAssetMintRows)
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Shelley (
   hashToBytea,
-  originalBytea,
   serializeBytea,
   shelleyTxInRow,
  )
@@ -108,14 +97,7 @@ coerceDats :: TxDats (ConwayEra StandardCrypto) -> TxDats (BabbageEra StandardCr
 coerceDats = unsafeCoerce
 
 conwayTxInRows
-  :: ( ConwayEraTxBody era
-     , AlonzoEraTxWits era
-     , EraTx era
-     , EraCrypto era ~ StandardCrypto
-     , PlutusPurpose AsItem era
-        ~ ConwayPlutusPurpose AsItem era
-     )
-  => Int64
+  :: Int64
   -> Bytea
   -> Cardano.Ledger.Babbage.Tx.IsValid
   -> Tx era
@@ -129,21 +111,9 @@ conwayTxInRows slot txId (Cardano.Ledger.Babbage.Tx.IsValid isValid) tx inputs c
       pure TxInRow{isCollateral = SqlBool True, ..}
 
 conwayTxInRow
-  :: ( ConwayEraTxBody era
-     , EraTx era
-     , EraCrypto era ~ StandardCrypto
-     , PlutusPurpose AsItem era
-        ~ ConwayPlutusPurpose AsItem era
-     , AlonzoEraTxWits era
-     )
-  => Int64
+  :: Int64
   -> Bytea
   -> Tx era
   -> TxIn StandardCrypto
   -> TxInRow
-conwayTxInRow slotNo txInId tx txIn =
-  (shelleyTxInRow slotNo txInId txIn)
-    { redeemerDatumBytes = do
-        (datum, _) <- Cardano.Ledger.Babbage.Tx.indexRedeemers tx $ ConwaySpending (AsItem txIn)
-        pure $ originalBytea $ dataToBinaryData datum
-    }
+conwayTxInRow slotNo txInId _ = shelleyTxInRow slotNo txInId

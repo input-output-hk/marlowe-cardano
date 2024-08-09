@@ -18,6 +18,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# OPTIONS_GHC -Wno-deprecations #-}
 
 -- | Run Marlowe contracts.
 module Language.Marlowe.CLI.Run (
