@@ -1235,7 +1235,7 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
         , helperRoles
         )
 
-    solveTxInsReference :: Set Chain.ScriptHash -> Set C.TxIn -> Either ConstraintError (C.TxInsReference C.BuildTx era)
+    solveTxInsReference :: Set Chain.ScriptHash -> Set C.TxIn -> Either ConstraintError (C.TxInsReference era)
     solveTxInsReference requiredPayoutScriptHashes helperTxInReferences =
       maybe (pure C.TxInsReferenceNone) (fmap (C.TxInsReference era) . sequence)
       -- sequenceL is from the 'Crosswalk' type class. It behaves similarly to
