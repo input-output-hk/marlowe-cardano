@@ -9,6 +9,10 @@
 # Required variables:
 #
 # CARDANO_NODE_SOCKET_PATH - path to the cardno-node socket - requires read / write permissions.
+#
+# All the below ports are usually the same when you are using marlowe-proxy.
+# Additionally when you run marlowe-proxy through our docker compose then you should be able
+# to get the port number by running: `docker compose port marlowe-proxy 3700`
 # MARLOWE_RT_PORT - port to run the marlowe runtime server.
 # MARLOWE_CHAIN_SYNC_PORT - port to run the chain sync server.
 # MARLOWE_CHAIN_SYNC_COMMAND_PORT - port to run the chain sync command server.
@@ -18,17 +22,20 @@
 #
 #
 cabal run exe:marlowe-cli -- \
-  --conway-era test \
+  --conway-era \
+  test \
   --testnet-magic "$CARDANO_NODE_NETWORK_ID" \
-  --max-concurrent-runners 8 \
+  --max-concurrent-runners 4 \
   --socket-path "$CARDANO_NODE_SOCKET_PATH" \
   --faucet-skey-file "$FAUCET_SKEY_FILE" \
   --faucet-address "$FAUCET_ADDRESS" \
   --marlowe-runtime-port "$MARLOWE_RT_PORT" \
   --write-to-json-file report.json \
-  --max-retries 3 \
+  --max-retries 0 \
   --stream-json \
-  ./test/operations/runtime.yaml 
+  ./test/templates/address-based/runtime/swap.yaml \
+  ./test/operations/burn.yaml \
+  ./test/operations/return-funds.yaml \
   ./test/inline/role-based/cli/contract-for-differences-with-oracle.yaml \
   ./test/inline/role-based/cli/contract-for-differences.yaml \
   ./test/inline/role-based/cli/coupon-bond-guaranteed.yaml \

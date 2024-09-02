@@ -38,6 +38,8 @@ operations:
       - [BPartyCurrency, BPartyTokenName, 100]
       - [ADA, "*"]
 
+- Sleep: 360
+
 - RuntimeCreateContract:
     minLovelace: 2000000
     awaitConfirmed: 120

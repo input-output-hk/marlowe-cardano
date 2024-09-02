@@ -147,8 +147,8 @@ library
     , filepath ^>=1.4
     , marlowe-cardano ==0.2.1.0
     , mtl >=2.2 && <3
-    , plutus-ledger-api ^>=1.30
-    , plutus-tx ^>=1.30
+    , plutus-ledger-api ^>=1.31
+    , plutus-tx ^>=1.31
     , QuickCheck >=2.14 && <3
     , tasty-quickcheck ^>=0.11
 
@@ -199,7 +199,7 @@ executable test-suite
     , aeson ^>=2.2
     , base >=4.9 && <5
     , bytestring >=0.10.12 && <0.12
-    , cardano-api ^>=9.1
+    , cardano-api ^>=9.2
     , containers ^>=0.6.5
     , data-default ^>=0.7.1
     , filepath ^>=1.4
@@ -210,12 +210,12 @@ executable test-suite
     , marlowe-spec-test ==0.1.0.1
     , marlowe-test
     , mtl >=2.2 && <3
-    , plutus-ledger-api ^>=1.30
-    , plutus-tx ^>=1.30
+    , plutus-ledger-api ^>=1.31
+    , plutus-tx ^>=1.31
     , QuickCheck >=2.14 && <3
     , quickcheck-instances ^>=0.3.29
     , sbv >=8.4
-    , tasty ^>=1.5.1
+    , tasty ^>=1.5
     , tasty-hunit ^>=0.10
     , tasty-quickcheck ^>=0.11
     , text ^>=2.0

@@ -10,8 +10,8 @@ repository cardano-haskell-packages
     d4a35cd3121aa00d18544bb0ac01c3e1691d618f462c46129271bccf39f7e8ee
 
 index-state:
-  , hackage.haskell.org 2024-06-23T23:01:13Z
-  , cardano-haskell-packages 2024-07-24T14:16:32Z 
+  , hackage.haskell.org 2024-08-07T14:18:16Z
+  , cardano-haskell-packages 2024-08-28T06:44:16Z
 
 packages:
   async-components
@@ -205,9 +205,10 @@ source-repository-package
 source-repository-package
    type: git
    location: https://github.com/input-output-hk/marlowe
-   tag: c144edd67361eccb0aabe15403e9f0788ccc6d56
+   tag: e94fab24826f5b095e8fc7c5a41fac939e5fb9ae
    subdir: marlowe-spec-test
            isabelle
-   --sha256: sha256-ento9kEmQnblcqLcvbc6R6DdF0izqb8ROl7t3yE99M4=
+   --sha256: sha256-29HMWsmDsRTyuJVJE+yc1rujNX6U6oVZ2homTab1syw=
+
 
 
