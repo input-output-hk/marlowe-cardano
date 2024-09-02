@@ -25,6 +25,7 @@ module Language.Marlowe.CLI.IO (
   decodeFileStrict,
   getEraHistory,
   getProtocolParams,
+  getLedgerProtocolParams,
   getMajorProtocolVersion,
   getPV2CostModelParams,
   getSystemStart,
@@ -389,6 +390,18 @@ getProtocolParams (QueryNode connection) = do
   era <- asksEra babbageEraOnwardsToShelleyBasedEra
   fromLedgerPParams era <$> queryInEra connection QueryProtocolParameters
 getProtocolParams (PureQueryContext _ NodeStateInfo{nsiProtocolParameters}) = pure nsiProtocolParameters
+
+getLedgerProtocolParams
+  :: (MonadError CliError m)
+  => (MonadIO m)
+  => (MonadReader (CliEnv era) m)
+  => QueryExecutionContext era
+  -> m (Ledger.PParams (C.ShelleyLedgerEra era))
+getLedgerProtocolParams (QueryNode connection) = do
+  queryInEra connection QueryProtocolParameters
+getLedgerProtocolParams (PureQueryContext _ NodeStateInfo{}) =
+  -- Workaround - fix this
+  throwError "getLedgerProtocolParams: Not implemented"
 
 queryAny :: (MonadError CliError m, MonadIO m) => LocalNodeConnectInfo -> QueryInMode a -> m a
 queryAny connection = liftCliExceptT . queryNodeLocalState connection VolatileTip

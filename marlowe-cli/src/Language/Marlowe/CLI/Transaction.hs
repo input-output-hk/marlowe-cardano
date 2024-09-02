@@ -231,6 +231,7 @@ import Language.Marlowe.CLI.IO (
   decodeFileBuiltinData,
   decodeFileStrict,
   getEraHistory,
+  getLedgerProtocolParams,
   getMajorProtocolVersion,
   getPV2CostModelParams,
   getProtocolParams,
@@ -934,8 +935,9 @@ buildScriptPublishingInfo
   -> m (ScriptPublishingInfo lang era)
 buildScriptPublishingInfo queryCtx plutusScript publishingStrategy = do
   era <- askEra
-  protocol <- getProtocolParams queryCtx
-  protocol' <- liftCli $ convertToLedgerProtocolParameters (babbageEraOnwardsToShelleyBasedEra era) protocol
+  -- protocol <- getProtocolParams queryCtx
+  -- protocol' <- liftCli $ convertToLedgerProtocolParameters (babbageEraOnwardsToShelleyBasedEra era) protocol
+  protocol' <- fmap LedgerProtocolParameters $ getLedgerProtocolParams queryCtx
   protocolVersion <- getMajorProtocolVersion queryCtx
   costModel <- getPV2CostModelParams queryCtx
   let networkId = queryContextNetworkId queryCtx
@@ -1548,9 +1550,11 @@ buildBodyWithContent queryCtx payFromScript payToScript extraInputs inputs outpu
     era <- askEra
     start <- getSystemStart queryCtx
     history <- getEraHistory queryCtx
+    -- Remaining fetch which is used in printing
     protocol <- getProtocolParams queryCtx
-    let protocol' = (\pp -> pp{protocolParamMaxTxExUnits = protocolParamMaxBlockExUnits pp}) protocol
-    protocol'' <- liftCli $ convertToLedgerProtocolParameters (babbageEraOnwardsToShelleyBasedEra era) protocol'
+    -- -- let protocol' = (\pp -> pp{protocolParamMaxTxExUnits = protocolParamMaxBlockExUnits pp}) protocol
+    -- protocol' <- liftCli $ convertToLedgerProtocolParameters (babbageEraOnwardsToShelleyBasedEra era) protocol
+    protocol' <- fmap LedgerProtocolParameters $ getLedgerProtocolParams queryCtx
     (scriptTxIn, txInsReferences) <-
       unzip <$> for payFromScript \s -> liftCli do
         redeemScript era s
@@ -1573,7 +1577,7 @@ buildBodyWithContent queryCtx payFromScript payToScript extraInputs inputs outpu
         txMetadata = metadata
         txAuxScripts = TxAuxScriptsNone
         txExtraKeyWits = TxExtraKeyWitnesses (babbageEraOnwardsToAlonzoEraOnwards era) extraSigners
-        txProtocolParams = BuildTxWith $ Just protocol''
+        txProtocolParams = BuildTxWith $ Just protocol'
         txWithdrawals = TxWithdrawalsNone
         txCertificates = TxCertificatesNone
         txUpdateProposal = TxUpdateProposalNone
@@ -1621,7 +1625,7 @@ buildBodyWithContent queryCtx payFromScript payToScript extraInputs inputs outpu
                   (babbageEraOnwardsToShelleyBasedEra era)
                   start
                   (C.toLedgerEpochInfo history)
-                  protocol''
+                  protocol'
                   S.empty
                   mempty
                   mempty
@@ -1634,7 +1638,7 @@ buildBodyWithContent queryCtx payFromScript payToScript extraInputs inputs outpu
             Left (TxBodyErrorAdaBalanceNegative delta) -> do
               balancingLoop (counter - 1) (C.lovelaceToValue delta <> changeValue)
             Left err -> throwError . CliError $ show err
-            Right balanced@(BalancedTxBody _ (TxBody TxBodyContent{txFee = fee}) _ _) -> do
+            Right balanced@(BalancedTxBody _ (TxBody TxBodyContent{txFee = fee}) _ _) ->
               pure (buildTxBodyContent{txFee = fee}, balanced)
 
         totalIn = foldMap txOutValueValue . (M.elems . C.unUTxO) $ utxos
@@ -1787,7 +1791,7 @@ redeemScript
   => BabbageEraOnwards era
   -> PayFromScript lang
   -- ^ The payment information.
-  -> m (TxInEra era, TxInsReference BuildTx era)
+  -> m (TxInEra era, TxInsReference era)
   -- ^ The transaction input.
 redeemScript era p@PayFromScript{..} = do
   witness <- scriptWitness era p
