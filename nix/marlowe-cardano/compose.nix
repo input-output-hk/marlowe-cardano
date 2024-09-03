@@ -98,7 +98,7 @@ let
   '';
 
   node-service = {
-    image = "ghcr.io/intersectmbo/cardano-node:9.1.0";
+    image = "ghcr.io/intersectmbo/cardano-node:9.1.1";
 
     environment = [
       "NETWORK=${network.name}"
