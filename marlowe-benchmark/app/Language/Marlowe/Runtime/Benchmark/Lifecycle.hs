@@ -126,11 +126,13 @@ fundAddress node era network srcAddress srcKey changeAddress dstAddressAmount =
               local
               Net.Query.VolatileTip
               C.QueryEraHistory
-    Right protocol <-
+    result <-
       liftIO . runExceptT $
         C.executeQueryCardanoMode node network $
           C.QueryInEra $
             C.QueryInShelleyBasedEra C.shelleyBasedEra C.QueryProtocolParameters
+    liftIO . putStrLn $ either show (const "") result
+    Right protocol <- pure result
     Right utxos <-
       liftIO . runExceptT $
         C.executeQueryCardanoMode node network $
