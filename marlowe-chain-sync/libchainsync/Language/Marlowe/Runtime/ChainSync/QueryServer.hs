@@ -1,7 +1,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StrictData #-}
-{-# OPTIONS_GHC -Wno-deprecations #-}
 
 module Language.Marlowe.Runtime.ChainSync.QueryServer where
 
@@ -12,7 +11,7 @@ import Cardano.Api (
   QueryInMode (..),
   QueryInShelleyBasedEra (..),
   ShelleyBasedEra (..),
-  fromLedgerPParams,
+  babbageEraOnwardsToShelleyBasedEra,
   inEonForEra,
  )
 import qualified Cardano.Api as Cardano
@@ -59,7 +58,11 @@ chainSyncQueryServer ChainSyncQueryServerDependencies{..} = ServerSource $ pure 
             fmap (,serverReq) . traverseReqTree \case
               GetSecurityParameter -> queryGenesisParameters protocolParamSecurity
               GetNetworkId -> queryGenesisParameters protocolParamNetworkId
-              GetProtocolParameters era -> queryLocalNodeState QueryProtocolParameters era
+              GetProtocolParameters era -> do
+                let sbe = babbageEraOnwardsToShelleyBasedEra era
+                either (fail . show) pure -- handling era mismatch failure
+                  =<< either (fail . show) pure -- handling acquiring failure
+                  =<< queryLocalNodeState Nothing (QueryInEra $ QueryInShelleyBasedEra sbe QueryProtocolParameters)
               GetSystemStart -> either (fail . show) pure =<< queryLocalNodeState Nothing QuerySystemStart
               GetEraHistory -> either (fail . show) pure =<< queryLocalNodeState Nothing QueryEraHistory
               GetUTxOs utxosQuery -> Database.runGetUTxOs getUTxOs utxosQuery

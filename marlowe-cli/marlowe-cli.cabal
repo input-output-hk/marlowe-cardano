@@ -99,6 +99,7 @@ library
     , cardano-api ^>=9.2
     , cardano-crypto-class
     , cardano-ledger-alonzo
+    , cardano-ledger-babbage
     , cardano-ledger-byron ^>=1.0.1
     , cardano-ledger-core ^>=1.13.2
     , cardano-ledger-shelley
@@ -112,6 +113,7 @@ library
     , marlowe-cardano
     , megaparsec
     , memory
+    , microlens
     , mtl
     , ouroboros-consensus
     , ouroboros-network-protocols

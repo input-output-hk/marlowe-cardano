@@ -27,7 +27,6 @@ import Cardano.Api (
   CardanoEra (..),
   ConwayEra,
   EraHistory (..),
-  IsShelleyBasedEra (shelleyBasedEra),
   NetworkId (..),
   NetworkMagic (..),
   ScriptInEra (..),
@@ -38,7 +37,6 @@ import Cardano.Api (
   metadataValueToJsonNoSchema,
   serialiseToBech32,
   serialiseToCBOR,
-  shelleyBasedEraConstraints,
  )
 import qualified Cardano.Api as C
 import qualified Cardano.Api as Cardano
@@ -117,7 +115,7 @@ import Data.Type.Equality (type (:~:) (Refl))
 import qualified Data.Vector as Vector
 import Data.Void (Void, absurd)
 import Data.Word (Word16, Word64)
-import GHC.Generics (Generic (Rep))
+import GHC.Generics (Generic)
 import GHC.Natural (Natural)
 import GHC.Show (showSpace)
 import Language.Marlowe.Runtime.Cardano.Feature (hush)
@@ -167,13 +165,11 @@ import Text.Read (readMaybe)
 import Unsafe.Coerce (unsafeCoerce)
 
 import Cardano.Api.ProtocolParameters (
-  LedgerProtocolParameters (LedgerProtocolParameters),
   ProtocolParameters,
   convertToLedgerProtocolParameters,
  )
 import qualified Cardano.Ledger.Core as Ledger
 import qualified Data.ByteString.Builder as BB
-import Data.Either (fromRight)
 import Data.Reflection (give)
 import qualified Ouroboros.Consensus.Shelley.Eras
 
@@ -1456,7 +1452,7 @@ instance Query.RequestVariations ChainSyncQuery where
     TagGetScripts BabbageEraOnwardsBabbage -> variations
     TagGetScripts BabbageEraOnwardsConway -> variations
 
--- TODO: Below three instances are ugly workarounds which still rely on deprecated ProtocolParameters.
+-- TODO (Refactor Deprecated ProtocolParameters) : Below three instances are ugly workarounds which still rely on deprecated ProtocolParameters.
 -- They should be removed and replaced by statically defined protocol params - we have JSON files in the repo which
 -- should be included in the code.
 instance Variations ProtocolParameters

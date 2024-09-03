@@ -10,7 +10,6 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# OPTIONS_GHC -Wno-deprecations #-}
 
 -----------------------------------------------------------------------------
 
@@ -234,7 +233,6 @@ import Language.Marlowe.CLI.IO (
   getLedgerProtocolParams,
   getMajorProtocolVersion,
   getPV2CostModelParams,
-  getProtocolParams,
   getSystemStart,
   liftCli,
   liftCliExceptT,

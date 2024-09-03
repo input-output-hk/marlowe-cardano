@@ -4,7 +4,6 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# OPTIONS_GHC -Wno-deprecations #-}
 
 module Language.Marlowe.Runtime.Transaction.ConstraintsSpec where
 
@@ -182,10 +181,10 @@ import Test.Gen.Cardano.Api.Typed (
   genAddressShelley,
   genHashableScriptData,
   genPlutusScript,
-  genProtocolParameters,
   genScriptHash,
   genTxBodyContent,
   genTxIn,
+  genValidProtocolParameters,
   genValueForTxOut,
  )
 import Test.Hspec

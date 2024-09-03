@@ -13,7 +13,6 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
-{-# OPTIONS_GHC -Wno-deprecations #-}
 
 module Language.Marlowe.CLI.Test.Runner where
 

@@ -24,7 +24,6 @@
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# OPTIONS_GHC -Wno-deprecations #-}
 
 -- | Types for the Marlowe CLI tool.
 module Language.Marlowe.CLI.Types (
@@ -147,6 +146,7 @@ import Cardano.Api (
  )
 import Cardano.Api qualified as C
 import Cardano.Api.Byron qualified as CB
+import Cardano.Api.Ledger qualified as Ledger
 import Cardano.Api.Shelley (PlutusScript (..))
 import Cardano.Api.Shelley qualified as C
 import Cardano.Api.Shelley qualified as CS
@@ -774,9 +774,9 @@ submitModeFromTimeout :: Maybe Second -> SubmitMode
 submitModeFromTimeout Nothing = DontSubmit
 submitModeFromTimeout (Just timeout) = DoSubmit timeout
 
-data NodeStateInfo = NodeStateInfo
+data NodeStateInfo era = NodeStateInfo
   { nsiNetworkId :: C.NetworkId
-  , nsiProtocolParameters :: C.ProtocolParameters
+  , nsiProtocolParameters :: Ledger.PParams era
   , nsiSystemStart :: C.SystemStart
   , nsiEraHistory :: C.EraHistory
   }
@@ -785,7 +785,7 @@ data NodeStateInfo = NodeStateInfo
 -- They allow us to perform fully dry run over contract execution.
 data QueryExecutionContext era
   = QueryNode C.LocalNodeConnectInfo
-  | PureQueryContext (TVar (C.UTxO era)) NodeStateInfo
+  | PureQueryContext (TVar (C.UTxO era)) (NodeStateInfo era)
 
 queryContextNetworkId :: QueryExecutionContext era -> C.NetworkId
 queryContextNetworkId (QueryNode connection) = C.localNodeNetworkId connection
@@ -796,7 +796,7 @@ data TxBuildupContext era
   = NodeTxBuildup C.LocalNodeConnectInfo SubmitMode
   | PureTxBuildup
       (TVar (C.UTxO era))
-      NodeStateInfo
+      (NodeStateInfo era)
 
 mkNodeTxBuildup :: forall era. C.LocalNodeConnectInfo -> Maybe Second -> TxBuildupContext era
 mkNodeTxBuildup connection timeout = NodeTxBuildup connection (submitModeFromTimeout timeout)

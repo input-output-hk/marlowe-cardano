@@ -16,7 +16,6 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# OPTIONS_GHC -Wno-deprecations #-}
 
 -- | Input/output functions for the Marlowe CLI tool.
 module Language.Marlowe.CLI.IO (
@@ -24,7 +23,6 @@ module Language.Marlowe.CLI.IO (
   decodeFileBuiltinData,
   decodeFileStrict,
   getEraHistory,
-  getProtocolParams,
   getLedgerProtocolParams,
   getMajorProtocolVersion,
   getPV2CostModelParams,
@@ -74,7 +72,6 @@ import Cardano.Api (
   TxMetadataInEra (..),
   TxMetadataJsonSchema (..),
   babbageEraOnwardsToShelleyBasedEra,
-  fromLedgerPParams,
   getScriptData,
   getTxId,
   metadataFromJson,
@@ -88,10 +85,15 @@ import Cardano.Api (
   toLedgerValue,
   writeFileTextEnvelope,
  )
+import Cardano.Api.Ledger (EraPParams (..))
 import Cardano.Api.Ledger qualified as Ledger
-import Cardano.Api.Shelley (ProtocolParameters (protocolParamProtocolVersion), toPlutusData)
+import Cardano.Api.Shelley (fromAlonzoCostModels, fromAlonzoExUnits, toPlutusData)
 import Cardano.Api.Shelley qualified as C
+import Cardano.Ledger.Alonzo.Core (ppMaxTxExUnitsL, ppMaxTxSizeL)
+import Cardano.Ledger.Alonzo.PParams (ppCostModelsL)
 import Cardano.Ledger.Alonzo.Scripts (ExUnits (..))
+import Cardano.Ledger.Babbage.PParams (BabbageEraPParams)
+import Cardano.Ledger.BaseTypes qualified as Ledger
 import Contrib.Cardano.TxBody qualified as T
 import Contrib.Cardano.UTxO qualified as U
 import Contrib.Control.Concurrent (threadDelay)
@@ -107,7 +109,6 @@ import Data.ByteString qualified as BS (length)
 import Data.ByteString.Char8 qualified as BS8 (putStrLn)
 import Data.ByteString.Lazy qualified as LBS (writeFile)
 import Data.ByteString.Lazy.Char8 qualified as LBS8 (putStrLn)
-import Data.Functor ((<&>))
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
 import Data.Time.Units (Second, TimeUnit, toMicroseconds)
@@ -132,6 +133,7 @@ import Language.Marlowe.CLI.Types (
   somePaymentSigningKeyToTxWitness,
   toAddressAny',
  )
+import Lens.Micro
 import Ouroboros.Network.Protocol.LocalStateQuery.Type
 import Ouroboros.Network.Protocol.LocalTxSubmission.Client (SubmitResult (..))
 import PlutusCore.Evaluation.Machine.ExBudgetingDefaults
@@ -380,17 +382,6 @@ queryByAddress
   -- ^ Action for running the query.
 queryByAddress queryCtx = queryUTxOs queryCtx . C.QueryUTxOByAddress . Set.singleton . toAddressAny'
 
-getProtocolParams
-  :: (MonadError CliError m)
-  => (MonadIO m)
-  => (MonadReader (CliEnv era) m)
-  => QueryExecutionContext era
-  -> m C.ProtocolParameters
-getProtocolParams (QueryNode connection) = do
-  era <- asksEra babbageEraOnwardsToShelleyBasedEra
-  fromLedgerPParams era <$> queryInEra connection QueryProtocolParameters
-getProtocolParams (PureQueryContext _ NodeStateInfo{nsiProtocolParameters}) = pure nsiProtocolParameters
-
 getLedgerProtocolParams
   :: (MonadError CliError m)
   => (MonadIO m)
@@ -423,26 +414,31 @@ getEraHistory (QueryNode connection) = queryAny connection QueryEraHistory
 getEraHistory (PureQueryContext _ NodeStateInfo{nsiEraHistory}) = pure nsiEraHistory
 
 getMajorProtocolVersion
-  :: (MonadError CliError m)
-  => (MonadIO m)
-  => (MonadReader (CliEnv era) m)
+  :: ( MonadError CliError m
+     , MonadIO m
+     , MonadReader (CliEnv era) m
+     , BabbageEraPParams (C.ShelleyLedgerEra era)
+     )
   => QueryExecutionContext era
   -> m MajorProtocolVersion
 getMajorProtocolVersion queryCtx = do
-  protocol <- getProtocolParams queryCtx
-  pure $ toPlutusMajorProtocolVersion $ protocolParamProtocolVersion protocol
+  protocolParameters <- getLedgerProtocolParams queryCtx
+  let protVersion = case protocolParameters ^. ppProtocolVersionL of Ledger.ProtVer a b -> (Ledger.getVersion a, b)
+  pure $ toPlutusMajorProtocolVersion protVersion
 
 getPV2CostModelParams
-  :: (MonadError CliError m)
-  => (MonadIO m)
-  => (MonadReader (CliEnv era) m)
+  :: ( MonadError CliError m
+     , MonadIO m
+     , MonadReader (CliEnv era) m
+     , BabbageEraPParams (C.ShelleyLedgerEra era)
+     )
   => QueryExecutionContext era
   -> m [Integer]
 getPV2CostModelParams queryCtx = do
-  protocolParams <- getProtocolParams queryCtx
+  protocolParameters <- getLedgerProtocolParams queryCtx
   let pv2 = C.AnyPlutusScriptVersion C.PlutusScriptV2
   C.CostModel costModel <- do
-    let costModels = C.protocolParamCostModels protocolParams
+    let costModels = fromAlonzoCostModels $ protocolParameters ^. ppCostModelsL
     liftCli $ note ("Missing PV2 cost model" :: String) $ Map.lookup pv2 costModels
   pure $ fromIntegral <$> costModel
 
@@ -480,23 +476,26 @@ waitForUtxos connection timeout txIns = do
   go . ceiling $ (fromIntegral timeoutMicroseconds / fromIntegral pauseMicroseconds :: Double)
 
 txResourceUsage
-  :: C.BabbageEraOnwards era
-  -> C.ProtocolParameters
+  :: (BabbageEraPParams era)
+  => -- \^ Babbage Protocol parameters
+  C.BabbageEraOnwards era
+  -- ^ The era to serialise the transaction in.
+  -> Ledger.PParams era
   -> C.TxBody era
   -> TxResourceUsage
-txResourceUsage era pp txBody =
+txResourceUsage era protocolParameters txBody =
   let size =
         naturalFromInteger $
           toInteger $
             BS.length $
               shelleyBasedEraConstraints (babbageEraOnwardsToShelleyBasedEra era) $
                 C.serialiseToCBOR txBody
-      maxSize = C.protocolParamMaxTxSize pp
+      maxSize = fromIntegral $ protocolParameters ^. ppMaxTxSizeL
       fractionSize = 100 * size `div` maxSize
 
       ExUnits memory steps = T.exUnits txBody
 
-      maxExecutionUnits = C.protocolParamMaxTxExUnits pp
+      maxExecutionUnits = Just . fromAlonzoExUnits $ protocolParameters ^. ppMaxTxExUnitsL
       fractionMemory = 100 * memory `div` maybe 0 C.executionMemory maxExecutionUnits
       fractionSteps = 100 * steps `div` maybe 0 C.executionSteps maxExecutionUnits
    in TxResourceUsage
@@ -506,9 +505,11 @@ txResourceUsage era pp txBody =
         }
 
 checkTxLimits
-  :: C.BabbageEraOnwards era
+  :: (BabbageEraPParams era)
+  => -- \^ Babbage Protocol parameters
+  C.BabbageEraOnwards era
   -- ^ The era to serialise the transaction in.
-  -> C.ProtocolParameters
+  -> Ledger.PParams era
   -- ^ The protocol params to check against.
   -> C.TxBody era
   -- ^ The transaction body.
@@ -529,9 +530,11 @@ checkTxLimits era pp txBody = do
 
 -- | Sign and submit a transaction.
 submitTxBody
-  :: (MonadError CliError m)
-  => (MonadIO m)
-  => (MonadReader (CliEnv era) m)
+  :: ( MonadError CliError m
+     , MonadIO m
+     , MonadReader (CliEnv era) m
+     , BabbageEraPParams era
+     )
   => TxBuildupContext era
   -- ^ The connection info for the local node.
   -> C.TxBody era
@@ -602,9 +605,11 @@ submitTxBody txBuildupContext txBody signings =
 -- (we experienced failures on the cardano-node for already balanced transactions).
 -- TODO: Refactor this function so it doesn't require the TxBodyContent to be passed in.
 submitTxBody'
-  :: (MonadError CliError m)
-  => (MonadIO m)
-  => (MonadReader (CliEnv era) m)
+  :: ( MonadError CliError m
+     , MonadIO m
+     , MonadReader (CliEnv era) m
+     , BabbageEraPParams era
+     )
   => TxBuildupContext era
   -- ^ The connection info for the local node.
   -> C.TxBody era

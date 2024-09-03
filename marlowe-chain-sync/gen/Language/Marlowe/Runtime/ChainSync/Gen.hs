@@ -12,7 +12,6 @@ import Cardano.Api (
   AddressAny (..),
   AlonzoEraOnwards (..),
   AnyShelleyBasedEra (..),
-  AsType (..),
   BabbageEra,
   BabbageEraOnwards (..),
   CardanoEra (..),
@@ -30,6 +29,7 @@ import Cardano.Api (
   unsafeHashableScriptData,
  )
 import Cardano.Api.Byron (AnyCardanoEra (..))
+import Cardano.Api.ProtocolParameters
 import qualified Cardano.Api.Shelley as Shelley
 import Control.Monad (replicateM)
 import Data.Bifunctor (first)
@@ -425,7 +425,8 @@ instance Query.ArbitraryRequest ChainSyncQuery where
     elements
       [ Query.SomeTag TagGetSecurityParameter
       , Query.SomeTag TagGetNetworkId
-      , Query.SomeTag TagGetProtocolParameters
+      , Query.SomeTag (TagGetProtocolParameters BabbageEraOnwardsBabbage)
+      , Query.SomeTag (TagGetProtocolParameters BabbageEraOnwardsConway)
       , Query.SomeTag TagGetSystemStart
       , Query.SomeTag TagGetEraHistory
       , Query.SomeTag TagGetUTxOs
@@ -434,7 +435,7 @@ instance Query.ArbitraryRequest ChainSyncQuery where
   arbitraryReq = \case
     TagGetSecurityParameter -> pure GetSecurityParameter
     TagGetNetworkId -> pure GetNetworkId
-    TagGetProtocolParameters -> pure GetProtocolParameters
+    TagGetProtocolParameters era -> pure $ GetProtocolParameters era
     TagGetSystemStart -> pure GetSystemStart
     TagGetEraHistory -> pure GetEraHistory
     TagGetUTxOs -> GetUTxOs <$> arbitrary
@@ -447,9 +448,14 @@ instance Query.ArbitraryRequest ChainSyncQuery where
   arbitraryResult = \case
     TagGetSecurityParameter -> arbitrary
     TagGetNetworkId -> arbitrary
-    TagGetProtocolParameters -> do
-      AnyCardanoEra era <- arbitrary
-      hedgehog $ genProtocolParameters era
+    TagGetProtocolParameters BabbageEraOnwardsBabbage ->
+      do
+        legacyProtocolParameter <- hedgehog $ genProtocolParameters BabbageEra
+        return $ either (error . show) id . toLedgerPParams ShelleyBasedEraBabbage $ legacyProtocolParameter
+    TagGetProtocolParameters BabbageEraOnwardsConway ->
+      do
+        legacyProtocolParameter <- hedgehog $ genProtocolParameters ConwayEra
+        return $ either (error . show) id . toLedgerPParams ShelleyBasedEraConway $ legacyProtocolParameter
     TagGetSystemStart -> SystemStart . posixSecondsToUTCTime . fromIntegral <$> arbitrary @Word64
     TagGetEraHistory -> genEraHistory
     TagGetUTxOs -> arbitrary
@@ -462,7 +468,7 @@ instance Query.ArbitraryRequest ChainSyncQuery where
   shrinkReq = \case
     GetSecurityParameter -> []
     GetNetworkId -> []
-    GetProtocolParameters -> []
+    GetProtocolParameters _ -> []
     GetSystemStart -> []
     GetEraHistory -> []
     GetUTxOs query -> GetUTxOs <$> shrink query
@@ -476,7 +482,7 @@ instance Query.ArbitraryRequest ChainSyncQuery where
     TagGetNetworkId -> \case
       Mainnet -> []
       Testnet _ -> [Mainnet]
-    TagGetProtocolParameters -> const []
+    TagGetProtocolParameters _ -> const []
     TagGetSystemStart -> const []
     TagGetEraHistory -> const []
     TagGetUTxOs -> shrink
@@ -563,7 +569,8 @@ instance Query.RequestEq ChainSyncQuery where
   resultEq = \case
     TagGetSecurityParameter -> (==)
     TagGetNetworkId -> (==)
-    TagGetProtocolParameters -> (==)
+    TagGetProtocolParameters BabbageEraOnwardsBabbage -> (==)
+    TagGetProtocolParameters BabbageEraOnwardsConway -> (==)
     TagGetSystemStart -> (==)
     TagGetEraHistory -> \(EraHistory interpreter1) (EraHistory interpreter2) ->
       unInterpreter interpreter1 == unInterpreter interpreter2

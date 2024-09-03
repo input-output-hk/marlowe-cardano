@@ -7,7 +7,6 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# HLINT ignore "Use underscore" #-}
 {-# LANGUAGE TypeApplications #-}
-{-# OPTIONS_GHC -Wno-deprecations #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 -----------------------------------------------------------------------------
