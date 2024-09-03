@@ -23,10 +23,10 @@ import Cardano.Api (
   LocalNodeConnectInfo (..),
  )
 import Cardano.Api qualified as C
+import Cardano.Api.Ledger (EraPParams (ppProtocolVersionL))
 import Cardano.Api.Ledger qualified as Ledger
-import Cardano.Api.Shelley (protocolParamProtocolVersion)
 import Cardano.Api.Shelley qualified as CS
-import Contrib.Cardano.Api (lovelaceFromInt, lovelaceToInt)
+import Contrib.Cardano.Api (ledgerProtVerToPlutusMajorProtocolVersion, lovelaceFromInt, lovelaceToInt, lppPParamsL)
 import Contrib.Control.Exception (liftEitherIO)
 import Contrib.Control.Monad.Trans.State.IO (unsafeExecIOStateT)
 import Contrib.Data.Foldable (foldMapFlipped)
@@ -71,7 +71,6 @@ import GHC.Generics (Generic)
 import GHC.IO (catch)
 import GHC.IO.Handle.FD (stderr)
 import Language.Marlowe.CLI.Cardano.Api (
-  toPlutusMajorProtocolVersion,
   txOutValueValue,
  )
 import Language.Marlowe.CLI.Cardano.Api.Value (
@@ -202,7 +201,7 @@ data Env lang era resource = Env
   , _envPrintStats :: PrintStats
   , _envStreamJSON :: Bool
   , _envSlotConfig :: SlotConfig
-  , _envProtocolParams :: CS.ProtocolParameters
+  , _envProtocolParams :: CS.LedgerProtocolParameters era
   , _envCostModelParams :: [Integer]
   , _envMaxRetries :: Int
   , _envTxBuildupContext :: TxBuildupContext era
@@ -443,8 +442,10 @@ setupTestInterpretEnv = do
   protocolParams <- view envProtocolParams
   slotConfig <- view envSlotConfig
   costModelParams <- view envCostModelParams
-  let protocolVersion =
-        toPlutusMajorProtocolVersion $ protocolParamProtocolVersion protocolParams
+  let protocolVersion :: P.MajorProtocolVersion =
+        C.babbageEraOnwardsConstraints era $
+          ledgerProtVerToPlutusMajorProtocolVersion $
+            protocolParams ^. lppPParamsL . ppProtocolVersionL
       env =
         InterpretEnv
           { _ieTxBuildupContext = txBuildupContext
@@ -901,11 +902,12 @@ runTests
   -> TestSuiteRunnerM C.PlutusScriptV2 era (TestSuiteResult C.PlutusScriptV2 era)
 runTests tests (MaxConcurrentRunners maxConcurrentRunners) = do
   protocolParams <- view envProtocolParams
+  era <- view envEra
   let concurrentRunners = min maxConcurrentRunners (length tests)
       -- Our coin selection algorithm bounds the tx fees using this 2x factor.
       txCosts =
         TxCostsUpperBounds
-          (2 * maximumFee protocolParams)
+          (2 * (C.babbageEraOnwardsConstraints era $ maximumFee protocolParams))
           (Ledger.Coin 100_000_000)
       subFaucetBudget = testsFaucetBudgetUpperBound txCosts (map snd tests)
       requiredFunds =

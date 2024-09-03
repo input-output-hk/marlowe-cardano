@@ -116,7 +116,7 @@ import Language.Marlowe.CLI.Export (
  )
 import Language.Marlowe.CLI.IO (
   decodeFileStrict,
-  getProtocolParams,
+  getLedgerProtocolParams,
   liftCli,
   liftCliIO,
   maybeWriteJson,
@@ -712,8 +712,7 @@ runTransactionImpl txBuildupCtx marloweInBundle marloweOut' inputs outputs chang
   do
     let queryCtx = toQueryContext txBuildupCtx
     era <- askEra @era
-    protocol <- getProtocolParams queryCtx
-    protocol' <- liftCli $ CS.convertToLedgerProtocolParameters (C.babbageEraOnwardsToShelleyBasedEra era) protocol
+    protocol <- getLedgerProtocolParams queryCtx
     let marloweParams = MC.marloweParams $ mtRolesCurrency marloweOut'
         go :: MarloweTransaction lang era -> m (TxBody era)
         go marloweOut = do
@@ -771,14 +770,14 @@ runTransactionImpl txBuildupCtx marloweInBundle marloweOut' inputs outputs chang
                     money' <-
                       liftCli $
                         toCardanoValue money
-                    let (_, money'') = adjustMinimumUTxO era protocol' address' C.TxOutDatumNone money' ReferenceScriptNone
+                    let (_, money'') = adjustMinimumUTxO era protocol address' C.TxOutDatumNone money' ReferenceScriptNone
                     pure $ Just (address', C.TxOutDatumNone, money'')
                   Party (Role role) -> do
                     money' <-
                       liftCli $
                         toCardanoValue money
                     let datum = toTxOutDatumInTx era $ diDatum $ buildRoleDatum (Token (rolesCurrency marloweParams) role)
-                    let (_, money'') = adjustMinimumUTxO era protocol' roleAddress datum money' ReferenceScriptNone
+                    let (_, money'') = adjustMinimumUTxO era protocol roleAddress datum money' ReferenceScriptNone
                     pure $ Just (roleAddress, datum, money'')
                   Account _ -> pure Nothing
                 | (payee, money) <-
@@ -983,8 +982,7 @@ autoRunTransactionImpl txBuildupCtx marloweInBundle marloweOut' extraSpend chang
   do
     let queryCtx = toQueryContext txBuildupCtx
     era <- askEra @era
-    protocol <- getProtocolParams queryCtx
-    protocol' <- liftCli $ CS.convertToLedgerProtocolParameters (C.babbageEraOnwardsToShelleyBasedEra era) protocol
+    protocol <- getLedgerProtocolParams queryCtx
     -- Read the Marlowe transaction information for the output.
     -- Fetch the era.
     let go :: MarloweTransaction lang era -> m (TxBody era)
@@ -1054,11 +1052,11 @@ autoRunTransactionImpl txBuildupCtx marloweInBundle marloweOut' extraSpend chang
                   Party (Address network address) -> do
                     address' <- doWithShelleyBasedEra $ marloweAddressToCardanoAddress network address
                     money' <- liftCli $ toCardanoValue money
-                    Just <$> ensureMinUtxo protocol' (address', C.TxOutDatumNone, money')
+                    Just <$> ensureMinUtxo protocol (address', C.TxOutDatumNone, money')
                   Party (Role role) -> do
                     money' <- liftCli $ toCardanoValue money
                     let datum = toTxOutDatumInTx era . diDatum $ buildRoleDatum (Token rolesCurrency role)
-                    Just <$> ensureMinUtxo protocol' (roleAddress, datum, money')
+                    Just <$> ensureMinUtxo protocol (roleAddress, datum, money')
                   Account _ -> pure Nothing
                 | (payee, money) <-
                     bimap head mconcat . unzip
@@ -1092,7 +1090,7 @@ autoRunTransactionImpl txBuildupCtx marloweInBundle marloweOut' extraSpend chang
             sequence
               [ do
                 value <- liftCli . toCardanoValue $ singleton (mtRolesCurrency marloweOut) role 1
-                ensureMinUtxo protocol' (changeAddress, C.TxOutDatumNone, value)
+                ensureMinUtxo protocol (changeAddress, C.TxOutDatumNone, value)
               | role <- roles $ mtInputs marloweOut
               ]
           txOuts <-
@@ -1306,9 +1304,7 @@ autoWithdrawFundsImpl txBuildupCtx token validatorInfo range changeAddress signi
   do
     let queryCtx = toQueryContext txBuildupCtx
     -- Fetch the protocol parameters.
-    era <- askEra
-    protocol <- getProtocolParams queryCtx
-    protocol' <- liftCli $ CS.convertToLedgerProtocolParameters (C.babbageEraOnwardsToShelleyBasedEra era) protocol
+    protocol <- getLedgerProtocolParams queryCtx
     let Token rolesCurrency roleName = token
         filterPayoutUtxos = fromMaybe id possibleFilter
         -- Build the datum corresponding to the role name.
@@ -1341,7 +1337,7 @@ autoWithdrawFundsImpl txBuildupCtx token validatorInfo range changeAddress signi
         -- The output value should include the spending from the script and the role token.
         withdrawn = mconcat [txOutValueToValue value | AnUTxO (_, TxOut _ value _ _) <- utxos]
     -- Ensure that the output meets the min-Ada requirement.
-    output <- ensureMinUtxo protocol' (changeAddress, C.TxOutDatumNone, withdrawn <> role) >>= uncurry3 makeTxOut'
+    output <- ensureMinUtxo protocol (changeAddress, C.TxOutDatumNone, withdrawn <> role) >>= uncurry3 makeTxOut'
 
     -- Select the coins.
     (collateral, extraInputs, revisedOutputs) <-

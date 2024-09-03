@@ -100,10 +100,15 @@ import Language.Marlowe.Scripts.Types (marloweTxInputsFromInputs)
 import Cardano.Api (unsafeHashableScriptData)
 import Cardano.Api qualified as Api
 import Cardano.Api qualified as C
+import Cardano.Api.Ledger (ppProtocolVersionL)
 import Cardano.Api.Ledger qualified as Ledger
-import Cardano.Api.Shelley (ProtocolParameters (protocolParamProtocolVersion))
 import Cardano.Api.Shelley qualified as Api
+import Cardano.Ledger.Alonzo.Core (ppCostModelsL, ppMaxTxSizeL, ppMaxValSizeL)
+import Cardano.Ledger.Alonzo.Core qualified as Ledger
 import Cardano.Ledger.Credential qualified as Shelley
+import Cardano.Ledger.Plutus (ExUnits (..))
+import Cardano.Ledger.Plutus qualified as P
+import Contrib.Cardano.Api (ledgerProtVerToPlutusMajorProtocolVersion, lppPParamsL)
 import Control.Monad.Writer (WriterT (..))
 import Data.Aeson qualified as A
 import Data.Aeson.Types qualified as A (Pair)
@@ -113,9 +118,11 @@ import Data.Foldable.Extra (foldlM)
 import Data.Map.Strict qualified as M (lookup)
 import Data.SatInt (SatInt (..))
 import Data.Set qualified as S (filter, member)
+import Data.Word (Word32)
 import Data.Yaml qualified as Y (encode)
-import Language.Marlowe.CLI.Cardano.Api (toPlutusMajorProtocolVersion)
+import GHC.Natural (naturalToInteger)
 import Language.Marlowe.CLI.Transaction (babbageEraOnwardsToAllegraEraOnwards, mkTxOutValue)
+import Lens.Micro ((^.))
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (Target (VolatileTip))
 import Plutus.V1.Ledger.Ada qualified as P (lovelaceValueOf)
 import Plutus.V1.Ledger.SlotConfig qualified as P (SlotConfig, posixTimeToEnclosingSlot)
@@ -253,7 +260,6 @@ analyzeImpl era protocol MarloweTransaction{..} preconditions roles tokens maxim
           if condition
             then Just <$> x
             else pure Nothing
-        protocol' = Api.fromLedgerPParams (Api.babbageEraOnwardsToShelleyBasedEra era) $ Api.unLedgerProtocolParameters protocol
     A.toJSON
       . catMaybes
       <$> sequence
@@ -267,12 +273,12 @@ analyzeImpl era protocol MarloweTransaction{..} preconditions roles tokens maxim
             . pure
             $ checkTokens ci
         , guardValue (maximumValue || checkAll) $
-            checkMaximumValue protocol' perhapsTransactions verbose
+            checkMaximumValue era protocol perhapsTransactions verbose
         , guardValue (minimumUtxo || checkAll) $
             Api.shelleyBasedEraConstraints (Api.babbageEraOnwardsToShelleyBasedEra era) $
               checkMinimumUtxo era protocol perhapsTransactions verbose
         , guardValue (executionCost || checkAll) $
-            checkExecutionCost protocol' ci transactions verbose
+            checkExecutionCost era protocol ci transactions verbose
         , guardValue (transactionSize || checkAll) $
             checkTransactionSizes era protocol ci transactions verbose
         ]
@@ -359,7 +365,8 @@ checkRoles ContractInstance{..} =
 -- | Check that the protocol limit on maximum value in a UTxO is not violated.
 checkMaximumValue
   :: (MonadError CliError m)
-  => Api.ProtocolParameters
+  => Api.BabbageEraOnwards era
+  -> Api.LedgerProtocolParameters era
   -- ^ The `maxValue` protocol parameter.
   -> Either (ContractInstance lang era) [Transaction ()]
   -- ^ The bundle of contract information, or the transactions to traverse.
@@ -367,23 +374,23 @@ checkMaximumValue
   -- ^ Whether to include worst-case example in output.
   -> m A.Value
   -- ^ Action to print a report on `maxValue` validity.
-checkMaximumValue Api.ProtocolParameters{protocolParamMaxValueSize = Just maxValue} info verbose =
-  let (size, worst) =
+checkMaximumValue era protocol info verbose = Api.babbageEraOnwardsConstraints era $ do
+  let maxValue = protocol ^. lppPParamsL . ppMaxValSizeL
+      (size, worst) =
         case info of
           Right transactions ->
             let measure tx@(Transaction _ contract _ _ ()) = [(worstValueSize $ extractAll contract, Just tx)]
              in maximumBy (compare `on` fst) $ foldMap measure transactions
           Left ContractInstance{..} -> (worstValueSize $ extractAllWithContinuations ciContract ciContinuations, Nothing)
-   in pure $
-        putJson "Maximum value" $
-          [ "Actual" .= size
-          , "Maximum" .= maxValue
-          , "Unit" .= ("byte" :: String)
-          , "Invalid" .= (size > maxValue)
-          , "Percentage" .= (100 * fromIntegral size / fromIntegral maxValue :: Double)
-          ]
-            <> maybe [] (pure . ("Worst case" .=)) (guard verbose >> worst)
-checkMaximumValue _ _ _ = throwError $ CliError "Missing `maxValue` protocol parameter."
+  pure $
+    putJson "Maximum value" $
+      [ "Actual" .= size
+      , "Maximum" .= maxValue
+      , "Unit" .= ("byte" :: String)
+      , "Invalid" .= (size > maxValue)
+      , "Percentage" .= (100 * fromIntegral size / fromIntegral maxValue :: Double)
+      ]
+        <> maybe [] (pure . ("Worst case" .=)) (guard verbose >> worst)
 
 -- | Check that the protocol limit on minimum UTxO is not violated.
 checkMinimumUtxo
@@ -439,7 +446,8 @@ checkMinimumUtxo era protocol info verbose =
 -- | Check that transactions satisfy the execution-cost protocol limits.
 checkExecutionCost
   :: (MonadError CliError m)
-  => Api.ProtocolParameters
+  => Api.BabbageEraOnwards era
+  -> Api.LedgerProtocolParameters era
   -- ^ The protocol parameters.
   -> ContractInstance lang era
   -- ^ The bundle of contract information.
@@ -449,12 +457,12 @@ checkExecutionCost
   -- ^ Whether to include worst-case example in output.
   -> m A.Value
   -- ^ Action to print a report on validity of transaction execution costs.
-checkExecutionCost protocol ContractInstance{..} transactions verbose =
+checkExecutionCost era protocol ContractInstance{..} transactions verbose = Api.babbageEraOnwardsConstraints era $
   do
-    Api.CostModel costModel <-
+    costModel <-
       liftCliMaybe "Plutus cost model not found." $
-        Api.AnyPlutusScriptVersion Api.PlutusScriptV2 `M.lookup` Api.protocolParamCostModels protocol
-    (evaluationContext, _) <- liftCli $ runWriterT $ P.mkEvaluationContext costModel
+        P.PlutusV2 `M.lookup` P.costModelsValid (protocol ^. lppPParamsL . ppCostModelsL)
+    (evaluationContext, _) <- liftCli $ runWriterT $ P.mkEvaluationContext $ P.getCostModelParams costModel
     let creatorAddress =
           P.Address
             (P.PubKeyCredential "88888888888888888888888888888888888888888888888888888888")
@@ -474,7 +482,7 @@ checkExecutionCost protocol ContractInstance{..} transactions verbose =
                   (P.TxOut referenceAddress (P.lovelaceValueOf 1) P.NoOutputDatum (Just semanticsHash))
     semanticsAddress <- fmap snd . liftCli $ marloweAddressFromCardanoAddress $ viAddress ciSemanticsValidator
     payoutAddress <- fmap snd . liftCli $ marloweAddressFromCardanoAddress $ viAddress ciPayoutValidator
-    let protocolVersion = toPlutusMajorProtocolVersion $ protocolParamProtocolVersion protocol
+    let protocolVersion = ledgerProtVerToPlutusMajorProtocolVersion $ protocol ^. lppPParamsL . ppProtocolVersionL
     script <- liftCli $ deserialiseScript protocolVersion $ viBytes ciSemanticsValidator
     let executor =
           executeTransaction
@@ -490,9 +498,8 @@ checkExecutionCost protocol ContractInstance{..} transactions verbose =
         . fmap (\(tx, P.ExBudget{..}) -> ((tx, exBudgetCPU), (tx, exBudgetMemory)))
         <$> mapM (liftM2 (<$>) (,) executor) transactions
     let (worstSteps, P.ExCPU (unSatInt -> actualSteps)) = maximumBy (compare `on` snd) steps
-        maximumSteps = maybe 0 (fromEnum . Api.executionSteps) (Api.protocolParamMaxTxExUnits protocol)
         (worstMemory, P.ExMemory (unSatInt -> actualMemory)) = maximumBy (compare `on` snd) memories
-        maximumMemory = maybe 0 (fromEnum . Api.executionMemory) (Api.protocolParamMaxTxExUnits protocol)
+        ExUnits maximumMemory maximumSteps = protocol ^. lppPParamsL . Ledger.ppMaxTxExUnitsL
     pure $
       putJson
         "Execution cost"
@@ -501,7 +508,7 @@ checkExecutionCost protocol ContractInstance{..} transactions verbose =
               ( [ "Actual" .= actualSteps
                 , "Maximum" .= maximumSteps
                 , "Percentage" .= (100 * fromIntegral actualSteps / fromIntegral maximumSteps :: Double)
-                , "Invalid" .= (fromEnum actualSteps > maximumSteps)
+                , "Invalid" .= (fromEnum actualSteps > (fromIntegral . naturalToInteger $ maximumSteps))
                 ]
                   <> maybe [] (pure . ("Worst case" .=)) (guard verbose >> Just worstSteps)
               )
@@ -510,7 +517,7 @@ checkExecutionCost protocol ContractInstance{..} transactions verbose =
               ( [ "Actual" .= actualMemory
                 , "Maximum" .= maximumMemory
                 , "Percentage" .= (100 * fromIntegral actualMemory / fromIntegral maximumMemory :: Double)
-                , "Invalid" .= (fromEnum actualMemory > maximumMemory)
+                , "Invalid" .= (fromEnum actualMemory > (fromIntegral . naturalToInteger $ maximumMemory))
                 ]
                   <> maybe [] (pure . ("Worst case" .=)) (guard verbose >> Just worstMemory)
               )
@@ -518,7 +525,8 @@ checkExecutionCost protocol ContractInstance{..} transactions verbose =
 
 calcMarloweTxExBudgets
   :: (MonadError CliError m)
-  => Api.ProtocolParameters
+  => Api.BabbageEraOnwards era
+  -> Api.LedgerProtocolParameters era
   -- ^ The protocol parameters.
   -> ContractInstance lang era
   -- ^ The bundle of contract information.
@@ -527,18 +535,18 @@ calcMarloweTxExBudgets
   -> [P.TokenName]
   -> m [MarloweExBudget]
   -- ^ Action to print a report on validity of transaction execution costs.
-calcMarloweTxExBudgets protocol ContractInstance{..} transactionsPath lockedRoles = do
-  Api.CostModel costModel <-
+calcMarloweTxExBudgets era protocol ContractInstance{..} transactionsPath lockedRoles = Api.babbageEraOnwardsConstraints era $ do
+  costModel <-
     liftCliMaybe "Plutus cost model not found." $
-      Api.AnyPlutusScriptVersion Api.PlutusScriptV2 `M.lookup` Api.protocolParamCostModels protocol
-  (evaluationContext, _) <- liftCli $ runWriterT $ P.mkEvaluationContext costModel
+      P.PlutusV2 `M.lookup` P.costModelsValid (protocol ^. lppPParamsL . ppCostModelsL)
+  (evaluationContext, _) <- liftCli $ runWriterT $ P.mkEvaluationContext $ P.getCostModelParams costModel
   let useSemanticsReferenceInput = UseReferenceInput $ isJust $ viTxIn ciSemanticsValidator
       useOperatorReferenceInput = UseReferenceInput $ isJust $ viTxIn ciOpenRoleValidator
 
   semanticsAddress <- fmap snd . liftCli $ marloweAddressFromCardanoAddress $ viAddress ciSemanticsValidator
   payoutAddress <- fmap snd . liftCli $ marloweAddressFromCardanoAddress $ viAddress ciPayoutValidator
   openRoleAddress <- fmap snd . liftCli $ marloweAddressFromCardanoAddress $ viAddress ciOpenRoleValidator
-  let protocolVersion = toPlutusMajorProtocolVersion $ protocolParamProtocolVersion protocol
+  let protocolVersion = ledgerProtVerToPlutusMajorProtocolVersion $ protocol ^. lppPParamsL . ppProtocolVersionL
   semanticsScript <- liftCli $ deserialiseScript protocolVersion $ viBytes ciSemanticsValidator
   openRolesScript <- liftCli $ deserialiseScript protocolVersion $ viBytes ciOpenRoleValidator
   let calcTxBudget transaction stillLockedRoles =
@@ -581,10 +589,7 @@ checkTransactionSizes era protocol ci transactions verbose =
   do
     sizes <- mapM (liftM2 (<$>) (,) $ checkTransactionSize era protocol ci) transactions
     let (worst, actual) = maximumBy (compare `on` snd) sizes
-        limit =
-          Api.protocolParamMaxTxSize $
-            Api.fromLedgerPParams (Api.babbageEraOnwardsToShelleyBasedEra era) $
-              Api.unLedgerProtocolParameters protocol
+        (limit :: Word32) = Api.babbageEraOnwardsConstraints era $ protocol ^. lppPParamsL . ppMaxTxSizeL
     pure $
       putJson "Transaction size" $
         [ "Actual" .= actual

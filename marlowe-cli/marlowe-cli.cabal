@@ -60,6 +60,7 @@ library
   import:          lang
   hs-source-dirs:  src
   exposed-modules:
+    Contrib.Cardano.Api
     Contrib.Cardano.TxBody
     Contrib.Cardano.UTxO
     Contrib.Control.Concurrent
@@ -137,7 +138,6 @@ library cli-test
   hs-source-dirs:  cli-test
   visibility:      public
   other-modules:
-    Contrib.Cardano.Api
     Contrib.Control.Concurrent.Async
     Contrib.Control.Exception
     Contrib.Control.Monad.Except

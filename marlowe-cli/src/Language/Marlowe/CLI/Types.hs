@@ -146,7 +146,6 @@ import Cardano.Api (
  )
 import Cardano.Api qualified as C
 import Cardano.Api.Byron qualified as CB
-import Cardano.Api.Ledger qualified as Ledger
 import Cardano.Api.Shelley (PlutusScript (..))
 import Cardano.Api.Shelley qualified as C
 import Cardano.Api.Shelley qualified as CS
@@ -776,7 +775,7 @@ submitModeFromTimeout (Just timeout) = DoSubmit timeout
 
 data NodeStateInfo era = NodeStateInfo
   { nsiNetworkId :: C.NetworkId
-  , nsiProtocolParameters :: Ledger.PParams era
+  , nsiProtocolParameters :: C.LedgerProtocolParameters era
   , nsiSystemStart :: C.SystemStart
   , nsiEraHistory :: C.EraHistory
   }

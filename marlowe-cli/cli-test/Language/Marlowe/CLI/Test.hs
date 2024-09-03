@@ -62,8 +62,8 @@ import GHC.IO.Handle.FD (stderr)
 import Language.Marlowe.CLI.IO (
   decodeFileStrict,
   getEraHistory,
+  getLedgerProtocolParams,
   getPV2CostModelParams,
-  getProtocolParams,
   getSystemStart,
   liftCli,
   queryInEra,
@@ -156,7 +156,7 @@ runTestSuite era TestSuite{..} = do
             utxo = C.UTxO $ Map.singleton txIn txOut
             queryCtx = QueryNode connection
         utxoVar <- liftIO $ newTVarIO utxo
-        protocolParams <- getProtocolParams queryCtx
+        protocolParams <- getLedgerProtocolParams queryCtx
         systemStart <- getSystemStart queryCtx
         eraHistory <- getEraHistory queryCtx
 
@@ -170,9 +170,7 @@ runTestSuite era TestSuite{..} = do
         pure $ PureTxBuildup utxoVar nodeStateInfo
       UseOnChainMode timeout ->
         pure $ NodeTxBuildup connection (T.DoSubmit timeout)
-
-  protocolParameters <-
-    C.fromLedgerPParams (C.babbageEraOnwardsToShelleyBasedEra era) <$> queryInEra connection C.QueryProtocolParameters
+  protocolParameters <- CS.LedgerProtocolParameters <$> queryInEra connection C.QueryProtocolParameters
   slotConfig <- querySlotConfig connection
   costModel <- getPV2CostModelParams (QueryNode connection)
   -- FIXME: This should be configurable.
@@ -246,7 +244,7 @@ mkPureTxBuildupContext connection faucetAddress = do
             queryCtx = QueryNode connection
         utxoVar <- liftIO $ newTVarIO utxo
         (protocolParameters, systemStart, eraHistory) <- flip runReaderT (CliEnv era) do
-          pp <- getProtocolParams queryCtx
+          pp <- getLedgerProtocolParams queryCtx
           ss <- getSystemStart queryCtx
           eh <- getEraHistory queryCtx
           pure (pp, ss, eh)
@@ -284,12 +282,11 @@ mkTestSuiteRunnerEnv connection useExecutionMode faucetAddress faucetSigningKey 
       onBabbageEraOnwards era = do
         let reportDir = "/tmp"
             resource = (faucetAddress, faucetSigningKey)
-            shelleyBasedEra = C.babbageEraOnwardsToShelleyBasedEra era
 
         (costModel, protocolParameters, slotConfig) <- flip runReaderT (CliEnv era) do
           sc <- querySlotConfig connection
           cm <- getPV2CostModelParams (QueryNode connection)
-          pp <- C.fromLedgerPParams shelleyBasedEra <$> queryInEra connection C.QueryProtocolParameters
+          pp <- CS.LedgerProtocolParameters <$> queryInEra connection C.QueryProtocolParameters
           pure (cm, pp, sc)
 
         pure $

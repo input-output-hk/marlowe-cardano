@@ -29,14 +29,14 @@ data UseExecutionMode
 -- | Tests that pass on chain should also pass in the simulation mode.
 -- | Configuration for executing Marlowe CLI DSL commands on the blockchain.
 data ExecutionMode era
-  = SimulationMode (TVar (C.UTxO era)) NodeStateInfo
+  = SimulationMode (TVar (C.UTxO era)) (NodeStateInfo era)
   | OnChainMode {transactionSubmissionTimeout :: Second}
 
 newSimulationMode
   :: forall era m
    . (MonadIO m)
   => C.UTxO era
-  -> NodeStateInfo
+  -> NodeStateInfo era
   -> m (ExecutionMode era)
 newSimulationMode utxo nsi = liftIO do
   tvar <- newTVarIO utxo

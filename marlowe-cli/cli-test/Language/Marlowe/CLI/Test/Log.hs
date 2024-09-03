@@ -41,7 +41,7 @@ import Data.Aeson.Types qualified as A
 import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
 import GHC.IO.Handle.FD (stderr)
-import Language.Marlowe.CLI.IO (getProtocolParams, txResourceUsage)
+import Language.Marlowe.CLI.IO (getLedgerProtocolParams, txResourceUsage)
 import Language.Marlowe.CLI.Test.CLI.Monad (runCli)
 import Language.Marlowe.CLI.Test.InterpreterError (
   InterpreterError (..),
@@ -146,7 +146,7 @@ logTxBody l msg txBody jsonRewrite = do
                 C.Debug.friendlyTxBody C.cardanoEra txBody
   era <- view eraL
   queryCtx <- view queryCtxL
-  pp <- runCli era (label l) $ getProtocolParams queryCtx
+  pp <- runCli era (label l) $ getLedgerProtocolParams queryCtx
   view reportDirL >>= \reportDir -> do
     let jsonFile = reportDir <> "/" <> txId <> ".json"
         envelopeFile = reportDir <> "/" <> txId <> ".envelope"

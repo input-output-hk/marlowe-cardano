@@ -115,9 +115,7 @@ import Data.ByteString.Lazy.Char8 qualified as LBS8 (unpack)
 import Data.Text qualified as T (unpack)
 
 import Cardano.Api qualified as C
-import Cardano.Api.Shelley qualified as C
 import Cardano.Api.Shelley qualified as CS
-import Cardano.Ledger.Babbage.Core hiding (hashScript)
 import Codec.Serialise (serialise)
 import Control.Monad.Reader (MonadReader)
 import Data.ByteString.Short qualified as SBS
@@ -343,12 +341,10 @@ exportMarloweAddress network stake = do
   exportAddress marloweValidator network stake
 
 buildValidatorInfo
-  :: ( MonadReader (CliEnv era) m
-     , MonadIO m
-     , MonadError CliError m
-     , BabbageEraPParams (C.ShelleyLedgerEra era)
-     , CS.IsPlutusScriptLanguage lang
-     )
+  :: (MonadReader (CliEnv era) m)
+  => (MonadIO m)
+  => (MonadError CliError m)
+  => (CS.IsPlutusScriptLanguage lang)
   => QueryExecutionContext era
   -> CS.PlutusScript lang
   -> Maybe C.TxIn

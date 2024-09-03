@@ -10,7 +10,6 @@ module Language.Marlowe.CLI.Cardano.Api (
   Value.txOutValue,
   Value.txOutValueValue,
   adjustMinimumUTxO,
-  toPlutusMajorProtocolVersion,
   toTxOutDatumInTx,
   toTxOutDatumInline,
 ) where
@@ -36,14 +35,9 @@ import Cardano.Api.Shelley (LedgerProtocolParameters (..), ReferenceScript)
 import Cardano.Api.Shelley qualified as C
 import Cardano.Api.Shelley qualified as CS
 import Cardano.Ledger.Coin qualified as C
-import GHC.Natural (Natural, naturalToInteger)
 import Language.Marlowe.CLI.Cardano.Api.Value qualified as Value
 import Language.Marlowe.CLI.Orphans ()
-import PlutusLedgerApi.Common (MajorProtocolVersion (..))
 import PlutusLedgerApi.V2 qualified as PV2
-
-toPlutusMajorProtocolVersion :: (Natural, Natural) -> MajorProtocolVersion
-toPlutusMajorProtocolVersion = MajorProtocolVersion . fromInteger . naturalToInteger . fst
 
 -- | 2022-08 This function was written to compensate for a bug in Cardano's calculateMinimumUTxO. It's called by adjustMinimumUTxO below. We will eventually be able to remove it.
 ensureAtLeastHalfAnAda :: C.Value -> C.Value

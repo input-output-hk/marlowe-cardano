@@ -95,8 +95,9 @@ checkTransactionCost Scenario{scContract, scState, scMerkleize, scExpected} =
   fmap (either (error . show) id)
     . runExceptT
     $ do
+      let era = C.BabbageEraOnwardsBabbage
       MarloweTransaction{..} <-
-        flip runReaderT (CliEnv C.BabbageEraOnwardsBabbage) $
+        flip runReaderT (CliEnv era) $
           initializeTransactionImpl
             @C.PlutusScriptV2
             (marloweParams "8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d")
@@ -122,7 +123,7 @@ checkTransactionCost Scenario{scContract, scState, scMerkleize, scExpected} =
           ciSlotConfig = mtSlotConfig
           contract = MerkleizedContract ciContract ciContinuations
       transactions <- findTransactions unitAnnotator True contract (AlreadyInitialized scState)
-      actual <- checkExecutionCost protocolTestnet ContractInstance{..} transactions False
+      actual <- checkExecutionCost era protocolTestnet ContractInstance{..} transactions False
       let lsbToText :: LBS.ByteString -> Text.Text
           lsbToText = Text.decodeUtf8 . LBS.toStrict
 
