@@ -59,7 +59,7 @@ chainSyncQueryServer ChainSyncQueryServerDependencies{..} = ServerSource $ pure 
             fmap (,serverReq) . traverseReqTree \case
               GetSecurityParameter -> queryGenesisParameters protocolParamSecurity
               GetNetworkId -> queryGenesisParameters protocolParamNetworkId
-              GetProtocolParameters -> queryShelley (\era -> QueryInShelleyBasedEraProjection QueryProtocolParameters $ fromLedgerPParams era)
+              GetProtocolParameters era -> queryLocalNodeState QueryProtocolParameters era
               GetSystemStart -> either (fail . show) pure =<< queryLocalNodeState Nothing QuerySystemStart
               GetEraHistory -> either (fail . show) pure =<< queryLocalNodeState Nothing QueryEraHistory
               GetUTxOs utxosQuery -> Database.runGetUTxOs getUTxOs utxosQuery

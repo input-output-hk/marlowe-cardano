@@ -254,7 +254,6 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                   (,,,,)
                     <$> request GetSystemStart
                     <*> request GetEraHistory
-                    <*> request GetProtocolParameters
                     <*> request GetNetworkId
                     <*> request GetEra
               shelleyEra <- case inEonForEraMaybe id era of
@@ -263,7 +262,6 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
 
               addField ev $ SystemStart systemStart
               addField ev $ EraHistory eraHistory
-              addField ev $ ProtocolParameters protocolParameters
               addField ev $ NetworkId networkId
               addField ev $ Era $ AnyCardanoEra era
 
@@ -280,9 +278,11 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                     Constraints.solveConstraints
                       systemStart
                       (toLedgerEpochInfo eraHistory)
-              ledgerProtocolParameters <- case convertToLedgerProtocolParameters shelleyEra protocolParameters of
-                Left e -> error $ "Failed to convert protocol params: " <> show e
-                Right a -> pure a
+              ledgerProtocolParameters <- request (GetProtocolParameters era)
+
+              -- ledgerProtocolParameters <- case convertToLedgerProtocolParameters shelleyEra protocolParameters of
+              --   Left e -> error $ "Failed to convert protocol params: " <> show e
+              --   Right a -> pure a
               cardanoEraConstraints era case command of
                 Create mStakeCredential version addresses threadRole roles metadata minAda accounts contract ->
                   withEvent ExecCreate \_ ->
