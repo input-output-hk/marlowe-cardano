@@ -25,6 +25,7 @@ import Cardano.Api (
   SerialiseAsRawBytes (..),
   ShelleyBasedEra (..),
   SystemStart (..),
+  babbageEraOnwardsToShelleyBasedEra,
   hashScriptDataBytes,
   unsafeHashableScriptData,
  )
@@ -67,10 +68,10 @@ import Ouroboros.Consensus.HardFork.History (
 import Test.Gen.Cardano.Api.Typed (
   genAddressShelley,
   genPlutusScript,
-  genProtocolParameters,
   genScriptHash,
   genScriptInEra,
   genTx,
+  genValidProtocolParameters,
   genVerificationKey,
  )
 import Test.QuickCheck hiding (shrinkMap)
@@ -448,14 +449,7 @@ instance Query.ArbitraryRequest ChainSyncQuery where
   arbitraryResult = \case
     TagGetSecurityParameter -> arbitrary
     TagGetNetworkId -> arbitrary
-    TagGetProtocolParameters BabbageEraOnwardsBabbage ->
-      do
-        legacyProtocolParameter <- hedgehog $ genProtocolParameters BabbageEra
-        return $ either (error . show) id . toLedgerPParams ShelleyBasedEraBabbage $ legacyProtocolParameter
-    TagGetProtocolParameters BabbageEraOnwardsConway ->
-      do
-        legacyProtocolParameter <- hedgehog $ genProtocolParameters ConwayEra
-        return $ either (error . show) id . toLedgerPParams ShelleyBasedEraConway $ legacyProtocolParameter
+    TagGetProtocolParameters era -> hedgehog $ genValidProtocolParameters $ babbageEraOnwardsToShelleyBasedEra era
     TagGetSystemStart -> SystemStart . posixSecondsToUTCTime . fromIntegral <$> arbitrary @Word64
     TagGetEraHistory -> genEraHistory
     TagGetUTxOs -> arbitrary

@@ -15,7 +15,7 @@ import Cardano.Api (
   inEonForEra,
  )
 import qualified Cardano.Api as Cardano
-import Cardano.Api.Shelley (AcquiringFailure)
+import Cardano.Api.Shelley (AcquiringFailure, LedgerProtocolParameters (LedgerProtocolParameters))
 import Control.Concurrent.STM (STM)
 import Control.Monad.Trans.Except (ExceptT (ExceptT), except, runExceptT, throwE, withExceptT)
 import Language.Marlowe.Runtime.ChainSync.Api (ChainPoint, ChainSyncQuery (..))
@@ -23,7 +23,7 @@ import Language.Marlowe.Runtime.ChainSync.Database (GetTip (runGetTip))
 import qualified Language.Marlowe.Runtime.ChainSync.Database as Database
 import Network.Protocol.Connection (ServerSource (..))
 import Network.Protocol.Query.Server (QueryServer (..), ServerStReq (..))
-import Network.Protocol.Query.Types
+import Network.Protocol.Query.Types (ReqTree (..))
 import UnliftIO (MonadUnliftIO, atomically)
 
 type QueryLocalNodeState m =
@@ -60,7 +60,8 @@ chainSyncQueryServer ChainSyncQueryServerDependencies{..} = ServerSource $ pure 
               GetNetworkId -> queryGenesisParameters protocolParamNetworkId
               GetProtocolParameters era -> do
                 let sbe = babbageEraOnwardsToShelleyBasedEra era
-                either (fail . show) pure -- handling era mismatch failure
+                pure . LedgerProtocolParameters
+                  =<< either (fail . show) pure -- handling era mismatch failure
                   =<< either (fail . show) pure -- handling acquiring failure
                   =<< queryLocalNodeState Nothing (QueryInEra $ QueryInShelleyBasedEra sbe QueryProtocolParameters)
               GetSystemStart -> either (fail . show) pure =<< queryLocalNodeState Nothing QuerySystemStart

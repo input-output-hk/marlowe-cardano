@@ -23,20 +23,66 @@ module Spec.Analysis (
 ) where
 
 import Cardano.Api qualified as C
+import Cardano.Api.Ledger (
+  CoinPerByte (CoinPerByte),
+  EraPParams (ppProtocolVersionL),
+  ppPricesL,
+ )
 import Cardano.Api.Ledger qualified as Ledger
-import Cardano.Api.Shelley qualified as C
+import Cardano.Api.Shelley (
+  AnyPlutusScriptVersion,
+  CostModel,
+  LedgerProtocolParameters (LedgerProtocolParameters),
+  ProtocolParametersConversionError (PpceVersionInvalid),
+  ShelleyLedgerEra,
+  fromAlonzoCostModels,
+  toAlonzoCostModels,
+  toAlonzoExUnits,
+  toAlonzoPrices,
+ )
+import Cardano.Ledger.Alonzo.PParams (
+  ppCollateralPercentageL,
+  ppCostModelsL,
+  ppMaxBlockExUnitsL,
+  ppMaxCollateralInputsL,
+  ppMaxTxExUnitsL,
+  ppMaxValSizeL,
+ )
+import Cardano.Ledger.Babbage.PParams (ppCoinsPerUTxOByteL)
 import Cardano.Ledger.BaseTypes qualified as CI
+import Cardano.Ledger.Core (
+  emptyPParams,
+  ppA0L,
+  ppEMaxL,
+  ppKeyDepositL,
+  ppMaxBBSizeL,
+  ppMaxBHSizeL,
+  ppMaxTxSizeL,
+  ppMinFeeAL,
+  ppMinFeeBL,
+  ppMinPoolCostL,
+  ppNOptL,
+  ppPoolDepositL,
+  ppRhoL,
+  ppTauL,
+ )
+import Contrib.Cardano.Api (ledgerProtVerToPlutusMajorProtocolVersion)
 import Control.Monad.Except (runExceptT)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (runReaderT)
 import Data.Aeson qualified as A
 import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.ByteString.Lazy qualified as LBS
+import Data.Either (fromRight)
+import Data.Either.Combinators (maybeToRight)
 import Data.Functor ((<&>))
+import Data.Map (Map)
 import Data.Map.Strict qualified as M
+import Data.Maybe
 import Data.Ratio ((%))
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
+import GHC.Natural (Natural)
 import Language.Marlowe (emptyState)
 import Language.Marlowe.Analysis.Safety.Transaction (CurrentState (..), findTransactions, unitAnnotator)
 import Language.Marlowe.CLI.Analyze (
@@ -72,9 +118,10 @@ import Language.Marlowe.Core.V1.Semantics.Types (
   Value (Constant),
  )
 import Language.Marlowe.Extended.V1 (adaSymbol, adaToken)
+import Lens.Micro ((&), (.~), (^.))
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (SlotConfig))
 import PlutusLedgerApi.V1.Value (tokenName)
-import PlutusLedgerApi.V2 (MajorProtocolVersion (..), POSIXTime (..))
+import PlutusLedgerApi.V2 (POSIXTime (..))
 import PlutusTx.AssocMap qualified as AM
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (Assertion, assertBool, testCase)
@@ -95,17 +142,18 @@ checkTransactionCost Scenario{scContract, scState, scMerkleize, scExpected} =
   fmap (either (error . show) id)
     . runExceptT
     $ do
-      let era = C.BabbageEraOnwardsBabbage
+      let era = C.BabbageEraOnwardsConway
+          protocolParameters = getTestnetProtocolParameters era
+          protocolVersion = ledgerProtVerToPlutusMajorProtocolVersion $ protocolParameters ^. ppProtocolVersionL
+          costModels = fromAlonzoCostModels $ protocolParameters ^. ppCostModelsL
       MarloweTransaction{..} <-
         flip runReaderT (CliEnv era) $
           initializeTransactionImpl
             @C.PlutusScriptV2
             (marloweParams "8bb3b343d8e404472337966a722150048c768d0a92a9813596c5338d")
             (SlotConfig 0 1000)
-            (MajorProtocolVersion $ fromEnum $ fst $ C.protocolParamProtocolVersion protocolTestnet)
-            ( (\(C.CostModel c) -> fromIntegral <$> c) $
-                C.protocolParamCostModels protocolTestnet M.! C.AnyPlutusScriptVersion C.PlutusScriptV2
-            )
+            protocolVersion
+            ((\(C.CostModel c) -> fromIntegral <$> c) $ costModels M.! C.AnyPlutusScriptVersion C.PlutusScriptV2)
             (C.Testnet $ C.NetworkMagic 1)
             C.NoStakeAddress
             scContract
@@ -123,7 +171,7 @@ checkTransactionCost Scenario{scContract, scState, scMerkleize, scExpected} =
           ciSlotConfig = mtSlotConfig
           contract = MerkleizedContract ciContract ciContinuations
       transactions <- findTransactions unitAnnotator True contract (AlreadyInitialized scState)
-      actual <- checkExecutionCost era protocolTestnet ContractInstance{..} transactions False
+      actual <- checkExecutionCost era (LedgerProtocolParameters protocolParameters) ContractInstance{..} transactions False
       let lsbToText :: LBS.ByteString -> Text.Text
           lsbToText = Text.decodeUtf8 . LBS.toStrict
 
@@ -335,27 +383,44 @@ scenario2 =
               ]
         ]
 
-protocolTestnet :: C.ProtocolParameters
-protocolTestnet =
-  C.ProtocolParameters
-    { protocolParamProtocolVersion = (8, 0)
-    , protocolParamDecentralization = Nothing
-    , protocolParamExtraPraosEntropy = Nothing
-    , protocolParamMaxBlockHeaderSize = 1100
-    , protocolParamMaxBlockBodySize = 90112
-    , protocolParamMaxTxSize = 16384
-    , protocolParamTxFeeFixed = 155381
-    , protocolParamTxFeePerByte = 44
-    , protocolParamMinUTxOValue = Nothing
-    , protocolParamStakeAddressDeposit = Ledger.Coin 2000000
-    , protocolParamStakePoolDeposit = Ledger.Coin 500000000
-    , protocolParamMinPoolCost = Ledger.Coin 340000000
-    , protocolParamPoolRetireMaxEpoch = CI.EpochInterval 18
-    , protocolParamStakePoolTargetNum = 500
-    , protocolParamPoolPledgeInfluence = 3 % 10
-    , protocolParamMonetaryExpansion = 3 % 1000
-    , protocolParamTreasuryCut = 1 % 5
-    , protocolParamCostModels =
+getTestnetProtocolParameters :: C.BabbageEraOnwards era -> Ledger.PParams (ShelleyLedgerEra era)
+getTestnetProtocolParameters era = C.babbageEraOnwardsConstraints era $ do
+  emptyPParams
+    & ppProtocolVersionL .~ (fromRight (error "Invalid protocol version") $ mkProtVer (8, 0))
+    & ppMaxBHSizeL .~ 1_100
+    & ppMaxBBSizeL .~ 90_112
+    & ppMaxTxSizeL .~ 16_384
+    & ppMinFeeBL .~ 155_381
+    & ppMinFeeAL .~ 44
+    & ppKeyDepositL .~ Ledger.Coin 2_000_000
+    & ppPoolDepositL .~ Ledger.Coin 500_000_000
+    & ppMinPoolCostL .~ Ledger.Coin 340_000_000
+    & ppEMaxL .~ CI.EpochInterval 18
+    & ppNOptL .~ 500
+    & ppA0L .~ (fromJust $ Ledger.boundRational (3 % 10))
+    & ppRhoL .~ (fromJust $ Ledger.boundRational (3 % 1000))
+    & ppTauL .~ (fromJust $ Ledger.boundRational (1 % 5))
+    & ppCostModelsL .~ getAlonzoCostModel
+    & ppPricesL
+      .~ ( fromRight (error "Invalid Prices") $
+            toAlonzoPrices $
+              C.ExecutionUnitPrices{priceExecutionSteps = 721 % 10000000, priceExecutionMemory = 577 % 10000}
+         )
+    & ppMaxTxExUnitsL .~ (toAlonzoExUnits $ C.ExecutionUnits{executionSteps = 10000000000, executionMemory = 14000000})
+    & ppMaxBlockExUnitsL .~ (toAlonzoExUnits $ C.ExecutionUnits{executionSteps = 40000000000, executionMemory = 62000000})
+    & ppMaxValSizeL .~ 5_000
+    & ppCollateralPercentageL .~ 150
+    & ppMaxCollateralInputsL .~ 3
+    & ppCoinsPerUTxOByteL .~ CoinPerByte (Ledger.Coin 4310)
+
+mkProtVer :: (Natural, Natural) -> Either ProtocolParametersConversionError Ledger.ProtVer
+mkProtVer (majorProtVer, minorProtVer) =
+  maybeToRight (PpceVersionInvalid majorProtVer) $
+    (`Ledger.ProtVer` minorProtVer) <$> Ledger.mkVersion majorProtVer
+
+getAlonzoCostModel :: Ledger.CostModels
+getAlonzoCostModel =
+  let costmodels :: Map AnyPlutusScriptVersion CostModel =
         M.singleton
           (C.AnyPlutusScriptVersion C.PlutusScriptV2)
           . C.CostModel
@@ -487,17 +552,6 @@ protocolTestnet =
             , ("quotientInteger-cpu-arguments-model-arguments-slope", 220)
             , ("quotientInteger-memory-arguments-intercept", 0)
             , ("quotientInteger-memory-arguments-minimum", 1)
-            , ("quotientInteger-memory-arguments-slope", 1)
-            , ("remainderInteger-cpu-arguments-constant", 196500)
-            , ("remainderInteger-cpu-arguments-model-arguments-intercept", 453240)
-            , ("remainderInteger-cpu-arguments-model-arguments-slope", 220)
-            , ("remainderInteger-memory-arguments-intercept", 0)
-            , ("remainderInteger-memory-arguments-minimum", 1)
-            , ("remainderInteger-memory-arguments-slope", 1)
-            , ("serialiseData-cpu-arguments-intercept", 1159724)
-            , ("serialiseData-cpu-arguments-slope", 392670)
-            , ("serialiseData-memory-arguments-intercept", 0)
-            , ("serialiseData-memory-arguments-slope", 2)
             , ("sha2_256-cpu-arguments-intercept", 806990)
             , ("sha2_256-cpu-arguments-slope", 30482)
             , ("sha2_256-memory-arguments", 4)
@@ -537,12 +591,4 @@ protocolTestnet =
             , ("verifySchnorrSecp256k1Signature-cpu-arguments-slope", 32947)
             , ("verifySchnorrSecp256k1Signature-memory-arguments", 10)
             ]
-    , protocolParamPrices =
-        Just (C.ExecutionUnitPrices{priceExecutionSteps = 721 % 10000000, priceExecutionMemory = 577 % 10000})
-    , protocolParamMaxTxExUnits = Just (C.ExecutionUnits{executionSteps = 10000000000, executionMemory = 14000000})
-    , protocolParamMaxBlockExUnits = Just (C.ExecutionUnits{executionSteps = 40000000000, executionMemory = 62000000})
-    , protocolParamMaxValueSize = Just 5000
-    , protocolParamCollateralPercent = Just 150
-    , protocolParamMaxCollateralInputs = Just 3
-    , protocolParamUTxOCostPerByte = Just (Ledger.Coin 4310)
-    }
+   in (fromRight (error "malformed cost models for testnet : ") $ toAlonzoCostModels costmodels)

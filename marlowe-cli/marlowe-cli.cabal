@@ -290,12 +290,16 @@ test-suite marlowe-cli-test
     , base >=4.9 && <5
     , bytestring
     , cardano-api ^>=9.2
+    , cardano-ledger-alonzo
+    , cardano-ledger-babbage
     , cardano-ledger-core ^>=1.13.2
     , containers
+    , either
     , marlowe-cardano
     , marlowe-cli
     , marlowe-test
     , megaparsec
+    , microlens
     , mtl
     , plutus-ledger-api ^>=1.31
     , plutus-ledger-slot

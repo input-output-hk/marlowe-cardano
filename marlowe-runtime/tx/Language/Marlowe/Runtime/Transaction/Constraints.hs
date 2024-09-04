@@ -47,8 +47,14 @@ import Cardano.Api (
   unsafeHashableScriptData,
  )
 import qualified Cardano.Api as C
+import Cardano.Api.Ledger (ppPricesL)
 import qualified Cardano.Api.Ledger as Ledger
+import Cardano.Api.Shelley (fromAlonzoExUnits, fromAlonzoPrices)
 import qualified Cardano.Api.Shelley as C
+import Cardano.Ledger.Alonzo.PParams (
+  ppMaxTxExUnitsL,
+ )
+import Cardano.Ledger.Core (ppMaxTxSizeL, ppMinFeeAL, ppMinFeeBL)
 import Control.Applicative ((<|>))
 import Control.Error (hoistMaybe, note, noteT, runExceptT)
 import Control.Monad (forM, unless, when, (<=<))
@@ -112,6 +118,7 @@ import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript, ReferenceScri
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
 import Language.Marlowe.Runtime.Transaction.Api (CoinSelectionError (..), ConstraintError (..), Destination (..))
 import qualified Language.Marlowe.Scripts.Types as V1
+import Lens.Micro ((^.))
 
 -- | Describes a set of Marlowe-specific conditions that a transaction must satisfy.
 data TxConstraints era v = TxConstraints
@@ -616,16 +623,15 @@ adjustTxForMinUtxo era protocol mMarloweAddress txBodyContent = do
             <> show (getMarloweOutputValue adjustedTxOuts)
 
 -- | Compute the maximum fee for any transaction.
-maximumFee :: C.ProtocolParameters -> Ledger.Coin
-maximumFee C.ProtocolParameters{..} =
-  let txFee :: Ledger.Coin
-      txFee = protocolParamTxFeeFixed + protocolParamTxFeePerByte * fromIntegral protocolParamMaxTxSize
-      executionFee :: Rational
-      executionFee =
-        case (protocolParamPrices, protocolParamMaxTxExUnits) of
-          (Just C.ExecutionUnitPrices{..}, Just C.ExecutionUnits{..}) ->
-            priceExecutionSteps * fromIntegral executionSteps + priceExecutionMemory * fromIntegral executionMemory
-          _ -> 0
+maximumFee :: C.BabbageEraOnwards era -> C.LedgerProtocolParameters era -> Ledger.Coin
+maximumFee era (C.LedgerProtocolParameters protocolParameters) = C.babbageEraOnwardsConstraints era $ do
+  let txFeeFixed = protocolParameters ^. ppMinFeeBL
+      txFeePerByte = protocolParameters ^. ppMinFeeAL
+      maxTxSize = fromIntegral $ protocolParameters ^. ppMaxTxSizeL
+      C.ExecutionUnitPrices{..} = fromAlonzoPrices $ protocolParameters ^. ppPricesL
+      C.ExecutionUnits{..} = fromAlonzoExUnits $ protocolParameters ^. ppMaxTxExUnitsL
+      txFee = txFeeFixed + txFeePerByte * maxTxSize
+      executionFee = priceExecutionSteps * fromIntegral executionSteps + priceExecutionMemory * fromIntegral executionMemory
    in txFee + ceiling executionFee
 
 -- | Calculate the minimum UTxO requirement for a value.
@@ -733,9 +739,7 @@ selectCoins era protocol marloweVersion scriptCtx walletCtx@WalletContext{..} he
 
       -- FIXME: Use protocolParamCollateralPercent from ProtocolParameters instead of this hard-coded '2'. We will automatically pick up future chain values this way.
       fee :: C.Value
-      fee =
-        C.lovelaceToValue $
-          2 * maximumFee (C.fromLedgerPParams (C.babbageEraOnwardsToShelleyBasedEra era) $ C.unLedgerProtocolParameters protocol)
+      fee = C.lovelaceToValue $ 2 * maximumFee era protocol
 
       maryEraOnwards :: C.MaryEraOnwards era
       maryEraOnwards = C.babbageEraOnwardsToMaryEraOnwards era

@@ -534,6 +534,7 @@ library tx
     , base16 ^>=0.3.2
     , bytestring >=0.10.12 && <0.12
     , cardano-api ^>=9.2
+    , cardano-ledger-alonzo
     , cardano-ledger-core ^>=1.13.2
     , co-log ^>=0.6
     , containers ^>=0.6.5
@@ -551,6 +552,7 @@ library tx
     , marlowe-runtime:contract-api
     , marlowe-runtime:sync-api
     , marlowe-runtime:tx-api
+    , microlens
     , nonempty-containers ^>=0.3.4
     , ouroboros-consensus ^>=0.20
     , ouroboros-network-api ^>=0.7.3

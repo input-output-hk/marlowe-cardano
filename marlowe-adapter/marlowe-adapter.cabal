@@ -38,10 +38,14 @@ library
   import:           lang
   hs-source-dirs:   src
   default-language: Haskell2010
-  exposed-modules:  Adapter.PlutusTx.AssocMap
+  exposed-modules:
+    Adapter.Cardano.Api.ProtocolParameters
+    Adapter.PlutusTx.AssocMap
+
   build-depends:
     , aeson
     , base >=4.9 && <5
+    , cardano-api
     , plutus-tx ^>=1.31
     , time
 

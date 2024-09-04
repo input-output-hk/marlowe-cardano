@@ -4,6 +4,7 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# OPTIONS_GHC -Wno-deprecations #-}
 
 module Language.Marlowe.Runtime.Transaction.ConstraintsSpec where
 
@@ -254,9 +255,7 @@ spec = do
   regressions
   describe "solveInitialTxBodyContent" do
     prop "satisfies the constraints" \(SomeTxConstraints marloweVersion constraints) -> do
-      protocol <-
-        either (error . show) id . convertToLedgerProtocolParameters shelleyBasedEraTest
-          <$> hedgehog (genProtocolParameters testEra)
+      protocol <- hedgehog (genValidProtocolParameters shelleyBasedEraTest)
       scriptCtx <- genScriptContext marloweVersion constraints
       walletContext <- genWalletContext marloweVersion constraints
       helpersContext <- genHelperContext constraints
