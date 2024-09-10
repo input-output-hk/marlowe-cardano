@@ -164,11 +164,12 @@ import Cardano.Api.ProtocolParameters (
   convertToLedgerProtocolParameters,
  )
 import qualified Cardano.Api.Script as Cardano.Api.Shelley
-import Cardano.Api.Shelley (LedgerProtocolParameters)
+import Cardano.Api.Shelley (LedgerProtocolParameters, ProtocolParameters (..))
 import qualified Data.ByteString.Builder as BB
 import Data.Reflection (give)
 
 import Adapter.Cardano.Api.ProtocolParameters ()
+import Data.Ratio ((%))
 
 -- | Extends a type with a "Genesis" member.
 data WithGenesis a = Genesis | At a
@@ -1452,7 +1453,17 @@ instance Query.RequestVariations ChainSyncQuery where
 -- TODO (Refactor Deprecated ProtocolParameters) : Below three instances are ugly workarounds which still rely on deprecated ProtocolParameters.
 -- They should be removed and replaced by statically defined protocol params - we have JSON files in the repo which
 -- should be included in the code.
-instance Variations ProtocolParameters
+
+instance Variations ProtocolParameters where
+  variations =
+    ( \ProtocolParameters{..} ->
+        ProtocolParameters
+          { protocolParamPrices =
+              Just (C.ExecutionUnitPrices{priceExecutionSteps = 721 % 10000000, priceExecutionMemory = 577 % 10000})
+          , ..
+          }
+    )
+      <$> variations
 
 instance Variations (Cardano.Api.Shelley.LedgerProtocolParameters BabbageEra) where
   variations = case traverse (convertToLedgerProtocolParameters C.ShelleyBasedEraBabbage) variations of
