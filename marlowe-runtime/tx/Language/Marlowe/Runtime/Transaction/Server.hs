@@ -7,6 +7,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# OPTIONS_GHC -Wno-deprecations #-}
 
 module Language.Marlowe.Runtime.Transaction.Server where
 
@@ -28,6 +29,7 @@ import Cardano.Api (
   TxBodyContent (..),
   TxMetadataInEra (..),
   TxOut (..),
+  babbageEraOnwardsConstraints,
   cardanoEra,
   cardanoEraConstraints,
   getTxBody,
@@ -40,8 +42,6 @@ import Cardano.Api (
 import qualified Cardano.Api as C
 import Cardano.Api.Shelley (
   LedgerProtocolParameters,
-  ProtocolParameters,
-  convertToLedgerProtocolParameters,
  )
 import qualified Cardano.Api.Shelley as C
 import Colog (Message, WithLog, logDebug)
@@ -209,7 +209,7 @@ data TransactionServerSelector f where
 data ExecField
   = SystemStart SystemStart
   | EraHistory EraHistory
-  | ProtocolParameters ProtocolParameters
+  | ProtocolParameters C.ProtocolParameters
   | NetworkId NetworkId
   | Era AnyCardanoEra
 
@@ -248,21 +248,21 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
       serverInit =
         ServerStInit
           { recvMsgExec = \command -> withEvent Exec \ev -> do
-              (systemStart, eraHistory, protocolParameters, networkId, AnyCardanoEra era) <-
+              (systemStart, eraHistory, networkId, AnyCardanoEra era) <-
                 runConnector chainSyncQueryConnector $
-                  (,,,,)
+                  (,,,)
                     <$> request GetSystemStart
                     <*> request GetEraHistory
-                    <*> request GetProtocolParameters
                     <*> request GetNetworkId
                     <*> request GetEra
               shelleyEra <- case inEonForEraMaybe id era of
                 Nothing -> error "Current era not supported"
                 Just a -> pure a
 
+              ledgerProtocolParameters <- runConnector chainSyncQueryConnector $ request (GetProtocolParameters shelleyEra)
+
               addField ev $ SystemStart systemStart
               addField ev $ EraHistory eraHistory
-              addField ev $ ProtocolParameters protocolParameters
               addField ev $ NetworkId networkId
               addField ev $ Era $ AnyCardanoEra era
 
@@ -279,9 +279,7 @@ transactionServer = component "tx-job-server" \TransactionServerDependencies{..}
                     Constraints.solveConstraints
                       systemStart
                       (toLedgerEpochInfo eraHistory)
-              ledgerProtocolParameters <- case convertToLedgerProtocolParameters shelleyEra protocolParameters of
-                Left e -> error $ "Failed to convert protocol params: " <> show e
-                Right a -> pure a
+
               cardanoEraConstraints era case command of
                 Create mStakeCredential version addresses threadRole roles metadata minAda accounts contract ->
                   withEvent ExecCreate \_ ->
@@ -444,15 +442,12 @@ logSolveConstraintsParams
   -> Constraints.HelpersContext
   -> TxConstraints era v
   -> m ()
-logSolveConstraintsParams era protocol version scriptCtx walletCtx helpersCtx constraints = case version of
-  MarloweV1 -> do
-    let shelleyBasedEra = C.babbageEraOnwardsToShelleyBasedEra era
-        protocolParams = C.fromLedgerPParams shelleyBasedEra $ C.unLedgerProtocolParameters protocol
-
-        entry =
+logSolveConstraintsParams era protocolParameters version scriptCtx walletCtx helpersCtx constraints = case version of
+  MarloweV1 -> babbageEraOnwardsConstraints era $ do
+    let entry =
           A.object
             [ ("era", A.String . T.pack . show $ era)
-            , ("protocol", A.toJSON protocolParams)
+            , ("protocol", A.toJSON protocolParameters)
             , ("version", A.toJSON version)
             , case scriptCtx of
                 Left marloweCtx -> ("marloweCtx", A.toJSON marloweCtx)
@@ -462,7 +457,7 @@ logSolveConstraintsParams era protocol version scriptCtx walletCtx helpersCtx co
             , ("constraints", A.toJSON constraints)
             ]
     logDebug . TL.toStrict . A.encodeToLazyText $ entry
-    logDebug . T.pack $ show (era, protocolParams, version, scriptCtx, walletCtx, helpersCtx, constraints)
+    logDebug . T.pack $ show (era, protocolParameters, version, scriptCtx, walletCtx, helpersCtx, constraints)
 
 execCreate
   :: forall env era m v

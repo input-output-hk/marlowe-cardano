@@ -12,8 +12,9 @@
     n2c.url = "github:nlewo/nix2container";
 
     marlowe-plutus.url = "github:input-output-hk/marlowe-plutus";
-
-    cardano-node.url = "github:input-output-hk/cardano-node?ref=8.9.0";
+    cardano-cli.url = "github:intersectmbo/cardano-cli?ref=cardano-cli-9.3.0.0";
+    cardano-node.url = "github:input-output-hk/cardano-node?ref=9.1.1";
+    cardano-addresses.url = "github:IntersectMBO/cardano-addresses?ref=3.12.0";
 
     iogx = {
       url = "github:input-output-hk/iogx";

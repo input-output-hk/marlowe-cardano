@@ -15,7 +15,18 @@ import Spec.Marlowe.Semantics.AssocMap (assocMapDelete, assocMapEq, assocMapInse
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck (Arbitrary (..), Gen, Property, elements, forAll, property, testProperty)
 
-import qualified PlutusTx.AssocMap as AM (Map, delete, empty, fromList, insert, lookup, member, null, singleton, toList)
+import qualified PlutusTx.AssocMap as AM (
+  Map,
+  delete,
+  empty,
+  insert,
+  lookup,
+  member,
+  null,
+  singleton,
+  toList,
+  unsafeFromList,
+ )
 
 -- | Run tests.
 tests :: TestTree
@@ -38,14 +49,14 @@ checkFromList :: Property
 checkFromList =
   property
     . forAll (arbitrary :: Gen [(Int, Double)])
-    $ \x -> AM.toList (AM.fromList x) == x
+    $ \x -> AM.toList (AM.unsafeFromList x) == x
 
 -- | `toList` is the inverse of `fromList`.
 checkToList :: Property
 checkToList =
   property
     . forAll (arbitraryAssocMap arbitrary arbitrary :: Gen (AM.Map Integer Double))
-    $ \x -> AM.fromList (AM.toList x) `assocMapEq` x
+    $ \x -> AM.unsafeFromList (AM.toList x) `assocMapEq` x
 
 -- | `empty` creates an empty list.
 checkEmpty :: Property

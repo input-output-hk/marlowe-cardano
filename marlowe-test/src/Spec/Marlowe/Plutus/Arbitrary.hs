@@ -42,7 +42,7 @@ import PlutusLedgerApi.V2 (
  )
 import PlutusTx.Builtins (BuiltinByteString)
 import Spec.Marlowe.Semantics.Arbitrary (arbitraryAssocMap, arbitraryPositiveInteger)
-import Spec.Marlowe.Semantics.Orphans ()
+
 import Test.Tasty.QuickCheck (
   Arbitrary (..),
   Gen,
@@ -152,7 +152,7 @@ instance Arbitrary TxInfo where
       txInfoData <- arbitraryAssocMap arbitrary arbitrary
       let txInfoMint = mempty
           txInfoDCert = mempty
-          txInfoWdrl = mempty
+          txInfoWdrl = AM.empty
       txInfoId <- arbitrary
       pure TxInfo{..}
 

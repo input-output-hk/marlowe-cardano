@@ -15,6 +15,7 @@ import Cardano.Api (
   defaultTxBodyContent,
  )
 import qualified Cardano.Api as C
+import qualified Cardano.Api.Ledger as Ledger
 import Cardano.Api.Shelley (LedgerProtocolParameters, PlutusScriptOrReferenceInput (..), ReferenceScript (..))
 import Control.Error (ExceptT, note, throwE)
 import Control.Monad (unless, when)
@@ -180,9 +181,9 @@ buildBurn era protocol inputs scripts = do
     buildInput :: TxOutRef -> Maybe (C.TxIn, C.BuildTxWith BuildTx (C.Witness C.WitCtxTxIn era))
     buildInput = fmap (,C.BuildTxWith $ C.KeyWitness C.KeyWitnessForSpending) . toCardanoTxIn
 
-    buildOutput :: Address -> TxOutAssets -> Maybe ([C.TxOut C.CtxTx era], [(C.AddressInEra era, C.Lovelace)])
+    buildOutput :: Address -> TxOutAssets -> Maybe ([C.TxOut C.CtxTx era], [(C.AddressInEra era, Ledger.Coin)])
     buildOutput address assets@(TxOutAssets (Assets lovelace (Tokens tokens))) = do
-      address' <- toCardanoAddressInEra (C.babbageEraOnwardsToCardanoEra era) address
+      address' <- toCardanoAddressInEra (C.toCardanoEra era) address
       let lovelace' = toCardanoLovelace lovelace
       if Map.null tokens
         then pure ([], [(address', lovelace')])
@@ -190,10 +191,10 @@ buildBurn era protocol inputs scripts = do
           value <- toCardanoTxOutValue maryEraOnwards assets
           pure ([C.TxOut address' value C.TxOutDatumNone ReferenceScriptNone], [])
 
-    mergeAdaOnly :: [(C.AddressInEra era, C.Lovelace)] -> [C.TxOut C.CtxTx era]
+    mergeAdaOnly :: [(C.AddressInEra era, Ledger.Coin)] -> [C.TxOut C.CtxTx era]
     mergeAdaOnly = fmap (uncurry buildAdaOnlyOutput) . Map.toList . Map.fromListWith (<>)
 
-    buildAdaOnlyOutput :: C.AddressInEra era -> C.Lovelace -> C.TxOut C.CtxTx era
+    buildAdaOnlyOutput :: C.AddressInEra era -> Ledger.Coin -> C.TxOut C.CtxTx era
     buildAdaOnlyOutput address lovelace =
       C.TxOut address (C.lovelaceToTxOutValue shelleyEra lovelace) C.TxOutDatumNone ReferenceScriptNone
 

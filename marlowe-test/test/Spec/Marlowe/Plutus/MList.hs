@@ -22,7 +22,6 @@ import qualified PlutusTx.AssocMap as AM (
   Map,
   delete,
   empty,
-  fromList,
   insert,
   lookup,
   member,
@@ -30,6 +29,7 @@ import qualified PlutusTx.AssocMap as AM (
   singleton,
   toList,
   unionWith,
+  unsafeFromList,
  )
 import qualified PlutusTx.Eq as P (Eq)
 
@@ -186,7 +186,7 @@ arbitraryMList :: Gen (MList Key Value, AM.Map Key Value)
 arbitraryMList =
   do
     items <- nubBy ((==) `on` fst) <$> arbitrary
-    pure (sortBy (compare `on` fst) items, AM.fromList items)
+    pure (sortBy (compare `on` fst) items, AM.unsafeFromList items)
 
 -- | Compare an `MList` to an `AssocMap`, ignoring ordering.
 equivalent :: (Ord a) => (P.Eq a) => (Eq b) => MList a b -> AM.Map a b -> Bool

@@ -4,7 +4,6 @@
 module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Cardano where
 
 import Cardano.Api
-import Cardano.Api.Block (Block (..))
 import Cardano.Api.Shelley (Tx (ShelleyTx))
 import qualified Cardano.Chain.Block as LB
 import Cardano.Chain.UTxO (ATxAux (aTaTx), ATxPayload (aUnTxPayload), taTx)

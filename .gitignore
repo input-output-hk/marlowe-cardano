@@ -126,3 +126,5 @@ marlowe-test/out/
 
 # CTags
 *.mtime
+
+/marlowe-benchmark/example/*/faucet

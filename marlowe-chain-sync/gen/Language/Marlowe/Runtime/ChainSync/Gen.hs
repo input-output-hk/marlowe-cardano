@@ -12,7 +12,6 @@ import Cardano.Api (
   AddressAny (..),
   AlonzoEraOnwards (..),
   AnyShelleyBasedEra (..),
-  AsType (..),
   BabbageEra,
   BabbageEraOnwards (..),
   CardanoEra (..),
@@ -26,10 +25,12 @@ import Cardano.Api (
   SerialiseAsRawBytes (..),
   ShelleyBasedEra (..),
   SystemStart (..),
+  babbageEraOnwardsToShelleyBasedEra,
   hashScriptDataBytes,
   unsafeHashableScriptData,
  )
 import Cardano.Api.Byron (AnyCardanoEra (..))
+import Cardano.Api.ProtocolParameters
 import qualified Cardano.Api.Shelley as Shelley
 import Control.Monad (replicateM)
 import Data.Bifunctor (first)
@@ -53,7 +54,7 @@ import Language.Marlowe.Runtime.ChainSync.Api
 import qualified Network.Protocol.ChainSeek.Types as ChainSeek
 import qualified Network.Protocol.Job.Types as Command
 import qualified Network.Protocol.Query.Types as Query
-import Ouroboros.Consensus.Block (EpochSize (..))
+import Ouroboros.Consensus.Block (EpochSize (..), GenesisWindow (..))
 import Ouroboros.Consensus.BlockchainTime (RelativeTime (..), SlotLength (..), mkSlotLength)
 import Ouroboros.Consensus.HardFork.History (
   Bound (..),
@@ -67,10 +68,10 @@ import Ouroboros.Consensus.HardFork.History (
 import Test.Gen.Cardano.Api.Typed (
   genAddressShelley,
   genPlutusScript,
-  genProtocolParameters,
   genScriptHash,
   genScriptInEra,
   genTx,
+  genValidProtocolParameters,
   genVerificationKey,
  )
 import Test.QuickCheck hiding (shrinkMap)
@@ -425,7 +426,8 @@ instance Query.ArbitraryRequest ChainSyncQuery where
     elements
       [ Query.SomeTag TagGetSecurityParameter
       , Query.SomeTag TagGetNetworkId
-      , Query.SomeTag TagGetProtocolParameters
+      , Query.SomeTag (TagGetProtocolParameters BabbageEraOnwardsBabbage)
+      , Query.SomeTag (TagGetProtocolParameters BabbageEraOnwardsConway)
       , Query.SomeTag TagGetSystemStart
       , Query.SomeTag TagGetEraHistory
       , Query.SomeTag TagGetUTxOs
@@ -434,7 +436,7 @@ instance Query.ArbitraryRequest ChainSyncQuery where
   arbitraryReq = \case
     TagGetSecurityParameter -> pure GetSecurityParameter
     TagGetNetworkId -> pure GetNetworkId
-    TagGetProtocolParameters -> pure GetProtocolParameters
+    TagGetProtocolParameters era -> pure $ GetProtocolParameters era
     TagGetSystemStart -> pure GetSystemStart
     TagGetEraHistory -> pure GetEraHistory
     TagGetUTxOs -> GetUTxOs <$> arbitrary
@@ -447,9 +449,7 @@ instance Query.ArbitraryRequest ChainSyncQuery where
   arbitraryResult = \case
     TagGetSecurityParameter -> arbitrary
     TagGetNetworkId -> arbitrary
-    TagGetProtocolParameters -> do
-      AnyCardanoEra era <- arbitrary
-      hedgehog $ genProtocolParameters era
+    TagGetProtocolParameters era -> hedgehog $ genValidProtocolParameters $ babbageEraOnwardsToShelleyBasedEra era
     TagGetSystemStart -> SystemStart . posixSecondsToUTCTime . fromIntegral <$> arbitrary @Word64
     TagGetEraHistory -> genEraHistory
     TagGetUTxOs -> arbitrary
@@ -462,7 +462,7 @@ instance Query.ArbitraryRequest ChainSyncQuery where
   shrinkReq = \case
     GetSecurityParameter -> []
     GetNetworkId -> []
-    GetProtocolParameters -> []
+    GetProtocolParameters _ -> []
     GetSystemStart -> []
     GetEraHistory -> []
     GetUTxOs query -> GetUTxOs <$> shrink query
@@ -476,7 +476,7 @@ instance Query.ArbitraryRequest ChainSyncQuery where
     TagGetNetworkId -> \case
       Mainnet -> []
       Testnet _ -> [Mainnet]
-    TagGetProtocolParameters -> const []
+    TagGetProtocolParameters _ -> const []
     TagGetSystemStart -> const []
     TagGetEraHistory -> const []
     TagGetUTxOs -> shrink
@@ -538,7 +538,13 @@ genEraEnd =
     ]
 
 genEraParams :: Gen EraParams
-genEraParams = EraParams <$> genEpochSize <*> genSlotLength <*> genSafeZone
+genEraParams = EraParams <$> genEpochSize <*> genSlotLength <*> genSafeZone <*> genGenesisWindow
+
+genGenesisWindow :: Gen GenesisWindow
+genGenesisWindow =
+  oneof
+    [ GenesisWindow <$> arbitrary
+    ]
 
 genSafeZone :: Gen SafeZone
 genSafeZone =
@@ -557,7 +563,8 @@ instance Query.RequestEq ChainSyncQuery where
   resultEq = \case
     TagGetSecurityParameter -> (==)
     TagGetNetworkId -> (==)
-    TagGetProtocolParameters -> (==)
+    TagGetProtocolParameters BabbageEraOnwardsBabbage -> (==)
+    TagGetProtocolParameters BabbageEraOnwardsConway -> (==)
     TagGetSystemStart -> (==)
     TagGetEraHistory -> \(EraHistory interpreter1) (EraHistory interpreter2) ->
       unInterpreter interpreter1 == unInterpreter interpreter2

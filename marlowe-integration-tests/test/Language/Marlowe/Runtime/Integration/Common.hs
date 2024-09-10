@@ -92,6 +92,7 @@ import Control.Concurrent (threadDelay)
 import Control.DeepSeq (NFData)
 import Control.Monad (guard, void, when, (<=<))
 import Control.Monad.Event.Class (Inject (inject), NoopEventT (..))
+import Control.Monad.Except (runExceptT)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Reader (ReaderT (..), ask, runReaderT)
 import qualified Control.Monad.Reader as Reader
@@ -299,7 +300,7 @@ balanceTx era (Wallet WalletAddresses{..} _) utxo txBodyContent = do
   history <- queryNode 0 C.QueryEraHistory
   protocol <- queryShelley 0 $ C.QueryInShelleyBasedEra era C.QueryProtocolParameters
   changeAddr <-
-    expectJust "Could not convert to Cardano address" $ toCardanoAddressInEra (C.shelleyBasedToCardanoEra era) changeAddress
+    expectJust "Could not convert to Cardano address" $ toCardanoAddressInEra (C.toCardanoEra era) changeAddress
   C.BalancedTxBody _ txBody _ _ <-
     withShelleyBasedEra era $
       expectRight "Failed to balance Tx" $
@@ -332,7 +333,8 @@ queryShelley nodeNum = either (fail . show) pure <=< queryNode nodeNum . C.Query
 queryNode :: Int -> C.QueryInMode a -> Integration a
 queryNode nodeNum query = do
   connectInfo <- nodeConnectInfo nodeNum
-  liftIO $ either (fail . show) pure =<< C.queryNodeLocalState connectInfo VolatileTip query
+  a <- liftIO $ runExceptT $ C.queryNodeLocalState connectInfo VolatileTip query
+  liftIO $ either (fail . show) pure a
 
 nodeConnectInfo :: Int -> Integration C.LocalNodeConnectInfo
 nodeConnectInfo nodeNum = do

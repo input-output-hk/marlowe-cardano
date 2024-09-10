@@ -53,7 +53,7 @@ extractPartiesTest = do
       continuations = M.fromList [(datumHash, V1.Pay charlie (V1.Account alice) ada (V1.Constant 1) V1.Close)]
 
       eve = V1.Role "eve"
-      accounts = AM.fromList [((eve, ada), 1)]
+      accounts = AM.unsafeFromList [((eve, ada), 1)]
       state = (V1.emptyState (PV2.POSIXTime 0)){V1.accounts = accounts}
 
       actual = P.extractParties state contract continuations

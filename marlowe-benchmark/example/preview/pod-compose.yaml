@@ -46,7 +46,7 @@ spec:
     - mountPath: /var/lib/postgresql/data
       name: pg-db
   - name: node
-    image: docker.io/inputoutput/cardano-node:8.1.2
+    image: ghcr.io/intersectmbo/cardano-node:9.1.1
     command:
     - /usr/local/bin/entrypoint
     env:

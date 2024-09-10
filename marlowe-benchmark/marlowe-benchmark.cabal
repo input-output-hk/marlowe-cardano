@@ -84,7 +84,9 @@ executable marlowe-benchmark
     , marlowe-cardano
     , marlowe-chain-sync
     , marlowe-client
-    , marlowe-runtime:{marlowe-runtime, sync-api, tx-api}
+    , marlowe-runtime
+    , marlowe-runtime:sync-api
+    , marlowe-runtime:tx-api
     , optparse-applicative
     , ouroboros-network-protocols
     , plutus-ledger-api

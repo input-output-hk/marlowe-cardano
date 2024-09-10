@@ -13,9 +13,18 @@
 
   cardano-cli =
     if system == "aarch64-darwin" then
-      inputs.cardano-node.packages.x86_64-darwin.cardano-cli
+      inputs.cardano-cli.packages.x86_64-darwin."cardano-cli:exe:cardano-cli"
     else if system == "aarch64-linux" then
-      inputs.cardano-node.packages.x86_64-linux.cardano-cli
+      inputs.cardano-cli.packages.x86_64-linux."cardano-cli:exe:cardano-cli"
     else
-      inputs.cardano-node.packages.${system}.cardano-cli;
+      inputs.cardano-cli.packages.${system}."cardano-cli:exe:cardano-cli";
+
+  cardano-addresses =
+    if system == "aarch64-darwin" then
+      inputs.cardano-addresses.packages.x86_64-darwin."cardano-addresses-cli:exe:cardano-address"
+    else if system == "aarch64-linux" then
+      inputs.cardano-addresses.packages.x86_64-linux."cardano-addresses-cli:exe:cardano-address"
+    else
+      inputs.cardano-addresses.packages.${system}."cardano-addresses-cli:exe:cardano-address";
+
 }

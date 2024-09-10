@@ -137,7 +137,9 @@ import PlutusLedgerApi.V1.Value (valueOf)
 import PlutusLedgerApi.V1.Value qualified as P
 import PlutusLedgerApi.V2 qualified as P
 import PlutusTx.AssocMap qualified as AssocMap
-import PlutusTx.Builtins.Class (stringToBuiltinByteString)
+
+import Cardano.Api.Ledger qualified as Ledger
+import PlutusTx.Builtins.HasOpaque
 import PlutusTx.Monoid (Group (inv))
 import System.IO.Temp (emptySystemTempFile, emptyTempFile)
 
@@ -520,7 +522,7 @@ interpret so@CheckBalance{..} = do
   logStoreLabeledMsg so $ "Publishing costs: " <> show _waPublishingCosts
   logStoreLabeledMsg so $
     "Total transaction fees amount: " <> do
-      let C.Lovelace amount = fees
+      let Ledger.Coin amount = fees
       show ((fromInteger amount / 1_000_000) :: F.Micro) <> " ADA"
 
   actualBalance <- plutusValueToAssets $ onChainTotal <> administrativeCosts <> inv _waBalanceCheckBaseline
@@ -824,7 +826,7 @@ fundWallets
   => (Label l)
   => l
   -> [WalletNickname]
-  -> [C.Lovelace]
+  -> [Ledger.Coin]
   -> m ()
 fundWallets label walletNicknames utxos = do
   let values = [C.lovelaceToValue v | v <- utxos]

@@ -68,7 +68,7 @@ import Cardano.Api (
   ScriptDataJsonSchema (..),
   SerialiseAsRawBytes (..),
   StakeAddressReference (..),
-  babbageEraOnwardsToCardanoEra,
+  ToCardanoEra (toCardanoEra),
   babbageEraOnwardsToShelleyBasedEra,
   cardanoEraConstraints,
   hashScript,
@@ -84,8 +84,8 @@ import Control.Monad.Except (MonadError, MonadIO, liftEither, liftIO)
 import Data.Aeson (encode)
 import Language.Marlowe.CLI.IO (
   decodeFileStrict,
+  getMajorProtocolVersion,
   getPV2CostModelParams,
-  getProtocolParams,
   maybeWriteJson,
   maybeWriteTextEnvelope,
  )
@@ -119,7 +119,6 @@ import Cardano.Api.Shelley qualified as CS
 import Codec.Serialise (serialise)
 import Control.Monad.Reader (MonadReader)
 import Data.ByteString.Short qualified as SBS
-import Language.Marlowe.CLI.Cardano.Api qualified as C
 import Language.Marlowe.CLI.Cardano.Api.PlutusScript (withPlutusScriptVersion)
 import Language.Marlowe.Scripts (marloweValidator, openRolesValidator, payoutValidator)
 import Language.Marlowe.Scripts.Types (marloweTxInputsFromInputs)
@@ -251,7 +250,7 @@ printMarlowe marloweParams era protocolVersion costModel network stake contract 
         putStrLn ""
         putStrLn $
           "Validator address: "
-            <> T.unpack (cardanoEraConstraints (babbageEraOnwardsToCardanoEra era) $ serialiseAddress viAddress)
+            <> T.unpack (cardanoEraConstraints (toCardanoEra era) $ serialiseAddress viAddress)
         putStrLn ""
         putStrLn $ "Validator hash: " <> show viHash
         putStrLn ""
@@ -342,7 +341,10 @@ exportMarloweAddress network stake = do
   exportAddress marloweValidator network stake
 
 buildValidatorInfo
-  :: (MonadReader (CliEnv era) m, MonadIO m, MonadError CliError m, CS.IsPlutusScriptLanguage lang)
+  :: (MonadReader (CliEnv era) m)
+  => (MonadIO m)
+  => (MonadError CliError m)
+  => (CS.IsPlutusScriptLanguage lang)
   => QueryExecutionContext era
   -> CS.PlutusScript lang
   -> Maybe C.TxIn
@@ -350,11 +352,9 @@ buildValidatorInfo
   -> m (ValidatorInfo lang era)
 buildValidatorInfo queryCtx plutusScript txIn stake = do
   era <- askEra
-  protocolParams <- getProtocolParams queryCtx
   costModel <- getPV2CostModelParams queryCtx
-  let networkId = queryContextNetworkId queryCtx
-      protocolVersion = C.toPlutusMajorProtocolVersion $ CS.protocolParamProtocolVersion protocolParams
-  validatorInfo' plutusScript txIn era protocolVersion costModel networkId stake
+  protocolVersion <- getMajorProtocolVersion queryCtx
+  validatorInfo' plutusScript txIn era protocolVersion costModel (queryContextNetworkId queryCtx) stake
 
 -- | Export to a file the validator information.
 exportValidatorImpl

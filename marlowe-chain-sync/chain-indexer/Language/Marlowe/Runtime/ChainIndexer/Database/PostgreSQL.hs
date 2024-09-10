@@ -41,12 +41,13 @@ import Cardano.Api (
   BlockHeader (..),
   BlockNo (..),
   ChainPoint (..),
-  Lovelace (..),
   SerialiseAsRawBytes (..),
   SlotNo (..),
   TxId,
  )
+import Cardano.Api.Ledger (Coin (..))
 import Cardano.Api.Shelley (Hash (..))
+import qualified Cardano.Ledger.Coin as C
 import Colog (Message, WithLog, logInfo)
 import Control.Monad.Event.Class (MonadInjectEvent, withEvent)
 import Control.Monad.Reader (ask)
@@ -464,10 +465,10 @@ copyBuilder sel conn table builder = do
         pure ()
 
 headerHashToParam :: Hash BlockHeader -> ByteString
-headerHashToParam (HeaderHash hash) = fromShort hash
+headerHashToParam (HeaderHash a) = fromShort a
 
-lovelaceToParam :: Lovelace -> Int64
-lovelaceToParam (Lovelace slotNo) = fromIntegral slotNo
+lovelaceToParam :: C.Coin -> Int64
+lovelaceToParam (Coin a) = fromIntegral a
 
 slotNoToParam :: SlotNo -> Int64
-slotNoToParam (SlotNo slotNo) = fromIntegral $ min slotNo (fromIntegral (maxBound :: Int64))
+slotNoToParam (SlotNo a) = fromIntegral $ min a (fromIntegral (maxBound :: Int64))

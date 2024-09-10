@@ -139,9 +139,9 @@ instance (ToJSON v, ToJSON k) => ToJSON (Map.Map k v) where
   toJSON = JSON.toJSON . Map.toList
 
 instance (FromJSON v, FromJSON k) => FromJSON (Map.Map k v) where
-  parseJSON v = Map.fromList <$> JSON.parseJSON v
+  parseJSON v = Map.unsafeFromList <$> JSON.parseJSON v
 
-deriving anyclass instance (Hashable k, Hashable v) => Hashable (Map.Map k v)
+deriving anyclass instance (Ord k, Hashable k, Hashable v) => Hashable (Map.Map k v)
 deriving anyclass instance (Serialise k, Serialise v) => Serialise (Map.Map k v)
 
 -- | Custom `FromJSON` instance which allows to parse a JSON number to a

@@ -29,13 +29,13 @@ import Cardano.Api (
   File (..),
   IsShelleyBasedEra,
   LocalNodeConnectInfo (..),
-  Lovelace (..),
   NetworkId (..),
   SlotNo,
   TxMetadataInEra (TxMetadataNone),
   TxMintValue (TxMintNone),
   lovelaceToValue,
  )
+import Cardano.Api.Ledger qualified as Ledger
 import Control.Applicative ((<|>))
 import Control.Category ((>>>))
 import Control.Monad.Except (MonadError, MonadIO, liftIO)
@@ -83,7 +83,7 @@ data UtilCommand era
       -- ^ The path to the node socket.
       , signingKeyFiles :: [SigningKeyFile]
       -- ^ The files containing the required signing keys.
-      , lovelace :: Lovelace
+      , lovelace :: Ledger.Coin
       -- ^ The lovelace to send with each bundle of tokens.
       , change :: AddressInEra era
       -- ^ The change address.
@@ -139,7 +139,7 @@ data UtilCommand era
       -- ^ The network ID, if any.
       , socketPath :: FilePath
       -- ^ The path to the node socket.
-      , amount :: Maybe Lovelace
+      , amount :: Maybe Ledger.Coin
       -- ^ The lovelace to send to the address. By default we drain out the address.
       , bodyFile :: TxBodyFile
       -- ^ The output file for the transaction body.
@@ -333,7 +333,7 @@ cleanOptions era network socket =
             "Location of the cardano-node socket file. Defaults to the CARDANO_NODE_SOCKET_PATH environment variable's value."
       )
     <*> requiredSignersOpt
-    <*> (O.option $ Lovelace <$> O.auto)
+    <*> (O.option $ Ledger.Coin <$> O.auto)
       ( O.long "lovelace"
           <> O.value 2_000_000
           <> O.metavar "LOVELACE"
@@ -518,7 +518,7 @@ fundAddressOptions era network socket =
       )
   where
     lovelaceOpt =
-      fmap Just . (O.option $ Lovelace <$> O.auto) $
+      fmap Just . (O.option $ Ledger.Coin <$> O.auto) $
         O.long "lovelace"
           <> O.metavar "LOVELACE"
           <> O.help "The lovelace to send to each address."

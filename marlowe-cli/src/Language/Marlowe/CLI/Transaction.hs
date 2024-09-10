@@ -88,7 +88,6 @@ import Cardano.Api (
   Hash,
   KeyWitnessInCtx (..),
   LocalNodeConnectInfo (..),
-  Lovelace,
   MaryEraOnwards (..),
   PaymentCredential (PaymentCredentialByScript),
   PaymentKey,
@@ -166,22 +165,20 @@ import Cardano.Api (
   writeFileTextEnvelope,
  )
 import Cardano.Api qualified as C
+import Cardano.Api.Ledger qualified as Ledger
 import Cardano.Api.Shelley (
-  ExecutionUnitPrices (..),
   LedgerProtocolParameters (..),
-  ProtocolParameters (..),
   ReferenceScript (ReferenceScript, ReferenceScriptNone),
   SimpleScriptOrReferenceInput (SScript),
-  convertToLedgerProtocolParameters,
   fromPlutusData,
-  protocolParamMaxBlockExUnits,
-  protocolParamMaxTxExUnits,
-  protocolParamMaxTxSize,
  )
 import Cardano.Api.Shelley qualified as C
 import Cardano.Ledger.Alonzo.Scripts (ExUnits (..))
 import Cardano.Ledger.Alonzo.TxWits (Redeemers (..))
+import Cardano.Ledger.Babbage.Core qualified as Ledger
+import Cardano.Ledger.Plutus qualified as P
 import Cardano.Slotting.EpochInfo.API (epochInfoRange, epochInfoSlotToUTCTime, hoistEpochInfo)
+import Contrib.Cardano.Api (lppPParamsL)
 import Contrib.Cardano.UTxO qualified as U
 import Contrib.Data.Foldable (foldMapFlipped, tillFirstMatch)
 import Control.Arrow ((***))
@@ -230,11 +227,12 @@ import Language.Marlowe.CLI.IO (
   decodeFileBuiltinData,
   decodeFileStrict,
   getEraHistory,
+  getLedgerProtocolParams,
   getMajorProtocolVersion,
   getPV2CostModelParams,
-  getProtocolParams,
   getSystemStart,
   liftCli,
+  liftCliExceptT,
   liftCliIO,
   liftCliMaybe,
   maybeWriteJson,
@@ -283,6 +281,7 @@ import Language.Marlowe.CLI.Types (
  )
 import Language.Marlowe.CLI.Types qualified as PayToScript (PayToScript (value))
 import Language.Marlowe.Scripts
+import Lens.Micro ((^.))
 import Ouroboros.Consensus.HardFork.History (interpreterToEpochInfo)
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (Target (VolatileTip))
 import Plutus.V1.Ledger.SlotConfig (SlotConfig (..))
@@ -349,7 +348,7 @@ buildClean
   -- ^ The connection info for the local node.
   -> [SigningKeyFile]
   -- ^ The files for required signing keys.
-  -> Lovelace
+  -> Ledger.Coin
   -- ^ The value to be sent to addresses with tokens.
   -> AddressInEra era
   -- ^ The change address.
@@ -476,9 +475,8 @@ buildFaucetImpl txBuildupCtx possibleValues destAddresses fundAddress fundSignin
           if nonAda /= mempty
             then do
               era <- askEra
-              protocol <- getProtocolParams queryCtx
-              protocol' <- liftCli $ convertToLedgerProtocolParameters (babbageEraOnwardsToShelleyBasedEra era) protocol
-              txOut <- makeBalancedTxOut era protocol' destAddress C.TxOutDatumNone nonAda ReferenceScriptNone
+              protocol <- getLedgerProtocolParams queryCtx
+              txOut <- makeBalancedTxOut era protocol destAddress C.TxOutDatumNone nonAda ReferenceScriptNone
               pure [txOut]
             else pure []
         pure (map fst utxosList, outputs, destAddress)
@@ -588,7 +586,7 @@ buildFaucet' connection value addresses (TxBodyFile bodyFile) timeout =
         TxMetadataNone
         False
         False
-    C.cardanoEraConstraints (C.babbageEraOnwardsToCardanoEra era) $
+    C.cardanoEraConstraints (C.toCardanoEra era) $
       liftCliIO $
         writeFileTextEnvelope (File bodyFile) Nothing body
     let txBuildupCtx = mkNodeTxBuildup connection timeout
@@ -673,8 +671,7 @@ buildMintingImpl txBuildupCtx mintingAction metadataProps expires (PrintStats pr
   do
     let queryCtx = toQueryContext txBuildupCtx
     era <- askEra
-    protocol <- getProtocolParams queryCtx
-    protocol' <- liftCli $ convertToLedgerProtocolParameters (babbageEraOnwardsToShelleyBasedEra era) protocol
+    protocol <- getLedgerProtocolParams queryCtx
     let CurrencyIssuer changeAddress signingKey = maIssuer mintingAction
         verification =
           verificationKeyHash $ toPaymentVerificationKey $ getVerificationKey signingKey
@@ -697,7 +694,7 @@ buildMintingImpl txBuildupCtx mintingAction metadataProps expires (PrintStats pr
           let value = C.txOutValueToValue txOutValue
               assetsValue = nonAdaValue value
           if assetsValue /= mempty
-            then Just <$> makeBalancedTxOut era protocol' addr C.TxOutDatumNone assetsValue ReferenceScriptNone
+            then Just <$> makeBalancedTxOut era protocol addr C.TxOutDatumNone assetsValue ReferenceScriptNone
             else pure Nothing
 
         outputs' <- fmap NonEmpty.toList $ for tokenDistribution' \(recipient, mintedValue, minAda) -> do
@@ -712,7 +709,7 @@ buildMintingImpl txBuildupCtx mintingAction metadataProps expires (PrintStats pr
                   value = adaValue <> mintedValue
               makeTxOut' address possibleDatum value
             Nothing ->
-              makeBalancedTxOut era protocol' address possibleDatum mintedValue ReferenceScriptNone
+              makeBalancedTxOut era protocol address possibleDatum mintedValue ReferenceScriptNone
         pure (map fst utxos, assetsOutputs <> outputs', [signingKey], foldMap (\(_, m, _) -> m) tokenDistribution')
       BurnAll _ providers -> do
         let signingKeys' = signingKey : (NonEmpty.toList . fmap snd $ providers)
@@ -756,7 +753,7 @@ buildMintingImpl txBuildupCtx mintingAction metadataProps expires (PrintStats pr
           value <- hoistMaybe (toAddressAny' addr `M.lookup` changesMap)
           MaybeT $
             if value /= mempty
-              then Just <$> makeBalancedTxOut era protocol' addr C.TxOutDatumNone value ReferenceScriptNone
+              then Just <$> makeBalancedTxOut era protocol addr C.TxOutDatumNone value ReferenceScriptNone
               else pure Nothing
         when (tokensValue == mempty) $ do
           throwError . CliError $ "Unable to find currency " <> show policy <> " tokens."
@@ -915,7 +912,7 @@ publisherAddress scriptHash publishingStrategy era network = case publishingStra
 
 -- | Information required to publish a script
 type ScriptPublishingInfo lang era =
-  ( Lovelace
+  ( Ledger.Coin
   , AddressInEra era
   , ValidatorInfo lang era
   )
@@ -932,8 +929,7 @@ buildScriptPublishingInfo
   -> m (ScriptPublishingInfo lang era)
 buildScriptPublishingInfo queryCtx plutusScript publishingStrategy = do
   era <- askEra
-  protocol <- getProtocolParams queryCtx
-  protocol' <- liftCli $ convertToLedgerProtocolParameters (babbageEraOnwardsToShelleyBasedEra era) protocol
+  protocol <- getLedgerProtocolParams queryCtx
   protocolVersion <- getMajorProtocolVersion queryCtx
   costModel <- getPV2CostModelParams queryCtx
   let networkId = queryContextNetworkId queryCtx
@@ -944,7 +940,7 @@ buildScriptPublishingInfo queryCtx plutusScript publishingStrategy = do
   referenceScriptInfo <- validatorInfo' plutusScript Nothing era protocolVersion costModel networkId NoStakeAddress
   referenceScript <- buildReferenceScript plutusScript
 
-  let (minAda, _) = adjustMinimumUTxO era protocol' publisher C.TxOutDatumNone mempty referenceScript
+  let (minAda, _) = adjustMinimumUTxO era protocol publisher C.TxOutDatumNone mempty referenceScript
   pure (minAda, publisher, referenceScriptInfo)
 
 buildPublishingImpl
@@ -1505,7 +1501,8 @@ buildBody queryCtx payFromScript payToScript extraInputs inputs outputs collater
 -- We need the `TxContext` when we want to resubmit a failing transaction with adjusted fees.
 buildBodyWithContent
   :: forall era lang m
-   . (MonadError CliError m, C.IsShelleyBasedEra era)
+   . (MonadError CliError m)
+  => (C.IsShelleyBasedEra era)
   => (C.IsPlutusScriptLanguage lang)
   => (MonadIO m)
   => (MonadReader (CliEnv era) m)
@@ -1546,9 +1543,7 @@ buildBodyWithContent queryCtx payFromScript payToScript extraInputs inputs outpu
     era <- askEra
     start <- getSystemStart queryCtx
     history <- getEraHistory queryCtx
-    protocol <- getProtocolParams queryCtx
-    let protocol' = (\pp -> pp{protocolParamMaxTxExUnits = protocolParamMaxBlockExUnits pp}) protocol
-    protocol'' <- liftCli $ convertToLedgerProtocolParameters (babbageEraOnwardsToShelleyBasedEra era) protocol'
+    protocol <- getLedgerProtocolParams queryCtx
     (scriptTxIn, txInsReferences) <-
       unzip <$> for payFromScript \s -> liftCli do
         redeemScript era s
@@ -1571,7 +1566,7 @@ buildBodyWithContent queryCtx payFromScript payToScript extraInputs inputs outpu
         txMetadata = metadata
         txAuxScripts = TxAuxScriptsNone
         txExtraKeyWits = TxExtraKeyWitnesses (babbageEraOnwardsToAlonzoEraOnwards era) extraSigners
-        txProtocolParams = BuildTxWith $ Just protocol''
+        txProtocolParams = BuildTxWith $ Just protocol
         txWithdrawals = TxWithdrawalsNone
         txCertificates = TxCertificatesNone
         txUpdateProposal = TxUpdateProposalNone
@@ -1601,7 +1596,8 @@ buildBodyWithContent queryCtx payFromScript payToScript extraInputs inputs outpu
         missingTxIns = [txIn | txIn <- allTxIns, txIn `notElem` foundTxIns]
     when (notNull missingTxIns) do
       throwError . CliError $ "Some inputs are missing from the chain (possibly reference inputs): " <> show missingTxIns
-
+    let txCurrentTreasuryValue = Nothing
+        txTreasuryDonation = Nothing
     let mkChangeTxOut value = do
           let txOutValue = mkTxOutValue era value
           C.TxOut changeAddress txOutValue TxOutDatumNone ReferenceScriptNone
@@ -1618,7 +1614,7 @@ buildBodyWithContent queryCtx payFromScript payToScript extraInputs inputs outpu
                   (babbageEraOnwardsToShelleyBasedEra era)
                   start
                   (C.toLedgerEpochInfo history)
-                  protocol''
+                  protocol
                   S.empty
                   mempty
                   mempty
@@ -1631,7 +1627,7 @@ buildBodyWithContent queryCtx payFromScript payToScript extraInputs inputs outpu
             Left (TxBodyErrorAdaBalanceNegative delta) -> do
               balancingLoop (counter - 1) (C.lovelaceToValue delta <> changeValue)
             Left err -> throwError . CliError $ show err
-            Right balanced@(BalancedTxBody _ (TxBody TxBodyContent{txFee = fee}) _ _) -> do
+            Right balanced@(BalancedTxBody _ (TxBody TxBodyContent{txFee = fee}) _ _) ->
               pure (buildTxBodyContent{txFee = fee}, balanced)
 
         totalIn = foldMap txOutValueValue . (M.elems . C.unUTxO) $ utxos
@@ -1645,23 +1641,23 @@ buildBodyWithContent queryCtx payFromScript payToScript extraInputs inputs outpu
     (txBodyContent, BalancedTxBody _ txBody _ lovelace) <- balancingLoop 10 initialChange
     when printStats
       . liftIO
-      $ do
+      $ C.babbageEraOnwardsConstraints era do
         hPutStrLn stderr ""
         hPutStrLn stderr $ "Fee: " <> show lovelace
         let size = BS.length $ C.shelleyBasedEraConstraints (babbageEraOnwardsToShelleyBasedEra era) $ serialiseToCBOR txBody
-            maxSize = fromIntegral $ protocolParamMaxTxSize protocol
+            maxSize = fromIntegral $ protocol ^. lppPParamsL . Ledger.ppMaxTxSizeL
             fractionSize = 100 * size `div` maxSize
         hPutStrLn stderr $ "Size: " <> show size <> " / " <> show maxSize <> " = " <> show fractionSize <> "%"
         let ExUnits memory steps = findExUnits txBody
-            maxExecutionUnits = protocolParamMaxTxExUnits protocol
-            fractionMemory = 100 * memory `div` maybe 0 executionMemory maxExecutionUnits
-            fractionSteps = 100 * steps `div` maybe 0 executionSteps maxExecutionUnits
+            ExUnits maxMem maxSteps = protocol ^. lppPParamsL . Ledger.ppMaxTxExUnitsL
+            fractionMemory = 100 * memory `div` maxMem
+            fractionSteps = 100 * steps `div` maxSteps
         hPutStrLn stderr "Execution units:"
         hPutStrLn stderr $
           "  Memory: "
             <> show memory
             <> " / "
-            <> show (maybe 0 executionMemory maxExecutionUnits)
+            <> show maxMem
             <> " = "
             <> show fractionMemory
             <> "%"
@@ -1669,7 +1665,7 @@ buildBodyWithContent queryCtx payFromScript payToScript extraInputs inputs outpu
           "  Steps: "
             <> show steps
             <> " / "
-            <> show (maybe 0 executionSteps maxExecutionUnits)
+            <> show maxSteps
             <> " = "
             <> show fractionSteps
             <> "%"
@@ -1764,7 +1760,7 @@ scriptWitness
 scriptWitness era PayFromScript{..} = do
   scriptInEra <- liftCliMaybe "Script language not supported in era" $ toScriptLanguageInEra era
   let datum' = case datum of
-        Just d -> ScriptDatumForTxIn . C.unsafeHashableScriptData . fromPlutusData $ toData d
+        Just d -> ScriptDatumForTxIn . Just . C.unsafeHashableScriptData . fromPlutusData $ toData d
         Nothing -> InlineScriptDatum
   pure $
     BuildTxWith . ScriptWitness ScriptWitnessForSpending $
@@ -1784,7 +1780,7 @@ redeemScript
   => BabbageEraOnwards era
   -> PayFromScript lang
   -- ^ The payment information.
-  -> m (TxInEra era, TxInsReference BuildTx era)
+  -> m (TxInEra era, TxInsReference era)
   -- ^ The transaction input.
 redeemScript era p@PayFromScript{..} = do
   witness <- scriptWitness era p
@@ -1962,10 +1958,10 @@ querySlotConfig connection =
   do
     epochNo <- queryInEra connection QueryEpoch
     systemStart <-
-      liftCliIO $
+      liftCliExceptT $
         queryNodeLocalState connection VolatileTip QuerySystemStart
     EraHistory interpreter <-
-      liftCliIO
+      liftCliExceptT
         . queryNodeLocalState connection VolatileTip
         $ QueryEraHistory
     let epochInfo =
@@ -1999,19 +1995,24 @@ querySlotting connection outputFile =
 
 -- | Compute the maximum fee for any transaction.
 maximumFee
-  :: ProtocolParameters
-  -> Lovelace
-maximumFee ProtocolParameters{..} =
-  let txFee :: Lovelace
-      txFee = protocolParamTxFeeFixed + protocolParamTxFeePerByte * fromIntegral protocolParamMaxTxSize
-      executionFee :: Rational
-      executionFee =
-        case (protocolParamPrices, protocolParamMaxTxExUnits) of
-          (Just ExecutionUnitPrices{..}, Just ExecutionUnits{..}) ->
-            priceExecutionSteps * fromIntegral executionSteps
-              + priceExecutionMemory * fromIntegral executionMemory
-          _ -> 0
-   in txFee + round executionFee
+  :: forall era
+   . (Ledger.AlonzoEraPParams (C.ShelleyLedgerEra era))
+  => LedgerProtocolParameters era
+  -> Ledger.Coin
+maximumFee (LedgerProtocolParameters pp) = do
+  let maxTxSize = fromIntegral $ pp ^. Ledger.ppMaxTxSizeL
+      -- TODO (create a ticket): References scripts can probably have larger cost after Chang - this should be incorporated here
+      -- https://docs.cardano.org/about-cardano/explore-more/parameter-guide/#a-list-of-updatable-protocol-parameters
+      -- txFeePerByte aka minFeeA
+      txFeePerByte = pp ^. Ledger.ppMinFeeAL
+      -- txFeeFixed aka minFeeB
+      txFeeFixed = pp ^. Ledger.ppMinFeeBL
+      txFee = txFeeFixed + Ledger.Coin (Ledger.unCoin txFeePerByte * maxTxSize)
+
+      maxTxExecutionUnits = pp ^. Ledger.ppMaxTxExUnitsL
+      prices = pp ^. Ledger.ppPricesL
+      executionFee = P.txscriptfee prices maxTxExecutionUnits
+  txFee <> executionFee
 
 -- | Calculate the minimum UTxO requirement for a value.
 findMinUtxo
@@ -2020,7 +2021,7 @@ findMinUtxo
   => (MonadReader (CliEnv era) m)
   => LedgerProtocolParameters era
   -> (AddressInEra era, Maybe Datum, Value)
-  -> m Lovelace
+  -> m Ledger.Coin
 findMinUtxo protocol (address, datum, value) =
   do
     era <- askEra
@@ -2105,8 +2106,7 @@ selectCoins queryCtx inputs outputs pay changeAddress CoinSelectionStrategy{..} 
       Nothing -> queryByAddress queryCtx changeAddress
 
     -- Fetch the protocol parameters
-    protocol <- getProtocolParams queryCtx
-    protocol' <- liftCli $ convertToLedgerProtocolParameters (babbageEraOnwardsToShelleyBasedEra era) protocol
+    protocol <- getLedgerProtocolParams queryCtx
     -- We want to consume as few UTxOs as possible, in order to keep the script context smaller.
     let -- Extract the value of a UTxO.
         txOutToValue :: TxOut ctx era -> Value
@@ -2116,7 +2116,7 @@ selectCoins queryCtx inputs outputs pay changeAddress CoinSelectionStrategy{..} 
         universe = foldMap (txOutToValue . snd) utxos
         -- Bound the possible fee.
         fee :: Value
-        fee = lovelaceToValue $ 2 * maximumFee protocol
+        fee = lovelaceToValue $ 2 * C.babbageEraOnwardsConstraints era (maximumFee protocol)
         -- Test whether value only contains lovelace.
         onlyLovelace :: Value -> Bool
         onlyLovelace value = lovelaceToValue (selectLovelace value) == value
@@ -2135,8 +2135,8 @@ selectCoins queryCtx inputs outputs pay changeAddress CoinSelectionStrategy{..} 
     -- Bound the lovelace that must be included with change
     minUtxo <-
       (<>)
-        <$> findMinUtxo protocol' (changeAddress, Nothing, universe) -- Output to native tokens.
-        <*> findMinUtxo protocol' (changeAddress, Nothing, mempty) -- Pure lovelace to change address.
+        <$> findMinUtxo protocol (changeAddress, Nothing, universe) -- Output to native tokens.
+        <*> findMinUtxo protocol (changeAddress, Nothing, mempty) -- Pure lovelace to change address.
     let -- Compute the value of the outputs.
         outgoing :: Value
         outgoing = foldMap txOutToValue outputs <> maybe mempty PayToScript.value pay
@@ -2233,7 +2233,7 @@ selectCoins queryCtx inputs outputs pay changeAddress CoinSelectionStrategy{..} 
       if change == mempty
         then pure []
         else do
-          (a, d, v) <- ensureMinUtxo protocol' (changeAddress, C.TxOutDatumNone, change)
+          (a, d, v) <- ensureMinUtxo protocol (changeAddress, C.TxOutDatumNone, change)
           (: []) <$> makeTxOut' a d v
     -- Return the coin selection.
     pure

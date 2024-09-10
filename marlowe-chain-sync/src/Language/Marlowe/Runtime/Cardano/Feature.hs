@@ -35,7 +35,7 @@ class CardanoFeature f where
 
 class (CardanoFeature f) => ShelleyFeature f where
   featureInShelleyBasedEra :: ShelleyBasedEra era -> Maybe (f era)
-  featureInShelleyBasedEra = featureInCardanoEra . shelleyBasedToCardanoEra
+  featureInShelleyBasedEra = featureInCardanoEra . toCardanoEra
   shelleyBasedEraOfFeature :: f era -> ShelleyBasedEra era
 
 instance CardanoFeature CardanoEra where
@@ -51,7 +51,7 @@ instance CardanoFeature ShelleyBasedEra where
     AlonzoEra -> Just ShelleyBasedEraAlonzo
     BabbageEra -> Just ShelleyBasedEraBabbage
     ConwayEra -> Just ShelleyBasedEraConway
-  cardanoEraOfFeature = shelleyBasedToCardanoEra
+  cardanoEraOfFeature = toCardanoEra
 
 instance ShelleyFeature ShelleyBasedEra where
   featureInShelleyBasedEra = Just

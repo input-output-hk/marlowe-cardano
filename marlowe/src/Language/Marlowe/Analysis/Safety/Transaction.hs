@@ -94,7 +94,8 @@ import qualified PlutusLedgerApi.Common.Versions as P
 import qualified PlutusLedgerApi.V2 as P hiding (evaluateScriptCounting)
 import qualified PlutusTx.AssocMap as AM
 import qualified PlutusTx.Builtins as P
-import qualified PlutusTx.Builtins.Class as P
+
+import qualified PlutusTx.Builtins.HasOpaque as P
 import Text.Printf (printf)
 
 -- | Execute a Marlowe transaction.
@@ -214,7 +215,7 @@ executeTransaction evaluationContext semanticsValidator semanticsAddress payoutA
               P.Address (P.PubKeyCredential pkh) _ -> pure pkh
               _ -> mempty
         txInfoRedeemers = AM.singleton scriptContextPurpose redeemer
-        txInfoData = AM.fromList $ ((,) =<< P.DatumHash . dataHash) <$> nub (inDatum : outDatum <> outPaymentDatums <> merkleDatums)
+        txInfoData = AM.unsafeFromList $ ((,) =<< P.DatumHash . dataHash) <$> nub (inDatum : outDatum <> outPaymentDatums <> merkleDatums)
         txInfoId = "2222222222222222222222222222222222222222222222222222222222222222"
         scriptContextTxInfo = P.TxInfo{..}
         scriptContextPurpose = P.Spending inScriptTxRef
@@ -514,7 +515,7 @@ calcValidatorsExBudget evaluationContext creatorAddress txInSpecs txOutSpecs (in
 
   txInfoId <- freshTxId
   let txInfoRedeemers =
-        AM.fromList $
+        AM.unsafeFromList $
           M.elems validatorsEvalContext <&> \(ValidatorEvalContext _ _ redeemer txOutRef) -> do
             let purpose = P.Spending txOutRef
             (purpose, redeemer)
@@ -535,7 +536,7 @@ calcValidatorsExBudget evaluationContext creatorAddress txInSpecs txOutSpecs (in
       txInfoData = do
         let inDatums = catMaybes $ txInSpecs <&> \(TxInSpec _ _ datum _) -> datum
             outDatums = catMaybes $ txOutSpecs <&> \(TxOutSpec _ _ datum) -> datum
-        AM.fromList $ ((,) =<< datumHash) <$> (nub $ inDatums <> outDatums)
+        AM.unsafeFromList $ ((,) =<< datumHash) <$> (nub $ inDatums <> outDatums)
 
   scriptPurposePlaceholder <- P.Spending <$> freshTxOutRef
   let scriptContextTxInfo = P.TxInfo{..}
@@ -589,7 +590,7 @@ findTransactions annotate requireContinuations mc@MerkleizedContract{..} current
     let state = case currentState of
           AlreadyInitialized st -> st
           NotInitialized creatorAddress initialValue -> do
-            let initialAccounts = AM.fromList $ first (creatorAddress,) <$> AM.toList initialValue
+            let initialAccounts = AM.unsafeFromList $ first (creatorAddress,) <$> AM.toList initialValue
                 minTime = 0
             State initialAccounts AM.empty AM.empty minTime
 
@@ -625,7 +626,7 @@ findTransactions' annotate requireContinuations mc@MerkleizedContract{..} =
             (P.PubKeyCredential "88888888888888888888888888888888888888888888888888888888")
             (Just . P.StakingHash $ P.PubKeyCredential "99999999999999999999999999999999999999999999999999999999")
       minAda = AM.singleton (Token "" "") $ worstMinimumUtxo' utxoCostPerByte mcContract mcContinuations
-      initialAccounts = AM.fromList $ first (creatorAddress,) <$> AM.toList minAda
+      initialAccounts = AM.unsafeFromList $ first (creatorAddress,) <$> AM.toList minAda
       minTime = 0
       state = AlreadyInitialized (State initialAccounts AM.empty AM.empty minTime)
    in findTransactions annotate requireContinuations mc state

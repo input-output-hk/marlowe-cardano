@@ -8,10 +8,10 @@ module Language.Marlowe.Runtime.Integration.ApplyInputs (spec, utcTimeToPOSIXTim
 import Cardano.Api (
   BabbageEraOnwards (BabbageEraOnwardsBabbage),
   CardanoEra (..),
+  ToCardanoEra (toCardanoEra),
   TxBody (..),
   TxBodyContent (..),
   TxOut (..),
-  babbageEraOnwardsToCardanoEra,
   getTxId,
  )
 import Control.Monad.IO.Class (liftIO)
@@ -163,7 +163,7 @@ closeSpec = parallel $ describe "Close contract" $ aroundAll setup do
     inputs `shouldBe` []
   it "should only output to the deposit address" $ runAsIntegration \(_, InputsApplied era InputsAppliedInEra{..}) -> do
     wallet <- getGenesisWallet 0
-    let getAddress (TxOut address _ _ _) = fromCardanoAddressInEra (babbageEraOnwardsToCardanoEra era) address
+    let getAddress (TxOut address _ _ _) = fromCardanoAddressInEra (toCardanoEra era) address
     let paidAddresses = case txBody of TxBody TxBodyContent{..} -> Set.fromList $ getAddress <$> txOuts
     liftIO $ paidAddresses `shouldBe` Set.singleton (changeAddress $ addresses wallet)
   where

@@ -10,7 +10,6 @@ module Language.Marlowe.CLI.Cardano.Api (
   Value.txOutValue,
   Value.txOutValueValue,
   adjustMinimumUTxO,
-  toPlutusMajorProtocolVersion,
   toTxOutDatumInTx,
   toTxOutDatumInline,
 ) where
@@ -18,7 +17,6 @@ module Language.Marlowe.CLI.Cardano.Api (
 import Cardano.Api (
   AddressInEra (..),
   BabbageEraOnwards (..),
-  Lovelace,
   MaryEraOnwards (..),
   ShelleyBasedEra,
   TxOut (..),
@@ -36,14 +34,10 @@ import Cardano.Api qualified as C
 import Cardano.Api.Shelley (LedgerProtocolParameters (..), ReferenceScript)
 import Cardano.Api.Shelley qualified as C
 import Cardano.Api.Shelley qualified as CS
-import GHC.Natural (Natural, naturalToInteger)
+import Cardano.Ledger.Coin qualified as C
 import Language.Marlowe.CLI.Cardano.Api.Value qualified as Value
 import Language.Marlowe.CLI.Orphans ()
-import PlutusLedgerApi.Common (MajorProtocolVersion (..))
 import PlutusLedgerApi.V2 qualified as PV2
-
-toPlutusMajorProtocolVersion :: (Natural, Natural) -> MajorProtocolVersion
-toPlutusMajorProtocolVersion = MajorProtocolVersion . fromInteger . naturalToInteger . fst
 
 -- | 2022-08 This function was written to compensate for a bug in Cardano's calculateMinimumUTxO. It's called by adjustMinimumUTxO below. We will eventually be able to remove it.
 ensureAtLeastHalfAnAda :: C.Value -> C.Value
@@ -53,7 +47,7 @@ ensureAtLeastHalfAnAda origValue =
     else origValue
   where
     origLovelace = selectLovelace origValue
-    minLovelace = C.Lovelace 500_000
+    minLovelace = C.Coin 500_000
 
 -- | Compute the `minAda` and adjust the lovelace in an output to confirm to the minimum ADA requirement.
 adjustMinimumUTxO
@@ -68,7 +62,7 @@ adjustMinimumUTxO
   -> C.Value
   -- ^ The output value.
   -> ReferenceScript era
-  -> (Lovelace, Api.Value)
+  -> (C.Coin, Api.Value)
   -- ^ Action to compute the adjusted value.
 adjustMinimumUTxO era protocol address datum origValue mRefScript = (minLovelace, value <> lovelaceToValue deficit)
   where

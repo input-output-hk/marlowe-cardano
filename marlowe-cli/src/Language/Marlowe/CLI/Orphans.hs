@@ -244,7 +244,7 @@ instance (ToJSON v, ToJSON k) => ToJSON (Map.Map k v) where
   toJSON = JSON.toJSON . Map.toList
 
 instance (FromJSON v, FromJSON k) => FromJSON (Map.Map k v) where
-  parseJSON v = Map.fromList <$> JSON.parseJSON v
+  parseJSON v = Map.unsafeFromList <$> JSON.parseJSON v
 
 -- | Newtype for deriving 'ToJSON' and 'FromJSON' for types that have a 'Serialise'
 -- instance by just encoding the serialized bytes as a JSON string.

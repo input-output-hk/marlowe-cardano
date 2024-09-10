@@ -21,7 +21,6 @@ module Language.Marlowe.CLI.Test.Wallet.Types where
 import Cardano.Api (
   AddressInEra,
   BabbageEraOnwards,
-  Lovelace,
   PolicyId,
   TxBody,
   UTxO (UTxO),
@@ -77,6 +76,7 @@ import PlutusLedgerApi.V1 (CurrencySymbol, TokenName)
 import PlutusLedgerApi.V1 qualified as P
 import Text.Read (readMaybe)
 
+import Cardano.Api.Ledger qualified as Ledger
 import Control.Lens.Getter (Getter)
 import Data.Aeson.Key qualified as K
 import Data.Aeson.KeyMap qualified as KM
@@ -451,7 +451,7 @@ data WalletOperation
       }
   | CreateWallet
       { woWalletNickname :: WalletNickname
-      , woPossibleUTxOs :: Maybe [Lovelace]
+      , woPossibleUTxOs :: Maybe [Ledger.Coin]
       }
   | CheckBalance
       { woWalletNickname :: WalletNickname
@@ -465,7 +465,7 @@ data WalletOperation
       }
   | Fund
       { woWalletNicknames :: [WalletNickname]
-      , woUTxOs :: [Lovelace]
+      , woUTxOs :: [Ledger.Coin]
       }
   | Mint
       { woCurrencyNickname :: CurrencyNickname
@@ -473,7 +473,7 @@ data WalletOperation
       -- ^ Fallbacks to faucet
       , woMetadata :: Maybe Aeson.Object
       , woTokenDistribution :: NonEmpty TokenAssignment
-      , woMinLovelace :: Lovelace
+      , woMinLovelace :: Ledger.Coin
       , -- We should make this relative
         woMintingExpirationSlot :: Maybe C.SlotNo
       }
@@ -488,12 +488,12 @@ data WalletOperation
       }
   | SplitWallet
       { woWalletNickname :: WalletNickname
-      , woUTxOs :: [Lovelace]
+      , woUTxOs :: [Ledger.Coin]
       }
   | ReturnFunds
   deriving stock (Eq, Generic, Show)
 
-mint :: CurrencyNickname -> NonEmpty TokenAssignment -> Lovelace -> WalletOperation
+mint :: CurrencyNickname -> NonEmpty TokenAssignment -> Ledger.Coin -> WalletOperation
 mint currencyNickname tokenDistribution minLovelace =
   Mint currencyNickname Nothing Nothing tokenDistribution minLovelace Nothing
 
@@ -646,12 +646,12 @@ type InterpretMonad env st m era =
 adaToken :: M.Token
 adaToken = M.Token "" ""
 
-txBodyFee :: forall era. TxBody era -> C.Lovelace
+txBodyFee :: forall era. TxBody era -> Ledger.Coin
 txBodyFee (C.TxBody txBodyContent) =
   case C.txFee txBodyContent of
     C.TxFeeExplicit _ lovelace -> lovelace
 
-walletTxFees :: Wallet era' -> C.Lovelace
+walletTxFees :: Wallet era' -> Ledger.Coin
 walletTxFees Wallet{..} = do
   let
   _waSubmittedTransactions `foldMapFlipped` \case

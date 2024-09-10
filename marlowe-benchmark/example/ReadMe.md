@@ -18,12 +18,19 @@ The following tools must be on the `PATH`:
 - `bc`: A command-line calculator, used for performing arithmetic calculations.
 - `curl`: A command-line tool for making HTTP requests, used for downloading files from a URL.
 
+## Magic Number Reminder 
+- `mainnet`: 764824073
+- `preprod`: 1
+- `preview`: 2
+- `sanchonet`: 4
+
 # Select the network and fetch network configs
 
 To begin, select the network you want to benchmark (`sanchonet`, `preview`, `preprod`) and fetch the network configuration files.
 
 ```bash
 NETWORK_NAME=preprod ## Select the one you want to benchmark {sanchonet, preview, preprod, mainnet}
+NETWORK_MAGIC_NUMBER=1
 cd $NETWORK_NAME
 rm -rf config
 mkdir -p config
@@ -49,18 +56,77 @@ do
 done
 ```
 
-## 2. Set the environment variables
+## 2. Set the Faucet for running the downstream Txs
+
+### 2.1 Generate the Verification, Signing Key  + Payment Adress
+
+
+
+```shell
+rm -rf faucet;
+mkdir faucet;
+cd faucet;
+cardano-address recovery-phrase generate --size 15 > phrase.prv;
+cardano-address key from-recovery-phrase Shelley < phrase.prv > root.xsk
+cat root.xsk | cardano-address key child 1852H/1815H/0H/0/0 > addr.xsk
+cat addr.xsk | cardano-address key public --without-chain-code > addr.pub
+cardano-address key child 1852H/1815H/0H/0/0 < root.xsk | cardano-address key public --with-chain-code > addr.xvk
+cardano-address address payment --network-tag testnet < addr.xvk > payment.addr
+cardano-cli key convert-cardano-address-key --shelley-payment-key --signing-key-file addr.xsk --out-file addr.skey
+cardano-cli key verification-key --signing-key-file addr.skey --verification-key-file addr.vkey
+
+echo "Please Provision with ADA this address :  $(cat payment.addr)"
+cd ..
+```
+### 2.2 Provisionning the account 
+
+
+##### Generating a Payment adress 
+
+```shell
+cardano-cli address build \
+    --payment-verification-key-file `faucet/payment.vkey` \
+    --out-file `faucet/ayment.addr` \
+    --testnet-magic $NETWORK_MAGIC_NUMBER
+```
+
+##### Provisioning the Payment adress with the faucet
+
+Here are the faucet webpages for obtaining test ADA on various Cardano networks:
+
+1. **Pre-production Testnet**:
+   - **Faucet URL**: [Pre-production Testnet Faucet](https://docs.cardano.org/cardano-testnets/tools/faucet/)
+
+2. **Preview Testnet**:
+   - **Faucet URL**: [Preview Testnet Faucet](https://faucet.preview.world.dev.cardano.org)
+
+3. **SanchoNet**:
+   - **Faucet URL**: [SanchoNet Faucet](https://faucet.sancho.network)
+
+
+These faucets allow developers and testers to request test ADA for use in these respective test environments. For more details on using these faucets, you can visit the official [Cardano documentation](https://docs.cardano.org/cardano-testnets/environments/)
+
+if you have `cardano-cli` available :
+
+```shell
+cardano-cli query utxo \
+    --address  $(cat faucet/payment.addr)  \
+    --testnet-magic $NETWORK_MAGIC_NUMBER
+```
+or look at a Cardano explorer :  e.g cardano scan
 
 To create and submit a transaction to the selected network, you'll need to provide the FAUCET details through two environment variables :
-# export FAUCET_ADDRESS= <YOUR FAUCET ADDRESS> 
-# export FAUCET_SKEY= <YOUR FAUCET PRIVATE KEY > 
 
-To source the other environment variables that should not be modified in a normal process, use the following command:
+```shell
+export FAUCET_ADDRESS=$(cat faucet/payment.addr);
+export FAUCET_SKEY="$(pwd)/faucet/addr.skey";
+```
+
+### 2.3 Sourcing Environement variables
 
 ```bash
 source environment
 ```
-
 ## 3. Create the pod and containers
 
 **Note**: The runtime containers for benchmarking are managed by Podman.
@@ -117,11 +183,19 @@ Starting remaining containers in pod b9463cbd7f198bf43ceb38869b2e9b4d4b0c385b7ab
 ## 5. Optionally, restart the pod to free up memory held by the syncing from genesis
 
 ```bash
-podman pod restart "benchmark-$NETWORK_NAME"
+podman pod stop "benchmark-$NETWORK_NAME"
+podman pod start "benchmark-$NETWORK_NAME"
+
 ```
 
 
 ## 6. Measure the performance of executing benchmarks
+
+Install the last version of marlowe-benchmark you have in this repo : 
+
+```bash
+cabal install marlowe-benchmark --overwrite-policy=always
+```
 
 ```bash
 ../measure-benchmark.sh

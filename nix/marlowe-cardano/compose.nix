@@ -2,7 +2,7 @@
 
 let
   inherit (pkgs) z3 sqitchPg postgresql runCommand writeShellScriptBin writeText glibcLocales;
-  network = inputs.self.networks.preview;
+  network = inputs.self.networks.preprod;
   inherit (inputs) marlowe-plutus;
 
   mkSqitchRunner = name: path: writeShellScriptBin name ''
@@ -98,7 +98,7 @@ let
   '';
 
   node-service = {
-    image = "ghcr.io/intersectmbo/cardano-node:8.9.0";
+    image = "ghcr.io/intersectmbo/cardano-node:9.1.1";
 
     environment = [
       "NETWORK=${network.name}"

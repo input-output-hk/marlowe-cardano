@@ -132,7 +132,7 @@ runContractCommand command =
         exportMarlowe @_
           marloweParams'
           protocolVersion
-          (Map.elems costModel)
+          (Map.elems $ fromIntegral <$> costModel)
           network'
           stake'
           contractFile
@@ -144,7 +144,7 @@ runContractCommand command =
       ExportValidator{..} ->
         exportMarloweValidator @_
           protocolVersion
-          (Map.elems costModel)
+          (Map.elems $ fromIntegral <$> costModel)
           network'
           stake'
           outputFile

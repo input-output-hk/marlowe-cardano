@@ -55,7 +55,7 @@ library
 
   build-depends:
     , base >=4.9 && <5
-    , cardano-api ^>=8.39.2.0
+    , cardano-api ^>=9.2
     , containers ^>=0.6.5
     , eventuo11y >=0.9 && <0.11
     , eventuo11y-extras ==0.1.1.0
@@ -64,7 +64,11 @@ library
     , marlowe-chain-sync ==1.0.0
     , marlowe-object ==1.0.0
     , marlowe-protocols ==0.3.0.0
-    , marlowe-runtime:{marlowe-runtime, contract-api, proxy-api, sync-api, tx-api} ==1.0.0
+    , marlowe-runtime ==1.0.0
+    , marlowe-runtime:contract-api
+    , marlowe-runtime:proxy-api
+    , marlowe-runtime:sync-api
+    , marlowe-runtime:tx-api
     , monad-control ^>=1
     , mtl >=2.2 && <3
     , network >=3.1 && <4
