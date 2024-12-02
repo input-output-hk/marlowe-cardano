@@ -6,42 +6,47 @@
 module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Conway where
 
 import Cardano.Ledger.Allegra.TxBody (StrictMaybe (..))
-import Cardano.Ledger.Alonzo.Tx (AlonzoTx (..))
-
+import Cardano.Ledger.Alonzo.Scripts (toAsIx)
+import Cardano.Ledger.Alonzo.Tx (bodyAlonzoTxL, witsAlonzoTxL)
 import Cardano.Ledger.Alonzo.TxAuxData (AlonzoTxAuxData (..))
-import Cardano.Ledger.Alonzo.TxWits (TxDats (..))
+import Cardano.Ledger.Alonzo.TxWits (TxDats (..), lookupRedeemer)
+import Cardano.Ledger.Alonzo.UTxO (zipAsIxItem)
 import Cardano.Ledger.Babbage (BabbageEra, BabbageTxOut)
 import Cardano.Ledger.Babbage.Tx (
   IsValid (..),
-  indexRedeemers,
  )
 import Cardano.Ledger.Babbage.TxBody (BabbageTxOut (..))
 import Cardano.Ledger.Binary (Sized (..), shelleyProtVer)
 import qualified Cardano.Ledger.Binary as L
 import Cardano.Ledger.Conway (ConwayEra)
 import Cardano.Ledger.Conway.Core (
-  AlonzoEraScript (PlutusPurpose),
   AlonzoEraTxWits,
-  AsItem (AsItem),
-  ConwayEraTxBody,
+  AsIxItem (..),
   Era (EraCrypto),
-  EraTx (Tx),
+  EraTx,
+  EraTxBody (inputsTxBodyL),
+  PlutusPurpose,
+  hashScript,
+  hoistPlutusPurpose,
  )
 import Cardano.Ledger.Conway.Scripts (
   AlonzoScript (..),
   ConwayPlutusPurpose (ConwaySpending),
  )
+import Cardano.Ledger.Conway.Tx (AlonzoTx (..))
 import Cardano.Ledger.Conway.TxBody (ConwayTxBody (..))
-import Cardano.Ledger.Conway.TxWits (AlonzoTxWits (..))
-import Cardano.Ledger.Core (EraScript (..), ScriptHash (..))
+import Cardano.Ledger.Conway.TxWits (AlonzoEraTxWits (rdmrsTxWitsL), AlonzoTxWits (..))
+import Cardano.Ledger.Core (ScriptHash (..))
 import Cardano.Ledger.Crypto (StandardCrypto)
 import Cardano.Ledger.Plutus.Data (dataToBinaryData)
 import Cardano.Ledger.Shelley.API (TxIn)
 import Control.Arrow (Arrow (..))
+import Control.Monad (join)
 import Data.ByteString (ByteString)
 import Data.Foldable (Foldable (..))
 import Data.Int (Int64)
 import qualified Data.Map as Map
+import Data.Maybe (listToMaybe)
 import qualified Data.Set as Set
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Alonzo (alonzoTxRow)
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Babbage (babbageTxOutRows)
@@ -59,6 +64,7 @@ import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types (
   TxInRow (..),
   TxRowGroup,
  )
+import Lens.Micro ((^.))
 import Unsafe.Coerce (unsafeCoerce)
 
 conwayTxToRows :: Int64 -> Bytea -> Bytea -> AlonzoTx (ConwayEra StandardCrypto) -> TxRowGroup
@@ -108,17 +114,15 @@ coerceDats :: TxDats (ConwayEra StandardCrypto) -> TxDats (BabbageEra StandardCr
 coerceDats = unsafeCoerce
 
 conwayTxInRows
-  :: ( ConwayEraTxBody era
-     , AlonzoEraTxWits era
-     , EraTx era
-     , EraCrypto era ~ StandardCrypto
-     , PlutusPurpose AsItem era
-        ~ ConwayPlutusPurpose AsItem era
-     )
+  :: forall era
+   . (EraTx era)
+  => (EraCrypto era ~ StandardCrypto)
+  => (PlutusPurpose AsIxItem era ~ ConwayPlutusPurpose AsIxItem era)
+  => (AlonzoEraTxWits era)
   => Int64
   -> Bytea
   -> Cardano.Ledger.Babbage.Tx.IsValid
-  -> Tx era
+  -> AlonzoTx era
   -> Set.Set (TxIn StandardCrypto)
   -> Set.Set (TxIn StandardCrypto)
   -> [TxInRow]
@@ -129,21 +133,24 @@ conwayTxInRows slot txId (Cardano.Ledger.Babbage.Tx.IsValid isValid) tx inputs c
       pure TxInRow{isCollateral = SqlBool True, ..}
 
 conwayTxInRow
-  :: ( ConwayEraTxBody era
-     , EraTx era
-     , EraCrypto era ~ StandardCrypto
-     , PlutusPurpose AsItem era
-        ~ ConwayPlutusPurpose AsItem era
-     , AlonzoEraTxWits era
-     )
+  :: forall era
+   . (EraTx era)
+  => (EraCrypto era ~ StandardCrypto)
+  => (PlutusPurpose AsIxItem era ~ ConwayPlutusPurpose AsIxItem era)
+  => (AlonzoEraTxWits era)
   => Int64
   -> Bytea
-  -> Tx era
+  -> AlonzoTx era
   -> TxIn StandardCrypto
   -> TxInRow
 conwayTxInRow slotNo txInId tx txIn =
   (shelleyTxInRow slotNo txInId txIn)
     { redeemerDatumBytes = do
-        (datum, _) <- Cardano.Ledger.Babbage.Tx.indexRedeemers tx $ ConwaySpending (AsItem txIn)
+        let redeemers = tx ^. witsAlonzoTxL . rdmrsTxWitsL
+            inputs = tx ^. bodyAlonzoTxL . inputsTxBodyL
+        index <- listToMaybe $ join $ zipAsIxItem (Set.toList inputs) $ \asIxItem@(AsIxItem _ txIn') ->
+          [asIxItem | txIn == txIn']
+        let purpose = ConwaySpending @AsIxItem @era index
+        (datum, _) <- lookupRedeemer (hoistPlutusPurpose toAsIx purpose) redeemers
         pure $ originalBytea $ dataToBinaryData datum
     }

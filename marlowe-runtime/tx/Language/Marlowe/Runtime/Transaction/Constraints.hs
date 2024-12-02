@@ -47,7 +47,14 @@ import Cardano.Api (
   unsafeHashableScriptData,
  )
 import qualified Cardano.Api as C
+import Cardano.Api.Ledger (ppPricesL)
+import qualified Cardano.Api.Ledger as Ledger
+import Cardano.Api.Shelley (fromAlonzoExUnits, fromAlonzoPrices)
 import qualified Cardano.Api.Shelley as C
+import Cardano.Ledger.Alonzo.PParams (
+  ppMaxTxExUnitsL,
+ )
+import Cardano.Ledger.Core (ppMaxTxSizeL, ppMinFeeAL, ppMinFeeBL)
 import Control.Applicative ((<|>))
 import Control.Error (hoistMaybe, note, noteT, runExceptT)
 import Control.Monad (forM, unless, when, (<=<))
@@ -111,6 +118,7 @@ import Language.Marlowe.Runtime.Core.ScriptRegistry (HelperScript, ReferenceScri
 import qualified Language.Marlowe.Runtime.Core.ScriptRegistry as ScriptRegistry
 import Language.Marlowe.Runtime.Transaction.Api (CoinSelectionError (..), ConstraintError (..), Destination (..))
 import qualified Language.Marlowe.Scripts.Types as V1
+import Lens.Micro ((^.))
 
 -- | Describes a set of Marlowe-specific conditions that a transaction must satisfy.
 data TxConstraints era v = TxConstraints
@@ -548,7 +556,7 @@ ensureAtLeastHalfAnAda origValue =
     else origValue
   where
     origLovelace = C.selectLovelace origValue
-    minLovelace = C.Lovelace 500_000
+    minLovelace = Ledger.Coin 500_000
 
 -- | Compute the `minAda` and adjust the lovelace in a single output to conform
 --   to the minimum ADA requirement.
@@ -589,7 +597,7 @@ adjustTxForMinUtxo era protocol mMarloweAddress txBodyContent = do
           . map
             ( First
                 . ( \(C.TxOut addressInEra txOutValue _ _) ->
-                      if fromCardanoAddressInEra (C.babbageEraOnwardsToCardanoEra era) addressInEra == marloweAddress
+                      if fromCardanoAddressInEra (C.toCardanoEra era) addressInEra == marloweAddress
                         then Just txOutValue
                         else Nothing
                   )
@@ -615,16 +623,15 @@ adjustTxForMinUtxo era protocol mMarloweAddress txBodyContent = do
             <> show (getMarloweOutputValue adjustedTxOuts)
 
 -- | Compute the maximum fee for any transaction.
-maximumFee :: C.ProtocolParameters -> C.Lovelace
-maximumFee C.ProtocolParameters{..} =
-  let txFee :: C.Lovelace
-      txFee = protocolParamTxFeeFixed + protocolParamTxFeePerByte * fromIntegral protocolParamMaxTxSize
-      executionFee :: Rational
-      executionFee =
-        case (protocolParamPrices, protocolParamMaxTxExUnits) of
-          (Just C.ExecutionUnitPrices{..}, Just C.ExecutionUnits{..}) ->
-            priceExecutionSteps * fromIntegral executionSteps + priceExecutionMemory * fromIntegral executionMemory
-          _ -> 0
+maximumFee :: C.BabbageEraOnwards era -> C.LedgerProtocolParameters era -> Ledger.Coin
+maximumFee era (C.LedgerProtocolParameters protocolParameters) = C.babbageEraOnwardsConstraints era $ do
+  let txFeeFixed = protocolParameters ^. ppMinFeeBL
+      txFeePerByte = protocolParameters ^. ppMinFeeAL
+      maxTxSize = fromIntegral $ protocolParameters ^. ppMaxTxSizeL
+      C.ExecutionUnitPrices{..} = fromAlonzoPrices $ protocolParameters ^. ppPricesL
+      C.ExecutionUnits{..} = fromAlonzoExUnits $ protocolParameters ^. ppMaxTxExUnitsL
+      txFee = txFeeFixed + txFeePerByte * maxTxSize
+      executionFee = priceExecutionSteps * fromIntegral executionSteps + priceExecutionMemory * fromIntegral executionMemory
    in txFee + ceiling executionFee
 
 -- | Calculate the minimum UTxO requirement for a value.
@@ -732,9 +739,7 @@ selectCoins era protocol marloweVersion scriptCtx walletCtx@WalletContext{..} he
 
       -- FIXME: Use protocolParamCollateralPercent from ProtocolParameters instead of this hard-coded '2'. We will automatically pick up future chain values this way.
       fee :: C.Value
-      fee =
-        C.lovelaceToValue $
-          2 * maximumFee (C.fromLedgerPParams (C.babbageEraOnwardsToShelleyBasedEra era) $ C.unLedgerProtocolParameters protocol)
+      fee = C.lovelaceToValue $ 2 * maximumFee era protocol
 
       maryEraOnwards :: C.MaryEraOnwards era
       maryEraOnwards = C.babbageEraOnwardsToMaryEraOnwards era
@@ -828,8 +833,8 @@ selectCoins era protocol marloweVersion scriptCtx walletCtx@WalletContext{..} he
     . Left
     . CoinSelectionFailed
     $ do
-      let C.Lovelace required = C.selectLovelace targetSelectionValue
-          C.Lovelace available = C.selectLovelace universe
+      let Ledger.Coin required = C.selectLovelace targetSelectionValue
+          Ledger.Coin available = C.selectLovelace universe
       InsufficientLovelace required available
 
   -- Satisfy the native-token requirements.
@@ -936,7 +941,7 @@ balanceTx era systemStart eraHistory protocol marloweVersion scriptCtx walletCtx
     maybe
       (Left $ BalancingError "Failed to convert change address.")
       Right
-      $ toCardanoAddressInEra (C.babbageEraOnwardsToCardanoEra era) changeAddress
+      $ toCardanoAddressInEra (C.toCardanoEra era) changeAddress
 
   let -- Extract the value of a UTxO
       txOutToValue :: C.TxOut ctx era -> C.Value
@@ -1029,7 +1034,7 @@ allUtxos era marloweVersion scriptCtx WalletContext{..} HelpersContext{..} inclu
       maryEraOnwards = C.babbageEraOnwardsToMaryEraOnwards era
 
       era' :: C.CardanoEra era
-      era' = C.babbageEraOnwardsToCardanoEra era
+      era' = C.toCardanoEra era
 
       convertUtxo :: (Chain.TxOutRef, Chain.TransactionOutput) -> Maybe (C.TxIn, C.TxOut ctx era)
       convertUtxo (txOutRef, transactionOutput) =
@@ -1169,7 +1174,7 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
                 plutusScriptV2InEra
                 C.PlutusScriptV2
                 plutusScriptOrRefInput
-                (C.ScriptDatumForTxIn $ unsafeHashableScriptData $ toCardanoScriptData $ Core.toChainDatum marloweVersion datum)
+                (C.ScriptDatumForTxIn $ Just . unsafeHashableScriptData $ toCardanoScriptData $ Core.toChainDatum marloweVersion datum)
                 ( unsafeHashableScriptData $ toCardanoScriptData case marloweVersion of
                     Core.MarloweV1 ->
                       Chain.toDatum $
@@ -1209,10 +1214,11 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
                     plutusScriptV2InEra
                     C.PlutusScriptV2
                     plutusScriptOrRefInput
-                    ( C.ScriptDatumForTxIn $
-                        C.unsafeHashableScriptData $
-                          toCardanoScriptData $
-                            Core.toChainPayoutDatum marloweVersion payoutDatum
+                    ( C.ScriptDatumForTxIn
+                        $ Just
+                          . C.unsafeHashableScriptData
+                        $ toCardanoScriptData
+                        $ Core.toChainPayoutDatum marloweVersion payoutDatum
                     )
                     (C.unsafeHashableScriptData $ C.ScriptDataConstructor 0 [])
                     (C.ExecutionUnits 0 0)
@@ -1232,7 +1238,7 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
         , helperRoles
         )
 
-    solveTxInsReference :: Set Chain.ScriptHash -> Set C.TxIn -> Either ConstraintError (C.TxInsReference C.BuildTx era)
+    solveTxInsReference :: Set Chain.ScriptHash -> Set C.TxIn -> Either ConstraintError (C.TxInsReference era)
     solveTxInsReference requiredPayoutScriptHashes helperTxInReferences =
       maybe (pure C.TxInsReferenceNone) (fmap (C.TxInsReference era) . sequence)
       -- sequenceL is from the 'Crosswalk' type class. It behaves similarly to
@@ -1315,7 +1321,7 @@ solveInitialTxBodyContent era protocol marloweVersion scriptCtx WalletContext{..
                     plutusScriptV2InEra
                     C.PlutusScriptV2
                     plutusScriptOrRefInput
-                    (C.ScriptDatumForTxIn $ C.unsafeHashableScriptData helperDatum)
+                    (C.ScriptDatumForTxIn . Just $ C.unsafeHashableScriptData helperDatum)
                     (C.unsafeHashableScriptData $ C.ScriptDataConstructor 0 []) -- FIXME: In the future, some helpers may require a redeemer, but open roles does not.
                     (C.ExecutionUnits 0 0)
             pure $

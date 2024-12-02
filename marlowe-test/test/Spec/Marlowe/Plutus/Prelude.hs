@@ -12,7 +12,7 @@ module Spec.Marlowe.Plutus.Prelude (
 
 import Data.List (find)
 import PlutusLedgerApi.V2 (DatumHash (..), ScriptHash (..), TxId (..), TxOutRef (..))
-import PlutusTx.Builtins.Class (stringToBuiltinByteString)
+
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck (
   Arbitrary (..),
@@ -26,6 +26,7 @@ import Test.Tasty.QuickCheck (
   testProperty,
  )
 
+import PlutusTx.Builtins.HasOpaque
 import qualified PlutusTx.Prelude as P (all, any, filter, find, fmap, foldMap, fromEnum, snd, (&&), (==))
 
 -- | Run tests.

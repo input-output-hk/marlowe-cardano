@@ -35,7 +35,7 @@ import Network.Protocol.Job.Types (ArbitraryCommand (..), CommandVariations (..)
 import qualified Network.URI
 import qualified Network.URI as Network
 import Spec.Marlowe.Semantics.Arbitrary ()
-import Test.Gen.Cardano.Api.Typed (genTx, genTxBody)
+import Test.Gen.Cardano.Api.Typed (genTx, genValidTxBody)
 import Test.QuickCheck hiding (shrinkMap)
 import Test.QuickCheck.Hedgehog (hedgehog)
 import Test.QuickCheck.Instances ()
@@ -286,7 +286,7 @@ instance (ArbitraryMarloweVersion v, IsShelleyBasedEra era) => Arbitrary (Contra
       <*> pure Core.marloweVersion
       <*> arbitrary
       <*> arbitrary
-      <*> hedgehog (genTxBody shelleyBasedEra)
+      <*> hedgehog (fst <$> genValidTxBody shelleyBasedEra)
       <*> arbitrary
   shrink ContractCreatedInEra{..} =
     fold
@@ -317,7 +317,7 @@ instance (ArbitraryMarloweVersion v, IsShelleyBasedEra era) => Arbitrary (Inputs
       <*> arbitrary
       <*> arbitrary
       <*> arbitrary
-      <*> hedgehog (genTxBody shelleyBasedEra)
+      <*> hedgehog (fst <$> genValidTxBody shelleyBasedEra)
       <*> arbitrary
   shrink InputsAppliedInEra{..} =
     fold
@@ -342,7 +342,7 @@ instance (ArbitraryMarloweVersion v, IsShelleyBasedEra era) => Arbitrary (Withdr
   arbitrary =
     WithdrawTxInEra Core.marloweVersion
       <$> arbitrary
-      <*> hedgehog (genTxBody shelleyBasedEra)
+      <*> hedgehog (fst <$> genValidTxBody shelleyBasedEra)
   shrink WithdrawTxInEra{..} = [WithdrawTxInEra{..}{WithdrawTxInEra.inputs = inputs'} | inputs' <- shrink inputs]
 
 instance (ArbitraryMarloweVersion v) => Arbitrary (BurnRoleTokensTx v) where
@@ -360,7 +360,7 @@ instance (ArbitraryMarloweVersion v, IsShelleyBasedEra era) => Arbitrary (BurnRo
   arbitrary =
     BurnRoleTokensTxInEra Core.marloweVersion
       <$> arbitrary
-      <*> hedgehog (genTxBody shelleyBasedEra)
+      <*> hedgehog (fst <$> genValidTxBody shelleyBasedEra)
   shrink BurnRoleTokensTxInEra{..} =
     [BurnRoleTokensTxInEra{..}{burnedTokens = burnedTokens'} | burnedTokens' <- shrink burnedTokens]
 

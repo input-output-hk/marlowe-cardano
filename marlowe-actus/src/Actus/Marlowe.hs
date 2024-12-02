@@ -49,7 +49,7 @@ import Data.Time (LocalTime (..), UTCTime (UTCTime), nominalDiffTimeToSeconds, t
 import Data.Time.Clock.POSIX
 import Data.Validation (Validation (..))
 import Language.Marlowe.Extended.V1
-import PlutusTx.Builtins.Class (stringToBuiltinByteString)
+import PlutusTx.Builtins.HasOpaque
 
 -- | 'genContract' validates the applicability of the contract terms in order
 -- to generate a Marlowe contract with risk factors observed at a given point

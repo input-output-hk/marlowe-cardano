@@ -57,7 +57,7 @@ library
     , async-components
     , base >=4.9 && <5
     , bytestring
-    , cardano-api ^>=8.39.2.0
+    , cardano-api ^>=9.2
     , cardano-crypto-wrapper
     , cardano-integration
     , cardano-ledger-byron
@@ -72,11 +72,20 @@ library
     , hasql-pool
     , hs-opentelemetry-api ^>=0.0.3
     , http-client
-    , marlowe-chain-sync:{marlowe-chain-sync, chain-indexer, libchainsync}
+    , marlowe-chain-sync
+    , marlowe-chain-sync:chain-indexer
+    , marlowe-chain-sync:libchainsync
     , marlowe-cli
     , marlowe-protocols
-    , marlowe-runtime-web:{marlowe-runtime-web, server}
-    , marlowe-runtime:{marlowe-runtime, contract, indexer, proxy-api, runtime, sync, tx}
+    , marlowe-runtime
+    , marlowe-runtime-web
+    , marlowe-runtime-web:server
+    , marlowe-runtime:contract
+    , marlowe-runtime:indexer
+    , marlowe-runtime:proxy-api
+    , marlowe-runtime:runtime
+    , marlowe-runtime:sync
+    , marlowe-runtime:tx
     , network
     , nonempty-containers
     , postgresql-libpq

@@ -7,8 +7,6 @@ module Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Alonzo where
 
 import Cardano.Binary (serialize')
 import Cardano.Ledger.Allegra.Core (
-  Era (EraCrypto),
-  EraTx (Tx),
   EraTxAuxData (TxAuxData),
   ValidityInterval,
  )
@@ -18,30 +16,41 @@ import Cardano.Ledger.Alonzo (
   AlonzoTxAuxData,
   AlonzoTxOut,
  )
-import Cardano.Ledger.Alonzo.Scripts (
-  AlonzoEraScript (PlutusPurpose),
-  AlonzoPlutusPurpose (AlonzoSpending),
-  AsItem (..),
+import Cardano.Ledger.Alonzo.Core (
+  AlonzoEraTxWits (rdmrsTxWitsL),
+  AsIxItem (..),
+  Era (EraCrypto),
+  EraTxBody,
+  PlutusPurpose,
+  inputsTxBodyL,
  )
-import Cardano.Ledger.Alonzo.Tx (AlonzoTx (..), IsValid (..), indexRedeemers, txdats')
+import Cardano.Ledger.Alonzo.Scripts (
+  AlonzoEraScript (hoistPlutusPurpose),
+  AlonzoPlutusPurpose (AlonzoSpending),
+  toAsIx,
+ )
+import Cardano.Ledger.Alonzo.Tx (AlonzoTx (..), IsValid (..), bodyAlonzoTxL, witsAlonzoTxL)
 import Cardano.Ledger.Alonzo.TxAuxData (AlonzoTxAuxData (..))
-import Cardano.Ledger.Alonzo.TxBody (AlonzoEraTxBody, AlonzoTxBody (..), AlonzoTxOut (..))
-import Cardano.Ledger.Alonzo.TxWits (AlonzoEraTxWits, TxDats)
+import Cardano.Ledger.Alonzo.TxBody (AlonzoTxBody (..), AlonzoTxOut (..))
+import Cardano.Ledger.Alonzo.TxWits (AlonzoTxWits (..), TxDats, lookupRedeemer)
 import qualified Cardano.Ledger.Alonzo.TxWits as Alonzo
+import Cardano.Ledger.Alonzo.UTxO (zipAsIxItem)
 import Cardano.Ledger.BaseTypes (shelleyProtVer)
 import qualified Cardano.Ledger.Binary as L
 import Cardano.Ledger.Crypto (StandardCrypto)
-import Cardano.Ledger.Plutus.Data (dataToBinaryData)
+import Cardano.Ledger.Plutus (dataToBinaryData)
 import Cardano.Ledger.Shelley.API (
   ScriptHash (..),
   ShelleyTxOut (ShelleyTxOut),
   StrictMaybe,
   TxIn,
  )
+import Control.Monad (join)
 import Data.ByteString (ByteString)
 import Data.Foldable (Foldable (..))
 import Data.Int (Int16, Int64)
 import qualified Data.Map as Map
+import Data.Maybe (listToMaybe)
 import qualified Data.Set as Set
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Mary (maryAssetMintRows, maryTxOutRow, maryTxRow)
 import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Shelley (
@@ -62,6 +71,7 @@ import Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types (
   TxRowGroup,
  )
 import qualified Language.Marlowe.Runtime.ChainSync.Database.PostgreSQL.Types as Marlowe
+import Lens.Micro ((^.))
 
 alonzoTxToRows :: Int64 -> Bytea -> Bytea -> AlonzoTx (AlonzoEra StandardCrypto) -> TxRowGroup
 alonzoTxToRows slotNo blockHash txId tx@AlonzoTx{..} =
@@ -103,17 +113,15 @@ convertIsValid :: IsValid -> SqlBool
 convertIsValid (IsValid b) = SqlBool b
 
 alonzoTxInRows
-  :: ( AlonzoEraTxBody era
-     , AlonzoEraTxWits era
-     , EraTx era
-     , EraCrypto era ~ StandardCrypto
-     , PlutusPurpose AsItem era
-        ~ AlonzoPlutusPurpose AsItem era
-     )
+  :: forall era
+   . (AlonzoEraTxWits era)
+  => (StandardCrypto ~ EraCrypto era)
+  => (PlutusPurpose AsIxItem era ~ AlonzoPlutusPurpose AsIxItem era)
+  => (EraTxBody era)
   => Int64
   -> Bytea
   -> IsValid
-  -> Tx era
+  -> AlonzoTx era
   -> Set.Set (TxIn StandardCrypto)
   -> Set.Set (TxIn StandardCrypto)
   -> [TxInRow]
@@ -124,22 +132,25 @@ alonzoTxInRows slot txId (IsValid isValid) tx inputs collateralInputs
       pure TxInRow{isCollateral = SqlBool True, ..}
 
 alonzoTxInRow
-  :: ( AlonzoEraTxBody era
-     , AlonzoEraTxWits era
-     , EraTx era
-     , EraCrypto era ~ StandardCrypto
-     , PlutusPurpose AsItem era
-        ~ AlonzoPlutusPurpose AsItem era
-     )
+  :: forall era
+   . (AlonzoEraTxWits era)
+  => (StandardCrypto ~ EraCrypto era)
+  => (PlutusPurpose AsIxItem era ~ AlonzoPlutusPurpose AsIxItem era)
+  => (EraTxBody era)
   => Int64
   -> Bytea
-  -> Tx era
-  -> TxIn StandardCrypto
+  -> AlonzoTx era
+  -> TxIn (EraCrypto era)
   -> TxInRow
 alonzoTxInRow slotNo txInId tx txIn =
   (shelleyTxInRow slotNo txInId txIn)
     { redeemerDatumBytes = do
-        (datum, _) <- indexRedeemers tx $ AlonzoSpending (AsItem txIn)
+        let redeemers = tx ^. witsAlonzoTxL . rdmrsTxWitsL
+            inputs = tx ^. bodyAlonzoTxL . inputsTxBodyL
+        index <- listToMaybe $ join $ zipAsIxItem (Set.toList inputs) $ \asIxItem@(AsIxItem _ txIn') ->
+          [asIxItem | txIn == txIn']
+        let purpose = AlonzoSpending @AsIxItem @era index
+        (datum, _) <- lookupRedeemer (hoistPlutusPurpose toAsIx purpose) redeemers
         pure $ originalBytea $ dataToBinaryData datum
     }
 

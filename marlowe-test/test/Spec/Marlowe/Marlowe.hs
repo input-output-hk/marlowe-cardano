@@ -294,7 +294,7 @@ transferBetweenAccountsTest :: IO ()
 transferBetweenAccountsTest = do
   let state =
         State
-          { accounts = AssocMap.fromList [((Role "alice", Token "" ""), 100)]
+          { accounts = AssocMap.unsafeFromList [((Role "alice", Token "" ""), 100)]
           , choices = AssocMap.empty
           , boundValues = AssocMap.empty
           , minTime = 10
@@ -307,7 +307,7 @@ transferBetweenAccountsTest = do
           }
   case computeTransaction txInput state contract of
     TransactionOutput{txOutState = State{accounts}} -> do
-      assertBool "Accounts check" $ accounts == AssocMap.fromList [(("bob", Token "" ""), 100)]
+      assertBool "Accounts check" $ accounts == AssocMap.unsafeFromList [(("bob", Token "" ""), 100)]
     e -> fail $ show e
 
 -- | Serialize the Pangram contract.

@@ -13,6 +13,8 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# OPTIONS_GHC -Wno-deprecations #-}
+{-# OPTIONS_GHC -Wno-deriving-defaults #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Marlowe.Runtime.ChainSync.Api where
@@ -39,11 +41,11 @@ import Cardano.Api (
  )
 import qualified Cardano.Api as C
 import qualified Cardano.Api as Cardano
-import Cardano.Api.Shelley (ProtocolParameters, fromShelleyBasedScript, toShelleyScript)
+import qualified Cardano.Api.Ledger as Coin
 import qualified Cardano.Api.Shelley as Cardano
 import qualified Cardano.Ledger.BaseTypes as Base
 import qualified Cardano.Ledger.BaseTypes as C
-import Cardano.Ledger.Binary (Annotator, DecCBOR (..), decodeFullAnnotator)
+import Cardano.Ledger.Binary (Annotator, DecCBOR (..), EncCBOR (encCBOR), decodeFullAnnotator, toBuilder)
 import Cardano.Ledger.Credential (ptrCertIx, ptrSlotNo, ptrTxIx)
 import Cardano.Ledger.SafeHash (SafeToHash (..))
 import Cardano.Ledger.Slot (EpochSize)
@@ -68,7 +70,7 @@ import Data.Aeson.Text (encodeToLazyText)
 import Data.Aeson.Types (Parser, parseFail, toJSONKeyText)
 import qualified Data.Attoparsec.ByteString.Char8 as Atto
 import Data.Bifunctor (Bifunctor (..), bimap)
-import Data.Binary (Binary (..), Get, get, getWord8, put, putWord8)
+import Data.Binary (Binary (..), Get, Put, get, getWord8, put, putWord8)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.ByteString.Base16 (decodeBase16, encodeBase16)
@@ -138,23 +140,36 @@ import qualified Network.Protocol.Query.Types as Query
 import Observe.Event.Render.OpenTelemetry (RenderSelectorOTel)
 import OpenTelemetry.Attributes (Attribute, PrimitiveAttribute (..))
 import OpenTelemetry.Trace.Core (toAttribute)
-import Ouroboros.Consensus.Block (EpochNo (..), EpochSize (..))
+import Ouroboros.Consensus.Block (EpochNo (..), EpochSize (..), GenesisWindow)
 import qualified Ouroboros.Consensus.Block as O
 import Ouroboros.Consensus.BlockchainTime (RelativeTime, SlotLength (..), SystemStart (..))
 import Ouroboros.Consensus.HardFork.History (
   Bound (..),
   EraEnd (..),
   EraParams (..),
+  EraParamsFormat (EraParamsWithGenesisWindow),
   EraSummary (..),
   Interpreter,
   SafeZone (..),
   Summary (Summary),
   mkInterpreter,
  )
-import PlutusCore.Evaluation.Machine.ExBudgetingDefaults (defaultCostModelParams)
+import PlutusCore.Evaluation.Machine.ExBudgetingDefaults (defaultCostModelParamsForTesting)
 import qualified PlutusLedgerApi.V1 as Plutus
 import Text.Read (readMaybe)
 import Unsafe.Coerce (unsafeCoerce)
+
+import Cardano.Api.ProtocolParameters (
+  ProtocolParameters,
+  convertToLedgerProtocolParameters,
+ )
+import qualified Cardano.Api.Script as Cardano.Api.Shelley
+import Cardano.Api.Shelley (LedgerProtocolParameters, ProtocolParameters (..))
+import qualified Data.ByteString.Builder as BB
+import Data.Reflection (give)
+
+import Adapter.Cardano.Api.ProtocolParameters ()
+import Data.Ratio ((%))
 
 -- | Extends a type with a "Genesis" member.
 data WithGenesis a = Genesis | At a
@@ -1172,7 +1187,7 @@ toUTxOTuple (UTxO txOutRef transactionOutput) = (txOutRef, transactionOutput)
 data ChainSyncQuery a where
   GetSecurityParameter :: ChainSyncQuery Int
   GetNetworkId :: ChainSyncQuery NetworkId
-  GetProtocolParameters :: ChainSyncQuery ProtocolParameters
+  GetProtocolParameters :: BabbageEraOnwards era -> ChainSyncQuery (Cardano.Api.Shelley.LedgerProtocolParameters era)
   GetSystemStart :: ChainSyncQuery SystemStart
   GetEraHistory :: ChainSyncQuery EraHistory
   GetUTxOs :: GetUTxOsQuery -> ChainSyncQuery UTxOs
@@ -1210,12 +1225,25 @@ renderChainSyncQueryOTel = \case
             , ("network-magic", toAttribute $ IntAttribute $ fromIntegral i)
             ]
       }
-  GetProtocolParameters ->
+  GetProtocolParameters era ->
     RequestRenderedOTel
       { requestName = "get-protocol-parameters"
-      , requestAttributes = []
+      , requestAttributes =
+          [
+            ( "era"
+            , case era of
+                BabbageEraOnwardsBabbage -> "babbage"
+                BabbageEraOnwardsConway -> "conway"
+            )
+          ]
       , responseAttributes = \params ->
-          [("protocol-parameters", toAttribute $ TextAttribute $ TL.toStrict $ encodeToLazyText params)]
+          [
+            ( "protocol-parameters"
+            , toAttribute $ TextAttribute $ TL.toStrict $ case era of
+                BabbageEraOnwardsBabbage -> encodeToLazyText params
+                BabbageEraOnwardsConway -> encodeToLazyText params
+            )
+          ]
       }
   GetSystemStart ->
     RequestRenderedOTel
@@ -1365,7 +1393,19 @@ instance Binary AnyCardanoEra where
       _ -> fail $ "Invalid era tag: " <> show tag
 
 deriving instance Show (ChainSyncQuery a)
-deriving instance Eq (ChainSyncQuery a)
+instance Eq (ChainSyncQuery a) where
+  (GetProtocolParameters BabbageEraOnwardsBabbage) == (GetProtocolParameters BabbageEraOnwardsBabbage) = True
+  (GetProtocolParameters BabbageEraOnwardsConway) == (GetProtocolParameters BabbageEraOnwardsConway) = True
+  GetSecurityParameter == GetSecurityParameter = True
+  GetNetworkId == GetNetworkId = True
+  GetSystemStart == GetSystemStart = True
+  GetEraHistory == GetEraHistory = True
+  GetUTxOs query == GetUTxOs query' = query == query'
+  GetNodeTip == GetNodeTip = True
+  GetTip == GetTip = True
+  GetEra == GetEra = True
+  GetScripts era scripts == GetScripts era' scripts' = era == era' && scripts == scripts'
+  _ == _ = False
 
 instance HasSignature ChainSyncQuery where
   signature _ = "ChainSyncQuery"
@@ -1375,7 +1415,7 @@ instance Query.RequestVariations ChainSyncQuery where
     NE.fromList
       [ Query.SomeTag TagGetSecurityParameter
       , Query.SomeTag TagGetNetworkId
-      , Query.SomeTag TagGetProtocolParameters
+      , Query.SomeTag $ TagGetProtocolParameters BabbageEraOnwardsBabbage
       , Query.SomeTag TagGetSystemStart
       , Query.SomeTag TagGetEraHistory
       , Query.SomeTag TagGetUTxOs
@@ -1388,7 +1428,7 @@ instance Query.RequestVariations ChainSyncQuery where
   requestVariations = \case
     TagGetSecurityParameter -> pure GetSecurityParameter
     TagGetNetworkId -> pure GetNetworkId
-    TagGetProtocolParameters -> pure GetProtocolParameters
+    TagGetProtocolParameters era -> pure (GetProtocolParameters era)
     TagGetSystemStart -> pure GetSystemStart
     TagGetEraHistory -> pure GetEraHistory
     TagGetUTxOs -> GetUTxOs <$> variations
@@ -1399,7 +1439,8 @@ instance Query.RequestVariations ChainSyncQuery where
   resultVariations = \case
     TagGetSecurityParameter -> variations
     TagGetNetworkId -> Mainnet NE.:| [Testnet $ NetworkMagic 0]
-    TagGetProtocolParameters -> variations
+    TagGetProtocolParameters BabbageEraOnwardsBabbage -> variations
+    TagGetProtocolParameters BabbageEraOnwardsConway -> variations
     TagGetSystemStart -> SystemStart <$> variations
     TagGetEraHistory -> variations
     TagGetUTxOs -> variations
@@ -1408,6 +1449,31 @@ instance Query.RequestVariations ChainSyncQuery where
     TagGetEra -> variations
     TagGetScripts BabbageEraOnwardsBabbage -> variations
     TagGetScripts BabbageEraOnwardsConway -> variations
+
+-- TODO (Refactor Deprecated ProtocolParameters) : Below three instances are ugly workarounds which still rely on deprecated ProtocolParameters.
+-- They should be removed and replaced by statically defined protocol params - we have JSON files in the repo which
+-- should be included in the code.
+
+instance Variations ProtocolParameters where
+  variations =
+    ( \ProtocolParameters{..} ->
+        ProtocolParameters
+          { protocolParamPrices =
+              Just (C.ExecutionUnitPrices{priceExecutionSteps = 721 % 10000000, priceExecutionMemory = 577 % 10000})
+          , ..
+          }
+    )
+      <$> variations
+
+instance Variations (Cardano.Api.Shelley.LedgerProtocolParameters BabbageEra) where
+  variations = case traverse (convertToLedgerProtocolParameters C.ShelleyBasedEraBabbage) variations of
+    Left err -> error $ "ChainSync.Api.Variations PParams: " <> show err
+    Right vs -> vs
+
+instance Variations (Cardano.Api.Shelley.LedgerProtocolParameters ConwayEra) where
+  variations = case traverse (convertToLedgerProtocolParameters C.ShelleyBasedEraConway) variations of
+    Left err -> error $ "ChainSync.Api.Variations PParams: " <> show err
+    Right vs -> vs
 
 instance Variations (ScriptInEra BabbageEra) where
   variations =
@@ -1424,25 +1490,28 @@ instance Variations (ScriptInEra ConwayEra) where
           C.examplePlutusScriptAlwaysSucceeds C.WitCtxTxIn
 
 instance Binary (ScriptInEra BabbageEra) where
-  put = put . originalBytes . toShelleyScript
+  put = put . originalBytes . Cardano.Api.Shelley.toShelleyScript
   get = do
     bytes <- get
-    fromShelleyBasedScript C.ShelleyBasedEraBabbage <$> getDecodeFull bytes
+    Cardano.Api.Shelley.fromShelleyBasedScript C.ShelleyBasedEraBabbage <$> getDecodeFull bytes
 
 instance Binary (ScriptInEra ConwayEra) where
-  put = put . originalBytes . toShelleyScript
+  put = put . originalBytes . Cardano.Api.Shelley.toShelleyScript
   get = do
     bytes <- get
-    fromShelleyBasedScript C.ShelleyBasedEraConway <$> getDecodeFull bytes
+    Cardano.Api.Shelley.fromShelleyBasedScript C.ShelleyBasedEraConway <$> getDecodeFull bytes
 
 getDecodeFull :: (DecCBOR (Annotator a)) => LBS.ByteString -> Get a
 getDecodeFull = either (fail . show) pure . decodeFullAnnotator Base.shelleyProtVer "getDecodeFull" decCBOR
+
+putEncodeFull :: (EncCBOR a) => a -> Put
+putEncodeFull a = put $ BB.toLazyByteString $ toBuilder Base.shelleyProtVer (encCBOR a)
 
 instance Query.Request ChainSyncQuery where
   data Tag ChainSyncQuery result where
     TagGetSecurityParameter :: Query.Tag ChainSyncQuery Int
     TagGetNetworkId :: Query.Tag ChainSyncQuery NetworkId
-    TagGetProtocolParameters :: Query.Tag ChainSyncQuery ProtocolParameters
+    TagGetProtocolParameters :: BabbageEraOnwards era -> Query.Tag ChainSyncQuery (LedgerProtocolParameters era)
     TagGetSystemStart :: Query.Tag ChainSyncQuery SystemStart
     TagGetEraHistory :: Query.Tag ChainSyncQuery EraHistory
     TagGetUTxOs :: Query.Tag ChainSyncQuery UTxOs
@@ -1454,8 +1523,10 @@ instance Query.Request ChainSyncQuery where
   tagEq TagGetSecurityParameter _ = Nothing
   tagEq TagGetNetworkId TagGetNetworkId = Just Refl
   tagEq TagGetNetworkId _ = Nothing
-  tagEq TagGetProtocolParameters TagGetProtocolParameters = Just Refl
-  tagEq TagGetProtocolParameters _ = Nothing
+  tagEq (TagGetProtocolParameters BabbageEraOnwardsBabbage) (TagGetProtocolParameters BabbageEraOnwardsBabbage) = Just Refl
+  tagEq (TagGetProtocolParameters BabbageEraOnwardsBabbage) _ = Nothing
+  tagEq (TagGetProtocolParameters BabbageEraOnwardsConway) (TagGetProtocolParameters BabbageEraOnwardsConway) = Just Refl
+  tagEq (TagGetProtocolParameters BabbageEraOnwardsConway) _ = Nothing
   tagEq TagGetEraHistory TagGetEraHistory = Just Refl
   tagEq TagGetEraHistory _ = Nothing
   tagEq TagGetSystemStart TagGetSystemStart = Just Refl
@@ -1475,7 +1546,7 @@ instance Query.Request ChainSyncQuery where
   tagFromReq = \case
     GetSecurityParameter -> TagGetSecurityParameter
     GetNetworkId -> TagGetNetworkId
-    GetProtocolParameters -> TagGetProtocolParameters
+    GetProtocolParameters era -> TagGetProtocolParameters era
     GetEraHistory -> TagGetEraHistory
     GetSystemStart -> TagGetSystemStart
     GetUTxOs _ -> TagGetUTxOs
@@ -1485,13 +1556,30 @@ instance Query.Request ChainSyncQuery where
     GetScripts era _ -> TagGetScripts era
 
 deriving instance Show (Query.Tag ChainSyncQuery a)
-deriving instance Eq (Query.Tag ChainSyncQuery a)
+instance Eq (Query.Tag ChainSyncQuery a) where
+  TagGetSecurityParameter == TagGetSecurityParameter = True
+  TagGetNetworkId == TagGetNetworkId = True
+  TagGetProtocolParameters BabbageEraOnwardsBabbage == TagGetProtocolParameters BabbageEraOnwardsBabbage = True
+  TagGetProtocolParameters BabbageEraOnwardsConway == TagGetProtocolParameters BabbageEraOnwardsConway = True
+  TagGetEraHistory == TagGetEraHistory = True
+  TagGetSystemStart == TagGetSystemStart = True
+  TagGetUTxOs == TagGetUTxOs = True
+  TagGetNodeTip == TagGetNodeTip = True
+  TagGetTip == TagGetTip = True
+  TagGetEra == TagGetEra = True
+  TagGetScripts BabbageEraOnwardsBabbage == TagGetScripts BabbageEraOnwardsBabbage = True
+  TagGetScripts BabbageEraOnwardsConway == TagGetScripts BabbageEraOnwardsConway = True
+  _ == _ = False
 
 instance Query.BinaryRequest ChainSyncQuery where
   putReq = \case
     GetSecurityParameter -> putWord8 0x01
     GetNetworkId -> putWord8 0x02
-    GetProtocolParameters -> putWord8 0x03
+    GetProtocolParameters era -> do
+      putWord8 0x03
+      putWord8 case era of
+        BabbageEraOnwardsBabbage -> 0x00
+        BabbageEraOnwardsConway -> 0x01
     GetSystemStart -> putWord8 0x04
     GetEraHistory -> putWord8 0x05
     GetUTxOs q -> do
@@ -1517,7 +1605,12 @@ instance Query.BinaryRequest ChainSyncQuery where
     case tag of
       0x01 -> pure $ Query.SomeRequest GetSecurityParameter
       0x02 -> pure $ Query.SomeRequest GetNetworkId
-      0x03 -> pure $ Query.SomeRequest GetProtocolParameters
+      0x03 -> do
+        tag' <- getWord8
+        case tag' of
+          0x00 -> pure $ Query.SomeRequest $ GetProtocolParameters BabbageEraOnwardsBabbage
+          0x01 -> pure $ Query.SomeRequest $ GetProtocolParameters BabbageEraOnwardsConway
+          _ -> fail "Invalid BabbageEraOnwards tag"
       0x04 -> pure $ Query.SomeRequest GetSystemStart
       0x05 -> pure $ Query.SomeRequest GetEraHistory
       0x06 -> do
@@ -1544,9 +1637,10 @@ instance Query.BinaryRequest ChainSyncQuery where
       put . \case
         Mainnet -> Nothing
         Testnet (NetworkMagic magic) -> Just magic
-    TagGetProtocolParameters -> put . Aeson.encode
+    TagGetProtocolParameters BabbageEraOnwardsBabbage -> put . Aeson.encode
+    TagGetProtocolParameters BabbageEraOnwardsConway -> put . Aeson.encode
     TagGetEraHistory -> \case
-      EraHistory interpreter -> put $ serialise interpreter
+      EraHistory interpreter -> give EraParamsWithGenesisWindow $ put $ serialise interpreter
     TagGetSystemStart -> \case
       SystemStart start -> put start
     TagGetUTxOs -> put
@@ -1558,14 +1652,14 @@ instance Query.BinaryRequest ChainSyncQuery where
   getResult = \case
     TagGetSecurityParameter -> get
     TagGetNetworkId -> maybe Mainnet (Testnet . NetworkMagic) <$> get
-    TagGetProtocolParameters -> do
+    TagGetProtocolParameters era -> C.babbageEraOnwardsConstraints era $ do
       bytes <- get
       case Aeson.decode bytes of
         Nothing -> fail "failed to decode protocol parameters JSON"
         Just params -> pure params
     TagGetEraHistory -> do
       bytes <- get
-      case deserialiseOrFail bytes of
+      case give EraParamsWithGenesisWindow $ deserialiseOrFail bytes of
         Left err -> fail $ show err
         Right interpreter -> pure $ EraHistory interpreter
     TagGetSystemStart -> SystemStart <$> get
@@ -1580,7 +1674,8 @@ instance Query.ShowRequest ChainSyncQuery where
   showsPrecResult p = \case
     TagGetSecurityParameter -> showsPrec p
     TagGetNetworkId -> showsPrec p
-    TagGetProtocolParameters -> showsPrec p
+    TagGetProtocolParameters BabbageEraOnwardsBabbage -> showsPrec p
+    TagGetProtocolParameters BabbageEraOnwardsConway -> showsPrec p
     TagGetSystemStart -> showsPrec p
     TagGetEraHistory -> \(EraHistory interpreter) ->
       showParen
@@ -1607,7 +1702,7 @@ instance Query.OTelRequest ChainSyncQuery where
   reqName = \case
     TagGetSecurityParameter -> "security_parameter"
     TagGetNetworkId -> "network_id"
-    TagGetProtocolParameters -> "protocol_parameters"
+    TagGetProtocolParameters _ -> "protocol_parameters"
     TagGetSystemStart -> "system_start"
     TagGetEraHistory -> "era_history"
     TagGetUTxOs -> "utxos"
@@ -1740,13 +1835,11 @@ eraEq AlonzoEraOnwardsConway _ = Nothing
 instance Variations AnyCardanoEra where
   variations = NE.fromList [minBound .. maxBound]
 
-instance Variations ProtocolParameters
-
 instance Variations C.PraosNonce where
   variations = C.makePraosNonce <$> variations
 
-instance Variations C.Lovelace where
-  variations = C.Lovelace <$> variations
+instance Variations Coin.Coin where
+  variations = Coin.Coin <$> variations
 
 instance Variations C.EpochNo
 
@@ -1757,10 +1850,11 @@ instance Variations C.AnyPlutusScriptVersion where
     NE.fromList
       [ C.AnyPlutusScriptVersion C.PlutusScriptV1
       , C.AnyPlutusScriptVersion C.PlutusScriptV2
+      , C.AnyPlutusScriptVersion C.PlutusScriptV3
       ]
 
 instance Variations C.CostModel where
-  variations = pure $ C.CostModel $ Map.elems $ fromJust defaultCostModelParams
+  variations = pure $ C.CostModel $ Map.elems $ fromJust defaultCostModelParamsForTesting
 
 instance Variations C.ExecutionUnitPrices where
   variations = C.ExecutionUnitPrices <$> variations `varyAp` variations
@@ -1786,6 +1880,10 @@ instance {-# OVERLAPPING #-} (Variations a, Variations (NonEmpty xs a)) => Varia
 instance Variations EraSummary
 
 instance Variations EraParams
+
+instance Variations GenesisWindow
+
+deriving instance (Generic GenesisWindow)
 
 instance Variations SafeZone
 

@@ -14,6 +14,7 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Language.Marlowe.Runtime.Web.Contract.API (
+  ContractId,
   ContractHeader (..),
   ContractState (..),
   ContractsAPI,
@@ -134,6 +135,8 @@ import Language.Marlowe.Runtime.Web.Tx.API (
   TxJSON,
  )
 
+type ContractId = TxOutRef
+
 type ContractsAPI =
   GetContractsAPI
     :<|> PostContractsAPI
@@ -238,7 +241,7 @@ type GetContractSourceIdsAPI = RenameResponseSchema "ContractSourceIds" :> Get '
 type PostContractsResponse tx = WithLink "contract" (CreateTxEnvelope tx)
 
 data ContractState = ContractState
-  { contractId :: TxOutRef
+  { contractId :: ContractId
   , roleTokenMintingPolicyId :: PolicyId
   , version :: MarloweVersion
   , tags :: Map Text Metadata
@@ -333,5 +336,5 @@ instance ToSchema ContractOrSourceId where
           & oneOf ?~ [contractSchema, contractSourceIdSchema]
 
 instance HasPagination ContractHeader "contractId" where
-  type RangeType ContractHeader "contractId" = TxOutRef
+  type RangeType ContractHeader "contractId" = ContractId
   getFieldValue _ ContractHeader{..} = contractId

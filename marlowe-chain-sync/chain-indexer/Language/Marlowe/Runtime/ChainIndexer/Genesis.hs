@@ -4,9 +4,10 @@ module Language.Marlowe.Runtime.ChainIndexer.Genesis (
   computeGenesisBlock,
 ) where
 
-import Cardano.Api (AddressAny (..), AsType (..), BlockHeader, Hash, Lovelace, TxId, deserialiseFromRawBytes)
+import Cardano.Api (AddressAny (..), AsType (..), BlockHeader, Hash, TxId, deserialiseFromRawBytes)
 import Cardano.Api.Byron (Address (..))
-import Cardano.Api.Shelley (Hash (..), ShelleyGenesis (..), fromShelleyAddrToAny, fromShelleyLovelace, fromShelleyTxId)
+import Cardano.Api.Ledger (Coin)
+import Cardano.Api.Shelley (Hash (..), ShelleyGenesis (..), fromShelleyAddrToAny, fromShelleyTxId)
 import qualified Cardano.Chain.Common as Byron
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto (abstractHashToBytes, serializeCborHash)
@@ -30,7 +31,7 @@ data GenesisBlock = GenesisBlock
 
 data GenesisTx = GenesisTx
   { genesisTxId :: !TxId
-  , genesisTxLovelace :: !Lovelace
+  , genesisTxLovelace :: !Coin
   , genesisTxAddress :: !AddressAny
   }
   deriving (Eq, Ord, Show)
@@ -82,6 +83,6 @@ fromShelleyBalance :: Shelley.TxIn StandardCrypto -> Core.TxOut (ShelleyEra Stan
 fromShelleyBalance (Shelley.TxIn txId _) (Shelley.ShelleyTxOut addr coin) =
   GenesisTx
     { genesisTxId = fromShelleyTxId txId
-    , genesisTxLovelace = fromShelleyLovelace coin
+    , genesisTxLovelace = coin
     , genesisTxAddress = fromShelleyAddrToAny addr
     }

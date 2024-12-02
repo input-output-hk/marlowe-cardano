@@ -124,7 +124,6 @@ import Cardano.Api (
   IsCardanoEra,
   IsScriptLanguage,
   IsShelleyBasedEra,
-  Lovelace,
   PaymentExtendedKey,
   PaymentKey,
   PlutusScript,
@@ -132,9 +131,9 @@ import Cardano.Api (
   Script (..),
   SigningKey,
   SlotNo,
+  ToCardanoEra (toCardanoEra),
   TxIn,
   VerificationKey,
-  babbageEraOnwardsToCardanoEra,
   babbageEraOnwardsToShelleyBasedEra,
   cardanoEraConstraints,
   castVerificationKey,
@@ -150,6 +149,7 @@ import Cardano.Api.Byron qualified as CB
 import Cardano.Api.Shelley (PlutusScript (..))
 import Cardano.Api.Shelley qualified as C
 import Cardano.Api.Shelley qualified as CS
+import Cardano.Ledger.Coin qualified as C
 import Codec.Serialise (deserialise)
 import Contrib.Data.Time.Units as Time.Units
 import Contrib.Data.Time.Units.Aeson (Duration (..))
@@ -258,7 +258,7 @@ marlowePlutusVersion :: PlutusScriptVersion MarlowePlutusVersion
 marlowePlutusVersion = C.plutusScriptVersion
 
 doWithCardanoEra :: forall era m a. (MonadReader (CliEnv era) m) => ((IsCardanoEra era) => m a) -> m a
-doWithCardanoEra m = askEra >>= \era -> cardanoEraConstraints (babbageEraOnwardsToCardanoEra era) m
+doWithCardanoEra m = askEra >>= \era -> cardanoEraConstraints (toCardanoEra era) m
 
 doWithShelleyBasedEra :: forall era m a. (MonadReader (CliEnv era) m) => ((IsShelleyBasedEra era) => m a) -> m a
 doWithShelleyBasedEra m = askEra >>= \era -> shelleyBasedEraConstraints (babbageEraOnwardsToShelleyBasedEra era) m
@@ -469,7 +469,7 @@ validatorInfo viScript viTxIn era protocolVersion costModel network stake = do
       viSize = SBS.length viBytes
 
   script <- Bifunctor.first show $ P.deserialiseScript protocolVersion viBytes
-  (evaluationContext, _) <- Bifunctor.first show $ runWriterT $ P.mkEvaluationContext costModel
+  (evaluationContext, _) <- Bifunctor.first show $ runWriterT $ P.mkEvaluationContext (fromIntegral <$> costModel)
   case P.evaluateScriptCounting protocolVersion P.Verbose evaluationContext script [] of
     (_, Right viCost) -> pure $ ValidatorInfo{..}
     (_, Left err) -> Left $ show err
@@ -627,7 +627,7 @@ data OutputQueryResult era = OutputQueryResult
 -- | Options for address queries.
 data OutputQuery era result where
   -- | Match pure-ADA UTxOs which pass the value check.
-  LovelaceOnly :: (Lovelace -> Bool) -> OutputQuery era (OutputQueryResult era)
+  LovelaceOnly :: (C.Coin -> Bool) -> OutputQuery era (OutputQueryResult era)
   -- | Match UTxOs containing only the specified asset.
   AssetOnly :: AssetId -> OutputQuery era (OutputQueryResult era)
   PolicyIdOnly :: C.PolicyId -> OutputQuery era (OutputQueryResult era)
@@ -759,7 +759,7 @@ data MintingAction era
       , -- , maTokenDistribution
         --     :: L.NonEmpty (AddressInEra era, Maybe Lovelace, [(P.TokenName, Natural)])
         maTokenDistribution
-          :: L.NonEmpty (TokensRecipient era, Maybe Lovelace, [(P.TokenName, Natural)])
+          :: L.NonEmpty (TokensRecipient era, Maybe C.Coin, [(P.TokenName, Natural)])
       }
   | -- | Burn all found tokens on the providers UTxOs of a given "private currency".
     BurnAll
@@ -773,9 +773,9 @@ submitModeFromTimeout :: Maybe Second -> SubmitMode
 submitModeFromTimeout Nothing = DontSubmit
 submitModeFromTimeout (Just timeout) = DoSubmit timeout
 
-data NodeStateInfo = NodeStateInfo
+data NodeStateInfo era = NodeStateInfo
   { nsiNetworkId :: C.NetworkId
-  , nsiProtocolParameters :: C.ProtocolParameters
+  , nsiProtocolParameters :: C.LedgerProtocolParameters era
   , nsiSystemStart :: C.SystemStart
   , nsiEraHistory :: C.EraHistory
   }
@@ -784,7 +784,7 @@ data NodeStateInfo = NodeStateInfo
 -- They allow us to perform fully dry run over contract execution.
 data QueryExecutionContext era
   = QueryNode C.LocalNodeConnectInfo
-  | PureQueryContext (TVar (C.UTxO era)) NodeStateInfo
+  | PureQueryContext (TVar (C.UTxO era)) (NodeStateInfo era)
 
 queryContextNetworkId :: QueryExecutionContext era -> C.NetworkId
 queryContextNetworkId (QueryNode connection) = C.localNodeNetworkId connection
@@ -795,7 +795,7 @@ data TxBuildupContext era
   = NodeTxBuildup C.LocalNodeConnectInfo SubmitMode
   | PureTxBuildup
       (TVar (C.UTxO era))
-      NodeStateInfo
+      (NodeStateInfo era)
 
 mkNodeTxBuildup :: forall era. C.LocalNodeConnectInfo -> Maybe Second -> TxBuildupContext era
 mkNodeTxBuildup connection timeout = NodeTxBuildup connection (submitModeFromTimeout timeout)

@@ -103,7 +103,7 @@ runRoleCommand command =
       ExportValidator{..} -> do
         exportRoleValidator @_
           protocolVersion
-          (Map.elems costModel)
+          (Map.elems $ fromIntegral <$> costModel)
           network'
           stake'
           outputFile

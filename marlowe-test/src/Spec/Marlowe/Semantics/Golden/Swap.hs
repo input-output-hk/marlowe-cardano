@@ -37,7 +37,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (
 import Language.Marlowe.Util ()
 import PlutusLedgerApi.V2 (CurrencySymbol, POSIXTime (..))
 
-import qualified PlutusTx.AssocMap as AM (Map, fromList)
+import qualified PlutusTx.AssocMap as AM (Map, unsafeFromList)
 
 aSymbol, bSymbol :: CurrencySymbol
 aSymbol = "13e78e78c233e131b0cbe4424225d338b7c5ac65e16df0a3e6c9d8f8"
@@ -85,7 +85,7 @@ newtype Map k v = Map {unMap :: [(k, v)]}
 
 -- | A function to assist parsing of test cases.
 toAM :: Map k v -> AM.Map k v
-toAM = AM.fromList . unMap
+toAM = AM.unsafeFromList . unMap
 
 -- | A list of Pangram test cases and results that should succeed, generated from `Language.Marlowe.FindInputs.getAllInputs`.
 valids :: [(POSIXTime, [TransactionInput], TransactionOutput)]

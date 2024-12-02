@@ -12,7 +12,7 @@
 
 module Language.Marlowe.CLI.Test.TestCase where
 
-import Cardano.Api (Lovelace)
+import Cardano.Api.Ledger qualified as Ledger
 import Contrib.Cardano.Api (lovelaceFromInt, lovelaceToInt)
 import Data.Maybe (isNothing)
 import GHC.Generics (Generic)
@@ -28,13 +28,13 @@ import Language.Marlowe.CLI.Test.Wallet.Types as Wallet (
  )
 
 data TxCostsUpperBounds = TxCostsUpperBounds
-  { _tcTxMaximumFee :: Lovelace
-  , _tcPublishingUTxOMinAda :: Lovelace
+  { _tcTxMaximumFee :: Ledger.Coin
+  , _tcPublishingUTxOMinAda :: Ledger.Coin
   }
   deriving stock (Eq, Generic, Show)
 
 -- A quick estimate of the budget required to run an test operation from a faucet perspective.
-operationFaucetBudget :: TxCostsUpperBounds -> TestOperation -> Lovelace
+operationFaucetBudget :: TxCostsUpperBounds -> TestOperation -> Ledger.Coin
 operationFaucetBudget (TxCostsUpperBounds _ publishingMinAda) = lovelaceFromInt . operationBudget'
   where
     faucetOperation possibleNickname = possibleNickname == Just faucetNickname || isNothing possibleNickname
@@ -63,7 +63,7 @@ operationFaucetBudget (TxCostsUpperBounds _ publishingMinAda) = lovelaceFromInt 
     operationBudget' _ = 0
 
 -- | A *really* rough and quick estimation of the budget required to run a test case.
-testFaucetBudgetUpperBound :: TxCostsUpperBounds -> TestCase -> Lovelace
+testFaucetBudgetUpperBound :: TxCostsUpperBounds -> TestCase -> Ledger.Coin
 testFaucetBudgetUpperBound tub@(TxCostsUpperBounds txCost _) TestCase{operations} =
   sum (map (operationFaucetBudget tub) operations) <> faucetTxsFees
   where
@@ -102,7 +102,7 @@ testFaucetBudgetUpperBound tub@(TxCostsUpperBounds txCost _) TestCase{operations
         possibleFaucetTx (ShouldFail operation) = possibleFaucetTx operation
 
 -- FIXME: We should probably include permanent lose when we publish marlowe on unspendable address.
-testTxsFeesUpperBound :: TxCostsUpperBounds -> TestCase -> Lovelace
+testTxsFeesUpperBound :: TxCostsUpperBounds -> TestCase -> Ledger.Coin
 testTxsFeesUpperBound (TxCostsUpperBounds txCost _) TestCase{operations} =
   lovelaceFromInt (lovelaceToInt txCost * length (filter possibleTx operations))
   where
@@ -132,7 +132,7 @@ testTxsFeesUpperBound (TxCostsUpperBounds txCost _) TestCase{operations} =
     possibleTx Comment{} = False
     possibleTx (ShouldFail operation) = possibleTx operation
 
-testsFaucetBudgetUpperBound :: TxCostsUpperBounds -> [TestCase] -> Lovelace
+testsFaucetBudgetUpperBound :: TxCostsUpperBounds -> [TestCase] -> Ledger.Coin
 testsFaucetBudgetUpperBound txCosts tests = do
   let maximumTestBudget = maximum (map (testFaucetBudgetUpperBound txCosts) tests)
       totalTxCost = sum (testTxsFeesUpperBound txCosts <$> tests)

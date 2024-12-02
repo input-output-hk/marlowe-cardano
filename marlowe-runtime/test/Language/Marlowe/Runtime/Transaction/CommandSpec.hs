@@ -3,7 +3,7 @@
 {-# LANGUAGE GADTs #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Language.Marlowe.Runtime.Transaction.CommandSpec where
+module Language.Marlowe.Runtime.Transaction.CommandSpec (spec) where
 
 import Language.Marlowe.Runtime.Transaction.Api
 import Language.Marlowe.Runtime.Transaction.Gen ()

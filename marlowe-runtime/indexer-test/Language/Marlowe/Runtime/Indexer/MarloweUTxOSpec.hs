@@ -7,7 +7,9 @@ module Language.Marlowe.Runtime.Indexer.MarloweUTxOSpec (
 ) where
 
 import Cardano.Api (
+  EpochNo (EpochNo),
   EraHistory (EraHistory),
+  SlotNo (SlotNo),
   SystemStart (SystemStart),
  )
 import qualified Cardano.Api as C
@@ -61,6 +63,7 @@ import Language.Marlowe.Runtime.History.Api (
 import Language.Marlowe.Runtime.Indexer.Types
 import Language.Marlowe.Runtime.Plutus.V2.Api (fromPlutusCurrencySymbol, fromPlutusTokenName, toPlutusCurrencySymbol)
 import Language.Marlowe.Util (ada, dataHash)
+import Ouroboros.Consensus.Block (EpochSize (EpochSize), GenesisWindow (GenesisWindow))
 import Ouroboros.Consensus.BlockchainTime (RelativeTime (..), mkSlotLength)
 import Ouroboros.Consensus.HardFork.History (
   Bound (..),
@@ -260,9 +263,10 @@ unboundedEraSummary i =
     , eraEnd = EraUnbounded
     , eraParams =
         EraParams
-          { eraEpochSize = 1
+          { eraEpochSize = EpochSize 1
           , eraSlotLength = mkSlotLength 0.001
           , eraSafeZone = UnsafeIndefiniteSafeZone
+          , eraGenesisWin = GenesisWindow 1
           }
     }
 
@@ -273,9 +277,10 @@ oneMillisecondEraSummary i =
     , eraEnd = EraEnd $ oneMillisecondBound $ i + 1
     , eraParams =
         EraParams
-          { eraEpochSize = 1
+          { eraEpochSize = EpochSize 1
           , eraSlotLength = mkSlotLength 0.001
           , eraSafeZone = UnsafeIndefiniteSafeZone
+          , eraGenesisWin = GenesisWindow 1
           }
     }
 
@@ -283,8 +288,8 @@ oneMillisecondBound :: Integer -> Bound
 oneMillisecondBound i =
   Bound
     { boundTime = RelativeTime $ fromInteger i / 1000
-    , boundSlot = fromInteger i
-    , boundEpoch = fromInteger i
+    , boundSlot = SlotNo $ fromInteger i
+    , boundEpoch = EpochNo $ fromInteger i
     }
 
 extractApplyInputsTx' :: Chain.BlockHeader -> Chain.Transaction -> WriterT [MarloweTransaction] (State MarloweUTxO) ()

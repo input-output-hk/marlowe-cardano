@@ -19,6 +19,7 @@ in
 
     repoRoot.nix.marlowe-cardano.cardano-tools.cardano-node
     repoRoot.nix.marlowe-cardano.cardano-tools.cardano-cli
+    repoRoot.nix.marlowe-cardano.cardano-tools.cardano-addresses
 
     inputs.marlowe-plutus.packages.marlowe-minting-validator
     inputs.n2c.packages.skopeo-nix2container
@@ -66,7 +67,6 @@ in
 
 
   shellHook = lib.optionalString isLinux "refresh-compose";
-
 
   preCommit = {
     cabal-fmt.enable = true;

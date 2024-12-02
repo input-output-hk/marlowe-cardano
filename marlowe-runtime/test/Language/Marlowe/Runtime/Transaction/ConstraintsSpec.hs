@@ -4,6 +4,7 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# OPTIONS_GHC -Wno-deprecations #-}
 
 module Language.Marlowe.Runtime.Transaction.ConstraintsSpec where
 
@@ -23,6 +24,7 @@ import Cardano.Api (
   CardanoEra (BabbageEra),
   CostModel (CostModel),
   CtxTx,
+  EpochNo (EpochNo),
   EraHistory (..),
   ExecutionUnitPrices (
     ExecutionUnitPrices,
@@ -31,7 +33,6 @@ import Cardano.Api (
   ),
   ExecutionUnits (ExecutionUnits, executionMemory, executionSteps),
   KeyWitnessInCtx (KeyWitnessForSpending),
-  Lovelace (..),
   MaryEraOnwards (MaryEraOnwardsBabbage),
   NetworkId (Mainnet, Testnet),
   NetworkMagic (NetworkMagic),
@@ -86,6 +87,7 @@ import Cardano.Api (
   valueToList,
   valueToLovelace,
  )
+import qualified Cardano.Api.Ledger as Ledger
 import Cardano.Api.Shelley (
   LedgerProtocolParameters (..),
   PlutusScriptOrReferenceInput (..),
@@ -95,7 +97,7 @@ import Cardano.Api.Shelley (
   convertToLedgerProtocolParameters,
  )
 import qualified Cardano.Api.Shelley as C
-import Cardano.Ledger.BaseTypes (EpochInterval (..))
+import Cardano.Ledger.BaseTypes (EpochInterval (..), EpochSize (EpochSize))
 import Control.Applicative (Alternative)
 import Control.Arrow (Arrow ((&&&), (***)))
 import Control.Error (MaybeT (runMaybeT), catMaybes, hoistMaybe, hush, hushT, note)
@@ -180,10 +182,10 @@ import Test.Gen.Cardano.Api.Typed (
   genAddressShelley,
   genHashableScriptData,
   genPlutusScript,
-  genProtocolParameters,
   genScriptHash,
   genTxBodyContent,
   genTxIn,
+  genValidProtocolParameters,
   genValueForTxOut,
  )
 import Test.Hspec
@@ -219,9 +221,10 @@ unboundedEraSummary i =
     , eraEnd = EraUnbounded
     , eraParams =
         EraParams
-          { eraEpochSize = 1
+          { eraEpochSize = EpochSize 1
           , eraSlotLength = mkSlotLength 0.001
           , eraSafeZone = UnsafeIndefiniteSafeZone
+          , eraGenesisWin = 0
           }
     }
 
@@ -232,9 +235,10 @@ oneMillisecondEraSummary i =
     , eraEnd = EraEnd $ oneMillisecondBound $ i + 1
     , eraParams =
         EraParams
-          { eraEpochSize = 1
+          { eraEpochSize = EpochSize 1
           , eraSlotLength = mkSlotLength 0.001
           , eraSafeZone = UnsafeIndefiniteSafeZone
+          , eraGenesisWin = 0
           }
     }
 
@@ -243,7 +247,7 @@ oneMillisecondBound i =
   Bound
     { boundTime = RelativeTime $ fromInteger i / 1000
     , boundSlot = fromInteger i
-    , boundEpoch = fromInteger i
+    , boundEpoch = EpochNo $ fromInteger i
     }
 
 spec :: Spec
@@ -251,9 +255,7 @@ spec = do
   regressions
   describe "solveInitialTxBodyContent" do
     prop "satisfies the constraints" \(SomeTxConstraints marloweVersion constraints) -> do
-      protocol <-
-        either (error . show) id . convertToLedgerProtocolParameters shelleyBasedEraTest
-          <$> hedgehog (genProtocolParameters testEra)
+      protocol <- hedgehog (genValidProtocolParameters shelleyBasedEraTest)
       scriptCtx <- genScriptContext marloweVersion constraints
       walletContext <- genWalletContext marloweVersion constraints
       helpersContext <- genHelperContext constraints
@@ -320,7 +322,7 @@ spec = do
             { txOuts =
                 [ TxOut
                     marloweAddressCardano
-                    (lovelaceToTxOutValue shelleyBasedEraTest $ Lovelace lovelaceAmount)
+                    (lovelaceToTxOutValue shelleyBasedEraTest $ Ledger.Coin lovelaceAmount)
                     TxOutDatumNone
                     ReferenceScriptNone
                 ]
@@ -383,7 +385,7 @@ spec = do
 
           valueIsAtLeastHalfAnAda :: TxOut CtxTx TestEra -> Maybe String
           valueIsAtLeastHalfAnAda (TxOut _ txOrigValue _ _) =
-            if origAda >= Lovelace 500_000
+            if origAda >= Ledger.Coin 500_000
               then Nothing
               else Just $ printf "An output is %s but should be at least 500_000 Lovelace" (show origAda)
             where
@@ -483,7 +485,7 @@ spec = do
             , hedgehog $ do
                 txIn <- genTxIn
                 script <- PReferenceScript <$> genTxIn <*> pure Nothing
-                datum <- ScriptDatumForTxIn <$> genHashableScriptData
+                datum <- ScriptDatumForTxIn . Just <$> genHashableScriptData
                 redeemer <- genHashableScriptData
                 pure
                   ( True
@@ -1130,16 +1132,16 @@ genBodyContentWith500AdaOutput = do
       { txOuts =
           [ TxOut
               addr
-              (lovelaceToTxOutValue shelleyBasedEraTest $ Lovelace 500_000_000)
+              (lovelaceToTxOutValue shelleyBasedEraTest $ Ledger.Coin 500_000_000)
               TxOutDatumNone
               ReferenceScriptNone
           ]
       }
 
-maxFee :: LedgerProtocolParameters TestEra -> Lovelace
+maxFee :: LedgerProtocolParameters TestEra -> Ledger.Coin
 maxFee (fromLedgerPParams shelleyBasedEraTest . unLedgerProtocolParameters -> ProtocolParameters{..}) = 2 * (txFee + round executionFee)
   where
-    txFee :: Lovelace
+    txFee :: Ledger.Coin
     txFee = protocolParamTxFeeFixed + protocolParamTxFeePerByte * fromIntegral protocolParamMaxTxSize
 
     executionFee :: Rational
@@ -1154,7 +1156,7 @@ changeAddressFromWallet :: WalletContext -> AddressInEra TestEra
 changeAddressFromWallet = anyAddressInShelleyBasedEra shelleyBasedEraTest . fromJust . Chain.toCardanoAddressAny . changeAddress
 
 -- FIXME: It's risky to copy-and-paste code being tested into the test suite so that it can be used for other tests.
-findMinUtxo' :: LedgerProtocolParameters TestEra -> AddressInEra TestEra -> Value -> Lovelace
+findMinUtxo' :: LedgerProtocolParameters TestEra -> AddressInEra TestEra -> Value -> Ledger.Coin
 findMinUtxo' protocol chAddress origValue = do
   let atLeastHalfAnAda :: Value
       atLeastHalfAnAda = lovelaceToValue (max 500_000 (selectLovelace origValue))
@@ -1276,7 +1278,7 @@ shrinkScriptOutput MarloweV1 marloweAddress TxConstraints{..} = case marloweInpu
 mkAdaOnlyAssets :: Integer -> Chain.Assets
 mkAdaOnlyAssets lovelace =
   Chain.Assets
-    (fromCardanoLovelace $ Lovelace lovelace)
+    (fromCardanoLovelace $ Ledger.Coin lovelace)
     (Chain.Tokens Map.empty)
 
 -- Generate a random amount and add the specified amount of Lovelace to it
@@ -1518,7 +1520,7 @@ mustConsumeMarloweOutputViolations MarloweV1 MarloweContext{..} TxConstraints{..
                 ["Marlowe script UTxO not consumed"]
                 (find ((== utxo) . fromCardanoTxIn . fst) txIns)
             (witDatum, witRedeemer) <- case witness of
-              BuildTxWith (ScriptWitness _ (PlutusScriptWitness _ _ _ (ScriptDatumForTxIn d) r _)) ->
+              BuildTxWith (ScriptWitness _ (PlutusScriptWitness _ _ _ (ScriptDatumForTxIn (Just d)) r _)) ->
                 pure (getScriptData d, getScriptData r)
               _ -> Left ["TxInput not build with a plutus script witness"]
             Left $
@@ -1562,7 +1564,7 @@ mustConsumePayoutViolations MarloweV1 PayoutContext{..} TxConstraints{..} TxBody
           _ -> False
     case matchingInput of
       Nothing -> ["No matching inputs found"]
-      Just (_, BuildTxWith (ScriptWitness _ (PlutusScriptWitness _ _ s (ScriptDatumForTxIn d) _ _))) ->
+      Just (_, BuildTxWith (ScriptWitness _ (PlutusScriptWitness _ _ s (ScriptDatumForTxIn (Just d)) _ _))) ->
         case Map.lookup payout payoutOutputs of
           Nothing -> ["Not found in context"]
           Just Chain.TransactionOutput{datum = Just expectedDatum} ->
@@ -1976,9 +1978,9 @@ protocolTestnet =
         , protocolParamTxFeeFixed = 155381
         , protocolParamTxFeePerByte = 44
         , protocolParamMinUTxOValue = Nothing
-        , protocolParamStakeAddressDeposit = Lovelace 2000000
-        , protocolParamStakePoolDeposit = Lovelace 500000000
-        , protocolParamMinPoolCost = Lovelace 340000000
+        , protocolParamStakeAddressDeposit = Ledger.Coin 2000000
+        , protocolParamStakePoolDeposit = Ledger.Coin 500000000
+        , protocolParamMinPoolCost = Ledger.Coin 340000000
         , protocolParamPoolRetireMaxEpoch = EpochInterval 18
         , protocolParamStakePoolTargetNum = 500
         , protocolParamPoolPledgeInfluence = 3 % 10
@@ -2173,5 +2175,5 @@ protocolTestnet =
         , protocolParamMaxValueSize = Just 5000
         , protocolParamCollateralPercent = Just 150
         , protocolParamMaxCollateralInputs = Just 3
-        , protocolParamUTxOCostPerByte = Just (Lovelace 4310)
+        , protocolParamUTxOCostPerByte = Just (Ledger.Coin 4310)
         }

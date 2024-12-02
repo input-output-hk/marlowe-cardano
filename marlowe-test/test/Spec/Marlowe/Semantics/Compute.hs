@@ -84,7 +84,7 @@ import Spec.Marlowe.Semantics.Arbitrary (
   whenContractWeights,
  )
 import Spec.Marlowe.Semantics.AssocMap (assocMapEq, assocMapInsert, assocMapLookup)
-import Spec.Marlowe.Semantics.Orphans ()
+
 import System.IO.Unsafe (unsafePerformIO)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck (
@@ -235,7 +235,7 @@ simplePayment =
         modifyState state =
           do
             accounts' <-
-              fmap AM.fromList
+              fmap AM.unsafeFromList
                 . shuffle
                 . AM.toList
                 . AM.insert (account, token) balance
@@ -957,7 +957,7 @@ payingSubtractsFromAccount =
           fmap (AM.filter (/= 0)) $
             AM.unionWith (+)
               <$> view preAccounts
-              <*> (AM.fromList . fmap (second negate) . AM.toList <$> view postAccounts)
+              <*> (AM.unsafeFromList . fmap (second negate) . AM.toList <$> view postAccounts)
         require "Only one balance changes." ((== 1) . length . AM.toList) delta
         require "Some balance decreases." (all (> 0) . AM.elems) delta
     }
@@ -974,7 +974,7 @@ depositAddsToAccount =
           fmap (AM.filter (/= 0)) $
             AM.unionWith (+)
               <$> view postAccounts
-              <*> (AM.fromList . fmap (second negate) . AM.toList <$> view preAccounts)
+              <*> (AM.unsafeFromList . fmap (second negate) . AM.toList <$> view preAccounts)
         require "Only one balance changes." ((== 1) . length . AM.toList) delta
         require "Some balance increases." (all (> 0) . AM.elems) delta
     }

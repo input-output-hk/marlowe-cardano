@@ -73,7 +73,7 @@ import Spec.Marlowe.Semantics.Arbitrary (
   whenContractWeights,
  )
 import Spec.Marlowe.Semantics.AssocMap (assocMapAdd, assocMapEq, assocMapInsert)
-import Spec.Marlowe.Semantics.Orphans ()
+
 import Spec.Marlowe.Semantics.Util (stateEq, truncatedDivide)
 import Test.QuickCheck.Monadic (monadicIO, pick, run)
 import Test.Tasty (TestTree, testGroup)
@@ -93,7 +93,18 @@ import Test.Tasty.QuickCheck (
 
 import Language.Marlowe.Analysis.FSSemantics (SlotLength (SlotLength))
 import Language.Marlowe.Util (dataHash)
-import qualified PlutusTx.AssocMap as AM (delete, empty, filter, fromList, insert, keys, lookup, member, null, toList)
+import qualified PlutusTx.AssocMap as AM (
+  delete,
+  empty,
+  filter,
+  insert,
+  keys,
+  lookup,
+  member,
+  null,
+  toList,
+  unsafeFromList,
+ )
 
 -- | Run the tests.
 tests :: TestTree
@@ -637,7 +648,7 @@ checkRefundOneNotPositive :: Property
 checkRefundOneNotPositive =
   property $
     forAll' (arbitraryAssocMap arbitrary arbitrary) $ \accountsMixed ->
-      let positive = AM.fromList . filter ((> 0) . snd) . AM.toList
+      let positive = AM.unsafeFromList . filter ((> 0) . snd) . AM.toList
           accountsPositive = positive accountsMixed
        in case (refundOne accountsMixed, refundOne accountsPositive) of
             (Just (payment, accountsMixed'), Just (payment', accountsPositive')) -> payment == payment' && positive accountsMixed' == accountsPositive'
